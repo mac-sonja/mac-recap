@@ -55,7 +55,8 @@ Goals:
 - Number of case studies generated
 - Average owner time per case study, against a target of 15-20 minutes
 - Amount of manual editing needed after generation
-- Hallucinations or guardrail violations caught in review, against a target of zero
+- Hallucinations or guardrail violations that reach an approved case study, against a target of zero
+- Hallucinations caught in review, tracked with no target. A high count signals weak generation, not a weak review.
 
 MAC closes about one project a month, so 8 weeks yields only a few case studies. Running the backlog of unpublished past projects through the tool gives a meaningful sample.
 
@@ -127,13 +128,13 @@ Guardrails are non-negotiable constraints. Any requirement that contradicts them
 **NFR1** – The AI does not alter graphic assets, the technical substance of the content, or template design.
 - [FLAG: possible conflict with FR4 and FR7. Layouts adapt to the number of media items, and exports resize to 16:9, 4:5, 1:1, 9:16 and A4. What counts as "altering" is open point 12.]
 
-**NFR2** – In the MVP, a person checks generated technical content for hallucinations during review, before approval. Every claim must trace back to the uploaded material. This is a manual step, not an automated feature.
+**NFR2** – In the MVP, a person checks generated technical content for hallucinations during review, before approval. Every claim must trace back to the uploaded material or the form answers. This is a manual step, not an automated feature.
 
 **NFR3** – No role can configure the guardrails, admin included.
 
-**NFR4** – The owner's hands-on time from upload to approval is 15-20 minutes at most. Time spent waiting for the draft to generate does not count, and generation time has no limit.
+**NFR4** – The owner's hands-on time from upload to approval is at most 20 minutes, with a target of 15. If the claim check (NFR2) needs more time, NFR2 wins. Time spent waiting for the draft to generate does not count, and generation time has no limit.
 
-**NFR5** – Texts follow the defined narrative structure (challenge, approach, result) and the quality checklist. They cover both the technical and the graphic side of the project.
+**NFR5** – Texts follow the defined narrative structure (challenge, approach, result) and the quality checklist, which is defined in the Sprint 2 non-dev deliverable "narrative structure and quality criteria". They cover both the technical and the graphic side of the project.
 
 **NFR6** – If no material is uploaded, nothing is generated.
 
@@ -201,6 +202,7 @@ Prerequisites: graphic template layouts, final case study templates, narrative s
 - The case study is generated from the graphic templates
 - Graphic assets and template design remain unchanged
 - Texts follow the challenge, approach, result structure and use only the uploaded material and form answers
+- Layouts are generated for the MVP export formats (open point 1)
 - If no material is uploaded, generation is not available
 
 **Story 3.2** – As an owner/designer, I want the template to adapt to the number of available media items.
@@ -218,7 +220,7 @@ Prerequisite: configurator visual design (Bento).
 - I can edit the generated text, layout, media and typography
 
 **Story 4.3** – As an owner/designer, I want to approve a case study.
-- Before approving, I check that every claim in the text traces back to the uploaded material
+- Before approving, I check that every claim in the text traces back to the uploaded material or the form answers
 - Any owner/designer can approve
 - The approved case study moves to the Approved status and becomes available for export and sharing
 - A case study that is not approved cannot be exported or shared
@@ -247,7 +249,7 @@ Prerequisite: account/sales/social user journey.
 - Admin: users and permissions
 
 **Story 6.3** – As the team, I want no role to have access to the guardrails.
-- Not even the admin can view or edit the guardrails
+- No role, admin included, has a setting that disables or changes NFR1-NFR7
 
 ### MVP closing activities (Sprint 3, non-dev)
 
@@ -296,17 +298,23 @@ Prerequisite: account/sales/social user journey.
 
 ## 12. Open points
 
-These points must be resolved before the epics that depend on them.
+These points must be resolved before the epics that depend on them. Owners are not yet assigned.
 
-1. **Export formats** (Epics 3 and 5). Which formats the MVP produces. The demo criteria set a minimum: 16:9 deck, social carousel and PDF. The A3 deck shows eight: 16:9 deck, A4 whitepaper, 1080×1350 carousel, square post, 1080×1920 social video, 1200×675 LinkedIn cover, HD PNG pack and ZIP. Merges v1 points 1 and 5. The publishing channel is now settled as the shareable link.
-2. **Data processing logic** (Epic 3). How the tool turns uploaded material into text.
-3. **Tag, property and flag taxonomy** (Epic 2). The list and meaning of the values that can be assigned to deliverables.
+1. **Export formats** (Epics 3 and 5; decide before Sprint 2). Which formats the MVP produces. The demo criteria set a minimum: 16:9 deck, social carousel and PDF. The A3 deck shows eight: 16:9 deck, A4 whitepaper, 1080×1350 carousel, square post, 1080×1920 social video, 1200×675 LinkedIn cover, HD PNG pack and ZIP. Merges v1 points 1 and 5. The publishing channel is now settled as the shareable link.
+2. **Data processing logic** (Epic 3; decide before Sprint 2). How the tool turns uploaded material into text.
+3. **Tag, property and flag taxonomy** (Epic 2; decide before Sprint 1 ends, October 14). The list and meaning of the values that can be assigned to deliverables.
 4. **Account/sales/social user journey** (Epic 5). Partly resolved: these users reach approved case studies inside MAC Recap, with their own login from Sprint 3. Still open: how they find and browse case studies.
 5. *Merged into point 1.*
 6. **Test or real data.** Resolved: the demo uses material from one real past project. Its confidentiality and NDA status must be cleared before upload (Known risks).
 7. **Data exposure from MAC Productive** (Epic 7). The data structure via MCP and client data confidentiality requirements.
-8. **Case study status lifecycle** (Epic 4). The A3 screens use Draft, Processing, Awaiting approval, Approved and Published, and the names differ from screen to screen. v1 names only Approved.
+8. **Case study status lifecycle** (Epic 4; decide before Sprint 2). The A3 screens use Draft, Processing, Awaiting approval, Approved and Published, and the names differ from screen to screen. v1 names only Approved.
 9. **Owner/designer export rights.** Resolved: both owner/designer and account/sales/social users can export and share approved case studies.
 10. **Attribution** (6-month review). How inbound contacts and upsells are attributed to a case study.
-11. **Shareable link access** (Epic 5). Can anyone with the link open it, only logged-in users, or does the link expire? This is a client confidentiality decision.
-12. **What counts as altering** (Epics 3 and 4, NFR1). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary.
+11. **Shareable link access** (Epic 5; decide before Sprint 2, since Epic 5 hosts real client material before logins exist). Can anyone with the link open it, only logged-in users, or does the link expire? This is a client confidentiality decision.
+12. **What counts as altering** (Epics 3 and 4, NFR1; decide before Sprint 2). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary.
+
+## 13. Assumptions to confirm
+
+- FR2: upload limits of 20 files, 100 MB each, taken from the A3 sketch.
+- Section 8, demo preparation: a dry run with the creative director and sales replaces v1's pilot test.
+- Section 1.1: the counter-metric on owner time.

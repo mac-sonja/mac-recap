@@ -13,7 +13,7 @@ Detail for UX and architecture that doesn't belong in the PRD itself. The full s
 These are design sketches, not decisions. In the standalone MVP, the steps that run inside MAC Productive drop out. The owner/designer starts from the "+ New case study" button in the dashboard.
 
 - **Creation wizard:** three steps, Materials → Details → Generate. Generation runs in the background, and the owner is notified when the draft is ready.
-- **Upload:** drag and drop or browse. Up to 20 files, 100 MB each. Suggested inputs: strategic decks, summary documents, impact metrics.
+- **Upload:** drag and drop or browse. Up to 20 files, 100 MB each. PRD FR2 carries these limits as an assumption to confirm. Suggested inputs: strategic decks, summary documents, impact metrics.
 - **Details form:** the "Context & background" section has 4 fields. Two are visible on the slide: business context and the solution. The other two, and any later sections, are cut off.
 - **Dashboard:** search by project or client. Filter by status. Columns: project ID, name, client, year, status. An "awaiting approval" queue shows a count.
 - **Configurator:** a channel and format picker, shuffle layout, replace media, 10 layout template variants, canvas ratio (16:9, 4:5, 1:1), font (Plus Jakarta Sans, Inter Sans, Editorial Serif), outer padding and box gap sliders, save draft, approve, and a version number with autosave.
@@ -26,3 +26,11 @@ These are design sketches, not decisions. In the standalone MVP, the steps that 
 - The configurator lists "Social 16:9", but its size is 1080×1920, which is 9:16.
 - The configurator offers three canvas ratios, but the export formats also include 9:16 and A4.
 - The deck lists "AI guardrails" as a high-effort item to test later, but the MVP already depends on AI generation. The PRD makes guardrails NFR1-NFR7 and puts them in the MVP.
+
+## Left for the UX phase
+
+The PRD review flagged these as thin, and the author chose to settle them in UX rather than in the PRD:
+
+- A Vision paragraph carried over from the brief
+- What "maintains templates" means for the owner/designer (upload, edit, versioning), and whether it needs its own FR
+- Acceptance criteria for the configurator (text, layout, media, typography) and the review dashboard (search, status filter)
