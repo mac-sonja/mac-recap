@@ -20,7 +20,7 @@ This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the produc
 - Owner and designer are one role. Account/sales and the social team share one role, which gets its own login in Sprint 3.
 - "Publish" means publishing a case study as a shareable link. The tool does not post to social channels or the website.
 - New guardrails NFR6 (no material, no generation) and NFR7 (human review before export or sharing). NFR2 and NFR4 are redefined.
-- October 30 is a demo on material from one real past project, not a pilot.
+- October 30 is a demo on material from one real past project, not a pilot. Onboarding is out of scope.
 - Epic 1 (BMAD setup) is now a team setup task, not product scope.
 - The owner/designer creates case studies manually. Requests for a case study happen outside the tool.
 - FR2 adds the details form, FR3 limits the text to uploaded material, and NFR5 requires both the technical and the graphic side.
@@ -67,7 +67,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 - Layout hours saved (baseline: 1-2 hours per case study). The 24-60 hour end-to-end baseline also includes producing material, which the MVP does not address.
 - Inbound contacts and upsells attributed to a case study. The attribution method is open (open point 10).
 
-**Counter-metric.** Owner time must not fall because the review gets shorter. A faster case study that skips the claim check (NFR2) is a failure, not a gain. [NOTE FOR PM: proposed in v2, not in the brief. Confirm.]
+**Counter-metric.** Owner time must not fall because the review gets shorter. A faster case study that skips the claim check (NFR2) is a failure, not a gain.
 
 ## 2. User roles
 
@@ -97,7 +97,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 **FR1** – The system creates every case study with a unique ID, ready to be linked to the project order later. The owner/designer creates the case study manually. There is no trigger at project close.
 
 **FR2** – The owner/designer uploads files and text, assigns tags, properties and flags to each deliverable, and fills in a short form on context, solution and results.
-- [ASSUMPTION: upload limits follow the A3 sketch, up to 20 files of at most 100 MB each. Confirm.]
+- Upload is limited to 20 files of at most 100 MB each.
 
 **FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material and form answers.
 - If no material is uploaded, generation is not available (NFR6).
@@ -254,7 +254,7 @@ Prerequisite: account/sales/social user journey.
 ### MVP closing activities (Sprint 3, non-dev)
 
 - **Guardrail check.** Verify that the AI does not alter graphic assets, technical substance or template design. Verify that nothing is generated without material. Check technical content for hallucinations.
-- **Demo preparation.** Select one real past project, ideally one of the seven never published. Clear the confidentiality and NDA status of its material before upload. Prepare the material for the live run. [ASSUMPTION: a dry run with the creative director and sales collects feedback before the demo, replacing v1's pilot test. Confirm.]
+- **Demo preparation.** Select one real past project, ideally one of the seven never published. Clear the confidentiality and NDA status of its material before upload. Prepare the material for the live run. Run a dry run with the creative director and sales to collect feedback before the demo. This replaces v1's pilot test.
 - **Demo on October 30.** Run the project live for the CEO against the success criteria in section 1.1.
 
 ## 9. Post-MVP backlog (after MAC Productive is ready, no date)
@@ -287,6 +287,7 @@ Prerequisite: account/sales/social user journey.
 - **Collecting and tagging material during the project,** and mockup and asset guidelines.
 - **Posting to social channels or the website from inside the tool.** Account/sales/social users download files or share links and post them elsewhere.
 - **Requesting a case study inside the tool.**
+- **Onboarding** of the wider team. v1's "pilot test and onboarding" is replaced by the demo dry run.
 - **Internal communication,** which the A3 analysis scoped out.
 
 ## 11. Known risks
@@ -312,9 +313,3 @@ These points must be resolved before the epics that depend on them. Owners are n
 10. **Attribution** (6-month review). How inbound contacts and upsells are attributed to a case study.
 11. **Shareable link access** (Epic 5; decide before Sprint 2, since Epic 5 hosts real client material before logins exist). Can anyone with the link open it, only logged-in users, or does the link expire? This is a client confidentiality decision.
 12. **What counts as altering** (Epics 3 and 4, NFR1; decide before Sprint 2). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary.
-
-## 13. Assumptions to confirm
-
-- FR2: upload limits of 20 files, 100 MB each, taken from the A3 sketch.
-- Section 8, demo preparation: a dry run with the creative director and sales replaces v1's pilot test.
-- Section 1.1: the counter-metric on owner time.
