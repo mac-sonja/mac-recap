@@ -1,6 +1,6 @@
 # UI Flows — MAC Recap MVP
 
-Adapted from the A3 deck (slides 14–23) with the MAC Productive steps removed. The MVP is standalone, and the owner starts each case study by hand.
+Summary of `EXPERIENCE.md`, which supersedes the A3 sketches (slides 14–23) and wins on any behaviour conflict. Labels are English with the Italian UI label where one exists.
 
 ## AS-IS (for reference)
 
@@ -12,33 +12,55 @@ Adapted from the A3 deck (slides 14–23) with the MAC Productive steps removed.
 
 Material lives on OneDrive (managed by the art director and account) and project timing on Wrike. Which assets to produce is decided case by case, with no standard.
 
-## Creation flow (owner/designer)
+## Surfaces by role
 
-1. Open MAC Recap, then create a case study (CAP-1).
-2. Upload materials: up to 20 files, at most 100 MB each. Tag each deliverable (CAP-2).
-3. Fill in the details form: business context, solution, results (CAP-3).
-4. Generate. This runs in the background, and the case shows "In elaborazione" until the draft is ready (CAP-4, CAP-5).
-5. Review on the dashboard, which shows each case's status: Bozza, In elaborazione, Da revisionare or Approvato (CAP-6).
-6. Refine in the configurator: channels and formats, shuffle layout, replace media, template variants, canvas ratio, typography and spacing (CAP-7).
-7. Check each claim against its sources, then approve (CAP-8).
+| Role | Lands on | Surfaces |
+| --- | --- | --- |
+| Owner/designer | Case studies (table) | + New case study wizard, Case studies table (Table / Library toggle), To review queue, configurator, case study view, Templates (scope is conflict C4) |
+| Account/sales/social | Case studies (library of approved cases) | Library, case study view |
+| Admin | Users | Users only |
+| Anyone with a link | Shared link page | One format of one approved case, no app chrome, no download |
 
-## Download flow (account/sales/social)
+A control a role can't use is absent, not disabled. Guardrail controls are shown disabled with the reason.
 
-1. Sign in from Sprint 3 onwards, then open the list of approved case studies (CAP-9).
-2. Open a case to see its technical and graphic content.
-3. Download the format needed, or create a share link (CAP-9, CAP-10). Posting to channels happens outside the tool.
+## Lifecycle labels (OP 8, interim Option A)
 
-## Candidate export formats (deck; MVP subset is Q1)
+Bozza → In elaborazione → Da approvare → Approvato. Shared links are a count on Approvato cases, not a status. There is no path back from Approvato.
 
-| Format | Size |
+## Flow 1 — Create and approve (owner/designer)
+
+1. **+ New case study:** enter name and client; the case is created with its ID and saved as Bozza (CAP-1).
+2. **Material:** drop up to 20 files of up to 100 MB; oversized or unsupported files are rejected per file. Tag each deliverable from a fixed list (CAP-2).
+3. **Details:** Context, Solution, Results, all optional (CAP-3).
+4. **Generate:** enabled only once one material file has uploaded; otherwise disabled with the reason. The case moves to In elaborazione, and the user can leave. On failure it returns to Bozza with **Try again** (CAP-4).
+5. A toast says the draft is ready; the case appears in **To review**, oldest first (CAP-6).
+6. **Configurator:** Formats pane, canvas, and Edit and Check tabs. Edit text in place and adjust layout variant, shuffle, spacing, media, font pairing and text scale per format (CAP-7).
+7. **Check tab:** tick each block against the material drawer. Editing a block unticks it. Approve stays disabled while any block is unchecked or overflows ("3 blocks still to check") (CAP-8).
+8. **Approve**, confirm, and the case moves to Approvato.
+
+## Flow 2 — Find, export, share (account/sales/social, also owner/designer)
+
+1. The library shows approved cases only, with search, client, year and tag facets (OP 3, OP 4).
+2. The case study view previews each MVP format (OP 1).
+3. **Export** the selected format, or **Export all** as one ZIP (CAP-9).
+4. **Share:** pick a format; the link is copied, and the dialog states who can open it (CAP-10, OP 11). The link list allows **Turn off link**.
+
+## Flow 3 — Edit an approved case (owner/designer)
+
+A banner shows the number of live links. Edits autosave to a working copy, and links keep showing the approved version. Re-check the edited blocks, then **Update approved version** (links update, the case stays Approvato) or **Discard changes**. This is the interim reading of Story 4.3 (conflict A1).
+
+## Flow 4 — Give access (admin)
+
+Add a user with an email and one role, change a role, or remove a user (their cases and links stay). The admin sees no case content and no permission or guardrail settings.
+
+## Candidate export formats (OP 1)
+
+One list, one name per format, shared by the configurator, case study view and share dialog. There is no canvas-ratio control.
+
+| UX option | Formats |
 | --- | --- |
-| Presentation deck | 16:9 |
-| Whitepaper | A4 |
-| Image carousel | 1080×1350 |
-| Square post | 1:1 (size not specified) |
-| Social video | 1080×1920 |
-| LinkedIn cover | 1200×675 |
-| HD PNG pack | — |
-| ZIP bundle | — |
+| A. Demo minimum (UX recommends) | Deck 16:9 (1920×1080) · Social carousel 4:5 (1080×1350) · PDF A4 portrait |
+| B. A + vertical and square | A + Story 9:16 (1080×1920, static) + Square post 1:1 (1080×1080) |
+| C. Everything in the A3 deck | B + LinkedIn cover 1200×675 + social video 9:16 + HD PNG pack + ZIP |
 
 The demo needs at least the deck, a social carousel and a PDF.
