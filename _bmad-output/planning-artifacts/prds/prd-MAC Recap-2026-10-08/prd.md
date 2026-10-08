@@ -75,7 +75,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 |---|---|
 | Owner/designer | Creates the case study, uploads project material, assigns tags, properties and flags, maintains templates, reviews, edits and approves the case study. Can also export and share approved case studies |
 | Account/sales/social | Finds approved case studies, exports them as files, and publishes them as shareable links. Does not create, edit or approve case studies |
-| Admin | Manages users and permissions, with no access to guardrails |
+| Admin | Manages users and assigns them to roles. Cannot change role permissions or the guardrails |
 
 - Requests for a case study happen outside the tool, as today. MAC Recap has no request feature.
 - The social team shares the account/sales/social role. It posts on its own channels outside the tool.
@@ -84,7 +84,8 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 ### 2.1 Terms
 
 - **Case study.** The output for one project: graphic layouts plus text structured as challenge, approach and result. Each has a unique ID.
-- **Deliverable.** One uploaded item (image, video or text) with its tags, properties and flags.
+- **Material.** Uploaded images, videos, texts and PDFs. The details form alone is not material.
+- **Deliverable.** One uploaded item of material with its tags, properties and flags.
 - **Approved case study.** A case study the owner/designer has reviewed and approved. Only approved case studies can be exported or shared.
 - **Shareable link.** A link to a hosted version of an approved case study, such as a hosted presentation. Who can open it is open point 11.
 - **Configurator.** The editing screen where the owner/designer adjusts text, layout, media and typography before approving.
@@ -96,7 +97,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 **FR1** – The system creates every case study with a unique ID, ready to be linked to the project order later. The owner/designer creates the case study manually. There is no trigger at project close.
 
-**FR2** – The owner/designer uploads files and text, assigns tags, properties and flags to each deliverable, and fills in a short form on context, solution and results.
+**FR2** – The owner/designer uploads material (images, videos, texts and PDFs), assigns tags, properties and flags to each deliverable, and fills in a short form on context, solution and results.
 - Upload is limited to 20 files of at most 100 MB each.
 
 **FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material and form answers.
@@ -136,7 +137,7 @@ Guardrails are non-negotiable constraints. Any requirement that contradicts them
 
 **NFR5** – Texts follow the defined narrative structure (challenge, approach, result) and the quality checklist, which is defined in the Sprint 2 non-dev deliverable "narrative structure and quality criteria". They cover both the technical and the graphic side of the project.
 
-**NFR6** – If no material is uploaded, nothing is generated.
+**NFR6** – If no material is uploaded, nothing is generated. A filled-in details form without material is not enough.
 
 **NFR7** – No case study is exported or published as a shareable link without human review and approval by an owner/designer.
 
@@ -155,7 +156,7 @@ The order follows the development plan. Non-dev activities are prerequisites for
 | Sprint | Due | Development | Non-dev activities |
 |---|---|---|---|
 | Sprint 1 | October 14 | Epic 2 – Asset upload and tagging | Team setup: Claude Code with the BMAD method (formerly Epic 1); tool design definition; template wireframes; data processing logic |
-| Sprint 2 | October 21 | Epic 3 – Graphic case study generation; Epic 4 – Review and approval; Epic 5 – Download and publishing | Configurator visual design (Bento); account/sales/social user journey; final case study templates; narrative structure and quality criteria |
+| Sprint 2 | October 21 | Epic 3 – Graphic case study generation; Epic 4 – Review and approval; Epic 5 – Download and publishing | Configurator visual design (Bento); account/sales/social user journey; final case study templates; narrative structure and quality criteria; first guardrail check |
 | Sprint 3 | October 28 | Epic 6 – Login, users and permissions | Mockups and assets for case studies; guardrail check; demo preparation; demo (October 30) |
 | After MAC Productive is ready (no date) | — | Epic 7 – MAC Productive integration; Epic 8 – Text-based case study generation | — |
 | Post-MVP (no date) | — | — | Mockup and asset guidelines |
@@ -224,6 +225,7 @@ Prerequisite: configurator visual design (Bento).
 - Any owner/designer can approve
 - The approved case study moves to the Approved status and becomes available for export and sharing
 - A case study that is not approved cannot be exported or shared
+- An owner/designer can still edit an approved case study. Saved changes update the case study and its shareable links, and it stays approved.
 
 ### Epic 5 – Download and publishing (Sprint 2)
 
@@ -243,17 +245,18 @@ Prerequisite: account/sales/social user journey.
 **Story 6.1** – As an owner/designer, account/sales/social user or admin, I want to sign in through a login.
 - There is a login for each of the three roles
 
-**Story 6.2** – As an admin, I want to manage roles and permissions.
+**Story 6.2** – As an admin, I want to assign users to roles.
+- Each role's permissions are fixed. The admin cannot change what a role can do
 - Owner/designer: create, upload and tag, manage templates, review, edit, approve, export and share
 - Account/sales/social: view approved case studies, export them, publish them as shareable links
-- Admin: users and permissions
+- Admin: users and role assignment
 
 **Story 6.3** – As the team, I want no role to have access to the guardrails.
 - No role, admin included, has a setting that disables or changes NFR1-NFR7
 
 ### MVP closing activities (Sprint 3, non-dev)
 
-- **Guardrail check.** Verify that the AI does not alter graphic assets, technical substance or template design. Verify that nothing is generated without material. Check technical content for hallucinations.
+- **Final guardrail check.** A first check runs at the end of Sprint 2, leaving time for fixes. Verify that the AI does not alter graphic assets, technical substance or template design. Verify that nothing is generated without material. Check technical content for hallucinations.
 - **Demo preparation.** Select one real past project, ideally one of the seven never published. Clear the confidentiality and NDA status of its material before upload. Prepare the material for the live run. Run a dry run with the creative director and sales before the demo, collecting their feedback in person. This replaces v1's pilot test.
 - **Demo on October 30.** Run the project live for the CEO against the success criteria in section 1.1.
 
@@ -313,3 +316,4 @@ These points must be resolved before the epics that depend on them. Owners are n
 10. **Attribution** (6-month review). How inbound contacts and upsells are attributed to a case study.
 11. **Shareable link access** (Epic 5; decide before Sprint 2, since Epic 5 hosts real client material before logins exist). Can anyone with the link open it, only logged-in users, or does the link expire? This is a client confidentiality decision.
 12. **What counts as altering** (Epics 3 and 4, NFR1; decide before Sprint 2). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary.
+13. **Recording the 8-week measures.** How owner time, editing and hallucinations are recorded during validation. To be decided.
