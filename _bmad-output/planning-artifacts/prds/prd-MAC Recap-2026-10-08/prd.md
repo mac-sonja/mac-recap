@@ -1,6 +1,6 @@
 ---
 title: "MAC Recap – MVP PRD (v2)"
-status: draft
+status: final
 created: 2026-10-07
 updated: 2026-10-08
 version: 2
@@ -11,7 +11,7 @@ supersedes: "docs/sources/MAC Recap-PRD-EN v1.pdf"
 
 Oct 8, 2026 · @Sonja
 
-This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR and epic numbers are unchanged from v1. Retired items are marked, not renumbered.
+This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR, epic, story and open-point numbers are unchanged from v1. Retired items are marked, not renumbered, and new items are added at the end.
 
 **Changes from v1**
 
@@ -36,7 +36,7 @@ Only 4 of the 11 projects closed in the last 12 months were shown externally. Th
 
 Goals:
 
-- Reduce the owner's time to produce a case study to 15-20 minutes.
+- Reduce the owner/designer's time to produce a case study to 15-20 minutes.
 - Release the standalone MVP by October 30, 2026, and present it to the CEO as a demo that day.
 - Validate the tool over 8 weeks after the demo and measure its business impact at 6 months.
 - Integrate with MAC Productive once that system is ready. No date is set.
@@ -45,7 +45,7 @@ Goals:
 
 **October 30 demo (go / no-go with the CEO).** One real past project goes through MAC Recap live. Ideally it is one of the seven never published.
 
-- From upload to approved case study in 15-20 minutes of the owner's hands-on time (NFR4).
+- From upload to approved case study in 15-20 minutes of the owner/designer's hands-on time (NFR4).
 - The same case study exported in several formats, such as deck, social carousel and PDF (FR7).
 - The text covers both the technical and the graphic side of the project (NFR5).
 - A person checks during review that every claim in the text can be traced back to the uploaded material (NFR2).
@@ -55,7 +55,7 @@ The demo is a go only if all four criteria pass. After a no-go, the team fixes t
 **8-week validation (after a go).** Real closed projects run through the standalone tool. Measures:
 
 - Number of case studies generated
-- Average owner time per case study, against a target of 15-20 minutes
+- Average owner/designer time per case study, against a target of 15-20 minutes
 - Amount of manual editing needed after generation
 - Hallucinations or guardrail violations that reach an approved case study, against a target of zero
 - Hallucinations caught in review, tracked with no target. A high count signals weak generation, not a weak review.
@@ -69,7 +69,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 - Layout hours saved (baseline: 1-2 hours per case study). The 24-60 hour end-to-end baseline also includes producing material, which the MVP does not address.
 - Inbound contacts and upsells attributed to a case study. The attribution method is open (open point 10).
 
-**Counter-metric.** Owner time must not fall because the review gets shorter. A faster case study that skips the claim check (NFR2) is a failure, not a gain.
+**Counter-metric.** Owner/designer time must not fall because the review gets shorter. A faster case study that skips the claim check (NFR2) is a failure, not a gain.
 
 ## 2. User roles
 
@@ -99,7 +99,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 **FR1** – The system creates every case study with a unique ID, ready to be linked to the project order later. The owner/designer creates the case study manually. There is no trigger at project close.
 
-**FR2** – The owner/designer uploads material (images, videos, texts and PDFs), assigns tags, properties and flags to each deliverable, and fills in a short form on context, solution and results.
+**FR2** – The owner/designer uploads material (images, videos, texts and PDFs), assigns tags, properties and flags to each deliverable, and fills in a short details form on context, solution and results.
 - Upload is limited to 20 files of at most 100 MB each.
 
 **FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material and form answers.
@@ -136,7 +136,7 @@ Guardrails are non-negotiable constraints. Any requirement that contradicts them
 
 **NFR3** – No role can configure the guardrails, admin included.
 
-**NFR4** – The owner's hands-on time from upload to approval is at most 20 minutes, with a target of 15. If the claim check (NFR2) needs more time, NFR2 wins. Time spent waiting for the draft to generate does not count, and generation time has no limit.
+**NFR4** – The owner/designer's hands-on time from upload to approval is at most 20 minutes, with a target of 15. If the claim check (NFR2) needs more time, NFR2 wins. Time spent waiting for the draft to generate does not count, and generation time has no limit.
 
 **NFR5** – Texts follow the defined narrative structure (challenge, approach, result) and the quality checklist, which is defined in the Sprint 2 non-dev deliverable "narrative structure and quality criteria". They cover both the technical and the graphic side of the project.
 
@@ -160,7 +160,7 @@ The order follows the development plan. Non-dev activities are prerequisites for
 |---|---|---|---|
 | Sprint 1 | October 14 | Epic 2 – Asset upload and tagging | Team setup: Claude Code with the BMAD method (formerly Epic 1); tool design definition; template wireframes; data processing logic |
 | Sprint 2 | October 21 | Epic 3 – Graphic case study generation; Epic 4 – Review and approval; Epic 5 – Download and publishing | Configurator visual design (Bento); account/sales/social user journey; final case study templates; narrative structure and quality criteria; first guardrail check |
-| Sprint 3 | October 28 | Epic 6 – Login, users and permissions | Mockups and assets for case studies; guardrail check; demo preparation; demo (October 30) |
+| Sprint 3 | October 28 | Epic 6 – Login, users and permissions | Mockups and assets for case studies; final guardrail check; demo preparation; demo (October 30) |
 | After MAC Productive is ready (no date) | — | Epic 7 – MAC Productive integration; Epic 8 – Text-based case study generation | — |
 | Post-MVP (no date) | — | — | Mockup and asset guidelines |
 
@@ -169,7 +169,7 @@ The order follows the development plan. Non-dev activities are prerequisites for
 1. ~~Epic 1 – Setup with BMAD~~. Removed from the epic list. It is team setup, not product scope, and now sits in Sprint 1's non-dev activities.
 2. Epic 2 – Asset upload and tagging: create the case study with a unique ID and handle file and text upload with tags, properties and flags
 3. Epic 3 – Graphic case study generation: generate case studies by applying graphic templates to the uploaded material
-4. Epic 4 – Review and approval: review, edit and approve case studies through the configurator and dashboard
+4. Epic 4 – Review and approval: review, edit and approve case studies through the configurator and review dashboard
 5. Epic 5 – Download and publishing: export approved case studies as files and publish them as shareable links
 6. Epic 6 – Login, users and permissions: introduce authentication and role-based permissions for the three roles
 7. Epic 7 – MAC Productive integration (post-MVP, no date): connect the tool to the project management system via MCP
@@ -193,7 +193,7 @@ Prerequisites: tool design definition, template wireframes (asset dimensions, fo
 **Story 2.3** – As an owner/designer, I want to upload files and text to the case study.
 - The file and text upload flow is complete
 - Uploaded material is associated with the case study
-- I can fill in the form on context, solution and results
+- I can fill in the details form on context, solution and results
 
 **Story 2.4** – As an owner/designer, I want to assign tags, properties and flags to deliverables.
 - Tags, properties and flags are saved for each deliverable
@@ -234,7 +234,7 @@ Prerequisite: configurator visual design (Bento).
 
 Prerequisite: account/sales/social user journey.
 
-**Story 5.1** – As an owner/designer or account/sales/social user, I want to export the final material of an approved case study.
+**Story 5.1** – As an owner/designer or account/sales/social user, I want to export an approved case study as files.
 - Only approved case studies can be exported
 - Export produces files in the MVP formats (open point 1)
 
@@ -254,7 +254,7 @@ Prerequisite: account/sales/social user journey.
 - Account/sales/social: view approved case studies, export them, publish them as shareable links
 - Admin: users and role assignment
 
-**Story 6.3** – As the team, I want no role to have access to the guardrails.
+**Story 6.3** – As the team, I want no role to be able to configure the guardrails.
 - No role, admin included, has a setting that disables or changes NFR1-NFR7
 
 ### MVP closing activities (Sprint 3, non-dev)
@@ -288,9 +288,10 @@ Prerequisite: account/sales/social user journey.
 ## 10. Out of scope for the MVP
 
 - **MAC Productive integration via MCP** (FR9, Epic 7). This includes the "Crea case" button at project close and the case study appearing on the project order page.
-- **Text-only case studies and whitepapers from project order data** (FR10, Epic 8). These depend on the integration.
-- **An automatic trigger at project close.** Owners start case studies manually.
-- **Collecting and tagging material during the project,** and mockup and asset guidelines.
+- **Text-based case studies and whitepapers from project order data** (FR10, Epic 8). These depend on the integration.
+- **An automatic trigger at project close.** The owner/designer starts case studies manually.
+- **Collecting and tagging material during the project.**
+- **Mockup and asset guidelines.**
 - **Posting to social channels or the website from inside the tool.** Account/sales/social users download files or share links and post them elsewhere.
 - **Requesting a case study inside the tool.**
 - **Onboarding and feedback collection inside the tool.** Both happen in person. v1's "pilot test and onboarding" is replaced by the demo dry run.
@@ -298,9 +299,9 @@ Prerequisite: account/sales/social user journey.
 
 ## 11. Known risks
 
-- **The root cause stays open.** The A3 analysis traced the problem to the lack of a standard process for tagging assets during the project. The MVP acts only at project close, and nothing prompts the owner to start. MAC Recap makes case studies fast, but on its own it may not make them happen. Without a process owner, the 4-of-11 rate could persist.
-- **Missing material still stops the flow.** If mockups or screenshots don't exist at close, the owner has to produce them before the 15-20 minutes can start.
-- **Real client data is used before login exists.** Until Sprint 3, the tool runs without authentication, and the demo uses a real past project. The confidentiality and NDA status of that material must be cleared first. Until open point 11 is decided, shareable links open for anyone who has them, so a forwarded link exposes client material.
+- **The root cause stays open.** The A3 analysis traced the problem to the lack of a standard process for tagging assets during the project. The MVP acts only at project close, and nothing prompts the owner/designer to start. MAC Recap makes case studies fast, but on its own it may not make them happen. Without a process owner, the 4-of-11 rate could persist.
+- **Missing material still stops the flow.** If mockups or screenshots don't exist at close, the owner/designer has to produce them before the 15-20 minutes can start.
+- **Real client material is used before login exists.** Until Sprint 3, the tool runs without authentication, and the demo uses a real past project. The confidentiality and NDA status of that material must be cleared first. Until open point 11 is decided, shareable links open for anyone who has them, so a forwarded link exposes client material.
 - **The schedule is tight.** Sprint 2 (due October 21) carries generation, review and export. It depends on non-dev deliverables due at the same time: final templates, the narrative structure and quality criteria, and the configurator visual design. Epics run strictly one after another, so Epic 3 can't start until those land. The "graphic template layouts" prerequisite of Epic 3 has no sprint.
 
 ## 12. Open points
@@ -319,4 +320,4 @@ These points must be resolved before the epics that depend on them. Owners are n
 10. **Attribution** (6-month review). How inbound contacts and upsells are attributed to a case study.
 11. **Shareable link access** (Epic 5). Until this is decided, links open for anyone who has them (FR7). Can anyone with the link open it, only logged-in users, or does the link expire? This is a client confidentiality decision.
 12. **What counts as altering** (Epics 3 and 4, NFR1; decide before Sprint 2). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary.
-13. **Recording the 8-week measures.** How owner time, editing and hallucinations are recorded during validation. To be decided.
+13. **Recording the 8-week measures.** How owner/designer time, editing and hallucinations are recorded during validation.
