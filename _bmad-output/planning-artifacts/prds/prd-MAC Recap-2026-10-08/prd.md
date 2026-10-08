@@ -20,7 +20,7 @@ This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the produc
 - Owner and designer are one role. Account/sales and the social team share one role, which gets its own login in Sprint 3.
 - "Publish" means publishing a case study as a shareable link. The tool does not post to social channels or the website.
 - New guardrails NFR6 (no material, no generation) and NFR7 (human review before export or sharing). NFR2 and NFR4 are redefined.
-- October 30 is a demo on material from one real past project, not a pilot. Onboarding is out of scope.
+- October 30 is a demo on material from one real past project, not a pilot. Onboarding and feedback happen in person, outside the tool.
 - Epic 1 (BMAD setup) is now a team setup task, not product scope.
 - The owner/designer creates case studies manually. Requests for a case study happen outside the tool.
 - FR2 adds the details form, FR3 limits the text to uploaded material, and NFR5 requires both the technical and the graphic side.
@@ -254,7 +254,7 @@ Prerequisite: account/sales/social user journey.
 ### MVP closing activities (Sprint 3, non-dev)
 
 - **Guardrail check.** Verify that the AI does not alter graphic assets, technical substance or template design. Verify that nothing is generated without material. Check technical content for hallucinations.
-- **Demo preparation.** Select one real past project, ideally one of the seven never published. Clear the confidentiality and NDA status of its material before upload. Prepare the material for the live run. Run a dry run with the creative director and sales to collect feedback before the demo. This replaces v1's pilot test.
+- **Demo preparation.** Select one real past project, ideally one of the seven never published. Clear the confidentiality and NDA status of its material before upload. Prepare the material for the live run. Run a dry run with the creative director and sales before the demo, collecting their feedback in person. This replaces v1's pilot test.
 - **Demo on October 30.** Run the project live for the CEO against the success criteria in section 1.1.
 
 ## 9. Post-MVP backlog (after MAC Productive is ready, no date)
@@ -287,7 +287,7 @@ Prerequisite: account/sales/social user journey.
 - **Collecting and tagging material during the project,** and mockup and asset guidelines.
 - **Posting to social channels or the website from inside the tool.** Account/sales/social users download files or share links and post them elsewhere.
 - **Requesting a case study inside the tool.**
-- **Onboarding** of the wider team. v1's "pilot test and onboarding" is replaced by the demo dry run.
+- **Onboarding and feedback collection inside the tool.** Both happen in person. v1's "pilot test and onboarding" is replaced by the demo dry run.
 - **Internal communication,** which the A3 analysis scoped out.
 
 ## 11. Known risks
