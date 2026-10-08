@@ -10,8 +10,8 @@ This addendum holds detail that belongs downstream (PRD, UX, architecture) rathe
 
 ## Source material
 
-- A3 deck (Italian): `/Users/Sonja/Downloads/MAC Recap_Modello A3.pdf`
-- PRD draft v1 (English): `/Users/Sonja/Downloads/MAC Recap-PRD-EN v1.pdf`. It holds the FRs, NFRs, epics and stories, and is the primary input for `bmad-prd`.
+- A3 deck (Italian): `docs/sources/MAC Recap_Modello A3.pdf`
+- PRD draft v1 (English): `docs/sources/MAC Recap-PRD-EN v1.pdf`. It holds the FRs, NFRs, epics and stories, and is the primary input for `bmad-prd`.
 
 ## Baseline data (from the A3 deck)
 
