@@ -5,10 +5,12 @@ companions:
   - delivery-plan.md
   - ui-flows.md
   - '../../planning-artifacts/architecture/architecture-MAC Recap-2026-10-08/ARCHITECTURE-SPINE.md'
+  - '../../planning-artifacts/ux-designs/ux-MAC Recap-2026-10-08/EXPERIENCE.md'
+  - '../../planning-artifacts/ux-designs/ux-MAC Recap-2026-10-08/DESIGN.md'
 sources:
+  - '../../planning-artifacts/prds/prd-MAC Recap-2026-10-08/prd.md'
   - '../../planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/brief.md'
   - '../../planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/addendum.md'
-  - '/Users/Sonja/Downloads/MAC Recap-PRD-EN v1.pdf'
 ---
 
 > **Canonical contract.** This SPEC and the files in `companions:` are the complete, preservation-validated contract for what to build, test, and validate. Source documents listed in frontmatter are for traceability — consult them only if you need narrative rationale or prose color this contract intentionally omits.
@@ -17,101 +19,120 @@ sources:
 
 ## Why
 
-The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects closed in the last 12 months were shown externally. Those took about two months to reach social channels, and none told both the technical and the graphic story, so upsell and inbound leads are lost. A case study takes 24–60 hours end to end, 1–2 hours of which is layout alone, and no one has time for it when a project closes. There is also a mandate: a working standalone MVP must be demoed to the CEO, the final validator, on October 30, 2026. MAC Recap turns a closed project's verified material into an on-brand case study in 15–20 minutes of the owner's time. It assembles what already exists and never invents content. It affects four teams: creative, sales, PM and social.
+The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects closed in the last 12 months were shown externally. Those took about two months to reach social channels, and none told both the technical and the graphic story, so upsell and inbound leads are lost. A case study takes 24–60 hours end to end, 1–2 hours of which is layout alone, and no one has time for it when a project closes. There is also a mandate: a working standalone MVP must be demoed to the CEO, the final validator, on October 30, 2026. MAC Recap turns a closed project's verified material into an on-brand case study in at most 20 minutes of the owner/designer's hands-on time, target 15. It assembles what already exists and never invents content. It affects four teams: creative, sales, PM and social.
 
 ## Capabilities
 
 - **CAP-1**
-  - **intent:** The owner creates a case study, and it gets a unique, permanent ID that a project order can later be linked to.
-  - **success:** Every new case study has an ID that never changes, is never reused, and is the only identifier other systems see.
+  - **intent:** The owner/designer creates a case study by hand, and it gets a unique, permanent ID that a project order can later be linked to.
+  - **success:** Every new case study has an ID that never changes, is never reused, and is the only identifier other systems see (AD-2).
 - **CAP-2**
-  - **intent:** The owner uploads images, video and text to a case study and tags each deliverable with tags, properties and flags.
-  - **success:** Up to 20 files of up to 100 MB each are stored with the case study, each carrying its own tags, properties and flags. Anything over those limits, or of a type not allowed, is rejected.
+  - **intent:** The owner/designer uploads material (images, videos, texts and PDFs) to a case study and tags each deliverable with tags, properties and flags.
+  - **success:** Up to 20 files of up to 100 MB each are stored with the case study, each carrying its own tags, properties and flags from a fixed list. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others.
 - **CAP-3**
-  - **intent:** The owner fills in a short form on business context, solution and results that feeds the narrative.
-  - **success:** The form's answers are saved with the case study and show up as sources the narrative can cite.
+  - **intent:** The owner/designer fills in a short details form on context, solution and results that feeds the narrative.
+  - **success:** The answers are saved with the case study and can be cited as claim sources. The fields are optional, and the form never counts as material.
 - **CAP-4**
-  - **intent:** The owner generates a graphic case study by applying MAC templates to the uploaded material, with a layout that adapts to how many media items there are.
-  - **success:** Generation runs in the background and the case shows "In elaborazione" until the draft is ready. The draft uses an unchanged template design and unchanged assets. For each media count in the template's supported range, generation uses that count's slot mapping. Generation is refused when the case has no visual material or fewer media items than the template's minimum.
+  - **intent:** The owner/designer generates a graphic case study by applying MAC templates to the uploaded material, with a layout that adapts to how many media items there are.
+  - **success:** Generation runs in the background and the case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The draft uses an unchanged template design and unchanged assets, and the slot mapping for its media count. Generation is refused with no material, even when the details form is filled in.
 - **CAP-5**
-  - **intent:** The narrative tells challenge, approach and result, covers both the technical and the graphic side, and is built only from uploaded material.
-  - **success:** Every generated claim carries links to its source material, and any claim without a valid link is flagged for the reviewer. A draft missing either the technical or the graphic side is flagged MISSING_ASPECT and cannot be approved.
+  - **intent:** The narrative tells challenge, approach and result, covers both the technical and the graphic side, and is built only from the uploaded material and form answers.
+  - **success:** The challenge, approach and result sections are always present and cannot be removed or reordered. Any source references a claim carries point only to this case's material or form answers, and are never shown as "verified". A draft missing the technical or the graphic side is marked MISSING_ASPECT and the warning is shown in the configurator (whether it blocks approval is conflict A3).
 - **CAP-6**
-  - **intent:** The owner/designer sees all case studies and their status on a review dashboard.
-  - **success:** The dashboard lists cases with the statuses Bozza, In elaborazione, Da revisionare and Approvato, and shows the ones awaiting review.
+  - **intent:** The owner/designer sees all case studies and their status, with a queue of those waiting for review.
+  - **success:** The list shows every case with its status (labels per OP 8; interim Bozza, In elaborazione, Da approvare, Approvato) and a To review queue, oldest first. Only Bozza cases can be deleted.
 - **CAP-7**
-  - **intent:** The owner/designer refines a generated case study in a configurator: channels and formats, shuffle layout, replace media, template variants, canvas ratio, typography and spacing.
-  - **success:** The configurator preview matches the exported files exactly, and edits can use only options the template defines.
+  - **intent:** The owner/designer refines a generated case study in a configurator: generated text, layout variant, shuffle, spacing, media replace, reorder and remove, font pairing and text scale, per export format.
+  - **success:** Every text block can be edited in place, and each edited block needs its claim check again. Layout, spacing and typography accept only values the template defines; media come only from this case's material. The preview matches the exported files exactly. There is no canvas-ratio control; each format sets its ratio.
 - **CAP-8**
-  - **intent:** The case owner approves the case study after checking every claim against its sources, which makes it available to sales.
-  - **success:** Only the case owner can approve. Approval is blocked while any claim has neither a valid source nor explicit reviewer sign-off, or while a MISSING_ASPECT flag is open. The approved version stays fixed, and editing it again creates a new version to review.
+  - **intent:** Any owner/designer approves a case study after checking every claim against the material and form answers, which makes it available for export and sharing.
+  - **success:** Approve stays disabled until every text block carries a current, manual check, no block overflows in any format, and no referenced material is deleted. There is no bulk check or bulk approve. Editing an approved case keeps it approved; edits go live, links included, only when an owner/designer re-checks the edited blocks and runs Update approved version (interim, conflict A1).
 - **CAP-9**
-  - **intent:** Account, sales and social staff find approved case studies and download them in the format they need.
-  - **success:** They can list approved case studies and download the same case in several formats, including a 16:9 deck, a PDF and a social carousel. Unapproved content cannot be exported.
+  - **intent:** Owner/designer and account/sales/social users find approved case studies and export them in the format they need.
+  - **success:** Account/sales/social users see approved case studies only. Both roles can export the same approved case in each MVP format (OP 1), at least a 16:9 deck as PDF, a social carousel and an A4 PDF. Unapproved content has no view, export or share entry point.
 - **CAP-10**
-  - **intent:** Account, sales and social staff publish an approved case study as a shareable link, such as a hosted presentation.
-  - **success:** The link shows the approved version and does not change if the case is edited later. It can be revoked or set to expire, and a revoked or expired link returns not found.
+  - **intent:** Owner/designer and account/sales/social users publish an approved case study as a shareable link to a hosted presentation.
+  - **success:** Each link shows one format of the current approved version, never a working copy, and offers no file download. Who can open it is stated in the share dialog. A link can be turned off, and a turned-off or expired link shows "no longer available".
 - **CAP-11**
-  - **intent:** Users sign in with one of three roles (owner/designer, account/sales/social, admin), and the admin manages users and roles.
-  - **success:** Every action follows the role permission matrix in the architecture spine (AD-11). The admin can manage users and reassign case owners but cannot view or change guardrails.
+  - **intent:** Users sign in with one of three fixed roles (owner/designer, account/sales/social, admin), and the admin adds and removes users and assigns their role.
+  - **success:** Every action follows the permission matrix in AD-11. The admin can manage users and roles only: no case content, no permission settings, no guardrail settings, and the last admin cannot drop their own admin role.
 - **CAP-12**
-  - **intent:** The team can measure each case's owner time, editing effort and review findings for the 8-week validation.
-  - **success:** For any approved case, the system reports the owner's hands-on time from first upload to approval and the difference between the generated draft and the approved version. Every step is recorded as a timestamped event with who did it.
+  - **intent:** The team can reconstruct each case's lifecycle and editing effort for the 8-week validation.
+  - **success:** Every transition, upload, save, block check, claim edit, approval, export and link change is an append-only, timestamped event with its actor, and the generated draft is kept next to the approved version. The tool does not record hands-on time; how the measures are recorded is OP 13.
 
 ## Constraints
 
 - These guardrails are not negotiable, and any requirement that contradicts them is flagged, not built:
-  - The AI never alters graphic assets, the technical substance of the content, or template design.
-  - With no visual material, nothing is generated.
-  - Nothing is shared or exported before human review and approval.
-  - A person checks the generated technical content for hallucinations during review.
-  - No role can view or change the guardrails, admin included.
-- The MVP is due on **October 30, 2026**, the demo date (not October 31). The sprints are due October 14, 21 and 28. Epics run one after another, never in parallel (see `delivery-plan.md`).
+  - NFR1: the AI never alters graphic assets, the technical substance of the content, or template design. Where adaptation, shuffle and resize stand is OP 12.
+  - NFR2: a person checks every generated claim against the uploaded material or form answers during review, before approval.
+  - NFR3: no role can view or change the guardrails, admin included.
+  - NFR6: with no material, nothing is generated. The details form alone is not enough.
+  - NFR7: nothing is exported or shared before review and approval by an owner/designer.
+- NFR4: the owner/designer's hands-on time from upload to approval is at most 20 minutes, target 15. If the claim check needs more time, NFR2 wins. Waiting for generation does not count, and generation time has no limit.
+- Owner/designer time must not fall by shortening the review. A faster case study that skips the claim check is a failure.
+- NFR5: the narrative follows challenge, approach and result, meets the Sprint 2 quality checklist, and covers both the technical and the graphic side.
+- The MVP is due on **October 30, 2026**, the demo date. The sprints are due October 14, 21 and 28. Epics run one after another, never in parallel (see `delivery-plan.md`).
 - The MVP is standalone from MAC Productive. Any future link runs through MCP and is keyed only on the case study's unique ID.
 - Data lives in Supabase and files in an AWS S3 bucket. The system is built with Claude Code and the BMAD method. The architecture spine's AD-1 to AD-20 are binding.
-- Login arrives only in Sprint 3. Until then every deployed environment must be gated (AD-12), because the demo uses real client material. That material's NDA was confirmed cleared by Sonja on 2026-10-08, including processing through the Anthropic API.
-- NFR4: the owner's hands-on time from upload to approved case study is 15–20 minutes at most.
-- The narrative follows challenge, approach and result, and meets the quality checklist (NFR5).
-- Case studies are created by hand. The owner opens MAC Recap and starts one; there is no trigger when a project closes.
+- Login arrives only in Sprint 3. Until then every deployed environment, shareable links included, is gated (AD-12), because the demo uses real client material. That material's NDA was confirmed cleared by Sonja on 2026-10-08, including processing through the Anthropic API. Each project run in the 8-week validation needs the same clearance.
+- Case studies are created by hand. There is no trigger at project close, and requests for a case study happen outside the tool.
 
 ## Non-goals
 
-- MAC Productive integration via MCP. This includes the "Crea case" button at project close and the case appearing on the project order page. It starts when MAC Productive is ready; no date is set.
-- Text-only case studies and whitepapers built from project order data (Epic 8).
-- An automatic trigger at project close.
-- Collecting or tagging material while the project is running, and guidelines for mockups and assets.
+- MAC Productive integration via MCP (FR9, Epic 7), including the "Crea case" button at project close and the case appearing on the project order page. No date is set.
+- Text-only case studies and whitepapers built from project order data (FR10, Epic 8).
+- An automatic trigger at project close, and requesting a case study inside the tool.
+- Collecting or tagging material while the project is running, and mockup and asset guidelines.
 - Posting to social channels or the website from inside the tool.
+- Onboarding and feedback collection inside the tool. Both happen in person.
 - Internal communication.
-- Automated hallucination detection. The NFR2 check is done by a person during review.
-- Creating or editing templates inside the tool. Templates change only in code.
+- Automated hallucination detection, and confidence scores or "AI verified" labels on claims.
+- Creating or editing template design inside the tool. Templates change only in code.
+- Editable PPTX export, version history, and email or Slack notifications.
 
 ## Success signal
 
-- At the October 30 demo, one real past project, ideally one of the seven never published, goes live from upload to an approved case study in 15–20 minutes of the owner's time. It is exported as a deck, a social carousel and a PDF. The text covers both the technical and the graphic side, and the CEO can trace every claim to the uploaded material. The 8-week and 6-month targets are in `success-metrics.md`.
+- At the October 30 demo, one real past project, ideally one of the seven never published, goes live from upload to an approved case study in at most 20 minutes of the owner/designer's hands-on time, target 15. It is exported as a deck, a social carousel and a PDF. The text covers both the technical and the graphic side, and a person has checked every claim against the uploaded material. The demo is a go only if all four pass; after a no-go the team fixes the gaps and presents again on a new date. The 8-week and 6-month measures are in `success-metrics.md`.
 
 ## Assumptions
 
-- Epic 1 (BMAD setup) is team setup that is already done, not product scope.
-- Allowed upload types are JPEG, PNG, WebP, MP4, MOV and PDF.
-- PPTX export is one rendered image per slide; editable slides are deferred.
-- Templates are coded from the designer's specs. In the tool, owner/designer only picks a template, variant and settings.
-- The UI is in Italian, and each case's narrative is in Italian or English (default Italian).
-- The social team shares the account/sales/social role and has no separate login.
+- Allowed upload types are JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown and DOCX. Pasted text counts as material.
+- The deck exports as PDF only. Image formats export as a ZIP of PNGs.
+- Text and media selection are shared across formats; layout variant, spacing and text scale are set per format.
+- Templates are coded from the design team's specs. In the tool, the owner/designer only picks variant, shuffle, spacing, text scale and font pairing.
+- Each case's narrative is in Italian or English (default Italian). The UI is in Italian.
+- Tagging is optional per file. There is no review assignment: any owner/designer can open any case.
+- Anyone who can share can turn off any link.
+- An in-app toast announces a ready draft.
 - Development and staging in Sprints 1–2 use the demo project's real material, but only inside environments gated under AD-12.
-- Where this spec differs from PRD v1, the difference is deliberate, following the brief or the architecture spine:
-  - Owner and designer are one role, and account/sales/social is one role.
-  - "Publish" means a share link.
-  - Templates change only in code.
-  - Generation requires visual material.
-  - The "Da revisionare" status is added.
-  - Deployed environments are gated before login exists.
 
 ## Open Questions
 
-- Q1: Which export formats are in the MVP? The deck shows eight (see `ui-flows.md`). This must be decided before the Epic 3 templates are final.
-- Q2: What are the values of the tag, property and flag taxonomy? They must be seeded before Story 2.4.
-- Q3: What are the narrative prompt and quality checklist? They are due with Sprint 2's "narrative structure and quality criteria".
-- Q4: How will inbound contacts and upsells be attributed to a case study for the 6-month review?
-- Q5: Who can open a shareable link by default: anyone with the link, only signed-in users, or anyone until the link expires? This must be decided before Epic 5 ships.
-- Which EU container host will run the app? It must be chosen by the end of Sprint 1.
-- What does "Lovable" mean in PRD Story 7.2? Clarify or remove it before Epic 7.
+PRD v2 open points (decide before the epics that depend on them; see `delivery-plan.md`):
+
+- OP 1: Which export formats are in the MVP? UX recommends the demo minimum (deck, carousel, A4) first.
+- OP 2: How does the tool turn uploaded material into text, including which material types the LLM reads?
+- OP 3: What are the tag, property and flag values? Due by October 14.
+- OP 4: How do account/sales/social users find and browse case studies? UX proposes a card library with search and facets.
+- OP 8: Which case study states and labels are used?
+- OP 10: How are inbound contacts and upsells attributed to a case study?
+- OP 11: Who can open a shareable link: anyone with it, only signed-in users, or until it expires?
+- OP 12: Do media-count adaptation, shuffle, replace and resizing for export count as altering?
+- OP 13: How are owner/designer time, editing and hallucinations recorded during the 8-week validation? UX has decided the tool records no hands-on time.
+- OP 7 (post-MVP): MAC Productive data structure and confidentiality.
+
+Other open items:
+
+- What is the narrative quality checklist (NFR5)? Due with Sprint 2's "narrative structure and quality criteria".
+- Which EU container host runs the app? Choose by the end of Sprint 1.
+- Epic 3's "graphic template layouts" prerequisite has no sprint.
+
+Conflicts carried from the architecture spine and UX, not decided here:
+
+- A1 / C1 (PRD owner): Story 4.3 says saved edits to an approved case update it and its links. The spine and UX stage edits until Update approved version, so unchecked text never reaches a link.
+- A2 (PRD owner): FR7 says anyone with a link can open it, but AD-12 gates `/s/{token}` until Epic 6 ships.
+- A3 (UX): Should MISSING_ASPECT block approval? It is a warning in the interim.
+- A4 (design team): What does a template render when the material has no images or videos?
+- A5 (UX): The server rejects a concurrent save, but UX has no "someone else changed this" state.
+- C3 (PRD owner): Autosave and the in-app toast are in the UX but in no FR.
+- C4 (PRD owner): "Maintain templates" is in the role permissions but in no FR. UX proposes browse, turn variants on and off, and see usage.
