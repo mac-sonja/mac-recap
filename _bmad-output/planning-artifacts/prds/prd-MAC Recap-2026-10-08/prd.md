@@ -50,6 +50,8 @@ Goals:
 - The text covers both the technical and the graphic side of the project (NFR5).
 - A person checks during review that every claim in the text can be traced back to the uploaded material (NFR2).
 
+The demo is a go only if all four criteria pass. After a no-go, the team fixes the gaps and presents again on a new date.
+
 **8-week validation (after a go).** Real closed projects run through the standalone tool. Measures:
 
 - Number of case studies generated
@@ -113,6 +115,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 - Only approved case studies can be exported or shared.
 - The tool does not post to social channels or the website.
 - Which formats are in the MVP is open point 1.
+- Until open point 11 is decided, anyone with a shareable link can open it.
 
 **FR8** – Owner/designer, account/sales/social and admin users sign in through a login, with distinct roles and permissions. Delivered in Sprint 3.
 
@@ -297,7 +300,7 @@ Prerequisite: account/sales/social user journey.
 
 - **The root cause stays open.** The A3 analysis traced the problem to the lack of a standard process for tagging assets during the project. The MVP acts only at project close, and nothing prompts the owner to start. MAC Recap makes case studies fast, but on its own it may not make them happen. Without a process owner, the 4-of-11 rate could persist.
 - **Missing material still stops the flow.** If mockups or screenshots don't exist at close, the owner has to produce them before the 15-20 minutes can start.
-- **Real client data is used before login exists.** Until Sprint 3, the tool runs without authentication, and the demo uses a real past project. The confidentiality and NDA status of that material must be cleared first.
+- **Real client data is used before login exists.** Until Sprint 3, the tool runs without authentication, and the demo uses a real past project. The confidentiality and NDA status of that material must be cleared first. Until open point 11 is decided, shareable links open for anyone who has them, so a forwarded link exposes client material.
 - **The schedule is tight.** Sprint 2 (due October 21) carries generation, review and export. It depends on non-dev deliverables due at the same time: final templates, the narrative structure and quality criteria, and the configurator visual design. Epics run strictly one after another, so Epic 3 can't start until those land. The "graphic template layouts" prerequisite of Epic 3 has no sprint.
 
 ## 12. Open points
@@ -314,6 +317,6 @@ These points must be resolved before the epics that depend on them. Owners are n
 8. **Case study status lifecycle** (Epic 4; decide before Sprint 2). The A3 screens use Draft, Processing, Awaiting approval, Approved and Published, and the names differ from screen to screen. v1 names only Approved.
 9. **Owner/designer export rights.** Resolved: both owner/designer and account/sales/social users can export and share approved case studies.
 10. **Attribution** (6-month review). How inbound contacts and upsells are attributed to a case study.
-11. **Shareable link access** (Epic 5; decide before Sprint 2, since Epic 5 hosts real client material before logins exist). Can anyone with the link open it, only logged-in users, or does the link expire? This is a client confidentiality decision.
+11. **Shareable link access** (Epic 5). Until this is decided, links open for anyone who has them (FR7). Can anyone with the link open it, only logged-in users, or does the link expire? This is a client confidentiality decision.
 12. **What counts as altering** (Epics 3 and 4, NFR1; decide before Sprint 2). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary.
 13. **Recording the 8-week measures.** How owner time, editing and hallucinations are recorded during validation. To be decided.
