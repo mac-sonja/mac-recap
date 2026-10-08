@@ -22,7 +22,11 @@ This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the produc
 - New guardrails NFR6 (no material, no generation) and NFR7 (human review before export or sharing). NFR2 and NFR4 are redefined.
 - October 30 is a demo on material from one real past project, not a pilot.
 - Epic 1 (BMAD setup) is now a team setup task, not product scope.
-- New sections: success criteria, out of scope, known risks. The open points now include the brief's open questions.
+- The owner/designer creates case studies manually. Requests for a case study happen outside the tool.
+- FR2 adds the details form, FR3 limits the text to uploaded material, and NFR5 requires both the technical and the graphic side.
+- The owner/designer can edit generated text and can export and share. Any owner/designer can approve, not only the one who uploaded the material, which relaxes the A3 deck's rule.
+- Story 8.3: the owner/designer generates the whitepaper and account/sales/social users download or share it. Story 7.2 no longer mentions Lovable.
+- New sections: success criteria, terms, out of scope, known risks. The open points now include the brief's open questions, plus two from the A3 deck (points 8 and 9).
 
 ## 1. Goals and context
 
@@ -68,7 +72,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 | Role | What they do in the tool |
 |---|---|
-| Owner/designer | Creates the case study, uploads project material, assigns tags, properties and flags, maintains templates, reviews, edits and approves the case study |
+| Owner/designer | Creates the case study, uploads project material, assigns tags, properties and flags, maintains templates, reviews, edits and approves the case study. Can also export and share approved case studies |
 | Account/sales/social | Finds approved case studies, exports them as files, and publishes them as shareable links. Does not create, edit or approve case studies |
 | Admin | Manages users and permissions, with no access to guardrails |
 
@@ -82,7 +86,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 - **Deliverable.** One uploaded item (image, video or text) with its tags, properties and flags.
 - **Approved case study.** A case study the owner/designer has reviewed and approved. Only approved case studies can be exported or shared.
 - **Shareable link.** A link to a hosted version of an approved case study, such as a hosted presentation. Who can open it is open point 11.
-- **Configurator.** The editing screen where the owner/designer adjusts layout, media and typography before approving.
+- **Configurator.** The editing screen where the owner/designer adjusts text, layout, media and typography before approving.
 - **Review dashboard.** The list of case studies and their statuses, including those waiting for review.
 
 ## 3. Functional requirements
@@ -99,11 +103,11 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 **FR4** – Templates adapt their layout to the number of available media items.
 
-**FR5** – The owner/designer reviews and edits case studies through the review dashboard and the configurator.
+**FR5** – The owner/designer reviews and edits case studies through the review dashboard and the configurator. Editing covers the generated text as well as layout, media and typography, so a claim that fails the review check (NFR2) can be corrected before approval.
 
-**FR6** – When the owner/designer approves a case study, it becomes an approved case study. Approval is the mandatory human review (NFR7). It belongs to the owner/designer who uploaded the visual material.
+**FR6** – When the owner/designer approves a case study, it becomes an approved case study. Approval is the mandatory human review (NFR7). Any owner/designer can approve.
 
-**FR7** – Account/sales/social users can export an approved case study as files in the MVP formats, or publish it as a shareable link, such as a hosted presentation.
+**FR7** – Owner/designer and account/sales/social users can export an approved case study as files in the MVP formats, or publish it as a shareable link, such as a hosted presentation.
 - Only approved case studies can be exported or shared.
 - The tool does not post to social channels or the website.
 - Which formats are in the MVP is open point 1.
@@ -121,6 +125,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 Guardrails are non-negotiable constraints. Any requirement that contradicts them must be flagged, not implemented.
 
 **NFR1** – The AI does not alter graphic assets, the technical substance of the content, or template design.
+- [FLAG: possible conflict with FR4 and FR7. Layouts adapt to the number of media items, and exports resize to 16:9, 4:5, 1:1, 9:16 and A4. What counts as "altering" is open point 12.]
 
 **NFR2** – In the MVP, a person checks generated technical content for hallucinations during review, before approval. Every claim must trace back to the uploaded material. This is a manual step, not an automated feature.
 
@@ -132,7 +137,7 @@ Guardrails are non-negotiable constraints. Any requirement that contradicts them
 
 **NFR6** – If no material is uploaded, nothing is generated.
 
-**NFR7** – No case study is exported or published as a shareable link without human review and approval. The review belongs to the owner/designer who uploaded the visual material.
+**NFR7** – No case study is exported or published as a shareable link without human review and approval by an owner/designer.
 
 ## 5. Technical assumptions
 
@@ -210,9 +215,11 @@ Prerequisite: configurator visual design (Bento).
 
 **Story 4.2** – As an owner/designer, I want to edit a case study through the configurator.
 - The configurator follows the designed Bento layout
+- I can edit the generated text, layout, media and typography
 
 **Story 4.3** – As an owner/designer, I want to approve a case study.
 - Before approving, I check that every claim in the text traces back to the uploaded material
+- Any owner/designer can approve
 - The approved case study moves to the Approved status and becomes available for export and sharing
 - A case study that is not approved cannot be exported or shared
 
@@ -220,11 +227,11 @@ Prerequisite: configurator visual design (Bento).
 
 Prerequisite: account/sales/social user journey.
 
-**Story 5.1** – As an account/sales/social user, I want to export the final material of an approved case study.
+**Story 5.1** – As an owner/designer or account/sales/social user, I want to export the final material of an approved case study.
 - Only approved case studies can be exported
 - Export produces files in the MVP formats (open point 1)
 
-**Story 5.2** – As an account/sales/social user, I want to publish an approved case study as a shareable link.
+**Story 5.2** – As an owner/designer or account/sales/social user, I want to publish an approved case study as a shareable link.
 - The approved case study can be published as a shareable link, such as a hosted presentation
 - Only approved case studies can be shared
 - The tool does not post to social channels or the website
@@ -235,7 +242,7 @@ Prerequisite: account/sales/social user journey.
 - There is a login for each of the three roles
 
 **Story 6.2** – As an admin, I want to manage roles and permissions.
-- Owner/designer: create, upload and tag, manage templates, review, edit and approve
+- Owner/designer: create, upload and tag, manage templates, review, edit, approve, export and share
 - Account/sales/social: view approved case studies, export them, publish them as shareable links
 - Admin: users and permissions
 
@@ -285,13 +292,13 @@ Prerequisite: account/sales/social user journey.
 - **The root cause stays open.** The A3 analysis traced the problem to the lack of a standard process for tagging assets during the project. The MVP acts only at project close, and nothing prompts the owner to start. MAC Recap makes case studies fast, but on its own it may not make them happen. Without a process owner, the 4-of-11 rate could persist.
 - **Missing material still stops the flow.** If mockups or screenshots don't exist at close, the owner has to produce them before the 15-20 minutes can start.
 - **Real client data is used before login exists.** Until Sprint 3, the tool runs without authentication, and the demo uses a real past project. The confidentiality and NDA status of that material must be cleared first.
-- **The schedule is tight.** Sprint 2 (due October 21) carries generation, review and export. It depends on non-dev deliverables due at the same time: final templates, the narrative structure and quality criteria, and the configurator visual design.
+- **The schedule is tight.** Sprint 2 (due October 21) carries generation, review and export. It depends on non-dev deliverables due at the same time: final templates, the narrative structure and quality criteria, and the configurator visual design. Epics run strictly one after another, so Epic 3 can't start until those land. The "graphic template layouts" prerequisite of Epic 3 has no sprint.
 
 ## 12. Open points
 
 These points must be resolved before the epics that depend on them.
 
-1. **Export formats** (Epics 3 and 5). Which formats the MVP produces. The A3 deck shows eight: 16:9 deck, A4 whitepaper, 1080×1350 carousel, square post, 1080×1920 social video, 1200×675 LinkedIn cover, HD PNG pack and ZIP. Merges v1 points 1 and 5. The publishing channel is now settled as the shareable link.
+1. **Export formats** (Epics 3 and 5). Which formats the MVP produces. The demo criteria set a minimum: 16:9 deck, social carousel and PDF. The A3 deck shows eight: 16:9 deck, A4 whitepaper, 1080×1350 carousel, square post, 1080×1920 social video, 1200×675 LinkedIn cover, HD PNG pack and ZIP. Merges v1 points 1 and 5. The publishing channel is now settled as the shareable link.
 2. **Data processing logic** (Epic 3). How the tool turns uploaded material into text.
 3. **Tag, property and flag taxonomy** (Epic 2). The list and meaning of the values that can be assigned to deliverables.
 4. **Account/sales/social user journey** (Epic 5). Partly resolved: these users reach approved case studies inside MAC Recap, with their own login from Sprint 3. Still open: how they find and browse case studies.
@@ -299,6 +306,7 @@ These points must be resolved before the epics that depend on them.
 6. **Test or real data.** Resolved: the demo uses material from one real past project. Its confidentiality and NDA status must be cleared before upload (Known risks).
 7. **Data exposure from MAC Productive** (Epic 7). The data structure via MCP and client data confidentiality requirements.
 8. **Case study status lifecycle** (Epic 4). The A3 screens use Draft, Processing, Awaiting approval, Approved and Published, and the names differ from screen to screen. v1 names only Approved.
-9. **Owner/designer export rights** (Epics 5 and 6). Can the owner/designer also export and share, or only account/sales/social users? The demo needs someone to export the case study in several formats.
+9. **Owner/designer export rights.** Resolved: both owner/designer and account/sales/social users can export and share approved case studies.
 10. **Attribution** (6-month review). How inbound contacts and upsells are attributed to a case study.
 11. **Shareable link access** (Epic 5). Can anyone with the link open it, only logged-in users, or does the link expire? This is a client confidentiality decision.
+12. **What counts as altering** (Epics 3 and 4, NFR1). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary.
