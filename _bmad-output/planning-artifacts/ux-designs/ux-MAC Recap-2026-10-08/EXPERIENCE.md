@@ -1,0 +1,436 @@
+---
+name: MAC Recap
+status: final
+created: 2026-10-08
+updated: 2026-10-08
+sources:
+  - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/prd.md
+  - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/addendum.md
+  - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/reconcile-a3-deck.md
+  - {planning_artifacts}/briefs/brief-MAC-Recap-2026-10-08/brief.md
+  - docs/sources/MAC Recap_Modello A3.pdf (slides 14-23)
+---
+
+# MAC Recap: Experience Spine
+
+> Final (fast path), 2026-10-08. Visual identity deferred to DESIGN.md Update mode. `[ASSUMPTION]` marks a UX call made without confirmation. `[OPEN n]` points to a PRD open point; this spine offers options and does not decide it. `[CONFLICT]` marks a tension between sources that goes back to the PRD owner. The PRD wins on product scope; this spine wins on behaviour; DESIGN.md wins on visuals.
+
+## Vision
+
+MAC Recap turns a closed project's verified material into a finished, on-brand case study. The tool does not invent: it assembles and structures what the team already made and checked. The experience follows from that. Uploading material is the only way to start generation. The owner/designer's review is a claim-by-claim check against that material, not a skim. Only what passes review can leave the tool. Success is a designer going from upload to approval in 15 minutes of hands-on time without skipping the check, and an account manager finding that case study and sending it to a client in under a minute.
+
+## Foundation
+
+- **Form factor:** desktop web, internal tool, standalone MVP. Primary viewport 1440px wide, minimum supported 1280px. The one exception is the **shared link page** (the hosted presentation), which clients and prospects open on any device and so must be responsive. See Responsive & Platform.
+- **UI system:** not decided (deferred to architecture). This spine stays system-agnostic and names behaviour only.
+- **Visual identity:** deferred. DESIGN.md holds token names only. Where this spine needs a visual hook it names a token (for example `{colors.status-approved}`); values come later. The dark navy and lime look in the A3 sketches is **not** adopted.
+- **Two separate visual systems:** the **tool UI** (DESIGN.md) and the **case study templates** (MAC's graphic templates, owned by the design team). The tool chrome never restyles template output.
+- **UI language:** Italian (decided 2026-10-08), matching the A3 sketches and the team. Copy in this spine is written in English for the spec, with the Italian sketch label next to it where one exists; final Italian microcopy is written from these English lines.
+- **Authentication:** login arrives in Sprint 3 (FR8). Until then the tool runs unauthenticated in a dev environment. Role-dependent surfaces below assume login exists, as it will by the Oct 30 demo.
+
+## Roles and what each one sees
+
+| Role (PRD name) | Lands on | Sees | Can do |
+|---|---|---|---|
+| Owner/designer | Case studies (table view) | Every case study, every status | Create, upload, tag, fill details, generate, edit in configurator, check claims, approve, export, share, maintain templates |
+| Account/sales/social | Case studies (library view) | Approved case studies only | Browse, search, filter, preview, export, create shareable links |
+| Admin | Users | Users and their roles | Add and remove users, assign one role per user. Nothing else: no permission or guardrail settings exist anywhere in the UI (NFR3) |
+
+Permissions are fixed (PRD Story 6.2). A control a role can't use is **absent**, not disabled. The exception is the guardrail controls below, which are shown disabled with a reason so the owner/designer knows why.
+
+## Information Architecture
+
+The A3 entry steps inside MAC Productive (slides 15 and 22) are out of the MVP. The owner/designer starts from **+ New case study** on the Case studies surface.
+
+| Surface | Reached from | Roles | Purpose |
+|---|---|---|---|
+| Sign in | App URL (from Sprint 3) | All | Login. One screen, no self-sign-up. |
+| Case studies | Sidebar, default landing | Owner/designer, account/sales/social | One list of case studies. Owner/designer gets a table with status filters and the review queue. Account/sales/social gets a library of approved case studies. |
+| To review | Sidebar item with count | Owner/designer | The approval queue: the Case studies table pre-filtered to status *To review*, oldest first. |
+| New case study wizard | **+ New case study** | Owner/designer | Three steps: 1 Material, 2 Details, 3 Generate (A3 1.2–1.4). |
+| Configurator | Click a row in *To review* or *Approved* (owner/designer) | Owner/designer | Review, edit, check claims, approve. Three panes: formats · canvas · edit and check (A3 1.6). |
+| Case study view | Click a card (account/sales/social) or **View** (owner/designer) | Owner/designer, account/sales/social | Read-only preview of an approved case study in every MVP format; export and share (A3 2.2). |
+| Templates | Sidebar | Owner/designer | Maintain templates. See *Templates* below for the MVP meaning. |
+| Users | Sidebar | Admin | User list and role assignment. |
+| Shared link page | A shareable link, outside the app | Anyone with the link (interim, [OPEN 11]) | Hosted presentation of one approved case study in one format. No app chrome. |
+
+**Navigation:** a left sidebar holds **+ New case study** (owner/designer only), Case studies, To review (owner/designer only), Templates (owner/designer only), Users (admin only), and the user menu with sign-out. The wizard and the configurator are full-screen task surfaces with a back arrow to the list; they hide the sidebar. Dialogs stack at most one level deep.
+
+**Surface closure check:** every PRD capability (FR1–FR8) maps to a surface above. FR1 → wizard (ID assigned on create). FR2 → wizard steps 1–2. FR3/FR4 → wizard step 3 and the configurator. FR5/FR6 → configurator. FR7 → case study view and the shared link page. FR8 → sign in and Users.
+
+## Case study lifecycle [OPEN 8]
+
+The A3 sketches use six names for what may be four states: *Bozza*, *In elaborazione*, *Da approvare*, *IN APPROVAZIONE*, *Approvato*, *PUBBLICATO*. The PRD defines only **Approved**. UX needs one vocabulary used on every screen, in one case style. Three options follow; the PRD owner decides.
+
+**Option A: four states, sharing is not a status (recommended).**
+
+| State | EN label | IT label | Entered when | Who sees it |
+|---|---|---|---|---|
+| Draft | Draft | Bozza | Case study created in the wizard; or generation failed | Owner/designer |
+| Generating | Generating | In elaborazione | **Generate** pressed with material present | Owner/designer |
+| To review | To review | Da approvare | Generation finished | Owner/designer |
+| Approved | Approved | Approvato | An owner/designer approves after the claim check | All except admin |
+
+Shared links are shown as a count on Approved case studies ("2 links"), not as a status. This matches the PRD rule that editing keeps a case study *approved*, and it avoids a *Published* state that would have to be per case study or per link.
+
+**Option B: five states, Published is a status.** As A, plus *Published* (*Pubblicato*), entered when the first shareable link is created. Clear for browsing ("what's already out there"), but the PRD has editing keep the case study "approved", so editing a Published case study would have to keep it Published, and it's unclear what happens when the last link is revoked.
+
+**Option C: three states.** Draft → To review → Approved, with *Generating* shown as a progress indicator on a Draft row instead of a status. Fewest names, but the review queue then mixes "being generated" with "nothing generated yet".
+
+Rules that hold under every option:
+- There is no path back from Approved to an earlier state. Editing an approved case study keeps it Approved (PRD Story 4.3).
+- A status badge always pairs colour with the text label (`{colors.status-draft}`, `{colors.status-generating}`, `{colors.status-review}`, `{colors.status-approved}`).
+- The A3 sketch's "Bozza while generating" inconsistency (slide 18) is resolved: the wizard header shows the current state, so *Generating* during generation.
+
+## Component Patterns
+
+Behavioural. Visual specs live in `DESIGN.md.Components`.
+
+### Case studies: owner/designer table view
+
+| Element | Behaviour |
+|---|---|
+| Columns | ID (FR1, monospace, `{typography.mono}`), Name, Client, Year, Status, Updated, Links (count, Approved only). |
+| Search | One field, placeholder "Search name, client or ID" (*Cerca progetto o cliente…*). Matches as you type (debounce ~250 ms), case- and accent-insensitive, over name, client and ID. `[ASSUMPTION]` Tag search waits on the taxonomy ([OPEN 3]). |
+| Status filter | Segmented control: All · Draft · Generating · To review · Approved (names follow whichever [OPEN 8] option is chosen). Each segment shows its count. Combines with search (AND). |
+| Sort | Default: Updated, newest first. Column headers sort on click. |
+| Row click | Draft → reopens the wizard at the first incomplete step. Generating → no-op with tooltip "Still generating". To review → configurator. Approved → configurator (edit) with a **View** action to the case study view. |
+| Row actions | Overflow menu: View (Approved), Export (Approved), Share (Approved), Delete (Draft only, with confirm). `[ASSUMPTION]` Deleting non-draft case studies is out of MVP. |
+| Live status | Rows in *Generating* update without a page reload when generation finishes. |
+| Empty | No case studies yet: "No case studies yet. Start with the material from a closed project." + **New case study**. |
+| No results | "Nothing matches '{query}'." + **Clear search and filters**. |
+
+### To review (approval queue)
+
+The Case studies table, pre-filtered to *To review* and sorted oldest first so nothing sits waiting. The sidebar count shows how many are waiting. Any owner/designer can open and approve any item (PRD: approver is not limited to the uploader). `[ASSUMPTION]` No assignment or claiming of review items in the MVP.
+
+### Case studies: account/sales/social library view [settles OPEN 4]
+
+`[ASSUMPTION]` Account/sales/social users browse visually, because they are choosing something to show a client.
+
+| Element | Behaviour |
+|---|---|
+| Layout | Card grid. Each card: cover thumbnail (first slide of the 16:9 deck), name, client, year, up to three tags. |
+| Content | Approved case studies only. No status filter, no status badge (everything here is approved). |
+| Search | Same field and matching as the table view. |
+| Filters | Client, Year, and tag facets (sector, service line, and so on) once the taxonomy is set ([OPEN 3]). Facets are multi-select chips; active filters show above the grid with a single **Clear all**. |
+| Sort | Newest approved first. |
+| Card click | Opens the case study view. |
+| Empty | "No approved case studies yet." No action (they can't create). |
+| Owner/designer access | `[ASSUMPTION]` Owner/designers can switch Case studies to the library view with a Table / Library toggle, so they see what account/sales/social see. |
+
+### New case study wizard
+
+A three-step stepper: **1 Material · 2 Details · 3 Generate**. The case study is created, and its unique ID assigned (FR1), when the wizard opens with a name entered. It is saved as a Draft from that moment, so leaving and returning loses nothing.
+
+**Step 0: Name.** A short header form: case study name (required) and client (required). `[ASSUMPTION]` Year defaults to the current year and is editable.
+
+**Step 1: Material** (FR2, NFR6).
+
+| Element | Behaviour |
+|---|---|
+| Dropzone | Drag and drop or **browse**. Accepts images, videos, text documents, PDFs. Copy: "Up to 20 files, 100 MB each." |
+| Limits | A 21st file or a file over 100 MB is rejected inline on that file ("Over 100 MB. Not uploaded.") without blocking the others. A wrong file type gets "This file type isn't supported. Use images, videos, texts or PDFs." |
+| Upload progress | Per-file progress bar; files upload in parallel; the user can tag a file as soon as it has uploaded. |
+| Deliverable rows | Each uploaded file is a deliverable row: thumbnail, file name, size, then tags, properties and flags (FR2). Taxonomy pending ([OPEN 3]); controls are chip pickers from a fixed list, no free text. `[ASSUMPTION]` Tagging is optional per file so it doesn't eat the 15-minute budget, but the row shows a gentle "untagged" marker. |
+| Remove | Each row has a remove action; no confirm, with an **Undo** toast for 5 s. |
+| Continue | **Next: Details** is enabled as soon as one file has finished uploading. |
+
+**Step 2: Details** (FR2). A short form in three sections that mirror the PRD: **Context**, **Solution**, **Results**. Each is a textarea with a one-line prompt (for example "What did the client need, and why?"). A counter shows how many are filled ("2 of 3"). The fields are optional (decided 2026-10-08); the form alone never enables generation (NFR6). The A3 sketch's "0 di 4" counter and its four-field "Contesto & background" section are replaced by the PRD's three topics.
+
+**Step 3: Generate** (FR3, NFR6).
+
+| Element | Behaviour |
+|---|---|
+| Summary | "{n} files, {m} of 3 details filled." |
+| Generate button | Enabled only when at least one material file has uploaded. Otherwise disabled with the reason visible next to it: "Add at least one file of project material. The details form alone isn't enough to generate." |
+| After Generate | Status becomes *Generating*. Screen shows a processing state with "Generating your case study. You can leave this page; it will appear in To review when it's ready." and **Back to case studies**. |
+| Waiting time | Generation time is unbounded and doesn't count toward the 15–20 minute budget (NFR4). No progress percentage is promised. |
+| Completion | The row moves to *To review*; the To review count goes up; `[ASSUMPTION]` an in-app toast appears if the user is anywhere in the app: "{Name} is ready to review." with **Open**. No email in MVP. Notifications aren't in any FR ([CONFLICT] C3). |
+| Failure | The case study returns to *Draft* with a banner in the wizard: "Generation didn't finish. Your material and details are saved." + **Try again**. |
+
+### Configurator (FR5, FR6, NFR2, NFR7)
+
+Three panes, as in A3 1.6, with the changes noted. The canvas is a Bento-style template layout (PRD Story 4.2).
+
+→ Layout reference: [`wireframes/flow-configurator-2026-10-08.excalidraw`](wireframes/flow-configurator-2026-10-08.excalidraw) (Edit tab, Check tab with material drawer, Approve confirm, editing an approved case study). Low fidelity, greyscale; open in Excalidraw. Placeholder content in it (file names, KPI values) is illustrative. This spine wins on conflict.
+
+**Top bar.** Back arrow · case study name · status badge · save state ("Saved" / "Saving…") · **Approve** (To review) or **Update approved version** (Approved). `[ASSUMPTION]` Edits autosave; there is no **Save draft** button (the A3 sketch shows one). Version history ("v2.4", "Cronologia Versioni") is out of MVP.
+
+**Left pane: Formats.** One entry per MVP export format ([OPEN 1]); the same list, names and order as the case study view. Selecting a format switches the canvas. Each entry: name, ratio, pixel size, and a check mark once its layout has been looked at.
+
+- Resolves the A3 inconsistencies: the "Social 16:9" label becomes "Story 9:16" (if that format is in the MVP), and the canvas ratio control (16:9 / 4:5 / 1:1) is **removed**. The format sets the ratio; there is no second control that could disagree with it.
+- `[ASSUMPTION]` **Content is shared, layout is per format.** Text and the choice of media are one set across all formats; layout variant, typography scale and spacing are set per format. Editing a headline in the deck changes it in the carousel too.
+
+**Centre: Canvas.** Live preview of the selected format at fit-to-pane zoom. Click a text block to edit it in place. Click a media slot to select it. Multi-page formats (deck, carousel) show a page strip under the canvas.
+
+**Right pane: two tabs, Edit and Check.**
+
+#### Configurator acceptance criteria: editing
+
+**Text**
+- Every generated text block is editable in place on the canvas: click to edit, Escape or click outside to finish. Changes autosave.
+- The challenge / approach / result structure (NFR5) is locked: section headings can be reworded but sections can't be deleted or reordered.
+- Plain text with line breaks only. No font, colour or size control inside a text block; those belong to typography.
+- Overflow: if text no longer fits its slot, the block shows an overflow marker and the Check tab lists it. The tool does not shrink text silently below the template's minimum size.
+- Every edited block is marked "edited" and needs its claim check again (see Check below).
+
+**Layout**
+- **Layout variant:** pick one of the template's designed variants for this format (thumbnail grid; the A3 sketch shows "10 varianti").
+- **Shuffle layout:** steps to the next designed variant that fits the number of media items (FR4). It never generates a new layout. Undo returns to the previous variant.
+- **Spacing:** outer padding and gap between boxes, as sliders limited to the range the template allows (A3 sketch: 24 px and 16 px defaults).
+- **Reset:** returns this format's layout to the generated default.
+- Status of shuffle as "altering" is [OPEN 12].
+
+**Media**
+- **Replace media:** swaps the selected slot's media for another file **from this case study's uploaded material only**. No upload from the configurator, no stock or generated images. `[ASSUMPTION]` To add new material, go back to the wizard's Material step; the case study keeps its status.
+- **Reorder:** drag a media item onto another slot to swap them.
+- **Remove from layout:** hides a media item; the layout adapts to the new count (FR4).
+- **Fit:** media is placed whole within its slot (fit, no stretching). Whether cropping or a focal point is allowed depends on [OPEN 12]. Until then the controls for crop, recolour, filters and effects don't exist.
+
+**Typography**
+- Choose one of the font pairings the template allows (A3 sketch: Plus Jakarta Sans, Inter Sans, Editorial Serif). No font upload, no free font picker.
+- **Text scale:** S / M / L per format, within template limits.
+- No per-word or per-block styling.
+
+#### Configurator acceptance criteria: claim check (NFR2)
+
+The owner/designer checks every claim against the material before approving. This is a manual step; the tool supports it but doesn't automate it or judge claims.
+
+- The **Check** tab lists every text block by section (challenge, approach, result, headline, KPI tiles), each with a checkbox "Checked against material".
+- Selecting a block in the list highlights it on the canvas, and vice versa.
+- **Material drawer:** from the Check tab, open the uploaded material and the details answers side by side with the canvas, to look up the source of a claim. Files open in a viewer (images, PDFs, text); video shows a player.
+- If a claim can't be traced, the owner/designer edits or deletes the claim, and the block needs checking again.
+- Editing a checked block unticks it.
+- **Approve** is disabled until every block is ticked and no block overflows. The disabled button names what's left: "3 blocks still to check."
+- Approving shows a confirm dialog: "Approve {Name}? Every claim has been checked against the material. Once approved, it can be exported and shared." **Approve** / **Cancel**. On confirm: status → Approved, toast "Approved. It's now in the library.", and the user goes back to To review if more items are waiting, otherwise to Case studies.
+- No "approve all" and no "tick all" shortcut. The counter-metric (PRD) is that time must not drop by skipping the check.
+
+#### Editing an approved case study (PRD Story 4.3)
+
+The PRD decides that editing an approved case study updates it and its shareable links, and that it stays approved. `[ASSUMPTION]` UX keeps NFR2 intact by staging the edits:
+
+- Opening an Approved case study in the configurator shows a banner: "Approved, with {n} live links. Changes go live when you update the approved version."
+- Edits autosave to a working copy. The live version and its links don't change yet.
+- Edited blocks are unticked in the Check tab. **Update approved version** is enabled when every edited block is ticked again.
+- Confirm dialog: "Update the approved version? {n} links will show the new version." On confirm, the live version and every link update; status stays Approved.
+- **Discard changes** returns to the live version.
+- [CONFLICT] C1: if the PRD intends edits to go live immediately, an unchecked claim could reach clients through a live link, which goes against NFR2 and NFR7. This staging is the proposed resolution.
+
+### Case study view (FR7)
+
+Read-only. Available only for Approved case studies (NFR7); a non-approved case study has no view, export or share entry point at all.
+
+| Element | Behaviour |
+|---|---|
+| Top bar | Back · name · status badge · **Share** · **Export**. |
+| Format list | Left pane, same list and names as the configurator's Formats pane. |
+| Preview | Page pager ("Slide 1 of 12"), zoom − / 100% / +, fit, full screen. |
+| Export | Exports the **selected format** as a file. File types: deck → PDF only (decided 2026-10-08; no PPTX), A4 → PDF, `[ASSUMPTION]` carousel and other image formats → ZIP of PNGs. Shows progress, then the browser download. **Export all** gives one ZIP with every format. |
+| Share | Opens the Share dialog (below). |
+| Owner/designer | Also sees **Edit**, which opens the configurator. |
+
+The A3 "Asset e Risorse" tab and the "Pacchetto PNG HD" source-material pack are out of MVP unless [OPEN 1] adds them.
+
+### Share dialog and shareable links [OPEN 11]
+
+- **Create link:** choose a format (default: 16:9 deck). Creates a link to a hosted presentation of that format. The link URL is copied automatically, with a "Link copied" toast.
+- **Who can open it:** shown as a plain sentence above the link, never hidden. Interim (PRD): "Anyone with the link can view."
+- **Link list:** every link for this case study, with format, created by, created on, and **Copy**. `[ASSUMPTION]` **Turn off link** is included; a turned-off link shows "This case study is no longer available."
+- Links always show the current approved version (PRD Story 4.3).
+
+Options for [OPEN 11], with their UX cost:
+
+| Option | What the viewer sees | UX cost |
+|---|---|---|
+| A. Anyone with the link (interim) | Opens straight away | None. Relies on "Turn off link" for control. |
+| B. Logged-in MAC users only | Sign-in screen first | Clients can't open links, so sharing with clients means exporting a file instead. Changes the purpose of links. |
+| C. Expiring link | Opens until the date, then an "expired" page | Share dialog gets an expiry picker (7 / 30 / 90 days / never). Link list shows expiry. |
+| D. A with an optional password | Password prompt if set | Share dialog gets a password field; the password has to be sent separately. |
+
+### Shared link page
+
+- A full-screen presentation of one format: pager, keyboard arrows, full screen. No sign-in (Option A), no MAC Recap navigation, no editing, no download button. `[ASSUMPTION]` No download, so sharing a link isn't a side door around export.
+- Responsive: fits any viewport; on phones, slides scale to width and swipe.
+- Turned-off or expired link: "This case study is no longer available. Contact the person who shared it."
+
+### Templates: what "maintains templates" means [settles addendum item]
+
+`[ASSUMPTION]` In the MVP, templates are designed by MAC's design team and built into the tool by the developers. Inside the tool, the owner/designer:
+
+- **Browses** the template set: each template's layout variants per format, previewed with sample content.
+- **Turns variants on or off.** An off variant is never used by generation or Shuffle. At least one variant per format stays on.
+- **Sees where a template is used:** how many case studies use each variant.
+
+Out of MVP: uploading new templates, editing template design in the tool, template versioning. Changing a template's design goes through the design team and a release.
+
+Recommendation for the PRD: give template maintenance its own FR with this scope, because Story 6.2 grants "manage templates" but no FR says what it does ([CONFLICT] C4). The A3 sidebar marks Templates "SOON"; this proposal makes the MVP version small so it can ship.
+
+### Users (admin)
+
+| Element | Behaviour |
+|---|---|
+| List | Name, email, role, added on. |
+| Add user | Email + role (one of the three). |
+| Change role | Role dropdown in the row; takes effect at the user's next page load. |
+| Remove user | Confirm dialog. Their case studies and links stay. |
+| Guard | An admin can't remove their own admin role if they're the last admin. |
+| Absent | No permission matrix, no guardrail settings, no case study access (NFR3). |
+
+## Export formats [OPEN 1]
+
+The Formats pane, the case study view and export all use **one list with one name per format**, which resolves the 4-versus-7 mismatch in the A3 sketches.
+
+| Option | Formats | Notes |
+|---|---|---|
+| A. Demo minimum | Deck 16:9 (1920×1080) · Social carousel 4:5 (1080×1350) · PDF A4 portrait | Exactly what the demo has to prove. Smallest template workload. |
+| B. A + vertical and square | A + Story 9:16 (1080×1920, static, not video) + Square post 1:1 (1080×1080) | Covers the main social placements. Two more template variants per layout. |
+| C. Everything in the A3 deck | B + LinkedIn cover 1200×675 + social video 9:16 + HD PNG pack + ZIP | Video needs motion templates; the highest risk for Oct 30. |
+
+Recommendation: A for the demo, B straight after. Whatever is chosen, each format gets a name, a ratio and a pixel size, and the "Social 16:9" label is retired.
+
+## What counts as altering assets [OPEN 12]
+
+NFR1: the AI doesn't alter graphic assets, technical substance or template design. The design team sets the boundary. The UX guarantees below hold under every option; the open question is which operations go beyond them.
+
+**UX guarantees.** No crop, recolour, filter, retouch, generative fill or upscaling of uploaded media. Media is never stretched. Replace only uses this case study's own material. Shuffle only uses the template's designed variants. Text edits are done by a person.
+
+| Operation | Option A: not altering | Option B: altering unless constrained | Option C: altering |
+|---|---|---|---|
+| Layout adapts to media count (FR4) | Choosing among designed variants | Allowed only among designer-approved variants per count | Not applicable: FR4 requires it |
+| Shuffle | Same as picking a variant | Allowed, limited to approved variants | Removed; owner picks a variant explicitly |
+| Replace media | Swaps within own material | Allowed | Allowed (person-driven, not AI) |
+| Resize for export formats | Scaling whole, no crop | Fit with letterbox, or a focal point set by the designer | Each format needs designer-supplied media |
+
+## Voice and Tone
+
+Microcopy. Brand voice will live in DESIGN.md once defined.
+
+| Do | Don't |
+|---|---|
+| "3 blocks still to check." | "Almost there! 🎉" |
+| "Add at least one file of project material. The details form alone isn't enough to generate." | "Error: missing input." |
+| "Approved. It's now in the library." | "Success!" |
+| "Anyone with the link can view." | Hiding who can open a link |
+| "Generation didn't finish. Your material and details are saved." | "Something went wrong." |
+| Plain verbs, the case study's name, the number of things left. | AI hype ("magic", "instantly"), exclamation marks. |
+
+Never describe generated text as verified until the owner/designer has checked it. The tool says "generated", the person says "checked".
+
+## State Patterns
+
+| State | Surface | Treatment |
+|---|---|---|
+| First load | Case studies | Skeleton rows or cards matching the layout. |
+| Empty, owner/designer | Case studies | "No case studies yet. Start with the material from a closed project." + **New case study**. |
+| Empty, account/sales/social | Case studies (library) | "No approved case studies yet." |
+| Queue empty | To review | "Nothing to review." |
+| No results | Case studies | "Nothing matches '{query}'." + **Clear search and filters**. |
+| No material | Wizard step 3 | **Generate** disabled with reason (see wizard). |
+| Upload rejected | Wizard step 1 | Inline on the file row; others continue. |
+| Generating | Wizard step 3, table row | Processing message; row badge *Generating*; no ETA. |
+| Generation failed | Wizard, table row | Back to Draft, banner with **Try again**. |
+| Unchecked claims | Configurator | **Approve** disabled with count of blocks left. |
+| Text overflow | Configurator | Marker on the block; listed in Check; blocks approval. |
+| Autosave failed | Configurator | Save state shows "Not saved. Retrying…"; after 3 failures, a banner: "Changes aren't saving. Keep this tab open." |
+| Approved with unpublished edits | Configurator | Banner + **Update approved version** / **Discard changes**. |
+| Export in progress | Case study view | Progress on the button; the user can keep browsing. |
+| Export failed | Case study view | Toast "Export didn't finish." + **Try again**. |
+| Link turned off or expired | Shared link page | "This case study is no longer available." |
+| Not permitted | Any surface | Surface absent from navigation; a direct URL returns to the role's landing page. |
+| Viewport too narrow | Configurator, wizard | Below 1024px: "The configurator needs a larger screen." Case studies list still works. |
+
+## Interaction Primitives
+
+- **Pointer-first, keyboard-complete.** Every action is reachable by keyboard; mouse is the main mode for designers.
+- Configurator shortcuts: `Cmd/Ctrl+Z` / `Shift+Cmd/Ctrl+Z` undo and redo (layout, media and text changes); `Esc` ends text editing or closes a dialog; `[` and `]` move between pages; `J` and `K` move between blocks in the Check list; `Space` ticks the selected block.
+- Global: `/` focuses search on Case studies.
+- Drag and drop: file upload, and swapping media between slots. Every drag has a keyboard or menu alternative.
+- Confirm dialogs only for Approve, Update approved version, Delete, Remove user, and Turn off link. Everything else is undoable.
+- **Banned:** "approve all", "tick all", bulk approve, auto-approve; any control that changes a guardrail; posting to social channels; infinite scroll (the library paginates at 24 cards); dialogs stacked more than one deep.
+
+## Accessibility Floor
+
+Behavioural. Visual contrast will live in DESIGN.md.
+
+- WCAG 2.2 AA for the app and the shared link page.
+- Status is never colour alone: every badge carries its text label.
+- Disabled **Generate** and **Approve** expose their reason in text, linked by `aria-describedby`.
+- Configurator: the canvas blocks are reachable by Tab in reading order; the Check list is a keyboard-operable list; the claim counter announces changes via `aria-live="polite"`.
+- Upload: the dropzone has a **browse** button; upload progress and rejections are announced.
+- Focus is visible on every control (`{colors.focus-ring}`); dialogs trap focus and return it on close.
+- Shared link page: each slide has its text available to screen readers; pager works with arrow keys.
+- Respect reduced motion: no animated transitions between slides or variants when it's set.
+
+## Responsive & Platform
+
+| Surface | ≥1280px | 1024–1279px | <1024px |
+|---|---|---|---|
+| Case studies, Users, Templates | Full layout | Sidebar collapses to icons | Usable list, read only for owner/designer tasks |
+| Wizard, Configurator | Full layout | Configurator panes narrow; right pane can collapse | "Needs a larger screen" message |
+| Case study view | Full | Format list collapses to a dropdown | Preview and Share work; export works |
+| Shared link page | Full | Full | Fully responsive, swipe between slides |
+
+## Inspiration & Anti-patterns
+
+- **From the A3 sketches (kept):** the three-step wizard, the async "Back to dashboard" generation, the three-pane configurator with Shuffle and Replace media, the formats panel, the read-only export view with pager and zoom.
+- **From the A3 sketches (dropped or changed):** MAC Productive entry points; the canvas ratio control; "Save draft" (autosave instead); version number and version history; "Esporta ZIP" as a separate primary; the share icon on the Export button (Export and Share are separate actions).
+- **Rejected: confidence scores or "AI verified" labels on claims.** NFR2 is a person's check. The tool doesn't rate claims.
+- **Rejected: posting to social channels or a website.** Publishing is a shareable link only (PRD).
+- **Rejected: free-form canvas editing** (Canva-style move/resize any element). It would let the template design drift (NFR1).
+
+## Key Flows
+
+### Flow 1: First case study for the demo (Giada, owner/designer, Oct 30 dry run)
+
+1. Giada signs in and lands on Case studies. She clicks **+ New case study**, enters the project name and client. The ID appears in the header.
+2. **Material:** she drags in 14 files (final screens, the strategy deck as PDF, a results sheet, two videos). While they upload she tags the screens by deliverable. One 140 MB video is rejected; she leaves it out.
+3. **Details:** she writes three short paragraphs: context, solution, results ("3 of 3").
+4. **Generate:** she presses **Generate**, sees "Generating your case study…", and goes back to Case studies. The wait doesn't count toward her hands-on time (NFR4).
+5. A toast says "{Name} is ready to review." She opens it from **To review**. The configurator shows the 16:9 deck.
+6. She switches to the Check tab and opens the material drawer. She ticks blocks one by one, looking up each claim. One KPI tile says "+40% conversions"; the results sheet says 34%. She edits the tile and ticks it.
+7. She presses **Shuffle layout** once on the cover, prefers it, then checks the carousel and the A4 formats.
+8. **Climax:** the counter reaches "All blocks checked", **Approve** turns on, and she confirms. The badge turns Approved, the toast says "Approved. It's now in the library." About 14 minutes of hands-on time, with every claim checked.
+
+Failure: generation fails → the case study is back in Draft with "Generation didn't finish. Your material and details are saved." She presses **Try again** without re-uploading.
+
+### Flow 2: A case study for tomorrow's pitch (Daniele, account/sales/social)
+
+1. Daniele has a pitch with a utility company tomorrow. He signs in and lands on the library.
+2. He types "energy" and filters by sector; three cards remain. He opens the first.
+3. The case study view shows the 16:9 deck; he pages through it, then switches to the carousel.
+4. He presses **Export**, deck selected, and gets the PDF for his slides.
+5. He presses **Share**, keeps "16:9 deck", and the link is copied. The dialog says "Anyone with the link can view."
+6. **Climax:** he pastes the link into his follow-up email draft and opens it once to check: the hosted deck opens full screen with no login, exactly as the client will see it. Under a minute from search to link.
+
+Failure: nothing matches → "Nothing matches 'energy'." He clears filters and browses by year.
+
+### Flow 3: Fixing an approved case study that's already out (Giada, a week later)
+
+1. Daniele tells Giada the client's name is misspelled on slide 3.
+2. Giada opens the Approved case study. The banner reads "Approved, with 2 live links. Changes go live when you update the approved version."
+3. She fixes the name; the block unticks; she checks it against the material and ticks it again.
+4. **Climax:** she presses **Update approved version**, confirms "2 links will show the new version", and the fix is live everywhere. The status never left Approved.
+
+### Flow 4: Giving Daniele access (Alessandro, admin)
+
+1. Alessandro signs in and lands on Users.
+2. **Add user**: Daniele's email, role account/sales/social.
+3. **Climax:** Daniele appears in the list with his role. When Daniele signs in, he lands in the library and sees only approved case studies. Alessandro sees no case study content and no permission settings, because there aren't any.
+
+## Conflicts and open questions
+
+**Conflicts flagged for the PRD owner (not resolved here):**
+- **C1. Live edits vs the claim check.** PRD Story 4.3 has edits to an approved case study update its links while it stays approved. If edits go live immediately, unchecked text can reach clients (NFR2, NFR7). Proposed: staged edits with **Update approved version** (see Configurator).
+- **C2. Text editing missing from the sketch.** FR5 requires text editing; the A3 configurator sketch has no text controls. This spine follows the PRD (in-place text editing).
+- **C3. Notifications, autosave and versioning** appear in the sketches but in no FR. This spine adds an in-app toast and autosave (needed for the time budget and to avoid losing work) and leaves out versioning and email.
+- **C4. Template maintenance** is in the role permissions (Story 6.2) but in no FR; the sketch marks it "SOON". Proposed MVP scope above; recommend its own FR.
+- **C5. Brief vs PRD:** the brief limits export to account/sales/social and puts the hallucination target on "caught in review". The PRD (both roles export; zero reaching approved) wins; noted only.
+
+**PRD open points with options above:** [OPEN 1] export formats · [OPEN 8] status lifecycle · [OPEN 11] link access · [OPEN 12] what counts as altering. Waiting on [OPEN 3] (taxonomy) for tag pickers and library facets.
+
+**UX questions resolved (2026-10-08):**
+- **Q1.** UI language: Italian.
+- **Q2.** Deck export: PDF only, no PPTX.
+- **Q3.** The tool does not record hands-on time. The 8-week measures ([OPEN 13]) are captured outside the tool; no timer or time-tracking UI.
+- **Q4.** Details form fields (Context, Solution, Results) are optional.
