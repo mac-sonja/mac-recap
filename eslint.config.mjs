@@ -64,8 +64,9 @@ const otherModuleInternals = (m) => ({
   message: "Import another module only through its public index: `@/modules/<module>` (AD-1).",
 });
 
-const domainImports = (m) => ({
-  regex: `^(?!zod(/|$)|\\./|@/shared/${m ? `|@/modules/${escape(m)}/domain/` : ""}).+`,
+// Test files in domain/ may also import vitest; production domain code may not.
+const domainImports = (m, { test = false } = {}) => ({
+  regex: `^(?!zod(/|$)|${test ? "vitest(/|$)|" : ""}\\./|@/shared/${m ? `|@/modules/${escape(m)}/domain/` : ""}).+`,
   message: "domain/ is pure: it imports only @/shared/*, files of its own domain/ and zod (AD-1).",
 });
 
@@ -123,7 +124,8 @@ const SHARED = [
 ];
 const application = (internals) => [VENDOR_SDK, RESERVED_INTEGRATION, DB_TYPES, internals, DOTDOT_SEGMENT];
 const adapters = (internals) => [RESERVED_INTEGRATION, internals, DOTDOT_SEGMENT];
-const domain = (m) => [domainImports(m), DB_TYPES, DOTDOT_SEGMENT];
+const domain = (m, opts) => [domainImports(m, opts), DB_TYPES, DOTDOT_SEGMENT];
+const DOMAIN_TEST = "*.test.{ts,tsx,mts,cts}";
 
 export default defineConfig(
   {
@@ -138,6 +140,8 @@ export default defineConfig(
       "_bmad-output/**",
       "docs/**",
       ".claude/**",
+      // Deliberately non-compliant inputs for test/authorize-guard.test.ts.
+      "test/fixtures/**",
     ],
   },
   js.configs.recommended,
@@ -160,6 +164,7 @@ export default defineConfig(
   }),
   layer([`src/modules/*/adapters/**/${SOURCE}`], adapters(MODULE_INTERNALS)),
   layer([`src/modules/*/domain/**/${SOURCE}`], domain(null)),
+  layer([`src/modules/*/domain/**/${DOMAIN_TEST}`], domain(null, { test: true })),
 
   // Known modules may reach their own internals through the alias.
   ...MODULES.flatMap((m) => [
@@ -170,6 +175,7 @@ export default defineConfig(
     ),
     layer([`src/modules/${m}/adapters/**/${SOURCE}`], adapters(otherModuleInternals(m))),
     layer([`src/modules/${m}/domain/**/${SOURCE}`], domain(m)),
+    layer([`src/modules/${m}/domain/**/${DOMAIN_TEST}`], domain(m, { test: true })),
   ]),
 
   // src/modules/integration is reserved for Epic 7 (AD-16): no file may exist there.

@@ -54,7 +54,7 @@ CI (`.github/workflows/ci.yml`) runs `npm ci`, lint, typecheck and tests on Node
 src/
   app/        pages, server actions, route handlers
   worker/     job loop entry (bundled in Story 2.2)
-  shared/     env.ts, result.ts, log.ts, utils.ts, db.types.ts (generated)
+  shared/     env.ts, result.ts, log.ts, utils.ts, db.types.ts (committed, see below)
   modules/
     case-study/ material/ generation/ rendering/ sharing/ access/ jobs/
       domain/ application/ index.ts   (+ ports/ adapters/ only at vendor seams)
@@ -71,6 +71,25 @@ supabase/     config.toml, migrations/ (forward-only SQL)
 - `domain/` imports only `@/shared/*`, files of its own `domain/` and `zod`.
 - `src/modules/integration` is reserved for Epic 7; no MCP client in the MVP.
 - `process.env` is read only in `src/shared/env.ts`.
+
+## Database types
+
+`src/shared/db.types.ts` is committed so CI can typecheck without Docker. It must
+match the migrations in `supabase/migrations/`: after adding or changing a
+migration, whoever has Docker runs `npm run db:start` and `npm run db:types`
+and commits the regenerated file with the migration. (The first version was
+written by hand in `supabase gen types` shape for the `profile` migration.)
+Only `adapters/` may import it.
+
+## Authorization
+
+Every server action and route handler calls `getActor()` and then
+`authorize(actor, action, resource)` from `@/modules/access` before any other
+module call (AD-11); `test/authorize-guard.test.ts` enforces this for
+`"use server"` modules, inline server actions and `route.ts` handlers. The
+role matrix lives only in `src/modules/access/domain/policy.ts`. Until Epic 6,
+`getActor()` resolves the seeded dev owner/designer profile; the seeded
+`system` profile is the worker's actor.
 
 Exact versions only: `test/scaffold.test.ts` fails if any dependency in `package.json`
 uses `^`, `~` or a tag.
