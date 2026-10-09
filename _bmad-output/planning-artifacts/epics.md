@@ -451,7 +451,6 @@ Covers: FR2 (files), CAP-2, AR8, AR18 (soft delete, upload doesn't change status
 **Then** it disappears with an **Undo** toast for 5 s and no confirm dialog; the asset is soft-deleted (`deleted_at`), never hard-deleted, and Undo restores it
 **And** a removal event is recorded
 
-
 ### Story 2.8: Add pasted text as material
 
 As an owner/designer,
@@ -567,7 +566,7 @@ Covers: FR2 (details form), CAP-3, AR18 (form fields as stable-key refs, never m
 
 The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
 
-Epic prerequisites (non-dev, Sprint 2): final case study templates, narrative structure and quality criteria (NFR5), data processing logic (OP 2), and the "graphic template layouts" prerequisite, which has no sprint. Stories 3.4, 3.5 and 3.6 can't close before their prerequisite lands.
+Epic prerequisites (non-dev): graphic template layouts and final case study templates (Sprint 2, decided 2026-10-09), narrative structure and quality criteria (NFR5, Sprint 2), and data processing logic (OP 2, Sprint 1). Stories 3.4–3.7 can't close before their prerequisites land; when in Sprint 2 the templates arrive is the schedule risk.
 
 ### Story 3.1: Background job queue and worker loop
 
@@ -682,7 +681,7 @@ So that the draft looks designed whether I uploaded three media items or twelve.
 
 Covers: FR4, CAP-4 (slot mapping per media count), AR4 (`relayout`), AR15, NFR1 (template design unchanged), PRD Story 3.2
 ⚑ Interim: IR-OP1, IR-OP12 (adaptation chooses only among designed variants), IR-C4 (no variant on/off state)
-⛔ Blocked on: IR-A4 (the zero-images-or-videos rule) and the final templates (non-dev prerequisite)
+⛔ Blocked on: IR-A4 (the zero-images-or-videos rule) and the graphic template layouts and final templates (Sprint 2 non-dev prerequisites)
 
 **Acceptance Criteria:**
 
@@ -720,7 +719,7 @@ So that the preview I approve is exactly what gets exported and shared.
 
 Covers: AR9 (one renderer per format), FR3 (layouts per format), CAP-7 (preview matches export), NFR1
 ⚑ Interim: IR-OP1, IR-OP12 (media placed whole, fit, never stretched or cropped)
-⛔ Blocked on: final templates (non-dev prerequisite)
+⛔ Blocked on: final templates (Sprint 2 non-dev prerequisite)
 
 **Acceptance Criteria:**
 

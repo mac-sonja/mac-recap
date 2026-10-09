@@ -1,0 +1,91 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 10-09-2026 10:25
+last_updated: 10-09-2026 10:25
+project: MAC Recap
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-2: backlog
+  2-1-scaffold-the-app-from-the-starter-and-pin-the-stack: backlog
+  2-2-one-gated-image-deployable-to-staging: backlog
+  2-3-actor-and-policy-seam-with-a-dev-owner-designer: backlog
+  2-4-app-shell-navigation-tokens-italian-copy-status-badge: backlog
+  2-5-create-a-case-study-with-a-permanent-id: backlog
+  2-6-find-and-reopen-case-studies-in-the-table: backlog
+  2-7-upload-project-files: backlog
+  2-8-add-pasted-text-as-material: backlog
+  2-9-tag-property-and-flag-deliverables: backlog
+  2-10-fill-in-the-details-form: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-background-job-queue-and-worker-loop: backlog
+  3-2-display-renditions-for-uploaded-media: backlog
+  3-3-the-case-study-document-revisions-and-the-format-registry: backlog
+  3-4-templates-as-versioned-code-with-media-count-rules: backlog
+  3-5-one-renderer-per-format: backlog
+  3-6-narrative-generator-port-and-anthropic-adapter: backlog
+  3-7-generate-a-case-study: backlog
+  3-8-tell-me-when-the-draft-is-ready: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-review-dashboard-and-to-review-queue: backlog
+  4-2-open-a-draft-in-the-configurator: backlog
+  4-3-edit-generated-text-in-place-with-autosave: backlog
+  4-4-adjust-the-layout-per-format: backlog
+  4-5-replace-reorder-and-remove-media: backlog
+  4-6-choose-typography-per-format: backlog
+  4-7-check-every-block-against-the-material: backlog
+  4-8-approve-a-case-study: backlog
+  4-9-edit-an-approved-case-and-update-the-approved-version: backlog
+  4-10-conditional-not-scheduled-template-maintenance: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-library-of-approved-case-studies: backlog
+  5-2-preview-an-approved-case-study-in-every-format: backlog
+  5-3-export-a-format-as-a-file: backlog
+  5-4-export-every-format-at-once: backlog
+  5-5-create-a-shareable-link: backlog
+  5-6-the-shared-link-page: backlog
+  5-7-turn-off-a-shareable-link: backlog
+  5-8-guardrail-test-suite-for-the-end-of-sprint-2-check: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-sign-in-with-a-fixed-role: backlog
+  6-2-retire-the-basic-auth-gate-and-open-shared-links-to-their-au: backlog
+  6-3-manage-users-and-their-roles: backlog
+  6-4-guardrail-and-permission-check-after-login: backlog
+  epic-6-retrospective: optional

@@ -5,11 +5,11 @@ Epics run one after another, in order, never in parallel. Non-dev activities are
 | Sprint | Due | Epics | Non-dev activities and decisions due |
 | --- | --- | --- | --- |
 | 1 | 2026-10-14 | Epic 2 — Asset upload and tagging (CAP-1, CAP-2, CAP-3) | Team setup: Claude Code with the BMAD method (formerly Epic 1); tool design definition; template wireframes (asset dimensions, formats); data processing logic (OP 2, decided before Sprint 2); taxonomy values (OP 3, by October 14); choose the container host |
-| 2 | 2026-10-21 | Epic 3 — Graphic case study generation (CAP-4, CAP-5); Epic 4 — Review and approval (CAP-6, CAP-7, CAP-8); Epic 5 — Download and publishing (CAP-9, CAP-10) | Configurator visual design (Bento); account/sales/social user journey (OP 4); final case study templates; narrative structure and quality criteria (NFR5); **first guardrail check at the end of Sprint 2**. Decided before Sprint 2: export formats (OP 1), status lifecycle (OP 8), what counts as altering (OP 12). Decided before Epic 5 ships: shareable link access (OP 11) |
+| 2 | 2026-10-21 | Epic 3 — Graphic case study generation (CAP-4, CAP-5); Epic 4 — Review and approval (CAP-6, CAP-7, CAP-8); Epic 5 — Download and publishing (CAP-9, CAP-10) | Configurator visual design (Bento); account/sales/social user journey (OP 4); graphic template layouts and final case study templates (Epic 3 prerequisites); narrative structure and quality criteria (NFR5); **first guardrail check at the end of Sprint 2**. Decided before Sprint 2: export formats (OP 1), status lifecycle (OP 8), what counts as altering (OP 12). Decided before Epic 5 ships: shareable link access (OP 11) |
 | 3 | 2026-10-28 | Epic 6 — Login, users and permissions (CAP-11) | Mockups and assets for case studies; final guardrail check; demo preparation |
 | Demo | 2026-10-30 | — | Live run for the CEO against the four criteria in `success-metrics.md` (go / no-go) |
 
-**Schedule risk:** Sprint 2 carries Epics 3–5 and depends on non-dev deliverables due in the same sprint: final templates, the narrative structure and quality criteria, and the Bento configurator design. Epic 3 can't start until they land, and a late deliverable delays all three epics. Epic 3's "graphic template layouts" prerequisite has no sprint.
+**Schedule risk:** Sprint 2 carries Epics 3–5 and depends on non-dev deliverables due in the same sprint: graphic template layouts and final templates, the narrative structure and quality criteria, and the Bento configurator design. Epic 3 can't start until they land, and a late deliverable delays all three epics.
 
 CAP-12 (lifecycle events) is not an epic of its own. Each epic emits its events as it is built (AD-20).
 
