@@ -125,7 +125,7 @@ Other open items:
 
 - What is the narrative quality checklist (NFR5)? Due with Sprint 2's "narrative structure and quality criteria".
 - Which EU container host runs the app? Choose by the end of Sprint 1.
-- Epic 3's "graphic template layouts" prerequisite has no sprint.
+- When in Sprint 2 the graphic template layouts and final templates land. Both are scheduled for Sprint 2 (decided 2026-10-09), but Epic 3 can't start until they do.
 
 Conflicts carried from the architecture spine and UX, not decided here:
 
