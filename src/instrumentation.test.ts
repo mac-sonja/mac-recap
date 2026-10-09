@@ -116,3 +116,55 @@ describe("instrumentation register", () => {
     });
   });
 });
+
+// The preflight (`dist/preflight.js`) runs only in front of the standalone
+// server.js, which forces production; it must never let a development or test
+// NODE_ENV through ungated. Tested here so BASIC_AUTH stays out of other files.
+describe("preflight", () => {
+  const loggedError = () =>
+    vi.mocked(console.error).mock.calls.map((args) => args.map(String).join(" ")).join("\n");
+
+  async function runPreflight() {
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    await import("./preflight");
+    return exit;
+  }
+
+  beforeEach(() => {
+    for (const [name, value] of Object.entries(VARS)) vi.stubEnv(name, value);
+  });
+
+  it.each(["development", "test", "production", undefined])(
+    "exits 1 with NODE_ENV=%s and the gate unset, naming BASIC_AUTH_USER",
+    async (NODE_ENV) => {
+      vi.stubEnv("NODE_ENV", NODE_ENV);
+      const exit = await runPreflight();
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(loggedError()).toContain("BASIC_AUTH_USER");
+    },
+  );
+
+  it("exits 1 in development when only the password is missing, naming it", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("BASIC_AUTH_USER", "mac");
+    const exit = await runPreflight();
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(loggedError()).toMatch(/Missing BASIC_AUTH_PASSWORD/);
+  });
+
+  it("passes in development with both gate variables set", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("BASIC_AUTH_USER", "mac");
+    vi.stubEnv("BASIC_AUTH_PASSWORD", "s3cret");
+    const exit = await runPreflight();
+    expect(exit).not.toHaveBeenCalled();
+  });
+
+  it("exits 1 when a Supabase variable is missing", async () => {
+    vi.stubEnv("BASIC_AUTH_USER", "mac");
+    vi.stubEnv("BASIC_AUTH_PASSWORD", "s3cret");
+    vi.stubEnv("SUPABASE_SECRET_KEY", undefined);
+    const exit = await runPreflight();
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+});

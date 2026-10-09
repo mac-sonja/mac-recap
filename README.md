@@ -46,7 +46,8 @@ unauthenticated path. Credentials are compared in constant time.
 - **Production** (any `NODE_ENV` other than `development` or `test`, including unset;
   the standalone `server.js` and `next start` set `production`): both
   `BASIC_AUTH_USER` and `BASIC_AUTH_PASSWORD` are required. If either is unset or
-  empty, the web process exits with code 1 before serving, naming it.
+  empty, the web process exits with code 1 before serving, naming it (in the
+  Docker image, before the port opens; see Deploy).
 - **Development / test** (`npm run dev`, Vitest): both are optional. Leave both unset
   or empty for no gate, or set both to try it. Setting only one is treated as a
   misconfiguration (exit 1).
@@ -57,21 +58,25 @@ unauthenticated path. Credentials are compared in constant time.
 | Script | What it does |
 | --- | --- |
 | `npm run dev` | Next.js dev server |
-| `npm run build` | Production build (`.next/standalone`) |
+| `npm run build` | Production build: `next build` (`.next/standalone`), then `build:dist` |
+| `npm run build:dist` | esbuild bundles `dist/worker.js` and `dist/preflight.js` (Node 24, CJS, deps inlined) |
 | `npm run lint` | ESLint, including the module-boundary rules |
 | `npm run typecheck` | Generates Next route types, then `tsc --noEmit` |
 | `npm test` | Vitest unit tests and lint-boundary fixtures |
 | `npm run db:start` | `supabase start` (needs Docker) |
 | `npm run db:types` | `supabase gen types` from the local DB into `src/shared/db.types.ts` |
 
-CI (`.github/workflows/ci.yml`) runs `npm ci`, lint, typecheck and tests on Node 24.
+CI (`.github/workflows/ci.yml`) has two jobs: `check` runs `npm ci`, lint, typecheck,
+tests and the build on Node 24; `image` builds the Docker image and runs
+`scripts/smoke-image.sh` against it (see Deploy).
 
 ## Layout and boundaries
 
 ```text
 src/
   app/        pages, server actions, route handlers
-  worker/     job loop entry (bundled in Story 2.2)
+  worker/     worker entry, bundled to dist/worker.js (idles until the job loop lands)
+  preflight.ts  env + gate check loaded before server.js, bundled to dist/preflight.js
   shared/     env.ts, result.ts, log.ts, utils.ts, db.types.ts (generated)
   modules/
     case-study/ material/ generation/ rendering/ sharing/ access/ jobs/
@@ -92,3 +97,87 @@ supabase/     config.toml, migrations/ (forward-only SQL)
 
 Exact versions only: `test/scaffold.test.ts` fails if any dependency in `package.json`
 uses `^`, `~` or a tag.
+
+## Deploy
+
+One Docker image runs both processes. It is built on
+`mcr.microsoft.com/playwright:v1.63.0-noble` (Node 24, npm, the Playwright
+browsers, user `pwuser`) with ffmpeg pinned to Ubuntu noble's `7:6.1.1-3ubuntu5`.
+The image carries no host-specific configuration; every setting comes from the
+environment at run time.
+
+### Build
+
+```sh
+docker build --platform linux/amd64 --tag mac-recap:<version> .
+scripts/smoke-image.sh mac-recap:<version>   # optional locally; CI runs it on every PR
+```
+
+Build the image you deploy with `--platform linux/amd64`, so one built on an Apple
+Silicon machine still runs on an amd64 host.
+
+The runtime runs as `pwuser` with `NODE_ENV=production`, `HOSTNAME=0.0.0.0` and
+`PORT=3000`, and contains only the standalone server, `.next/static` and `dist/`.
+`HOSTNAME` is the address the web process binds to: a host that injects its own
+`HOSTNAME` (Kubernetes sets it to the pod name) must set it back to `0.0.0.0`, or
+the server listens only on that name and probes and traffic miss it.
+
+### Run
+
+Start both processes from the same image with the same environment (the
+variables in [Environment variables](#environment-variables); the worker ignores
+the basic-auth pair):
+
+| Process | Command | Notes |
+| --- | --- | --- |
+| Web | default `CMD`: `node --require ./dist/preflight.js server.js` | Listens on 3000. The preflight checks the environment and the basic-auth gate first, so a missing or invalid variable exits 1 before the port opens. |
+| Worker | `node dist/worker.js` | Logs one JSON readiness line, then idles (no job loop yet). Exits 0 on SIGTERM or SIGINT, 1 on an invalid environment. |
+
+```sh
+docker run --env-file staging.env -p 3000:3000 mac-recap:<version>
+docker run --env-file staging.env mac-recap:<version> node dist/worker.js
+```
+
+### Probes
+
+The gate has no unauthenticated path, and the image defines no `HEALTHCHECK`
+because the worker shares it. Configure the host instead:
+
+- **Web:** a TCP check on port 3000, or an HTTP check that sends
+  `Authorization: Basic <base64 of user:password>` (without it every path answers 401).
+- **Worker:** process liveness only; it opens no port.
+
+### Caching
+
+No shared cache or CDN may sit in front of the web process. Next serves
+`/_next/static/*` as `public, immutable`, so a shared cache could replay those
+responses to clients that never passed the gate.
+
+### Migrations
+
+Migrations are forward-only SQL files in `supabase/migrations/`; never edit or
+revert one that has been applied. To recover from a bad migration, write a new
+corrective migration and push it the same way. Each environment has its own
+Supabase project. Apply migrations before starting the image that needs them:
+
+- **Compatible with the running image.** A migration is applied while the previous
+  image is still serving, so it must not break that image: add before you remove
+  (new columns nullable or defaulted, renames and drops in a later migration once
+  no running image uses the old shape).
+- **Credentials.** `supabase link` and `db push` need a Supabase access token
+  (`SUPABASE_ACCESS_TOKEN`, or `npx supabase login`) and the project's database
+  password (`SUPABASE_DB_PASSWORD`, or the prompt).
+
+```sh
+npx supabase link --project-ref <staging-project-ref>
+npx supabase db push            # staging first
+# deploy the new image to staging and check it
+npx supabase link --project-ref <prod-project-ref>
+npx supabase db push            # prod only after staging
+npx supabase link --project-ref <staging-project-ref>   # re-link staging at once
+```
+
+`supabase link` stores the project ref locally (`supabase/.temp`), and a later bare
+`db push` targets whatever is linked. Re-link staging right after a prod push, or
+push to prod with `npx supabase db push --db-url <prod-connection-string>` without
+linking it, so a casual `db push` can never reach prod.
