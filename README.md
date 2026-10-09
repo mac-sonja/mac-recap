@@ -25,14 +25,32 @@ npm run dev
 ### Environment variables
 
 Validated by `src/shared/env.ts`, the only file that reads `process.env`. The
-server and the worker refuse to start if any is missing or invalid. None carries
-the `NEXT_PUBLIC_` prefix: the browser never talks to Supabase directly.
+server and the worker refuse to start if any required variable is missing or
+invalid. None carries the `NEXT_PUBLIC_` prefix: the browser never talks to
+Supabase directly.
 
-| Variable | Local value (from `npx supabase status`) |
+| Variable | Local value / purpose |
 | --- | --- |
-| `SUPABASE_URL` | API URL, `http://127.0.0.1:54321` |
-| `SUPABASE_PUBLISHABLE_KEY` | Publishable key |
-| `SUPABASE_SECRET_KEY` | Secret key (server only) |
+| `SUPABASE_URL` | API URL from `npx supabase status`, `http://127.0.0.1:54321` |
+| `SUPABASE_PUBLISHABLE_KEY` | Publishable key from `npx supabase status` |
+| `SUPABASE_SECRET_KEY` | Secret key from `npx supabase status` (server only) |
+| `BASIC_AUTH_USER` | Basic-auth gate user (web only; see below) |
+| `BASIC_AUTH_PASSWORD` | Basic-auth gate password (web only; see below) |
+
+#### Basic-auth gate
+
+Until login ships (Epic 6), `src/proxy.ts` puts HTTP basic auth in front of every
+request the web process serves, including `/s/*`, `/_next/*` and 404s; there is no
+unauthenticated path. Credentials are compared in constant time.
+
+- **Production** (any `NODE_ENV` other than `development` or `test`, including unset;
+  the standalone `server.js` and `next start` set `production`): both
+  `BASIC_AUTH_USER` and `BASIC_AUTH_PASSWORD` are required. If either is unset or
+  empty, the web process exits with code 1 before serving, naming it.
+- **Development / test** (`npm run dev`, Vitest): both are optional. Leave both unset
+  or empty for no gate, or set both to try it. Setting only one is treated as a
+  misconfiguration (exit 1).
+- **Worker**: never needs them.
 
 ## Scripts
 
