@@ -111,6 +111,26 @@ describe("module boundaries (I/O matrix)", () => {
       expect(await ruleIds("src/modules/x/domain/a.ts", `import "${spec}";\n`)).toEqual([]);
     });
 
+    it("a domain test file importing vitest passes", async () => {
+      expect(await ruleIds("src/modules/access/domain/policy.test.ts", `import "vitest";\n`)).toEqual([]);
+      expect(await ruleIds("src/modules/x/domain/a.test.ts", `import "vitest";\n`)).toEqual([]);
+    });
+
+    it("domain production code importing vitest fails", async () => {
+      expect(await ruleIds("src/modules/access/domain/policy.ts", `import "vitest";\n`)).toContain(
+        "no-restricted-imports",
+      );
+    });
+
+    it("a domain test file is still pure apart from vitest", async () => {
+      expect(
+        await ruleIds("src/modules/access/domain/policy.test.ts", `import "@/modules/access/application/a";\n`),
+      ).toContain("no-restricted-imports");
+      expect(await ruleIds("src/modules/access/domain/policy.test.ts", `import "node:fs";\n`)).toContain(
+        "no-restricted-imports",
+      );
+    });
+
     it("a known module's domain importing its own domain through the alias passes", async () => {
       expect(
         await ruleIds("src/modules/material/domain/a.ts", `import "@/modules/material/domain/files";\n`),

@@ -29,16 +29,16 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-09-2026 11:27
+last_updated: 10-09-2026 11:59
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 development_status:
   epic-2: in-progress
-  2-1-scaffold-the-app-from-the-starter-and-pin-the-stack: review
+  2-1-scaffold-the-app-from-the-starter-and-pin-the-stack: done
   2-2-one-gated-image-deployable-to-staging: backlog
-  2-3-actor-and-policy-seam-with-a-dev-owner-designer: backlog
+  2-3-actor-and-policy-seam-with-a-dev-owner-designer: review
   2-4-app-shell-navigation-tokens-italian-copy-status-badge: backlog
   2-5-create-a-case-study-with-a-permanent-id: backlog
   2-6-find-and-reopen-case-studies-in-the-table: backlog
