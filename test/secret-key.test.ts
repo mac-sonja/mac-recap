@@ -14,9 +14,9 @@ function files(dir: string): string[] {
 
 /**
  * env.ts and any module's adapters/ may name the secret key (AD-11), plus the
- * env tests that stub it (env.ts itself and the startup check in instrumentation).
+ * env tests that stub it (env.ts itself, the startup check in instrumentation and the proxy gate).
  */
-const ENV_TESTS = new Set(["src/shared/env.test.ts", "src/instrumentation.test.ts"]);
+const ENV_TESTS = new Set(["src/shared/env.test.ts", "src/instrumentation.test.ts", "src/proxy.test.ts"]);
 const allowed = (rel: string) =>
   rel === "src/shared/env.ts" || ENV_TESTS.has(rel) || /^src\/modules\/[^/]+\/adapters\//.test(rel);
 

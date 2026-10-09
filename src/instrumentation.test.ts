@@ -9,6 +9,9 @@ const VARS = {
 beforeEach(() => {
   vi.resetModules();
   vi.spyOn(console, "error").mockImplementation(() => undefined);
+  // Isolate from the developer's shell: the gate is off unless a test sets it.
+  vi.stubEnv("BASIC_AUTH_USER", undefined);
+  vi.stubEnv("BASIC_AUTH_PASSWORD", undefined);
 });
 
 afterEach(() => {
@@ -45,5 +48,71 @@ describe("instrumentation register", () => {
     for (const [name, value] of Object.entries(VARS)) vi.stubEnv(name, value);
     const exit = await runRegister();
     expect(exit).not.toHaveBeenCalled();
+  });
+
+  describe("basic-auth gate", () => {
+    const loggedError = () =>
+      vi.mocked(console.error).mock.calls.map((args) => args.map(String).join(" ")).join("\n");
+
+    beforeEach(() => {
+      for (const [name, value] of Object.entries(VARS)) vi.stubEnv(name, value);
+    });
+
+    it.each([
+      ["both unset", {}, "BASIC_AUTH_USER"],
+      ["user unset", { BASIC_AUTH_PASSWORD: "s3cret" }, "BASIC_AUTH_USER"],
+      ["password unset", { BASIC_AUTH_USER: "mac" }, "BASIC_AUTH_PASSWORD"],
+      ["user empty", { BASIC_AUTH_USER: "", BASIC_AUTH_PASSWORD: "s3cret" }, "BASIC_AUTH_USER"],
+      ["password empty", { BASIC_AUTH_USER: "mac", BASIC_AUTH_PASSWORD: "" }, "BASIC_AUTH_PASSWORD"],
+    ])("exits 1 in production with %s, naming the missing variable", async (_, gate, name) => {
+      vi.stubEnv("NODE_ENV", "production");
+      for (const [key, value] of Object.entries(gate)) vi.stubEnv(key, value);
+      const exit = await runRegister();
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(loggedError()).toMatch(new RegExp(`Missing (\\w+, )?${name}`));
+    });
+
+    it("starts in production with both variables set", async () => {
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("BASIC_AUTH_USER", "mac");
+      vi.stubEnv("BASIC_AUTH_PASSWORD", "s3cret");
+      const exit = await runRegister();
+      expect(exit).not.toHaveBeenCalled();
+    });
+
+    it("starts in development with both variables unset (no gate)", async () => {
+      vi.stubEnv("NODE_ENV", "development");
+      const exit = await runRegister();
+      expect(exit).not.toHaveBeenCalled();
+    });
+
+    it("starts in development with both variables empty (no gate)", async () => {
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("BASIC_AUTH_USER", "");
+      vi.stubEnv("BASIC_AUTH_PASSWORD", "");
+      const exit = await runRegister();
+      expect(exit).not.toHaveBeenCalled();
+    });
+
+    it.each(["staging", undefined])(
+      "exits 1 when NODE_ENV=%s and the variables are unset",
+      async (NODE_ENV) => {
+        vi.stubEnv("NODE_ENV", NODE_ENV);
+        const exit = await runRegister();
+        expect(exit).toHaveBeenCalledWith(1);
+        expect(loggedError()).toContain("BASIC_AUTH_USER");
+      },
+    );
+
+    it.each([
+      ["BASIC_AUTH_PASSWORD", { BASIC_AUTH_USER: "mac" }],
+      ["BASIC_AUTH_USER", { BASIC_AUTH_PASSWORD: "s3cret" }],
+    ])("exits 1 in development when only one is set, naming %s", async (name, gate) => {
+      vi.stubEnv("NODE_ENV", "development");
+      for (const [key, value] of Object.entries(gate)) vi.stubEnv(key, value);
+      const exit = await runRegister();
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(loggedError()).toContain(name);
+    });
   });
 });
