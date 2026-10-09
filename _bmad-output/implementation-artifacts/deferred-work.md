@@ -54,3 +54,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-part-2-one-image-with-web-and-worker.md`
   summary: Cache Docker layers in the CI image job.
   evidence: Every PR rebuilds the multi-GB Playwright-based image from scratch.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-4-app-shell-navigation-tokens-italian-copy-status-badge.md`
+  summary: Story 2.4 part 2 — an accessible single-level Dialog (native dialog + showModal, focus trapped and returned to the opener, Esc closes, a second dialog refused) and a lint rule rejecting hard-coded UI strings in src/app (JSX text with letters; aria-label/title/placeholder/alt string literals), with fixtures in test/lint-boundaries.test.ts.
+  evidence: Split from the Story 2.4 spec at the user's choice to keep it under the size limit; part 1 ships tokens, dictionary, sidebar, landing redirect and StatusBadge.
