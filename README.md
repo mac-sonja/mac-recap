@@ -62,13 +62,16 @@ unauthenticated path. Credentials are compared in constant time.
 | `npm run build:dist` | esbuild bundles `dist/worker.js` and `dist/preflight.js` (Node 24, CJS, deps inlined) |
 | `npm run lint` | ESLint, including the module-boundary rules |
 | `npm run typecheck` | Generates Next route types, then `tsc --noEmit` |
-| `npm test` | Vitest unit tests and lint-boundary fixtures |
+| `npm test` | Vitest unit tests and lint-boundary fixtures (no Docker; skips `test/db/**`) |
+| `npm run test:db` | DB tests in `test/db/**` against the running local stack (see Database tests) |
 | `npm run db:start` | `supabase start` (needs Docker) |
 | `npm run db:types` | `supabase gen types` from the local DB into `src/shared/db.types.ts` |
 
-CI (`.github/workflows/ci.yml`) has two jobs: `check` runs `npm ci`, lint, typecheck,
-tests and the build on Node 24; `image` builds the Docker image and runs
-`scripts/smoke-image.sh` against it (see Deploy).
+CI (`.github/workflows/ci.yml`) has three jobs: `check` runs `npm ci`, lint, typecheck,
+tests and the build on Node 24 (no Docker); `image` builds the Docker image and runs
+`scripts/smoke-image.sh` against it (see Deploy); `db` starts the local Supabase stack,
+applies every migration, runs `npm run test:db` and checks `db.types.ts` for drift
+(see Database tests).
 
 ## Layout and boundaries
 
@@ -103,6 +106,32 @@ migration, whoever has Docker runs `npm run db:start` and `npm run db:types`
 and commits the regenerated file with the migration. (The first version was
 written by hand in `supabase gen types` shape for the `profile` migration.)
 Only `adapters/` may import it.
+
+The CI `db` job enforces this: it runs `npm run db:types` and fails if the result
+differs from the committed file (the diff is in the log). On that failure it uploads
+the generated file as the `db-types` workflow artifact. Without Docker, download that
+artifact from the failed run, commit it as `src/shared/db.types.ts`, and push; the
+job passes from then on.
+
+## Database tests
+
+`test/db/**` checks the migrations against a real Postgres: the exact seed rows,
+RLS on with no policies, the role check against `ROLES`, that reads and writes on
+`profile` are refused (permission denied) for the publishable key (select, insert)
+and for the `anon`/`authenticated` roles (select, insert, update, delete), and that
+the real `getActor()` adapter resolves the dev owner/designer and returns
+`UNAUTHENTICATED` while it is disabled. They need Docker and are not part of `npm test`.
+
+```sh
+npm run db:start   # once; applies supabase/migrations/ and the seed
+npm run test:db    # reads URLs and keys from `supabase status`; nothing is hard-coded
+```
+
+`npm run test:db` (`scripts/test-db.sh`) maps `supabase status -o env` onto
+`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` and
+`SUPABASE_DB_URL`, then runs Vitest with `vitest.db.config.mts`. Without a running
+stack it exits 1 and tells you to run `npm run db:start`. After changing a
+migration, `npx supabase db reset` re-applies everything before rerunning.
 
 ## Authorization
 
