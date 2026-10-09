@@ -32,3 +32,41 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build --tag mac-recap:ci .
       - run: scripts/smoke-image.sh mac-recap:ci
+
+  db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Pinned CLI from devDependencies. Applies every migration and the seed.
+      # Only Postgres, PostgREST behind Kong (tests) and postgres-meta (gen types) run.
+      - name: Start local Supabase
+        id: start
+        run: >-
+          npx --no-install supabase start
+          -x gotrue,realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
+      - run: npm run test:db
+      - name: Generate db.types.ts
+        id: gen
+        # Also runs when DB tests failed, so one run reports both.
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
+        run: npm run db:types
+      - name: Check db.types.ts is up to date
+        id: drift
+        if: ${{ !cancelled() && steps.gen.outcome == 'success' }}
+        run: git diff --exit-code -- src/shared/db.types.ts
+      # Bootstrap path (no Docker locally): commit this artifact as src/shared/db.types.ts.
+      - name: Upload generated db.types.ts
+        if: ${{ !cancelled() && steps.gen.outcome == 'success' && steps.drift.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-types
+          path: src/shared/db.types.ts
+      - name: Stop local Supabase
+        if: always()
+        run: npx --no-install supabase stop --no-backup
