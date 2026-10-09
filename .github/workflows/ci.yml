@@ -22,3 +22,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # Re-run the client-bundle secret check now that .next/static exists.
+      - run: npx vitest run test/secret-key.test.ts
