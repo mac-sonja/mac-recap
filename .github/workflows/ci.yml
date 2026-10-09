@@ -44,12 +44,13 @@ jobs:
           cache: npm
       - run: npm ci
       # Pinned CLI from devDependencies. Applies every migration and the seed.
-      # Only Postgres, PostgREST behind Kong (tests) and postgres-meta (gen types) run.
+      # Only Postgres, PostgREST behind Kong (tests), Auth (status prints the API keys
+      # only when it runs) and postgres-meta (gen types) run.
       - name: Start local Supabase
         id: start
         run: >-
           npx --no-install supabase start
-          -x gotrue,realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
+          -x realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
       - run: npm run test:db
       - name: Generate db.types.ts
         id: gen
