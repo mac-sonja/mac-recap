@@ -39,3 +39,18 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-one-gated-image-deployable-to-staging.md`
   summary: Check that local next/image optimization still works behind the basic-auth gate.
   evidence: Unverified: the optimizer's internal sub-request may lack credentials and get the 401 body; no next/image use exists yet (Story 2.4+). Settle by serving an optimized local image with the gate on.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-part-2-one-image-with-web-and-worker.md`
+  summary: Add an init process (tini, or docker run --init / the host equivalent) once the web or worker process spawns Chromium or ffmpeg.
+  evidence: Both processes run as PID 1 and Node does not reap orphaned children; no child processes exist yet.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-part-2-one-image-with-web-and-worker.md`
+  summary: Keep the Playwright version in the Dockerfile's FROM lines and package.json in sync with a test.
+  evidence: Both say 1.63.0 today, kept in sync by hand; a mismatch only shows up at render time.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-part-2-one-image-with-web-and-worker.md`
+  summary: Pin the Playwright base image by digest and give the ffmpeg apt pin an owner and bump process.
+  evidence: The tag v1.63.0-noble is mutable, and the exact apt pin skips security updates if noble ever ships one.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-part-2-one-image-with-web-and-worker.md`
+  summary: Decide how the worker bundle handles native dependencies (playwright, sharp) before the job loop imports them.
+  evidence: build:dist bundles every dependency, and the runtime image only carries the node_modules Next traced for server.js.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-part-2-one-image-with-web-and-worker.md`
+  summary: Cache Docker layers in the CI image job.
+  evidence: Every PR rebuilds the multi-GB Playwright-based image from scratch.

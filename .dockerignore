@@ -1,0 +1,12 @@
+node_modules
+.next
+dist
+.git
+.env*
+_bmad*
+docs
+.claude
+**/*.tsbuildinfo
+coverage
+**/.DS_Store
+supabase/.temp
