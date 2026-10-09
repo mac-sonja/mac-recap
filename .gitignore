@@ -1,1 +1,24 @@
 .DS_Store
+
+# dependencies
+node_modules/
+
+# build output
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# test output
+coverage/
+
+# env files
+.env*
+!.env.example
+
+# db:types temp output
+src/shared/db.types.ts.tmp
+
+# debug
+npm-debug.log*
