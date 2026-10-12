@@ -100,7 +100,7 @@ export function createSupabaseCaseStudyRepository(
           actor_id: event.actorId,
           type: event.type,
           revision_id: event.revisionId,
-          data: event.data as Json,
+          data: event.data as NonNullable<Json>,
         })
         .select(CASE_EVENT_COLUMNS)
         .single();

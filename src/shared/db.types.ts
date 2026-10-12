@@ -25,30 +25,29 @@ export type Database = {
           Tables: {
             "case_event": {
                   Row: {
-                    "actor_id": string,"at": string,"case_id": string,"data": Json,"id": string,"revision_id": string | null,"type": string
+                    "actor_id": string,"at": string,"case_id": string,"data": NonNullable<Json>,"id": string,"revision_id": string | null,"type": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "actor_id": string,"at"?: string,"case_id": string,"data"?: Json,"id"?: string,"revision_id"?: string | null,"type": string
+                    "actor_id": string,"at"?: string,"case_id": string,"data"?: NonNullable<Json>,"id"?: string,"revision_id"?: string | null,"type": string
                   }
                   Update: {
-                    "actor_id"?: string,"at"?: string,"case_id"?: string,"data"?: Json,"id"?: string,"revision_id"?: string | null,"type"?: string
+                    "actor_id"?: string,"at"?: string,"case_id"?: string,"data"?: NonNullable<Json>,"id"?: string,"revision_id"?: string | null,"type"?: string
                   }
                   Relationships: [
                     {
-                      foreignKeyName: "case_event_actor_id_fkey"
-                      columns: ["actor_id"]
-                      isOneToOne: false
-                      referencedRelation: "profile"
-                      referencedColumns: ["id"]
-                    },
-                    {
-                      foreignKeyName: "case_event_case_id_fkey"
-                      columns: ["case_id"]
-                      isOneToOne: false
-                      referencedRelation: "case_study"
-                      referencedColumns: ["id"]
-                    }
+      foreignKeyName: "case_event_actor_id_fkey"
+      columns: ["actor_id"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "case_event_case_id_fkey"
+      columns: ["case_id"]
+isOneToOne: false
+      referencedRelation: "case_study"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"case_study": {
                   Row: {
@@ -63,12 +62,12 @@ export type Database = {
                   }
                   Relationships: [
                     {
-                      foreignKeyName: "case_study_created_by_fkey"
-                      columns: ["created_by"]
-                      isOneToOne: false
-                      referencedRelation: "profile"
-                      referencedColumns: ["id"]
-                    }
+      foreignKeyName: "case_study_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"profile": {
                   Row: {
@@ -92,9 +91,27 @@ export type Database = {
           Functions: {
             "create_case_study":
 { Args: { "p_actor_id": string,"p_client": string,"p_locale": string,"p_name": string,"p_year": number }; Returns: {
-                    "approved_revision_id": string | null,"client": string,"created_at": string,"created_by": string,"deleted_at": string | null,"head_revision_id": string | null,"head_version": number,"id": string,"locale": string,"name": string,"project_order_ref": string | null,"status": string,"updated_at": string,"year": number
-                  }
-                           }
+              "approved_revision_id": string | null,
+"client": string,
+"created_at": string,
+"created_by": string,
+"deleted_at": string | null,
+"head_revision_id": string | null,
+"head_version": number,
+"id": string,
+"locale": string,
+"name": string,
+"project_order_ref": string | null,
+"status": string,
+"updated_at": string,
+"year": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "case_study"
+        isOneToOne: true
+        isSetofReturn: false
+      } }
           }
           Enums: {
             [_ in never]: never
