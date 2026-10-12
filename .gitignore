@@ -22,3 +22,7 @@ src/shared/db.types.ts.tmp
 
 # debug
 npm-debug.log*
+
+# agent instruction files that `next dev` writes into the repo root
+/AGENTS.md
+/CLAUDE.md
