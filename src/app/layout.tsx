@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { it } from "@/shared/i18n/it";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MAC Recap",
+  title: it.app.name,
 };
 
 export default function RootLayout({
@@ -12,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it">
-      <body className="antialiased">{children}</body>
+      <body className="bg-surface font-body text-foreground antialiased">{children}</body>
     </html>
   );
 }

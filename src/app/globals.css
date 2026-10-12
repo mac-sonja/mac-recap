@@ -1,1 +1,75 @@
 @import "tailwindcss";
+
+/*
+ * Tool UI theme tokens. Names are fixed by DESIGN.md; the values are placeholders
+ * until the MAC UI guidelines exist, which will change values only, never names.
+ * Components use these through Tailwind theme utilities (`bg-surface`,
+ * `text-foreground-muted`, `font-mono`, `rounded-md`, ...), never raw colours or
+ * font stacks. Tailwind's default palette, fonts and radii are cleared so only
+ * these tokens exist. Template renderers (Epic 3) never consume these tokens.
+ */
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+  --radius-*: initial;
+
+  /* Chrome: neutral greyscale placeholders. */
+  --color-surface: oklch(0.985 0 0);
+  --color-surface-raised: oklch(1 0 0);
+  --color-foreground: oklch(0.205 0 0);
+  --color-foreground-muted: oklch(0.45 0 0);
+  --color-border: oklch(0.87 0 0);
+  --color-primary: oklch(0.25 0 0);
+  --color-primary-foreground: oklch(0.985 0 0);
+  --color-focus-ring: oklch(0.5 0.2 260);
+  --color-danger: oklch(0.55 0.21 27);
+
+  /* Lifecycle status: four clearly distinct hues, always paired with a text label. */
+  --color-status-draft: oklch(0.6 0.13 240);
+  --color-status-generating: oklch(0.75 0.16 70);
+  --color-status-review: oklch(0.55 0.2 305);
+  --color-status-approved: oklch(0.6 0.15 150);
+
+  /* Typography: system stacks, no web fonts. */
+  --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-heading: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-label: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Rounding. */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-full: 9999px;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-body);
+    color: var(--color-foreground);
+    background-color: var(--color-surface);
+  }
+
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border);
+  }
+
+  /* Visible focus on every control, from the focus-ring token. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
