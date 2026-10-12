@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "test/**/*.test.ts"],
+    // test/db/** needs the local Supabase stack: `npm run test:db` (vitest.db.config.mts).
+    exclude: [...configDefaults.exclude, "test/db/**"],
     testTimeout: 30_000,
   },
 });
