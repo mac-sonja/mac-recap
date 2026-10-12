@@ -31,6 +31,10 @@ export function getActor(): Promise<Result<Actor>> {
 const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   UNAUTHENTICATED: 401,
   FORBIDDEN: 403,
+  INVALID_INPUT: 400,
+  NOT_FOUND: 404,
+  INVALID_TRANSITION: 409,
+  STALE_STATUS: 409,
 };
 
 /** HTTP status for an `AppError` code; unknown codes are 500. */
