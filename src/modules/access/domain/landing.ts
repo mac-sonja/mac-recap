@@ -1,0 +1,18 @@
+import type { Role } from "./actor";
+
+/**
+ * Where each role lands: `/` and any surface the role cannot use redirect here.
+ * Defined only here. `/library` (Story 5.1) and `/users` (Story 6.3) are registered
+ * by their stories; `system` is the worker and has no UI.
+ */
+const LANDING: Readonly<Record<Role, string | null>> = {
+  owner_designer: "/case-studies",
+  account_sales_social: "/library",
+  admin: "/users",
+  system: null,
+};
+
+/** The role's landing path, or `null` when the role has no UI. */
+export function landingFor(role: Role): string | null {
+  return Object.hasOwn(LANDING, role) ? LANDING[role] : null;
+}

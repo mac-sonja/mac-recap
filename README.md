@@ -98,6 +98,30 @@ supabase/     config.toml, migrations/ (forward-only SQL)
 - `src/modules/integration` is reserved for Epic 7; no MCP client in the MVP.
 - `process.env` is read only in `src/shared/env.ts`.
 
+## UI: tokens, dictionary, shell
+
+- **Theme tokens** live in `src/app/globals.css` under `@theme` (Tailwind 4, CSS-first).
+  Names are fixed by DESIGN.md: colours `surface`, `surface-raised`, `foreground`,
+  `foreground-muted`, `border`, `primary`, `primary-foreground`, `focus-ring`, `danger`,
+  `status-draft|generating|review|approved`; fonts `display`, `heading`, `body`, `label`,
+  `mono`; rounding `sm`, `md`, `full`. Values are placeholders (greyscale chrome, four
+  distinct status hues, system font stacks) until the MAC UI guidelines arrive; they
+  change values only. Tailwind's default palette, fonts and radii are cleared, so
+  components can use only these tokens (`bg-surface`, `text-foreground-muted`,
+  `font-mono`, `rounded-md`). `test/tokens.test.ts` checks every name exists and that no
+  `src/app/**/*.tsx` uses raw colours or font stacks.
+- **Template renderers (Epic 3) never consume tool tokens**: case study output has its
+  own styling, independent of the tool UI.
+- **Italian dictionary:** every UI string comes from `src/shared/i18n/it.ts` (the `it`
+  object, or the typed `t("dot.path")` accessor). Plain verbs, no exclamation marks.
+- **Shell:** `src/app/(tool)/layout.tsx` resolves the actor and renders the left sidebar.
+  Nav items come from `can(actor, action)` in `@/modules/access`, never from role names;
+  items a role can't use are absent. Each page calls `requireSurface(action)`
+  (`src/app/_lib/surface.ts`), which redirects to the role's landing (`landingFor`, defined
+  only in `access`) when the policy denies it; `/` redirects there too. With no actor the
+  no-actor message renders instead of the shell. Desktop only (≥1024 px; icons only at
+  1024–1279 px).
+
 ## Database types
 
 `src/shared/db.types.ts` is committed so CI can typecheck without Docker. It must

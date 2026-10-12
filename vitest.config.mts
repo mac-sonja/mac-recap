@@ -7,7 +7,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "test/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "test/**/*.test.ts"],
     // test/db/** needs the local Supabase stack: `npm run test:db` (vitest.db.config.mts).
     exclude: [...configDefaults.exclude, "test/db/**"],
     testTimeout: 30_000,
