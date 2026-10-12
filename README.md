@@ -121,6 +121,10 @@ supabase/     config.toml, migrations/ (forward-only SQL)
   only in `access`) when the policy denies it; `/` redirects there too. With no actor the
   no-actor message renders instead of the shell. Desktop only (≥1024 px; icons only at
   1024–1279 px).
+- **Dialog:** `src/app/_components/dialog.tsx` is the only dialog (native `<dialog>`,
+  `showModal()`); one level deep, a second open is refused; callers supply the actions.
+  `open` is controlled and `onClose` only asks to close; a backdrop click does nothing;
+  focus returns to the opener (mark an initial-focus control with `data-autofocus`).
 
 ## Database types
 
