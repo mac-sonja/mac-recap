@@ -3,6 +3,9 @@ import { z } from "zod";
 /** The event written with every new case, in the same transaction. */
 export const CASE_CREATED = "case_created";
 
+/** The event written with every status change, in the same transaction; `data` is `{ event, from, to }`. */
+export const TRANSITION = "transition";
+
 /** Event types are snake_case; the `case_event.type` check uses the same pattern. */
 export const caseEventTypeSchema = z.string().regex(/^[a-z][a-z0-9_]*$/, "Must be snake_case.");
 

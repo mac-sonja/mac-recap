@@ -5,14 +5,17 @@ import { createSupabaseCaseStudyRepository } from "@/modules/case-study/adapters
 import { makeCreateCaseStudy } from "@/modules/case-study/application/create-case-study";
 import { makeGetCaseStudy } from "@/modules/case-study/application/get-case-study";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
+import { makeTransition } from "@/modules/case-study/application/transition";
 import type { CaseEvent } from "@/modules/case-study/domain/case-event";
 import type { CaseStudy } from "@/modules/case-study/domain/case-study";
 import type { Result } from "@/shared/result";
 
-export { CASE_CREATED } from "@/modules/case-study/domain/case-event";
+export { CASE_CREATED, TRANSITION } from "@/modules/case-study/domain/case-event";
 export type { CaseEvent, RecordEventInput } from "@/modules/case-study/domain/case-event";
 export { LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
 export type { CaseStudy, CreateCaseStudyInput, Locale } from "@/modules/case-study/domain/case-study";
+export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
+export type { TransitionEvent } from "@/modules/case-study/domain/transition";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
 
 /**
@@ -35,4 +38,15 @@ export function get(id: unknown): Promise<Result<CaseStudy>> {
  */
 export function recordEvent(actor: Actor, input: unknown): Promise<Result<CaseEvent>> {
   return makeRecordEvent(createSupabaseCaseStudyRepository())(actor, input);
+}
+
+/**
+ * The only way a case's status changes (AD-3): applies `event` (one of
+ * `TRANSITION_EVENTS`) per the domain transition table and appends a `transition`
+ * event `{ event, from, to }` with the actor, in one transaction. Call only with an
+ * already-authorized actor (AR11). Errors: `NOT_FOUND`, `INVALID_TRANSITION`,
+ * `STALE_STATUS` (status moved since read); nothing is written on any of them.
+ */
+export function transition(caseId: unknown, event: unknown, actor: Actor): Promise<Result<CaseStudy>> {
+  return makeTransition(createSupabaseCaseStudyRepository())(caseId, event, actor);
 }
