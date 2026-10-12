@@ -95,6 +95,33 @@ const dynamicImports = (patterns) =>
     },
   ]);
 
+// Every UI string comes from the Italian dictionary (Story 2.4). In src/app
+// components: no JSX text with a letter, no string or plain template literal as
+// a JSX child, no literal aria-label/title/placeholder/alt. Text without letters
+// (punctuation, numbers, whitespace) is allowed.
+// Latin letters incl. accented ones; the × (U+00D7) and ÷ (U+00F7) signs are not letters.
+const LETTER = "/[A-Za-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F]/";
+const UI_STRING_MESSAGE = "UI text comes from the Italian dictionary: use `it` / `t()` from src/shared/i18n/it.ts.";
+const UI_ATTRIBUTE = "JSXAttribute[name.name=/^(aria-label|title|placeholder|alt)$/]";
+const JSX_PARENT = ":matches(JSXElement, JSXFragment)";
+// A value in braces: the literal itself, or a branch of `cond ? a : b` / `a && b` / `a ?? b`.
+const IN_BRACES = [
+  "JSXExpressionContainer >",
+  "JSXExpressionContainer > ConditionalExpression >",
+  "JSXExpressionContainer > LogicalExpression >",
+];
+const literals = (prefix) =>
+  IN_BRACES.flatMap((path) => [
+    `${prefix} > ${path} Literal[value=${LETTER}]`,
+    `${prefix} > ${path} TemplateLiteral[expressions.length=0] > TemplateElement[value.raw=${LETTER}]`,
+  ]);
+const UI_STRINGS = [
+  `JSXText[value=${LETTER}]`,
+  `${UI_ATTRIBUTE} > Literal[value=${LETTER}]`,
+  ...literals(JSX_PARENT),
+  ...literals(UI_ATTRIBUTE),
+].map((selector) => ({ selector, message: UI_STRING_MESSAGE }));
+
 /** One boundary layer: static, dynamic and require imports plus the process.env ban. */
 const layer = (files, patterns, { ignores, extraSyntax = [] } = {}) => ({
   files,
@@ -154,6 +181,9 @@ export default defineConfig(
 
   // UI and worker entry: modules only through index.ts, no vendor SDKs.
   layer([`src/app/${SOURCE}`, `src/worker/${SOURCE}`, `src/*.{ts,tsx}`], OUTSIDE_MODULES),
+
+  // UI components (not their tests): same boundaries, plus no hard-coded UI strings.
+  layer([`src/app/**/*.tsx`], OUTSIDE_MODULES, { ignores: [`src/app/**/*.test.tsx`], extraSyntax: UI_STRINGS }),
 
   // Shared primitives depend on nothing app-specific.
   layer([`src/shared/${SOURCE}`], SHARED),
