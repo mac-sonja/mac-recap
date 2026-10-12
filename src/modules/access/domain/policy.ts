@@ -1,4 +1,7 @@
+import type { CaseStatus } from "@/shared/case-status";
 import type { Role } from "./actor";
+
+export { CASE_STATUSES, type CaseStatus } from "@/shared/case-status";
 
 /**
  * The AD-11 permission matrix. This file is the only place permissions are
@@ -27,10 +30,6 @@ export const ACTIONS = [
   "change permissions or guardrails",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
-
-/** Case statuses the policy reasons about (AD-3, interim OP 8 set). */
-export const CASE_STATUSES = ["draft", "generating", "in_review", "approved"] as const;
-export type CaseStatus = (typeof CASE_STATUSES)[number];
 
 /**
  * What an action is performed on. `status` is the case's status; for `list cases`

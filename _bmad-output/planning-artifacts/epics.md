@@ -91,11 +91,12 @@ UX-DR4: Owner/designer Case studies table. Columns ID (monospace), Name, Client,
 UX-DR5: To review queue. The table pre-filtered to Da approvare, oldest first; sidebar count; no assignment or claiming; empty copy "Nothing to review."
 UX-DR6: Library view. Card grid (cover = first slide of the 16:9 deck, name, client, year, up to three tags); approved only; no status filter or badge; same search; facets Client, Year and tags as multi-select chips with active filters and Clear all; newest approved first; paginates at 24, no infinite scroll; empty copy "No approved case studies yet."; owner/designer Table / Library toggle.
 UX-DR7: Wizard step 0. Name (required) and client (required), year defaulting to the current year. The case is created and its ID shown in the header; saved as Bozza from that moment; leaving and returning loses nothing.
-UX-DR8: Wizard step 1 Material. Dropzone plus browse button; copy "Up to 20 files, 100 MB each."; per-file inline rejections ("Over 100 MB. Not uploaded." / unsupported-type copy / 21st file) that don't block others; parallel uploads with per-file progress, announced to screen readers; deliverable rows (thumbnail, name, size, tag/property/flag chip pickers from a fixed list, no free text, "untagged" marker; tagging optional); remove with 5 s Undo toast; Next: Details enabled once one file has uploaded.
+UX-DR8: Wizard step 1 Material. Dropzone plus browse button; copy "Up to 20 files, 100 MB each."; per-file inline rejections ("Over 100 MB. Not uploaded." / unsupported-type copy / 21st file) that don't block others; parallel uploads with per-file progress, progress and rejections announced to screen readers; deliverable rows (thumbnail, name, size, tag/property/flag chip pickers from a fixed list, no free text, "untagged" marker; tagging optional); remove with 5 s Undo toast; Next: Details enabled once one file has uploaded.
 UX-DR9: Wizard step 2 Details. Context, Solution, Results textareas with one-line prompts, a "{n} of 3" counter, all optional.
 UX-DR10: Wizard step 3 Generate. Summary "{n} files, {m} of 3 details filled."; Generate disabled without material, with the visible reason linked via `aria-describedby`; processing state with leave-page copy and Back to case studies; no ETA or percentage; failure banner "Generation didn't finish. Your material and details are saved." with Try again.
 UX-DR11: Draft-ready toast anywhere in the app: "{Name} is ready to review." with Open (C3).
-UX-DR12: Configurator frame. Top bar (back, name, status badge, save state, Approve or Update approved version); left Formats pane (one entry per registry format: name, ratio, pixel size, looked-at check mark); centre canvas at fit-to-pane zoom with page strip for multi-page formats; right pane Edit and Check tabs. Below 1024 px: "The configurator needs a larger screen."
+UX-DR12: Configurator frame. Top bar (back, name, status badge, save state, Approve or Update approved version); left Formats pane (one entry per registry format: name, ratio, pixel size, looked-at check mark); centre canvas at fit-to-pane zoom with page strip for multi-page formats; right pane Edit and Check tabs. At 1024–1279 px the panes narrow and the right pane can collapse. Below 1024 px: "The configurator needs a larger screen."
+UX-DR34: Adding material after generation. To add material to a case in Da approvare or Approvato, the owner/designer goes back to the wizard's Material step; the case keeps its status, and the new material is available to Replace media (EXPERIENCE `[ASSUMPTION]`, spine *Deferred: Regenerate*).
 UX-DR13: Configurator text editing. Click to edit in place, Esc or click outside to finish, autosave. Plain text and line breaks only. Section headings can be reworded, sections can't be deleted or reordered. Overflow marker; no silent shrink below template minimum. Edited blocks are marked "edited" and need re-checking.
 UX-DR14: Configurator layout. Variant thumbnail grid from the template's designed variants for the format; Shuffle layout steps to the next designed variant that fits the media count, with undo; spacing sliders bounded by template range; Reset to generated default per format.
 UX-DR15: Configurator media. Replace from this case's own material only (no upload, stock or generated images); drag to swap slots with a keyboard/menu alternative; remove from layout re-adapts to the new count; media placed whole (fit, no stretching); no crop, recolour, filter or effect controls.
@@ -113,7 +114,7 @@ UX-DR26: Keyboard. Every action keyboard-reachable; configurator shortcuts Cmd/C
 UX-DR27: Accessibility floor. Visible focus (`focus-ring`) on every control; dialogs trap and return focus; canvas blocks reachable by Tab in reading order; Check list keyboard-operable; reduced motion respected (no animated slide or variant transitions).
 UX-DR28: Confirm dialogs only for Approve, Update approved version, Delete, Remove user, Turn off link; everything else undoable. Banned anywhere: approve all, tick all, bulk approve, auto-approve, any guardrail control, posting to social channels, infinite scroll.
 UX-DR29: Copy and voice. All UI copy in Italian through one dictionary file (English lines in the spec are the source for the Italian microcopy); plain verbs, no hype, no exclamation marks; generated text is never described as "verified".
-UX-DR30: Responsive rules. Case studies / Users / Templates: sidebar collapses to icons at 1024–1279 px, read-only usable list below 1024 px. First load shows skeleton rows or cards.
+UX-DR30: Responsive rules. Case studies / Users / Templates: sidebar collapses to icons at 1024–1279 px, read-only usable list below 1024 px. Wizard and configurator below 1024 px show the "needs a larger screen" message. First load shows skeleton rows or cards.
 UX-DR31: Design tokens (DESIGN.md). Implement the fixed token names (colours, typography roles incl. mono, rounded, components button-primary, status-badge, focus-indicator) as theme variables with placeholder values, so values can be filled later without code changes. Tool chrome tokens never style template output.
 UX-DR32: Templates surface (conditional on C4). Browse templates and their variants per format with sample content; turn variants on and off (at least one per format stays on); see usage counts.
 UX-DR33: `MISSING_ASPECT` warning shown in the configurator (spine AD-6; placement and blocking are conflict A3).
@@ -345,7 +346,7 @@ I want to create a case study by entering its name and client,
 So that it gets a permanent ID and is saved as a draft I can fill in later.
 
 Covers: FR1, CAP-1, AR2, AR3 (create, `draft`), AR20, UX-DR7, PRD Story 2.2
-⚑ Interim: IR-OP8
+⚑ Interim: IR-OP8, IR-OP13 (the `case_event` log is what the tool keeps for the measures; no hands-on time)
 UX gap: narrative language (`it` | `en`) has no designed control; it is placed in this form as a select defaulting to Italiano.
 
 **Acceptance Criteria:**
@@ -380,7 +381,7 @@ As an owner/designer,
 I want a table of all case studies with search,
 So that I can find a draft I started and carry on where I left off.
 
-Covers: UX-DR4 (columns, search, sort, Bozza row click, empty and no-results states, `/` shortcut), UX-DR30 (skeleton), CAP-6 (list part)
+Covers: UX-DR4 (columns, search, sort, Bozza row click, empty and no-results states, `/` shortcut), UX-DR30 (skeleton, below 1024 px), CAP-6 (list part), AR11 (list scope)
 ⚑ Interim: IR-OP8
 Note: the status filter, row actions, delete and the To review queue come in Story 4.1, when more than one status exists.
 
@@ -409,6 +410,15 @@ Note: the status filter, row actions, delete and the To review queue come in Sto
 **Given** a row in Bozza
 **When** I click it
 **Then** the wizard reopens for that case (Story 2.10 makes it open at the first incomplete step once all steps exist)
+
+**Given** the list use case
+**When** it authorizes `list cases` with a scope (all statuses for owner/designer, approved only for account/sales/social)
+**Then** the query filters by exactly the scope that was authorized, and a test with an account/sales/social actor gets approved cases only (follow-up from the Story 2.3 review, `deferred-work.md`)
+
+**Given** a viewport narrower than 1024 px
+**When** I open Case studies
+**Then** the table still lists, searches and sorts, read-only
+**And** **+ New case study** and a Bozza row click show "needs a larger screen" copy instead of opening the wizard
 
 ### Story 2.7: Upload project files
 
@@ -440,6 +450,7 @@ Covers: FR2 (files), CAP-2, AR8, AR18 (soft delete, upload doesn't change status
 **Given** a file over 100 MB, a file of a type not on the allowlist, or a 21st file
 **When** I add it with other valid files
 **Then** only that file is rejected, inline on its row ("Over 100 MB. Not uploaded." / "This file type isn't supported. Use images, videos, texts or PDFs." / a 20-file limit message), and the other files upload normally
+**And** each rejection is announced to screen readers, like upload progress
 **And** a request that bypasses the UI and exceeds a limit is rejected by S3 or by the confirm step, never stored as an asset
 
 **Given** an uploaded file
@@ -574,7 +585,7 @@ As the team,
 I want long work to run as leased Postgres jobs in the worker process,
 So that generation, exports and renditions never run inside a web request, never run twice from a double click, and never leave a case stuck after a crash.
 
-Covers: AR10, NFR4 (waiting off the hands-on path)
+Covers: AR10, AR11 (system actor), NFR4 (waiting off the hands-on path)
 
 **Acceptance Criteria:**
 
@@ -592,6 +603,10 @@ Covers: AR10, NFR4 (waiting off the hands-on path)
 **When** it runs a job
 **Then** it renews the lease every minute while the job runs, so a long job is never cut off by the lease (generation time is unbounded)
 **And** handlers are registered per kind, and the worker acts as the `system` actor
+
+**Given** `access.index`
+**When** the worker starts
+**Then** it gets the `system` actor through a public resolver on `access.index` (the seeded system profile, read from `profile`), and passes it to `authorize` for job work; nothing outside `access` hard-codes the system profile id (follow-up from the Story 2.3 review, `deferred-work.md`)
 
 **Given** a worker crashes mid-job
 **When** the lease expires
@@ -645,7 +660,7 @@ I want one validated document per revision that every format and screen reads, a
 So that content never differs between formats, configurator edits reach the exports, and old revisions survive schema changes.
 
 Covers: AR3 (revision model, live and editable reads), AR4, AR9 (format registry), AR21, FR3 (layouts per format), CAP-12 (generated draft kept)
-⚑ Interim: IR-OP1 (registry holds Deck 16:9, Social carousel 4:5, PDF A4 only), IR-OP8
+⚑ Interim: IR-OP1 (registry holds Deck 16:9, Social carousel 4:5, PDF A4 only), IR-OP8, IR-OP13 (`generated_doc` is kept next to the approved `doc` for the measures)
 
 **Acceptance Criteria:**
 
@@ -794,7 +809,7 @@ So that the draft is built in the background without my waiting time counting ag
 
 Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, failure → `draft`), AR6 (gate in UI and worker), AR10, AR17 (`baseHeadVersion`, new revision), AR18 (manifest), AR20, UX-DR10, UX-DR4 (live status), PRD Story 3.1
 ⚑ Interim: IR-OP8, IR-OP1
-⛔ Blocked on: IR-A4 (a case with text or PDFs only, until the template's zero-media rule exists), via Stories 3.4 and 3.6
+⛔ Blocked on: IR-A4 (a case with text or PDFs only, until the template's zero-media rule exists, via Story 3.4); IR-OP2 and IR-NFR5 (via Story 3.6); the graphic template layouts and final templates (via Stories 3.4 and 3.5)
 
 **Acceptance Criteria:**
 
@@ -923,6 +938,10 @@ Covers: FR5 (configurator), CAP-7 (preview equals export), AR3 (`getEditableRevi
 **When** the configurator opens
 **Then** a warning says the draft lacks the technical or the graphic side (whichever is missing), and Approve is not blocked by it
 
+**Given** a viewport of 1024–1279 px
+**When** the configurator loads
+**Then** the panes narrow and the right pane can be collapsed and reopened, by pointer and by keyboard
+
 **Given** a viewport narrower than 1024 px
 **When** I open the configurator
 **Then** it shows "The configurator needs a larger screen." instead of the panes
@@ -983,8 +1002,8 @@ As an owner/designer,
 I want to pick a designed variant, shuffle, adjust spacing or reset each format's layout,
 So that each format looks right without changing the template design.
 
-Covers: FR5 (layout), FR4 (shuffle respects media count), CAP-7, NFR1, AR15 (`listVariants`), UX-DR14, UX-DR26 (undo/redo)
-⚑ Interim: IR-OP12 (Shuffle and variants choose only among designed variants), IR-C4 (all coded variants are available)
+Covers: FR5 (layout), FR4 (shuffle respects media count), CAP-7, NFR1, AR15 (`listVariants`), UX-DR14, UX-DR26 (undo/redo), UX-DR27 (reduced motion)
+⚑ Interim: IR-OP12 (Shuffle and variants choose only among designed variants), IR-C4 (all coded variants are available), IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
 
 **Acceptance Criteria:**
 
@@ -1008,14 +1027,19 @@ Covers: FR5 (layout), FR4 (shuffle respects media count), CAP-7, NFR1, AR15 (`li
 **When** it is saved
 **Then** it uses the Story 4.3 save path (compare-and-set, save states, events), and the shared text and media set are unchanged
 
+**Given** reduced motion is set
+**When** the variant changes (pick, Shuffle, undo or Reset)
+**Then** the canvas switches without an animated transition
+
 ### Story 4.5: Replace, reorder and remove media
 
 As an owner/designer,
 I want to swap, reorder or hide media in the layout using only this case's material,
 So that the best visuals lead without anything outside the project creeping in.
 
-Covers: FR5 (media), FR4 (adapt on count change), CAP-7, NFR1, AR4 (`relayout` in the same write), AR18 (refs from own material), UX-DR15, UX-DR26 (drag alternative)
-⚑ Interim: IR-OP12 (fit whole; no crop, focal point, recolour, filter or effect controls)
+Covers: FR5 (media), FR4 (adapt on count change), CAP-7, NFR1, AR3 (generation only from `draft`), AR4 (`relayout` in the same write), AR18 (refs from own material; upload never changes status), UX-DR15, UX-DR26 (drag alternative), UX-DR34
+⚑ Interim: IR-OP12 (fit whole; no crop, focal point, recolour, filter or effect controls), IR-OP8 (status kept when material is added), IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
+UX gap: EXPERIENCE.md sends the owner/designer "back to the wizard's Material step" but designs no control for it. This story adds **Add material** in the Replace media picker. Flag to UX.
 
 **Acceptance Criteria:**
 
@@ -1035,6 +1059,13 @@ Covers: FR5 (media), FR4 (adapt on count change), CAP-7, NFR1, AR4 (`relayout` i
 **When** it names an asset that isn't this case's non-deleted material
 **Then** it is rejected
 
+**Given** a case in Da approvare or Approvato
+**When** I choose **Add material** in the Replace media picker
+**Then** the wizard's Material step (Stories 2.7–2.9) opens for this case, with uploads, pasted text and tagging working as for a draft, and a back arrow to the configurator
+**And** the case status doesn't change, no Details or Generate step is offered (generation runs only from `draft`), and the Generate action called directly fails because the case isn't in `draft`
+**And** when I return, the new images and videos are listed in the Replace media picker; nothing enters the layout or the revision until I place it
+**And** removing a file there that a revision references only soft-deletes it (AR18), so the revision's references stay resolvable and the approval check can report the missing material
+
 **Given** any media control
 **When** I look for crop, recolour, filter or effect controls
 **Then** none exists; media are always placed whole within their slot
@@ -1050,6 +1081,7 @@ I want to choose the font pairing and text scale the template offers,
 So that the text reads well in each format while staying on-brand.
 
 Covers: FR5 (typography), CAP-7, NFR1, UX-DR16
+⚑ Interim: IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
 
 **Acceptance Criteria:**
 
@@ -1076,6 +1108,7 @@ I want to tick each block only after I've checked its claims against the materia
 So that nothing reaches a client that a person hasn't traced back to the source.
 
 Covers: NFR2, FR6 (manual check), CAP-8, AR19 (`check { by, at, textHash }`, no bulk, voided on change, `sourceRefs` never "verified"), AR20 (check and uncheck events), UX-DR17, UX-DR26 (`J` `K` `Space`), UX-DR28 (no tick-all), UX-DR29 (never "verified")
+⚑ Interim: IR-C3 and IR-A5 (ticks save through the Story 4.3 autosave path)
 
 **Acceptance Criteria:**
 
@@ -1119,7 +1152,7 @@ I want to approve a case once every block is checked and nothing overflows,
 So that it becomes available for export and sharing, and only then.
 
 Covers: FR6, CAP-8, NFR2, NFR7, AR3 (`in_review` → `approved`, `approved_revision_id`), AR5 (automated guardrail test), AR17, AR18 (`MATERIAL_MISSING`), AR19 (server-side check, overflow per format), AR20, UX-DR18, UX-DR28, PRD Story 4.3
-⚑ Interim: IR-OP8, IR-A3 (`MISSING_ASPECT` doesn't block)
+⚑ Interim: IR-OP8, IR-A3 (`MISSING_ASPECT` doesn't block), IR-A5 (a stale approve reloads the revision; no "someone else changed this" state)
 
 **Acceptance Criteria:**
 
@@ -1155,7 +1188,7 @@ I want to fix an approved case without unchecked text reaching anyone,
 So that a correction goes live only after I've checked it.
 
 Covers: FR6 (approved stays approved), CAP-8, NFR2, NFR7, AR3 (fork, live vs editable, update, discard, `superseded`), AR17 (`forkHead`), AR19 (unedited blocks keep their checks), AR20, UX-DR19, UX-DR28, PRD Story 4.3 (last criterion, staged reading)
-⚑ Interim: IR-A1 (edits are staged until **Update approved version**)
+⚑ Interim: IR-A1 (edits are staged until **Update approved version**), IR-OP8 (no path back from Approvato), IR-C3 and IR-A5 (edits save through the Story 4.3 autosave path)
 Note: the live-link count in the banner and dialog is added by Story 5.5, when links exist.
 
 **Acceptance Criteria:**
@@ -1200,6 +1233,7 @@ Covers: UX-DR32, AR15 (conditional `template_variant_state`), AR11 (`manage temp
 **Given** the PRD owner adopted the C4 scope
 **When** I open **Templates** in the sidebar
 **Then** I see each template's variants per format with sample content and how many case studies use each variant
+**And** below 1024 px the list stays readable (UX-DR30)
 
 **Given** a variant
 **When** I turn it off
@@ -1450,7 +1484,7 @@ I want every guardrail covered by automated tests that run against the pre-login
 So that the first guardrail check at the end of Sprint 2 has evidence, not opinions.
 
 Covers: AR5, NFR1, NFR3, NFR6, NFR7, Sprint 2 non-dev "first guardrail check"
-⚑ Interim: IR-OP12 (the NFR1 tests check the interim boundary)
+⚑ Interim: IR-OP12 (the NFR1 tests check the interim boundary), IR-PERM (the NFR3 matrix check includes "any sharer turns off any link")
 
 **Acceptance Criteria:**
 
@@ -1493,6 +1527,10 @@ Open (spine *Deferred*, not an OP): the sign-in method, Supabase Auth email and 
 **Given** a profile with `disabled_at` set, or an auth user with no profile
 **When** they try to sign in or use an existing session
 **Then** they are denied and returned to the sign-in screen
+
+**Given** a session email that differs from a profile email only in letter case
+**When** `getActor()` matches the session to a profile
+**Then** it matches case-insensitively, and the database rejects two profiles whose emails differ only in case (`lower(email)` unique index or `citext`; follow-up from the Story 2.3 review, `deferred-work.md`)
 
 **Given** the cutover
 **When** Epic 6 is deployed
@@ -1541,7 +1579,7 @@ As an admin,
 I want to add users, change their role and remove them,
 So that the right people get the right access, without me touching case content or permissions.
 
-Covers: FR8 (admin), CAP-11, AR11 (role changes apply at next request; removal disables the profile), UX-DR24, UX-DR28 (Remove user confirm), PRD Story 6.2
+Covers: FR8 (admin), CAP-11, AR11 (role changes apply at next request; removal disables the profile), UX-DR24, UX-DR28 (Remove user confirm), UX-DR30 (Users list), PRD Story 6.2
 
 **Acceptance Criteria:**
 
@@ -1552,10 +1590,12 @@ Covers: FR8 (admin), CAP-11, AR11 (role changes apply at next request; removal d
 **Given** the Users screen
 **When** I open it as admin
 **Then** I see name, email, role and added-on date for every non-system user
+**And** at 1024–1279 px the sidebar collapses to icons, and below 1024 px the list stays readable
 
 **Given** **Add user**
 **When** I enter an email and pick exactly one role (owner/designer, account/sales/social, admin)
 **Then** a profile is created with that role and the person can sign in with the chosen sign-in method; the `system` role can't be picked
+**And** a database constraint allows the `system` role only on the seeded system profile, so neither this action nor a role change can assign it (follow-up from the Story 2.3 review, `deferred-work.md`)
 
 **Given** a user's role dropdown
 **When** I change it
@@ -1580,6 +1620,7 @@ I want the guardrail and permission tests re-run with real roles,
 So that the final guardrail check in Sprint 3 confirms that no role, admin included, can change a guardrail.
 
 Covers: NFR3, AR5, AR11, Story 6.3 of the PRD (no role configures guardrails), Sprint 3 non-dev "final guardrail check"
+⚑ Interim: IR-PERM (every matrix cell is tested, including "any sharer turns off any link")
 
 **Acceptance Criteria:**
 
