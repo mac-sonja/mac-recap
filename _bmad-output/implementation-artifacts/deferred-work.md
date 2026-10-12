@@ -54,3 +54,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-part-2-one-image-with-web-and-worker.md`
   summary: Cache Docker layers in the CI image job.
   evidence: Every PR rebuilds the multi-GB Playwright-based image from scratch.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-create-a-case-study-backend.md`
+  summary: Story 2.5 backend part 2 — `case-study.transition(caseId, event, actor)` with the AD-3 transition table in domain, a Postgres function doing compare-and-set on status plus a `transition` event ({event, from, to}) in one transaction (`INVALID_TRANSITION`, `STALE_STATUS`), a trigger rejecting any status change outside that function, and a static test that nothing else writes `case_study.status`.
+  evidence: Split from the Story 2.5 backend spec at the user's choice to keep it under the size limit; part 1 has no code path that writes status.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-create-a-case-study-backend.md`
+  summary: Story 2.5 UI part — wizard step 0 (name and client required, year prefilled, narrative-language select defaulting to Italiano), ID in mono and the Bozza badge in the header, field-level missing-field messages, and reopening loses nothing.
+  evidence: The user chose backend first while UI guidelines are pending; depends on Story 2.4 (app shell).
