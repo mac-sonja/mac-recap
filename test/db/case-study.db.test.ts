@@ -7,7 +7,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
 import { LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
-import { CASE_STATUSES } from "@/shared/case-status";
+import { CASE_STATUSES, type CaseStatus } from "@/shared/case-status";
 
 const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -383,5 +383,253 @@ describe("RLS lockout", () => {
     await expect(
       inRolledBackTx(`select public.create_case_study('I', 'X', 2026, 'it', '${DEV_ACTOR_ID}')`, [], role),
     ).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+describe("transition", () => {
+  /** Events that walk a new draft case to each status through the real use case. */
+  const PATH: Record<CaseStatus, string[]> = {
+    draft: [],
+    generating: ["generate"],
+    in_review: ["generate", "generation_succeeded"],
+    approved: ["generate", "generation_succeeded", "approve"],
+  };
+
+  async function caseIn(status: CaseStatus) {
+    const { transition } = await loadCaseStudy();
+    const actor = await devActor();
+    const created = await createCase();
+    for (const event of PATH[status]) {
+      const moved = await transition(created.id, event, actor);
+      if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
+    }
+    return created.id;
+  }
+
+  async function statusOf(id: string) {
+    const { rows } = await pool.query<{ status: string }>("select status from public.case_study where id = $1", [id]);
+    return rows[0]?.status;
+  }
+
+  async function transitionEvents(id: string) {
+    const { rows } = await pool.query(
+      "select actor_id, revision_id, data from public.case_event where case_id = $1 and type = 'transition' order by at",
+      [id],
+    );
+    return rows;
+  }
+
+  async function expectRefused(result: { ok: boolean; error?: { code: string } }, code: string) {
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error?.code).toBe(code);
+  }
+
+  it.each([
+    ["draft", "generate", "generating"],
+    ["generating", "generation_succeeded", "in_review"],
+    ["generating", "generation_failed", "draft"],
+    ["in_review", "approve", "approved"],
+  ] as const)("%s --%s--> %s writes the status and one transition event with the actor", async (from, event, to) => {
+    const id = await caseIn(from);
+    const before = await transitionEvents(id);
+    const actor = await devActor();
+    const { transition } = await loadCaseStudy();
+    const result = await transition(id, event, actor);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toMatchObject({ id, status: to });
+    expect(await statusOf(id)).toBe(to);
+    expect(await transitionEvents(id)).toEqual([
+      ...before,
+      { actor_id: actor.id, revision_id: null, data: { event, from, to } },
+    ]);
+  });
+
+  it.each([
+    ["approve on draft", "draft", "approve"],
+    ["generation_succeeded on draft", "draft", "generation_succeeded"],
+    ["generate on in_review", "in_review", "generate"],
+    ...["generate", "generation_succeeded", "generation_failed", "approve"].map(
+      (event) => [`${event} on approved`, "approved", event] as const,
+    ),
+    ["an unknown event", "draft", "fork"],
+  ] as const)("%s → INVALID_TRANSITION; nothing written", async (_label, status, event) => {
+    const id = await caseIn(status);
+    const { transition } = await loadCaseStudy();
+    const before = await counts();
+    await expectRefused(await transition(id, event, await devActor()), "INVALID_TRANSITION");
+    expect(await statusOf(id)).toBe(status);
+    expect(await counts()).toEqual(before);
+  });
+
+  it("a status that moved since the read → STALE_STATUS; nothing written", async () => {
+    const id = await caseIn("generating");
+    // The adapter call the use case makes after reading `draft`.
+    const { createSupabaseCaseStudyRepository } = await import("@/modules/case-study/adapters/supabase/case-study-repository");
+    const before = await counts();
+    const result = await createSupabaseCaseStudyRepository().transition({
+      caseId: id,
+      event: "generate",
+      from: "draft",
+      to: "generating",
+      actorId: DEV_ACTOR_ID,
+    });
+    await expectRefused(result, "STALE_STATUS");
+    expect(await statusOf(id)).toBe("generating");
+    expect(await counts()).toEqual(before);
+  });
+
+  it.each([
+    ["an unknown id", async () => UNKNOWN_ID],
+    [
+      "a soft-deleted case",
+      async () => {
+        const id = await caseIn("draft");
+        await pool.query("update public.case_study set deleted_at = now() where id = $1", [id]);
+        return id;
+      },
+    ],
+  ])("the adapter maps %s to NOT_FOUND; nothing written", async (_label, setup) => {
+    const caseId = await setup();
+    const { createSupabaseCaseStudyRepository } = await import("@/modules/case-study/adapters/supabase/case-study-repository");
+    const before = await counts();
+    const result = await createSupabaseCaseStudyRepository().transition({
+      caseId,
+      event: "generate",
+      from: "draft",
+      to: "generating",
+      actorId: DEV_ACTOR_ID,
+    });
+    await expectRefused(result, "NOT_FOUND");
+    expect(await counts()).toEqual(before);
+  });
+
+  it.each([
+    ["an unknown id", async () => UNKNOWN_ID],
+    ["a malformed id", async () => "not-a-uuid"],
+    [
+      "a soft-deleted case",
+      async () => {
+        const id = await caseIn("draft");
+        await pool.query("update public.case_study set deleted_at = now() where id = $1", [id]);
+        return id;
+      },
+    ],
+  ])("%s → NOT_FOUND; nothing written", async (_label, setup) => {
+    const id = await setup();
+    const { transition } = await loadCaseStudy();
+    const before = await counts();
+    await expectRefused(await transition(id, "generate", await devActor()), "NOT_FOUND");
+    expect(await counts()).toEqual(before);
+  });
+
+  describe("transition_case_study itself", () => {
+    const call = "select public.transition_case_study($1, $2, $3, $4, $5)";
+
+    it("raises STALE_STATUS when status is not p_from, writing nothing", async () => {
+      const id = await caseIn("generating");
+      const before = await counts();
+      await expect(inRolledBackTx(call, [id, "generate", "draft", "generating", DEV_ACTOR_ID])).rejects.toMatchObject({
+        code: "P0001",
+        message: "STALE_STATUS",
+      });
+      expect(await counts()).toEqual(before);
+    });
+
+    it("raises NOT_FOUND for an unknown or soft-deleted case", async () => {
+      await expect(inRolledBackTx(call, [UNKNOWN_ID, "generate", "draft", "generating", DEV_ACTOR_ID])).rejects.toMatchObject({
+        code: "P0001",
+        message: "NOT_FOUND",
+      });
+      const id = await caseIn("draft");
+      await pool.query("update public.case_study set deleted_at = now() where id = $1", [id]);
+      await expect(inRolledBackTx(call, [id, "generate", "draft", "generating", DEV_ACTOR_ID])).rejects.toMatchObject({
+        code: "P0001",
+        message: "NOT_FOUND",
+      });
+      expect(await statusOf(id)).toBe("draft");
+    });
+
+    it("raises INVALID_TRANSITION when from equals to, so no event without a status change", async () => {
+      const id = await caseIn("draft");
+      await expect(inRolledBackTx(call, [id, "generate", "draft", "draft", DEV_ACTOR_ID])).rejects.toMatchObject({
+        code: "P0001",
+        message: "INVALID_TRANSITION",
+      });
+      expect(await transitionEvents(id)).toEqual([]);
+    });
+
+    it("rejects a status outside the check constraint, writing no event", async () => {
+      const id = await caseIn("draft");
+      await expect(inRolledBackTx(call, [id, "generate", "draft", "archived", DEV_ACTOR_ID])).rejects.toMatchObject({
+        code: "23514",
+      });
+      expect(await transitionEvents(id)).toEqual([]);
+    });
+
+    it("does not leave status writes open for the rest of the transaction", async () => {
+      const id = await caseIn("draft");
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await client.query(call, [id, "generate", "draft", "generating", DEV_ACTOR_ID]);
+        await expect(client.query("update public.case_study set status = 'approved' where id = $1", [id])).rejects.toMatchObject({
+          code: "P0001",
+          message: expect.stringMatching(/only through transition_case_study/),
+        });
+      } finally {
+        await client.query("rollback").catch(() => undefined);
+        client.release();
+      }
+      expect(await statusOf(id)).toBe("draft");
+    });
+
+    it.each(["anon", "authenticated"])("%s may not execute it", async (role) => {
+      await expect(
+        inRolledBackTx(`select public.transition_case_study('${UNKNOWN_ID}', 'generate', 'draft', 'generating', '${DEV_ACTOR_ID}')`, [], role),
+      ).rejects.toMatchObject({ code: "42501" });
+    });
+
+    it("the browser key is refused calling it", async () => {
+      const browser = createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      const { data, error } = await browser.rpc("transition_case_study", {
+        p_case_id: UNKNOWN_ID,
+        p_event: "generate",
+        p_from: "draft",
+        p_to: "generating",
+        p_actor_id: DEV_ACTOR_ID,
+      });
+      expect(data).toBeNull();
+      expect(["42501", "PGRST202"]).toContain(error?.code);
+    });
+  });
+
+  describe("direct status writes", () => {
+    it.each(["generating", "approved", "draft"])("update … set status = %s is rejected and the row is unchanged", async (status) => {
+      const id = await caseIn("in_review");
+      await expect(
+        inRolledBackTx("update public.case_study set status = $2 where id = $1", [id, status]),
+      ).rejects.toMatchObject({ code: "P0001", message: expect.stringMatching(/only through transition_case_study/) });
+      expect(await statusOf(id)).toBe("in_review");
+    });
+
+    it("a soft delete is still allowed", async () => {
+      const id = await caseIn("draft");
+      const { rows } = await inRolledBackTx(
+        "update public.case_study set deleted_at = now() where id = $1 returning status, deleted_at is not null as deleted",
+        [id],
+      );
+      expect(rows).toEqual([{ status: "draft", deleted: true }]);
+    });
+
+    it("an updated_at touch (and a same-value status assignment) is still allowed", async () => {
+      const id = await caseIn("draft");
+      const { rows } = await inRolledBackTx(
+        "update public.case_study set updated_at = now(), status = status where id = $1 returning status",
+        [id],
+      );
+      expect(rows).toEqual([{ status: "draft" }]);
+    });
   });
 });

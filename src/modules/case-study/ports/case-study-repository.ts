@@ -1,5 +1,7 @@
 import type { CaseEvent } from "@/modules/case-study/domain/case-event";
 import type { CaseStudy, CreateCaseStudyInput } from "@/modules/case-study/domain/case-study";
+import type { TransitionEvent } from "@/modules/case-study/domain/transition";
+import type { CaseStatus } from "@/shared/case-status";
 import type { Result } from "@/shared/result";
 
 export interface NewCaseEvent {
@@ -18,4 +20,19 @@ export interface CaseStudyRepository {
   findById(id: string): Promise<Result<CaseStudy | null>>;
   /** Appends one event; `ok(null)` when no case has `caseId`; `err` only when the write fails. */
   appendEvent(event: NewCaseEvent): Promise<Result<CaseEvent | null>>;
+  /**
+   * Compare-and-set: moves a non-deleted case from `from` to `to` and appends its
+   * `transition` event `{ event, from, to }` atomically. `err NOT_FOUND` (unknown or
+   * soft-deleted), `err STALE_STATUS` (status is no longer `from`), otherwise `err`
+   * only when the write fails. Nothing is written on any `err`.
+   */
+  transition(change: StatusChange): Promise<Result<CaseStudy>>;
+}
+
+export interface StatusChange {
+  caseId: string;
+  event: TransitionEvent;
+  from: CaseStatus;
+  to: CaseStatus;
+  actorId: string;
 }

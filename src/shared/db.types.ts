@@ -111,6 +111,28 @@ isOneToOne: false
         to: "case_study"
         isOneToOne: true
         isSetofReturn: false
+      } },"transition_case_study":
+{ Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {
+              "approved_revision_id": string | null,
+"client": string,
+"created_at": string,
+"created_by": string,
+"deleted_at": string | null,
+"head_revision_id": string | null,
+"head_version": number,
+"id": string,
+"locale": string,
+"name": string,
+"project_order_ref": string | null,
+"status": string,
+"updated_at": string,
+"year": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "case_study"
+        isOneToOne: true
+        isSetofReturn: false
       } }
           }
           Enums: {

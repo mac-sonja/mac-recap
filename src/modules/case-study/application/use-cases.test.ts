@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
-import { CASE_CREATED, type CaseEvent } from "@/modules/case-study/domain/case-event";
+import { CASE_CREATED, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
+import type { CaseStatus } from "@/shared/case-status";
 import type { CaseStudy } from "@/modules/case-study/domain/case-study";
 import { err, ok } from "@/shared/result";
 import { makeCreateCaseStudy } from "./create-case-study";
 import { makeGetCaseStudy } from "./get-case-study";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import { makeRecordEvent } from "./record-event";
+import { makeTransition } from "./transition";
 
 const actor: Actor = {
   id: "00000000-0000-4000-8000-000000000002",
@@ -60,6 +62,16 @@ function fakeRepository() {
       const row: CaseEvent = { id: uuid(), at: now, ...event };
       events.push(row);
       return ok(row);
+    }),
+    // Mirrors transition_case_study: compare-and-set on a non-deleted row, then one `transition` event.
+    transition: vi.fn<CaseStudyRepository["transition"]>(async ({ caseId, event, from, to, actorId }) => {
+      const row = cases.get(caseId);
+      if (!row || row.deletedAt !== null) return err({ code: "NOT_FOUND", message: "No case study with this id." });
+      if (row.status !== from) return err({ code: "STALE_STATUS", message: "Status changed." });
+      const moved: CaseStudy = { ...row, status: to };
+      cases.set(caseId, moved);
+      events.push({ id: uuid(), caseId, revisionId: null, actorId, type: TRANSITION, at: now, data: { event, from, to } });
+      return ok(moved);
     }),
   } satisfies CaseStudyRepository;
 
@@ -182,5 +194,98 @@ describe("recordEvent", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
     expect(repo.appendEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("transition", () => {
+  /** A fake repository holding one case in `status`, with the create event cleared. */
+  async function caseIn(status: CaseStatus, deletedAt: string | null = null) {
+    const fake = fakeRepository();
+    const created = await makeCreateCaseStudy(fake.repo)(actor, { name: "R", client: "A", year: 2026 });
+    if (!created.ok) throw new Error("setup");
+    fake.cases.set(created.value.id, { ...created.value, status, deletedAt });
+    fake.events.length = 0;
+    return { ...fake, id: created.value.id };
+  }
+
+  it.each([
+    ["draft", "generate", "generating"],
+    ["generating", "generation_succeeded", "in_review"],
+    ["generating", "generation_failed", "draft"],
+    ["in_review", "approve", "approved"],
+  ] as const)("%s --%s--> %s with one transition event", async (from, event, to) => {
+    const { repo, events, id } = await caseIn(from);
+    const result = await makeTransition(repo)(id, event, actor);
+    expect(result).toEqual(ok(expect.objectContaining({ id, status: to })));
+    expect(repo.transition).toHaveBeenCalledWith({ caseId: id, event, from, to, actorId: actor.id });
+    expect(events).toEqual([
+      expect.objectContaining({ caseId: id, actorId: actor.id, type: TRANSITION, data: { event, from, to } }),
+    ]);
+  });
+
+  it.each([
+    ["approve on draft", "draft", "approve"],
+    ["generate on generating", "generating", "generate"],
+    ["approve on approved", "approved", "approve"],
+    ["generate on approved", "approved", "generate"],
+    ["an unknown event", "draft", "fork"],
+    ["a non-string event", "draft", 7],
+  ] as const)("%s → INVALID_TRANSITION; nothing written", async (_label, status, event) => {
+    const { repo, events, cases, id } = await caseIn(status);
+    const result = await makeTransition(repo)(id, event, actor);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("INVALID_TRANSITION");
+    expect(repo.transition).not.toHaveBeenCalled();
+    expect(cases.get(id)?.status).toBe(status);
+    expect(events).toEqual([]);
+  });
+
+  it("returns STALE_STATUS when the status moved between read and write; nothing written", async () => {
+    const { repo, events, cases, id } = await caseIn("draft");
+    // Another writer moves the case right after the read.
+    repo.findById.mockImplementationOnce(async (caseId) => {
+      const read = cases.get(caseId)!;
+      cases.set(caseId, { ...read, status: "generating" });
+      return ok(read);
+    });
+    const result = await makeTransition(repo)(id, "generate", actor);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("STALE_STATUS");
+    expect(cases.get(id)?.status).toBe("generating");
+    expect(events).toEqual([]);
+  });
+
+  it("returns NOT_FOUND for a soft-deleted case", async () => {
+    const { repo, events, id } = await caseIn("draft", "2026-10-09T11:00:00Z");
+    const result = await makeTransition(repo)(id, "generate", actor);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+    expect(repo.transition).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
+  it("returns NOT_FOUND for an unknown id", async () => {
+    const { repo } = fakeRepository();
+    const result = await makeTransition(repo)("11111111-1111-4111-8111-111111111111", "generate", actor);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+    expect(repo.transition).not.toHaveBeenCalled();
+  });
+
+  it.each(["not-a-uuid", "", undefined, 42])("returns NOT_FOUND for %o without querying", async (id) => {
+    const { repo } = fakeRepository();
+    const result = await makeTransition(repo)(id, "generate", actor);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+    expect(repo.findById).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["the lookup", "findById", err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "down" })],
+    ["the write", "transition", err({ code: "CASE_STUDY_WRITE_FAILED", message: "down" })],
+  ] as const)("passes a failure of %s through", async (_label, method, failure) => {
+    const { repo, id } = await caseIn("draft");
+    repo[method].mockResolvedValueOnce(failure);
+    expect(await makeTransition(repo)(id, "generate", actor)).toEqual(failure);
   });
 });
