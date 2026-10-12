@@ -66,6 +66,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-part-2-accessible-dialog.md`
   summary: Check the Dialog in a real browser (Playwright): the page is inert while it is open, Esc fires cancel and calls onClose, a backdrop click does not close it, and focus returns to the opener.
   evidence: happy-dom has no top layer, inertness or light-dismiss, so the unit tests simulate cancel and can't observe modality; Playwright is already a dependency.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-4-part-3-no-hard-coded-ui-strings.md`
+  summary: Make the UI-string lint rule catch template literals that mix literal text with expressions (e.g. `Ciao ${name}`), once the dictionary has a parameterised accessor such as t(key, params).
+  evidence: The rule exempts every template with an expression, so hard-coded words around an interpolation pass; enforcing it today would leave no compliant way to build such copy.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-4-part-3-no-hard-coded-ui-strings.md`
+  summary: Widen the UI-string lint rule's attribute list beyond aria-label/title/placeholder/alt (aria-description, aria-roledescription, aria-valuetext, and text props of our own components such as label or description).
+  evidence: `<Foo label="Salva" />` and the other text-bearing aria attributes pass today; no such props exist yet, so add them when the first component that takes one lands.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-create-a-case-study-backend.md`
   summary: Story 2.5 backend part 2 — `case-study.transition(caseId, event, actor)` with the AD-3 transition table in domain, a Postgres function doing compare-and-set on status plus a `transition` event ({event, from, to}) in one transaction (`INVALID_TRANSITION`, `STALE_STATUS`), a trigger rejecting any status change outside that function, and a static test that nothing else writes `case_study.status`.
   evidence: Split from the Story 2.5 backend spec at the user's choice to keep it under the size limit; part 1 has no code path that writes status.

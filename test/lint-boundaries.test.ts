@@ -238,3 +238,52 @@ describe("module boundaries (I/O matrix)", () => {
     expect(await ruleIds("src/shared/env.ts", `export const a = process.env.FOO;\n`)).toEqual([]);
   });
 });
+
+describe("no hard-coded UI strings in src/app components (Story 2.4)", () => {
+  const component = (jsx: string) =>
+    `import { it, t } from "@/shared/i18n/it";\nexport { it, t };\nexport const ok: boolean = Date.now() > 0;\nexport function C() {\n  return ${jsx};\n}\n`;
+
+  it.each([
+    ["JSX text with letters", "<p>Salva</p>"],
+    ["accented JSX text", "<p>Città</p>"],
+    ["a string literal child", `<p>{"Salva"}</p>`],
+    ["a plain template literal child", "<p>{`Salva`}</p>"],
+    ["a fragment child", "<>Salva</>"],
+    ["a ternary child", `<p>{ok ? "Sì" : "No"}</p>`],
+    ["an && child", `<p>{ok && "Salva"}</p>`],
+    ["a ternary template child", "<p>{ok ? `Sì` : null}</p>"],
+    ...(["aria-label", "title", "placeholder", "alt"] as const).flatMap((attr) => [
+      [`a literal ${attr}`, `<input ${attr}="Testo" />`],
+      [`a literal ${attr} in braces`, `<input ${attr}={"Testo"} />`],
+      [`a template ${attr}`, `<input ${attr}={\`Testo\`} />`],
+      [`a ternary ${attr}`, `<input ${attr}={ok ? "Testo" : undefined} />`],
+      [`an ?? ${attr}`, `<input ${attr}={undefined ?? "Testo"} />`],
+    ]),
+  ])("%s fails", async (_label, jsx) => {
+    expect(await ruleIds("src/app/c.tsx", component(jsx))).toContain("no-restricted-syntax");
+  });
+
+  it.each([
+    ["dictionary text", "<p>{it.app.name}</p>"],
+    ["a dictionary aria-label", "<nav aria-label={it.shell.nav.label} />"],
+    ["text without letters", "<p>— {1} / 2 · 100%</p>"],
+    ["the × and ÷ signs", "<button>× ÷</button>"],
+    ["a ternary between dictionary strings", "<p>{ok ? it.status.draft : it.status.approved}</p>"],
+    ["a t() call", `<p>{t("shell.nav.caseStudies")}</p>`],
+    ["a non-UI attribute literal", `<div className="flex gap-2" data-status="draft" />`],
+    ["a template with an expression", "<p>{`${it.app.name}`}</p>"],
+  ])("%s passes", async (_label, jsx) => {
+    expect(await ruleIds("src/app/c.tsx", component(jsx))).toEqual([]);
+  });
+
+  it("test files are exempt", async () => {
+    expect(await ruleIds("src/app/c.test.tsx", component("<button>Apri</button>"))).toEqual([]);
+  });
+
+  it("the boundary and process.env rules still apply to components", async () => {
+    expect(await ruleIds("src/app/c.tsx", `import "@/modules/material/domain/files";\n`)).toContain(
+      "no-restricted-imports",
+    );
+    expect(await ruleIds("src/app/c.tsx", component("<p>{process.env.FOO}</p>"))).toContain("no-restricted-syntax");
+  });
+});
