@@ -46,6 +46,7 @@ set search_path = ''
 as $$
 declare
   moved public.case_study;
+  updated boolean;
 begin
   if p_from is not distinct from p_to then
     raise exception 'INVALID_TRANSITION' using errcode = 'P0001', detail = 'from and to must differ';
@@ -58,9 +59,11 @@ begin
      and deleted_at is null
      and status = p_from
   returning * into moved;
+  -- Capture FOUND now: the PERFORM below resets it.
+  updated := found;
   perform pg_catalog.set_config('mac_recap.status_transition', 'off', true);
 
-  if not found then
+  if not updated then
     perform 1 from public.case_study where id = p_case_id and deleted_at is null;
     if not found then
       raise exception 'NOT_FOUND' using errcode = 'P0001';

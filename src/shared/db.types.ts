@@ -111,7 +111,8 @@ isOneToOne: false
         to: "case_study"
         isOneToOne: true
         isSetofReturn: false
-      } },"transition_case_study":
+      } },
+"transition_case_study":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {
               "approved_revision_id": string | null,
 "client": string,
