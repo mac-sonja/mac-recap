@@ -4,6 +4,7 @@ import type { Asset } from "@/modules/material/domain/asset";
 import { MAX_FILE_BYTES } from "@/modules/material/domain/files";
 import type { AssetRepository, NewAsset } from "@/modules/material/ports/asset-repository";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
+import type { TaxonomyRepository } from "@/modules/material/ports/taxonomy-repository";
 import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
 import { err, ok } from "@/shared/result";
 import { makeConfirmUpload } from "./confirm-upload";
@@ -33,7 +34,7 @@ const PNG = "image/png";
 function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = {}) {
   const assets = new Map<string, Asset>();
   const objects = new Map<string, StoredObject>();
-  const events: { caseId: string; type: string; data: Record<string, string>; actorId: string }[] = [];
+  const events: { caseId: string; type: string; data: Record<string, string | string[]>; actorId: string }[] = [];
   let n = 0;
   const seed = (deletedAt: string | null) => {
     const id = `cccccccc-0000-4000-8000-${String(++n).padStart(12, "0")}`;
@@ -96,7 +97,7 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
     }),
   } satisfies CaseStudies;
 
-  const deps: MaterialDeps = { assets: repo, texts: unusedTexts, storage, cases, newId: () => NEW_ASSET_ID };
+  const deps: MaterialDeps = { assets: repo, texts: unusedTexts, taxonomy: unusedTaxonomy, storage, cases, newId: () => NEW_ASSET_ID };
   return { deps, repo, storage, cases, assets, objects, events, seed };
 }
 
@@ -104,6 +105,13 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
 const unusedTexts = new Proxy({} as TextItemRepository, {
   get: (_target, name) => () => {
     throw new Error(`asset use case called texts.${String(name)}`);
+  },
+});
+
+/** Asset use cases never touch the taxonomy. */
+const unusedTaxonomy = new Proxy({} as TaxonomyRepository, {
+  get: (_target, name) => () => {
+    throw new Error(`asset use case called taxonomy.${String(name)}`);
   },
 });
 

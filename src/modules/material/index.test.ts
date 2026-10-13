@@ -21,6 +21,11 @@ const m = vi.hoisted(() => ({
     restore: vi.fn(),
     hasMaterial: vi.fn(),
   },
+  taxonomy: {
+    listTerms: vi.fn(),
+    setTerms: vi.fn(),
+    caseTerms: vi.fn(),
+  },
   storage: { presignUpload: vi.fn(), head: vi.fn() },
 }));
 
@@ -32,6 +37,9 @@ vi.mock("@/modules/material/adapters/supabase/asset-repository", () => ({
 }));
 vi.mock("@/modules/material/adapters/supabase/text-item-repository", () => ({
   createSupabaseTextItemRepository: () => m.texts,
+}));
+vi.mock("@/modules/material/adapters/supabase/taxonomy-repository", () => ({
+  createSupabaseTaxonomyRepository: () => m.taxonomy,
 }));
 
 const material = await import("@/modules/material");
@@ -47,6 +55,7 @@ const ASSET_ID = "bbbbbbbb-0000-4000-8000-000000000001";
 const ref = { caseId: CASE_ID, assetId: ASSET_ID };
 const TEXT_ID = "eeeeeeee-0000-4000-8000-000000000001";
 const textRef = { caseId: CASE_ID, textItemId: TEXT_ID };
+const termsInput = { caseId: CASE_ID, refKind: "asset", refId: ASSET_ID, kind: "tag", keys: ["app"] };
 const textItem = {
   id: TEXT_ID,
   caseId: CASE_ID,
@@ -83,6 +92,9 @@ beforeEach(() => {
   m.texts.softDelete.mockResolvedValue(ok(true));
   m.texts.restore.mockResolvedValue(ok(true));
   m.texts.hasMaterial.mockResolvedValue(ok(true));
+  m.taxonomy.listTerms.mockResolvedValue(ok([{ kind: "tag", key: "app", label: "App" }]));
+  m.taxonomy.setTerms.mockResolvedValue(ok([]));
+  m.taxonomy.caseTerms.mockResolvedValue(ok([{ refKind: "asset", refId: ASSET_ID, terms: [{ kind: "tag", key: "app" }] }]));
 });
 
 describe("material index wiring", () => {
@@ -172,6 +184,30 @@ describe("material index wiring", () => {
     expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "text_restored", data: { textItemId: TEXT_ID } });
   });
 
+  it("listTerms groups the taxonomy repository's terms by kind", async () => {
+    expect(await material.listTerms()).toEqual(ok({ tag: [{ key: "app", label: "App" }], property: [], flag: [] }));
+  });
+
+  it("setDeliverableTerms sets through the taxonomy repository and records terms_set", async () => {
+    expect(await material.setDeliverableTerms(actor, termsInput)).toEqual(
+      ok({ refKind: "asset", refId: ASSET_ID, kind: "tag", keys: ["app"] }),
+    );
+    expect(m.taxonomy.setTerms).toHaveBeenCalledWith(termsInput);
+    expect(m.recordEvent).toHaveBeenCalledWith(actor, {
+      caseId: CASE_ID,
+      type: "terms_set",
+      data: { refKind: "asset", refId: ASSET_ID, kind: "tag", keys: ["app"] },
+    });
+  });
+
+  it("getCaseTerms reads the taxonomy repository's case terms", async () => {
+    expect(await material.getCaseTerms({ caseId: CASE_ID })).toEqual(
+      ok([{ refKind: "asset", refId: ASSET_ID, tag: ["app"], property: [], flag: [] }]),
+    );
+    expect(m.get).toHaveBeenCalledWith(CASE_ID);
+    expect(m.taxonomy.caseTerms).toHaveBeenCalledWith(CASE_ID);
+  });
+
   it("hasMaterial asks the text item repository's has_material", async () => {
     expect(await material.hasMaterial(CASE_ID)).toEqual(ok(true));
     expect(m.texts.hasMaterial).toHaveBeenCalledWith(CASE_ID);
@@ -183,6 +219,9 @@ describe("material index wiring", () => {
     ["removeTextItem", () => material.removeTextItem(actor, textRef)],
     ["restoreTextItem", () => material.restoreTextItem(actor, textRef)],
     ["hasMaterial", () => material.hasMaterial(CASE_ID)],
+    ["listTerms", () => material.listTerms()],
+    ["setDeliverableTerms", () => material.setDeliverableTerms(actor, termsInput)],
+    ["getCaseTerms", () => material.getCaseTerms({ caseId: CASE_ID })],
   ])("%s works without S3 and never resolves storage", async (_name, call) => {
     m.getStorageConfig.mockReturnValue(null);
     expect((await call()).ok).toBe(true);

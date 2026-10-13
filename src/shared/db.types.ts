@@ -95,6 +95,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"material_term": {
+                  Row: {
+                    "created_at": string,"id": string,"ref_id": string,"ref_kind": string,"term_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"ref_id": string,"ref_kind": string,"term_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"ref_id"?: string,"ref_kind"?: string,"term_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "material_term_term_id_fkey"
+      columns: ["term_id"]
+isOneToOne: false
+      referencedRelation: "taxonomy_term"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"profile": {
                   Row: {
                     "created_at": string,"disabled_at": string | null,"display_name": string,"email": string,"id": string,"role": string
@@ -105,6 +125,20 @@ isOneToOne: false
                   }
                   Update: {
                     "created_at"?: string,"disabled_at"?: string | null,"display_name"?: string,"email"?: string,"id"?: string,"role"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"taxonomy_term": {
+                  Row: {
+                    "id": string,"key": string,"kind": string,"label": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id"?: string,"key": string,"kind": string,"label": string
+                  }
+                  Update: {
+                    "id"?: string,"key"?: string,"kind"?: string,"label"?: string
                   }
                   Relationships: [
                     
@@ -141,7 +175,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "create_asset":
+            "case_material_terms":
+{ Args: { "p_case_id": string }; Returns: Json
+                           },
+"create_asset":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_content_type": string,"p_id": string,"p_kind": string,"p_original_file_name": string,"p_s3_key": string,"p_size_bytes": number }; Returns: {
               "case_id": string,
 "content_type": string,
@@ -188,6 +225,9 @@ isOneToOne: false
                            },
 "restore_asset":
 { Args: { "p_asset_id": string,"p_case_id": string }; Returns: boolean
+                           },
+"set_material_terms":
+{ Args: { "p_case_id": string,"p_keys": (string)[],"p_kind": string,"p_ref_id": string,"p_ref_kind": string }; Returns: (string)[]
                            },
 "transition_case_study":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {

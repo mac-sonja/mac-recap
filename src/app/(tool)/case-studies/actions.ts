@@ -4,7 +4,14 @@ import { authorize, getActor, httpStatusFor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import type { CaseStudy } from "@/modules/case-study";
 import * as material from "@/modules/material";
-import type { Asset, PresignedAssetUpload, TextItem } from "@/modules/material";
+import type {
+  Asset,
+  DeliverableTerms,
+  PresignedAssetUpload,
+  TermsByKind,
+  TermsSet,
+  TextItem,
+} from "@/modules/material";
 import type { AppError } from "@/shared/result";
 
 /**
@@ -131,4 +138,45 @@ export async function restoreTextItem(input: unknown): Promise<ActionResult<void
   if (!decision.ok) return failure(decision.error);
   const restored = await material.restoreTextItem(actor.value, input);
   return restored.ok ? restored : failure(restored.error);
+}
+
+/**
+ * Every taxonomy term, `{ tag, property, flag }`, each `[{ key, label }]` ordered
+ * by label; an unseeded kind is `[]`. 403 `FORBIDDEN` unless the role may `tag`.
+ */
+export async function listTaxonomyTerms(): Promise<ActionResult<TermsByKind>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "tag");
+  if (!decision.ok) return failure(decision.error);
+  const terms = await material.listTerms();
+  return terms.ok ? terms : failure(terms.error);
+}
+
+/**
+ * Replaces one deliverable's terms of one kind: `{ caseId, refKind: 'asset' | 'text',
+ * refId, kind: 'tag' | 'property' | 'flag', keys }` (`[]` clears that kind).
+ * 400 `UNKNOWN_TERM` naming the key; 404 `NOT_FOUND` for a removed or unknown
+ * deliverable or another case's; 400 `INVALID_INPUT`. Status never changes.
+ */
+export async function setDeliverableTerms(input: unknown): Promise<ActionResult<TermsSet>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "tag");
+  if (!decision.ok) return failure(decision.error);
+  const set = await material.setDeliverableTerms(actor.value, input);
+  return set.ok ? set : failure(set.error);
+}
+
+/**
+ * The term keys of every live deliverable of a case: `{ caseId }` →
+ * `[{ refKind, refId, tag, property, flag }]` (untagged: all `[]`). 404 `NOT_FOUND`.
+ */
+export async function getCaseTerms(input: unknown): Promise<ActionResult<DeliverableTerms[]>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "tag");
+  if (!decision.ok) return failure(decision.error);
+  const terms = await material.getCaseTerms(input);
+  return terms.ok ? terms : failure(terms.error);
 }

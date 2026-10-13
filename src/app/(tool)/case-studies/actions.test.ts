@@ -14,6 +14,9 @@ const {
   editTextUseCase,
   removeTextUseCase,
   restoreTextUseCase,
+  listTermsUseCase,
+  setTermsUseCase,
+  getCaseTermsUseCase,
 } = vi.hoisted(() => ({
   getActor: vi.fn(),
   create: vi.fn(),
@@ -25,6 +28,9 @@ const {
   editTextUseCase: vi.fn(),
   removeTextUseCase: vi.fn(),
   restoreTextUseCase: vi.fn(),
+  listTermsUseCase: vi.fn(),
+  setTermsUseCase: vi.fn(),
+  getCaseTermsUseCase: vi.fn(),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -42,6 +48,9 @@ vi.mock("@/modules/material", () => ({
   editTextItem: editTextUseCase,
   removeTextItem: removeTextUseCase,
   restoreTextItem: restoreTextUseCase,
+  listTerms: listTermsUseCase,
+  setDeliverableTerms: setTermsUseCase,
+  getCaseTerms: getCaseTermsUseCase,
 }));
 
 const {
@@ -54,6 +63,9 @@ const {
   editTextItem,
   removeTextItem,
   restoreTextItem,
+  listTaxonomyTerms,
+  setDeliverableTerms,
+  getCaseTerms,
 } = await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({
@@ -94,6 +106,9 @@ beforeEach(() => {
     editTextUseCase,
     removeTextUseCase,
     restoreTextUseCase,
+    listTermsUseCase,
+    setTermsUseCase,
+    getCaseTermsUseCase,
   ])
     fn.mockReset();
 });
@@ -275,5 +290,67 @@ describe("text item actions", () => {
       status: 400,
       error: { code: "INVALID_INPUT", message: "Invalid or missing: title.", fields: ["title"] },
     });
+  });
+});
+
+describe("taxonomy actions", () => {
+  const caseId = "11111111-1111-4111-8111-111111111111";
+  const refId = "22222222-2222-4222-8222-222222222222";
+  const setInput = { caseId, refKind: "asset", refId, kind: "tag", keys: ["app"] };
+
+  it("listTaxonomyTerms returns the terms for an owner/designer", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    const terms = { tag: [{ key: "app", label: "App" }], property: [], flag: [] };
+    listTermsUseCase.mockResolvedValue(ok(terms));
+    expect(await listTaxonomyTerms()).toEqual({ ok: true, value: terms });
+    expect(listTermsUseCase).toHaveBeenCalledOnce();
+  });
+
+  it("setDeliverableTerms passes the actor and its input unchanged", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    const value = { refKind: "asset", refId, kind: "tag", keys: ["app"] };
+    setTermsUseCase.mockResolvedValue(ok(value));
+    expect(await setDeliverableTerms(setInput)).toEqual({ ok: true, value });
+    expect(setTermsUseCase).toHaveBeenCalledExactlyOnceWith(actor("owner_designer"), setInput);
+    expect(setTermsUseCase.mock.calls[0][1]).toBe(setInput);
+  });
+
+  it("getCaseTerms passes its input unchanged", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    const value = [{ refKind: "asset", refId, tag: ["app"], property: [], flag: [] }];
+    getCaseTermsUseCase.mockResolvedValue(ok(value));
+    const input = { caseId };
+    expect(await getCaseTerms(input)).toEqual({ ok: true, value });
+    expect(getCaseTermsUseCase.mock.calls[0][0]).toBe(input);
+  });
+
+  const actions = [
+    ["listTaxonomyTerms", () => listTaxonomyTerms(), listTermsUseCase],
+    ["setDeliverableTerms", () => setDeliverableTerms(setInput), setTermsUseCase],
+    ["getCaseTerms", () => getCaseTerms({ caseId }), getCaseTermsUseCase],
+  ] as const;
+
+  it.each(
+    actions.flatMap((a) => (["account_sales_social", "admin", "system"] as const).map((role) => [a[0], role, a[1], a[2]] as const)),
+  )("%s returns 403 FORBIDDEN for %s and never calls the use case", async (_name, role, call, useCase) => {
+    getActor.mockResolvedValue(ok(actor(role)));
+    expect(await call()).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
+    expect(useCase).not.toHaveBeenCalled();
+  });
+
+  it.each(actions)("%s returns 401 when no actor resolves", async (_name, call, useCase) => {
+    getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "No profile." }));
+    expect(await call()).toMatchObject({ ok: false, status: 401 });
+    expect(useCase).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["UNKNOWN_TERM", 400],
+    ["NOT_FOUND", 404],
+    ["TERMS_WRITE_FAILED", 500],
+  ] as const)("setDeliverableTerms maps %s to %i and keeps details server-side", async (code, status) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    setTermsUseCase.mockResolvedValue(err({ code, message: "m", details: { key: "nope" } }));
+    expect(await setDeliverableTerms(setInput)).toEqual({ ok: false, status, error: { code, message: "m" } });
   });
 });

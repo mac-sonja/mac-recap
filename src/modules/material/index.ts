@@ -1,22 +1,27 @@
 // Public surface of the material module. Code outside this module imports only this file.
-// The module owns `asset`, `text_item` and S3 `cases/{caseId}/assets/**` (AD-11): nobody else writes them.
+// The module owns `asset`, `text_item`, `taxonomy_term`, `material_term` and S3 `cases/{caseId}/assets/**` (AD-11): nobody else writes them.
 import { randomUUID } from "node:crypto";
 import type { Actor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import { createS3ObjectStorage } from "@/modules/material/adapters/s3/object-storage";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
+import { createSupabaseTaxonomyRepository } from "@/modules/material/adapters/supabase/taxonomy-repository";
 import { createSupabaseTextItemRepository } from "@/modules/material/adapters/supabase/text-item-repository";
 import { makeAddTextItem } from "@/modules/material/application/add-text-item";
 import { makeConfirmUpload } from "@/modules/material/application/confirm-upload";
 import type { MaterialDeps } from "@/modules/material/application/deps";
 import { makeEditTextItem } from "@/modules/material/application/edit-text-item";
+import { makeGetCaseTerms } from "@/modules/material/application/get-case-terms";
 import { makeHasMaterial } from "@/modules/material/application/has-material";
+import { makeListTerms } from "@/modules/material/application/list-terms";
 import { makePresignUpload, type PresignedAssetUpload } from "@/modules/material/application/presign-upload";
 import { makeRemoveAsset } from "@/modules/material/application/remove-asset";
 import { makeRemoveTextItem } from "@/modules/material/application/remove-text-item";
 import { makeRestoreAsset } from "@/modules/material/application/restore-asset";
 import { makeRestoreTextItem } from "@/modules/material/application/restore-text-item";
+import { makeSetDeliverableTerms } from "@/modules/material/application/set-deliverable-terms";
 import type { Asset } from "@/modules/material/domain/asset";
+import type { DeliverableTerms, TermsByKind, TermsSet } from "@/modules/material/domain/taxonomy";
 import type { TextItem } from "@/modules/material/domain/text-item";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
 import { getStorageConfig } from "@/shared/env";
@@ -33,6 +38,15 @@ export {
   TEXT_RESTORED,
 } from "@/modules/material/domain/text-item";
 export type { TextItem } from "@/modules/material/domain/text-item";
+export { DELIVERABLE_KINDS, TERM_KINDS, TERMS_SET } from "@/modules/material/domain/taxonomy";
+export type {
+  DeliverableKind,
+  DeliverableTerms,
+  Term,
+  TermKind,
+  TermsByKind,
+  TermsSet,
+} from "@/modules/material/domain/taxonomy";
 export {
   ALLOWED_CONTENT_TYPES,
   ASSET_KINDS,
@@ -53,18 +67,20 @@ function configuredStorage(): ObjectStorage | null {
   return storageMemo.storage;
 }
 
-/** Use-case dependencies. Text paths pass `withStorage: false`: they never resolve S3. */
+/** Use-case dependencies. Text and taxonomy paths pass `withStorage: false`: they never resolve S3. */
 function deps({ withStorage = true }: { withStorage?: boolean } = {}): MaterialDeps {
   return {
     assets: createSupabaseAssetRepository(),
     texts: createSupabaseTextItemRepository(),
+    taxonomy: createSupabaseTaxonomyRepository(),
     storage: withStorage ? configuredStorage() : null,
     cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
     newId: randomUUID,
   };
 }
 
-const textDeps = () => deps({ withStorage: false });
+/** Dependencies without storage, for the paths that never touch S3 (text items, taxonomy). */
+const storagelessDeps = () => deps({ withStorage: false });
 
 /**
  * A presigned POST for one file: `{ assetId, url, fields }`. Input
@@ -102,7 +118,7 @@ export function restoreAsset(actor: Actor, input: unknown): Promise<Result<void>
  * `TEXT_EMPTY`, `NOT_FOUND`. Never counts toward the file cap; needs no S3.
  */
 export function addTextItem(actor: Actor, input: unknown): Promise<Result<TextItem>> {
-  return makeAddTextItem(textDeps())(actor, input);
+  return makeAddTextItem(storagelessDeps())(actor, input);
 }
 
 /**
@@ -111,17 +127,17 @@ export function addTextItem(actor: Actor, input: unknown): Promise<Result<TextIt
  * `TEXT_EMPTY`, `NOT_FOUND` (unknown or removed).
  */
 export function editTextItem(actor: Actor, input: unknown): Promise<Result<TextItem>> {
-  return makeEditTextItem(textDeps())(actor, input);
+  return makeEditTextItem(storagelessDeps())(actor, input);
 }
 
 /** Soft-deletes one text item (`{ caseId, textItemId }`) and records `text_removed`. Authorize `upload` first. */
 export function removeTextItem(actor: Actor, input: unknown): Promise<Result<void>> {
-  return makeRemoveTextItem(textDeps())(actor, input);
+  return makeRemoveTextItem(storagelessDeps())(actor, input);
 }
 
 /** Restores one removed text item (`{ caseId, textItemId }`) and records `text_restored`. Authorize `upload` first. */
 export function restoreTextItem(actor: Actor, input: unknown): Promise<Result<void>> {
-  return makeRestoreTextItem(textDeps())(actor, input);
+  return makeRestoreTextItem(storagelessDeps())(actor, input);
 }
 
 /**
@@ -132,4 +148,32 @@ export function restoreTextItem(actor: Actor, input: unknown): Promise<Result<vo
  */
 export function hasMaterial(caseId: unknown): Promise<Result<boolean>> {
   return makeHasMaterial({ texts: createSupabaseTextItemRepository() })(caseId);
+}
+
+/**
+ * Every taxonomy term, grouped `{ tag, property, flag }` and ordered by label;
+ * a kind with nothing seeded is `[]`. Refer to terms by `key` only; labels are
+ * display-only. Authorize `tag` first. Works without S3.
+ */
+export function listTerms(): Promise<Result<TermsByKind>> {
+  return makeListTerms(storagelessDeps())();
+}
+
+/**
+ * Replaces one live deliverable's terms of one kind: `{ caseId, refKind: 'asset' | 'text',
+ * refId, kind: 'tag' | 'property' | 'flag', keys }` (`[]` clears it), and records
+ * `terms_set { refKind, refId, kind, keys }`. Authorize `tag` first. Errors:
+ * `INVALID_INPUT`, `UNKNOWN_TERM` (naming the key), `NOT_FOUND`. Status never changes; works without S3.
+ */
+export function setDeliverableTerms(actor: Actor, input: unknown): Promise<Result<TermsSet>> {
+  return makeSetDeliverableTerms(storagelessDeps())(actor, input);
+}
+
+/**
+ * The term keys of every live deliverable of a case (`{ caseId }`), each
+ * `{ refKind, refId, tag, property, flag }`; untagged ones have all `[]`.
+ * Authorize `tag` first. Errors: `INVALID_INPUT`, `NOT_FOUND`. Works without S3.
+ */
+export function getCaseTerms(input: unknown): Promise<Result<DeliverableTerms[]>> {
+  return makeGetCaseTerms(storagelessDeps())(input);
 }

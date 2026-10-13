@@ -105,3 +105,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-8-add-pasted-text-as-material-backend.md`
   summary: When Story 2.10 adds `context_form`, test that `hasMaterial(caseId)` stays false for a case whose details form is filled in but which has no assets or text items.
   evidence: The 2.8 matrix row "details form filled → false" can only be checked once the form table exists.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-9-tag-property-and-flag-deliverables-backend.md`
+  summary: Story 2.9 UI part — tag, property and flag chip pickers on each deliverable row (files and text items; seeded terms only, no free text, saves at once, usable as soon as a file finishes uploading), an "untagged" marker, and "No values yet" for an empty kind.
+  evidence: Built backend-only at the user's choice; the UI depends on the Story 2.5 wizard and the 2.7/2.8 rows.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-9-tag-property-and-flag-deliverables-backend.md`
+  summary: OP 3 seed migration — insert the decided tag, property and flag terms into `taxonomy_term` (stable keys, Italian labels) once the taxonomy is decided (due 2026-10-14).
+  evidence: The 2.9 backend ships with no seed rows by design (IR-OP3); only a migration may write terms.
