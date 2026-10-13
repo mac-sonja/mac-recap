@@ -2,8 +2,9 @@
 title: 'Story 2.6: Find and reopen case studies in the table'
 type: 'feature'
 created: '2026-10-12'
-status: 'ready-for-dev'
+status: 'done'
 route: 'dispatch'
+baseline_commit: 'bc22a7d44d295571a0257c170f5487b851297fe0'
 review_loop_iteration: 0
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-2-context.md'
@@ -52,13 +53,13 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/case-study/**` + tests -- scoped `list` end to end (fake-repo tests for scope and soft-delete)
-- [ ] `src/shared/i18n/it.ts` + test -- table strings, `fill()`
-- [ ] `src/app/(tool)/case-studies/page.tsx`, `loading.tsx`, `_components/case-studies-table.tsx` (+ a pure `filter-sort` helper) -- table per Boundaries
-- [ ] `src/app/(tool)/case-studies/new/page.tsx` -- narrow-screen message
-- [ ] `src/app/(tool)/case-studies/_components/*.test.tsx` (happy-dom) and helper tests -- every UI matrix row
-- [ ] `test/db/case-study.db.test.ts` -- `list` excludes soft-deleted; the approved-only scope returns approved rows only (set status in a rolled-back transaction through `transition_case_study`)
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 2.4 `done`, 2.5 back to `in-progress` (its UI part is open)
+- [x] `src/modules/case-study/**` + tests -- scoped `list` end to end (fake-repo tests for scope and soft-delete)
+- [x] `src/shared/i18n/it.ts` + test -- table strings, `fill()`
+- [x] `src/app/(tool)/case-studies/page.tsx`, `loading.tsx`, `_components/case-studies-table.tsx` (+ a pure `filter-sort` helper) -- table per Boundaries
+- [x] `src/app/(tool)/case-studies/new/page.tsx` -- narrow-screen message
+- [x] `src/app/(tool)/case-studies/_components/*.test.tsx` (happy-dom) and helper tests -- every UI matrix row
+- [x] `test/db/case-study.db.test.ts` -- `list` excludes soft-deleted; the approved-only scope returns approved rows only (set status in a rolled-back transaction through `transition_case_study`)
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 2.4 `done`, 2.5 back to `in-progress` (its UI part is open)
 
 **Acceptance Criteria:**
 - Given a clean checkout, when `npm run lint && npm run typecheck && npm test && npm run build` run, then all pass.
@@ -66,9 +67,40 @@ context:
 
 ## Implementation Notes
 
+- Scope: `src/app/_lib/list-scope.ts` (`listScopeFor`) derives it from `can`; the page also calls `authorize(actor, "list cases", scope)` before `list`. `requireSurface("list cases")` (kept) still redirects account/sales/social to their landing, so today only owner/designer reaches the page; the approved-only path is covered by unit tests and the DB test.
+- `case-study.list` validates the scope (`listScopeSchema`, strict); a malformed scope is `INVALID_INPUT` and queries nothing.
+- Updated is formatted on the server (`src/shared/i18n/format.ts`) and passed to the client as a label, so server and browser ICU data cannot cause a hydration mismatch.
+- Status sorts in lifecycle order (Bozza → Approvato); text columns use an Italian collator (case- and accent-insensitive).
+- DB test deviation: the approved case is reached through the real `transition` use case and committed, not in a rolled-back transaction, because `list` reads through PostgREST on its own connection and cannot see uncommitted rows. This matches the file's existing practice (case rows are never deleted).
+- `loading.tsx` at `/case-studies` also acts as the Suspense fallback while `/case-studies/new` loads (Next nests the boundary over child segments).
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Source | Finding | Verdict | Route | Evidence |
+|---|--------|---------|---------|-------|----------|
+| 1 | verification-gap | Adapter `list` error / invalid-row paths untested | medium | patch | Pre-verified: only fakes and mocks cover failure; a swallowed error would show the empty state. |
+| 2 | verification-gap | `openRow` link guard never exercised | low | defer | Pre-verified, filed as defer: both navigations hit the same placeholder until 2.5. |
+| 3 | blind | No `error.tsx` / `global-error.tsx` in `src/app` | medium | defer | Confirmed none exist; a failed load shows Next's default English screen. App-wide, predates this story. |
+| 4 | blind, edge | No pagination; PostgREST `max_rows = 1000` truncates silently | low | reject | Real, but MVP volume is tens of cases and the intent rules out pagination; a count guard adds branches. |
+| 5 | blind, edge | DB tests commit rows (deviation from the rolled-back wording) | false | reject | Recorded deviation: `list` reads on its own PostgREST connection and can't see uncommitted rows; CI DB is fresh each run. |
+| 6 | blind | `count(*)` assertion races other DB test files | false | reject | `vitest.db.config.mts` sets `fileParallelism: false`. |
+| 7 | blind | `list(scope)` takes no actor | low | reject | The page authorizes before calling, as the Code Map designs; changing the API adds public surface for a hypothetical caller. |
+| 8 | blind | Spec `in-review` vs sprint `in-progress` | false | reject | Workflow syncs sprint status at present time. |
+| 9 | blind, edge | Bozza row opens a page that ignores `caseId` | false | reject | Frozen Decision: placeholder until the 2.5 wizard. |
+| 10 | blind, edge | Row click navigates on modifier click / text selection | medium | patch | Dragging to copy the mono ID navigates away on mouseup. |
+| 11 | blind | Loading skeleton silent to screen readers; pulse ignores reduced motion | low | patch | Only content is `aria-hidden`; `animate-pulse` not `motion-safe:`. Direct fix. |
+| 12 | blind | No-results live region mounted with its content | low | patch | Dynamically inserted `role="status"` is often not announced; persistent region is a direct fix. |
+| 13 | blind | `redirect(landing)` could loop | false | reject | `listScopeFor` returns `{}` for owner/designer; null only for roles whose landing is elsewhere. |
+| 14 | blind | "Cancella ricerca e filtri" mentions filters | false | reject | Approved copy in the frozen Boundaries. |
+| 15 | blind | Narrow `/case-studies/new` has no visible heading | low | patch | `<h1>` sits inside `hidden lg:block`. |
+| 16 | blind | Status sort test omits `generating` | low | patch | Lifecycle order not fully pinned; one-row test addition. |
+| 17 | blind | One malformed row fails the whole list | false | reject | Loud failure into the error boundary is the intended "no partial table" behaviour. |
+| 18 | blind, edge | `/` steals focus from `<select>` / IME composition | low | patch | `isTextField` excludes SELECT; no `isComposing` check. Direct fix. |
+| 19 | edge | Tied `updated_at` rows can swap between loads | low | patch | Single `order`; add `id` tiebreak. |
+| 20 | edge | `formatDateTime` / `Date.parse` on invalid `updatedAt` | false | reject | Comes from a `timestamptz` column via PostgREST; always a valid ISO string. |
+| 21 | edge | ID sort with `numeric: true` collator on hex UUIDs | low | patch | Digit runs compare numerically; lexical compare is a direct fix. |
 
 ## Verification
 

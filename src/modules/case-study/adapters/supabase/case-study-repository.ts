@@ -100,6 +100,24 @@ export function createSupabaseCaseStudyRepository(
       return data === null ? { ok: true, value: null } : toCaseStudy(data);
     },
 
+    async list(scope) {
+      let query = client().from("case_study").select(CASE_STUDY_COLUMNS).is("deleted_at", null);
+      if (scope.status !== undefined) query = query.eq("status", scope.status);
+      // `id` breaks ties so equal timestamps keep a stable order between loads.
+      const { data, error } = await query.order("updated_at", { ascending: false }).order("id", { ascending: true });
+      if (error) {
+        log.error(`case_study list failed: ${error.code}`);
+        return err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "Could not list the case studies." });
+      }
+      const cases: CaseStudy[] = [];
+      for (const row of data) {
+        const mapped = toCaseStudy(row);
+        if (!mapped.ok) return mapped;
+        cases.push(mapped.value);
+      }
+      return { ok: true, value: cases };
+    },
+
     async appendEvent(event) {
       const { data, error } = await client()
         .from("case_event")

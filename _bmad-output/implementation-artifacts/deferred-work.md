@@ -78,3 +78,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-create-a-case-study-backend.md`
   summary: Story 2.5 UI part — wizard step 0 (name and client required, year prefilled, narrative-language select defaulting to Italiano), ID in mono and the Bozza badge in the header, field-level missing-field messages, and reopening loses nothing.
   evidence: The user chose backend first while UI guidelines are pending; depends on Story 2.4 (app shell).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-6-find-and-reopen-case-studies-in-the-table.md`
+  summary: Add an app-wide Italian `error.tsx` (and `global-error.tsx`) so failed loads such as the Case studies list show dictionary copy and a retry instead of Next's default English error screen.
+  evidence: No `error.tsx` or `global-error.tsx` exists under `src/app`; `/case-studies` throws on a failed `list` by design.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-6-find-and-reopen-case-studies-in-the-table.md`
+  summary: Test that clicking a Bozza row's name link does not also call `router.push` (the `closest("a")` guard in `openRow`).
+  evidence: No test clicks the link itself; double navigation goes to the same placeholder until the Story 2.5 wizard, so add it when the row target becomes the wizard.
