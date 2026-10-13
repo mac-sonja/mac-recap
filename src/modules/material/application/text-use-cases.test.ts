@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { hasText, MAX_TEXT_BODY_CHARS, type TextItem } from "@/modules/material/domain/text-item";
 import type { AssetRepository } from "@/modules/material/ports/asset-repository";
+import type { DetailsFormRepository } from "@/modules/material/ports/details-form-repository";
 import type { TaxonomyRepository } from "@/modules/material/ports/taxonomy-repository";
 import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
 import { err, ok } from "@/shared/result";
@@ -119,7 +120,7 @@ function world({ liveAssets = 0, removedAssets = 0 }: { liveAssets?: number; rem
   } satisfies CaseStudies;
 
   // Text paths run without storage.
-  const deps: MaterialDeps = { assets: assetRepo, texts: repo, taxonomy: unusedTaxonomy, storage: null, cases, newId: () => "unused" };
+  const deps: MaterialDeps = { assets: assetRepo, texts: repo, taxonomy: unusedTaxonomy, form: unusedForm, storage: null, cases, newId: () => "unused" };
   return { deps, repo, assetRepo, cases, texts, events, status, seed };
 }
 
@@ -127,6 +128,13 @@ function world({ liveAssets = 0, removedAssets = 0 }: { liveAssets?: number; rem
 const unusedTaxonomy = new Proxy({} as TaxonomyRepository, {
   get: (_target, name) => () => {
     throw new Error(`text use case called taxonomy.${String(name)}`);
+  },
+});
+
+/** Text use cases never touch the details form. */
+const unusedForm = new Proxy({} as DetailsFormRepository, {
+  get: (_target, name) => () => {
+    throw new Error(`text use case called form.${String(name)}`);
   },
 });
 

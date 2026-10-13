@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import type { AssetRepository } from "@/modules/material/ports/asset-repository";
+import type { DetailsFormRepository } from "@/modules/material/ports/details-form-repository";
 import type { TaxonomyRepository } from "@/modules/material/ports/taxonomy-repository";
 import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
 import type { DeliverableKind, TaxonomyTerm } from "@/modules/material/domain/taxonomy";
@@ -121,6 +122,7 @@ function world(terms: TaxonomyTerm[] = SEEDED) {
     assets: unused<AssetRepository>("assets"),
     texts: unused<TextItemRepository>("texts"),
     taxonomy,
+    form: unused<DetailsFormRepository>("form"),
     storage: null,
     cases,
     newId: () => "unused",

@@ -26,6 +26,10 @@ const m = vi.hoisted(() => ({
     setTerms: vi.fn(),
     caseTerms: vi.fn(),
   },
+  form: {
+    saveField: vi.fn(),
+    read: vi.fn(),
+  },
   storage: { presignUpload: vi.fn(), head: vi.fn() },
 }));
 
@@ -41,6 +45,9 @@ vi.mock("@/modules/material/adapters/supabase/text-item-repository", () => ({
 vi.mock("@/modules/material/adapters/supabase/taxonomy-repository", () => ({
   createSupabaseTaxonomyRepository: () => m.taxonomy,
 }));
+vi.mock("@/modules/material/adapters/supabase/details-form-repository", () => ({
+  createSupabaseDetailsFormRepository: () => m.form,
+}));
 
 const material = await import("@/modules/material");
 
@@ -55,6 +62,7 @@ const ASSET_ID = "bbbbbbbb-0000-4000-8000-000000000001";
 const ref = { caseId: CASE_ID, assetId: ASSET_ID };
 const TEXT_ID = "eeeeeeee-0000-4000-8000-000000000001";
 const textRef = { caseId: CASE_ID, textItemId: TEXT_ID };
+const detailsInput = { caseId: CASE_ID, field: "context", text: "Bando PNRR" };
 const termsInput = { caseId: CASE_ID, refKind: "asset", refId: ASSET_ID, kind: "tag", keys: ["app"] };
 const textItem = {
   id: TEXT_ID,
@@ -95,6 +103,8 @@ beforeEach(() => {
   m.taxonomy.listTerms.mockResolvedValue(ok([{ kind: "tag", key: "app", label: "App" }]));
   m.taxonomy.setTerms.mockResolvedValue(ok([]));
   m.taxonomy.caseTerms.mockResolvedValue(ok([{ refKind: "asset", refId: ASSET_ID, terms: [{ kind: "tag", key: "app" }] }]));
+  m.form.saveField.mockResolvedValue(ok(""));
+  m.form.read.mockResolvedValue(ok({ context: "Bando PNRR", solution: "", results: "" }));
 });
 
 describe("material index wiring", () => {
@@ -208,6 +218,24 @@ describe("material index wiring", () => {
     expect(m.taxonomy.caseTerms).toHaveBeenCalledWith(CASE_ID);
   });
 
+  it("saveDetailsField saves through the details form repository and records details_saved { field }", async () => {
+    expect(await material.saveDetailsField(actor, detailsInput)).toEqual(ok({ field: "context", text: "Bando PNRR" }));
+    expect(m.get).toHaveBeenCalledWith(CASE_ID);
+    expect(m.form.saveField).toHaveBeenCalledWith(CASE_ID, "context", "Bando PNRR", actor.id);
+    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "details_saved", data: { field: "context" } });
+  });
+
+  it("getDetailsForm reads the details form repository", async () => {
+    expect(await material.getDetailsForm({ caseId: CASE_ID })).toEqual(ok({ context: "Bando PNRR", solution: "", results: "" }));
+    expect(m.form.read).toHaveBeenCalledWith(CASE_ID);
+  });
+
+  it("resolveRefs resolves form_field refs through the details form repository", async () => {
+    const refs = [{ kind: "form_field", id: "context" }];
+    expect(await material.resolveRefs(CASE_ID, refs)).toEqual(ok([{ ref: refs[0], text: "Bando PNRR" }]));
+    expect(m.form.read).toHaveBeenCalledWith(CASE_ID);
+  });
+
   it("hasMaterial asks the text item repository's has_material", async () => {
     expect(await material.hasMaterial(CASE_ID)).toEqual(ok(true));
     expect(m.texts.hasMaterial).toHaveBeenCalledWith(CASE_ID);
@@ -222,6 +250,9 @@ describe("material index wiring", () => {
     ["listTerms", () => material.listTerms()],
     ["setDeliverableTerms", () => material.setDeliverableTerms(actor, termsInput)],
     ["getCaseTerms", () => material.getCaseTerms({ caseId: CASE_ID })],
+    ["saveDetailsField", () => material.saveDetailsField(actor, detailsInput)],
+    ["getDetailsForm", () => material.getDetailsForm({ caseId: CASE_ID })],
+    ["resolveRefs", () => material.resolveRefs(CASE_ID, [{ kind: "form_field", id: "results" }])],
   ])("%s works without S3 and never resolves storage", async (_name, call) => {
     m.getStorageConfig.mockReturnValue(null);
     expect((await call()).ok).toBe(true);

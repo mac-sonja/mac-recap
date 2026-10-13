@@ -1,5 +1,6 @@
 import type { Actor } from "@/modules/access";
 import type { AssetRepository } from "@/modules/material/ports/asset-repository";
+import type { DetailsFormRepository } from "@/modules/material/ports/details-form-repository";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
 import type { TaxonomyRepository } from "@/modules/material/ports/taxonomy-repository";
 import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
@@ -21,6 +22,8 @@ export interface MaterialDeps {
   texts: TextItemRepository;
   /** Taxonomy terms and their links to deliverables (never needs storage). */
   taxonomy: TaxonomyRepository;
+  /** The details form (never needs storage; never material). */
+  form: DetailsFormRepository;
   /** `null` when `S3_BUCKET` / `S3_REGION` are unset (and on text paths, which never need it). */
   storage: ObjectStorage | null;
   cases: CaseStudies;

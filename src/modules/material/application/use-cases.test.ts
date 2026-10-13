@@ -3,6 +3,7 @@ import type { Actor } from "@/modules/access";
 import type { Asset } from "@/modules/material/domain/asset";
 import { MAX_FILE_BYTES } from "@/modules/material/domain/files";
 import type { AssetRepository, NewAsset } from "@/modules/material/ports/asset-repository";
+import type { DetailsFormRepository } from "@/modules/material/ports/details-form-repository";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
 import type { TaxonomyRepository } from "@/modules/material/ports/taxonomy-repository";
 import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
@@ -97,7 +98,7 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
     }),
   } satisfies CaseStudies;
 
-  const deps: MaterialDeps = { assets: repo, texts: unusedTexts, taxonomy: unusedTaxonomy, storage, cases, newId: () => NEW_ASSET_ID };
+  const deps: MaterialDeps = { assets: repo, texts: unusedTexts, taxonomy: unusedTaxonomy, form: unusedForm, storage, cases, newId: () => NEW_ASSET_ID };
   return { deps, repo, storage, cases, assets, objects, events, seed };
 }
 
@@ -112,6 +113,13 @@ const unusedTexts = new Proxy({} as TextItemRepository, {
 const unusedTaxonomy = new Proxy({} as TaxonomyRepository, {
   get: (_target, name) => () => {
     throw new Error(`asset use case called taxonomy.${String(name)}`);
+  },
+});
+
+/** Asset use cases never touch the details form. */
+const unusedForm = new Proxy({} as DetailsFormRepository, {
+  get: (_target, name) => () => {
+    throw new Error(`asset use case called form.${String(name)}`);
   },
 });
 

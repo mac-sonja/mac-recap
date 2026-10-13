@@ -7,6 +7,8 @@ import * as material from "@/modules/material";
 import type {
   Asset,
   DeliverableTerms,
+  DetailsFieldSaved,
+  DetailsForm,
   PresignedAssetUpload,
   TermsByKind,
   TermsSet,
@@ -179,4 +181,32 @@ export async function getCaseTerms(input: unknown): Promise<ActionResult<Deliver
   if (!decision.ok) return failure(decision.error);
   const terms = await material.getCaseTerms(input);
   return terms.ok ? terms : failure(terms.error);
+}
+
+/**
+ * Saves one details-form field: `{ caseId, field: 'context' | 'solution' | 'results', text }`
+ * (`""` clears it; at most 5,000 characters). Saving the stored text again changes
+ * nothing. 403 `FORBIDDEN` unless the role may `fill details`; 400 `UNKNOWN_FIELD`;
+ * 400 `INVALID_INPUT` naming `text`; 404 `NOT_FOUND`. Status never changes.
+ */
+export async function saveDetailsField(input: unknown): Promise<ActionResult<DetailsFieldSaved>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "fill details");
+  if (!decision.ok) return failure(decision.error);
+  const saved = await material.saveDetailsField(actor.value, input);
+  return saved.ok ? saved : failure(saved.error);
+}
+
+/**
+ * The details form of a case: `{ caseId }` → `{ context, solution, results }`,
+ * each `""` when never saved. 403 `FORBIDDEN` unless the role may `fill details`; 404 `NOT_FOUND`.
+ */
+export async function getDetailsForm(input: unknown): Promise<ActionResult<DetailsForm>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "fill details");
+  if (!decision.ok) return failure(decision.error);
+  const form = await material.getDetailsForm(input);
+  return form.ok ? form : failure(form.error);
 }

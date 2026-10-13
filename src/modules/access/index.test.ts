@@ -18,6 +18,8 @@ describe("respondToAppError", () => {
     ["STORAGE_NOT_CONFIGURED", 503],
     ["TEXT_EMPTY", 400],
     ["UNKNOWN_TERM", 400],
+    ["UNKNOWN_FIELD", 400],
+    ["UNKNOWN_REF", 400],
     ["PROFILE_LOOKUP_FAILED", 500],
   ] as const)("maps %s to %i with { error: { code, message } } and no details", async (code, status) => {
     const error = { code, message: "m", details: { secret: "internal" } };
