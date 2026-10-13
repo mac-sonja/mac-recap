@@ -55,7 +55,8 @@ wait_stopped() {
 wait_for_log() {
   local name="$1" pattern="$2" i
   for ((i = 0; i < TIMEOUT; i++)); do
-    docker logs "$name" 2>&1 | grep -Eq "$pattern" && return 0
+    # Read the logs first: with pipefail, `grep -q` exiting early can SIGPIPE docker logs and fail a match.
+    grep -Eq "$pattern" <<<"$(docker logs "$name" 2>&1)" && return 0
     running "$name" || return 1
     sleep 1
   done
@@ -121,7 +122,7 @@ web_gated() {
   fi
 
   # Positive control for web_ungated: the listening pattern must match a server that did listen.
-  if docker logs "$name" 2>&1 | grep -Eq "$LISTEN_PATTERN"; then
+  if grep -Eq "$LISTEN_PATTERN" <<<"$(docker logs "$name" 2>&1)"; then
     pass "web gated: listening line present (ungated check is not vacuous)"
   else
     fail "web gated: no line matches the listening pattern; update LISTEN_PATTERN"
