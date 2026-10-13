@@ -26,6 +26,11 @@ export interface ObjectStorage {
    * 1..`maxBytes`. Signing never touches the network; `err` only on failure.
    */
   presignUpload(target: UploadTarget, maxBytes: number): Promise<Result<PresignedUpload>>;
+  /**
+   * A presigned GET for the stored object, valid `ttlSeconds`. Signing never
+   * touches the network; `err` only on failure.
+   */
+  presignDownload(target: UploadTarget, ttlSeconds: number): Promise<Result<string>>;
   /** HEAD of the uploaded object; `ok(null)` when it does not exist. */
   head(target: UploadTarget): Promise<Result<StoredObject | null>>;
 }

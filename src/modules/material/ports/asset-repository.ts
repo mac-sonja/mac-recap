@@ -14,6 +14,8 @@ export interface NewAsset {
 
 /** Reads and writes `asset`. Implemented by `adapters/supabase/asset-repository.ts`. */
 export interface AssetRepository {
+  /** Non-deleted assets of the case, oldest first (then by id); `err` only when the read fails. */
+  listLive(caseId: string): Promise<Result<Asset[]>>;
   /** Non-deleted assets of the case; `err` only when the read fails. */
   countLive(caseId: string): Promise<Result<number>>;
   /**

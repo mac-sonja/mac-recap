@@ -19,6 +19,7 @@ const {
   getCaseTermsUseCase,
   saveDetailsUseCase,
   getDetailsUseCase,
+  listAssetsUseCase,
 } = vi.hoisted(() => ({
   getActor: vi.fn(),
   create: vi.fn(),
@@ -35,6 +36,7 @@ const {
   getCaseTermsUseCase: vi.fn(),
   saveDetailsUseCase: vi.fn(),
   getDetailsUseCase: vi.fn(),
+  listAssetsUseCase: vi.fn(),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -57,6 +59,7 @@ vi.mock("@/modules/material", () => ({
   getCaseTerms: getCaseTermsUseCase,
   saveDetailsField: saveDetailsUseCase,
   getDetailsForm: getDetailsUseCase,
+  listAssets: listAssetsUseCase,
 }));
 
 const {
@@ -74,6 +77,7 @@ const {
   getCaseTerms,
   saveDetailsField,
   getDetailsForm,
+  listAssets,
 } = await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({
@@ -119,6 +123,7 @@ beforeEach(() => {
     getCaseTermsUseCase,
     saveDetailsUseCase,
     getDetailsUseCase,
+    listAssetsUseCase,
   ])
     fn.mockReset();
 });
@@ -447,6 +452,63 @@ describe("details form actions", () => {
       ok: false,
       status: 400,
       error: { code: "INVALID_INPUT", message: "Invalid or missing: text.", fields: ["text"] },
+    });
+  });
+});
+
+describe("listAssets action", () => {
+  const listInput = { caseId: "11111111-1111-4111-8111-111111111111" };
+  const listed = [
+    {
+      id: "22222222-2222-4222-8222-222222222222",
+      kind: "image",
+      originalFileName: "a.png",
+      contentType: "image/png",
+      sizeBytes: 10,
+      createdAt: "2026-10-13T10:00:00Z",
+      thumbnailUrl: "https://s3/get",
+    },
+  ];
+
+  it("passes its input unchanged to the use case for an owner/designer", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    listAssetsUseCase.mockResolvedValue(ok(listed));
+    expect(await listAssets(listInput)).toEqual({ ok: true, value: listed });
+    expect(listAssetsUseCase).toHaveBeenCalledExactlyOnceWith(listInput);
+    expect(listAssetsUseCase.mock.calls[0][0]).toBe(listInput);
+  });
+
+  it.each(["account_sales_social", "admin", "system"] as const)("returns 403 FORBIDDEN for %s and never lists", async (role) => {
+    getActor.mockResolvedValue(ok(actor(role)));
+    expect(await listAssets(listInput)).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
+    expect(listAssetsUseCase).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when no actor resolves", async () => {
+    getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "No profile." }));
+    expect(await listAssets(listInput)).toMatchObject({ ok: false, status: 401 });
+    expect(listAssetsUseCase).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["NOT_FOUND", 404],
+    ["STORAGE_FAILED", 500],
+    ["ASSET_LOOKUP_FAILED", 500],
+  ] as const)("maps %s to %i and keeps details server-side", async (code, status) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    listAssetsUseCase.mockResolvedValue(err({ code, message: "m", details: { secret: 1 } }));
+    expect(await listAssets(listInput)).toEqual({ ok: false, status, error: { code, message: "m" } });
+  });
+
+  it("maps INVALID_INPUT to 400 with the failing field names", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    listAssetsUseCase.mockResolvedValue(
+      err({ code: "INVALID_INPUT", message: "Invalid or missing: caseId.", details: { fields: ["caseId"], issues: [] } }),
+    );
+    expect(await listAssets({ caseId: "nope" })).toEqual({
+      ok: false,
+      status: 400,
+      error: { code: "INVALID_INPUT", message: "Invalid or missing: caseId.", fields: ["caseId"] },
     });
   });
 });

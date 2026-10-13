@@ -55,3 +55,20 @@ export type AssetRefInput = z.infer<typeof assetRefInputSchema>;
 export const ASSET_UPLOADED = "asset_uploaded";
 export const ASSET_REMOVED = "asset_removed";
 export const ASSET_RESTORED = "asset_restored";
+
+/** Lists the live assets of one case. */
+export const listAssetsInputSchema = z.object({
+  caseId: z.uuid(),
+});
+
+/** How long an image's presigned GET (its thumbnail URL) stays valid, in seconds. */
+export const THUMBNAIL_URL_TTL_SECONDS = 15 * 60;
+
+/**
+ * One row of a case's file list: the asset without its author or deletion
+ * stamp, plus a presigned GET for images (`null` for other kinds, or when S3
+ * isn't configured).
+ */
+export type ListedAsset = Pick<Asset, "id" | "kind" | "originalFileName" | "contentType" | "sizeBytes" | "createdAt"> & {
+  thumbnailUrl: string | null;
+};

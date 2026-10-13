@@ -23,7 +23,7 @@ const row = (over: Record<string, unknown> = {}) => ({
 function stubClient(response: { data?: unknown; error: unknown; count?: number | null }) {
   const builder: Record<string, unknown> = {};
   const step = () => vi.fn(() => builder);
-  const calls = { select: step(), update: step(), eq: step(), is: step() };
+  const calls = { select: step(), update: step(), eq: step(), is: step(), order: step() };
   Object.assign(builder, calls, { then: (resolve: (r: typeof response) => unknown) => resolve(response) });
   const from = vi.fn(() => builder);
   const rpc = vi.fn(async () => response);
@@ -94,6 +94,47 @@ describe("createSupabaseAssetRepository", () => {
     const result = await createSupabaseAssetRepository(stub.factory).create(newAsset);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("ASSET_INVALID");
+  });
+
+  it("listLive reads the live assets of the case, oldest first then by id", async () => {
+    const second = { ...row(), id: "bbbbbbbb-0000-4000-8000-000000000002", created_at: "2026-10-13T11:00:00+00:00" };
+    const stub = stubClient({ data: [row(), second], error: null });
+    const result = await createSupabaseAssetRepository(stub.factory).listLive(CASE_ID);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map((a) => a.id)).toEqual([ASSET_ID, second.id]);
+    expect(stub.from).toHaveBeenCalledWith("asset");
+    expect(stub.eq).toHaveBeenCalledWith("case_id", CASE_ID);
+    expect(stub.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(stub.order.mock.calls).toEqual([
+      ["created_at", { ascending: true }],
+      ["id", { ascending: true }],
+    ]);
+  });
+
+  it("listLive returns [] for a case without files", async () => {
+    expect(await createSupabaseAssetRepository(stubClient({ data: [], error: null }).factory).listLive(CASE_ID)).toEqual({ ok: true, value: [] });
+  });
+
+  it("listLive rejects a row outside the domain", async () => {
+    const stub = stubClient({ data: [row({ kind: "archive" })], error: null });
+    const result = await createSupabaseAssetRepository(stub.factory).listLive(CASE_ID);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("ASSET_INVALID");
+  });
+
+  it("listLive returns ASSET_LOOKUP_FAILED and logs no material when the read fails", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const stub = stubClient({ data: null, error: { code: "PGRST000", message: "down" } });
+      const result = await createSupabaseAssetRepository(stub.factory).listLive(CASE_ID);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("ASSET_LOOKUP_FAILED");
+      const line = String(write.mock.calls[0][0]);
+      expect(JSON.parse(line)).toMatchObject({ level: "error", caseId: CASE_ID });
+      expect(line).not.toContain("moodboard");
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it("countLive counts non-deleted assets of the case", async () => {

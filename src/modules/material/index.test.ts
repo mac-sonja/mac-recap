@@ -8,6 +8,7 @@ const m = vi.hoisted(() => ({
   getStorageConfig: vi.fn(),
   createS3ObjectStorage: vi.fn(),
   repo: {
+    listLive: vi.fn(),
     countLive: vi.fn(),
     create: vi.fn(),
     softDelete: vi.fn(),
@@ -30,7 +31,7 @@ const m = vi.hoisted(() => ({
     saveField: vi.fn(),
     read: vi.fn(),
   },
-  storage: { presignUpload: vi.fn(), head: vi.fn() },
+  storage: { presignUpload: vi.fn(), presignDownload: vi.fn(), head: vi.fn() },
 }));
 
 vi.mock("@/modules/case-study", () => ({ get: m.get, recordEvent: m.recordEvent }));
@@ -89,6 +90,10 @@ beforeEach(() => {
   m.get.mockResolvedValue(ok({ id: CASE_ID }));
   m.recordEvent.mockResolvedValue(ok({}));
   m.repo.countLive.mockResolvedValue(ok(0));
+  m.repo.listLive.mockResolvedValue(
+    ok([{ id: ASSET_ID, caseId: CASE_ID, kind: "image", originalFileName: "a.png", contentType: "image/png", sizeBytes: 10, createdBy: actor.id, createdAt: "2026-10-13T10:00:00Z", deletedAt: null }]),
+  );
+  m.storage.presignDownload.mockResolvedValue(ok("https://s3.test/get"));
   m.repo.create.mockImplementation(async (a) => ok({ ...a, createdAt: "2026-10-13T10:00:00Z", deletedAt: null }));
   m.repo.softDelete.mockResolvedValue(ok(true));
   m.repo.restore.mockResolvedValue(ok(true));
@@ -155,6 +160,26 @@ describe("material index wiring", () => {
     if (!result.ok) expect(result.error.code).toBe("STORAGE_NOT_CONFIGURED");
     expect(m.createS3ObjectStorage).not.toHaveBeenCalled();
     expect(m.get).not.toHaveBeenCalled();
+  });
+
+  it("listAssets lists through the asset repository and signs image thumbnails with the configured adapter", async () => {
+    const config = configure();
+    const result = await material.listAssets({ caseId: CASE_ID });
+    expect(result).toEqual(
+      ok([{ id: ASSET_ID, kind: "image", originalFileName: "a.png", contentType: "image/png", sizeBytes: 10, createdAt: "2026-10-13T10:00:00Z", thumbnailUrl: "https://s3.test/get" }]),
+    );
+    expect(m.createS3ObjectStorage).toHaveBeenCalledWith(config);
+    expect(m.repo.listLive).toHaveBeenCalledWith(CASE_ID);
+    expect(m.storage.presignDownload).toHaveBeenCalledWith({ caseId: CASE_ID, assetId: ASSET_ID, contentType: "image/png" }, 900);
+    expect(m.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it("listAssets still lists when S3 is unset, with null thumbnail URLs", async () => {
+    m.getStorageConfig.mockReturnValue(null);
+    const result = await material.listAssets({ caseId: CASE_ID });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map((a) => a.thumbnailUrl)).toEqual([null]);
+    expect(m.createS3ObjectStorage).not.toHaveBeenCalled();
   });
 
   it("builds the S3 adapter once per resolved config", async () => {
