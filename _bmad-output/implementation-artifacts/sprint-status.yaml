@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-13-2026 16:30
+last_updated: 10-13-2026 17:30
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -42,7 +42,7 @@ development_status:
   2-4-app-shell-navigation-tokens-italian-copy-status-badge: done
   2-5-create-a-case-study-with-a-permanent-id: in-progress  # backend done (create + transition); UI open
   2-6-find-and-reopen-case-studies-in-the-table: done
-  2-7-upload-project-files: in-progress  # backend done (#17); UI, asset listing, buckets open
+  2-7-upload-project-files: in-progress  # backend done (#17, listing #22); UI, buckets open
   2-8-add-pasted-text-as-material: in-progress  # backend done (#18); UI open
   2-9-tag-property-and-flag-deliverables: in-progress  # backend done (#19); UI and OP 3 seed open
   2-10-fill-in-the-details-form: in-progress  # backend done (#20); UI open
