@@ -44,3 +44,10 @@ export const createCaseStudyInputSchema = z.object({
   locale: localeSchema.default(DEFAULT_LOCALE),
 });
 export type CreateCaseStudyInput = z.infer<typeof createCaseStudyInputSchema>;
+
+/**
+ * The status scope of a list, as authorized by `list cases`: `{}` is every status,
+ * `{ status }` only that one. Any other key is rejected.
+ */
+export const listScopeSchema = z.strictObject({ status: z.enum(CASE_STATUSES).optional() });
+export type ListScope = z.infer<typeof listScopeSchema>;

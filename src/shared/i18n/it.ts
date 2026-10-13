@@ -20,6 +20,30 @@ export const it = {
   },
   caseStudies: {
     heading: "Case study",
+    table: {
+      /** Read by screen readers only. */
+      caption: "Elenco dei case study",
+      columns: {
+        id: "ID",
+        name: "Nome",
+        client: "Cliente",
+        year: "Anno",
+        status: "Stato",
+        updated: "Aggiornato",
+        links: "Link",
+      },
+    },
+    search: {
+      label: "Cerca nome, cliente o ID",
+      placeholder: "Cerca nome, cliente o ID",
+    },
+    /** `{query}` is filled with the search text. */
+    noResults: "Nessun risultato per '{query}'.",
+    clearSearch: "Cancella ricerca e filtri",
+    empty: "Ancora nessun case study. Inizia dal materiale di un progetto chiuso.",
+    narrowScreen: "Questa pagina richiede uno schermo più grande.",
+    /** Read by screen readers while the table loads. */
+    loading: "Caricamento…",
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {
@@ -53,4 +77,15 @@ export function t(key: MessageKey): string {
   }
   if (typeof node !== "string") throw new Error(`Missing dictionary entry: ${key}`);
   return node;
+}
+
+/**
+ * Inserts `params` into a dictionary template: `fill(t("caseStudies.noResults"), { query })`.
+ * Each `{name}` with a matching param is replaced by its value, verbatim; any other
+ * `{…}` is left as is. `t()` stays key-only.
+ */
+export function fill(template: string, params: Readonly<Record<string, string | number>>): string {
+  return template.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
+    Object.hasOwn(params, name) ? String(params[name]) : placeholder,
+  );
 }

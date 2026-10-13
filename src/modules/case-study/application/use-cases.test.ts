@@ -6,6 +6,7 @@ import type { CaseStudy } from "@/modules/case-study/domain/case-study";
 import { err, ok } from "@/shared/result";
 import { makeCreateCaseStudy } from "./create-case-study";
 import { makeGetCaseStudy } from "./get-case-study";
+import { makeListCaseStudies } from "./list-case-studies";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import { makeRecordEvent } from "./record-event";
 import { makeTransition } from "./transition";
@@ -57,6 +58,14 @@ function fakeRepository() {
       const row = cases.get(id);
       return ok(row && row.deletedAt === null ? row : null);
     }),
+    // Mirrors the adapter query: non-deleted, `status` when scoped, newest updated_at first.
+    list: vi.fn<CaseStudyRepository["list"]>(async (scope) =>
+      ok(
+        [...cases.values()]
+          .filter((row) => row.deletedAt === null && (scope.status === undefined || row.status === scope.status))
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+      ),
+    ),
     appendEvent: vi.fn<CaseStudyRepository["appendEvent"]>(async (event) => {
       if (!cases.has(event.caseId)) return ok(null);
       const row: CaseEvent = { id: uuid(), at: now, ...event };
@@ -161,6 +170,71 @@ describe("get", () => {
     const { repo } = fakeRepository();
     repo.findById.mockResolvedValueOnce(failure);
     expect(await makeGetCaseStudy(repo)("11111111-1111-4111-8111-111111111111")).toEqual(failure);
+  });
+});
+
+describe("list", () => {
+  /** A fake repository holding one case per status, plus a soft-deleted draft and a soft-deleted approved case. */
+  async function seeded() {
+    const fake = fakeRepository();
+    const make = async (name: string, status: CaseStatus, updatedAt: string, deletedAt: string | null = null) => {
+      const created = await makeCreateCaseStudy(fake.repo)(actor, { name, client: "Acme", year: 2026 });
+      if (!created.ok) throw new Error("setup");
+      fake.cases.set(created.value.id, { ...created.value, status, updatedAt, deletedAt });
+      return created.value.id;
+    };
+    const ids = {
+      draft: await make("Draft", "draft", "2026-10-09T10:00:00Z"),
+      generating: await make("Generating", "generating", "2026-10-11T10:00:00Z"),
+      inReview: await make("In review", "in_review", "2026-10-10T10:00:00Z"),
+      approved: await make("Approved", "approved", "2026-10-12T10:00:00Z"),
+      oldApproved: await make("Old approved", "approved", "2026-10-01T10:00:00Z"),
+      deletedDraft: await make("Deleted", "draft", "2026-10-13T10:00:00Z", "2026-10-13T11:00:00Z"),
+      deletedApproved: await make("Deleted approved", "approved", "2026-10-13T10:00:00Z", "2026-10-13T11:00:00Z"),
+    };
+    return { ...fake, ids };
+  }
+
+  it("lists every non-deleted case for the all-statuses scope, newest updated first", async () => {
+    const { repo, ids } = await seeded();
+    const result = await makeListCaseStudies(repo)({});
+    expect(repo.list).toHaveBeenCalledWith({});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.map((c) => c.id)).toEqual([ids.approved, ids.generating, ids.inReview, ids.draft, ids.oldApproved]);
+    }
+  });
+
+  it("lists approved cases only for the approved scope, never soft-deleted ones", async () => {
+    const { repo, ids } = await seeded();
+    const result = await makeListCaseStudies(repo)({ status: "approved" });
+    expect(repo.list).toHaveBeenCalledWith({ status: "approved" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map((c) => c.id)).toEqual([ids.approved, ids.oldApproved]);
+  });
+
+  it("returns an empty list when there are no cases", async () => {
+    expect(await makeListCaseStudies(fakeRepository().repo)({})).toEqual(ok([]));
+  });
+
+  it.each([
+    ["an unknown status", { status: "archived" }],
+    ["an extra key", { status: "approved", createdBy: actor.id }],
+    ["a non-object", "approved"],
+    ["undefined", undefined],
+  ])("rejects %s as INVALID_INPUT without querying", async (_label, scope) => {
+    const { repo } = fakeRepository();
+    const result = await makeListCaseStudies(repo)(scope);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
+    expect(repo.list).not.toHaveBeenCalled();
+  });
+
+  it("passes a repository failure through", async () => {
+    const failure = err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "down" });
+    const { repo } = fakeRepository();
+    repo.list.mockResolvedValueOnce(failure);
+    expect(await makeListCaseStudies(repo)({})).toEqual(failure);
   });
 });
 

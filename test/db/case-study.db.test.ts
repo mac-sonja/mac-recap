@@ -199,6 +199,76 @@ describe("get", () => {
   });
 });
 
+describe("list", () => {
+  /** A committed case walked to `approved` through the real transition use case. */
+  async function approvedCase(input: Record<string, unknown> = {}) {
+    const { transition } = await loadCaseStudy();
+    const actor = await devActor();
+    const created = await createCase(input);
+    for (const event of ["generate", "generation_succeeded", "approve"]) {
+      const moved = await transition(created.id, event, actor);
+      if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
+    }
+    return created.id;
+  }
+
+  async function softDelete(id: string) {
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [id]);
+  }
+
+  async function listed(scope: { status?: CaseStatus }) {
+    const { list } = await loadCaseStudy();
+    const result = await list(scope);
+    if (!result.ok) throw new Error(`list failed: ${result.error.code}`);
+    return result.value;
+  }
+
+  const isNewestFirst = (cases: { updatedAt: string }[]) =>
+    cases.every((c, i) => i === 0 || Date.parse(cases[i - 1].updatedAt) >= Date.parse(c.updatedAt));
+
+  it("lists every non-deleted case, newest updated first, never a soft-deleted one", async () => {
+    const draft = (await createCase({ name: "List draft" })).id;
+    const approved = await approvedCase({ name: "List approved" });
+    const deleted = (await createCase({ name: "List deleted" })).id;
+    await softDelete(deleted);
+
+    const cases = await listed({});
+    const ids = cases.map((c) => c.id);
+    expect(ids).toContain(draft);
+    expect(ids).toContain(approved);
+    expect(ids).not.toContain(deleted);
+    expect(cases.every((c) => c.deletedAt === null)).toBe(true);
+    expect(isNewestFirst(cases)).toBe(true);
+  });
+
+  it("the approved-only scope returns approved, non-deleted cases only", async () => {
+    const draft = (await createCase({ name: "Scope draft" })).id;
+    const approved = await approvedCase({ name: "Scope approved" });
+    const deletedApproved = await approvedCase({ name: "Scope deleted approved" });
+    await softDelete(deletedApproved);
+
+    const cases = await listed({ status: "approved" });
+    const ids = cases.map((c) => c.id);
+    expect(ids).toContain(approved);
+    expect(ids).not.toContain(draft);
+    expect(ids).not.toContain(deletedApproved);
+    expect(cases.every((c) => c.status === "approved" && c.deletedAt === null)).toBe(true);
+    expect(isNewestFirst(cases)).toBe(true);
+
+    const { rows } = await pool.query<{ n: number }>(
+      "select count(*)::int as n from public.case_study where status = 'approved' and deleted_at is null",
+    );
+    expect(cases).toHaveLength(rows[0].n);
+  });
+
+  it("rejects a malformed scope without querying", async () => {
+    const { list } = await loadCaseStudy();
+    const result = await list({ status: "archived" } as unknown as { status?: CaseStatus });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
+  });
+});
+
 describe("recordEvent", () => {
   it("appends one case_event row with the actor, type and data", async () => {
     const created = await createCase();

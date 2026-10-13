@@ -4,16 +4,17 @@ import type { Actor } from "@/modules/access";
 import { createSupabaseCaseStudyRepository } from "@/modules/case-study/adapters/supabase/case-study-repository";
 import { makeCreateCaseStudy } from "@/modules/case-study/application/create-case-study";
 import { makeGetCaseStudy } from "@/modules/case-study/application/get-case-study";
+import { makeListCaseStudies } from "@/modules/case-study/application/list-case-studies";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
 import { makeTransition } from "@/modules/case-study/application/transition";
 import type { CaseEvent } from "@/modules/case-study/domain/case-event";
-import type { CaseStudy } from "@/modules/case-study/domain/case-study";
+import type { CaseStudy, ListScope } from "@/modules/case-study/domain/case-study";
 import type { Result } from "@/shared/result";
 
 export { CASE_CREATED, TRANSITION } from "@/modules/case-study/domain/case-event";
 export type { CaseEvent, RecordEventInput } from "@/modules/case-study/domain/case-event";
 export { LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
-export type { CaseStudy, CreateCaseStudyInput, Locale } from "@/modules/case-study/domain/case-study";
+export type { CaseStudy, CreateCaseStudyInput, ListScope, Locale } from "@/modules/case-study/domain/case-study";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
 export type { TransitionEvent } from "@/modules/case-study/domain/transition";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
@@ -30,6 +31,16 @@ export function create(actor: Actor, input: unknown): Promise<Result<CaseStudy>>
 /** One case study by id; unknown, malformed or soft-deleted ids are `NOT_FOUND`. */
 export function get(id: unknown): Promise<Result<CaseStudy>> {
   return makeGetCaseStudy(createSupabaseCaseStudyRepository())(id);
+}
+
+/**
+ * The non-deleted case studies within exactly `scope`, newest `updated_at` first:
+ * `{}` lists every status, `{ status: "approved" }` approved only. Derive the scope
+ * from the `list cases` policy and authorize it first, so no scope the policy
+ * denies is ever queried. A malformed scope is `INVALID_INPUT`.
+ */
+export function list(scope: ListScope): Promise<Result<CaseStudy[]>> {
+  return makeListCaseStudies(createSupabaseCaseStudyRepository())(scope);
 }
 
 /**
