@@ -9,6 +9,7 @@ import type { TaxonomyRepository } from "@/modules/material/ports/taxonomy-repos
 import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
 import { err, ok } from "@/shared/result";
 import { makeConfirmUpload } from "./confirm-upload";
+import { makeListAssets } from "./list-assets";
 import type { CaseStudies, MaterialDeps } from "./deps";
 import { makePresignUpload } from "./presign-upload";
 import { makeRemoveAsset } from "./remove-asset";
@@ -57,6 +58,9 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
   const liveCount = (caseId: string) => [...assets.values()].filter((a) => a.caseId === caseId && a.deletedAt === null).length;
 
   const repo = {
+    listLive: vi.fn<AssetRepository["listLive"]>(async (caseId) =>
+      ok([...assets.values()].filter((a) => a.caseId === caseId && a.deletedAt === null)),
+    ),
     countLive: vi.fn<AssetRepository["countLive"]>(async (caseId) => ok(liveCount(caseId))),
     create: vi.fn<AssetRepository["create"]>(async (a: NewAsset) => {
       if (liveCount(a.caseId) >= 20) return err({ code: "FILE_LIMIT_REACHED", message: "cap" });
@@ -84,6 +88,9 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
   const storage = {
     presignUpload: vi.fn<ObjectStorage["presignUpload"]>(async (target, maxBytes) =>
       ok({ url: "https://bucket.s3.example/", fields: { key: `k/${target.assetId}`, "Content-Type": target.contentType, max: String(maxBytes) } }),
+    ),
+    presignDownload: vi.fn<ObjectStorage["presignDownload"]>(async (target, ttl) =>
+      ok(`https://bucket.s3.example/${target.assetId}?ttl=${ttl}`),
     ),
     head: vi.fn<ObjectStorage["head"]>(async (target) => ok(objects.get(target.assetId) ?? null)),
   } satisfies ObjectStorage;
@@ -372,5 +379,117 @@ describe("every use case", () => {
       "STORAGE_NOT_CONFIGURED",
     );
     expect(w.cases.get).not.toHaveBeenCalled();
+  });
+});
+
+describe("listAssets", () => {
+  /** Puts one asset of `kind` into the world, created at `createdAt`. */
+  function put(w: ReturnType<typeof world>, id: string, over: Partial<Asset>) {
+    w.assets.set(id, {
+      id,
+      caseId: CASE_ID,
+      kind: "image",
+      originalFileName: `${id.slice(0, 4)}.png`,
+      contentType: PNG,
+      sizeBytes: 10,
+      createdBy: actor.id,
+      createdAt: "2026-10-13T10:00:00Z",
+      deletedAt: null,
+      ...over,
+    });
+  }
+  const IMG = "dddddddd-0000-4000-8000-000000000001";
+  const PDF = "dddddddd-0000-4000-8000-000000000002";
+  const MOV = "dddddddd-0000-4000-8000-000000000003";
+  const GONE = "dddddddd-0000-4000-8000-000000000004";
+
+  function filled() {
+    const w = world();
+    put(w, IMG, {});
+    put(w, PDF, { kind: "document", contentType: "application/pdf", originalFileName: "brief.pdf", sizeBytes: 2 * MB });
+    put(w, MOV, { kind: "video", contentType: "video/quicktime", originalFileName: "spot.mov" });
+    put(w, GONE, { deletedAt: "2026-10-13T11:00:00Z" });
+    return w;
+  }
+
+  it("lists live assets with a 15-minute presigned GET for images only; removed ones are left out", async () => {
+    const w = filled();
+    const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.map((a) => [a.id, a.kind, a.thumbnailUrl])).toEqual([
+      [IMG, "image", `https://bucket.s3.example/${IMG}?ttl=900`],
+      [PDF, "document", null],
+      [MOV, "video", null],
+    ]);
+    expect(result.value[1]).toEqual({
+      id: PDF,
+      kind: "document",
+      originalFileName: "brief.pdf",
+      contentType: "application/pdf",
+      sizeBytes: 2 * MB,
+      createdAt: "2026-10-13T10:00:00Z",
+      thumbnailUrl: null,
+    });
+    expect(w.storage.presignDownload).toHaveBeenCalledOnce();
+    expect(w.storage.presignDownload).toHaveBeenCalledWith({ caseId: CASE_ID, assetId: IMG, contentType: PNG }, 900);
+  });
+
+  it("keeps the repository's order (oldest first)", async () => {
+    const w = filled();
+    w.repo.listLive.mockResolvedValueOnce(ok([...w.assets.values()].filter((a) => a.deletedAt === null).reverse()));
+    const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map((a) => a.id)).toEqual([MOV, PDF, IMG]);
+  });
+
+  it("returns [] for a case without files", async () => {
+    expect(await makeListAssets(world().deps)({ caseId: CASE_ID })).toEqual(ok([]));
+  });
+
+  it("still lists when S3 isn't configured, with every thumbnailUrl null", async () => {
+    const w = filled();
+    const result = await makeListAssets({ ...w.deps, storage: null })({ caseId: CASE_ID });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map((a) => a.thumbnailUrl)).toEqual([null, null, null]);
+  });
+
+  it("writes nothing and records no event", async () => {
+    const w = filled();
+    await makeListAssets(w.deps)({ caseId: CASE_ID });
+    expect(w.repo.create).not.toHaveBeenCalled();
+    expect(w.repo.softDelete).not.toHaveBeenCalled();
+    expect(w.repo.restore).not.toHaveBeenCalled();
+    expect(w.events).toEqual([]);
+  });
+
+  it("a soft-deleted case → NOT_FOUND without listing", async () => {
+    const w = filled();
+    const result = await makeListAssets(w.deps)({ caseId: DELETED_CASE_ID });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+    expect(w.repo.listLive).not.toHaveBeenCalled();
+  });
+
+  it.each([{ caseId: "nope" }, {}, "x", undefined])("malformed input %j → INVALID_INPUT without a query", async (input) => {
+    const w = filled();
+    const result = await makeListAssets(w.deps)(input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
+    expect(w.cases.get).not.toHaveBeenCalled();
+  });
+
+  it("passes a lookup failure through", async () => {
+    const w = filled();
+    w.repo.listLive.mockResolvedValueOnce(err({ code: "ASSET_LOOKUP_FAILED", message: "down" }));
+    expect(await makeListAssets(w.deps)({ caseId: CASE_ID })).toEqual(err({ code: "ASSET_LOOKUP_FAILED", message: "down" }));
+  });
+
+  it("passes a signing failure through", async () => {
+    const w = filled();
+    w.storage.presignDownload.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "no creds" }));
+    const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("STORAGE_FAILED");
   });
 });

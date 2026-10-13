@@ -13,6 +13,9 @@ const RAISE_EXCEPTION = "P0001";
 /** Postgres unique_violation: fallback if the id (or its key) exists despite the function's check. */
 const UNIQUE_VIOLATION = "23505";
 
+/** The columns `toAsset` maps; the S3 key is rebuilt by `assetKey` when needed, so it isn't read. */
+const ASSET_COLUMNS = "id, case_id, kind, original_file_name, content_type, size_bytes, created_by, created_at, deleted_at";
+
 const REFUSALS: Readonly<Record<string, Omit<AppError, "details">>> = {
   NOT_FOUND: { code: "NOT_FOUND", message: "No such case study or file." },
   FILE_LIMIT_REACHED: { code: "FILE_LIMIT_REACHED", message: "This case study already has 20 files." },
@@ -45,6 +48,27 @@ export function createSupabaseAssetRepository(
   client: () => ReturnType<typeof createSupabaseAdminClient> = createSupabaseAdminClient,
 ): AssetRepository {
   return {
+    async listLive(caseId) {
+      const { data, error } = await client()
+        .from("asset")
+        .select(ASSET_COLUMNS)
+        .eq("case_id", caseId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true });
+      if (error) {
+        log.error(`asset list failed: ${error.code ?? "no-code"}`, { caseId });
+        return err({ code: "ASSET_LOOKUP_FAILED", message: "Could not read the case study's files." });
+      }
+      const assets: Asset[] = [];
+      for (const row of data) {
+        const mapped = toAsset(row as AssetRow);
+        if (!mapped.ok) return mapped;
+        assets.push(mapped.value);
+      }
+      return ok(assets);
+    },
+
     async countLive(caseId) {
       const { count, error } = await client()
         .from("asset")

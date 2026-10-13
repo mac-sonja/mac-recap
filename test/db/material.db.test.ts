@@ -302,12 +302,73 @@ describe("soft delete and restore", () => {
   });
 });
 
+describe("listing assets", () => {
+  it("listLive returns the case's live assets oldest first, leaving out removed ones and other cases'", async () => {
+    const created = await createCase();
+    const other = await createCase();
+    const [first, removed, last] = await seedAssets(created.id, 3);
+    await seedAssets(other.id, 1);
+    await pool.query("update public.asset set deleted_at = now() where id = $1", [removed]);
+
+    const listed = await createSupabaseAssetRepository().listLive(created.id);
+    expect(listed.ok).toBe(true);
+    if (listed.ok) expect(listed.value.map((a) => a.id)).toEqual([first, last]);
+  });
+
+  it("listLive breaks a created_at tie by id", async () => {
+    const created = await createCase();
+    const ids = await seedAssets(created.id, 3);
+    await pool.query("update public.asset set created_at = '2026-10-13T10:00:00Z' where case_id = $1", [created.id]);
+    const listed = await createSupabaseAssetRepository().listLive(created.id);
+    expect(listed.ok).toBe(true);
+    if (listed.ok) expect(listed.value.map((a) => a.id)).toEqual([...ids].sort());
+  });
+
+  it("listLive returns [] for a case without files", async () => {
+    const created = await createCase();
+    expect(await createSupabaseAssetRepository().listLive(created.id)).toEqual({ ok: true, value: [] });
+  });
+
+  it("the listAssets use case reads through the real repository and case-study module (no S3: null URLs)", async () => {
+    const caseStudy = await loadCaseStudy();
+    const { makeListAssets } = await import("@/modules/material/application/list-assets");
+    const created = await createCase();
+    const [id] = await seedAssets(created.id, 1);
+    const list = makeListAssets({
+      assets: createSupabaseAssetRepository(),
+      storage: null,
+      cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
+    });
+    const result = await list({ caseId: created.id });
+    expect(result).toEqual({
+      ok: true,
+      value: [
+        {
+          id,
+          kind: "image",
+          originalFileName: "f.png",
+          contentType: "image/png",
+          sizeBytes: 10,
+          createdAt: expect.any(String),
+          thumbnailUrl: null,
+        },
+      ],
+    });
+
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
+    const gone = await list({ caseId: created.id });
+    expect(gone.ok).toBe(false);
+    if (!gone.ok) expect(gone.error.code).toBe("NOT_FOUND");
+  });
+});
+
 describe("use cases against the real DB and case-study module (S3 stubbed)", () => {
   /** Real repository and case-study calls; storage answers HEAD from `objects`. */
   async function realDeps(objects: Map<string, StoredObject>) {
     const caseStudy = await loadCaseStudy();
     const storage: ObjectStorage = {
       presignUpload: async (target) => ({ ok: true, value: { url: "https://s3.test/", fields: { key: target.assetId } } }),
+      presignDownload: async (target) => ({ ok: true, value: `https://s3.test/${target.assetId}` }),
       head: async (target) => ({ ok: true, value: objects.get(target.assetId) ?? null }),
     };
     return {

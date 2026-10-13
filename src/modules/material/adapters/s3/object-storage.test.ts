@@ -11,7 +11,8 @@ const KEY = `cases/${CASE_ID}/assets/${ASSET_ID}/original.mov`;
 function stubCalls() {
   const send = vi.fn<S3Calls["send"]>(async () => ({ ContentLength: 42, ContentType: "video/quicktime" }));
   const presignPost = vi.fn<S3Calls["presignPost"]>(async () => ({ url: "https://s3.example/", fields: { key: KEY } }));
-  return { send, presignPost, client: {} as S3Calls["client"] };
+  const presignGet = vi.fn<S3Calls["presignGet"]>(async () => "https://s3.example/signed-get");
+  return { send, presignPost, presignGet, client: {} as S3Calls["client"] };
 }
 
 const quiet = () => vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -93,7 +94,7 @@ describe("createS3ObjectStorage", () => {
       requestChecksumCalculation: "WHEN_REQUIRED",
       credentials: { accessKeyId: "AKIDEXAMPLE", secretAccessKey: "test-secret" },
     });
-    const storage = createS3ObjectStorage(config, { client, presignPost: createPresignedPost, send: vi.fn() });
+    const storage = createS3ObjectStorage(config, { client, presignPost: createPresignedPost, presignGet: vi.fn(), send: vi.fn() });
     const result = await storage.presignUpload(target, 100 * 1024 * 1024);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -107,5 +108,66 @@ describe("createS3ObjectStorage", () => {
         { key: KEY },
       ]),
     );
+  });
+});
+
+describe("createS3ObjectStorage presignDownload", () => {
+  it("presigns a GET of the object at its key, valid for the given seconds", async () => {
+    const calls = stubCalls();
+    const result = await createS3ObjectStorage(config, calls).presignDownload(target, 900);
+    expect(result).toEqual({ ok: true, value: "https://s3.example/signed-get" });
+    expect(calls.presignGet).toHaveBeenCalledOnce();
+    const [, command, options] = calls.presignGet.mock.calls[0];
+    expect(command.input).toEqual({
+      Bucket: "mac-recap-test",
+      Key: KEY,
+      ResponseContentType: "video/quicktime",
+      ResponseContentDisposition: "inline",
+    });
+    expect(options).toEqual({ expiresIn: 900 });
+  });
+
+  it("returns STORAGE_FAILED when signing throws", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const calls = stubCalls();
+      calls.presignGet.mockRejectedValueOnce(Object.assign(new Error("no creds"), { name: "CredentialsProviderError" }));
+      const result = await createS3ObjectStorage(config, calls).presignDownload(target, 900);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("STORAGE_FAILED");
+      expect(write).toHaveBeenCalledOnce();
+      const line = String(write.mock.calls[0][0]);
+      expect(JSON.parse(line)).toMatchObject({ level: "error", caseId: CASE_ID });
+      expect(line).not.toContain(KEY);
+      expect(line).not.toContain(ASSET_ID);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("signs a real presigned GET offline, expiring in 15 minutes", async () => {
+    const { S3Client } = await import("@aws-sdk/client-s3");
+    const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+    const client = new S3Client({
+      region: config.region,
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      credentials: { accessKeyId: "AKIDEXAMPLE", secretAccessKey: "test-secret" },
+    });
+    const storage = createS3ObjectStorage(config, {
+      client,
+      presignPost: vi.fn(),
+      presignGet: (c, command, options) => getSignedUrl(c, command, options),
+      send: vi.fn(),
+    });
+    const result = await storage.presignDownload(target, 15 * 60);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const url = new URL(result.value);
+    expect(url.pathname).toContain(`/cases/${CASE_ID}/assets/${ASSET_ID}/original.mov`);
+    expect(url.hostname).toContain("mac-recap-test");
+    expect(url.searchParams.get("X-Amz-Expires")).toBe("900");
+    expect(url.searchParams.get("response-content-type")).toBe("video/quicktime");
+    expect(url.searchParams.get("response-content-disposition")).toBe("inline");
+    expect(url.searchParams.get("X-Amz-Signature")).toMatch(/^[0-9a-f]{64}$/);
   });
 });

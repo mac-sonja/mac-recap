@@ -9,6 +9,7 @@ import type {
   DeliverableTerms,
   DetailsFieldSaved,
   DetailsForm,
+  ListedAsset,
   PresignedAssetUpload,
   TermsByKind,
   TermsSet,
@@ -76,6 +77,21 @@ export async function confirmAssetUpload(input: unknown): Promise<ActionResult<A
   if (!decision.ok) return failure(decision.error);
   const confirmed = await material.confirmUpload(actor.value, input);
   return confirmed.ok ? confirmed : failure(confirmed.error);
+}
+
+/**
+ * The files of a case study: `{ caseId }` → its non-deleted assets, oldest first.
+ * Images carry a `thumbnailUrl` valid 15 minutes; other kinds carry `null`.
+ * 403 `FORBIDDEN` unless the role may `upload`; 400 `INVALID_INPUT`; 404 `NOT_FOUND`;
+ * 500 for `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`, `STORAGE_FAILED`.
+ */
+export async function listAssets(input: unknown): Promise<ActionResult<ListedAsset[]>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "upload");
+  if (!decision.ok) return failure(decision.error);
+  const listed = await material.listAssets(input);
+  return listed.ok ? listed : failure(listed.error);
 }
 
 /** Removes (soft-deletes) one asset: `{ caseId, assetId }`. 404 `NOT_FOUND` when unknown or already removed. */

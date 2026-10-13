@@ -104,6 +104,7 @@ function world({ liveAssets = 0, removedAssets = 0 }: { liveAssets?: number; rem
     countLive: vi.fn<AssetRepository["countLive"]>(async (caseId) =>
       ok(assets.filter((a) => a.caseId === caseId && a.deletedAt === null).length),
     ),
+    listLive: vi.fn<AssetRepository["listLive"]>(),
     create: vi.fn<AssetRepository["create"]>(),
     softDelete: vi.fn<AssetRepository["softDelete"]>(),
     restore: vi.fn<AssetRepository["restore"]>(),

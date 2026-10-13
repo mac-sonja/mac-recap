@@ -15,6 +15,7 @@ import { makeEditTextItem } from "@/modules/material/application/edit-text-item"
 import { makeGetCaseTerms } from "@/modules/material/application/get-case-terms";
 import { makeGetDetailsForm } from "@/modules/material/application/get-details-form";
 import { makeHasMaterial } from "@/modules/material/application/has-material";
+import { makeListAssets } from "@/modules/material/application/list-assets";
 import { makeListTerms } from "@/modules/material/application/list-terms";
 import { makePresignUpload, type PresignedAssetUpload } from "@/modules/material/application/presign-upload";
 import { makeRemoveAsset } from "@/modules/material/application/remove-asset";
@@ -24,7 +25,7 @@ import { makeRestoreAsset } from "@/modules/material/application/restore-asset";
 import { makeRestoreTextItem } from "@/modules/material/application/restore-text-item";
 import { makeSaveDetailsField } from "@/modules/material/application/save-details-field";
 import { makeSetDeliverableTerms } from "@/modules/material/application/set-deliverable-terms";
-import type { Asset } from "@/modules/material/domain/asset";
+import type { Asset, ListedAsset } from "@/modules/material/domain/asset";
 import type { DetailsFieldSaved, DetailsForm, ResolvedRef } from "@/modules/material/domain/details-form";
 import type { DeliverableTerms, TermsByKind, TermsSet } from "@/modules/material/domain/taxonomy";
 import type { TextItem } from "@/modules/material/domain/text-item";
@@ -33,7 +34,7 @@ import { getStorageConfig } from "@/shared/env";
 import type { Result } from "@/shared/result";
 
 export { ASSET_REMOVED, ASSET_RESTORED, ASSET_UPLOADED } from "@/modules/material/domain/asset";
-export type { Asset } from "@/modules/material/domain/asset";
+export type { Asset, ListedAsset } from "@/modules/material/domain/asset";
 export {
   MAX_TEXT_BODY_CHARS,
   MAX_TEXT_TITLE_CHARS,
@@ -115,6 +116,16 @@ export function presignUpload(actor: Actor, input: unknown): Promise<Result<Pres
  */
 export function confirmUpload(actor: Actor, input: unknown): Promise<Result<Asset>> {
   return makeConfirmUpload(deps())(actor, input);
+}
+
+/**
+ * The non-deleted assets of a case (`{ caseId }`), oldest first. Images carry a
+ * `thumbnailUrl` (presigned GET, 15 minutes); other kinds, and every asset when
+ * S3 isn't configured, carry `null`. Authorize `upload` first. Errors:
+ * `INVALID_INPUT`, `NOT_FOUND`, `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`, `STORAGE_FAILED`.
+ */
+export function listAssets(input: unknown): Promise<Result<ListedAsset[]>> {
+  return makeListAssets(deps())(input);
 }
 
 /** Soft-deletes one asset (`{ caseId, assetId }`) and records `asset_removed`. Authorize `upload` first. */
