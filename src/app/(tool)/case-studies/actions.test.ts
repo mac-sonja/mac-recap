@@ -3,7 +3,14 @@ import type { Actor } from "@/modules/access";
 import type { CaseStudy } from "@/modules/case-study";
 import { err, ok } from "@/shared/result";
 
-const { getActor, create } = vi.hoisted(() => ({ getActor: vi.fn(), create: vi.fn() }));
+const { getActor, create, presignUpload, confirmUpload, removeAssetUseCase, restoreAssetUseCase } = vi.hoisted(() => ({
+  getActor: vi.fn(),
+  create: vi.fn(),
+  presignUpload: vi.fn(),
+  confirmUpload: vi.fn(),
+  removeAssetUseCase: vi.fn(),
+  restoreAssetUseCase: vi.fn(),
+}));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
 vi.mock("@/modules/access", async (importOriginal) => ({
@@ -11,8 +18,14 @@ vi.mock("@/modules/access", async (importOriginal) => ({
   getActor,
 }));
 vi.mock("@/modules/case-study", () => ({ create }));
+vi.mock("@/modules/material", () => ({
+  presignUpload,
+  confirmUpload,
+  removeAsset: removeAssetUseCase,
+  restoreAsset: restoreAssetUseCase,
+}));
 
-const { createCaseStudy } = await import("./actions");
+const { createCaseStudy, presignAssetUpload, confirmAssetUpload, removeAsset, restoreAsset } = await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({
   id: "00000000-0000-4000-8000-000000000002",
@@ -41,8 +54,7 @@ const created: CaseStudy = {
 const input = { name: "Rebrand", client: "Acme", year: 2026 };
 
 beforeEach(() => {
-  getActor.mockReset();
-  create.mockReset();
+  for (const fn of [getActor, create, presignUpload, confirmUpload, removeAssetUseCase, restoreAssetUseCase]) fn.mockReset();
 });
 
 describe("createCaseStudy", () => {
@@ -96,6 +108,75 @@ describe("createCaseStudy", () => {
       ok: false,
       status: 500,
       error: { code: "CASE_STUDY_WRITE_FAILED", message: "Could not create." },
+    });
+  });
+});
+
+describe("material actions", () => {
+  const ref = { caseId: "11111111-1111-4111-8111-111111111111", assetId: "22222222-2222-4222-8222-222222222222" };
+  const actions = [
+    [
+      "presignAssetUpload",
+      presignAssetUpload,
+      presignUpload,
+      { caseId: ref.caseId, contentType: "image/png", sizeBytes: 2048 },
+      { assetId: ref.assetId, url: "https://s3/", fields: {} },
+    ],
+    ["confirmAssetUpload", confirmAssetUpload, confirmUpload, { ...ref, contentType: "image/png", fileName: "a.png" }, { id: ref.assetId }],
+    ["removeAsset", removeAsset, removeAssetUseCase, ref, undefined],
+    ["restoreAsset", restoreAsset, restoreAssetUseCase, ref, undefined],
+  ] as const;
+
+  it.each(actions)("%s passes its input unchanged to the use case for an owner/designer", async (_name, action, useCase, input, value) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    useCase.mockResolvedValue(ok(value));
+    expect(await action(input)).toEqual({ ok: true, value });
+    expect(useCase).toHaveBeenCalledExactlyOnceWith(actor("owner_designer"), input);
+    expect(useCase.mock.calls[0][1]).toBe(input);
+  });
+
+  it.each(
+    actions.flatMap((a) => (["account_sales_social", "admin", "system"] as const).map((role) => [a[0], role, a[1], a[2], a[3]] as const)),
+  )("%s returns 403 FORBIDDEN for %s and never calls the use case", async (_name, role, action, useCase, input) => {
+    getActor.mockResolvedValue(ok(actor(role)));
+    expect(await action(input)).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
+    expect(useCase).not.toHaveBeenCalled();
+  });
+
+  it.each(actions)("%s returns 401 when no actor resolves", async (_name, action, useCase, input) => {
+    getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "No profile." }));
+    expect(await action(input)).toMatchObject({ ok: false, status: 401 });
+    expect(useCase).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["FILE_TYPE_NOT_ALLOWED", 400],
+    ["FILE_TOO_LARGE", 400],
+    ["FILE_LIMIT_REACHED", 409],
+    ["UPLOAD_NOT_FOUND", 404],
+    ["UPLOAD_REJECTED", 400],
+    ["ASSET_ALREADY_CONFIRMED", 409],
+    ["NOT_FOUND", 404],
+    ["STORAGE_NOT_CONFIGURED", 503],
+  ] as const)("maps %s to %i and keeps details server-side", async (code, status) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    confirmUpload.mockResolvedValue(err({ code, message: "m", details: { secret: 1 } }));
+    expect(await confirmAssetUpload({ ...ref, contentType: "image/png", fileName: "a.png" })).toEqual({
+      ok: false,
+      status,
+      error: { code, message: "m" },
+    });
+  });
+
+  it("maps INVALID_INPUT to 400 with the failing field names", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    confirmUpload.mockResolvedValue(
+      err({ code: "INVALID_INPUT", message: "Invalid or missing: fileName.", details: { fields: ["fileName"], issues: [] } }),
+    );
+    expect(await confirmAssetUpload({ ...ref, contentType: "image/png", fileName: "a\u0000b" })).toEqual({
+      ok: false,
+      status: 400,
+      error: { code: "INVALID_INPUT", message: "Invalid or missing: fileName.", fields: ["fileName"] },
     });
   });
 });
