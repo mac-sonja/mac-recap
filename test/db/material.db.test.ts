@@ -8,6 +8,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
+import { createSupabaseTextItemRepository } from "@/modules/material/adapters/supabase/text-item-repository";
 import { ALLOWED_CONTENT_TYPES, ASSET_KINDS, MAX_ASSETS_PER_CASE } from "@/modules/material/domain/files";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
 
@@ -309,6 +310,7 @@ describe("use cases against the real DB and case-study module (S3 stubbed)", () 
     };
     return {
       assets: createSupabaseAssetRepository(),
+      texts: createSupabaseTextItemRepository(),
       storage,
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
       newId: randomUUID,
@@ -447,6 +449,264 @@ describe("RLS lockout", () => {
     delete: "delete from public.asset",
     "create_asset": `select public.create_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'image', 'x.png', 'image/png', 1, 'x', '${DEV_ACTOR_ID}')`,
     "restore_asset": `select public.restore_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}')`,
+  };
+  const cases = (["anon", "authenticated"] as const).flatMap((role) =>
+    Object.entries(statements).map(([verb, sql]) => [role, verb, sql] as const),
+  );
+
+  it.each(cases)("%s gets permission denied on %s", async (role, _verb, sql) => {
+    await expect(inRolledBackTx(sql, [], role)).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+// Story 2.8: text_item and has_material.
+
+const INSERT_TEXT = "insert into public.text_item (case_id, title, body, created_by) values ($1, $2, $3, $4) returning id";
+
+async function seedText(caseId: string, body = "Testo", title = "Brief") {
+  const { rows } = await pool.query<{ id: string }>(INSERT_TEXT, [caseId, title, body, DEV_ACTOR_ID]);
+  return rows[0].id;
+}
+
+const hasMaterialSql = async (caseId: string) => {
+  const { rows } = await pool.query<{ has: boolean }>("select public.has_material($1) as has", [caseId]);
+  return rows[0].has;
+};
+
+describe("text_item", () => {
+  it("stores the body as given and touches updated_at on update", async () => {
+    const created = await createCase();
+    const body = "  riga uno\n\n  riga due  \n";
+    const id = await seedText(created.id, body);
+    const { rows: before } = await pool.query("select body, updated_at, deleted_at from public.text_item where id = $1", [id]);
+    expect(before[0]).toMatchObject({ body, deleted_at: null });
+    await pool.query("update public.text_item set title = 'Nuovo' where id = $1", [id]);
+    const { rows: after } = await pool.query<{ updated_at: Date }>("select updated_at from public.text_item where id = $1", [id]);
+    expect(after[0].updated_at.getTime()).toBeGreaterThan((before[0].updated_at as Date).getTime());
+  });
+
+  it.each([
+    ["an empty body", "Brief", ""],
+    ["a whitespace-only body", "Brief", "  \n\t "],
+    ["a blank title", "   ", "Testo"],
+    ["a 201-char title", "t".repeat(201), "Testo"],
+    ["a 200,001-char body", "Brief", "b".repeat(200_001)],
+  ])("the table checks reject %s", async (_label, title, body) => {
+    const created = await createCase();
+    await expect(inRolledBackTx(INSERT_TEXT, [created.id, title, body, DEV_ACTOR_ID])).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("text items don't count toward the asset cap", async () => {
+    const created = await createCase();
+    await seedText(created.id);
+    await seedText(created.id);
+    await seedAssets(created.id, MAX_ASSETS_PER_CASE);
+    expect(await liveCount(created.id)).toBe(MAX_ASSETS_PER_CASE);
+    // A text item is still stored at the cap.
+    const result = await createSupabaseTextItemRepository().create({
+      caseId: created.id,
+      title: "At cap",
+      body: "Testo",
+      createdBy: DEV_ACTOR_ID,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("the adapter maps a whitespace-only body to TEXT_EMPTY and an unknown case to NOT_FOUND", async () => {
+    const created = await createCase();
+    const repo = createSupabaseTextItemRepository();
+    const empty = await repo.create({ caseId: created.id, title: "Brief", body: " \n ", createdBy: DEV_ACTOR_ID });
+    expect(empty.ok).toBe(false);
+    if (!empty.ok) expect(empty.error.code).toBe("TEXT_EMPTY");
+    const unknown = await repo.create({ caseId: UNKNOWN_ID, title: "Brief", body: "Testo", createdBy: DEV_ACTOR_ID });
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) expect(unknown.error.code).toBe("NOT_FOUND");
+  });
+
+  it("the adapter edits, removes, refuses a second removal, restores, then reports already live", async () => {
+    const created = await createCase();
+    const id = await seedText(created.id);
+    const repo = createSupabaseTextItemRepository();
+    const edited = await repo.update(created.id, id, { title: "Nuovo", body: "Testo nuovo" });
+    expect(edited.ok && edited.value).toMatchObject({ id, title: "Nuovo", body: "Testo nuovo" });
+    expect(await repo.softDelete(created.id, id)).toEqual({ ok: true, value: true });
+    expect(await repo.softDelete(created.id, id)).toEqual({ ok: true, value: false });
+    expect(await repo.getLive(created.id, id)).toEqual({ ok: true, value: null });
+    expect(await repo.update(created.id, id, { title: "x", body: "y" })).toEqual({ ok: true, value: null });
+    expect(await repo.restore(created.id, id)).toEqual({ ok: true, value: true });
+    expect(await repo.restore(created.id, id)).toEqual({ ok: true, value: false });
+    const unknown = await repo.restore(created.id, UNKNOWN_ID);
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) expect(unknown.error.code).toBe("NOT_FOUND");
+  });
+
+  it("does not touch a text item of another case", async () => {
+    const [a, b] = [await createCase(), await createCase()];
+    const id = await seedText(a.id);
+    const repo = createSupabaseTextItemRepository();
+    expect(await repo.softDelete(b.id, id)).toEqual({ ok: true, value: false });
+    expect(await repo.update(b.id, id, { title: "x", body: "y" })).toEqual({ ok: true, value: null });
+    const restored = await repo.restore(b.id, id);
+    expect(restored.ok).toBe(false);
+  });
+
+  it("deleting a text_item row is rejected", async () => {
+    const created = await createCase();
+    const id = await seedText(created.id);
+    await expect(inRolledBackTx("delete from public.text_item where id = $1", [id])).rejects.toThrow(/never deleted/);
+  });
+
+  it("truncating text_item is rejected", async () => {
+    await expect(inRolledBackTx("truncate public.text_item")).rejects.toThrow(/never deleted/);
+  });
+
+  it("enables RLS with no policies on text_item", async () => {
+    const { rows } = await pool.query<{ rls: boolean; policies: number }>(
+      `select c.relrowsecurity as rls,
+              (select count(*)::int from pg_catalog.pg_policy p where p.polrelid = c.oid) as policies
+       from pg_catalog.pg_class c where c.oid = 'public.text_item'::regclass`,
+    );
+    expect(rows).toEqual([{ rls: true, policies: 0 }]);
+  });
+});
+
+describe("has_material", () => {
+  it("none: no assets, no text items → false", async () => {
+    const created = await createCase();
+    expect(await hasMaterialSql(created.id)).toBe(false);
+    expect(await createSupabaseTextItemRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
+  });
+
+  it("an unknown case → false", async () => {
+    expect(await hasMaterialSql(UNKNOWN_ID)).toBe(false);
+  });
+
+  it("asset: one live asset → true", async () => {
+    const created = await createCase();
+    await seedAssets(created.id, 1);
+    expect(await hasMaterialSql(created.id)).toBe(true);
+    expect(await createSupabaseTextItemRepository().hasMaterial(created.id)).toEqual({ ok: true, value: true });
+  });
+
+  it("text: one live, non-empty text item → true", async () => {
+    const created = await createCase();
+    await seedText(created.id);
+    expect(await hasMaterialSql(created.id)).toBe(true);
+  });
+
+  it("removed only: assets and text items all soft-deleted → false", async () => {
+    const created = await createCase();
+    const [assetId] = await seedAssets(created.id, 1);
+    const textId = await seedText(created.id);
+    await pool.query("update public.asset set deleted_at = now() where id = $1", [assetId]);
+    await pool.query("update public.text_item set deleted_at = now() where id = $1", [textId]);
+    expect(await hasMaterialSql(created.id)).toBe(false);
+  });
+
+  it("a soft-deleted case with a live asset and a live text item → false", async () => {
+    const created = await createCase();
+    await seedAssets(created.id, 1);
+    await seedText(created.id);
+    expect(await hasMaterialSql(created.id)).toBe(true);
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
+    expect(await hasMaterialSql(created.id)).toBe(false);
+    expect(await createSupabaseTextItemRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
+  });
+
+  it("only counts the given case", async () => {
+    const [a, b] = [await createCase(), await createCase()];
+    await seedText(a.id);
+    await seedAssets(a.id, 1);
+    expect(await hasMaterialSql(b.id)).toBe(false);
+  });
+});
+
+describe("text use cases against the real DB and case-study module (no S3)", () => {
+  async function textDeps() {
+    const caseStudy = await loadCaseStudy();
+    return {
+      assets: createSupabaseAssetRepository(),
+      texts: createSupabaseTextItemRepository(),
+      storage: null,
+      cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
+      newId: randomUUID,
+    };
+  }
+
+  async function textEvents(caseId: string) {
+    const { rows } = await pool.query<{ type: string; actor_id: string; data: unknown }>(
+      "select type, actor_id, data from public.case_event where case_id = $1 and type like 'text_%' order by at, type",
+      [caseId],
+    );
+    return rows;
+  }
+
+  it("add → edit → remove → restore writes the row and one event each; status stays draft", async () => {
+    const { makeAddTextItem } = await import("@/modules/material/application/add-text-item");
+    const { makeEditTextItem } = await import("@/modules/material/application/edit-text-item");
+    const { makeRemoveTextItem } = await import("@/modules/material/application/remove-text-item");
+    const { makeRestoreTextItem } = await import("@/modules/material/application/restore-text-item");
+    const actor = await devActor();
+    const created = await createCase();
+    const deps = await textDeps();
+
+    const added = await makeAddTextItem(deps)(actor, { caseId: created.id, title: " Brief ", body: "Testo" });
+    if (!added.ok) throw new Error(`add failed: ${added.error.code}`);
+    const textItemId = added.value.id;
+    expect(added.value).toMatchObject({ title: "Brief", body: "Testo", createdBy: actor.id, deletedAt: null });
+    const edited = await makeEditTextItem(deps)(actor, { caseId: created.id, textItemId, title: "Nuovo", body: "Testo nuovo" });
+    expect(edited.ok).toBe(true);
+    expect(await makeRemoveTextItem(deps)(actor, { caseId: created.id, textItemId })).toEqual({ ok: true, value: undefined });
+    expect(await makeRestoreTextItem(deps)(actor, { caseId: created.id, textItemId })).toEqual({ ok: true, value: undefined });
+
+    const { rows } = await pool.query("select title, body, deleted_at from public.text_item where id = $1", [textItemId]);
+    expect(rows).toEqual([{ title: "Nuovo", body: "Testo nuovo", deleted_at: null }]);
+    expect(await textEvents(created.id)).toEqual([
+      { type: "text_added", actor_id: actor.id, data: { textItemId } },
+      { type: "text_edited", actor_id: actor.id, data: { textItemId } },
+      { type: "text_removed", actor_id: actor.id, data: { textItemId } },
+      { type: "text_restored", actor_id: actor.id, data: { textItemId } },
+    ]);
+    const { rows: status } = await pool.query("select status from public.case_study where id = $1", [created.id]);
+    expect(status).toEqual([{ status: "draft" }]);
+  });
+
+  it("a soft-deleted case → NOT_FOUND; nothing stored", async () => {
+    const { makeAddTextItem } = await import("@/modules/material/application/add-text-item");
+    const created = await createCase();
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
+    const result = await makeAddTextItem(await textDeps())(await devActor(), { caseId: created.id, title: "Brief", body: "Testo" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+    const { rows } = await pool.query("select count(*)::int as n from public.text_item where case_id = $1", [created.id]);
+    expect(rows).toEqual([{ n: 0 }]);
+  });
+});
+
+describe("text_item RLS lockout", () => {
+  const browser = () =>
+    createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+
+  it("the browser key is refused reading text_item", async () => {
+    const { data, error } = await browser().from("text_item").select("*");
+    expect(data).toBeNull();
+    expect(error?.code).toBe("42501");
+  });
+
+  it("the browser key is refused calling has_material", async () => {
+    const { data, error } = await browser().rpc("has_material", { p_case_id: UNKNOWN_ID });
+    expect(data).toBeNull();
+    expect(["42501", "PGRST202"]).toContain(error?.code);
+  });
+
+  const statements = {
+    select: "select * from public.text_item",
+    insert: `insert into public.text_item (case_id, title, body, created_by) values ('${UNKNOWN_ID}', 'x', 'y', '${DEV_ACTOR_ID}')`,
+    update: "update public.text_item set deleted_at = now()",
+    delete: "delete from public.text_item",
+    has_material: `select public.has_material('${UNKNOWN_ID}')`,
   };
   const cases = (["anon", "authenticated"] as const).flatMap((role) =>
     Object.entries(statements).map(([verb, sql]) => [role, verb, sql] as const),

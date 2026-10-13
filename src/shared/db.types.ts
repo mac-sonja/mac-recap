@@ -109,6 +109,32 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"text_item": {
+                  Row: {
+                    "body": string,"case_id": string,"created_at": string,"created_by": string,"deleted_at": string | null,"id": string,"title": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "body": string,"case_id": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"id"?: string,"title": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "body"?: string,"case_id"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"id"?: string,"title"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "text_item_case_id_fkey"
+      columns: ["case_id"]
+isOneToOne: false
+      referencedRelation: "case_study"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "text_item_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
@@ -157,6 +183,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"has_material":
+{ Args: { "p_case_id": string }; Returns: boolean
+                           },
 "restore_asset":
 { Args: { "p_asset_id": string,"p_case_id": string }; Returns: boolean
                            },

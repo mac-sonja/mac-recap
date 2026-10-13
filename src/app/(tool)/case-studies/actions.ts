@@ -4,7 +4,7 @@ import { authorize, getActor, httpStatusFor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import type { CaseStudy } from "@/modules/case-study";
 import * as material from "@/modules/material";
-import type { Asset, PresignedAssetUpload } from "@/modules/material";
+import type { Asset, PresignedAssetUpload, TextItem } from "@/modules/material";
 import type { AppError } from "@/shared/result";
 
 /**
@@ -86,5 +86,49 @@ export async function restoreAsset(input: unknown): Promise<ActionResult<void>> 
   const decision = authorize(actor.value, "upload");
   if (!decision.ok) return failure(decision.error);
   const restored = await material.restoreAsset(actor.value, input);
+  return restored.ok ? restored : failure(restored.error);
+}
+
+/**
+ * Adds pasted text as material: `{ caseId, title, body }`. Never counts toward
+ * the file cap. 400 `TEXT_EMPTY` for a whitespace-only body; 400 `INVALID_INPUT`
+ * naming `title` / `body`; 404 `NOT_FOUND`.
+ */
+export async function addTextItem(input: unknown): Promise<ActionResult<TextItem>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "upload");
+  if (!decision.ok) return failure(decision.error);
+  const added = await material.addTextItem(actor.value, input);
+  return added.ok ? added : failure(added.error);
+}
+
+/** Edits a live text item: `{ caseId, textItemId, title, body }`. 404 `NOT_FOUND` when unknown or removed. */
+export async function editTextItem(input: unknown): Promise<ActionResult<TextItem>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "upload");
+  if (!decision.ok) return failure(decision.error);
+  const edited = await material.editTextItem(actor.value, input);
+  return edited.ok ? edited : failure(edited.error);
+}
+
+/** Removes (soft-deletes) one text item: `{ caseId, textItemId }`. 404 `NOT_FOUND` when unknown or already removed. */
+export async function removeTextItem(input: unknown): Promise<ActionResult<void>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "upload");
+  if (!decision.ok) return failure(decision.error);
+  const removed = await material.removeTextItem(actor.value, input);
+  return removed.ok ? removed : failure(removed.error);
+}
+
+/** Restores one removed text item (Undo): `{ caseId, textItemId }`. 404 `NOT_FOUND` when unknown. */
+export async function restoreTextItem(input: unknown): Promise<ActionResult<void>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "upload");
+  if (!decision.ok) return failure(decision.error);
+  const restored = await material.restoreTextItem(actor.value, input);
   return restored.ok ? restored : failure(restored.error);
 }

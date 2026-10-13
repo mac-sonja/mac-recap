@@ -1,6 +1,7 @@
 import type { Actor } from "@/modules/access";
 import type { AssetRepository } from "@/modules/material/ports/asset-repository";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
+import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
 import { err, type Result } from "@/shared/result";
 
 /** The case-study calls material needs (wired to `@/modules/case-study` in index.ts). */
@@ -13,7 +14,8 @@ export interface CaseStudies {
 
 export interface MaterialDeps {
   assets: AssetRepository;
-  /** `null` when `S3_BUCKET` / `S3_REGION` are unset. */
+  texts: TextItemRepository;
+  /** `null` when `S3_BUCKET` / `S3_REGION` are unset (and on text paths, which never need it). */
   storage: ObjectStorage | null;
   cases: CaseStudies;
   /** Generates asset ids at presign. */

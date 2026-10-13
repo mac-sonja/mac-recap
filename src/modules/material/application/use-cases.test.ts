@@ -4,6 +4,7 @@ import type { Asset } from "@/modules/material/domain/asset";
 import { MAX_FILE_BYTES } from "@/modules/material/domain/files";
 import type { AssetRepository, NewAsset } from "@/modules/material/ports/asset-repository";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
+import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
 import { err, ok } from "@/shared/result";
 import { makeConfirmUpload } from "./confirm-upload";
 import type { CaseStudies, MaterialDeps } from "./deps";
@@ -95,9 +96,16 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
     }),
   } satisfies CaseStudies;
 
-  const deps: MaterialDeps = { assets: repo, storage, cases, newId: () => NEW_ASSET_ID };
+  const deps: MaterialDeps = { assets: repo, texts: unusedTexts, storage, cases, newId: () => NEW_ASSET_ID };
   return { deps, repo, storage, cases, assets, objects, events, seed };
 }
+
+/** Asset use cases never touch text items. */
+const unusedTexts = new Proxy({} as TextItemRepository, {
+  get: (_target, name) => () => {
+    throw new Error(`asset use case called texts.${String(name)}`);
+  },
+});
 
 const codeOf = (result: { ok: boolean; error?: { code: string } }) => (result.ok ? "OK" : result.error?.code);
 

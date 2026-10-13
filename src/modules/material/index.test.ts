@@ -13,6 +13,14 @@ const m = vi.hoisted(() => ({
     softDelete: vi.fn(),
     restore: vi.fn(),
   },
+  texts: {
+    create: vi.fn(),
+    getLive: vi.fn(),
+    update: vi.fn(),
+    softDelete: vi.fn(),
+    restore: vi.fn(),
+    hasMaterial: vi.fn(),
+  },
   storage: { presignUpload: vi.fn(), head: vi.fn() },
 }));
 
@@ -21,6 +29,9 @@ vi.mock("@/shared/env", () => ({ getStorageConfig: m.getStorageConfig }));
 vi.mock("@/modules/material/adapters/s3/object-storage", () => ({ createS3ObjectStorage: m.createS3ObjectStorage }));
 vi.mock("@/modules/material/adapters/supabase/asset-repository", () => ({
   createSupabaseAssetRepository: () => m.repo,
+}));
+vi.mock("@/modules/material/adapters/supabase/text-item-repository", () => ({
+  createSupabaseTextItemRepository: () => m.texts,
 }));
 
 const material = await import("@/modules/material");
@@ -34,6 +45,18 @@ const actor: Actor = {
 const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const ASSET_ID = "bbbbbbbb-0000-4000-8000-000000000001";
 const ref = { caseId: CASE_ID, assetId: ASSET_ID };
+const TEXT_ID = "eeeeeeee-0000-4000-8000-000000000001";
+const textRef = { caseId: CASE_ID, textItemId: TEXT_ID };
+const textItem = {
+  id: TEXT_ID,
+  caseId: CASE_ID,
+  title: "Brief",
+  body: "Testo",
+  createdBy: "00000000-0000-4000-8000-000000000002",
+  createdAt: "2026-10-13T10:00:00Z",
+  updatedAt: "2026-10-13T10:00:00Z",
+  deletedAt: null,
+};
 
 let bucketSeq = 0;
 /** A fresh bucket name per call, so the module-level memo never hides a factory call. */
@@ -54,6 +77,12 @@ beforeEach(() => {
   m.repo.restore.mockResolvedValue(ok(true));
   m.storage.presignUpload.mockResolvedValue(ok({ url: "https://s3.test/", fields: { key: "k" } }));
   m.storage.head.mockResolvedValue(ok({ sizeBytes: 10, contentType: "image/png" }));
+  m.texts.create.mockImplementation(async (t) => ok({ ...textItem, ...t }));
+  m.texts.getLive.mockResolvedValue(ok(textItem));
+  m.texts.update.mockImplementation(async (_c, _id, content) => ok({ ...textItem, ...content }));
+  m.texts.softDelete.mockResolvedValue(ok(true));
+  m.texts.restore.mockResolvedValue(ok(true));
+  m.texts.hasMaterial.mockResolvedValue(ok(true));
 });
 
 describe("material index wiring", () => {
@@ -115,5 +144,49 @@ describe("material index wiring", () => {
     await material.removeAsset(actor, ref);
     expect(m.createS3ObjectStorage).toHaveBeenCalledTimes(2);
     expect(m.createS3ObjectStorage.mock.calls[0][0]).toEqual(config);
+  });
+
+  it("addTextItem creates the item and records text_added through case-study", async () => {
+    const result = await material.addTextItem(actor, { caseId: CASE_ID, title: "Brief", body: "Testo" });
+    expect(result).toEqual(ok(textItem));
+    expect(m.texts.create).toHaveBeenCalledWith({ caseId: CASE_ID, title: "Brief", body: "Testo", createdBy: actor.id });
+    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "text_added", data: { textItemId: TEXT_ID } });
+  });
+
+  it("editTextItem updates the item and records text_edited", async () => {
+    const result = await material.editTextItem(actor, { ...textRef, title: "Nuovo", body: "B" });
+    expect(result.ok && result.value.title).toBe("Nuovo");
+    expect(m.texts.update).toHaveBeenCalledWith(CASE_ID, TEXT_ID, { title: "Nuovo", body: "B" });
+    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "text_edited", data: { textItemId: TEXT_ID } });
+  });
+
+  it("removeTextItem soft-deletes and records text_removed", async () => {
+    expect(await material.removeTextItem(actor, textRef)).toEqual(ok(undefined));
+    expect(m.texts.softDelete).toHaveBeenCalledWith(CASE_ID, TEXT_ID);
+    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "text_removed", data: { textItemId: TEXT_ID } });
+  });
+
+  it("restoreTextItem restores and records text_restored", async () => {
+    expect(await material.restoreTextItem(actor, textRef)).toEqual(ok(undefined));
+    expect(m.texts.restore).toHaveBeenCalledWith(CASE_ID, TEXT_ID);
+    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "text_restored", data: { textItemId: TEXT_ID } });
+  });
+
+  it("hasMaterial asks the text item repository's has_material", async () => {
+    expect(await material.hasMaterial(CASE_ID)).toEqual(ok(true));
+    expect(m.texts.hasMaterial).toHaveBeenCalledWith(CASE_ID);
+  });
+
+  it.each([
+    ["addTextItem", () => material.addTextItem(actor, { caseId: CASE_ID, title: "Brief", body: "Testo" })],
+    ["editTextItem", () => material.editTextItem(actor, { ...textRef, title: "Brief", body: "Testo" })],
+    ["removeTextItem", () => material.removeTextItem(actor, textRef)],
+    ["restoreTextItem", () => material.restoreTextItem(actor, textRef)],
+    ["hasMaterial", () => material.hasMaterial(CASE_ID)],
+  ])("%s works without S3 and never resolves storage", async (_name, call) => {
+    m.getStorageConfig.mockReturnValue(null);
+    expect((await call()).ok).toBe(true);
+    expect(m.getStorageConfig).not.toHaveBeenCalled();
+    expect(m.createS3ObjectStorage).not.toHaveBeenCalled();
   });
 });

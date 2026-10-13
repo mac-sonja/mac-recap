@@ -43,6 +43,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   UPLOAD_REJECTED: 400,
   ASSET_ALREADY_CONFIRMED: 409,
   STORAGE_NOT_CONFIGURED: 503,
+  // Pasted text (Story 2.8).
+  TEXT_EMPTY: 400,
 };
 
 /** HTTP status for an `AppError` code; unknown codes are 500. */
