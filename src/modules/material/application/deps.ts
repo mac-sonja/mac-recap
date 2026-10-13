@@ -1,6 +1,7 @@
 import type { Actor } from "@/modules/access";
 import type { AssetRepository } from "@/modules/material/ports/asset-repository";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
+import type { TaxonomyRepository } from "@/modules/material/ports/taxonomy-repository";
 import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
 import { err, type Result } from "@/shared/result";
 
@@ -9,12 +10,17 @@ export interface CaseStudies {
   /** `NOT_FOUND` for an unknown or soft-deleted case. */
   get(id: unknown): Promise<Result<unknown>>;
   /** Appends one `case_event` with the actor. */
-  recordEvent(actor: Actor, input: { caseId: string; type: string; data: Record<string, string> }): Promise<Result<unknown>>;
+  recordEvent(
+    actor: Actor,
+    input: { caseId: string; type: string; data: Record<string, string | string[]> },
+  ): Promise<Result<unknown>>;
 }
 
 export interface MaterialDeps {
   assets: AssetRepository;
   texts: TextItemRepository;
+  /** Taxonomy terms and their links to deliverables (never needs storage). */
+  taxonomy: TaxonomyRepository;
   /** `null` when `S3_BUCKET` / `S3_REGION` are unset (and on text paths, which never need it). */
   storage: ObjectStorage | null;
   cases: CaseStudies;

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { hasText, MAX_TEXT_BODY_CHARS, type TextItem } from "@/modules/material/domain/text-item";
 import type { AssetRepository } from "@/modules/material/ports/asset-repository";
+import type { TaxonomyRepository } from "@/modules/material/ports/taxonomy-repository";
 import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
 import { err, ok } from "@/shared/result";
 import { makeAddTextItem } from "./add-text-item";
@@ -38,7 +39,7 @@ function world({ liveAssets = 0, removedAssets = 0 }: { liveAssets?: number; rem
     ...Array.from({ length: liveAssets }, () => ({ caseId: CASE_ID, deletedAt: null })),
     ...Array.from({ length: removedAssets }, () => ({ caseId: CASE_ID, deletedAt: "2026-10-13T11:00:00Z" })),
   ];
-  const events: { caseId: string; type: string; data: Record<string, string>; actorId: string }[] = [];
+  const events: { caseId: string; type: string; data: Record<string, string | string[]>; actorId: string }[] = [];
   const status = { [CASE_ID]: "draft" };
   let n = 0;
   let clock = 0;
@@ -118,9 +119,16 @@ function world({ liveAssets = 0, removedAssets = 0 }: { liveAssets?: number; rem
   } satisfies CaseStudies;
 
   // Text paths run without storage.
-  const deps: MaterialDeps = { assets: assetRepo, texts: repo, storage: null, cases, newId: () => "unused" };
+  const deps: MaterialDeps = { assets: assetRepo, texts: repo, taxonomy: unusedTaxonomy, storage: null, cases, newId: () => "unused" };
   return { deps, repo, assetRepo, cases, texts, events, status, seed };
 }
+
+/** Text use cases never touch the taxonomy. */
+const unusedTaxonomy = new Proxy({} as TaxonomyRepository, {
+  get: (_target, name) => () => {
+    throw new Error(`text use case called taxonomy.${String(name)}`);
+  },
+});
 
 const codeOf = (result: { ok: boolean; error?: { code: string } }) => (result.ok ? "OK" : result.error?.code);
 const fieldsOf = (result: { ok: boolean; error?: { details?: unknown } }) =>

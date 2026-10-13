@@ -8,6 +8,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
+import { createSupabaseTaxonomyRepository } from "@/modules/material/adapters/supabase/taxonomy-repository";
 import { createSupabaseTextItemRepository } from "@/modules/material/adapters/supabase/text-item-repository";
 import { ALLOWED_CONTENT_TYPES, ASSET_KINDS, MAX_ASSETS_PER_CASE } from "@/modules/material/domain/files";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
@@ -311,6 +312,7 @@ describe("use cases against the real DB and case-study module (S3 stubbed)", () 
     return {
       assets: createSupabaseAssetRepository(),
       texts: createSupabaseTextItemRepository(),
+      taxonomy: createSupabaseTaxonomyRepository(),
       storage,
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
       newId: randomUUID,
@@ -627,6 +629,7 @@ describe("text use cases against the real DB and case-study module (no S3)", () 
     return {
       assets: createSupabaseAssetRepository(),
       texts: createSupabaseTextItemRepository(),
+      taxonomy: createSupabaseTaxonomyRepository(),
       storage: null,
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
       newId: randomUUID,
@@ -713,6 +716,336 @@ describe("text_item RLS lockout", () => {
   );
 
   it.each(cases)("%s gets permission denied on %s", async (role, _verb, sql) => {
+    await expect(inRolledBackTx(sql, [], role)).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+// Story 2.9: taxonomy_term, material_term, set_material_terms, case_material_terms.
+// Terms are seeded here with the `postgres` pool, as a migration would, under keys
+// unique to this run, and removed again afterwards (with the delete guard
+// disabled inside that one transaction, as only the table owner can).
+
+describe("taxonomy", () => {
+  const suffix = randomUUID().replace(/-/g, "").slice(0, 12);
+  const key = (name: string) => `zt_${suffix}_${name}`;
+  const TAG_A = key("tag_a");
+  const TAG_B = key("tag_b");
+  const PROP = key("prop");
+  const FLAG = key("flag");
+  const seededIds: string[] = [];
+
+  const serviceRole = () =>
+    createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+  const browser = () =>
+    createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+
+  beforeAll(async () => {
+    const { rows } = await pool.query<{ id: string }>(
+      `insert into public.taxonomy_term (kind, key, label) values
+         ('tag', $1, 'Zt ${suffix} Beta'), ('tag', $2, 'Zt ${suffix} Alfa'),
+         ('property', $3, 'Zt ${suffix} Proprietà'), ('flag', $4, 'Zt ${suffix} Riservato')
+       returning id`,
+      [TAG_A, TAG_B, PROP, FLAG],
+    );
+    seededIds.push(...rows.map((r) => r.id));
+  });
+
+  afterAll(async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("delete from public.material_term where term_id = any($1::uuid[])", [seededIds]);
+      await client.query("alter table public.taxonomy_term disable trigger taxonomy_term_reject_delete");
+      await client.query("delete from public.taxonomy_term where id = any($1::uuid[])", [seededIds]);
+      await client.query("alter table public.taxonomy_term enable trigger taxonomy_term_reject_delete");
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+  async function taxonomyDeps() {
+    const caseStudy = await loadCaseStudy();
+    return {
+      assets: createSupabaseAssetRepository(),
+      texts: createSupabaseTextItemRepository(),
+      taxonomy: createSupabaseTaxonomyRepository(),
+      storage: null,
+      cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
+      newId: randomUUID,
+    };
+  }
+
+  async function setTerms(input: Record<string, unknown>) {
+    const { makeSetDeliverableTerms } = await import("@/modules/material/application/set-deliverable-terms");
+    return makeSetDeliverableTerms(await taxonomyDeps())(await devActor(), input);
+  }
+
+  async function caseTerms(caseId: string) {
+    const { makeGetCaseTerms } = await import("@/modules/material/application/get-case-terms");
+    const result = await makeGetCaseTerms(await taxonomyDeps())({ caseId });
+    if (!result.ok) throw new Error(`getCaseTerms failed: ${result.error.code}`);
+    return result.value;
+  }
+
+  async function linkedKeys(refId: string) {
+    const { rows } = await pool.query<{ key: string }>(
+      `select t.key from public.material_term mt join public.taxonomy_term t on t.id = mt.term_id
+       where mt.ref_id = $1 order by t.key collate "C"`,
+      [refId],
+    );
+    return rows.map((r) => r.key);
+  }
+
+  async function termEvents(caseId: string) {
+    const { rows } = await pool.query<{ type: string; actor_id: string; data: unknown }>(
+      "select type, actor_id, data from public.case_event where case_id = $1 and type = 'terms_set' order by at",
+      [caseId],
+    );
+    return rows;
+  }
+
+  const codeOf = (result: { ok: boolean; error?: { code: string } }) => (result.ok ? "OK" : result.error?.code);
+
+  it("listTerms groups the seeded terms by kind, ordered by label", async () => {
+    const { makeListTerms } = await import("@/modules/material/application/list-terms");
+    const result = await makeListTerms(await taxonomyDeps())();
+    if (!result.ok) throw new Error(result.error.code);
+    const ours = (terms: { key: string }[]) => terms.filter((t) => t.key.startsWith(`zt_${suffix}_`)).map((t) => t.key);
+    expect(ours(result.value.tag)).toEqual([TAG_B, TAG_A]);
+    expect(ours(result.value.property)).toEqual([PROP]);
+    expect(ours(result.value.flag)).toEqual([FLAG]);
+  });
+
+  it("set → replace → clear on an asset; other kinds untouched; one terms_set each; status unchanged", async () => {
+    const actor = await devActor();
+    const created = await createCase();
+    const [assetId] = await seedAssets(created.id, 1);
+    const ref = { caseId: created.id, refKind: "asset", refId: assetId };
+
+    expect(codeOf(await setTerms({ ...ref, kind: "tag", keys: [TAG_A, TAG_B] }))).toBe("OK");
+    expect(await linkedKeys(assetId)).toEqual([TAG_A, TAG_B].sort());
+    expect(codeOf(await setTerms({ ...ref, kind: "property", keys: [PROP] }))).toBe("OK");
+    expect(codeOf(await setTerms({ ...ref, kind: "tag", keys: [TAG_B] }))).toBe("OK");
+    expect(await linkedKeys(assetId)).toEqual([PROP, TAG_B].sort());
+    expect(codeOf(await setTerms({ ...ref, kind: "tag", keys: [] }))).toBe("OK");
+    expect(await linkedKeys(assetId)).toEqual([PROP]);
+
+    expect(await termEvents(created.id)).toEqual([
+      { type: "terms_set", actor_id: actor.id, data: { refKind: "asset", refId: assetId, kind: "tag", keys: [TAG_A, TAG_B] } },
+      { type: "terms_set", actor_id: actor.id, data: { refKind: "asset", refId: assetId, kind: "property", keys: [PROP] } },
+      { type: "terms_set", actor_id: actor.id, data: { refKind: "asset", refId: assetId, kind: "tag", keys: [TAG_B] } },
+      { type: "terms_set", actor_id: actor.id, data: { refKind: "asset", refId: assetId, kind: "tag", keys: [] } },
+    ]);
+    const { rows: status } = await pool.query("select status from public.case_study where id = $1", [created.id]);
+    expect(status).toEqual([{ status: "draft" }]);
+  });
+
+  it("set_material_terms returns the previous keys of that kind", async () => {
+    const created = await createCase();
+    const [assetId] = await seedAssets(created.id, 1);
+    const repo = createSupabaseTaxonomyRepository();
+    const target = { caseId: created.id, refKind: "asset" as const, refId: assetId, kind: "tag" as const };
+    expect(await repo.setTerms({ ...target, keys: [TAG_A, TAG_B, TAG_A] })).toEqual({ ok: true, value: [] });
+    expect(await repo.setTerms({ ...target, keys: [TAG_B] })).toEqual({ ok: true, value: [TAG_A, TAG_B].sort() });
+    expect(await repo.setTerms({ ...target, kind: "flag", keys: [] })).toEqual({ ok: true, value: [] });
+  });
+
+  it("a text item works like an asset", async () => {
+    const created = await createCase();
+    const textId = await seedText(created.id);
+    expect(codeOf(await setTerms({ caseId: created.id, refKind: "text", refId: textId, kind: "flag", keys: [FLAG] }))).toBe("OK");
+    expect(await linkedKeys(textId)).toEqual([FLAG]);
+  });
+
+  it.each([
+    ["an unknown key", () => [TAG_A, key("missing")], key("missing")],
+    ["a property key sent as tag", () => [PROP], PROP],
+  ])("%s → UNKNOWN_TERM naming the key; nothing changes", async (_label, keys, named) => {
+    const created = await createCase();
+    const [assetId] = await seedAssets(created.id, 1);
+    const ref = { caseId: created.id, refKind: "asset", refId: assetId };
+    await setTerms({ ...ref, kind: "tag", keys: [TAG_B] });
+    const result = await setTerms({ ...ref, kind: "tag", keys: keys() });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatchObject({ code: "UNKNOWN_TERM", details: { key: named } });
+    expect(await linkedKeys(assetId)).toEqual([TAG_B]);
+    expect(await termEvents(created.id)).toHaveLength(1);
+  });
+
+  it("removed deliverables and another case's deliverables → NOT_FOUND; nothing changes", async () => {
+    const [a, b] = [await createCase(), await createCase()];
+    const [assetId] = await seedAssets(a.id, 1);
+    const textId = await seedText(a.id);
+    await pool.query("update public.asset set deleted_at = now() where id = $1", [assetId]);
+    await pool.query("update public.text_item set deleted_at = now() where id = $1", [textId]);
+    const [otherAsset] = await seedAssets(b.id, 1);
+
+    for (const input of [
+      { caseId: a.id, refKind: "asset", refId: assetId },
+      { caseId: a.id, refKind: "text", refId: textId },
+      { caseId: a.id, refKind: "asset", refId: otherAsset },
+      { caseId: a.id, refKind: "text", refId: otherAsset },
+    ]) {
+      expect(codeOf(await setTerms({ ...input, kind: "tag", keys: [TAG_A] }))).toBe("NOT_FOUND");
+    }
+    expect(await linkedKeys(assetId)).toEqual([]);
+    expect(await linkedKeys(textId)).toEqual([]);
+    expect(await linkedKeys(otherAsset)).toEqual([]);
+    expect(await termEvents(a.id)).toEqual([]);
+  });
+
+  it("set_material_terms raises NOT_FOUND for a soft-deleted case", async () => {
+    const created = await createCase();
+    const [assetId] = await seedAssets(created.id, 1);
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
+    await expect(
+      pool.query("select public.set_material_terms($1, 'asset', $2, 'tag', $3::text[])", [created.id, assetId, [TAG_A]]),
+    ).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+  });
+
+  it("read: tagged and untagged deliverables; a removed one keeps its links and comes back on restore", async () => {
+    const created = await createCase();
+    const [tagged, untagged] = await seedAssets(created.id, 2);
+    const textId = await seedText(created.id);
+    await setTerms({ caseId: created.id, refKind: "asset", refId: tagged, kind: "tag", keys: [TAG_A, TAG_B] });
+    await setTerms({ caseId: created.id, refKind: "asset", refId: tagged, kind: "flag", keys: [FLAG] });
+    await setTerms({ caseId: created.id, refKind: "text", refId: textId, kind: "property", keys: [PROP] });
+
+    const expected = [
+      { refKind: "asset", refId: tagged, tag: [TAG_B, TAG_A], property: [], flag: [FLAG] },
+      { refKind: "asset", refId: untagged, tag: [], property: [], flag: [] },
+      { refKind: "text", refId: textId, tag: [], property: [PROP], flag: [] },
+    ];
+    expect(await caseTerms(created.id)).toEqual(expected);
+
+    const repo = createSupabaseAssetRepository();
+    await repo.softDelete(created.id, tagged);
+    expect((await caseTerms(created.id)).map((d) => d.refId)).toEqual([untagged, textId]);
+    expect(await linkedKeys(tagged)).toEqual([FLAG, TAG_A, TAG_B].sort());
+    await repo.restore(created.id, tagged);
+    expect(await caseTerms(created.id)).toEqual(expected);
+  });
+
+  it("an unknown case reads as NOT_FOUND; case_material_terms gives []", async () => {
+    const { makeGetCaseTerms } = await import("@/modules/material/application/get-case-terms");
+    const result = await makeGetCaseTerms(await taxonomyDeps())({ caseId: UNKNOWN_ID });
+    expect(codeOf(result)).toBe("NOT_FOUND");
+    const { rows } = await pool.query("select public.case_material_terms($1) as terms", [UNKNOWN_ID]);
+    expect(rows).toEqual([{ terms: [] }]);
+  });
+
+  it("a label renamed by a migration leaves key-based set and read working", async () => {
+    const created = await createCase();
+    const [assetId] = await seedAssets(created.id, 1);
+    await setTerms({ caseId: created.id, refKind: "asset", refId: assetId, kind: "tag", keys: [TAG_A] });
+    await pool.query("update public.taxonomy_term set label = $2 where key = $1", [TAG_A, `Zt ${suffix} Rinominato`]);
+    expect((await caseTerms(created.id))[0].tag).toEqual([TAG_A]);
+    expect(codeOf(await setTerms({ caseId: created.id, refKind: "asset", refId: assetId, kind: "tag", keys: [TAG_A, TAG_B] }))).toBe(
+      "OK",
+    );
+    expect(await linkedKeys(assetId)).toEqual([TAG_A, TAG_B].sort());
+  });
+
+  it("the service role can read terms but never write them", async () => {
+    const db = serviceRole();
+    const read = await db.from("taxonomy_term").select("key").eq("key", TAG_A);
+    expect(read.error).toBeNull();
+    expect(read.data).toEqual([{ key: TAG_A }]);
+
+    const insert = await db.from("taxonomy_term").insert({ kind: "tag", key: key("injected"), label: "X" });
+    expect(insert.error?.code).toBe("42501");
+    const update = await db.from("taxonomy_term").update({ label: "X" }).eq("key", TAG_A);
+    expect(update.error?.code).toBe("42501");
+    const remove = await db.from("taxonomy_term").delete().eq("key", TAG_A);
+    expect(remove.error?.code).toBe("42501");
+
+    const { rows } = await pool.query("select count(*)::int as n from public.taxonomy_term where key in ($1, $2)", [
+      TAG_A,
+      key("injected"),
+    ]);
+    expect(rows).toEqual([{ n: 1 }]);
+  });
+
+  it("select is the service role's only privilege on taxonomy_term", async () => {
+    const { rows } = await pool.query<{ privilege: string }>(
+      `select privilege_type as privilege from information_schema.role_table_grants
+       where table_schema = 'public' and table_name = 'taxonomy_term' and grantee = 'service_role'
+       order by privilege_type`,
+    );
+    expect(rows).toEqual([{ privilege: "SELECT" }]);
+    const { rows: checks } = await pool.query(
+      `select ${["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+        .map((p) => `has_table_privilege('service_role', 'public.taxonomy_term', '${p}') as "${p}"`)
+        .join(", ")}`,
+    );
+    expect(checks).toEqual([
+      { SELECT: true, INSERT: false, UPDATE: false, DELETE: false, TRUNCATE: false, REFERENCES: false, TRIGGER: false },
+    ]);
+  });
+
+  it("deleting or truncating taxonomy_term is rejected even for the owner", async () => {
+    await expect(inRolledBackTx("delete from public.taxonomy_term where key = $1", [TAG_A])).rejects.toThrow(/never deleted/);
+    await expect(inRolledBackTx("truncate public.taxonomy_term cascade")).rejects.toThrow(/never deleted/);
+  });
+
+  it.each([
+    ["an upper-case key", "insert into public.taxonomy_term (kind, key, label) values ('tag', 'Bad', 'X')"],
+    ["a key with a space", "insert into public.taxonomy_term (kind, key, label) values ('tag', 'a b', 'X')"],
+    ["an unknown kind", "insert into public.taxonomy_term (kind, key, label) values ('category', 'zt_ok', 'X')"],
+    ["a blank label", "insert into public.taxonomy_term (kind, key, label) values ('tag', 'zt_ok', '  ')"],
+    ["an unknown ref kind", `insert into public.material_term (ref_kind, ref_id, term_id) select 'form_field', '${UNKNOWN_ID}', id from public.taxonomy_term limit 1`],
+  ])("the table checks reject %s", async (_label, sql) => {
+    await expect(inRolledBackTx(sql)).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it.each(["taxonomy_term", "material_term"])("enables RLS with no policies on %s", async (table) => {
+    const { rows } = await pool.query<{ rls: boolean; policies: number }>(
+      `select c.relrowsecurity as rls,
+              (select count(*)::int from pg_catalog.pg_policy p where p.polrelid = c.oid) as policies
+       from pg_catalog.pg_class c where c.oid = $1::regclass`,
+      [`public.${table}`],
+    );
+    expect(rows).toEqual([{ rls: true, policies: 0 }]);
+  });
+
+  it.each(["taxonomy_term", "material_term"])("the browser key is refused reading %s", async (table) => {
+    const { data, error } = await browser().from(table as "taxonomy_term").select("*");
+    expect(data).toBeNull();
+    expect(error?.code).toBe("42501");
+  });
+
+  it.each([
+    ["set_material_terms", { p_case_id: UNKNOWN_ID, p_ref_kind: "asset", p_ref_id: UNKNOWN_ID, p_kind: "tag", p_keys: [] }],
+    ["case_material_terms", { p_case_id: UNKNOWN_ID }],
+  ])("the browser key is refused calling %s", async (fn, args) => {
+    const { data, error } = await browser().rpc(fn as "case_material_terms", args as never);
+    expect(data).toBeNull();
+    expect(["42501", "PGRST202"]).toContain(error?.code);
+  });
+
+  const statements = {
+    "select taxonomy_term": "select * from public.taxonomy_term",
+    "insert taxonomy_term": "insert into public.taxonomy_term (kind, key, label) values ('tag', 'zt_x', 'X')",
+    "update taxonomy_term": "update public.taxonomy_term set label = 'X'",
+    "select material_term": "select * from public.material_term",
+    "insert material_term": `insert into public.material_term (ref_kind, ref_id, term_id) values ('asset', '${UNKNOWN_ID}', '${UNKNOWN_ID}')`,
+    "delete material_term": "delete from public.material_term",
+    set_material_terms: `select public.set_material_terms('${UNKNOWN_ID}', 'asset', '${UNKNOWN_ID}', 'tag', '{}')`,
+    case_material_terms: `select public.case_material_terms('${UNKNOWN_ID}')`,
+  };
+  const roleCases = (["anon", "authenticated"] as const).flatMap((role) =>
+    Object.entries(statements).map(([verb, sql]) => [role, verb, sql] as const),
+  );
+
+  it.each(roleCases)("%s gets permission denied on %s", async (role, _verb, sql) => {
     await expect(inRolledBackTx(sql, [], role)).rejects.toMatchObject({ code: "42501" });
   });
 });

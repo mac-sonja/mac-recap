@@ -45,6 +45,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   STORAGE_NOT_CONFIGURED: 503,
   // Pasted text (Story 2.8).
   TEXT_EMPTY: 400,
+  // Taxonomy (Story 2.9).
+  UNKNOWN_TERM: 400,
 };
 
 /** HTTP status for an `AppError` code; unknown codes are 500. */
