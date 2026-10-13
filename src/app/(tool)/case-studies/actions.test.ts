@@ -3,13 +3,28 @@ import type { Actor } from "@/modules/access";
 import type { CaseStudy } from "@/modules/case-study";
 import { err, ok } from "@/shared/result";
 
-const { getActor, create, presignUpload, confirmUpload, removeAssetUseCase, restoreAssetUseCase } = vi.hoisted(() => ({
+const {
+  getActor,
+  create,
+  presignUpload,
+  confirmUpload,
+  removeAssetUseCase,
+  restoreAssetUseCase,
+  addTextUseCase,
+  editTextUseCase,
+  removeTextUseCase,
+  restoreTextUseCase,
+} = vi.hoisted(() => ({
   getActor: vi.fn(),
   create: vi.fn(),
   presignUpload: vi.fn(),
   confirmUpload: vi.fn(),
   removeAssetUseCase: vi.fn(),
   restoreAssetUseCase: vi.fn(),
+  addTextUseCase: vi.fn(),
+  editTextUseCase: vi.fn(),
+  removeTextUseCase: vi.fn(),
+  restoreTextUseCase: vi.fn(),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -23,9 +38,23 @@ vi.mock("@/modules/material", () => ({
   confirmUpload,
   removeAsset: removeAssetUseCase,
   restoreAsset: restoreAssetUseCase,
+  addTextItem: addTextUseCase,
+  editTextItem: editTextUseCase,
+  removeTextItem: removeTextUseCase,
+  restoreTextItem: restoreTextUseCase,
 }));
 
-const { createCaseStudy, presignAssetUpload, confirmAssetUpload, removeAsset, restoreAsset } = await import("./actions");
+const {
+  createCaseStudy,
+  presignAssetUpload,
+  confirmAssetUpload,
+  removeAsset,
+  restoreAsset,
+  addTextItem,
+  editTextItem,
+  removeTextItem,
+  restoreTextItem,
+} = await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({
   id: "00000000-0000-4000-8000-000000000002",
@@ -54,7 +83,19 @@ const created: CaseStudy = {
 const input = { name: "Rebrand", client: "Acme", year: 2026 };
 
 beforeEach(() => {
-  for (const fn of [getActor, create, presignUpload, confirmUpload, removeAssetUseCase, restoreAssetUseCase]) fn.mockReset();
+  for (const fn of [
+    getActor,
+    create,
+    presignUpload,
+    confirmUpload,
+    removeAssetUseCase,
+    restoreAssetUseCase,
+    addTextUseCase,
+    editTextUseCase,
+    removeTextUseCase,
+    restoreTextUseCase,
+  ])
+    fn.mockReset();
 });
 
 describe("createCaseStudy", () => {
@@ -177,6 +218,62 @@ describe("material actions", () => {
       ok: false,
       status: 400,
       error: { code: "INVALID_INPUT", message: "Invalid or missing: fileName.", fields: ["fileName"] },
+    });
+  });
+});
+
+describe("text item actions", () => {
+  const ref = { caseId: "11111111-1111-4111-8111-111111111111", textItemId: "33333333-3333-4333-8333-333333333333" };
+  const content = { title: "Brief", body: "Testo" };
+  const item = { id: ref.textItemId, caseId: ref.caseId, ...content };
+  const actions = [
+    ["addTextItem", addTextItem, addTextUseCase, { caseId: ref.caseId, ...content }, item],
+    ["editTextItem", editTextItem, editTextUseCase, { ...ref, ...content }, item],
+    ["removeTextItem", removeTextItem, removeTextUseCase, ref, undefined],
+    ["restoreTextItem", restoreTextItem, restoreTextUseCase, ref, undefined],
+  ] as const;
+
+  it.each(actions)("%s passes its input unchanged to the use case for an owner/designer", async (_name, action, useCase, input, value) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    useCase.mockResolvedValue(ok(value));
+    expect(await action(input)).toEqual({ ok: true, value });
+    expect(useCase).toHaveBeenCalledExactlyOnceWith(actor("owner_designer"), input);
+    expect(useCase.mock.calls[0][1]).toBe(input);
+  });
+
+  it.each(
+    actions.flatMap((a) => (["account_sales_social", "admin", "system"] as const).map((role) => [a[0], role, a[1], a[2], a[3]] as const)),
+  )("%s returns 403 FORBIDDEN for %s and never calls the use case", async (_name, role, action, useCase, input) => {
+    getActor.mockResolvedValue(ok(actor(role)));
+    expect(await action(input)).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
+    expect(useCase).not.toHaveBeenCalled();
+  });
+
+  it.each(actions)("%s returns 401 when no actor resolves", async (_name, action, useCase, input) => {
+    getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "No profile." }));
+    expect(await action(input)).toMatchObject({ ok: false, status: 401 });
+    expect(useCase).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["TEXT_EMPTY", 400],
+    ["NOT_FOUND", 404],
+    ["TEXT_WRITE_FAILED", 500],
+  ] as const)("maps %s to %i and keeps details server-side", async (code, status) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    addTextUseCase.mockResolvedValue(err({ code, message: "m", details: { secret: 1 } }));
+    expect(await addTextItem({ caseId: ref.caseId, ...content })).toEqual({ ok: false, status, error: { code, message: "m" } });
+  });
+
+  it("maps INVALID_INPUT to 400 with the failing field names", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    editTextUseCase.mockResolvedValue(
+      err({ code: "INVALID_INPUT", message: "Invalid or missing: title.", details: { fields: ["title"], issues: [] } }),
+    );
+    expect(await editTextItem({ ...ref, title: " ", body: "x" })).toEqual({
+      ok: false,
+      status: 400,
+      error: { code: "INVALID_INPUT", message: "Invalid or missing: title.", fields: ["title"] },
     });
   });
 });

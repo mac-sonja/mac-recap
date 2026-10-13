@@ -99,3 +99,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-7-upload-project-files-backend.md`
   summary: Story 2.7 UI follow-ups — declare a normalized content type per file (browsers report `""`, `text/x-markdown` or `text/plain` for .md), re-presign and re-upload when confirm fails (a failed confirm can't be retried with the same assetId), and don't presign more files than the remaining slots.
   evidence: Review of the 2.7 backend: the allowlist is exact, confirm failures leave the assetId used, and the cap is only enforced at confirm.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-add-pasted-text-as-material-backend.md`
+  summary: Story 2.8 UI part — **Paste text** next to browse in wizard step 1 (title and body, inline "text is empty" message), text deliverable rows (text icon, title, character count) with edit, and Remove with the same 5 s Undo toast as files; flag the missing text-entry design to UX.
+  evidence: Built backend-only at the user's choice; the UI depends on the Story 2.5 wizard.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-add-pasted-text-as-material-backend.md`
+  summary: When Story 2.10 adds `context_form`, test that `hasMaterial(caseId)` stays false for a case whose details form is filled in but which has no assets or text items.
+  evidence: The 2.8 matrix row "details form filled → false" can only be checked once the form table exists.
