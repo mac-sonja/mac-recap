@@ -95,6 +95,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"context_form": {
+                  Row: {
+                    "case_id": string,"context": string,"created_at": string,"results": string,"solution": string,"updated_at": string,"updated_by": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "case_id": string,"context"?: string,"created_at"?: string,"results"?: string,"solution"?: string,"updated_at"?: string,"updated_by": string
+                  }
+                  Update: {
+                    "case_id"?: string,"context"?: string,"created_at"?: string,"results"?: string,"solution"?: string,"updated_at"?: string,"updated_by"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "context_form_case_id_fkey"
+      columns: ["case_id"]
+isOneToOne: true
+      referencedRelation: "case_study"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "context_form_updated_by_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"material_term": {
                   Row: {
                     "created_at": string,"id": string,"ref_id": string,"ref_kind": string,"term_id": string
@@ -225,6 +251,9 @@ isOneToOne: false
                            },
 "restore_asset":
 { Args: { "p_asset_id": string,"p_case_id": string }; Returns: boolean
+                           },
+"save_context_field":
+{ Args: { "p_actor_id": string,"p_case_id": string,"p_field": string,"p_text": string }; Returns: string
                            },
 "set_material_terms":
 { Args: { "p_case_id": string,"p_keys": (string)[],"p_kind": string,"p_ref_id": string,"p_ref_kind": string }; Returns: (string)[]

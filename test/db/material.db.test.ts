@@ -8,6 +8,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
+import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
 import { createSupabaseTaxonomyRepository } from "@/modules/material/adapters/supabase/taxonomy-repository";
 import { createSupabaseTextItemRepository } from "@/modules/material/adapters/supabase/text-item-repository";
 import { ALLOWED_CONTENT_TYPES, ASSET_KINDS, MAX_ASSETS_PER_CASE } from "@/modules/material/domain/files";
@@ -313,6 +314,7 @@ describe("use cases against the real DB and case-study module (S3 stubbed)", () 
       assets: createSupabaseAssetRepository(),
       texts: createSupabaseTextItemRepository(),
       taxonomy: createSupabaseTaxonomyRepository(),
+      form: createSupabaseDetailsFormRepository(),
       storage,
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
       newId: randomUUID,
@@ -630,6 +632,7 @@ describe("text use cases against the real DB and case-study module (no S3)", () 
       assets: createSupabaseAssetRepository(),
       texts: createSupabaseTextItemRepository(),
       taxonomy: createSupabaseTaxonomyRepository(),
+      form: createSupabaseDetailsFormRepository(),
       storage: null,
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
       newId: randomUUID,
@@ -777,6 +780,7 @@ describe("taxonomy", () => {
       assets: createSupabaseAssetRepository(),
       texts: createSupabaseTextItemRepository(),
       taxonomy: createSupabaseTaxonomyRepository(),
+      form: createSupabaseDetailsFormRepository(),
       storage: null,
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
       newId: randomUUID,
@@ -1040,6 +1044,209 @@ describe("taxonomy", () => {
     "delete material_term": "delete from public.material_term",
     set_material_terms: `select public.set_material_terms('${UNKNOWN_ID}', 'asset', '${UNKNOWN_ID}', 'tag', '{}')`,
     case_material_terms: `select public.case_material_terms('${UNKNOWN_ID}')`,
+  };
+  const roleCases = (["anon", "authenticated"] as const).flatMap((role) =>
+    Object.entries(statements).map(([verb, sql]) => [role, verb, sql] as const),
+  );
+
+  it.each(roleCases)("%s gets permission denied on %s", async (role, _verb, sql) => {
+    await expect(inRolledBackTx(sql, [], role)).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+// Story 2.10: context_form and save_context_field.
+
+describe("details form (context_form)", () => {
+  const browser = () =>
+    createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+
+  async function formDeps() {
+    const caseStudy = await loadCaseStudy();
+    return {
+      assets: createSupabaseAssetRepository(),
+      texts: createSupabaseTextItemRepository(),
+      taxonomy: createSupabaseTaxonomyRepository(),
+      form: createSupabaseDetailsFormRepository(),
+      storage: null,
+      cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
+      newId: randomUUID,
+    };
+  }
+
+  async function saveField(input: Record<string, unknown>) {
+    const { makeSaveDetailsField } = await import("@/modules/material/application/save-details-field");
+    return makeSaveDetailsField(await formDeps())(await devActor(), input);
+  }
+
+  async function readForm(caseId: string) {
+    const { makeGetDetailsForm } = await import("@/modules/material/application/get-details-form");
+    return makeGetDetailsForm(await formDeps())({ caseId });
+  }
+
+  async function formRow(caseId: string) {
+    const { rows } = await pool.query("select context, solution, results, updated_by from public.context_form where case_id = $1", [
+      caseId,
+    ]);
+    return rows;
+  }
+
+  async function detailsEvents(caseId: string) {
+    const { rows } = await pool.query<{ type: string; actor_id: string; data: unknown }>(
+      "select type, actor_id, data from public.case_event where case_id = $1 and type = 'details_saved' order by at",
+      [caseId],
+    );
+    return rows;
+  }
+
+  const codeOf = (result: { ok: boolean; error?: { code: string } }) => (result.ok ? "OK" : result.error?.code);
+
+  it("first save → next save → unchanged → clear: one row, one details_saved { field } per change; status unchanged", async () => {
+    const actor = await devActor();
+    const created = await createCase();
+    const caseId = created.id;
+
+    expect(await readForm(caseId)).toEqual({ ok: true, value: { context: "", solution: "", results: "" } });
+    expect(await formRow(caseId)).toEqual([]);
+
+    expect(codeOf(await saveField({ caseId, field: "context", text: "Bando PNRR" }))).toBe("OK");
+    expect(await formRow(caseId)).toEqual([{ context: "Bando PNRR", solution: "", results: "", updated_by: actor.id }]);
+
+    expect(codeOf(await saveField({ caseId, field: "results", text: "+30% iscritti" }))).toBe("OK");
+    expect(await readForm(caseId)).toEqual({ ok: true, value: { context: "Bando PNRR", solution: "", results: "+30% iscritti" } });
+
+    const { rows: before } = await pool.query("select updated_at from public.context_form where case_id = $1", [caseId]);
+    expect(codeOf(await saveField({ caseId, field: "results", text: "+30% iscritti" }))).toBe("OK");
+    const { rows: after } = await pool.query("select updated_at from public.context_form where case_id = $1", [caseId]);
+    expect(after).toEqual(before);
+
+    expect(codeOf(await saveField({ caseId, field: "context", text: "" }))).toBe("OK");
+    expect(await readForm(caseId)).toEqual({ ok: true, value: { context: "", solution: "", results: "+30% iscritti" } });
+
+    expect(await detailsEvents(caseId)).toEqual([
+      { type: "details_saved", actor_id: actor.id, data: { field: "context" } },
+      { type: "details_saved", actor_id: actor.id, data: { field: "results" } },
+      { type: "details_saved", actor_id: actor.id, data: { field: "context" } },
+    ]);
+    const { rows: status } = await pool.query("select status from public.case_study where id = $1", [caseId]);
+    expect(status).toEqual([{ status: "draft" }]);
+  });
+
+  it("save_context_field returns the previous text; a first save of '' creates no row", async () => {
+    const created = await createCase();
+    const repo = createSupabaseDetailsFormRepository();
+    expect(await repo.saveField(created.id, "solution", "", DEV_ACTOR_ID)).toEqual({ ok: true, value: "" });
+    expect(await formRow(created.id)).toEqual([]);
+    expect(await repo.saveField(created.id, "solution", "App", DEV_ACTOR_ID)).toEqual({ ok: true, value: "" });
+    expect(await repo.saveField(created.id, "solution", "Sito", DEV_ACTOR_ID)).toEqual({ ok: true, value: "App" });
+  });
+
+  it("an unknown field → UNKNOWN_FIELD; nothing written", async () => {
+    const created = await createCase();
+    expect(codeOf(await saveField({ caseId: created.id, field: "budget", text: "x" }))).toBe("UNKNOWN_FIELD");
+    await expect(
+      pool.query("select public.save_context_field($1, 'budget', 'x', $2)", [created.id, DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "P0001", message: "UNKNOWN_FIELD" });
+    expect(await formRow(created.id)).toEqual([]);
+  });
+
+  it("5,000 characters are stored; 5,001 are refused by the use case and the table check", async () => {
+    const created = await createCase();
+    expect(codeOf(await saveField({ caseId: created.id, field: "context", text: "è".repeat(5_000) }))).toBe("OK");
+    const tooLong = await saveField({ caseId: created.id, field: "context", text: "x".repeat(5_001) });
+    expect(codeOf(tooLong)).toBe("INVALID_INPUT");
+    if (!tooLong.ok) expect((tooLong.error.details as { fields: string[] }).fields).toEqual(["text"]);
+    await expect(
+      inRolledBackTx("select public.save_context_field($1, 'context', $2, $3)", [created.id, "x".repeat(5_001), DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "23514" });
+    const repo = createSupabaseDetailsFormRepository();
+    const viaAdapter = await repo.saveField(created.id, "results", "x".repeat(5_001), DEV_ACTOR_ID);
+    expect(codeOf(viaAdapter)).toBe("INVALID_INPUT");
+    expect((await formRow(created.id))[0]).toMatchObject({ context: "è".repeat(5_000), results: "" });
+  });
+
+  it("a soft-deleted case → NOT_FOUND; nothing written or read", async () => {
+    const created = await createCase();
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
+    expect(codeOf(await saveField({ caseId: created.id, field: "context", text: "x" }))).toBe("NOT_FOUND");
+    expect(codeOf(await readForm(created.id))).toBe("NOT_FOUND");
+    await expect(
+      pool.query("select public.save_context_field($1, 'context', 'x', $2)", [created.id, DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+    expect(await createSupabaseDetailsFormRepository().saveField(created.id, "context", "x", DEV_ACTOR_ID)).toMatchObject({
+      ok: false,
+      error: { code: "NOT_FOUND" },
+    });
+    expect(await formRow(created.id)).toEqual([]);
+    expect(await detailsEvents(created.id)).toEqual([]);
+  });
+
+  it("resolveRefs reads form_field refs from the DB", async () => {
+    const { makeResolveRefs } = await import("@/modules/material/application/resolve-refs");
+    const created = await createCase();
+    await saveField({ caseId: created.id, field: "context", text: "Bando PNRR" });
+    const refs = [
+      { kind: "form_field", id: "context" },
+      { kind: "form_field", id: "results" },
+    ];
+    expect(await makeResolveRefs(await formDeps())(created.id, refs)).toEqual({
+      ok: true,
+      value: [
+        { ref: refs[0], text: "Bando PNRR" },
+        { ref: refs[1], text: "" },
+      ],
+    });
+  });
+
+  it("the form is not material: a filled form with no assets or text items → has_material false", async () => {
+    const created = await createCase();
+    for (const field of ["context", "solution", "results"]) {
+      expect(codeOf(await saveField({ caseId: created.id, field, text: "Compilato" }))).toBe("OK");
+    }
+    expect(await hasMaterialSql(created.id)).toBe(false);
+    expect(await createSupabaseTextItemRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
+  });
+
+  it("deleting or truncating context_form is rejected", async () => {
+    const created = await createCase();
+    await saveField({ caseId: created.id, field: "context", text: "x" });
+    await expect(inRolledBackTx("delete from public.context_form where case_id = $1", [created.id])).rejects.toThrow(/never deleted/);
+    await expect(inRolledBackTx("truncate public.context_form")).rejects.toThrow(/never deleted/);
+  });
+
+  it("enables RLS with no policies on context_form", async () => {
+    const { rows } = await pool.query<{ rls: boolean; policies: number }>(
+      `select c.relrowsecurity as rls,
+              (select count(*)::int from pg_catalog.pg_policy p where p.polrelid = c.oid) as policies
+       from pg_catalog.pg_class c where c.oid = 'public.context_form'::regclass`,
+    );
+    expect(rows).toEqual([{ rls: true, policies: 0 }]);
+  });
+
+  it("the browser key is refused reading context_form", async () => {
+    const { data, error } = await browser().from("context_form").select("*");
+    expect(data).toBeNull();
+    expect(error?.code).toBe("42501");
+  });
+
+  it("the browser key is refused calling save_context_field", async () => {
+    const { data, error } = await browser().rpc("save_context_field", {
+      p_case_id: UNKNOWN_ID,
+      p_field: "context",
+      p_text: "x",
+      p_actor_id: DEV_ACTOR_ID,
+    });
+    expect(data).toBeNull();
+    expect(["42501", "PGRST202"]).toContain(error?.code);
+  });
+
+  const statements = {
+    select: "select * from public.context_form",
+    insert: `insert into public.context_form (case_id, updated_by) values ('${UNKNOWN_ID}', '${DEV_ACTOR_ID}')`,
+    update: "update public.context_form set context = 'x'",
+    delete: "delete from public.context_form",
+    save_context_field: `select public.save_context_field('${UNKNOWN_ID}', 'context', 'x', '${DEV_ACTOR_ID}')`,
   };
   const roleCases = (["anon", "authenticated"] as const).flatMap((role) =>
     Object.entries(statements).map(([verb, sql]) => [role, verb, sql] as const),

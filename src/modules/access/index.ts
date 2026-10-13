@@ -47,6 +47,9 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   TEXT_EMPTY: 400,
   // Taxonomy (Story 2.9).
   UNKNOWN_TERM: 400,
+  // Details form (Story 2.10).
+  UNKNOWN_FIELD: 400,
+  UNKNOWN_REF: 400,
 };
 
 /** HTTP status for an `AppError` code; unknown codes are 500. */

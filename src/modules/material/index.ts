@@ -1,10 +1,11 @@
 // Public surface of the material module. Code outside this module imports only this file.
-// The module owns `asset`, `text_item`, `taxonomy_term`, `material_term` and S3 `cases/{caseId}/assets/**` (AD-11): nobody else writes them.
+// The module owns `asset`, `text_item`, `context_form`, `taxonomy_term`, `material_term` and S3 `cases/{caseId}/assets/**` (AD-11): nobody else writes them.
 import { randomUUID } from "node:crypto";
 import type { Actor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import { createS3ObjectStorage } from "@/modules/material/adapters/s3/object-storage";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
+import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
 import { createSupabaseTaxonomyRepository } from "@/modules/material/adapters/supabase/taxonomy-repository";
 import { createSupabaseTextItemRepository } from "@/modules/material/adapters/supabase/text-item-repository";
 import { makeAddTextItem } from "@/modules/material/application/add-text-item";
@@ -12,15 +13,19 @@ import { makeConfirmUpload } from "@/modules/material/application/confirm-upload
 import type { MaterialDeps } from "@/modules/material/application/deps";
 import { makeEditTextItem } from "@/modules/material/application/edit-text-item";
 import { makeGetCaseTerms } from "@/modules/material/application/get-case-terms";
+import { makeGetDetailsForm } from "@/modules/material/application/get-details-form";
 import { makeHasMaterial } from "@/modules/material/application/has-material";
 import { makeListTerms } from "@/modules/material/application/list-terms";
 import { makePresignUpload, type PresignedAssetUpload } from "@/modules/material/application/presign-upload";
 import { makeRemoveAsset } from "@/modules/material/application/remove-asset";
 import { makeRemoveTextItem } from "@/modules/material/application/remove-text-item";
+import { makeResolveRefs } from "@/modules/material/application/resolve-refs";
 import { makeRestoreAsset } from "@/modules/material/application/restore-asset";
 import { makeRestoreTextItem } from "@/modules/material/application/restore-text-item";
+import { makeSaveDetailsField } from "@/modules/material/application/save-details-field";
 import { makeSetDeliverableTerms } from "@/modules/material/application/set-deliverable-terms";
 import type { Asset } from "@/modules/material/domain/asset";
+import type { DetailsFieldSaved, DetailsForm, ResolvedRef } from "@/modules/material/domain/details-form";
 import type { DeliverableTerms, TermsByKind, TermsSet } from "@/modules/material/domain/taxonomy";
 import type { TextItem } from "@/modules/material/domain/text-item";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
@@ -38,6 +43,15 @@ export {
   TEXT_RESTORED,
 } from "@/modules/material/domain/text-item";
 export type { TextItem } from "@/modules/material/domain/text-item";
+export { DETAILS_SAVED, FORM_FIELDS, MATERIAL_REF_KINDS, MAX_FORM_FIELD_CHARS } from "@/modules/material/domain/details-form";
+export type {
+  DetailsFieldSaved,
+  DetailsForm,
+  FormField,
+  MaterialRef,
+  MaterialRefKind,
+  ResolvedRef,
+} from "@/modules/material/domain/details-form";
 export { DELIVERABLE_KINDS, TERM_KINDS, TERMS_SET } from "@/modules/material/domain/taxonomy";
 export type {
   DeliverableKind,
@@ -67,19 +81,20 @@ function configuredStorage(): ObjectStorage | null {
   return storageMemo.storage;
 }
 
-/** Use-case dependencies. Text and taxonomy paths pass `withStorage: false`: they never resolve S3. */
+/** Use-case dependencies. Text, taxonomy and details-form paths pass `withStorage: false`: they never resolve S3. */
 function deps({ withStorage = true }: { withStorage?: boolean } = {}): MaterialDeps {
   return {
     assets: createSupabaseAssetRepository(),
     texts: createSupabaseTextItemRepository(),
     taxonomy: createSupabaseTaxonomyRepository(),
+    form: createSupabaseDetailsFormRepository(),
     storage: withStorage ? configuredStorage() : null,
     cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
     newId: randomUUID,
   };
 }
 
-/** Dependencies without storage, for the paths that never touch S3 (text items, taxonomy). */
+/** Dependencies without storage, for the paths that never touch S3 (text items, taxonomy, details form). */
 const storagelessDeps = () => deps({ withStorage: false });
 
 /**
@@ -176,4 +191,35 @@ export function setDeliverableTerms(actor: Actor, input: unknown): Promise<Resul
  */
 export function getCaseTerms(input: unknown): Promise<Result<DeliverableTerms[]>> {
   return makeGetCaseTerms(storagelessDeps())(input);
+}
+
+/**
+ * Saves one details-form field: `{ caseId, field: 'context' | 'solution' | 'results', text }`
+ * (`""` clears it; at most 5,000 characters) and records `details_saved { field }`
+ * (never the text); saving the stored text again changes nothing and records no
+ * event. Authorize `fill details` first. Errors: `INVALID_INPUT` (naming `text`),
+ * `UNKNOWN_FIELD`, `NOT_FOUND`. Any status; status never changes; works without S3.
+ * The form is never material.
+ */
+export function saveDetailsField(actor: Actor, input: unknown): Promise<Result<DetailsFieldSaved>> {
+  return makeSaveDetailsField(storagelessDeps())(actor, input);
+}
+
+/**
+ * The details form of a case (`{ caseId }`): `{ context, solution, results }`,
+ * each `""` when never saved. Authorize `fill details` first. Errors: `INVALID_INPUT`, `NOT_FOUND`. Works without S3.
+ */
+export function getDetailsForm(input: unknown): Promise<Result<DetailsForm>> {
+  return makeGetDetailsForm(storagelessDeps())(input);
+}
+
+/**
+ * Resolves `MaterialRef`s of a case to their current text, in order: `[{ ref, text }]`.
+ * Only `{ kind: 'form_field', id: 'context' | 'solution' | 'results' }` resolves so
+ * far; anything else is `UNKNOWN_REF` naming it (nothing resolved). Errors:
+ * `INVALID_INPUT`, `UNKNOWN_REF`, `NOT_FOUND`. Works without S3. The only way
+ * other modules read cited material.
+ */
+export function resolveRefs(caseId: unknown, refs: unknown): Promise<Result<ResolvedRef[]>> {
+  return makeResolveRefs(storagelessDeps())(caseId, refs);
 }

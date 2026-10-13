@@ -17,6 +17,8 @@ const {
   listTermsUseCase,
   setTermsUseCase,
   getCaseTermsUseCase,
+  saveDetailsUseCase,
+  getDetailsUseCase,
 } = vi.hoisted(() => ({
   getActor: vi.fn(),
   create: vi.fn(),
@@ -31,6 +33,8 @@ const {
   listTermsUseCase: vi.fn(),
   setTermsUseCase: vi.fn(),
   getCaseTermsUseCase: vi.fn(),
+  saveDetailsUseCase: vi.fn(),
+  getDetailsUseCase: vi.fn(),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -51,6 +55,8 @@ vi.mock("@/modules/material", () => ({
   listTerms: listTermsUseCase,
   setDeliverableTerms: setTermsUseCase,
   getCaseTerms: getCaseTermsUseCase,
+  saveDetailsField: saveDetailsUseCase,
+  getDetailsForm: getDetailsUseCase,
 }));
 
 const {
@@ -66,6 +72,8 @@ const {
   listTaxonomyTerms,
   setDeliverableTerms,
   getCaseTerms,
+  saveDetailsField,
+  getDetailsForm,
 } = await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({
@@ -109,6 +117,8 @@ beforeEach(() => {
     listTermsUseCase,
     setTermsUseCase,
     getCaseTermsUseCase,
+    saveDetailsUseCase,
+    getDetailsUseCase,
   ])
     fn.mockReset();
 });
@@ -352,5 +362,91 @@ describe("taxonomy actions", () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     setTermsUseCase.mockResolvedValue(err({ code, message: "m", details: { key: "nope" } }));
     expect(await setDeliverableTerms(setInput)).toEqual({ ok: false, status, error: { code, message: "m" } });
+  });
+});
+
+describe("details form actions", () => {
+  const caseId = "11111111-1111-4111-8111-111111111111";
+  const saveInput = { caseId, field: "context", text: "Bando PNRR" };
+
+  it("saveDetailsField passes the actor and its input unchanged", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    const value = { field: "context", text: "Bando PNRR" };
+    saveDetailsUseCase.mockResolvedValue(ok(value));
+    expect(await saveDetailsField(saveInput)).toEqual({ ok: true, value });
+    expect(saveDetailsUseCase).toHaveBeenCalledExactlyOnceWith(actor("owner_designer"), saveInput);
+    expect(saveDetailsUseCase.mock.calls[0][1]).toBe(saveInput);
+  });
+
+  it("getDetailsForm passes its input unchanged", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    const value = { context: "Bando PNRR", solution: "", results: "" };
+    getDetailsUseCase.mockResolvedValue(ok(value));
+    const input = { caseId };
+    expect(await getDetailsForm(input)).toEqual({ ok: true, value });
+    expect(getDetailsUseCase.mock.calls[0][0]).toBe(input);
+  });
+
+  const actions = [
+    ["saveDetailsField", () => saveDetailsField(saveInput), saveDetailsUseCase],
+    ["getDetailsForm", () => getDetailsForm({ caseId }), getDetailsUseCase],
+  ] as const;
+
+  it.each(
+    actions.flatMap((a) => (["account_sales_social", "admin", "system"] as const).map((role) => [a[0], role, a[1], a[2]] as const)),
+  )("%s returns 403 FORBIDDEN for %s and never calls the use case", async (_name, role, call, useCase) => {
+    getActor.mockResolvedValue(ok(actor(role)));
+    expect(await call()).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
+    expect(useCase).not.toHaveBeenCalled();
+  });
+
+  it.each(actions)("%s returns 401 when no actor resolves", async (_name, call, useCase) => {
+    getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "No profile." }));
+    expect(await call()).toMatchObject({ ok: false, status: 401 });
+    expect(useCase).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["UNKNOWN_FIELD", 400],
+    ["NOT_FOUND", 404],
+    ["DETAILS_WRITE_FAILED", 500],
+  ] as const)("saveDetailsField maps %s to %i and keeps details server-side", async (code, status) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    saveDetailsUseCase.mockResolvedValue(err({ code, message: "m", details: { field: "budget" } }));
+    expect(await saveDetailsField(saveInput)).toEqual({ ok: false, status, error: { code, message: "m" } });
+  });
+
+  it("getDetailsForm maps NOT_FOUND to 404 and keeps details server-side", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    getDetailsUseCase.mockResolvedValue(err({ code: "NOT_FOUND", message: "m", details: { caseId } }));
+    expect(await getDetailsForm({ caseId })).toEqual({ ok: false, status: 404, error: { code: "NOT_FOUND", message: "m" } });
+  });
+
+  it("getDetailsForm maps INVALID_INPUT to 400 with only the field names", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    getDetailsUseCase.mockResolvedValue(
+      err({
+        code: "INVALID_INPUT",
+        message: "Invalid or missing: caseId.",
+        details: { fields: ["caseId"], issues: [{ field: "caseId", message: "secret" }] },
+      }),
+    );
+    expect(await getDetailsForm({ caseId: "nope" })).toEqual({
+      ok: false,
+      status: 400,
+      error: { code: "INVALID_INPUT", message: "Invalid or missing: caseId.", fields: ["caseId"] },
+    });
+  });
+
+  it("saveDetailsField maps INVALID_INPUT to 400 naming text", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    saveDetailsUseCase.mockResolvedValue(
+      err({ code: "INVALID_INPUT", message: "Invalid or missing: text.", details: { fields: ["text"], issues: [] } }),
+    );
+    expect(await saveDetailsField(saveInput)).toEqual({
+      ok: false,
+      status: 400,
+      error: { code: "INVALID_INPUT", message: "Invalid or missing: text.", fields: ["text"] },
+    });
   });
 });

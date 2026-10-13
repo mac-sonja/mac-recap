@@ -20,15 +20,15 @@ export const textItemSchema = z.object({
 export type TextItem = z.infer<typeof textItemSchema>;
 
 /** At most `max` characters counted as code points (like Postgres `char_length`); cheap when the UTF-16 length is already within it. */
-function withinCodePoints(value: string, max: number): boolean {
+export function withinCodePoints(value: string, max: number): boolean {
   if (value.length <= max) return true;
   if (value.length > max * 2) return false;
   return Array.from(value).length <= max;
 }
 
 /** Postgres text cannot hold U+0000. */
-const hasNoNul = (value: string) => !value.includes("\u0000");
-const NUL_MESSAGE = "Must not contain the NUL character.";
+export const hasNoNul = (value: string) => !value.includes("\u0000");
+export const NUL_MESSAGE = "Must not contain the NUL character.";
 
 const titleSchema = z
   .string()

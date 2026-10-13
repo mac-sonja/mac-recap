@@ -111,3 +111,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-9-tag-property-and-flag-deliverables-backend.md`
   summary: OP 3 seed migration — insert the decided tag, property and flag terms into `taxonomy_term` (stable keys, Italian labels) once the taxonomy is decided (due 2026-10-14).
   evidence: The 2.9 backend ships with no seed rows by design (IR-OP3); only a migration may write terms.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-10-fill-in-the-details-form-backend.md`
+  summary: Story 2.10 UI part — wizard step 2 Details (Context, Solution and Results textareas with a one-line prompt each, a "{n} of 3" counter, save on pause or blur) and the Case studies table's Bozza row opening the wizard at its first incomplete step (derived from `hasMaterial`).
+  evidence: Built backend-only; the UI depends on the Story 2.5 wizard.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-10-fill-in-the-details-form-backend.md`
+  summary: Add a DB test firing two concurrent first saves of different details-form fields on a case with no row, asserting both succeed, one row holds both fields and two `details_saved` events are recorded (guards the per-case advisory lock in `save_context_field`).
+  evidence: Review of the 2.10 backend: every DB test saves sequentially, so removing the lock would ship lost first saves; most relevant once the autosave UI lands.
