@@ -9,6 +9,13 @@ describe("respondToAppError", () => {
     ["NOT_FOUND", 404],
     ["INVALID_TRANSITION", 409],
     ["STALE_STATUS", 409],
+    ["FILE_TYPE_NOT_ALLOWED", 400],
+    ["FILE_TOO_LARGE", 400],
+    ["FILE_LIMIT_REACHED", 409],
+    ["UPLOAD_NOT_FOUND", 404],
+    ["UPLOAD_REJECTED", 400],
+    ["ASSET_ALREADY_CONFIRMED", 409],
+    ["STORAGE_NOT_CONFIGURED", 503],
     ["PROFILE_LOOKUP_FAILED", 500],
   ] as const)("maps %s to %i with { error: { code, message } } and no details", async (code, status) => {
     const error = { code, message: "m", details: { secret: "internal" } };

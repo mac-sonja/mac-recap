@@ -23,7 +23,33 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "case_event": {
+            "asset": {
+                  Row: {
+                    "case_id": string,"content_type": string,"created_at": string,"created_by": string,"deleted_at": string | null,"id": string,"kind": string,"original_file_name": string,"s3_key": string,"size_bytes": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "case_id": string,"content_type": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"id"?: string,"kind": string,"original_file_name": string,"s3_key": string,"size_bytes": number
+                  }
+                  Update: {
+                    "case_id"?: string,"content_type"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"id"?: string,"kind"?: string,"original_file_name"?: string,"s3_key"?: string,"size_bytes"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "asset_case_id_fkey"
+      columns: ["case_id"]
+isOneToOne: false
+      referencedRelation: "case_study"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "asset_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"case_event": {
                   Row: {
                     "actor_id": string,"at": string,"case_id": string,"data": NonNullable<Json>,"id": string,"revision_id": string | null,"type": string
                   }
@@ -89,7 +115,26 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "create_case_study":
+            "create_asset":
+{ Args: { "p_actor_id": string,"p_case_id": string,"p_content_type": string,"p_id": string,"p_kind": string,"p_original_file_name": string,"p_s3_key": string,"p_size_bytes": number }; Returns: {
+              "case_id": string,
+"content_type": string,
+"created_at": string,
+"created_by": string,
+"deleted_at": string | null,
+"id": string,
+"kind": string,
+"original_file_name": string,
+"s3_key": string,
+"size_bytes": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "asset"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"create_case_study":
 { Args: { "p_actor_id": string,"p_client": string,"p_locale": string,"p_name": string,"p_year": number }; Returns: {
               "approved_revision_id": string | null,
 "client": string,
@@ -112,6 +157,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"restore_asset":
+{ Args: { "p_asset_id": string,"p_case_id": string }; Returns: boolean
+                           },
 "transition_case_study":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {
               "approved_revision_id": string | null,

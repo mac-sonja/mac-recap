@@ -35,6 +35,14 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   NOT_FOUND: 404,
   INVALID_TRANSITION: 409,
   STALE_STATUS: 409,
+  // Material uploads (Story 2.7).
+  FILE_TYPE_NOT_ALLOWED: 400,
+  FILE_TOO_LARGE: 400,
+  FILE_LIMIT_REACHED: 409,
+  UPLOAD_NOT_FOUND: 404,
+  UPLOAD_REJECTED: 400,
+  ASSET_ALREADY_CONFIRMED: 409,
+  STORAGE_NOT_CONFIGURED: 503,
 };
 
 /** HTTP status for an `AppError` code; unknown codes are 500. */
