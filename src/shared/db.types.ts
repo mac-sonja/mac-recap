@@ -227,7 +227,7 @@ isOneToOne: false
 { Args: { "p_asset_id": string,"p_case_id": string }; Returns: boolean
                            },
 "set_material_terms":
-{ Args: { "p_case_id": string,"p_keys": string[],"p_kind": string,"p_ref_id": string,"p_ref_kind": string }; Returns: string[]
+{ Args: { "p_case_id": string,"p_keys": (string)[],"p_kind": string,"p_ref_id": string,"p_ref_kind": string }; Returns: (string)[]
                            },
 "transition_case_study":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {
