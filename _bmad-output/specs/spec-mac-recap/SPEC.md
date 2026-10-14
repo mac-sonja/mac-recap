@@ -73,7 +73,7 @@ The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects clos
 - NFR5: the narrative follows challenge, approach and result, meets the Sprint 2 quality checklist, and covers both the technical and the graphic side.
 - The MVP is due on **October 30, 2026**, the demo date. The sprints are due October 14, 21 and 28. Epics run one after another, never in parallel (see `delivery-plan.md`).
 - The MVP is standalone from MAC Productive. Any future link runs through MCP and is keyed only on the case study's unique ID.
-- Data lives in Supabase and files in an AWS S3 bucket. The system is built with Claude Code and the BMAD method. The architecture spine's AD-1 to AD-20 are binding.
+- Data and files live in Supabase: the database and a private Supabase Storage bucket, both in the EU. The system is built with Claude Code and the BMAD method. The architecture spine's AD-1 to AD-20 are binding.
 - Login arrives only in Sprint 3. Until then every deployed environment, shareable links included, is gated (AD-12), because the demo uses real client material. That material's NDA was confirmed cleared by Sonja on 2026-10-08, including processing through the Anthropic API. Each project run in the 8-week validation needs the same clearance.
 - Case studies are created by hand. There is no trigger at project close, and requests for a case study happen outside the tool.
 

@@ -11,7 +11,7 @@ supersedes: "docs/sources/MAC Recap-PRD-EN v1.pdf"
 
 Oct 8, 2026 · @Sonja
 
-Updated Oct 14, 2026: favourites replace tags, properties and flags, there is no pasted text, and removing a file has no undo ([Sprint Change Proposal 2026-10-14](../../sprint-change-proposal-2026-10-14.md)).
+Updated Oct 14, 2026: favourites replace tags, properties and flags, there is no pasted text, and removing a file has no undo ([Sprint Change Proposal 2026-10-14](../../sprint-change-proposal-2026-10-14.md)). Files are stored in Supabase Storage, not AWS S3 ([storage proposal](../../sprint-change-proposal-2026-10-14-storage.md)).
 
 This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR, epic, story and open-point numbers are unchanged from v1. Retired items are marked, not renumbered, and new items are added at the end.
 
@@ -148,7 +148,7 @@ Guardrails are non-negotiable constraints. Any requirement that contradicts them
 
 ## 5. Technical assumptions
 
-- Dedicated database on Supabase, file storage on an AWS S3 bucket
+- Dedicated Supabase project (EU) for the database and for file storage (a private Supabase Storage bucket)
 - Development with Claude Code and the BMAD method
 - Tool kept separate from MAC Productive. The future connection will run via MCP using the case study's unique ID.
 - Development epics run one after another, in epic order, never in parallel
@@ -183,9 +183,9 @@ The order follows the development plan. Non-dev activities are prerequisites for
 
 Prerequisites: tool design definition, template wireframes (asset dimensions, formats).
 
-**Story 2.1** – As the team, I want a Supabase database and AWS S3 storage to save case studies and assets.
+**Story 2.1** – As the team, I want a Supabase database and Supabase Storage to save case studies and assets.
 - Case study data is stored on Supabase
-- Uploaded files are stored on AWS S3
+- Uploaded files are stored in a private Supabase Storage bucket
 
 **Story 2.2** – As an owner/designer, I want to create a case study with a unique ID.
 - I create the case study manually in MAC Recap

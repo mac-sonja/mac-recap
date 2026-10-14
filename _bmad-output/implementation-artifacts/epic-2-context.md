@@ -4,7 +4,7 @@
 
 ## Goal
 
-The owner/designer creates a case study by hand, gets a permanent ID, uploads project files, marks favourite images and videos and fills in an optional details form, all stored in Supabase and a private EU S3 bucket inside a basic-auth-gated environment. The epic also lays the foundation every later epic builds on: the pinned starter scaffold, the module skeleton with enforced boundaries, the actor/policy seam with a dev owner/designer, the append-only event log, the app shell with design tokens and Italian copy, and a basic Case studies table. Scope was reshaped on 2026-10-14: no tags/taxonomy (favourites instead), no pasted text, no undo on file removal.
+The owner/designer creates a case study by hand, gets a permanent ID, uploads project files, marks favourite images and videos and fills in an optional details form, all stored in Supabase (database and a private Storage bucket, EU) inside a basic-auth-gated environment. The epic also lays the foundation every later epic builds on: the pinned starter scaffold, the module skeleton with enforced boundaries, the actor/policy seam with a dev owner/designer, the append-only event log, the app shell with design tokens and Italian copy, and a basic Case studies table. Scope was reshaped on 2026-10-14: no tags/taxonomy (favourites instead), no pasted text, no undo on file removal. Files move from AWS S3 to Supabase Storage (Story 2.11, storage proposal 2026-10-14).
 
 ## Stories
 
@@ -18,6 +18,7 @@ The owner/designer creates a case study by hand, gets a permanent ID, uploads pr
 - Story 2.8: Retire pasted text and the taxonomy
 - Story 2.9: Mark images and videos as favourite
 - Story 2.10: Fill in the details form
+- Story 2.11: Store project files in Supabase Storage
 
 ## Requirements & Constraints
 
@@ -33,14 +34,14 @@ The owner/designer creates a case study by hand, gets a permanent ID, uploads pr
 
 ## Technical Decisions
 
-- Stack pinned exactly (no ranges): Next.js 16 (`output: 'standalone'`, `cacheComponents` off), React 19, TS 6, Tailwind 4 + shadcn (new-york, neutral), supabase-js/ssr, AWS SDK v3, zod 4, Playwright, sharp; Node 24 LTS. Versions are listed in Story 2.1.
+- Stack pinned exactly (no ranges): Next.js 16 (`output: 'standalone'`, `cacheComponents` off), React 19, TS 6, Tailwind 4 + shadcn (new-york, neutral), supabase-js/ssr, zod 4, Playwright, sharp; Node 24 LTS. Versions are listed in Story 2.1 (its AWS SDK pins are removed in Story 2.11).
 - Modular monolith: `src/modules/{case-study,material,generation,rendering,sharing,access,jobs}` each with `domain/`, `application/`, `index.ts`; `ports/`/`adapters/` only at vendor seams. Lint enforces: cross-module imports via `index.ts` only, vendor SDKs only in `adapters/`, `domain/` imports only `src/shared`. `src/modules/integration` is reserved (Epic 7); no MAC Productive calls.
 - `src/shared/`: `env.ts` (zod-validated, the only `process.env` reader), `result.ts` (`Result<T, AppError>`, SCREAMING_SNAKE codes), structured JSON logger (`caseId`, `jobId`, `actorId`; never material or prompts), generated `db.types.ts`.
 - Every server action/route: `access.getActor()` then `access.authorize(actor, action, resource)`; denial returns `FORBIDDEN`/403 before the use case runs. Role read from `profile` on every request. The full permission matrix lives only in `access/domain/policy.ts` as code; "change permissions or guardrails" is denied to all roles. Pre-Epic 6 the actor is a seeded dev `owner_designer`; a `system` profile also exists. List scope: all statuses for owner/designer, approved only for account/sales/social.
 - Data access is server-only with the service-role key (read only in `env.ts` and adapters); RLS denies `anon` and `authenticated` on every table.
 - `case_study.status` changes only through `case-study.transition(caseId, event, actor)`, which writes status and event in one transaction.
 - Tables (snake_case singular, uuid ids, `timestamptz` UTC displayed Europe/Rome): `profile`, `case_study`, append-only `case_event` (UPDATE/DELETE rejected), `asset` (incl. `is_favourite boolean not null default false`), `context_form` (one row per case, keys `context`/`solution`/`results`). No taxonomy or text-item tables.
-- S3: private EU bucket per environment, Block Public Access, versioning, CORS for app origin only (POST, GET). Keys `cases/{caseId}/assets/{assetId}/original.{ext}`, built only in `material/adapters`. Browser uploads via presigned POST (`content-length-range` ≤ 100 MB, fixed Content-Type, `requestChecksumCalculation: "WHEN_REQUIRED"`); asset row created only after a server HEAD check and a re-check of the 20-file cap. Presigned GET ≤ 15 min. No Supabase Storage. Type allowlist lives in `material/domain/files.ts`.
+- Storage: Supabase Storage, private bucket `material` in each environment's EU project, created by migration with `file_size_limit` 100 MB and `allowed_mime_types` = the allowlist; no public access, the service role is the only reader and writer. Keys `cases/{caseId}/assets/{assetId}/original.{ext}`, built only in `material/adapters`. Browser uploads to a signed upload URL issued after `authorize`; size and type limits are enforced by the bucket, and the asset row is created only after the server checks the object's metadata (size, type) at confirm and re-checks the 20-file cap. Signed GET ≤ 15 min. No versioning, so the app never deletes objects (removal is a soft delete). No AWS S3. Type allowlist lives in `material/domain/files.ts`.
 - `MaterialRef { asset | form_field, id }`, resolved only through `material.resolveRefs`; unknown form keys are rejected.
 - Migrations are forward-only; never edit an applied migration. Applied staging before prod, before the new image starts. Without local Docker, commit CI's regenerated `db.types.ts` when the drift check fails.
 - Deployment: one Docker image on the Playwright base with pinned ffmpeg, two processes (`node server.js`, `node dist/worker.js`); worker only idles in this epic. Basic auth enforced in `proxy.ts`; credentials never `NEXT_PUBLIC_`.
@@ -63,4 +64,5 @@ The owner/designer creates a case study by hand, gets a permanent ID, uploads pr
 - 2.1 → 2.2 → 2.3 are foundations for everything; 2.4 (shell, tokens, dictionary, StatusBadge) precedes all UI stories.
 - 2.5 creates `case_study`, `case_event` and `transition`, used by 2.6–2.10; 2.6's Bozza row click is completed by 2.10 (first-incomplete-step routing).
 - 2.8 (cleanup migration, `hasMaterial` = live asset) lands before 2.9 (favourites); the 2.7 and 2.10 UI parts follow both. 2.10's Avanti gate depends on `hasMaterial`.
+- 2.11 swaps the S3 adapter for Supabase Storage behind the existing `ObjectStorage` port, after the 2.7 UI lands; it updates the browser upload helper to the signed-upload shape (method, URL, headers).
 - Later epics: Epic 3 consumes `hasMaterial`, `resolveRefs` and the material manifest (favourites carried but ignored); Story 4.1 adds status filter, row actions, delete and To review; Epic 6 swaps only how `getActor()` resolves the actor and retires the basic-auth gate.
