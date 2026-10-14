@@ -102,7 +102,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 **FR1** – The system creates every case study with a unique ID, ready to be linked to the project order later. The owner/designer creates the case study manually. There is no trigger at project close.
 
 **FR2** – The owner/designer uploads material (images, videos, text documents and PDFs), can mark any number of images and videos as favourite, and fills in a short details form on context, solution and results. The details form is the only place for typed project text.
-- Upload is limited to 20 files of at most 100 MB each.
+- Upload is limited to 20 files of at most 50 MB each. (50 MB is the hosted Supabase plan's upload cap; it returns to 100 MB when the plan is upgraded. Owner decision 2026-10-14.)
 
 **FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material and form answers.
 - If no material is uploaded, generation is not available (NFR6).

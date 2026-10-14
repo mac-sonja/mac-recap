@@ -3,8 +3,9 @@ import { z } from "zod";
 /** At most this many non-deleted assets per case (checked at presign and, atomically, at confirm). */
 export const MAX_ASSETS_PER_CASE = 20;
 
-/** Upper size bound of one file, in bytes (100 MB). */
-export const MAX_FILE_BYTES = 100 * 1024 * 1024;
+/** Upper size bound of one file, in bytes (50 MB). */
+// Hosted Supabase plan cap; back to 100 MB on Pro (owner decision 2026-10-14).
+export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 /** What an asset is, for icons and later renditions. The `asset.kind` check lists exactly these. */
 export const ASSET_KINDS = ["image", "video", "document", "text"] as const;

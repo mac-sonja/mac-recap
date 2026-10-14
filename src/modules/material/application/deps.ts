@@ -19,7 +19,7 @@ export interface MaterialDeps {
   assets: AssetRepository;
   /** The details form (never needs storage; never material). */
   form: DetailsFormRepository;
-  /** `null` when `S3_BUCKET` / `S3_REGION` are unset (and on details-form paths, which never need it). */
+  /** `null` on the paths that never need storage (details form, refs, favourites); use cases answer `STORAGE_NOT_CONFIGURED` then. */
   storage: ObjectStorage | null;
   cases: CaseStudies;
   /** Generates asset ids at presign. */

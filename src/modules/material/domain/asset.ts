@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ASSET_KINDS, contentTypeSchema, MAX_FILE_BYTES, type AssetKind } from "@/modules/material/domain/files";
 
-/** An `asset` row as the material module sees it. The S3 key stays in adapters. */
+/** An `asset` row as the material module sees it. The storage key stays in adapters. */
 export const assetSchema = z.object({
   id: z.uuid(),
   caseId: z.uuid(),
@@ -17,7 +17,7 @@ export const assetSchema = z.object({
 export type Asset = z.infer<typeof assetSchema>;
 
 /**
- * Request for a presigned POST. `contentType` and `sizeBytes` are checked by the
+ * Request for a signed upload. `contentType` and `sizeBytes` are checked by the
  * use case (FILE_TYPE_NOT_ALLOWED / FILE_TOO_LARGE), so here they are loose.
  */
 export const presignInputSchema = z.object({
@@ -77,8 +77,8 @@ export const THUMBNAIL_URL_TTL_SECONDS = 15 * 60;
 
 /**
  * One row of a case's file list: the asset (with its favourite flag) without
- * its author or deletion stamp, plus a presigned GET for images (`null` for other kinds, or when S3
- * isn't configured).
+ * its author or deletion stamp, plus a signed GET for images (`null` for other kinds, or when storage
+ * isn't available).
  */
 export type ListedAsset = Pick<Asset, "id" | "kind" | "originalFileName" | "contentType" | "sizeBytes" | "createdAt" | "isFavourite"> & {
   thumbnailUrl: string | null;

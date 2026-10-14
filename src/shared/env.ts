@@ -20,11 +20,6 @@ export const envSchema = z.object({
   // when the web process requires them.
   BASIC_AUTH_USER: optionalNonEmpty,
   BASIC_AUTH_PASSWORD: optionalNonEmpty,
-  // Private EU bucket for project files (material module). Optional so the app
-  // still starts without it; material use cases then return
-  // STORAGE_NOT_CONFIGURED. Credentials come from the AWS SDK default chain.
-  S3_BUCKET: optionalNonEmpty,
-  S3_REGION: optionalNonEmpty,
   NODE_ENV: z.string().optional(),
 });
 
@@ -71,17 +66,4 @@ export function resolveGateCredentials(env: Env): GateCredentials | null {
 /** Gate credentials for the web process (`proxy.ts`, boot check); `null` when the gate is off. */
 export function getGateCredentials(): GateCredentials | null {
   return resolveGateCredentials(getEnv());
-}
-
-export type StorageConfig = { bucket: string; region: string };
-
-/** The S3 bucket and region, or `null` when either is unset (uploads are then unavailable). */
-export function resolveStorageConfig(env: Env): StorageConfig | null {
-  const { S3_BUCKET: bucket, S3_REGION: region } = env;
-  return bucket && region ? { bucket, region } : null;
-}
-
-/** Storage config for the material S3 adapter; `null` when not configured. */
-export function getStorageConfig(): StorageConfig | null {
-  return resolveStorageConfig(getEnv());
 }

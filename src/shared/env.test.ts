@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
-import { parseEnv, resolveGateCredentials, resolveStorageConfig } from "./env";
+import { parseEnv, resolveGateCredentials } from "./env";
 
 const valid = {
   SUPABASE_URL: "http://127.0.0.1:54321",
@@ -99,25 +99,5 @@ describe("resolveGateCredentials", () => {
     }
     expect(message).toMatch(/BASIC_AUTH_PASSWORD/);
     expect(message).not.toContain(secret);
-  });
-});
-
-describe("resolveStorageConfig", () => {
-  const resolve = (source: Record<string, string | undefined>) => resolveStorageConfig(parseEnv({ ...valid, ...source }));
-
-  it("returns bucket and region when both are set", () => {
-    expect(resolve({ S3_BUCKET: "mac-recap-staging", S3_REGION: "eu-south-1" })).toEqual({
-      bucket: "mac-recap-staging",
-      region: "eu-south-1",
-    });
-  });
-
-  it.each([
-    ["both unset", {}],
-    ["bucket only", { S3_BUCKET: "b" }],
-    ["region only", { S3_REGION: "eu-south-1" }],
-    ["empty values", { S3_BUCKET: "", S3_REGION: "" }],
-  ])("returns null (%s) and the environment still parses", (_label, source) => {
-    expect(resolve(source)).toBeNull();
   });
 });

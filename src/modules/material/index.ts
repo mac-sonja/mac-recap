@@ -1,12 +1,12 @@
 // Public surface of the material module. Code outside this module imports only this file.
-// The module owns `asset` (including its favourite flag), `context_form` and S3
-// `cases/{caseId}/assets/**` (AD-11): nobody else writes them.
+// The module owns `asset` (including its favourite flag), `context_form` and the
+// `material` storage bucket's `cases/{caseId}/assets/**` (AD-11): nobody else writes them.
 import { randomUUID } from "node:crypto";
 import type { Actor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
-import { createS3ObjectStorage } from "@/modules/material/adapters/s3/object-storage";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
+import { createSupabaseObjectStorage } from "@/modules/material/adapters/supabase/object-storage";
 import { makeConfirmUpload } from "@/modules/material/application/confirm-upload";
 import type { MaterialDeps } from "@/modules/material/application/deps";
 import { makeGetDetailsForm } from "@/modules/material/application/get-details-form";
@@ -20,7 +20,6 @@ import { makeSetFavourite } from "@/modules/material/application/set-favourite";
 import type { Asset, ListedAsset } from "@/modules/material/domain/asset";
 import type { DetailsFieldSaved, DetailsForm, ResolvedRef } from "@/modules/material/domain/details-form";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
-import { getStorageConfig } from "@/shared/env";
 import type { Result } from "@/shared/result";
 
 export { ASSET_FAVOURITED, ASSET_REMOVED, ASSET_UNFAVOURITED, ASSET_UPLOADED } from "@/modules/material/domain/asset";
@@ -43,18 +42,15 @@ export {
 export type { AllowedContentType, AssetKind } from "@/modules/material/domain/files";
 export type { PresignedAssetUpload } from "@/modules/material/application/presign-upload";
 
-/** One S3 adapter (and client) per resolved bucket/region, reused across requests. */
-let storageMemo: { key: string; storage: ObjectStorage } | undefined;
+/** One Supabase Storage adapter, built on first use and reused across requests. */
+let storageMemo: ObjectStorage | undefined;
 
-function configuredStorage(): ObjectStorage | null {
-  const config = getStorageConfig();
-  if (config === null) return null;
-  const key = `${config.bucket}/${config.region}`;
-  if (storageMemo?.key !== key) storageMemo = { key, storage: createS3ObjectStorage(config) };
-  return storageMemo.storage;
+function configuredStorage(): ObjectStorage {
+  storageMemo ??= createSupabaseObjectStorage();
+  return storageMemo;
 }
 
-/** Use-case dependencies. Details-form paths pass `withStorage: false`: they never resolve S3. */
+/** Use-case dependencies. Details-form paths pass `withStorage: false`: they never resolve storage. */
 function deps({ withStorage = true }: { withStorage?: boolean } = {}): MaterialDeps {
   return {
     assets: createSupabaseAssetRepository(),
@@ -65,11 +61,12 @@ function deps({ withStorage = true }: { withStorage?: boolean } = {}): MaterialD
   };
 }
 
-/** Dependencies without storage, for the paths that never touch S3 (details form, material refs, favourites). */
+/** Dependencies without storage, for the paths that never touch it (details form, material refs, favourites). */
 const storagelessDeps = () => deps({ withStorage: false });
 
 /**
- * A presigned POST for one file: `{ assetId, url, fields }`. Input
+ * A signed upload for one file: `{ assetId, url, method: "PUT", headers }`; the
+ * browser sends the raw file to `url` with those headers. Input
  * `{ caseId, contentType, sizeBytes }`. Call only after `authorize(actor, 'upload')`.
  * Errors: `INVALID_INPUT`, `FILE_TYPE_NOT_ALLOWED`, `FILE_TOO_LARGE`,
  * `FILE_LIMIT_REACHED`, `NOT_FOUND`, `STORAGE_NOT_CONFIGURED`.
@@ -79,7 +76,7 @@ export function presignUpload(actor: Actor, input: unknown): Promise<Result<Pres
 }
 
 /**
- * Creates the asset after HEAD-checking the uploaded object, and records
+ * Creates the asset after checking the uploaded object's stored metadata, and records
  * `asset_uploaded`. Input `{ caseId, assetId, contentType, fileName }`. Call only
  * after `authorize(actor, 'upload')`. Errors: `UPLOAD_NOT_FOUND`, `UPLOAD_REJECTED`,
  * `FILE_LIMIT_REACHED`, `ASSET_ALREADY_CONFIRMED`, `NOT_FOUND`, `STORAGE_NOT_CONFIGURED`.
@@ -90,8 +87,7 @@ export function confirmUpload(actor: Actor, input: unknown): Promise<Result<Asse
 
 /**
  * The non-deleted assets of a case (`{ caseId }`), oldest first. Images carry a
- * `thumbnailUrl` (presigned GET, 15 minutes); other kinds, and every asset when
- * S3 isn't configured, carry `null`. Authorize `upload` first. Errors:
+ * `thumbnailUrl` (signed GET, 15 minutes); other kinds carry `null`. Authorize `upload` first. Errors:
  * `INVALID_INPUT`, `NOT_FOUND`, `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`, `STORAGE_FAILED`.
  */
 export function listAssets(input: unknown): Promise<Result<ListedAsset[]>> {
@@ -111,7 +107,7 @@ export function removeAsset(actor: Actor, input: unknown): Promise<Result<void>>
  * `mark favourites` first. Errors: `INVALID_INPUT`, `NOT_FOUND`, `NOT_FAVOURITABLE`,
  * `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`, `ASSET_WRITE_FAILED`, and the event-write
  * error (the flag is then put back).
- * Any status; status never changes; works without S3. Generation ignores the flag.
+ * Any status; status never changes; never touches storage. Generation ignores the flag.
  */
 export function setFavourite(actor: Actor, input: unknown): Promise<Result<void>> {
   return makeSetFavourite(storagelessDeps())(actor, input);
@@ -121,7 +117,7 @@ export function setFavourite(actor: Actor, input: unknown): Promise<Result<void>
  * Whether the case has material: at least one non-deleted asset. The details
  * form never counts. The single
  * check reused by Next: Details (Story 2.10) and the Generate gate (Epic 3).
- * Works without S3. Errors: `INVALID_INPUT` (malformed id), `MATERIAL_LOOKUP_FAILED`.
+ * Never touches storage. Errors: `INVALID_INPUT` (malformed id), `MATERIAL_LOOKUP_FAILED`.
  */
 export function hasMaterial(caseId: unknown): Promise<Result<boolean>> {
   return makeHasMaterial(storagelessDeps())(caseId);
@@ -132,7 +128,7 @@ export function hasMaterial(caseId: unknown): Promise<Result<boolean>> {
  * (`""` clears it; at most 5,000 characters) and records `details_saved { field }`
  * (never the text); saving the stored text again changes nothing and records no
  * event. Authorize `fill details` first. Errors: `INVALID_INPUT` (naming `text`),
- * `UNKNOWN_FIELD`, `NOT_FOUND`. Any status; status never changes; works without S3.
+ * `UNKNOWN_FIELD`, `NOT_FOUND`. Any status; status never changes; never touches storage.
  * The form is never material.
  */
 export function saveDetailsField(actor: Actor, input: unknown): Promise<Result<DetailsFieldSaved>> {
@@ -141,7 +137,7 @@ export function saveDetailsField(actor: Actor, input: unknown): Promise<Result<D
 
 /**
  * The details form of a case (`{ caseId }`): `{ context, solution, results }`,
- * each `""` when never saved. Authorize `fill details` first. Errors: `INVALID_INPUT`, `NOT_FOUND`. Works without S3.
+ * each `""` when never saved. Authorize `fill details` first. Errors: `INVALID_INPUT`, `NOT_FOUND`. Never touches storage.
  */
 export function getDetailsForm(input: unknown): Promise<Result<DetailsForm>> {
   return makeGetDetailsForm(storagelessDeps())(input);
@@ -151,7 +147,7 @@ export function getDetailsForm(input: unknown): Promise<Result<DetailsForm>> {
  * Resolves `MaterialRef`s of a case to their current text, in order: `[{ ref, text }]`.
  * Only `{ kind: 'form_field', id: 'context' | 'solution' | 'results' }` resolves so
  * far; anything else is `UNKNOWN_REF` naming it (nothing resolved). Errors:
- * `INVALID_INPUT`, `UNKNOWN_REF`, `NOT_FOUND`. Works without S3. The only way
+ * `INVALID_INPUT`, `UNKNOWN_REF`, `NOT_FOUND`. Never touches storage. The only way
  * other modules read cited material.
  */
 export function resolveRefs(caseId: unknown, refs: unknown): Promise<Result<ResolvedRef[]>> {

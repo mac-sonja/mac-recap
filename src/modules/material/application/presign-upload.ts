@@ -11,7 +11,7 @@ export interface PresignedAssetUpload extends PresignedUpload {
 }
 
 /**
- * Issues a presigned POST for one file of a non-deleted case (any status). The
+ * Issues a signed upload (PUT) for one file of a non-deleted case (any status). The
  * caller has already authorized `upload`. Nothing is stored: the asset row is
  * created only by `confirmUpload`. Errors: `INVALID_INPUT`, `FILE_TYPE_NOT_ALLOWED`,
  * `FILE_TOO_LARGE`, `STORAGE_NOT_CONFIGURED`, `NOT_FOUND`, `FILE_LIMIT_REACHED`.
@@ -25,7 +25,7 @@ export function makePresignUpload({ assets, storage, cases, newId }: MaterialDep
       return err({ code: "FILE_TYPE_NOT_ALLOWED", message: "This file type is not allowed.", details: { contentType } });
     }
     if (sizeBytes > MAX_FILE_BYTES) {
-      return err({ code: "FILE_TOO_LARGE", message: "Files can be at most 100 MB.", details: { sizeBytes } });
+      return err({ code: "FILE_TOO_LARGE", message: `Files can be at most ${MAX_FILE_BYTES / (1024 * 1024)} MB.`, details: { sizeBytes } });
     }
     if (storage === null) return storageNotConfigured();
 

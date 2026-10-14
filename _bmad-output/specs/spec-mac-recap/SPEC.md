@@ -28,7 +28,7 @@ The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects clos
   - **success:** Every new case study has an ID that never changes, is never reused, and is the only identifier other systems see (AD-2).
 - **CAP-2**
   - **intent:** The owner/designer uploads material (images, videos, text documents and PDFs) to a case study and can mark any number of images and videos as favourite.
-  - **success:** Up to 20 files of up to 100 MB each are stored with the case study, and each image or video can carry an optional favourite mark. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others.
+  - **success:** Up to 20 files of up to 50 MB each are stored with the case study, and each image or video can carry an optional favourite mark. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others.
 - **CAP-3**
   - **intent:** The owner/designer fills in a short details form on context, solution and results that feeds the narrative.
   - **success:** The answers are saved with the case study and can be cited as claim sources. The fields are optional, and the form never counts as material.

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import { acceptFor, normalizeContentType, uploadToS3, UploadError } from "./upload";
+import { acceptFor, normalizeContentType, uploadFile, UploadError } from "./upload";
 
 const ALLOWED = [
   "image/jpeg",
@@ -14,11 +14,13 @@ const ALLOWED = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
+const SIGNED_URL = "https://project.supabase.co/storage/v1/object/upload/sign/material/cases/x/original.png?token=t";
+
 /** A minimal XHR stub: records the request; the test drives progress and the outcome. */
 class FakeXhr {
   method = "";
   url = "";
-  body: FormData | null = null;
+  body: Blob | null = null;
   status = 0;
   headers: Record<string, string> = {};
   aborted = false;
@@ -35,7 +37,7 @@ class FakeXhr {
   setRequestHeader(name: string, value: string) {
     this.headers[name] = value;
   }
-  send(body: FormData) {
+  send(body: Blob) {
     this.body = body;
   }
   abort() {
@@ -55,26 +57,22 @@ function start(signal?: AbortSignal) {
   const xhr = new FakeXhr();
   const onProgress = vi.fn();
   const file = new File(["hello"], "a.png", { type: "image/png" });
-  const done = uploadToS3("https://bucket.s3/", { key: "cases/x", "Content-Type": "image/png", Policy: "p" }, file, onProgress, {
+  const target = { url: SIGNED_URL, method: "PUT" as const, headers: { "content-type": "image/png", "x-upsert": "false" } };
+  const done = uploadFile(target, file, onProgress, {
     signal,
     createXhr: () => xhr as unknown as XMLHttpRequest,
   });
   return { xhr, onProgress, file, done };
 }
 
-describe("uploadToS3", () => {
-  it("POSTs every field first and the file last, without a Content-Type header", async () => {
+describe("uploadFile", () => {
+  it("PUTs the raw file to the signed URL with every given header", async () => {
     const { xhr, file, done } = start();
-    expect(xhr.method).toBe("POST");
-    expect(xhr.url).toBe("https://bucket.s3/");
-    expect(xhr.headers).toEqual({});
-    const entries = [...(xhr.body as FormData).entries()];
-    expect(entries.map(([name]) => name)).toEqual(["key", "Content-Type", "Policy", "file"]);
-    expect(entries[0][1]).toBe("cases/x");
-    const sent = entries[3][1] as File;
-    expect(sent.name).toBe(file.name);
-    expect(sent.size).toBe(file.size);
-    xhr.finish(204);
+    expect(xhr.method).toBe("PUT");
+    expect(xhr.url).toBe(SIGNED_URL);
+    expect(xhr.headers).toEqual({ "content-type": "image/png", "x-upsert": "false" });
+    expect(xhr.body).toBe(file);
+    xhr.finish(200);
     await expect(done).resolves.toBeUndefined();
   });
 
@@ -87,10 +85,10 @@ describe("uploadToS3", () => {
     expect(onProgress.mock.calls.map(([p]) => p)).toEqual([25, 67, 100]);
   });
 
-  it("rejects on a non-2xx answer with its status", async () => {
+  it.each([400, 403, 413])("rejects on a %i answer (e.g. over the bucket limit) with its status", async (status) => {
     const { xhr, done } = start();
-    xhr.finish(403);
-    await expect(done).rejects.toMatchObject({ name: "UploadError", status: 403, aborted: false });
+    xhr.finish(status);
+    await expect(done).rejects.toMatchObject({ name: "UploadError", status, aborted: false });
   });
 
   it("rejects on a network error", async () => {

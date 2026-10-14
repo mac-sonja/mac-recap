@@ -75,7 +75,7 @@ describe("material step copy", () => {
     expect(t("wizard.material.intro")).toBe("Carica il materiale già verificato. La generazione parte solo da qui.");
     expect(t("wizard.material.drop.lead")).toBe("Trascina qui i file o");
     expect(t("wizard.material.drop.browse")).toBe("sfoglia");
-    expect(fill(t("wizard.material.drop.hint"), { max: 20, size: 100 })).toBe("Fino a 20 file, 100 MB ciascuno.");
+    expect(fill(t("wizard.material.drop.hint"), { max: 20, size: 50 })).toBe("Fino a 20 file, 50 MB ciascuno.");
     expect(Object.values(m.drop.types)).toEqual(["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]);
     expect(t("wizard.material.list.label")).toBe("Materiale");
     expect(fill(t("wizard.material.list.count"), { n: 4, max: 20 })).toBe("4 / 20 file");
@@ -86,7 +86,7 @@ describe("material step copy", () => {
   });
 
   test("has the rejection and failure lines", () => {
-    expect(fill(t("wizard.material.errors.tooLarge"), { size: 100 })).toBe("Oltre 100 MB. Non caricato.");
+    expect(fill(t("wizard.material.errors.tooLarge"), { size: 50 })).toBe("Oltre 50 MB. Non caricato.");
     expect(t("wizard.material.errors.type")).toBe(
       "Questo tipo di file non è supportato. Usa immagini, video, testi o PDF.",
     );

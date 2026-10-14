@@ -1,9 +1,10 @@
 /**
- * Browser-side helpers for the Material step's direct-to-S3 uploads (Story 2.7).
- * Client code: it imports nothing from `@/modules/*`; the allowlist comes in as data.
+ * Browser-side helpers for the Material step's direct uploads to Supabase Storage
+ * (Stories 2.7, 2.11). Client code: it imports nothing from `@/modules/*`; the
+ * allowlist comes in as data.
  */
 
-/** Thrown by `uploadToS3` when the POST fails, is aborted, or S3 answers non-2xx. */
+/** Thrown by `uploadFile` when the request fails, is aborted, or storage answers non-2xx. */
 export class UploadError extends Error {
   constructor(
     message: string,
@@ -19,15 +20,22 @@ export class UploadError extends Error {
 /** Builds the XHR; injectable so tests can pass a stub. */
 export type XhrFactory = () => XMLHttpRequest;
 
+/** Where and how to send one file: the signed upload issued by `presignAssetUpload`. */
+export interface SignedUpload {
+  url: string;
+  method: "PUT";
+  headers: Readonly<Record<string, string>>;
+}
+
 /**
- * Posts `file` to a presigned S3 POST: every entry of `fields` first, the file
- * last (S3 ignores fields after `file`). No Content-Type header is set, so the
- * browser writes the multipart boundary. `onProgress` gets 0–100 as bytes go out.
- * Resolves on any 2xx (S3 answers 204); rejects with `UploadError` otherwise.
+ * Sends `file` as the raw request body to a signed upload: `target.method` to
+ * `target.url` with every entry of `target.headers` (they fix the content type
+ * and forbid overwriting). `onProgress` gets 0–100 as bytes go out. Resolves on
+ * any 2xx; rejects with `UploadError` otherwise (storage refuses a file over the
+ * bucket's size limit or of a type outside its list with a 4xx).
  */
-export function uploadToS3(
-  url: string,
-  fields: Readonly<Record<string, string>>,
+export function uploadFile(
+  target: SignedUpload,
   file: Blob,
   onProgress: (percent: number) => void,
   { signal, createXhr = () => new XMLHttpRequest() }: { signal?: AbortSignal; createXhr?: XhrFactory } = {},
@@ -37,13 +45,11 @@ export function uploadToS3(
       reject(new UploadError("Upload aborted.", 0, true));
       return;
     }
-    const form = new FormData();
-    for (const [name, value] of Object.entries(fields)) form.append(name, value);
-    form.append("file", file);
 
     const xhr = createXhr();
     const onAbort = () => xhr.abort();
-    xhr.open("POST", url);
+    xhr.open(target.method, target.url);
+    for (const [name, value] of Object.entries(target.headers)) xhr.setRequestHeader(name, value);
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {
         onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
@@ -55,7 +61,7 @@ export function uploadToS3(
         onProgress(100);
         resolve();
       } else {
-        reject(new UploadError(`S3 answered ${xhr.status}.`, xhr.status));
+        reject(new UploadError(`Storage answered ${xhr.status}.`, xhr.status));
       }
     };
     xhr.onerror = () => {
@@ -67,7 +73,7 @@ export function uploadToS3(
       reject(new UploadError("Upload aborted.", 0, true));
     };
     signal?.addEventListener("abort", onAbort, { once: true });
-    xhr.send(form);
+    xhr.send(file);
   });
 }
 

@@ -10,9 +10,8 @@ const confirmAssetUpload = vi.fn<(input: unknown) => Promise<ActionResult<Asset>
 const listAssets = vi.fn<(input: unknown) => Promise<ActionResult<ListedAsset[]>>>();
 const removeAsset = vi.fn<(input: unknown) => Promise<ActionResult<void>>>();
 const setAssetFavourite = vi.fn<(input: unknown) => Promise<ActionResult<void>>>();
-const uploadToS3 = vi.fn<
-  (url: string, fields: Record<string, string>, file: Blob, onProgress: (p: number) => void, opts?: { signal?: AbortSignal }) => Promise<void>
->();
+type Target = { url: string; method: "PUT"; headers: Record<string, string> };
+const uploadFile = vi.fn<(target: Target, file: Blob, onProgress: (p: number) => void, opts?: { signal?: AbortSignal }) => Promise<void>>();
 
 vi.mock("@/app/(tool)/case-studies/actions", () => ({
   presignAssetUpload: (input: unknown) => presignAssetUpload(input),
@@ -23,7 +22,7 @@ vi.mock("@/app/(tool)/case-studies/actions", () => ({
 }));
 vi.mock("../_lib/upload", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../_lib/upload")>()),
-  uploadToS3: (...args: Parameters<typeof uploadToS3>) => uploadToS3(...args),
+  uploadFile: (...args: Parameters<typeof uploadFile>) => uploadFile(...args),
 }));
 
 const { MaterialStep } = await import("./material-step");
@@ -72,12 +71,15 @@ const fail = (code: string, status = 500) => ({ ok: false as const, status, erro
 
 beforeEach(() => {
   issued = 0;
-  for (const fn of [presignAssetUpload, confirmAssetUpload, listAssets, removeAsset, setAssetFavourite, uploadToS3]) fn.mockReset();
+  for (const fn of [presignAssetUpload, confirmAssetUpload, listAssets, removeAsset, setAssetFavourite, uploadFile]) fn.mockReset();
   presignAssetUpload.mockImplementation(async () => {
     issued += 1;
-    return { ok: true, value: { assetId: `asset-${issued}`, url: "https://bucket.s3/", fields: { key: `k${issued}` } } };
+    return {
+      ok: true,
+      value: { assetId: `asset-${issued}`, url: `https://storage.test/sign/k${issued}`, method: "PUT", headers: { "content-type": "image/png", "x-upsert": "false" } },
+    };
   });
-  uploadToS3.mockImplementation(async (_url, _fields, _file, onProgress) => onProgress(100));
+  uploadFile.mockImplementation(async (_target, _file, onProgress) => onProgress(100));
   confirmAssetUpload.mockImplementation(async (input) => {
     const { assetId, contentType, fileName } = input as { assetId: string; contentType: Asset["contentType"]; fileName: string };
     return {
@@ -103,7 +105,7 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-function setup(initialAssets: ListedAsset[] = [], { maxAssets = 20, maxFileBytes = 100 * MB } = {}) {
+function setup(initialAssets: ListedAsset[] = [], { maxAssets = 20, maxFileBytes = 50 * MB } = {}) {
   const user = userEvent.setup({ applyAccept: false });
   const view = render(
     <MaterialStep caseId={CASE_ID} initialAssets={initialAssets} maxAssets={maxAssets} maxFileBytes={maxFileBytes} allowedContentTypes={ALLOWED} />,
@@ -140,7 +142,7 @@ describe("MaterialStep: empty", () => {
     expect(screen.getByText("Carica il materiale già verificato. La generazione parte solo da qui.")).toBeTruthy();
     expect(dropZone().getAttribute("tabindex")).toBe("0");
     expect(screen.getByText("sfoglia").className).toContain("text-primary");
-    expect(screen.getByText("Fino a 20 file, 100 MB ciascuno.")).toBeTruthy();
+    expect(screen.getByText("Fino a 20 file, 50 MB ciascuno.")).toBeTruthy();
     for (const chip of ["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]) expect(screen.getByText(chip)).toBeTruthy();
     const button = avanti();
     expect(button.tagName).toBe("BUTTON");
@@ -169,7 +171,7 @@ describe("MaterialStep: uploads", () => {
   it("uploads 3 files in parallel with per-file progress, then lists them; count 3 / 20; Avanti goes to step 2", async () => {
     const gates = [deferred(), deferred(), deferred()];
     let call = 0;
-    uploadToS3.mockImplementation((_url, _fields, _file, onProgress) => {
+    uploadFile.mockImplementation((_target, _file, onProgress) => {
       onProgress(40);
       return gates[call++].promise;
     });
@@ -180,7 +182,7 @@ describe("MaterialStep: uploads", () => {
       makeFile("brief.pdf", "application/pdf"),
     ]);
 
-    await waitFor(() => expect(uploadToS3).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(uploadFile).toHaveBeenCalledTimes(3));
     const bars = screen.getAllByRole("progressbar");
     expect(bars.map((bar) => bar.getAttribute("aria-label"))).toEqual([
       "Caricamento di key.png",
@@ -194,8 +196,11 @@ describe("MaterialStep: uploads", () => {
     expect(avanti().tagName).toBe("BUTTON");
 
     expect(presignAssetUpload).toHaveBeenCalledWith({ caseId: CASE_ID, contentType: "image/png", sizeBytes: 4.2 * MB });
-    expect(uploadToS3.mock.calls[0][0]).toBe("https://bucket.s3/");
-    expect(uploadToS3.mock.calls[0][1]).toEqual({ key: "k1" });
+    expect(uploadFile.mock.calls[0][0]).toEqual({
+      url: "https://storage.test/sign/k1",
+      method: "PUT",
+      headers: { "content-type": "image/png", "x-upsert": "false" },
+    });
 
     await act(async () => gates.forEach((gate) => gate.resolve()));
     await waitFor(() => expect(screen.queryAllByRole("progressbar")).toHaveLength(0));
@@ -211,10 +216,10 @@ describe("MaterialStep: uploads", () => {
   });
 
   it("shows the thumbnail from the listing once an image is confirmed", async () => {
-    listAssets.mockResolvedValue({ ok: true, value: [listed(1, { id: "asset-1", thumbnailUrl: "https://bucket.s3/t1" })] });
+    listAssets.mockResolvedValue({ ok: true, value: [listed(1, { id: "asset-1", thumbnailUrl: "https://storage.test/t1" })] });
     const { user, input } = setup();
     await user.upload(input, makeFile("key.png", "image/png"));
-    await waitFor(() => expect(rowOf("key.png").querySelector("img")?.getAttribute("src")).toBe("https://bucket.s3/t1"));
+    await waitFor(() => expect(rowOf("key.png").querySelector("img")?.getAttribute("src")).toBe("https://storage.test/t1"));
     expect(rowOf("key.png").querySelector("img")?.getAttribute("alt")).toBe("");
   });
 
@@ -248,11 +253,11 @@ describe("MaterialStep: uploads", () => {
     expect(dropZone().hasAttribute("data-drag-over")).toBe(false);
   });
 
-  it("rejects a file over 100 MB on its row and uploads the others", async () => {
+  it("rejects a file over 50 MB on its row and uploads the others", async () => {
     const { user, input } = setup();
     await user.upload(input, [makeFile("backstage-raw.mov", "video/quicktime", 140 * MB), makeFile("a.pdf", "application/pdf")]);
-    expect(within(rowOf("backstage-raw.mov")).getByText("Oltre 100 MB. Non caricato.")).toBeTruthy();
-    expect(liveRegion().textContent).toContain("backstage-raw.mov: Oltre 100 MB. Non caricato.");
+    expect(within(rowOf("backstage-raw.mov")).getByText("Oltre 50 MB. Non caricato.")).toBeTruthy();
+    expect(liveRegion().textContent).toContain("backstage-raw.mov: Oltre 50 MB. Non caricato.");
     await screen.findByText("1 / 20 file");
     expect(presignAssetUpload).toHaveBeenCalledOnce();
     expect(presignAssetUpload).toHaveBeenCalledWith(expect.objectContaining({ contentType: "application/pdf" }));
@@ -281,7 +286,7 @@ describe("MaterialStep: uploads", () => {
 
   it("counts uploads in flight against the slots of a later drop", async () => {
     const gate = deferred();
-    uploadToS3.mockImplementation(() => gate.promise);
+    uploadFile.mockImplementation(() => gate.promise);
     const initial = Array.from({ length: 19 }, (_, i) => listed(i + 1, { kind: "document", contentType: "application/pdf", originalFileName: `doc-${i + 1}.pdf` }));
     const { user, input } = setup(initial);
     await user.upload(input, makeFile("a.pdf", "application/pdf"));
@@ -293,7 +298,7 @@ describe("MaterialStep: uploads", () => {
 
   it.each([
     ["presign", "FILE_LIMIT_REACHED", "Limite di 20 file raggiunto. Non caricato."],
-    ["presign", "FILE_TOO_LARGE", "Oltre 100 MB. Non caricato."],
+    ["presign", "FILE_TOO_LARGE", "Oltre 50 MB. Non caricato."],
     ["presign", "FILE_TYPE_NOT_ALLOWED", "Questo tipo di file non è supportato. Usa immagini, video, testi o PDF."],
     ["confirm", "FILE_LIMIT_REACHED", "Limite di 20 file raggiunto. Non caricato."],
     ["confirm", "UPLOAD_REJECTED", "Il file caricato non corrisponde a quello scelto. Non caricato."],
@@ -312,12 +317,12 @@ describe("MaterialStep: uploads", () => {
     const { user, input } = setup();
     await user.upload(input, [makeFile("a.pdf", "application/pdf"), makeFile("b.pdf", "application/pdf")]);
     await screen.findByText("1 / 20 file");
-    expect(within(rowOf("a.pdf")).getByText("Oltre 100 MB. Non caricato.")).toBeTruthy();
+    expect(within(rowOf("a.pdf")).getByText("Oltre 50 MB. Non caricato.")).toBeTruthy();
     expect(rowOf("b.pdf").getAttribute("data-row-state")).toBe("listed");
   });
 
-  it("re-presigns and retries once when the S3 POST fails, then lists the file", async () => {
-    uploadToS3.mockRejectedValueOnce(new UploadError("Network error.", 0));
+  it("re-presigns and retries once when the storage upload fails, then lists the file", async () => {
+    uploadFile.mockRejectedValueOnce(new UploadError("Network error.", 0));
     const { user, input } = setup();
     await user.upload(input, makeFile("a.pdf", "application/pdf"));
     await screen.findByText("1 / 20 file");
@@ -397,7 +402,7 @@ describe("MaterialStep: uploads", () => {
 
   it("aborts uploads still running when the step unmounts", async () => {
     const signals: AbortSignal[] = [];
-    uploadToS3.mockImplementation((_url, _fields, _file, _onProgress, opts) => {
+    uploadFile.mockImplementation((_target, _file, _onProgress, opts) => {
       if (opts?.signal) signals.push(opts.signal);
       return new Promise(() => undefined);
     });
@@ -447,7 +452,7 @@ describe("MaterialStep: uploads", () => {
   });
 
   it("shows Caricamento non riuscito. after the retry fails too", async () => {
-    uploadToS3.mockRejectedValue(new UploadError("S3 answered 500.", 500));
+    uploadFile.mockRejectedValue(new UploadError("Storage answered 500.", 500));
     const { user, input } = setup();
     await user.upload(input, makeFile("a.pdf", "application/pdf"));
     expect(await within(rowOf("a.pdf")).findByText("Caricamento non riuscito.")).toBeTruthy();
@@ -476,15 +481,15 @@ describe("MaterialStep: uploads", () => {
   });
 
   it("cancels an upload in flight when its row is removed", async () => {
-    uploadToS3.mockImplementation(
-      (_url, _fields, _file, _onProgress, opts) =>
+    uploadFile.mockImplementation(
+      (_target, _file, _onProgress, opts) =>
         new Promise((_resolve, reject) =>
           opts?.signal?.addEventListener("abort", () => reject(new UploadError("Upload aborted.", 0, true))),
         ),
     );
     const { user, input } = setup();
     await user.upload(input, makeFile("a.pdf", "application/pdf"));
-    await waitFor(() => expect(uploadToS3).toHaveBeenCalled());
+    await waitFor(() => expect(uploadFile).toHaveBeenCalled());
     await user.click(screen.getByRole("button", { name: "Rimuovi a.pdf" }));
     expect(screen.queryByText("a.pdf")).toBeNull();
     await act(async () => undefined);
@@ -502,7 +507,7 @@ describe("MaterialStep: uploads", () => {
 });
 
 describe("MaterialStep: listed rows", () => {
-  const image = listed(1, { originalFileName: "lumen-keyvisual-final.png", sizeBytes: 4.2 * MB, thumbnailUrl: "https://bucket.s3/t1" });
+  const image = listed(1, { originalFileName: "lumen-keyvisual-final.png", sizeBytes: 4.2 * MB, thumbnailUrl: "https://storage.test/t1" });
   const video = listed(2, { kind: "video", contentType: "video/mp4", originalFileName: "spot.mp4", isFavourite: true });
   const docs = [
     listed(3, { kind: "document", contentType: "application/pdf", originalFileName: "guide.pdf", sizeBytes: 11.6 * MB }),
@@ -522,7 +527,7 @@ describe("MaterialStep: listed rows", () => {
       "notes.txt",
       "notes.md",
     ]);
-    expect(items[0].querySelector("img")?.getAttribute("src")).toBe("https://bucket.s3/t1");
+    expect(items[0].querySelector("img")?.getAttribute("src")).toBe("https://storage.test/t1");
     expect(items[1].querySelector("img")).toBeNull();
     expect(items[1].querySelector("svg")).not.toBeNull();
     const size = within(items[0]).getByText("4,2 MB");
@@ -572,7 +577,7 @@ describe("MaterialStep: listed rows", () => {
     const saved = deferred<ActionResult<void>>();
     setAssetFavourite.mockReturnValue(saved.promise);
     const user = userEvent.setup();
-    render(<MaterialStep caseId={CASE_ID} initialAssets={[image]} maxAssets={20} maxFileBytes={100 * MB} allowedContentTypes={ALLOWED} />);
+    render(<MaterialStep caseId={CASE_ID} initialAssets={[image]} maxAssets={20} maxFileBytes={50 * MB} allowedContentTypes={ALLOWED} />);
     const toggle = screen.getByRole("button", { name: "Preferito" });
     await user.click(toggle);
     expect(toggle.getAttribute("aria-pressed")).toBe("true");

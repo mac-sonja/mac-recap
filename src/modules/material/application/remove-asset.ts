@@ -7,7 +7,7 @@ import { storageNotConfigured, type MaterialDeps } from "./deps";
 
 /**
  * Soft-deletes one live asset of a non-deleted case and records `asset_removed
- * { assetId }`; the S3 object stays. An unknown or already removed asset is
+ * { assetId }`; the stored object stays. An unknown or already removed asset is
  * `NOT_FOUND`. If the event write fails the soft delete is undone
  * (`undoSoftDelete`) and the error returned. The caller has already authorized `upload`.
  */

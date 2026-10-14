@@ -7,7 +7,7 @@ import { err, ok, type Result } from "@/shared/result";
 import { storageNotConfigured, type MaterialDeps } from "./deps";
 
 /**
- * Turns an uploaded object into an asset. HEAD-checks the object (present, ≤ 100 MB,
+ * Turns an uploaded object into an asset. Checks its stored metadata (present, 1 B..`MAX_FILE_BYTES`,
  * same `Content-Type`), inserts the row under the per-case cap lock, then records
  * `asset_uploaded { assetId }`. If the event write fails the row is soft-deleted
  * again and the error returned, so no asset exists without its event. Case status

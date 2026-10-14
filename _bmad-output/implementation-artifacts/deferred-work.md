@@ -117,3 +117,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-wizard-shell-and-name-step.md`
   summary: Make case creation idempotent (client request key) so a retry after a lost `createCaseStudy` response doesn't create a second Bozza case.
   evidence: Review of the Story 2.5 UI (triage #2): if the server creates the case but the response is lost, the generic error invites "riprova" and a second create runs; create is not idempotent (spec-2-5-create-a-case-study-backend row 12).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-11-store-project-files-in-supabase-storage.md`
+  summary: Decide and implement cleanup for orphaned storage objects (rejected confirms, abandoned 2 h signed uploads, soft-deleted assets), or record storage-quota monitoring, since AD-8 says the app never deletes objects.
+  evidence: Review of Story 2.11 (triage #12): nothing ever removes objects from the `material` bucket; storage is billed against the Supabase plan.

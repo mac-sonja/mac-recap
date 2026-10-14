@@ -2,16 +2,20 @@
 // `removeAsset`'s compensation since Story 2.8), `has_material`, the details form
 // and the real material adapters against the local Supabase stack. Run with
 // `npm run test:db`. Asset and case rows can never be deleted, so every test
-// works on its own fresh case.
+// works on its own fresh case. The Supabase Storage adapter runs against the
+// stack's real `material` bucket; objects are never deleted either, so every
+// object lives under its own fresh case and asset id.
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
+import { assetKey } from "@/modules/material/adapters/asset-key";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
+import { createSupabaseObjectStorage, MATERIAL_BUCKET } from "@/modules/material/adapters/supabase/object-storage";
 import { FAVOURITABLE_KINDS } from "@/modules/material/domain/asset";
-import { ALLOWED_CONTENT_TYPES, ASSET_KINDS, MAX_ASSETS_PER_CASE } from "@/modules/material/domain/files";
+import { ALLOWED_CONTENT_TYPES, ASSET_KINDS, MAX_ASSETS_PER_CASE, MAX_FILE_BYTES, type AllowedContentType } from "@/modules/material/domain/files";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
 import { err } from "@/shared/result";
 
@@ -336,7 +340,7 @@ describe("listing assets", () => {
     expect(await createSupabaseAssetRepository().listLive(created.id)).toEqual({ ok: true, value: [] });
   });
 
-  it("the listAssets use case reads through the real repository and case-study module (no S3: null URLs)", async () => {
+  it("the listAssets use case reads through the real repository and case-study module (no storage: null URLs)", async () => {
     const caseStudy = await loadCaseStudy();
     const { makeListAssets } = await import("@/modules/material/application/list-assets");
     const created = await createCase();
@@ -370,13 +374,17 @@ describe("listing assets", () => {
   });
 });
 
-describe("use cases against the real DB and case-study module (S3 stubbed)", () => {
+describe("use cases against the real DB and case-study module (storage stubbed)", () => {
   /** Real repository and case-study calls; storage answers HEAD from `objects`. */
   async function realDeps(objects: Map<string, StoredObject>) {
     const caseStudy = await loadCaseStudy();
     const storage: ObjectStorage = {
-      presignUpload: async (target) => ({ ok: true, value: { url: "https://s3.test/", fields: { key: target.assetId } } }),
-      presignDownload: async (target) => ({ ok: true, value: `https://s3.test/${target.assetId}` }),
+      presignUpload: async (target) => ({
+        ok: true,
+        value: { url: `https://storage.test/${target.assetId}`, method: "PUT", headers: { "content-type": target.contentType, "x-upsert": "false" } },
+      }),
+      presignDownload: async (target) => ({ ok: true, value: `https://storage.test/${target.assetId}` }),
+      presignDownloads: async (targets) => ({ ok: true, value: targets.map((target) => `https://storage.test/${target.assetId}`) }),
       head: async (target) => ({ ok: true, value: objects.get(target.assetId) ?? null }),
     };
     return {
@@ -995,5 +1003,176 @@ describe("details form (context_form)", () => {
 
   it.each(roleCases)("%s gets permission denied on %s", async (role, _verb, sql) => {
     await expect(inRolledBackTx(sql, [], role)).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+// Story 2.11: the private `material` bucket and the Supabase Storage adapter.
+
+describe("material storage bucket", () => {
+  const browser = () =>
+    createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+  const storage = () => createSupabaseObjectStorage();
+
+  /** A fresh case, a fresh asset id and the object's key for `contentType`. */
+  async function freshTarget(contentType: AllowedContentType) {
+    const created = await createCase();
+    const assetId = randomUUID();
+    return { target: { caseId: created.id, assetId, contentType }, path: assetKey(created.id, assetId, contentType) };
+  }
+
+  /** A tiny PNG body (the bucket checks only the declared type, not the bytes). */
+  const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+
+  it("exists, is private, and has the MAX_FILE_BYTES (50 MB) limit and exactly the allowlist", async () => {
+    const { rows } = await pool.query<{ id: string; public: boolean; limit: string; types: string[] }>(
+      "select id, public, file_size_limit::text as limit, allowed_mime_types as types from storage.buckets where id = $1",
+      [MATERIAL_BUCKET],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: "material", public: false, limit: String(MAX_FILE_BYTES) });
+    expect([...rows[0].types].sort()).toEqual([...ALLOWED_CONTENT_TYPES].sort());
+  });
+
+  it("has no storage.objects policy that could reach it (only the service role does)", async () => {
+    // A policy reaches `material` when it names the bucket, or when it doesn't
+    // filter on bucket_id at all (it then applies to every bucket).
+    const { rows } = await pool.query(
+      `select policyname from pg_policies
+        where schemaname = 'storage' and tablename = 'objects'
+          and ((coalesce(qual, '') || ' ' || coalesce(with_check, '')) ilike '%material%'
+               or (coalesce(qual, '') || ' ' || coalesce(with_check, '')) not ilike '%bucket_id%')`,
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it("round trip: presign → upload to the signed URL → head gives size and type → confirm → signed thumbnail", async () => {
+    const { makeConfirmUpload } = await import("@/modules/material/application/confirm-upload");
+    const { makeListAssets } = await import("@/modules/material/application/list-assets");
+    const caseStudy = await loadCaseStudy();
+    const actor = await devActor();
+    const { target, path } = await freshTarget("image/png");
+
+    const presigned = await storage().presignUpload(target, MAX_FILE_BYTES);
+    if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+    expect(presigned.value.method).toBe("PUT");
+    expect(presigned.value.headers).toEqual({ "content-type": "image/png", "x-upsert": "false" });
+    const url = new URL(presigned.value.url);
+    expect(url.pathname).toContain(`/object/upload/sign/${MATERIAL_BUCKET}/${path}`);
+    const token = url.searchParams.get("token");
+    expect(token).toBeTruthy();
+
+    const { error: uploadError } = await browser()
+      .storage.from(MATERIAL_BUCKET)
+      .uploadToSignedUrl(path, token as string, PNG_BYTES, { contentType: "image/png", upsert: false });
+    expect(uploadError).toBeNull();
+
+    expect(await storage().head(target)).toEqual({ ok: true, value: { sizeBytes: PNG_BYTES.byteLength, contentType: "image/png" } });
+
+    const deps = {
+      assets: createSupabaseAssetRepository(),
+      storage: storage(),
+      cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
+    };
+    const confirmed = await makeConfirmUpload({ ...deps, form: createSupabaseDetailsFormRepository(), newId: randomUUID })(actor, {
+      caseId: target.caseId,
+      assetId: target.assetId,
+      contentType: "image/png",
+      fileName: "key.png",
+    });
+    expect(confirmed.ok).toBe(true);
+    if (confirmed.ok) expect(confirmed.value.sizeBytes).toBe(PNG_BYTES.byteLength);
+    const { rows } = await pool.query("select s3_key from public.asset where id = $1", [target.assetId]);
+    expect(rows).toEqual([{ s3_key: path }]);
+
+    const listed = await makeListAssets(deps)({ caseId: target.caseId });
+    if (!listed.ok) throw new Error(`list failed: ${listed.error.code}`);
+    const thumbnail = listed.value[0].thumbnailUrl;
+    expect(thumbnail).toEqual(expect.any(String));
+    const fetched = await fetch(thumbnail as string);
+    expect(fetched.status).toBe(200);
+    expect(fetched.headers.get("content-type")).toBe("image/png");
+    expect(fetched.headers.get("content-disposition") ?? "").not.toMatch(/attachment/i);
+    expect(new Uint8Array(await fetched.arrayBuffer())).toEqual(PNG_BYTES);
+    // The signed token is a JWT valid for the thumbnail TTL: 15 minutes.
+    const jwt = new URL(thumbnail as string).searchParams.get("token") as string;
+    const claims = JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString("utf8")) as { iat: number; exp: number };
+    expect(Math.abs(claims.exp - claims.iat - 900)).toBeLessThanOrEqual(5);
+  });
+
+  it("the browser's request shape works: a raw PUT with the given headers, and a second PUT never overwrites", async () => {
+    const { target } = await freshTarget("application/pdf");
+    const presigned = await storage().presignUpload(target, MAX_FILE_BYTES);
+    if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+    const { url, method, headers } = presigned.value;
+    const body = new Blob(["%PDF-1.4 tiny"], { type: "application/pdf" });
+
+    const first = await fetch(url, { method, headers, body });
+    expect(first.status).toBe(200);
+    expect(await storage().head(target)).toEqual({ ok: true, value: { sizeBytes: body.size, contentType: "application/pdf" } });
+
+    const second = await fetch(url, { method, headers, body: new Blob(["%PDF-1.4 replaced!"]) });
+    expect(second.status).toBeGreaterThanOrEqual(400);
+    expect(second.status).toBeLessThan(500);
+    expect(await storage().head(target)).toEqual({ ok: true, value: { sizeBytes: body.size, contentType: "application/pdf" } });
+  });
+
+  it("refuses a type outside the bucket's list (4xx) and stores nothing", async () => {
+    const { target } = await freshTarget("image/png");
+    const presigned = await storage().presignUpload(target, MAX_FILE_BYTES);
+    if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+    const { url, method } = presigned.value;
+    const refused = await fetch(url, { method, headers: { "content-type": "application/zip", "x-upsert": "false" }, body: PNG_BYTES });
+    expect(refused.status).toBeGreaterThanOrEqual(400);
+    expect(refused.status).toBeLessThan(500);
+    expect(await storage().head(target)).toEqual({ ok: true, value: null });
+  });
+
+  it("head of an object never uploaded is null, so confirm answers UPLOAD_NOT_FOUND", async () => {
+    const { makeConfirmUpload } = await import("@/modules/material/application/confirm-upload");
+    const caseStudy = await loadCaseStudy();
+    const { target } = await freshTarget("image/png");
+    expect(await storage().head(target)).toEqual({ ok: true, value: null });
+
+    const confirmed = await makeConfirmUpload({
+      assets: createSupabaseAssetRepository(),
+      form: createSupabaseDetailsFormRepository(),
+      storage: storage(),
+      cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
+      newId: randomUUID,
+    })(await devActor(), { caseId: target.caseId, assetId: target.assetId, contentType: "image/png", fileName: "x.png" });
+    expect(confirmed.ok).toBe(false);
+    if (!confirmed.ok) expect(confirmed.error.code).toBe("UPLOAD_NOT_FOUND");
+    expect(await liveCount(target.caseId)).toBe(0);
+  });
+
+  it("the browser key is refused writing, signing and reading in the bucket", async () => {
+    const { target, path } = await freshTarget("image/png");
+    const bucket = browser().storage.from(MATERIAL_BUCKET);
+
+    const upload = await bucket.upload(path, PNG_BYTES, { contentType: "image/png", upsert: false });
+    expect(upload.data).toBeNull();
+    expect(upload.error).not.toBeNull();
+
+    const signUpload = await bucket.createSignedUploadUrl(path);
+    expect(signUpload.data).toBeNull();
+    expect(signUpload.error).not.toBeNull();
+    expect(await storage().head(target)).toEqual({ ok: true, value: null });
+
+    // An object the service role stored is still invisible to the browser key.
+    const presigned = await storage().presignUpload(target, MAX_FILE_BYTES);
+    if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+    const { url, method, headers } = presigned.value;
+    expect((await fetch(url, { method, headers, body: PNG_BYTES })).status).toBe(200);
+
+    const download = await bucket.download(path);
+    expect(download.data).toBeNull();
+    expect(download.error).not.toBeNull();
+    const signGet = await bucket.createSignedUrl(path, 60);
+    expect(signGet.data).toBeNull();
+    expect(signGet.error).not.toBeNull();
+    const listing = await bucket.list(`cases/${target.caseId}/assets/${target.assetId}`);
+    expect(listing.data ?? []).toEqual([]);
   });
 });

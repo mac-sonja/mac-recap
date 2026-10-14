@@ -48,8 +48,8 @@ describe("upload allowlist", () => {
     },
   );
 
-  it("caps at 20 files of 100 MB", () => {
+  it("caps at 20 files of 50 MB", () => {
     expect(MAX_ASSETS_PER_CASE).toBe(20);
-    expect(MAX_FILE_BYTES).toBe(104_857_600);
+    expect(MAX_FILE_BYTES).toBe(52_428_800);
   });
 });

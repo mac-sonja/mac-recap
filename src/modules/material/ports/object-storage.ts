@@ -8,10 +8,11 @@ export interface UploadTarget {
   contentType: AllowedContentType;
 }
 
-/** A browser-ready presigned POST: post `fields` plus the file to `url`. */
+/** A browser-ready signed upload: send the raw file to `url` with `method` and every entry of `headers`. */
 export interface PresignedUpload {
   url: string;
-  fields: Record<string, string>;
+  method: "PUT";
+  headers: Record<string, string>;
 }
 
 export interface StoredObject {
@@ -19,18 +20,29 @@ export interface StoredObject {
   contentType: string | null;
 }
 
-/** The private S3 bucket. Implemented by `adapters/s3/object-storage.ts`. */
+/**
+ * The private Supabase Storage bucket `material`. Implemented by
+ * `adapters/supabase/object-storage.ts`. A signed upload URL binds only the
+ * object path: the per-file checks are the bucket's own limits (size and the
+ * content-type allowlist, enforced by Supabase on every upload) and the confirm
+ * check of size and type from the object's stored metadata (`head`).
+ */
 export interface ObjectStorage {
   /**
-   * A presigned POST that fixes `Content-Type` and limits the body to
-   * 1..`maxBytes`. Signing never touches the network; `err` only on failure.
+   * A signed upload URL for the object's path that never overwrites an existing
+   * object; the returned headers declare the content type the browser must send.
+   * `maxBytes` is informational only: the bucket's `file_size_limit` is the only
+   * upload-time size cap, and confirm re-checks the stored size. `err` only on failure.
    */
   presignUpload(target: UploadTarget, maxBytes: number): Promise<Result<PresignedUpload>>;
-  /**
-   * A presigned GET for the stored object, valid `ttlSeconds`. Signing never
-   * touches the network; `err` only on failure.
-   */
+  /** A signed GET for the stored object, valid `ttlSeconds`, shown inline. `err` only on failure. */
   presignDownload(target: UploadTarget, ttlSeconds: number): Promise<Result<string>>;
-  /** HEAD of the uploaded object; `ok(null)` when it does not exist. */
+  /**
+   * Signed GETs for several objects in one storage call, valid `ttlSeconds`, in
+   * the order of `targets`; an entry is `null` when that object could not be
+   * signed (e.g. missing). `err` only when the whole call fails.
+   */
+  presignDownloads(targets: readonly UploadTarget[], ttlSeconds: number): Promise<Result<(string | null)[]>>;
+  /** The uploaded object's stored metadata; `ok(null)` when it does not exist. */
   head(target: UploadTarget): Promise<Result<StoredObject | null>>;
 }

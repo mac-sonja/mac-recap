@@ -137,8 +137,8 @@ A three-step stepper: **1 Material · 2 Details · 3 Generate**, horizontal, abo
 
 | Element | Behaviour |
 |---|---|
-| Dropzone | Drag and drop or **browse**. Accepts images, videos, text documents, PDFs; the accepted types show as small chips inside the empty dropzone. Copy: "Up to 20 files, 100 MB each." Once files are in, the dropzone compacts above the rows. |
-| Limits | A 21st file or a file over 100 MB is rejected inline on that file ("Over 100 MB. Not uploaded.") without blocking the others. A wrong file type gets "This file type isn't supported. Use images, videos, texts or PDFs." |
+| Dropzone | Drag and drop or **browse**. Accepts images, videos, text documents, PDFs; the accepted types show as small chips inside the empty dropzone. Copy: "Up to 20 files, 50 MB each." Once files are in, the dropzone compacts above the rows. |
+| Limits | A 21st file or a file over 50 MB is rejected inline on that file ("Over 50 MB. Not uploaded.") without blocking the others. A wrong file type gets "This file type isn't supported. Use images, videos, texts or PDFs." |
 | Upload progress | Per-file progress bar; files upload in parallel; the user can mark a file as favourite as soon as it has uploaded. |
 | Deliverable rows | Each uploaded file is a deliverable row: thumbnail, file name, size (mono), remove. No tags, properties or flags (decided 2026-10-13, C6, resolved). |
 | Favourite | Image and video rows carry a **Preferito** toggle (star); PDFs and documents don't. Any number of files can be favourites; it's optional and never blocks **Avanti**. Saves at once; a toggle button with `aria-pressed`. What a favourite means for generation is open ([OPEN 14]). |

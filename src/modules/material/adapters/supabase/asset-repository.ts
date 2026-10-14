@@ -13,7 +13,7 @@ const RAISE_EXCEPTION = "P0001";
 /** Postgres unique_violation: fallback if the id (or its key) exists despite the function's check. */
 const UNIQUE_VIOLATION = "23505";
 
-/** The columns `toAsset` maps; the S3 key is rebuilt by `assetKey` when needed, so it isn't read. */
+/** The columns `toAsset` maps; the storage key (`s3_key`) is rebuilt by `assetKey` when needed, so it isn't read. */
 const ASSET_COLUMNS = "id, case_id, kind, original_file_name, content_type, size_bytes, created_by, created_at, deleted_at, is_favourite";
 
 const REFUSALS: Readonly<Record<string, Omit<AppError, "details">>> = {

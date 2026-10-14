@@ -2,9 +2,10 @@
 title: 'Story 2.11: Store project files in Supabase Storage'
 type: 'refactor'
 created: '2026-10-14'
-status: 'draft'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
+baseline_commit: '0870bdf1029cb6b89d7620d1619029cf4e7f6870'
 context:
   - '{project-root}/_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-14-storage.md'
 ---
@@ -34,6 +35,8 @@ context:
 - Upload never overwrites: `x-upsert: false`.
 - Migrations are forward-only; `db.types.ts` matches the generator.
 - `check`, `db` and `image` pass, and the DB tests run against the real bucket in CI.
+
+**Decision (owner, 2026-10-14, review triage #1):** the per-file limit is **50 MB** for now. The hosted Supabase plan caps any upload at 50 MB (verified: a 60 MB PUT returned 413). `MAX_FILE_BYTES`, the bucket `file_size_limit` (via a new forward migration), the local `config.toml`, the copy and the planning docs all say 50 MB. It goes back to 100 MB when the organization moves to Pro and raises the project's upload limit (a one-line migration plus a constant). This supersedes "100 MB" in the Intent and the matrix.
 
 **Never:**
 - No public bucket and no anon or authenticated storage policies.
@@ -91,13 +94,13 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] migration + `supabase/config.toml` + `.github/workflows/ci.yml` -- bucket and storage in CI
-- [ ] `src/modules/material/**` -- port shape, Supabase adapter + tests, delete the S3 adapter, wiring, fakes
-- [ ] `src/shared/env.ts` + test, `.env.example`, README -- no `S3_*`
-- [ ] `package.json` + `package-lock.json` -- no `@aws-sdk`
-- [ ] `src/app/(wizard)/_lib/upload.ts` + test, `material-step.tsx` + test -- PUT upload
-- [ ] `test/db/material.db.test.ts` -- bucket and round-trip tests
-- [ ] `sprint-status.yaml` -- 2.11 in-progress/review per flow
+- [x] migration + `supabase/config.toml` + `.github/workflows/ci.yml` -- bucket and storage in CI
+- [x] `src/modules/material/**` -- port shape, Supabase adapter + tests, delete the S3 adapter, wiring, fakes
+- [x] `src/shared/env.ts` + test, `.env.example`, README -- no `S3_*`
+- [x] `package.json` + `package-lock.json` -- no `@aws-sdk`
+- [x] `src/app/(wizard)/_lib/upload.ts` + test, `material-step.tsx` + test -- PUT upload
+- [x] `test/db/material.db.test.ts` -- bucket and round-trip tests
+- [x] `sprint-status.yaml` -- 2.11 in-progress/review per flow
 
 **Acceptance Criteria:**
 - Given the repo, when you `grep -rn "@aws-sdk\|S3_BUCKET\|S3_REGION" src test package.json .env.example`, then nothing matches except lint fixtures.
@@ -105,9 +108,33 @@ context:
 
 ## Implementation Notes
 
+- Verified on mac-recap-dev (bucket migration pushed): a signed-upload PUT with no apikey returns 200, a reused token 400, a zip 400, `info` gives size and type, signed GET 200, and the publishable key is refused. In the wizard (Browser pane), a PNG and a PDF uploaded, the PNG showed its thumbnail, a .zip was rejected inline, and Preferito and the rows survived a reload. Local: 53 files / 1365 tests, lint, typecheck and build pass.
+- Signed upload URLs last 2 h (Supabase fixed), not 15 min; thumbnail signing is one call per image.
+
+- Review patches applied (triage #2–10). The 50 MB decision (#1) is applied: `MAX_FILE_BYTES`, the forward migration `20261014180000_material_bucket_50mb.sql`, `config.toml`, the copy (from props), `.env.example`, a README "File storage" section, and the planning docs. Pushed to mac-recap-dev: a 49 MB PUT returns 200, a 60 MB PUT returns 413. Full run: 53 files / 1374 tests, lint, typecheck and build pass.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge, vg | Hosted project caps uploads below the bucket's 100 MB | high | Verified on mac-recap-dev: 49 MB PUT 200, 60 MB PUT 413 `EntityTooLarge` (plan-wide 50 MB limit) | intent gap → owner decision |
+| 2 | blind, edge | `info()` 400 for any reason becomes "not found" | medium | Real: non-not-found 400s are mapped to `UPLOAD_NOT_FOUND`, unlogged | patch |
+| 3 | edge | One failed thumbnail sign fails the whole listing | medium | Real: `list-assets` returns the error | patch (null thumbnail + warn) |
+| 4 | blind | Per-image signing round trips | low | `createSignedUrls` batches them | patch |
+| 5 | blind | New admin client per storage call | low | Real | patch (memoize in adapter) |
+| 6 | blind, edge, vg | Memo test depends on order; one assertion can't fail | low | Real | patch (`vi.resetModules`) |
+| 7 | vg, blind, edge | Thumbnail type and inline no longer pinned or tested | low | Port doc claims it; stored type is validated at confirm | patch (DB test asserts `content-type`, no attachment) |
+| 8 | edge, blind | Port says the signed upload fixes Content-Type; `maxBytes` ignored | low | Real: only path is bound; confirm is the per-file check | patch (docs; drop or document `maxBytes`) |
+| 9 | blind | Adapter helper named `describe`; two `UploadTarget` types | low | Real | patch (rename) |
+| 10 | blind | Tests: no upsert assertion, TTL `<= 900`, policy test too broad | low | Real | patch |
+| 11 | blind, edge, vg | `STORAGE_NOT_CONFIGURED` unreachable but kept | low | Kept on purpose by the spec | reject |
+| 12 | blind | Orphaned objects accumulate | medium | By design (AD-8: no deletes); pre-existing | defer |
+| 13 | blind | `s3_key` name misleading | low | Spec decision | reject |
+| 14 | blind | 4xx from bucket retried once | low | One extra attempt, harmless | reject |
+| 15 | blind | `.env.example` / README lack hosted setup steps | low | Real; depends on #1's answer | patch after #1 |
+| 16 | blind | Spec in-review vs sprint-status in-progress | false | Workflow sets review at present | reject |
 
 ## Verification
 

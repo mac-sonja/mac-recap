@@ -37,6 +37,13 @@ Supabase directly.
 | `BASIC_AUTH_USER` | Basic-auth gate user (web only; see below) |
 | `BASIC_AUTH_PASSWORD` | Basic-auth gate password (web only; see below) |
 
+#### File storage
+
+Project files live in the Supabase Storage bucket `material`, created by a migration
+(`npx supabase db push`). It is private: only the service role (server) reads and writes it.
+The per-file limit is 50 MB, the hosted plan's upload cap. To go to 100 MB, raise the
+project's upload limit (Pro), then update `MAX_FILE_BYTES` and add a bucket migration.
+
 #### Basic-auth gate
 
 Until login ships (Epic 6), `src/proxy.ts` puts HTTP basic auth in front of every
@@ -92,7 +99,7 @@ supabase/     config.toml, migrations/ (forward-only SQL)
 - `src/app` and `src/worker` import a module only through `@/modules/<module>` (its `index.ts`).
 - A module imports another module only through its index. Inside `src/modules`, cross-folder
   imports use the `@/modules/...` alias; only `./` relative imports are allowed.
-- Vendor SDKs (Supabase, AWS, Anthropic, Playwright, sharp) are imported only in `adapters/`;
+- Vendor SDKs (Supabase, Anthropic, Playwright, sharp) are imported only in `adapters/`;
   generated DB types too.
 - `domain/` imports only `@/shared/*`, files of its own `domain/` and `zod`.
 - `src/modules/integration` is reserved for Epic 7; no MCP client in the MVP.

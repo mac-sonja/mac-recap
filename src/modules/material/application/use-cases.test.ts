@@ -29,7 +29,7 @@ const PNG = "image/png";
 
 /**
  * In-memory material world: a live case and a soft-deleted one, assets that
- * mirror `create_asset` / `restore_asset` (cap of 20 non-deleted) and `has_material`, stored S3
+ * mirror `create_asset` / `restore_asset` (cap of 20 non-deleted) and `has_material`, stored
  * objects by asset id, and the recorded events.
  */
 function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = {}) {
@@ -101,10 +101,13 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
 
   const storage = {
     presignUpload: vi.fn<ObjectStorage["presignUpload"]>(async (target, maxBytes) =>
-      ok({ url: "https://bucket.s3.example/", fields: { key: `k/${target.assetId}`, "Content-Type": target.contentType, max: String(maxBytes) } }),
+      ok({ url: `https://storage.example/upload/${target.assetId}?max=${maxBytes}`, method: "PUT", headers: { "content-type": target.contentType, "x-upsert": "false" } }),
     ),
     presignDownload: vi.fn<ObjectStorage["presignDownload"]>(async (target, ttl) =>
-      ok(`https://bucket.s3.example/${target.assetId}?ttl=${ttl}`),
+      ok(`https://storage.example/${target.assetId}?ttl=${ttl}`),
+    ),
+    presignDownloads: vi.fn<ObjectStorage["presignDownloads"]>(async (targets, ttl) =>
+      ok(targets.map((target) => `https://storage.example/${target.assetId}?ttl=${ttl}`)),
     ),
     head: vi.fn<ObjectStorage["head"]>(async (target) => ok(objects.get(target.assetId) ?? null)),
   } satisfies ObjectStorage;
@@ -135,24 +138,31 @@ const codeOf = (result: { ok: boolean; error?: { code: string } }) => (result.ok
 describe("presignUpload", () => {
   const input = { caseId: CASE_ID, contentType: PNG, sizeBytes: 2 * MB };
 
-  it("returns { assetId, url, fields } for a draft case with 3 assets; nothing stored", async () => {
+  it("returns { assetId, url, method, headers } for a draft case with 3 assets; nothing stored", async () => {
     const w = world({ live: 3 });
     const result = await makePresignUpload(w.deps)(actor, input);
-    expect(result).toEqual(ok({ assetId: NEW_ASSET_ID, url: "https://bucket.s3.example/", fields: expect.any(Object) }));
+    expect(result).toEqual(
+      ok({
+        assetId: NEW_ASSET_ID,
+        url: `https://storage.example/upload/${NEW_ASSET_ID}?max=${MAX_FILE_BYTES}`,
+        method: "PUT",
+        headers: { "content-type": PNG, "x-upsert": "false" },
+      }),
+    );
     expect(w.storage.presignUpload).toHaveBeenCalledWith({ caseId: CASE_ID, assetId: NEW_ASSET_ID, contentType: PNG }, MAX_FILE_BYTES);
     expect(w.assets.size).toBe(3);
     expect(w.repo.create).not.toHaveBeenCalled();
     expect(w.events).toEqual([]);
   });
 
-  it("accepts exactly 100 MB", async () => {
+  it("accepts exactly MAX_FILE_BYTES", async () => {
     expect(codeOf(await makePresignUpload(world().deps)(actor, { ...input, sizeBytes: MAX_FILE_BYTES }))).toBe("OK");
   });
 
   it.each([
     ["a bad type", { ...input, contentType: "application/zip" }, "FILE_TYPE_NOT_ALLOWED"],
     ["a declared 101 MB", { ...input, sizeBytes: 101 * MB }, "FILE_TOO_LARGE"],
-    ["100 MB + 1 byte", { ...input, sizeBytes: MAX_FILE_BYTES + 1 }, "FILE_TOO_LARGE"],
+    ["MAX_FILE_BYTES + 1 byte", { ...input, sizeBytes: MAX_FILE_BYTES + 1 }, "FILE_TOO_LARGE"],
     ["an empty file", { ...input, sizeBytes: 0 }, "INVALID_INPUT"],
     ["a malformed case id", { ...input, caseId: "nope" }, "INVALID_INPUT"],
     ["a soft-deleted case", { ...input, caseId: DELETED_CASE_ID }, "NOT_FOUND"],
@@ -171,7 +181,7 @@ describe("presignUpload", () => {
     expect(codeOf(await makePresignUpload(withRemoved.deps)(actor, input))).toBe("OK");
   });
 
-  it("returns STORAGE_NOT_CONFIGURED without querying when S3 is not configured", async () => {
+  it("returns STORAGE_NOT_CONFIGURED without querying when storage is not configured", async () => {
     const w = world();
     const result = await makePresignUpload({ ...w.deps, storage: null })(actor, input);
     expect(codeOf(result)).toBe("STORAGE_NOT_CONFIGURED");
@@ -228,7 +238,7 @@ describe("confirmUpload", () => {
   });
 
   it.each([
-    ["HEAD over 100 MB", { sizeBytes: MAX_FILE_BYTES + 1, contentType: PNG }],
+    ["stored size over MAX_FILE_BYTES", { sizeBytes: MAX_FILE_BYTES + 1, contentType: PNG }],
     ["an empty object", { sizeBytes: 0, contentType: PNG }],
     ["another Content-Type", { sizeBytes: 10, contentType: "image/jpeg" }],
     ["no Content-Type", { sizeBytes: 10, contentType: null }],
@@ -272,7 +282,7 @@ describe("confirmUpload", () => {
     expect(w.repo.create).not.toHaveBeenCalled();
   });
 
-  it("STORAGE_NOT_CONFIGURED when S3 is not configured", async () => {
+  it("STORAGE_NOT_CONFIGURED when storage is not configured", async () => {
     expect(codeOf(await makeConfirmUpload({ ...world().deps, storage: null })(actor, input))).toBe("STORAGE_NOT_CONFIGURED");
   });
 
@@ -587,7 +597,7 @@ describe("hasMaterial", () => {
 describe("every use case", () => {
   it.each([
     ["remove", makeRemoveAsset],
-  ] as const)("%s returns STORAGE_NOT_CONFIGURED when S3 is not configured", async (_label, make) => {
+  ] as const)("%s returns STORAGE_NOT_CONFIGURED when storage is not configured", async (_label, make) => {
     const w = world();
     expect(codeOf(await make({ ...w.deps, storage: null })(actor, { caseId: CASE_ID, assetId: NEW_ASSET_ID }))).toBe(
       "STORAGE_NOT_CONFIGURED",
@@ -633,7 +643,7 @@ describe("listAssets", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.map((a) => [a.id, a.kind, a.thumbnailUrl])).toEqual([
-      [IMG, "image", `https://bucket.s3.example/${IMG}?ttl=900`],
+      [IMG, "image", `https://storage.example/${IMG}?ttl=900`],
       [PDF, "document", null],
       [MOV, "video", null],
     ]);
@@ -647,8 +657,8 @@ describe("listAssets", () => {
       isFavourite: false,
       thumbnailUrl: null,
     });
-    expect(w.storage.presignDownload).toHaveBeenCalledOnce();
-    expect(w.storage.presignDownload).toHaveBeenCalledWith({ caseId: CASE_ID, assetId: IMG, contentType: PNG }, 900);
+    expect(w.storage.presignDownloads).toHaveBeenCalledExactlyOnceWith([{ caseId: CASE_ID, assetId: IMG, contentType: PNG }], 900);
+    expect(w.storage.presignDownload).not.toHaveBeenCalled();
   });
 
   it("carries isFavourite on each listed row", async () => {
@@ -675,7 +685,7 @@ describe("listAssets", () => {
     expect(await makeListAssets(world().deps)({ caseId: CASE_ID })).toEqual(ok([]));
   });
 
-  it("still lists when S3 isn't configured, with every thumbnailUrl null", async () => {
+  it("still lists when storage isn't configured, with every thumbnailUrl null", async () => {
     const w = filled();
     const result = await makeListAssets({ ...w.deps, storage: null })({ caseId: CASE_ID });
     expect(result.ok).toBe(true);
@@ -713,11 +723,53 @@ describe("listAssets", () => {
     expect(await makeListAssets(w.deps)({ caseId: CASE_ID })).toEqual(err({ code: "ASSET_LOOKUP_FAILED", message: "down" }));
   });
 
-  it("passes a signing failure through", async () => {
+  it("signs every image in one batch call, in listing order", async () => {
     const w = filled();
-    w.storage.presignDownload.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "no creds" }));
+    const IMG2 = "dddddddd-0000-4000-8000-000000000005";
+    put(w, IMG2, { createdAt: "2026-10-13T12:00:00Z" });
     const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("STORAGE_FAILED");
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map((a) => a.thumbnailUrl)).toEqual([
+      `https://storage.example/${IMG}?ttl=900`,
+      null,
+      null,
+      `https://storage.example/${IMG2}?ttl=900`,
+    ]);
+    expect(w.storage.presignDownloads).toHaveBeenCalledOnce();
+    expect(w.storage.presignDownloads.mock.calls[0][0].map((t) => t.assetId)).toEqual([IMG, IMG2]);
+  });
+
+  it("an image the batch could not sign gets a null thumbnailUrl; the others keep theirs", async () => {
+    const w = filled();
+    const IMG2 = "dddddddd-0000-4000-8000-000000000005";
+    put(w, IMG2, { createdAt: "2026-10-13T12:00:00Z" });
+    w.storage.presignDownloads.mockResolvedValueOnce(ok([null, "https://storage.example/two"]));
+    const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map((a) => a.thumbnailUrl)).toEqual([null, null, null, "https://storage.example/two"]);
+  });
+
+  it("does not call storage when there is no image", async () => {
+    const w = world();
+    put(w, PDF, { kind: "document", contentType: "application/pdf" });
+    expect((await makeListAssets(w.deps)({ caseId: CASE_ID })).ok).toBe(true);
+    expect(w.storage.presignDownloads).not.toHaveBeenCalled();
+  });
+
+  it("a signing failure still lists, with null thumbnails and a warning naming only the case", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const w = filled();
+      w.storage.presignDownloads.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "down" }));
+      const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.map((a) => a.thumbnailUrl)).toEqual([null, null, null]);
+      expect(write).toHaveBeenCalledOnce();
+      const line = String(write.mock.calls[0][0]);
+      expect(JSON.parse(line)).toMatchObject({ level: "warn", caseId: CASE_ID });
+      expect(line).not.toContain(IMG);
+    } finally {
+      write.mockRestore();
+    }
   });
 });

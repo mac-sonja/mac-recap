@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-14-2026 16:45
+last_updated: 10-14-2026 17:15
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -46,7 +46,7 @@ development_status:
   2-8-retire-pasted-text-and-the-taxonomy: done  # retires pasted text (#18), the taxonomy (#19) and the restore feature (#17) per SCP 2026-10-14; land first
   2-9-mark-images-and-videos-as-favourite: done  # replaces tagging (#19 backend) per SCP 2026-10-14
   2-10-fill-in-the-details-form: in-progress  # backend done (#20); UI open; gate = ≥1 file
-  2-11-store-project-files-in-supabase-storage: backlog  # SCP 2026-10-14 (storage); after the 2.7 UI
+  2-11-store-project-files-in-supabase-storage: review  # SCP 2026-10-14 (storage); after the 2.7 UI
   epic-2-retrospective: optional
 
   epic-3: backlog
