@@ -85,17 +85,17 @@
   summary: Test that clicking a Bozza row's name link does not also call `router.push` (the `closest("a")` guard in `openRow`).
   evidence: No test clicks the link itself; double navigation goes to the same placeholder until the Story 2.5 wizard, so add it when the row target becomes the wizard.
 - source_spec: none
-  summary: Story 2.7 UI part — wizard step 1 (Material) dropzone and browse, parallel direct-to-S3 uploads with per-file progress announced to screen readers, inline per-file rejections (over 100 MB, unsupported type, 20-file limit), rows with thumbnail (presigned GET ≤ 15 min, scaled by the browser) or type icon plus name and size, and Remove (immediate, no undo).
+  summary: Story 2.7 UI part — wizard step 1 (Material) dropzone and browse, parallel direct-to-storage uploads (Supabase Storage after Story 2.11) with per-file progress announced to screen readers, inline per-file rejections (over 100 MB, unsupported type, 20-file limit), rows with thumbnail (signed GET ≤ 15 min, scaled by the browser) or type icon plus name and size, and Remove (immediate, no undo).
   evidence: Split from Story 2.7 at the user's choice; depends on the Story 2.5 wizard UI, which is not built yet, and on the backend part's presign/confirm/remove contract.
 - source_spec: none
-  summary: Story 2.7 infrastructure — one private S3 bucket per environment in the EU with Block Public Access and versioning on, and CORS allowing only the app origin for POST and GET.
+  summary: Resolved by Story 2.11 (Supabase Storage bucket created by migration; [storage proposal](../planning-artifacts/sprint-change-proposal-2026-10-14-storage.md)). Was: Story 2.7 infrastructure — one private S3 bucket per environment in the EU with Block Public Access and versioning on, and CORS allowing only the app origin for POST and GET.
   evidence: Split from Story 2.7 at the user's choice; the repo has no infrastructure-as-code, so this is either manual AWS setup or a new IaC decision, separate from the app code.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-7-upload-project-files-backend.md`
   summary: Story 2.7 asset listing — a `listAssets` server action returning a case's non-deleted assets oldest first, with a presigned GET (valid ≤ 15 minutes) for image thumbnails, built in the `material` S3 adapter.
   evidence: Split from the Story 2.7 backend spec at the user's choice to bring it nearer the size guideline; only the deferred Material step UI consumes it.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-7-upload-project-files-backend.md`
-  summary: Story 2.7 bucket follow-ups — grant the app role `s3:ListBucket` on the bucket so HEAD on a missing key returns 404 (`UPLOAD_NOT_FOUND`) instead of 403 (`STORAGE_FAILED`, 500), and add a lifecycle rule expiring objects under `cases/*/assets/*` that never became an asset row, plus noncurrent versions.
-  evidence: Review of the 2.7 backend: without ListBucket S3 answers 403 for missing keys; rejected, abandoned and compensated uploads leave objects with no row.
+  summary: Story 2.7 orphaned uploads cleanup — remove objects under `cases/*/assets/*` that never became an asset row. Re-scoped 2026-10-14 ([storage proposal](../planning-artifacts/sprint-change-proposal-2026-10-14-storage.md)): with Supabase Storage (Story 2.11) the `s3:ListBucket` grant, the S3 lifecycle rule and noncurrent versions no longer apply.
+  evidence: Review of the 2.7 backend: rejected, abandoned and compensated uploads leave objects with no row. AD-8 says the app never deletes objects, so the cleanup needs a decision on who removes orphans and when.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-7-upload-project-files-backend.md`
   summary: Story 2.7 UI follow-ups — declare a normalized content type per file (browsers report `""`, `text/x-markdown` or `text/plain` for .md), re-presign and re-upload when confirm fails (a failed confirm can't be retried with the same assetId), and don't presign more files than the remaining slots.
   evidence: Review of the 2.7 backend: the allowlist is exact, confirm failures leave the assetId used, and the cap is only enforced at confirm.
