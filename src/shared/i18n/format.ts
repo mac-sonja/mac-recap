@@ -12,3 +12,10 @@ const DATE_TIME = new Intl.DateTimeFormat("it-IT", {
 export function formatDateTime(iso: string): string {
   return DATE_TIME.format(new Date(iso));
 }
+
+const YEAR = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Rome", year: "numeric" });
+
+/** The calendar year in Europe/Rome at `now`, e.g. `2026`. */
+export function currentYear(now: Date = new Date()): number {
+  return Number(YEAR.format(now));
+}

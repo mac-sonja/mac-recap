@@ -45,6 +45,46 @@ export const it = {
     /** Read by screen readers while the table loads. */
     loading: "Caricamento…",
   },
+  /** The new-case-study wizard (Story 2.5): frame, stepper and step 0. */
+  wizard: {
+    eyebrow: "Nuovo case study",
+    /** Accessible name of the top bar's back arrow. */
+    back: "Torna ai case study",
+    /** Read by screen readers before the case ID in the top bar. */
+    caseId: "ID",
+    stepper: {
+      label: "Passaggi",
+      /** Read by screen readers after a completed step. */
+      done: "completato",
+    },
+    steps: {
+      material: "Materiale",
+      details: "Dettagli",
+      generate: "Genera",
+    },
+    fields: {
+      name: "Nome del case study",
+      client: "Cliente",
+      year: "Anno",
+      locale: "Lingua del testo",
+    },
+    locales: {
+      it: "Italiano",
+      en: "English",
+    },
+    errors: {
+      name: "Inserisci il nome del case study.",
+      client: "Inserisci il cliente.",
+      /** `{min}` and `{max}` are filled with the accepted years. */
+      year: "Inserisci un anno tra {min} e {max}.",
+      locale: "Scegli la lingua del testo.",
+      generic: "Non è stato possibile creare il case study. I dati inseriti sono ancora qui: riprova.",
+    },
+    next: "Avanti",
+    /** The wizard's error boundary: the case could not be loaded. */
+    loadFailed: "Non è stato possibile aprire il case study. Riprova tra poco.",
+    materialPlaceholder: "Il caricamento del materiale non è ancora disponibile in questa versione.",
+  },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {
     draft: "Bozza",

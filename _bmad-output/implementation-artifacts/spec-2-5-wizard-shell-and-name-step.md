@@ -2,9 +2,10 @@
 title: 'Story 2.5 UI: wizard frame and step 0 (name)'
 type: 'feature'
 created: '2026-10-14'
-status: 'draft'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
+baseline_commit: '855f1081f55c02659399d2dea273e6a265581f30'
 context:
   - '{project-root}/_bmad-output/planning-artifacts/ux-designs/ux-MAC Recap-2026-10-08/EXPERIENCE.md'
   - '{project-root}/_bmad-output/planning-artifacts/ux-designs/ux-MAC Recap-2026-10-08/mockups/material-step.html'
@@ -101,12 +102,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/app/(wizard)/layout.tsx` + test -- focused layout, no sidebar
-- [ ] `src/app/(wizard)/case-studies/new/page.tsx` + test -- surface check, `?caseId=` load, narrow-screen copy; delete the `(tool)` page and update its test
-- [ ] `src/app/(wizard)/_components/{wizard-frame,stepper,name-step}.tsx` + tests -- every matrix row
-- [ ] `src/app/_components/button-styles.ts` -- shared `PRIMARY_ACTION`; table imports it
-- [ ] `src/shared/i18n/it.ts` + `it.test.ts` -- wizard copy
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 2.5 comment: UI frame + step 0 done
+- [x] `src/app/(wizard)/layout.tsx` + test -- focused layout, no sidebar
+- [x] `src/app/(wizard)/case-studies/new/page.tsx` + test -- surface check, `?caseId=` load, narrow-screen copy; delete the `(tool)` page and update its test
+- [x] `src/app/(wizard)/_components/{wizard-frame,stepper,name-step}.tsx` + tests -- every matrix row
+- [x] `src/app/_components/button-styles.ts` -- shared `PRIMARY_ACTION`; table imports it
+- [x] `src/shared/i18n/it.ts` + `it.test.ts` -- wizard copy
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 2.5 comment: UI frame + step 0 done
 
 **Acceptance Criteria:**
 - Given an owner/designer on `/case-studies/new`, when the page renders, then no sidebar is present and the frame matches EXPERIENCE.md's wizard layout.
@@ -114,9 +115,34 @@ context:
 
 ## Implementation Notes
 
+- Local: lint, typecheck, 50 files / 1269 tests, build pass. Not browser-checked (no dev Supabase). Every matrix row has a component or page test (`name-step.test.tsx`, `case-studies/new/page.test.tsx`, `wizard-frame.test.tsx`).
+- Beyond spec: `currentYear()` in `src/shared/i18n/format.ts` (Europe/Rome); client-side year range check; server passes default year and range so the client never imports `@/modules/case-study`; `PRIMARY_ACTION_INACTIVE` style. Italian copy drafted (back arrow "Torna ai case study", "Lingua del testo", errors, step-1 placeholder) for owner review. Non-draft `?caseId=` renders step 1 with its badge.
+
+- Review patches applied (triage #1, #4–6, #8, #10, #11, #13–16): shared `wizardHref` in `src/app/_lib/routes.ts`, non-draft `?caseId=` redirects to Case studies, `h-dvh` on the frame only, flushSync before focus, Italian `(wizard)/error.tsx`. Full run: 51 files / 1279 tests, lint, typecheck, build pass.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, vg | `wizardHref` duplicates the table's `draftHref` | low | Real: same URL built twice | patch |
+| 2 | blind | Retry after a lost create response makes a second case | medium | Real but rare; needs an idempotency key in the backend | defer |
+| 3 | blind, edge | Busy button never resets if navigation after success fails | low | `router.replace` has no failure signal; a failed render shows the error boundary anyway | reject |
+| 4 | blind, edge, vg | Non-draft `?caseId=` opens in the new-case wizard; only drafts tested | medium | Real: an approved case would sit under *Nuovo case study*; the table links only Bozza rows | patch (redirect non-drafts to Case studies) |
+| 5 | blind, vg | Malformed-id path relies on mocks; module test lacks `null` | low | Real: page passes `null` for a repeated param | patch (module test) |
+| 6 | vg, blind | Page never asserts year `min`/`max`/exact default | medium | Pre-verified gap | patch |
+| 7 | blind | `(wizard)` imports `(tool)` actions | low | Lint allows it; moving the file is more than a direct fix | reject (revisit in 2.7) |
+| 8 | blind | Two full-screen wrappers; `h-screen` | low | Real | patch (`h-dvh` on one element) |
+| 9 | blind | Layout test misses other failure paths | low | Shared `resolveShellActor` is covered by surface tests | reject |
+| 10 | blind | Step-1 Avanti has no `aria-describedby` reason | low | Real | patch |
+| 11 | blind | `cursor-not-allowed` on a clickable inactive Avanti | low | Real: click validates | patch |
+| 12 | blind | Spec in review without a visual check | false | Verification section states it; no dev DB | reject |
+| 13 | blind | `errors.locale` path untested | low | Real | patch |
+| 14 | edge | Focus moves before error attributes commit | low | Real: `setErrors` then `focus()` in one tick | patch |
+| 15 | edge | Unknown server field names dropped silently | low | Real | patch (generic error too) |
+| 16 | edge | No `error.tsx`: thrown lookup errors show Next's English page | low | Real: no error boundary in `src/app` | patch (Italian wizard error boundary) |
+| 17 | edge | No loading fallback after leaving `(tool)` | low | Server `get` is fast; cosmetic | reject |
 
 ## Verification
 

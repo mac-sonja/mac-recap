@@ -44,3 +44,25 @@ describe("case studies table copy", () => {
     expect(t("caseStudies.loading")).toBe("Caricamento…");
   });
 });
+
+describe("wizard copy", () => {
+  test("has the approved strings", () => {
+    expect(t("wizard.eyebrow")).toBe("Nuovo case study");
+    expect(t("wizard.back")).toBe("Torna ai case study");
+    expect(Object.values(it.wizard.steps)).toEqual(["Materiale", "Dettagli", "Genera"]);
+    expect(Object.values(it.wizard.fields)).toEqual(["Nome del case study", "Cliente", "Anno", "Lingua del testo"]);
+    expect(it.wizard.locales).toEqual({ it: "Italiano", en: "English" });
+    expect(t("wizard.next")).toBe("Avanti");
+    expect(t("wizard.errors.name")).toBe("Inserisci il nome del case study.");
+    expect(t("wizard.errors.client")).toBe("Inserisci il cliente.");
+    expect(fill(t("wizard.errors.year"), { min: 1900, max: 2100 })).toBe("Inserisci un anno tra 1900 e 2100.");
+    expect(t("wizard.errors.generic")).toMatch(/^Non è stato possibile creare il case study\./);
+    expect(t("wizard.materialPlaceholder")).not.toBe("");
+    expect(t("wizard.loadFailed")).toBe("Non è stato possibile aprire il case study. Riprova tra poco.");
+  });
+
+  test("names each missing required field", () => {
+    expect(t("wizard.errors.name")).toContain("nome");
+    expect(t("wizard.errors.client")).toContain("cliente");
+  });
+});
