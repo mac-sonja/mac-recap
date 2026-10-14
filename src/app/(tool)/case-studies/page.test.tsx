@@ -19,7 +19,6 @@ vi.mock("@/modules/case-study", () => ({ list: (scope: ListScope) => list(scope)
 
 const { default: CaseStudiesPage } = await import("./page");
 const { default: Loading } = await import("./loading");
-const { default: NewCaseStudyPage } = await import("./new/page");
 
 const shell = (role: Role, landing = "/case-studies"): ShellActor => ({
   actor: { id: "00000000-0000-4000-8000-000000000002", email: "dev@example.it", displayName: "Dev", role } satisfies Actor,
@@ -108,18 +107,5 @@ describe("Loading", () => {
     // Pulses only without reduced motion.
     expect(html).toContain("motion-safe:animate-pulse");
     expect(html).not.toMatch(/(^|[\s"])animate-pulse/);
-  });
-});
-
-describe("NewCaseStudyPage", () => {
-  it("keeps the heading at every width and shows the larger-screen message only below lg", async () => {
-    requireSurface.mockResolvedValue(shell("owner_designer"));
-    const html = renderToStaticMarkup(await NewCaseStudyPage());
-    expect(requireSurface).toHaveBeenCalledWith("create case");
-    const h1 = html.match(/<h1 class="([^"]*)">Nuovo case study<\/h1>/);
-    expect(h1).not.toBeNull();
-    expect(h1?.[1]).not.toMatch(/\bhidden\b/);
-    expect(html).toMatch(/<p class="[^"]*\blg:hidden\b[^"]*">Questa pagina richiede uno schermo più grande\.<\/p>/);
-    expect(html).toContain('<div class="hidden lg:block"></div>');
   });
 });

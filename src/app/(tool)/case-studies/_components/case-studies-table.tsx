@@ -4,7 +4,9 @@ import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState, type MouseEvent } from "react";
+import { PRIMARY_ACTION } from "@/app/_components/button-styles";
 import { StatusBadge } from "@/app/_components/status-badge";
+import { wizardHref } from "@/app/_lib/routes";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import {
@@ -26,9 +28,6 @@ export interface CaseStudiesTableProps {
 
 export const SEARCH_DEBOUNCE_MS = 250;
 
-/** Until the Story 2.5 wizard: a Bozza row reopens the new-case-study placeholder. */
-export const draftHref = (id: string) => `/case-studies/new?caseId=${encodeURIComponent(id)}`;
-
 const COLUMNS: ReadonlyArray<{ key: SortKey; label: string }> = [
   { key: "id", label: it.caseStudies.table.columns.id },
   { key: "name", label: it.caseStudies.table.columns.name },
@@ -47,9 +46,6 @@ function isTextField(el: Element | null): boolean {
   if (el.tagName === "INPUT") return !NON_TEXT_INPUTS.has((el as HTMLInputElement).type);
   return (el as HTMLElement).isContentEditable === true;
 }
-
-const PRIMARY_ACTION =
-  "inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 font-label text-sm text-primary-foreground hover:opacity-90";
 
 /**
  * The Case studies table: ID, Name, Client, Year, Status, Updated and Links (blank).
@@ -183,7 +179,7 @@ export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
             </thead>
             <tbody>
               {visible.map((row) => {
-                const href = row.status === "draft" ? draftHref(row.id) : null;
+                const href = row.status === "draft" ? wizardHref(row.id) : null;
                 return (
                   <tr
                     key={row.id}

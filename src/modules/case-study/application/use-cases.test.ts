@@ -157,7 +157,7 @@ describe("get", () => {
     if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
   });
 
-  it.each(["not-a-uuid", "", undefined, 42])("returns NOT_FOUND for %o without querying", async (id) => {
+  it.each(["not-a-uuid", "", undefined, null, 42])("returns NOT_FOUND for %o without querying", async (id) => {
     const { repo } = fakeRepository();
     const result = await makeGetCaseStudy(repo)(id);
     expect(result.ok).toBe(false);
