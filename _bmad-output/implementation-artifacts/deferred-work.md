@@ -85,8 +85,8 @@
   summary: Test that clicking a Bozza row's name link does not also call `router.push` (the `closest("a")` guard in `openRow`).
   evidence: No test clicks the link itself; double navigation goes to the same placeholder until the Story 2.5 wizard, so add it when the row target becomes the wizard.
 - source_spec: none
-  summary: Story 2.7 UI part — wizard step 1 (Material) dropzone and browse, parallel direct-to-S3 uploads with per-file progress announced to screen readers, inline per-file rejections (over 100 MB, unsupported type, 20-file limit), rows with thumbnail (presigned GET ≤ 15 min, scaled by the browser) or type icon plus name and size, and Remove with a 5 s Undo toast.
-  evidence: Split from Story 2.7 at the user's choice; depends on the Story 2.5 wizard UI, which is not built yet, and on the backend part's presign/confirm/remove/restore contract.
+  summary: Story 2.7 UI part — wizard step 1 (Material) dropzone and browse, parallel direct-to-S3 uploads with per-file progress announced to screen readers, inline per-file rejections (over 100 MB, unsupported type, 20-file limit), rows with thumbnail (presigned GET ≤ 15 min, scaled by the browser) or type icon plus name and size, and Remove (immediate, no undo).
+  evidence: Split from Story 2.7 at the user's choice; depends on the Story 2.5 wizard UI, which is not built yet, and on the backend part's presign/confirm/remove contract.
 - source_spec: none
   summary: Story 2.7 infrastructure — one private S3 bucket per environment in the EU with Block Public Access and versioning on, and CORS allowing only the app origin for POST and GET.
   evidence: Split from Story 2.7 at the user's choice; the repo has no infrastructure-as-code, so this is either manual AWS setup or a new IaC decision, separate from the app code.
@@ -100,19 +100,10 @@
   summary: Story 2.7 UI follow-ups — declare a normalized content type per file (browsers report `""`, `text/x-markdown` or `text/plain` for .md), re-presign and re-upload when confirm fails (a failed confirm can't be retried with the same assetId), and don't presign more files than the remaining slots.
   evidence: Review of the 2.7 backend: the allowlist is exact, confirm failures leave the assetId used, and the cap is only enforced at confirm.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-8-add-pasted-text-as-material-backend.md`
-  summary: Story 2.8 UI part — **Paste text** next to browse in wizard step 1 (title and body, inline "text is empty" message), text deliverable rows (text icon, title, character count) with edit, and Remove with the same 5 s Undo toast as files; flag the missing text-entry design to UX.
-  evidence: Built backend-only at the user's choice; the UI depends on the Story 2.5 wizard.
-- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-add-pasted-text-as-material-backend.md`
   summary: When Story 2.10 adds `context_form`, test that `hasMaterial(caseId)` stays false for a case whose details form is filled in but which has no assets or text items.
   evidence: The 2.8 matrix row "details form filled → false" can only be checked once the form table exists.
-- source_spec: `_bmad-output/implementation-artifacts/spec-2-9-tag-property-and-flag-deliverables-backend.md`
-  summary: Story 2.9 UI part — tag, property and flag chip pickers on each deliverable row (files and text items; seeded terms only, no free text, saves at once, usable as soon as a file finishes uploading), an "untagged" marker, and "No values yet" for an empty kind.
-  evidence: Built backend-only at the user's choice; the UI depends on the Story 2.5 wizard and the 2.7/2.8 rows.
-- source_spec: `_bmad-output/implementation-artifacts/spec-2-9-tag-property-and-flag-deliverables-backend.md`
-  summary: OP 3 seed migration — insert the decided tag, property and flag terms into `taxonomy_term` (stable keys, Italian labels) once the taxonomy is decided (due 2026-10-14).
-  evidence: The 2.9 backend ships with no seed rows by design (IR-OP3); only a migration may write terms.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-10-fill-in-the-details-form-backend.md`
-  summary: Story 2.10 UI part — wizard step 2 Details (Context, Solution and Results textareas with a one-line prompt each, a "{n} of 3" counter, save on pause or blur) and the Case studies table's Bozza row opening the wizard at its first incomplete step (derived from `hasMaterial`).
+  summary: Story 2.10 UI part — wizard step 2 Details (Context, Solution and Results textareas with the one-line prompt as placeholder, a "{n} di 3 compilati" counter in the footer, Avanti active from the start, save on pause or blur) and the Case studies table's Bozza row opening the wizard at its first incomplete step (derived from `hasMaterial`).
   evidence: Built backend-only; the UI depends on the Story 2.5 wizard.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-10-fill-in-the-details-form-backend.md`
   summary: Add a DB test firing two concurrent first saves of different details-form fields on a case with no row, asserting both succeed, one row holds both fields and two `details_saved` events are recorded (guards the per-case advisory lock in `save_context_field`).

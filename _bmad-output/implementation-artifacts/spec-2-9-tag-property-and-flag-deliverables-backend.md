@@ -10,6 +10,8 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-2-context.md'
 ---
 
+> **Superseded 2026-10-14** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-14.md). This code is retired by Story 2.8 (Retire pasted text and the taxonomy); favourites replace tagging in Story 2.9 (Mark images and videos as favourite). Kept as a historical record.
+
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
 ## Intent

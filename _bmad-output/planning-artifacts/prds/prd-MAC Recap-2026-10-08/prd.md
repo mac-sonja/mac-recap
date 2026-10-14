@@ -2,7 +2,7 @@
 title: "MAC Recap – MVP PRD (v2)"
 status: final
 created: 2026-10-07
-updated: 2026-10-08
+updated: 2026-10-14
 version: 2
 supersedes: "docs/sources/MAC Recap-PRD-EN v1.pdf"
 ---
@@ -10,6 +10,8 @@ supersedes: "docs/sources/MAC Recap-PRD-EN v1.pdf"
 # MAC Recap – MVP PRD (v2)
 
 Oct 8, 2026 · @Sonja
+
+Updated Oct 14, 2026: favourites replace tags, properties and flags, there is no pasted text, and removing a file has no undo ([Sprint Change Proposal 2026-10-14](../../sprint-change-proposal-2026-10-14.md)).
 
 This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR, epic, story and open-point numbers are unchanged from v1. Retired items are marked, not renumbered, and new items are added at the end.
 
@@ -75,7 +77,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 | Role | What they do in the tool |
 |---|---|
-| Owner/designer | Creates the case study, uploads project material, assigns tags, properties and flags, maintains templates, reviews, edits and approves the case study. Can also export and share approved case studies |
+| Owner/designer | Creates the case study, uploads project material, marks favourite images and videos, maintains templates, reviews, edits and approves the case study. Can also export and share approved case studies |
 | Account/sales/social | Finds approved case studies, exports them as files, and publishes them as shareable links. Does not create, edit or approve case studies |
 | Admin | Manages users and assigns them to roles. Cannot change role permissions or the guardrails |
 
@@ -86,8 +88,8 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 ### 2.1 Terms
 
 - **Case study.** The output for one project: graphic layouts plus text structured as challenge, approach and result. Each has a unique ID.
-- **Material.** Uploaded images, videos, texts and PDFs. The details form alone is not material.
-- **Deliverable.** One uploaded item of material with its tags, properties and flags.
+- **Material.** Uploaded files: images, videos, text documents and PDFs. The details form is not material.
+- **Deliverable.** One uploaded file of material. Images and videos can be marked as favourite.
 - **Approved case study.** A case study the owner/designer has reviewed and approved. Only approved case studies can be exported or shared.
 - **Shareable link.** A link to a hosted version of an approved case study, such as a hosted presentation. Who can open it is open point 11.
 - **Configurator.** The editing screen where the owner/designer adjusts text, layout, media and typography before approving.
@@ -99,7 +101,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 **FR1** – The system creates every case study with a unique ID, ready to be linked to the project order later. The owner/designer creates the case study manually. There is no trigger at project close.
 
-**FR2** – The owner/designer uploads material (images, videos, texts and PDFs), assigns tags, properties and flags to each deliverable, and fills in a short details form on context, solution and results.
+**FR2** – The owner/designer uploads material (images, videos, text documents and PDFs), can mark any number of images and videos as favourite, and fills in a short details form on context, solution and results. The details form is the only place for typed project text.
 - Upload is limited to 20 files of at most 100 MB each.
 
 **FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material and form answers.
@@ -158,7 +160,7 @@ The order follows the development plan. Non-dev activities are prerequisites for
 
 | Sprint | Due | Development | Non-dev activities |
 |---|---|---|---|
-| Sprint 1 | October 14 | Epic 2 – Asset upload and tagging | Team setup: Claude Code with the BMAD method (formerly Epic 1); tool design definition; template wireframes; data processing logic |
+| Sprint 1 | October 14 | Epic 2 – Asset upload | Team setup: Claude Code with the BMAD method (formerly Epic 1); tool design definition; template wireframes; data processing logic |
 | Sprint 2 | October 21 | Epic 3 – Graphic case study generation; Epic 4 – Review and approval; Epic 5 – Download and publishing | Configurator visual design (Bento); account/sales/social user journey; final case study templates; narrative structure and quality criteria; first guardrail check |
 | Sprint 3 | October 28 | Epic 6 – Login, users and permissions | Mockups and assets for case studies; final guardrail check; demo preparation; demo (October 30) |
 | After MAC Productive is ready (no date) | — | Epic 7 – MAC Productive integration; Epic 8 – Text-based case study generation | — |
@@ -167,7 +169,7 @@ The order follows the development plan. Non-dev activities are prerequisites for
 ## 7. Epic list
 
 1. ~~Epic 1 – Setup with BMAD~~. Removed from the epic list. It is team setup, not product scope, and now sits in Sprint 1's non-dev activities.
-2. Epic 2 – Asset upload and tagging: create the case study with a unique ID and handle file and text upload with tags, properties and flags
+2. Epic 2 – Asset upload: create the case study with a unique ID and handle file upload, favourites and the details form
 3. Epic 3 – Graphic case study generation: generate case studies by applying graphic templates to the uploaded material
 4. Epic 4 – Review and approval: review, edit and approve case studies through the configurator and review dashboard
 5. Epic 5 – Download and publishing: export approved case studies as files and publish them as shareable links
@@ -177,7 +179,7 @@ The order follows the development plan. Non-dev activities are prerequisites for
 
 ## 8. Epic details
 
-### Epic 2 – Asset upload and tagging (Sprint 1)
+### Epic 2 – Asset upload (Sprint 1)
 
 Prerequisites: tool design definition, template wireframes (asset dimensions, formats).
 
@@ -190,13 +192,13 @@ Prerequisites: tool design definition, template wireframes (asset dimensions, fo
 - Every case study receives a unique ID on creation
 - The ID is ready for the future link to the project order
 
-**Story 2.3** – As an owner/designer, I want to upload files and text to the case study.
-- The file and text upload flow is complete
+**Story 2.3** – As an owner/designer, I want to upload files to the case study.
+- The file upload flow is complete
 - Uploaded material is associated with the case study
 - I can fill in the details form on context, solution and results
 
-**Story 2.4** – As an owner/designer, I want to assign tags, properties and flags to deliverables.
-- Tags, properties and flags are saved for each deliverable
+**Story 2.4** – As an owner/designer, I want to mark images and videos as favourite.
+- The favourite mark is saved for each image or video; it's optional and any number can be marked
 
 ### Epic 3 – Graphic case study generation (Sprint 2)
 
@@ -250,7 +252,7 @@ Prerequisite: account/sales/social user journey.
 
 **Story 6.2** – As an admin, I want to assign users to roles.
 - Each role's permissions are fixed. The admin cannot change what a role can do
-- Owner/designer: create, upload and tag, manage templates, review, edit, approve, export and share
+- Owner/designer: create, upload and mark favourites, manage templates, review, edit, approve, export and share
 - Account/sales/social: view approved case studies, export them, publish them as shareable links
 - Admin: users and role assignment
 
@@ -310,7 +312,7 @@ These points must be resolved before the epics that depend on them. Owners are n
 
 1. **Export formats** (Epics 3 and 5; decide before Sprint 2). Which formats the MVP produces. The demo criteria set a minimum: 16:9 deck, social carousel and PDF. The A3 deck shows eight: 16:9 deck, A4 whitepaper, 1080×1350 carousel, square post, 1080×1920 social video, 1200×675 LinkedIn cover, HD PNG pack and ZIP. Merges v1 points 1 and 5. The publishing channel is now settled as the shareable link.
 2. **Data processing logic** (Epic 3; decide before Sprint 2). How the tool turns uploaded material into text.
-3. **Tag, property and flag taxonomy** (Epic 2; decide before Sprint 1 ends, October 14). The list and meaning of the values that can be assigned to deliverables.
+3. **Tag, property and flag taxonomy.** Resolved 2026-10-14: no taxonomy. Tags, properties and flags are dropped; favourites replace them (Story 2.4).
 4. **Account/sales/social user journey** (Epic 5). Partly resolved: these users reach approved case studies inside MAC Recap, with their own login from Sprint 3. Still open: how they find and browse case studies.
 5. *Merged into point 1.*
 6. **Test or real data.** Resolved: the demo uses material from one real past project. Its confidentiality and NDA status must be cleared before upload (Known risks).
@@ -321,3 +323,4 @@ These points must be resolved before the epics that depend on them. Owners are n
 11. **Shareable link access** (Epic 5). Until this is decided, links open for anyone who has them (FR7). Can anyone with the link open it, only logged-in users, or does the link expire? This is a client confidentiality decision.
 12. **What counts as altering** (Epics 3 and 4, NFR1; decide before Sprint 2). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary.
 13. **Recording the 8-week measures.** How owner/designer time, editing and hallucinations are recorded during validation.
+14. **What a favourite means for generation** (Epic 3; decide before Sprint 2). Whether generation must use, prefers, or simply shows favourites first.

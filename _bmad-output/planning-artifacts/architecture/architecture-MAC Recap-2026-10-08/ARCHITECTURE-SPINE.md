@@ -4,10 +4,10 @@ type: architecture-spine
 purpose: build-substrate
 altitude: feature
 paradigm: 'modular monolith with ports at vendor seams; generation as a pipes-and-filters pipeline over one canonical document'
-scope: 'MAC Recap standalone MVP (Epics 2-6): case creation, upload and tagging, generation, review and approval, export and shareable links, auth. Plus the seam for the later MAC Productive (MCP) integration'
+scope: 'MAC Recap standalone MVP (Epics 2-6): case creation, upload and favourites, generation, review and approval, export and shareable links, auth. Plus the seam for the later MAC Productive (MCP) integration'
 status: final
 created: '2026-10-08'
-updated: '2026-10-08'
+updated: '2026-10-14'
 binds: [FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, NFR1, NFR2, NFR3, NFR4, NFR5, NFR6, NFR7, FR9-seam]
 sources:
   - '_bmad-output/planning-artifacts/prds/prd-MAC Recap-2026-10-08/prd.md (PRD v2, final)'
@@ -49,7 +49,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  M[Material snapshot<br/>manifest at enqueue] --> G{AD-6 gate:<br/>at least one material item?}
+  M[Material snapshot<br/>manifest at enqueue] --> G{AD-6 gate:<br/>at least one live asset?}
   G -- no --> X[reject: NO_MATERIAL]
   G -- yes --> N[Narrative filter<br/>LLM writes text fields only]
   N --> L[Layout filter<br/>deterministic rendering.relayout]
@@ -65,12 +65,12 @@ flowchart LR
 
 - **Binds:** all epics
 - **Prevents:** Epic 4 or 5 reading Epic 2's tables or S3 keys directly, and vendor SDK calls leaking into UI code
-- **Rule:** The MVP modules are `case-study`, `material` (which includes taxonomy), `generation`, `rendering`, `sharing`, `access` and `jobs`. `integration` is created at Epic 7 (AD-16). Each module owns the tables and S3 prefixes listed below, and nothing else writes them. Code outside a module imports only that module's `index.ts`. Vendor SDKs are imported only in `adapters/`.
+- **Rule:** The MVP modules are `case-study`, `material`, `generation`, `rendering`, `sharing`, `access` and `jobs`. `integration` is created at Epic 7 (AD-16). Each module owns the tables and S3 prefixes listed below, and nothing else writes them. Code outside a module imports only that module's `index.ts`. Vendor SDKs are imported only in `adapters/`.
 
 | Owner | Tables | S3 prefixes |
 | --- | --- | --- |
 | `case-study` | `case_study`, `revision`, `case_event` | — |
-| `material` | `asset`, `text_item`, `context_form`, `taxonomy_term`, `material_term` | `cases/{caseId}/assets/**` (originals and renditions) |
+| `material` | `asset` (including `is_favourite`), `context_form` | `cases/{caseId}/assets/**` (originals and renditions) |
 | `generation` | — (writes revisions only via `case-study`) | — |
 | `rendering` | `export`, `template_variant_state` (only if AD-15's conditional applies) | `cases/{caseId}/revisions/{revisionId}/exports/**` |
 | `sharing` | `share_link` | — |
@@ -146,7 +146,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Binds:** NFR6, NFR5, FR3, Story 3.1
 - **Prevents:** generation from the details form alone, and the gate disagreeing with the UI's Generate button
 - **Rule:**
-  - `generate` fails with `NO_MATERIAL` before any LLM call unless the case has at least one non-deleted material item: an asset of any allowed type (image, video, text document, PDF) or a non-empty text item `[ASSUMPTION: pasted text counts, per Story 2.3 "files and text"]`. The details form never counts (NFR6). The wizard's Generate button and the worker (again, when it claims the job) use the same check through `material.index`.
+  - `generate` fails with `NO_MATERIAL` before any LLM call unless the case has at least one non-deleted asset of any allowed type (image, video, text document, PDF). Typed text lives only in the details form, which never counts (NFR6). The wizard's Generate button and the worker (again, when it claims the job) use the same check through `material.index`.
   - The template's media-count rule (AD-15) then picks the layout. What a template renders with zero images or videos is a template rule the design team supplies (see Deferred).
   - The LLM receives only the case's material snapshot and form answers (AD-18). It gets no web or other server tools.
   - The structured output tags each claim with `aspect`, `technical` or `graphic`. A draft without both aspects is marked `MISSING_ASPECT` and the warning is shown in the configurator. It does not block approval. `[CONFLICT A3]`
@@ -220,7 +220,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 | Action | owner_designer | account_sales_social | admin | system |
 | --- | --- | --- | --- | --- |
 | list cases | all statuses | approved only | — | — |
-| create case, upload, tag, fill details, generate, edit | any case | — | — | — |
+| create case, upload, mark favourites, fill details, generate, edit | any case | — | — | — |
 | delete case | any `draft` case | — | — | — |
 | approve, update approved version, discard | any case (AD-19) | — | — | — |
 | view, export | any approved | any approved | — | — |
@@ -256,11 +256,15 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - The page offers no file download `[ASSUMPTION, from UX]`, and its media are display-size renditions and video poster frames or transcodes served by presigned GET, never originals.
   - `accessMode` is an enum. Until OP 11 is decided its only value in use is `unlisted`: anyone with the link can open it (FR7). The modes OP 11 adds (expiry, login, password or other) are added to the enum then; `expiresAt` already exists.
 
-### AD-14 — Tags, properties and flags are reference data with stable keys
+### AD-14 — Favourite is a property of an image or video asset
 
-- **Binds:** FR2, Story 2.4, FR4, `material`, OP 3
-- **Prevents:** free-text tags, labels hard-coded in layout rules, and renames breaking generation
-- **Rule:** Every value is a row in `taxonomy_term` (`kind` ∈ tag|property|flag, a stable `key`, a `label`), seeded through migrations. Material links to terms through `material_term`. Code, templates and prompts refer to terms only by `key`, never by label. The value list is OP 3.
+- **Binds:** FR2, PRD Story 2.4, `material`, OP 14
+- **Prevents:** favourites on files that can't be shown as media, a favourite change moving a case's status, and generation depending on a mark whose meaning isn't decided
+- **Rule:**
+  - `asset.is_favourite` (boolean, default false) is settable only on image and video assets, through `material.index`. Any number of assets per case can be favourites.
+  - Setting it records an event and never changes case status.
+  - It is carried in the material manifest, and generation ignores it until OP 14 is decided.
+  - There is no taxonomy. Tags, properties and flags were dropped on 2026-10-14 (OP 3 resolved; [Sprint Change Proposal](../../sprint-change-proposal-2026-10-14.md)).
 
 ### AD-15 — Templates are versioned code and the versions only ever get added
 
@@ -296,11 +300,11 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Binds:** FR2, FR3, NFR2, NFR6, `material`, `generation`, OP 2
 - **Prevents:** generation inventing ids for form fields, uploads arriving mid-job being included at random, and deleting an asset breaking approved revisions or the material drawer a reviewer uses
 - **Rule:**
-  - Material is referred to only as `MaterialRef { kind: 'asset' | 'text' | 'form_field', id }`, where form fields have stable keys. Refs are resolved only through `material.resolveRefs(caseId, refs)`. A `form_field` ref is a valid source for a claim (NFR2) but never counts as material (AD-6).
+  - Material is referred to only as `MaterialRef { kind: 'asset' | 'form_field', id }`, where form fields have stable keys. Refs are resolved only through `material.resolveRefs(caseId, refs)`. A `form_field` ref is a valid source for a claim (NFR2) but never counts as material (AD-6).
   - A `generate` job's payload carries a material manifest (refs plus content hashes) taken when it is enqueued. The revision stores that manifest.
   - How each material type is turned into LLM input is a `generation` adapter concern decided with OP 2; it does not change the ref or manifest shape. Known limits: a request is capped at 32 MB and PDFs at 600 pages, DOCX is not an API input, and video is not an API input. A file over those limits goes in as extracted text or split. The Anthropic Files API is not used, because it stores client material at Anthropic.
-  - Material that any revision or any queued or running job references can only be soft-deleted (`deleted_at`). `approve` fails with `MATERIAL_MISSING` if anything the revision references is deleted.
-  - Uploading or tagging never changes case status. New material is used only by the next generation.
+  - Material that any revision or any queued or running job references can only be soft-deleted (`deleted_at`). `approve` fails with `MATERIAL_MISSING` if anything the revision references is deleted. The UI offers no restore.
+  - Uploading or marking a favourite never changes case status. New material is used only by the next generation.
 
 ### AD-19 — Approval by any owner/designer after a manual check of every block [ADOPTED]
 
@@ -364,10 +368,8 @@ Starter: `npx create-next-app -e with-supabase`. The starter currently ships `ne
 erDiagram
   PROFILE ||--o{ CASE_STUDY : created
   CASE_STUDY ||--o{ ASSET : has
-  CASE_STUDY ||--o{ TEXT_ITEM : has
+  %% ASSET carries is_favourite (boolean, default false; images and videos only, AD-14)
   CASE_STUDY ||--|| CONTEXT_FORM : has
-  ASSET }o--o{ TAXONOMY_TERM : material_term
-  TEXT_ITEM }o--o{ TAXONOMY_TERM : material_term
   CASE_STUDY ||--o{ REVISION : versions
   CASE_STUDY ||--o{ CASE_EVENT : logs
   CASE_STUDY ||--o{ SHARE_LINK : shared_as
@@ -408,7 +410,7 @@ supabase/migrations/        # forward-only SQL, incl. jobs_claim()
 | Capability | Lives in | Governed by |
 | --- | --- | --- |
 | FR1 unique ID | `case-study` | AD-2 |
-| FR2 upload (20 × 100 MB), tags, properties, flags, details form | `material` | AD-8, AD-14, AD-18 |
+| FR2 upload (20 × 100 MB), favourites, details form | `material` | AD-8, AD-14, AD-18 |
 | FR3 generate from templates, only from material and form answers | `generation`, `jobs` | AD-4, AD-5, AD-6, AD-7, AD-10, AD-17 |
 | FR4 adapt to media count | `rendering/templates` | AD-15 |
 | FR5 review dashboard and configurator, text editing | `app/(tool)`, `case-study` | AD-3, AD-4, AD-17, AD-19 |
@@ -439,12 +441,13 @@ Not resolved by this spine. Each AD carries an interim rule so building can cont
 | --- | --- | --- |
 | OP 1 export formats | AD-9 format registry entries, AD-15 template formats, motion formats | renderer-per-format, export uniqueness, file types |
 | OP 2 data processing logic | AD-7 prompt content, AD-18 per-type LLM input (PDF, DOCX, video) | port, manifest and ref shapes |
-| OP 3 taxonomy | AD-14 seed values, library facets | term table and key-only references |
+| OP 3 taxonomy | Resolved 2026-10-14: dropped, no taxonomy (AD-14) | — |
 | OP 4 account/sales/social journey (browsing) | library queries over `getLiveRevision` | approved-only listing (AD-11) |
 | OP 8 status lifecycle | AD-3 stored state set and labels | revision model, approved is terminal |
 | OP 11 link access | AD-13 default `accessMode`, expiry UI, AD-12 after Epic 6 | token, case + format link, turn-off |
 | OP 12 what counts as altering | AD-5 rendition operations (fitting into export formats, crop, focal point, PDF pages as media), AD-15 Shuffle and media-count adaptation | no AI modifies assets, no upscaling, template versions in code |
 | OP 13 recording the measures | AD-20 use of the event log | append-only `case_event` |
+| OP 14 what a favourite means for generation | AD-14 use of `is_favourite` in generation (AD-7 prompt, AD-18 manifest) | `asset.is_favourite`, carried in the manifest |
 
 ## Deferred
 

@@ -27,7 +27,7 @@ Scope: the standalone MVP, Epics 2–6, keeping PRD v2 numbering (Epic 1 is team
 ### Functional Requirements
 
 FR1: The owner/designer creates a case study by hand, and the system gives it a unique, permanent ID (a database-generated uuid that is never changed or reused). The ID is the only identifier exposed to other systems and is ready for the later project-order link. There is no trigger at project close. (CAP-1, Story 2.2)
-FR2: The owner/designer uploads material (images, videos, texts, PDFs; pasted text also counts) to a case study. The limit is 20 files of at most 100 MB each, of an allowlisted type. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others. Each deliverable gets tags, properties and flags from a fixed list. The owner/designer also fills in an optional details form (context, solution, results), which is saved, can be cited as a claim source, and never counts as material. (CAP-2, CAP-3, Stories 2.3–2.4)
+FR2: The owner/designer uploads material (images, videos, text documents, PDFs) to a case study. The limit is 20 files of at most 100 MB each, of an allowlisted type. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others. Any number of images and videos can be marked as favourite; the mark is optional. The owner/designer also fills in an optional details form (context, solution, results), which is the only place for typed project text, is saved, can be cited as a claim source, and never counts as material. (CAP-2, CAP-3, Stories 2.3–2.4)
 FR3: The system generates a graphic case study in the background by applying MAC templates to the uploaded material. The case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The narrative follows challenge, approach and result (always present, can't be removed or reordered), covers the technical and the graphic side, and uses only the uploaded material and form answers. Template design and assets stay unchanged. Generation is refused when there is no material, even with the form filled in. Layouts are produced for every MVP export format. (CAP-4, CAP-5, Story 3.1)
 FR4: Templates adapt their layout to the number of available media items, using the template's own media-count rules (slot mapping per count). (CAP-4, Story 3.2)
 FR5: The owner/designer reviews and edits case studies through the review dashboard (every case with its status, a To review queue oldest first, delete only in Bozza) and the configurator (generated text in place, layout variant, shuffle, spacing, media replace / reorder / remove, font pairing and text scale per format). Layout, spacing and typography accept only template-defined values; media come only from this case's material; the preview matches the exported files exactly; there is no canvas-ratio control. (CAP-6, CAP-7, Stories 4.1–4.2)
@@ -64,7 +64,7 @@ From the architecture spine (AD-1 to AD-20 are binding):
 - AR3 (AD-3): `case_study.status` changes only through `case-study.transition`. Revisions have `working | approved | superseded`. `head_revision_id` and `approved_revision_id` pointers; `getLiveRevision` and `getEditableRevision` reads. Generation only from `draft`; delete only in `draft`, soft (`deleted_at`).
 - AR4 (AD-4): `CaseStudyDocument` (zod, jsonb) stored twice per revision, `generated_doc` (immutable) and `doc` (editable). Shared part (template@version, blocks with stable `blockId`, claims and check state, media set) and per-format part (variant, slot assignments, spacing, text scale, font pairing). No canvas ratio. Schema rejects a missing challenge/approach/result. `rendering.relayout` is the only slot-assignment code. `schemaVersion` + `upgrade(doc)` on read. `FORMAT_NOT_IN_REVISION`.
 - AR5 (AD-5): Guardrails are code (`generation/domain/guardrails.ts`, `access/domain/policy.ts`, `case-study` preconditions), never DB/env/UI. Each guardrail is enforced in a use case and covered by an automated test, so the end-of-Sprint-2 guardrail check runs on the pre-login build.
-- AR6 (AD-6): `generate` fails with `NO_MATERIAL` before any LLM call unless there's at least one non-deleted asset or non-empty text item; the same check backs the Generate button and the worker's claim. Claims tagged `aspect: technical | graphic`; a draft missing one is `MISSING_ASPECT`.
+- AR6 (AD-6): `generate` fails with `NO_MATERIAL` before any LLM call unless there's at least one non-deleted asset; the same check backs the Generate button and the worker's claim. Claims tagged `aspect: technical | graphic`; a draft missing one is `MISSING_ASPECT`.
 - AR7 (AD-7): One `NarrativeGenerator` port, worker only. Adapter uses `client.beta.messages.parse` with the zod schema, model `claude-opus-5-5` from one constant, adaptive thinking, `effort: "high"`, server-side refusal fallbacks; `refusal` → `LLM_REFUSAL`. Versioned prompt files. Each revision records `response.model`, `fellBack`, `promptVersion`, `schemaVersion`.
 - AR8 (AD-8): Private EU S3 bucket, Block Public Access, versioning, CORS for app origin only. Browser uploads via presigned POST (`content-length-range` 100 MB, allowlisted Content-Type), `requestChecksumCalculation: "WHEN_REQUIRED"`. Asset row only after a HEAD check. 20-file cap checked on issue and confirm. Presigned GET ≤ 15 min. Fixed key layout. No Supabase Storage.
 - AR9 (AD-9): A format registry (`rendering/domain/formats.ts`) and one React renderer per format, used by the configurator, case study view, `/s/{token}` and exports. Exports: `renderToStaticMarkup` + Playwright `page.setContent`, no print route. Deck and A4 → PDF; image formats → ZIP of PNGs; Export all → one ZIP. Video shows its poster frame in static formats. `export` unique and immutable on `(revision_id, format)`; `ensureExport` is idempotent.
@@ -72,11 +72,11 @@ From the architecture spine (AD-1 to AD-20 are binding):
 - AR11 (AD-11): Every action and route calls `access.getActor()` + `access.authorize()`. Permission matrix lives only in `policy.ts`. Role read from `profile` on every request. A `system` actor for the worker. Server-only data access with the service-role key; RLS denies `anon` and `authenticated`. A seeded dev `owner_designer` until Epic 6, disabled at cutover and never reassigned.
 - AR12 (AD-12): HTTP basic auth in `proxy.ts` on every deployed environment until Epic 6, including `/s/{token}`. Forward-only SQL migrations applied staging → prod before the image.
 - AR13 (AD-13): `share_link` (token ≥ 128 bits URL-safe, caseId, format, createdBy/At, expiresAt, revokedAt, accessMode enum). `/s/{token}` resolves via `getLiveRevision` at request time, read-only, display renditions only, no download.
-- AR14 (AD-14): Taxonomy is `taxonomy_term` rows (kind tag|property|flag, stable key, label) seeded by migration; `material_term` links; code refers to keys only.
+- AR14 (AD-14): Favourite is a boolean on `asset` (`is_favourite`, default false), settable only on image and video assets; changing it records an event and never changes case status. There is no taxonomy.
 - AR15 (AD-15): Templates are versioned code folders `rendering/templates/{templateId}/v{n}/` (variants, slots, media-count rules, allowed values, one renderer per format); a published version is never edited. `rendering.listVariants(templateId, format, mediaCount)` is the only variant source.
 - AR16 (AD-16): No MVP code calls MAC Productive.
 - AR17 (AD-17): Compare-and-set on `revision.version` (`STALE_REVISION`) and `case_study.head_version` (`STALE_HEAD`); no edits while `generating`; only `working` revisions writable (`REVISION_NOT_WRITABLE`); explicit idempotent `forkHead`; generate results create a new revision, discarded on head mismatch.
-- AR18 (AD-18): `MaterialRef { asset | text | form_field, id }` resolved only via `material.resolveRefs`. Generate jobs carry a material manifest (refs + hashes) stored on the revision. Referenced material is soft-deleted only; `approve` fails with `MATERIAL_MISSING`. Upload/tag never change case status. Anthropic limits (32 MB request, 600-page PDF, no DOCX, no video); Files API not used.
+- AR18 (AD-18): `MaterialRef { asset | form_field, id }` resolved only via `material.resolveRefs`. Generate jobs carry a material manifest (refs + hashes) stored on the revision. Referenced material is soft-deleted only; `approve` fails with `MATERIAL_MISSING`. Upload and favourite never change case status. Anthropic limits (32 MB request, 600-page PDF, no DOCX, no video); Files API not used.
 - AR19 (AD-19): Per-block `check: { by, at, textHash } | null`, set only by a person, no bulk check. A check counts only while `textHash` matches. `approve(caseId, revisionId, expectedRevisionVersion, expectedHeadVersion)` checks every block on the server and requires an overflow-free result per format from the client. Claims carry `provenance` and optional validated `sourceRefs`, never shown as "verified".
 - AR20 (AD-20): `case_event` append-only rows (`case_id`, `revision_id`, `actor_id`, `type`, `at`, `data`) on every transition, upload confirmation, save, block check/uncheck, claim edit, approval, export, link create and turn-off.
 - AR21 (conventions): snake_case singular tables; uuid ids; `timestamptz` UTC, displayed Europe/Rome; zod in `domain/` as single definition; generated DB types; `Result<T, AppError>` with SCREAMING_SNAKE codes; structured JSON logs with no material or prompts; env read only in `src/shared/env.ts`; `case_study.locale` it|en default it.
@@ -89,9 +89,9 @@ UX-DR2: Role-based absence. A control a role can't use is absent, not disabled. 
 UX-DR3: Status badge. Always colour plus text label, using tokens `status-draft`, `status-generating`, `status-review`, `status-approved`. Labels from the OP 8 interim (Bozza, In elaborazione, Da approvare, Approvato).
 UX-DR4: Owner/designer Case studies table. Columns ID (monospace), Name, Client, Year, Status, Updated, Links (count, Approvato only). Search "Search name, client or ID", ~250 ms debounce, case- and accent-insensitive over name, client, ID. Status segmented filter with per-segment counts, combined with search (AND). Default sort Updated newest; header click sorts. Row click by status (Bozza → wizard at first incomplete step; In elaborazione → no-op with "Still generating" tooltip; Da approvare → configurator; Approvato → configurator plus View). Overflow menu: View, Export, Share (Approvato), Delete (Bozza, with confirm). Rows in In elaborazione update without reload. Empty and no-results states with their copy.
 UX-DR5: To review queue. The table pre-filtered to Da approvare, oldest first; sidebar count; no assignment or claiming; empty copy "Nothing to review."
-UX-DR6: Library view. Card grid (cover = first slide of the 16:9 deck, name, client, year, up to three tags); approved only; no status filter or badge; same search; facets Client, Year and tags as multi-select chips with active filters and Clear all; newest approved first; paginates at 24, no infinite scroll; empty copy "No approved case studies yet."; owner/designer Table / Library toggle.
+UX-DR6: Library view. Card grid (cover = first slide of the 16:9 deck, name, client, year; no tags); approved only; no status filter or badge; same search; facets Client and Year as multi-select chips with active filters and Clear all; newest approved first; paginates at 24, no infinite scroll; empty copy "No approved case studies yet."; owner/designer Table / Library toggle.
 UX-DR7: Wizard step 0. Name (required) and client (required), year defaulting to the current year. The case is created and its ID shown in the header; saved as Bozza from that moment; leaving and returning loses nothing.
-UX-DR8: Wizard step 1 Material. Dropzone plus browse button; copy "Up to 20 files, 100 MB each."; per-file inline rejections ("Over 100 MB. Not uploaded." / unsupported-type copy / 21st file) that don't block others; parallel uploads with per-file progress, progress and rejections announced to screen readers; deliverable rows (thumbnail, name, size, tag/property/flag chip pickers from a fixed list, no free text, "untagged" marker; tagging optional); remove with 5 s Undo toast; Next: Details enabled once one file has uploaded.
+UX-DR8: Wizard step 1 Material, in the focused wizard (per `mockups/material-step.html`). Dropzone plus browse button with accepted-type chips; no pasted text; copy "Up to 20 files, 100 MB each."; per-file inline rejections ("Over 100 MB. Not uploaded." / unsupported-type copy / 21st file) that don't block others; parallel uploads with per-file progress, progress and rejections announced to screen readers; rows (thumbnail, name, size, remove, plus a **Preferito** toggle on images and videos); remove is immediate, with no confirm and no undo; **Avanti** is active from the first uploaded file, and Dettagli and Genera can't be reached with 0 files.
 UX-DR9: Wizard step 2 Details. Context, Solution, Results textareas with one-line prompts, a "{n} of 3" counter, all optional.
 UX-DR10: Wizard step 3 Generate. Summary "{n} files, {m} of 3 details filled."; Generate disabled without material, with the visible reason linked via `aria-describedby`; processing state with leave-page copy and Back to case studies; no ETA or percentage; failure banner "Generation didn't finish. Your material and details are saved." with Try again.
 UX-DR11: Draft-ready toast anywhere in the app: "{Name} is ready to review." with Open (C3).
@@ -127,12 +127,13 @@ These are the rules the stories are built against. None of them is a decision; e
 | --- | --- | --- | --- | --- |
 | IR-OP1 | OP 1 export formats | PRD owner | Format registry holds UX Option A only: Deck 16:9 (1920×1080, PDF), Social carousel 4:5 (1080×1350, ZIP of PNGs), PDF A4 portrait (PDF). Adding formats means adding registry entries and template renderers. | SPEC CAP-9, ui-flows, AD-9 |
 | IR-OP2 | OP 2 data processing logic | PRD owner | **No interim rule.** Stable regardless: the `NarrativeGenerator` port, `MaterialRef`s and the manifest shape (AD-18). Which material types the LLM reads, and how each is turned into input, is open. | AD-7, AD-18 |
-| IR-OP3 | OP 3 taxonomy values (due Oct 14) | PRD owner | Term table, key-only references and chip pickers are built; the seed values arrive by migration once OP 3 is decided. Until then, facets and tag search show only the terms seeded. | AD-14, EXPERIENCE |
-| IR-OP4 | OP 4 account/sales/social browsing | PRD owner | UX proposal: card library with search, Client / Year / tag facets, paginated at 24, approved only. | EXPERIENCE (library view) |
+| IR-OP3 | OP 3 taxonomy values | PRD owner | **Resolved 2026-10-14:** no taxonomy. Tags, properties and flags are dropped; favourites replace them (AR14). No interim rule remains. | PRD OP 3, AD-14 |
+| IR-OP4 | OP 4 account/sales/social browsing | PRD owner | UX proposal: card library with search, Client / Year facets, paginated at 24, approved only. | EXPERIENCE (library view) |
 | IR-OP8 | OP 8 status lifecycle | PRD owner | Option A: `draft` Bozza → `generating` In elaborazione → `in_review` Da approvare → `approved` Approvato. Links are a count, not a status. No path back from Approvato. | AD-3, EXPERIENCE |
 | IR-OP11 | OP 11 link access | PRD owner | `accessMode = unlisted` (anyone with the link), with `expiresAt` present but unused in the UI. Share dialog says "Anyone with the link can view." Combined with IR-A2 until Epic 6. | AD-13, FR7 |
 | IR-OP12 | OP 12 what counts as altering | Design team | Renditions only downscale whole images (no upscaling, crop, recolour or filter) and make video poster frames/transcodes. Media are placed whole (fit). No crop or focal point. Media-count adaptation and Shuffle pick only among designed variants. | AD-5, AD-15, EXPERIENCE |
 | IR-OP13 | OP 13 recording the measures | PRD owner | The tool records no hands-on time and has no timer UI; it keeps the append-only `case_event` log and `generated_doc` next to the approved `doc`. | AD-20, UX Q3 |
+| IR-OP14 | OP 14 what a favourite means for generation (Epic 3) | PRD owner | Favourites are stored and shown, not used by generation. | AD-14, PRD OP 14 |
 | IR-NFR5 | NFR5 quality checklist (Sprint 2 deliverable) | Non-dev, Sprint 2 | **No interim rule.** The schema enforces challenge / approach / result and both aspects are tagged; the checklist content for prompts is open. | SPEC Open Questions |
 | IR-HOST | Container host | Team, end of Sprint 1 | **No interim rule.** Any EU host that runs one image with two processes. | Spine Deferred, AR22 |
 | IR-A1 | A1 / C1 live edits vs claim check | PRD owner | Edits to an approved case are staged on a working head; links keep serving the approved revision until an owner/designer re-checks the edited blocks and runs **Update approved version**. **Discard changes** returns to the live version. | AD-3, AD-19, EXPERIENCE |
@@ -149,7 +150,7 @@ These are the rules the stories are built against. None of them is a decision; e
 | Requirement | Epic | What it covers |
 | --- | --- | --- |
 | FR1 | Epic 2 | Manual creation with a permanent uuid |
-| FR2 | Epic 2 | Upload (20 × 100 MB, allowlist), pasted text, tags / properties / flags, details form |
+| FR2 | Epic 2 | Upload (20 × 100 MB, allowlist), favourites, details form |
 | FR3 | Epic 3 | Background generation, narrative from material only, NFR6 gate, layouts per format |
 | FR4 | Epic 3 | Media-count rules (re-applied when the media set changes in the Epic 4 configurator) |
 | FR5 | Epic 4 | Review dashboard, To review queue, configurator editing |
@@ -170,7 +171,7 @@ These are the rules the stories are built against. None of them is a decision; e
 Epic numbering follows PRD v2 (Epic 1 is team setup, not product scope). Epics run strictly in order, never in parallel.
 
 ### Epic 2: Create a case study and collect its material (Sprint 1, due 2026-10-14)
-The owner/designer creates a case study by hand, gets its permanent ID, uploads files and pasted text, tags each deliverable and fills in the details form, all saved in Supabase and S3 inside a gated environment. Also lays the foundation later epics build on: starter scaffold, module skeleton, actor and policy seam with a dev actor, basic-auth gate, event log, app shell, design tokens and a basic Case studies table.
+The owner/designer creates a case study by hand, gets its permanent ID, uploads files, marks favourite images and videos and fills in the details form, all saved in Supabase and S3 inside a gated environment. Also lays the foundation later epics build on: starter scaffold, module skeleton, actor and policy seam with a dev actor, basic-auth gate, event log, app shell, design tokens and a basic Case studies table.
 **FRs covered:** FR1, FR2, CAP-12
 
 ### Epic 3: Generate a graphic case study from the material (Sprint 2, due 2026-10-21)
@@ -198,7 +199,7 @@ Each user signs in with one of three fixed roles; the admin manages users and ro
 
 ## Epic 2: Create a case study and collect its material
 
-The owner/designer creates a case study by hand, gets its permanent ID, uploads files and pasted text, tags each deliverable and fills in the details form, all saved in Supabase and S3 inside a gated environment. The epic also lays the foundation the later epics build on.
+The owner/designer creates a case study by hand, gets its permanent ID, uploads files, marks favourite images and videos and fills in the details form, all saved in Supabase and S3 inside a gated environment. The epic also lays the foundation the later epics build on.
 
 ### Story 2.1: Scaffold the app from the starter and pin the stack
 
@@ -282,7 +283,7 @@ Covers: AR11, AR5 (permissions half), NFR3, CAP-11 (policy only)
 
 **Given** `access/domain/policy.ts`
 **When** I read it
-**Then** it holds the complete AD-11 matrix as code for every action (list cases, create/upload/tag/fill details/generate/edit, delete draft case, approve/update approved version/discard, view/export, job work, create link, turn off link, manage templates, manage users and roles, change permissions or guardrails)
+**Then** it holds the complete AD-11 matrix as code for every action (list cases, create/upload/mark favourites/fill details/generate/edit, delete draft case, approve/update approved version/discard, view/export, job work, create link, turn off link, manage templates, manage users and roles, change permissions or guardrails)
 **And** "change permissions or guardrails" is denied to every role, admin and system included
 **And** there is no table, environment variable or API that changes the matrix
 **And** a unit test asserts every cell of the matrix
@@ -426,7 +427,7 @@ As an owner/designer,
 I want to drop up to 20 project files into a case study,
 So that the material is stored safely with the case and ready for generation.
 
-Covers: FR2 (files), CAP-2, AR8, AR18 (soft delete, upload doesn't change status), AR20, UX-DR8 (dropzone, limits, progress, rows, remove/undo), NFR8, PRD Stories 2.1 and 2.3
+Covers: FR2 (files), CAP-2, AR8, AR18 (soft delete, upload doesn't change status), AR20, UX-DR8 (dropzone, limits, progress, rows, remove), NFR8, PRD Stories 2.1 and 2.3
 ⚑ Interim: IR-OP12 (images are shown whole, scaled by the browser; no crop)
 
 **Acceptance Criteria:**
@@ -459,77 +460,76 @@ Covers: FR2 (files), CAP-2, AR8, AR18 (soft delete, upload doesn't change status
 
 **Given** an uploaded file
 **When** I remove it
-**Then** it disappears with an **Undo** toast for 5 s and no confirm dialog; the asset is soft-deleted (`deleted_at`), never hard-deleted, and Undo restores it
+**Then** it disappears at once, with no confirm dialog and no undo; the asset is soft-deleted (`deleted_at`), never hard-deleted (AR18)
 **And** a removal event is recorded
 
-### Story 2.8: Add pasted text as material
+**Given** a case with 0 non-deleted files
+**When** wizard step 1 is shown
+**Then** **Avanti** is inactive, and Dettagli and Genera can't be reached
 
-As an owner/designer,
-I want to paste project text straight into the case study,
-So that notes that aren't a file still count as material.
+### Story 2.8: Retire pasted text and the taxonomy
 
-Covers: FR2 (text), AR6 (non-empty text item counts as material), AR18, AR20, SPEC assumption "pasted text counts as material", PRD Story 2.3 "files and text"
-UX gap: EXPERIENCE.md designs no text-entry control. This story adds **Paste text** next to **browse** in the Material step, producing a deliverable row like a file. Flag to UX.
+As the team,
+I want the pasted-text, taxonomy and restore backends removed with one forward migration,
+So that material means uploaded files only and no dead tables or code remain before favourites are added.
+
+Replaces: Story 2.8 "Add pasted text as material" and the taxonomy part of Story 2.9 "Tag, property and flag deliverables" (Sprint Change Proposal 2026-10-14). Lands before Story 2.9.
+Covers: FR2, AR6 (material = at least one non-deleted asset), AR14 (no taxonomy), AR18 (`MaterialRef` kinds `asset | form_field`), AR12 (forward-only migrations)
 
 **Acceptance Criteria:**
 
 **Given** the `material` module
-**When** the migration for this story runs
-**Then** a `text_item` table exists (uuid id, `case_id`, title, body, `created_by`, `created_at`, `updated_at`, `deleted_at`) with RLS denying `anon` and `authenticated`
+**When** the forward migration for this story runs
+**Then** `has_material` is rewritten to "case exists and has at least one non-deleted asset"
+**And** `material_term`, `taxonomy_term`, `set_material_terms`, `case_material_terms`, `text_item`, their triggers and functions, and `restore_asset` are dropped
+**And** `src/shared/db.types.ts` is regenerated
 
-**Given** wizard step 1
-**When** I choose **Paste text**, enter a title and a body, and save
-**Then** a text item is stored with the case and appears as a deliverable row (text icon, title, character count)
+**Given** the code
+**When** this story is done
+**Then** the text-item and taxonomy slices are removed, along with `restoreAsset` / `restoreTextItem`, their actions, tests and error mappings (`TEXT_EMPTY`, `UNKNOWN_TERM`), and the policy action `tag`
+**And** `withinCodePoints`, `hasNoNul` and `caseIdSchema` are moved out of `text-item.ts` first, so `details-form.ts` keeps working
+**And** `hasMaterial` lives in the asset repository
+**And** `MaterialRef` kinds are `asset | form_field`
+
+**Given** `material.hasMaterial(caseId)`
+**When** it is called
+**Then** it returns true only when the case has a non-deleted asset, and false when the details form is filled in and there is no asset
+
+**Given** the migrations folder
+**When** this story is reviewed
+**Then** no applied migration is edited
+**And** the `check`, `db` and `image` CI jobs pass
+
+### Story 2.9: Mark images and videos as favourite
+
+As an owner/designer,
+I want to mark any of my images and videos as favourite,
+So that the ones I like best are recorded with the case.
+
+Replaces: Story 2.9 "Tag, property and flag deliverables" (Sprint Change Proposal 2026-10-14).
+Covers: FR2 (favourites), AR14, UX-DR8 (Preferito toggle)
+⚑ Interim: IR-OP14 (favourites are stored and shown, not used by generation)
+
+**Acceptance Criteria:**
+
+**Given** the `material` module
+**When** the forward migration for this story runs
+**Then** `asset.is_favourite boolean not null default false` exists
+**And** setting it on an asset that isn't an image or a video is rejected
+
+**Given** an image or video row in wizard step 1
+**When** I use its **Preferito** toggle
+**Then** the mark changes at once and survives reload
 **And** an event is recorded and the case status does not change
+**And** I can set it as soon as the file has finished uploading
 
-**Given** a text item whose body is empty or only whitespace
-**When** I try to save it
-**Then** it isn't saved, and I'm told the text is empty
-
-**Given** text items
-**When** the 20-file limit is counted
-**Then** text items don't count toward it, because the limit applies to files (FR2)
-
-**Given** a text item
-**When** I remove it
-**Then** it is soft-deleted with the same 5 s **Undo** toast as files
-
-**Given** `material.index`
-**When** another module asks whether a case has material
-**Then** `hasMaterial(caseId)` returns true only for at least one non-deleted asset or one non-deleted, non-empty text item, and never counts the details form (the function Epic 3's gate uses)
-
-### Story 2.9: Tag, property and flag deliverables
-
-As an owner/designer,
-I want to give each deliverable tags, properties and flags from a fixed list,
-So that the material is described consistently for generation and for finding case studies later.
-
-Covers: FR2 (tagging), CAP-2, AR14, UX-DR8 (chip pickers, untagged marker), PRD Story 2.4
-⚑ Interim: IR-OP3 (seed values arrive by migration once the taxonomy is decided; due 2026-10-14)
-
-**Acceptance Criteria:**
-
-**Given** the `material` module
-**When** the migration for this story runs
-**Then** `taxonomy_term` (uuid id, `kind` ∈ tag | property | flag, stable unique `key`, `label`) and `material_term` (material ref kind and id, term id) tables exist, with RLS denying `anon` and `authenticated`
-**And** term values are inserted only by migrations; no UI or API creates, renames or deletes a term
-
-**Given** a deliverable row (file or text item)
-**When** I open its tag, property or flag picker
-**Then** I can pick only from that kind's seeded terms as chips, with no free-text entry, and the choice saves at once and survives reload
-**And** I can tag a file as soon as it has finished uploading, while others are still uploading
-
-**Given** a deliverable with no terms
+**Given** a PDF or text-document row
 **When** the row is shown
-**Then** it shows an "untagged" marker, and nothing blocks continuing (tagging is optional)
+**Then** it has no **Preferito** toggle
 
-**Given** code, templates or prompts that refer to a term
-**When** a term's `label` changes in a later migration
-**Then** nothing breaks, because references use `key` only (checked by a test that renames a label)
-
-**Given** OP 3 is not yet decided
-**When** this story is closed
-**Then** the pickers work against whatever terms are seeded (an empty kind shows "No values yet"), and adding the decided values needs only a new seed migration
+**Given** a case's images and videos
+**When** I mark favourites
+**Then** any number can be marked, and none are required to continue
 
 ### Story 2.10: Fill in the details form
 
@@ -537,7 +537,7 @@ As an owner/designer,
 I want to write short answers on context, solution and results,
 So that the narrative can use what isn't in the files, and each answer can be cited when I check claims.
 
-Covers: FR2 (details form), CAP-3, AR18 (form fields as stable-key refs, never material), UX-DR8 (Next: Details), UX-DR9, UX-DR4 (Bozza row opens first incomplete step)
+Covers: FR2 (details form), CAP-3, AR18 (form fields as stable-key refs, never material), UX-DR8 (Avanti gate), UX-DR9, UX-DR4 (Bozza row opens first incomplete step)
 
 **Acceptance Criteria:**
 
@@ -547,15 +547,16 @@ Covers: FR2 (details form), CAP-3, AR18 (form fields as stable-key refs, never m
 
 **Given** wizard step 2 (Details)
 **When** it opens
-**Then** it shows three sections, Context, Solution and Results, each a textarea with a one-line prompt (e.g. "What did the client need, and why?"), and a counter "{n} of 3"
+**Then** it shows three sections, Context, Solution and Results, each a textarea whose placeholder is a one-line prompt (e.g. "What did the client need, and why?"), and the counter "{n} di 3 compilati" in the footer
+**And** **Avanti** is active from the start
 
 **Given** I type in a field
 **When** I pause or leave the field
 **Then** the answer is saved with the case and survives reload, the counter updates, and a save event is recorded
 
 **Given** wizard step 1 (Material)
-**When** `material.hasMaterial(caseId)` is true (at least one uploaded file or one non-empty text item)
-**Then** **Next: Details** is enabled; before that it is disabled
+**When** `material.hasMaterial(caseId)` is true (at least one uploaded file)
+**Then** **Avanti** is enabled; before that it is inactive and step 2 can't be reached
 
 **Given** a row in Bozza in the Case studies table
 **When** I click it
@@ -762,7 +763,7 @@ I want the narrative written only from my case's material and form answers,
 So that every claim in the draft has something I can check it against.
 
 Covers: FR3, CAP-5, AR6 (aspects, MISSING_ASPECT), AR7, AR18 (manifest, limits, no Files API), AR19 (provenance, validated sourceRefs), NFR1, NFR2 (no "verified"), NFR5, NFR13 (narrative language)
-⚑ Interim: IR-A3 (`MISSING_ASPECT` is recorded, not blocking)
+⚑ Interim: IR-A3 (`MISSING_ASPECT` is recorded, not blocking), IR-OP14 (favourites are in the manifest but ignored)
 ⛔ Blocked on: IR-OP2 (which material types the LLM reads and how each becomes input), IR-NFR5 (quality checklist content for the prompt)
 
 **Acceptance Criteria:**
@@ -779,7 +780,7 @@ Covers: FR3, CAP-5, AR6 (aspects, MISSING_ASPECT), AR7, AR18 (manifest, limits, 
 
 **Given** a material manifest
 **When** the adapter builds the request
-**Then** it includes only items in the manifest plus the form answers: text items and form answers as text, other types per the OP 2 rule (blocked until decided)
+**Then** it includes only items in the manifest plus the form answers: form answers as text, other types per the OP 2 rule (blocked until decided)
 **And** it respects the API limits (32 MB request, 600 PDF pages; DOCX and video are not API inputs) by extracting or splitting rather than failing, and never uploads to the Anthropic Files API
 
 **Given** the model's response
@@ -817,7 +818,7 @@ Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, f
 **When** it opens
 **Then** it shows "{n} files, {m} of 3 details filled."
 
-**Given** a case with no material (no non-deleted asset and no non-empty text item), with or without the details form filled in
+**Given** a case with no material (no non-deleted asset), with or without the details form filled in
 **When** I look at **Generate**
 **Then** it is disabled and shows "Add at least one file of project material. The details form alone isn't enough to generate.", linked via `aria-describedby`
 **And** calling the generate action directly fails with `NO_MATERIAL` before any job or LLM call
@@ -1061,7 +1062,7 @@ UX gap: EXPERIENCE.md sends the owner/designer "back to the wizard's Material st
 
 **Given** a case in Da approvare or Approvato
 **When** I choose **Add material** in the Replace media picker
-**Then** the wizard's Material step (Stories 2.7–2.9) opens for this case, with uploads, pasted text and tagging working as for a draft, and a back arrow to the configurator
+**Then** the wizard's Material step (Stories 2.7–2.9) opens for this case, with uploads and favourites working as for a draft, and a back arrow to the configurator
 **And** the case status doesn't change, no Details or Generate step is offered (generation runs only from `draft`), and the Generate action called directly fails because the case isn't in `draft`
 **And** when I return, the new images and videos are listed in the Replace media picker; nothing enters the layout or the revision until I place it
 **And** removing a file there that a revision references only soft-deletes it (AR18), so the revision's references stay resolvable and the approval check can report the missing material
@@ -1257,21 +1258,21 @@ I want to browse approved case studies as cards with search and filters,
 So that I can find the right one to show a client in under a minute.
 
 Covers: FR7 (find), CAP-9 (approved only), AR3 (`getLiveRevision` only), AR11 (approved-only listing), UX-DR6, UX-DR30 (skeleton cards)
-⚑ Interim: IR-OP4 (card library with facets), IR-OP3 (tag facets show only seeded terms), IR-OP1 (cover from the 16:9 deck)
+⚑ Interim: IR-OP4 (card library with facets), IR-OP1 (cover from the 16:9 deck)
 
 **Acceptance Criteria:**
 
 **Given** the library
 **When** it loads
 **Then** it shows only cases with an approved revision, read through `getLiveRevision`, as a card grid sorted newest approved first, paginated at 24 cards with no infinite scroll, with skeleton cards during the first load
-**And** each card shows a cover thumbnail (the first page of the live revision's 16:9 deck, drawn with the shared renderer), name, client, year and up to three tags
+**And** each card shows a cover thumbnail (the first page of the live revision's 16:9 deck, drawn with the shared renderer), name, client and year
 **And** cards have no status badge and the library has no status filter
 
 **Given** the search field
 **When** I type
 **Then** it matches name, client and ID with the same rules as the table (Story 2.6)
 
-**Given** facets for Client, Year and tags (from the taxonomy terms on the case's material)
+**Given** facets for Client and Year
 **When** I pick chips
 **Then** values in one facet combine with OR, facets combine with AND and with search, active filters show above the grid, and **Clear all** removes them
 **And** with no results it shows "Nothing matches '{query}'." with **Clear search and filters**; with no approved cases at all, "No approved case studies yet." and no action
