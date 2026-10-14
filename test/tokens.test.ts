@@ -10,20 +10,27 @@ const css = readFileSync(join(root, "src/app/globals.css"), "utf8");
 const COLORS = [
   "surface",
   "surface-raised",
+  "surface-control",
+  "surface-selected",
+  "border",
+  "border-strong",
+  "foreground-strong",
   "foreground",
   "foreground-muted",
-  "border",
   "primary",
   "primary-foreground",
-  "focus-ring",
+  "accent",
+  "info",
   "danger",
+  "danger-foreground",
+  "focus-ring",
   "status-draft",
   "status-generating",
   "status-review",
   "status-approved",
 ];
 const FONTS = ["display", "heading", "body", "label", "mono"];
-const RADII = ["sm", "md", "full"];
+const RADII = ["sm", "md", "lg", "full"];
 
 const themeBlock = css.match(/@theme\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
 

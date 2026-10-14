@@ -2,33 +2,26 @@ import type { CaseStatus } from "@/modules/access";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
-/** The `status-*` token per case status; colour is never the only signal. */
-const DOT: Readonly<Record<CaseStatus, string>> = {
-  draft: "bg-status-draft",
-  generating: "bg-status-generating",
-  in_review: "bg-status-review",
-  approved: "bg-status-approved",
+/**
+ * Per status: a tinted fill and border from the `status-*` token and the label in
+ * that hue (DESIGN.md Components, status badge). *Da approvare* uses `info` text,
+ * because blue text on a blue tint is below 4.5:1. Colour is never the only
+ * signal: the Italian label always shows.
+ */
+const TONE: Readonly<Record<CaseStatus, string>> = {
+  draft: "bg-status-draft/6 border-status-draft/22 text-status-draft",
+  generating: "bg-status-generating/6 border-status-generating/22 text-status-generating",
+  in_review: "bg-status-review/16 border-status-review/40 text-info",
+  approved: "bg-status-approved/10 border-status-approved/28 text-status-approved",
 };
 
-const RING: Readonly<Record<CaseStatus, string>> = {
-  draft: "border-status-draft",
-  generating: "border-status-generating",
-  in_review: "border-status-review",
-  approved: "border-status-approved",
-};
-
-/** A case status: its colour token paired with its Italian label (IR-OP8). */
+/** A case status: a tinted pill with its Italian label (IR-OP8), no leading dot. */
 export function StatusBadge({ status, className }: { status: CaseStatus; className?: string }) {
   return (
     <span
       data-status={status}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border bg-surface-raised px-2 py-0.5 font-label text-xs text-foreground",
-        RING[status],
-        className,
-      )}
+      className={cn("inline-flex items-center rounded-full border px-3 py-0.5 font-label text-badge", TONE[status], className)}
     >
-      <span aria-hidden="true" className={cn("size-2 rounded-full", DOT[status])} />
       {it.status[status]}
     </span>
   );
