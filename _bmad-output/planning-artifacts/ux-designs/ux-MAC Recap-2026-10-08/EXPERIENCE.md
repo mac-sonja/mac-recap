@@ -143,15 +143,15 @@ A three-step stepper: **1 Material · 2 Details · 3 Generate**, horizontal, abo
 | Deliverable rows | Each uploaded file is a deliverable row: thumbnail, file name, size (mono), remove. No tags, properties or flags (decided 2026-10-13, [CONFLICT] C6). |
 | Favourite | Image and video rows carry a **Preferito** toggle (star); PDFs and documents don't. Any number of files can be favourites; it's optional and never blocks **Avanti**. Saves at once; a toggle button with `aria-pressed`. What a favourite means for generation is open ([OPEN F]). |
 | Remove | Each row has a remove action (✕). The file is removed at once: no confirm and no Undo toast (decided 2026-10-14, [CONFLICT] C8). |
-| Continue | **Avanti** is enabled as soon as one file has finished uploading. |
+| Continue | **Avanti** is enabled as soon as one file has finished uploading. With 0 files, step 2 (and so step 3) can't be reached by any route: **Avanti** is inactive and the *Dettagli* and *Genera* stepper segments aren't clickable (decided 2026-10-14). |
 
-**Step 2: Details** (FR2). A short form in three sections that mirror the PRD: **Context**, **Solution**, **Results** (*Contesto*, *Soluzione*, *Risultati*). Each is a textarea whose one-line prompt is its placeholder (for example "What did the client need, and why?"), decided 2026-10-14. These three fields are the only place for project text in the wizard: there is no extra free field and no pasted-text block ([CONFLICT] C7). A counter in the footer's left slot shows how many are filled ("2 di 3 compilati"); **Avanti** is active from the start. Each field autosaves. `[ASSUMPTION]` Visited steps are clickable in the stepper, so Materiale can be reopened.
+**Step 2: Details** (FR2). A short form in three sections that mirror the PRD: **Context**, **Solution**, **Results** (*Contesto*, *Soluzione*, *Risultati*). Each is a textarea whose one-line prompt is its placeholder (for example "What did the client need, and why?"), decided 2026-10-14. These three fields are the only place for project text in the wizard: there is no extra free field and no pasted-text block ([CONFLICT] C7). A counter in the footer's left slot shows how many are filled ("2 di 3 compilati"); **Avanti** is active from the start. Each field autosaves. `[ASSUMPTION]` Visited steps are clickable in the stepper, so Materiale can be reopened; Dettagli and Genera are clickable only while step 1 has at least one file.
 
 → Visual reference: [`mockups/details-step.html`](mockups/details-step.html). This spine wins on conflict. The fields are optional (decided 2026-10-08); the form alone never enables generation (NFR6). The A3 sketch's "0 di 4" counter and its four-field "Contesto & background" section are replaced by the PRD's three topics.
 
 **Step 3: Generate** (FR3, NFR6).
 
-→ Visual reference: [`mockups/generate-step.html`](mockups/generate-step.html) (ready, blocked, generating, failed). This spine wins on conflict. The summary panel lists Materiale and Dettagli with a **Modifica** link back to each step; **Genera** is the main call to action. While generating, the stepper and footer give way to the processing message and an indeterminate bar (no percentage).
+→ Visual reference: [`mockups/generate-step.html`](mockups/generate-step.html) (ready, generating, failed; the blocked state below can't be reached from the UI, because step 1 gates the wizard, and stays as a server-side safety). This spine wins on conflict. The summary panel lists Materiale and Dettagli with a **Modifica** link back to each step; **Genera** is the main call to action. While generating, the stepper and footer give way to the processing message and an indeterminate bar (no percentage).
 
 | Element | Behaviour |
 |---|---|

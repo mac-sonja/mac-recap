@@ -7,7 +7,7 @@
 <style>
 /* Governs: EXPERIENCE.md > New case study wizard > Step 3 Generate (FR3, NFR4, NFR6); State Patterns > Generating.
    Layout: wizard layout (imports/ui-refs/ref-hifi-material-layout.webp, layout only). Look: DESIGN.md (2026-10-14).
-   States: ready, blocked, generating, failed. Spines win on conflict. */
+   States: ready, generating, failed (blocked is unreachable: step 1 gates the wizard). Spines win on conflict. */
 :root{
   --surface:#000;--raised:#151515;--control:#1E1E1E;--selected:#262626;--border:#262626;--border-strong:#303030;
   --fg-strong:#FFF;--fg:#F2F2F2;--muted:#878787;--primary:#CBFF00;--accent:#007BFF;--info:#B2D9EF;--danger:#FF4D4F;
@@ -75,24 +75,7 @@ h2{font-size:20px;font-weight:500;color:var(--fg-strong);margin:0 0 6px}
   </div></div>
 </div>
 
-<p class="cap"><b>2 · Generate, blocked.</b> No material file (for example all files were removed). Genera is inactive and the reason sits next to it.</p>
-<div class="frame">
-  <div class="top"><span class="back">←</span><span>Rebrand Lumen 2026</span><span class="badge">Bozza</span></div>
-  <div class="stage"><div class="col">
-    <p class="eyebrow">Nuovo case study</p>
-    <h1>Rebrand Lumen 2026</h1>
-    <div class="stepper"><div class="step"><i>1</i> Materiale</div><div class="step done"><em>✓</em> Dettagli</div><div class="step on"><i>3</i> Genera</div></div>
-    <h2>Genera il case study</h2>
-    <p class="intro">La generazione usa solo il materiale caricato e i dettagli. Potrai controllare ogni blocco prima di approvare.</p>
-    <div class="panel">
-      <div class="sum"><span><span class="lbl">Materiale</span><br><span class="mono">0 file</span></span><span class="edit">Aggiungi file</span></div>
-      <div class="sum"><span><span class="lbl">Dettagli</span><br><span class="mono">3 di 3 compilati</span></span><span class="edit">Modifica</span></div>
-    </div>
-    <div class="foot"><span></span><div class="dots"><span></span><span></span><span class="on"></span></div><div class="right"><span class="why">Aggiungi almeno un file di materiale. I dettagli da soli non bastano per generare.</span><button class="btn off" aria-disabled="true">Genera</button></div></div>
-  </div></div>
-</div>
-
-<p class="cap"><b>3 · Generating.</b> Status becomes In elaborazione. Indeterminate bar, no percentage or ETA. The user can leave; the stepper and footer are replaced by the processing message.</p>
+<p class="cap"><b>2 · Generating.</b> Status becomes In elaborazione. Indeterminate bar, no percentage or ETA. The user can leave; the stepper and footer are replaced by the processing message.</p>
 <div class="frame">
   <div class="top"><span class="back">←</span><span>Rebrand Lumen 2026</span><span class="badge">In elaborazione</span></div>
   <div class="stage"><div class="col">
@@ -107,7 +90,7 @@ h2{font-size:20px;font-weight:500;color:var(--fg-strong);margin:0 0 6px}
   </div></div>
 </div>
 
-<p class="cap"><b>4 · Generation failed.</b> Back to Bozza. Banner with the reason and Riprova; material and details are kept.</p>
+<p class="cap"><b>3 · Generation failed.</b> Back to Bozza. Banner with the reason and Riprova; material and details are kept.</p>
 <div class="frame">
   <div class="top"><span class="back">←</span><span>Rebrand Lumen 2026</span><span class="badge">Bozza</span></div>
   <div class="stage"><div class="col">
