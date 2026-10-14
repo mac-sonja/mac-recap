@@ -2,10 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { CaseStudy } from "@/modules/case-study";
+import type { ListedAsset } from "@/modules/material";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const get = vi.fn<(id: unknown) => Promise<Result<CaseStudy>>>();
+const listAssets = vi.fn<(input: unknown) => Promise<Result<ListedAsset[]>>>();
+const hasMaterial = vi.fn<(caseId: unknown) => Promise<Result<boolean>>>();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn() }),
@@ -15,8 +18,25 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
 vi.mock("@/modules/case-study", () => ({ get: (id: unknown) => get(id), YEAR_MIN: 1900, YEAR_MAX: 2100 }));
-vi.mock("@/shared/i18n/format", () => ({ currentYear: () => 2031 }));
-vi.mock("@/app/(tool)/case-studies/actions", () => ({ createCaseStudy: vi.fn() }));
+vi.mock("@/shared/i18n/format", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/shared/i18n/format")>()),
+  currentYear: () => 2031,
+}));
+vi.mock("@/modules/material", () => ({
+  listAssets: (input: unknown) => listAssets(input),
+  hasMaterial: (caseId: unknown) => hasMaterial(caseId),
+  MAX_ASSETS_PER_CASE: 20,
+  MAX_FILE_BYTES: 100 * 1024 * 1024,
+  ALLOWED_CONTENT_TYPES: ["image/png", "application/pdf"],
+}));
+vi.mock("@/app/(tool)/case-studies/actions", () => ({
+  createCaseStudy: vi.fn(),
+  presignAssetUpload: vi.fn(),
+  confirmAssetUpload: vi.fn(),
+  listAssets: vi.fn(),
+  removeAsset: vi.fn(),
+  setAssetFavourite: vi.fn(),
+}));
 
 const { default: NewCaseStudyPage } = await import("./page");
 
@@ -44,13 +64,28 @@ const draft: CaseStudy = {
   deletedAt: null,
 };
 
-const render = async (params: { caseId?: string | string[] } = {}) =>
+const asset: ListedAsset = {
+  id: "bbbbbbbb-0000-4000-8000-000000000001",
+  kind: "image",
+  originalFileName: "lumen-keyvisual-final.png",
+  contentType: "image/png",
+  sizeBytes: 4.2 * 1024 * 1024,
+  createdAt: "2026-10-14T10:00:00+00:00",
+  isFavourite: true,
+  thumbnailUrl: "https://bucket.s3/thumb?sig=1",
+};
+
+const render = async (params: { caseId?: string | string[]; step?: string | string[] } = {}) =>
   renderToStaticMarkup(await NewCaseStudyPage({ searchParams: Promise.resolve(params) }));
 
 beforeEach(() => {
   requireSurface.mockReset();
   get.mockReset();
+  listAssets.mockReset();
+  hasMaterial.mockReset();
   requireSurface.mockResolvedValue(shell);
+  listAssets.mockResolvedValue(ok([]));
+  hasMaterial.mockResolvedValue(ok(false));
 });
 
 describe("NewCaseStudyPage", () => {
@@ -92,17 +127,72 @@ describe("NewCaseStudyPage", () => {
     expect(html).toContain('data-status="draft"');
     expect(html).toContain(">Bozza</span>");
     expect(html).toMatch(/<li data-step="1" aria-current="step"/);
-    expect(html).toContain("Il caricamento del materiale non è ancora disponibile");
+    expect(html).toContain("Aggiungi il materiale del progetto");
     expect(html).not.toContain("<form");
     expect(html).not.toContain("PO-SECRET-42");
   });
 
-  it("gives the inactive step 1 Avanti its reason: the placeholder line", async () => {
+  it("shows the empty Material step: drop zone, chips and hint, inactive Avanti with its reason, no list", async () => {
     get.mockResolvedValue(ok(draft));
     const html = await render({ caseId: ID });
-    const note = html.match(/<p id="([^"]+)"[^>]*>Il caricamento del materiale/)?.[1];
-    expect(note).toBeDefined();
-    expect(html).toMatch(new RegExp(`<button type="button" aria-disabled="true" aria-describedby="${note}"[^>]*>Avanti</button>`));
+    expect(listAssets).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
+    expect(html).toContain("Carica il materiale già verificato. La generazione parte solo da qui.");
+    expect(html).toMatch(/role="button"[^>]*aria-label="Trascina qui i file o sfoglia"/);
+    expect(html).toContain("Fino a 20 file, 100 MB ciascuno.");
+    for (const chip of ["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]) expect(html).toContain(`>${chip}</li>`);
+    expect(html).toMatch(/<input type="file" multiple="" accept="image\/png,application\/pdf,\.png,\.pdf"/);
+    const reason = html.match(/<span id="([^"]+)">Aggiungi almeno un file per continuare\.<\/span>/)?.[1];
+    expect(reason).toBeDefined();
+    expect(html).toMatch(new RegExp(`<button type="button" aria-disabled="true" aria-describedby="${reason}"[^>]*>Avanti</button>`));
+    expect(html).not.toContain(">Materiale</h3>");
+    expect(html).not.toContain("<img");
+  });
+
+  it("reopens a draft with its files listed from the server and an active Avanti to step 2", async () => {
+    get.mockResolvedValue(ok(draft));
+    listAssets.mockResolvedValue(ok([asset, { ...asset, id: "bbbbbbbb-0000-4000-8000-000000000002", kind: "document", contentType: "application/pdf", originalFileName: "brief.pdf", thumbnailUrl: null, isFavourite: false }]));
+    const html = await render({ caseId: ID });
+    expect(html).toContain(">Materiale</h3>");
+    expect(html).toContain("2 / 20 file");
+    expect(html.indexOf("lumen-keyvisual-final.png")).toBeLessThan(html.indexOf("brief.pdf"));
+    expect(html).toContain('<img src="https://bucket.s3/thumb?sig=1" alt=""');
+    expect(html).toContain("4,2 MB");
+    expect(html).toMatch(new RegExp(`<a [^>]*href="/case-studies/new\\?caseId=${ID}&amp;step=2"[^>]*>Avanti</a>`));
+    expect(html).toContain("I preferiti sono facoltativi.");
+  });
+
+  it("throws into the error boundary when the files cannot be listed", async () => {
+    get.mockResolvedValue(ok(draft));
+    listAssets.mockResolvedValue(err({ code: "ASSET_LOOKUP_FAILED", message: "down" }));
+    await expect(render({ caseId: ID })).rejects.toThrow(/ASSET_LOOKUP_FAILED/);
+  });
+
+  it("opens the step 2 placeholder with step=2 when the case has material", async () => {
+    get.mockResolvedValue(ok(draft));
+    hasMaterial.mockResolvedValue(ok(true));
+    const html = await render({ caseId: ID, step: "2" });
+    expect(hasMaterial).toHaveBeenCalledExactlyOnceWith(ID);
+    expect(html).toMatch(/<li data-step="2" aria-current="step"/);
+    expect(html).toContain("La compilazione dei dettagli non è ancora disponibile");
+    expect(html).not.toContain("Aggiungi il materiale del progetto");
+    expect(listAssets).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["without material", ok(false)],
+    ["when the material check fails", err({ code: "MATERIAL_LOOKUP_FAILED", message: "down" })],
+  ] as const)("redirects step=2 %s to the step 1 URL", async (_label, result) => {
+    get.mockResolvedValue(ok(draft));
+    hasMaterial.mockResolvedValue(result);
+    await expect(render({ caseId: ID, step: "2" })).rejects.toThrow(`REDIRECT /case-studies/new?caseId=${ID}`);
+    expect(listAssets).not.toHaveBeenCalled();
+  });
+
+  it("renders step 1 for any other step value without checking material", async () => {
+    get.mockResolvedValue(ok(draft));
+    const html = await render({ caseId: ID, step: "3" });
+    expect(hasMaterial).not.toHaveBeenCalled();
+    expect(html).toMatch(/<li data-step="1" aria-current="step"/);
   });
 
   it.each(["generating", "in_review", "approved"] as const)("redirects a %s case to Case studies", async (status) => {
