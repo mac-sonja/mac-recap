@@ -4,14 +4,14 @@
 
 ## Goal
 
-The owner/designer creates a case study by hand, gets a permanent ID, uploads project files, marks favourite images and videos, and fills in an optional details form. Everything is saved in Supabase and a private EU S3 bucket, inside an environment gated by basic auth because real client material is in use. The epic also lays the foundation every later epic builds on: the pinned starter scaffold, the module skeleton with enforced boundaries, the actor and policy seam with a dev actor, the basic-auth gate, the append-only event log, the app shell with design tokens and Italian copy, and a basic Case studies table. Sprint 1, due 2026-10-14. A sprint change approved on 2026-10-14 replaced tags with favourites, dropped pasted text, and removed undo on file removal.
+The owner/designer creates a case study by hand, gets a permanent ID, uploads project files, marks favourite images and videos and fills in an optional details form, all stored in Supabase and a private EU S3 bucket inside a basic-auth-gated environment. The epic also lays the foundation every later epic builds on: the pinned starter scaffold, the module skeleton with enforced boundaries, the actor/policy seam with a dev owner/designer, the append-only event log, the app shell with design tokens and Italian copy, and a basic Case studies table. Scope was reshaped on 2026-10-14: no tags/taxonomy (favourites instead), no pasted text, no undo on file removal.
 
 ## Stories
 
 - Story 2.1: Scaffold the app from the starter and pin the stack
 - Story 2.2: One gated image, deployable to staging
 - Story 2.3: Actor and policy seam with a dev owner/designer
-- Story 2.4: App shell: navigation, tokens, Italian copy, status badge
+- Story 2.4: App shell — navigation, tokens, Italian copy, status badge
 - Story 2.5: Create a case study with a permanent ID
 - Story 2.6: Find and reopen case studies in the table
 - Story 2.7: Upload project files
@@ -21,60 +21,46 @@ The owner/designer creates a case study by hand, gets a permanent ID, uploads pr
 
 ## Requirements & Constraints
 
-- The case ID is a database-generated uuid. It is immutable, never reused, and the only identifier exposed to other systems. `project_order_ref` exists, stays null, and has no UI in the MVP.
-- Material means uploaded files only: images, videos, text documents and PDFs. A case can hold at most 20 non-deleted files of at most 100 MB each, of an allowlisted type (JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown, DOCX). A file that breaks a limit is rejected on its own; the other files still upload.
-- Any number of images and videos can be marked favourite, and none are required. PDFs and documents can't be marked. Favourites are stored and shown, but generation ignores them for now (interim rule; open point 14).
-- The details form (context, solution, results) is optional. It is the only place for typed project text and never counts as material. `hasMaterial` is true only when the case has at least one non-deleted asset.
-- Upload, removal, favourite changes and form saves never change case status. Removal is a soft delete (`deleted_at`) and is never a hard delete.
-- Status lifecycle (interim): `draft` Bozza → `generating` In elaborazione → `in_review` Da approvare → `approved` Approvato. Only `draft` is used in this epic.
-- Guardrails: no role, admin included, can change permissions or guardrails, and no setting, table or env var can change them.
-- Every deployed environment, `/s/` paths included, sits behind HTTP basic auth until Epic 6. The web process refuses to start if the auth variables are missing.
-- The UI is in Italian, through one dictionary file. Each case has a narrative locale, `it` or `en`, defaulting to `it`. The app targets desktop web: 1440 px primary, 1280 px minimum. Accessibility target is WCAG 2.2 AA.
-- Data lives in Supabase and files in AWS S3, both in the EU. The MVP code makes no calls to MAC Productive.
+- Case study ID: DB-generated uuid, immutable, never reused; the only identifier exposed externally. `project_order_ref` stays null with no UI.
+- Material = uploaded files only (images, videos, text documents, PDFs). Max 20 non-deleted files per case, 100 MB each, allowlisted types. A rejected file never blocks the others.
+- Favourite: optional, any number, images and videos only; stored and shown but not used by generation (open point, interim).
+- Details form (context, solution, results): all optional, the only place for typed project text, citable as a claim source, and **never counts as material**. `hasMaterial` is true only with at least one non-deleted asset.
+- Upload, favourite and details saves never change case status. Removal is a soft delete (`deleted_at`), never hard delete, with no confirm and no undo.
+- Every mutation writes an append-only `case_event` row with actor id (no hands-on-time tracking).
+- Until login (Epic 6) every deployed environment, `/s/` included, sits behind HTTP basic auth; the web process refuses to start if the credentials are missing.
+- WCAG 2.2 AA; desktop web (primary 1440 px, min 1280 px); UI in Italian through one dictionary file; narrative locale it | en, default it.
+- Status labels (interim): Bozza / In elaborazione / Da approvare / Approvato; only Bozza is reachable in this epic.
 
 ## Technical Decisions
 
-- **Stack:** pinned exactly, with no `^`, `~` or `latest`. Node 24 LTS, Next.js 16.3.8 (`output: 'standalone'`, `cacheComponents` off), React 19.3.0, TypeScript 6.0.3, Tailwind 4.3.3, shadcn 4.21.4, supabase-js 2.117.3, ssr 0.12.7, Supabase CLI 2.120.0, AWS SDK 3.1147.0, zod 4.6.5, Playwright 1.63.0, sharp 0.35.5.
-- **Modular monolith:** the modules are `case-study`, `material`, `generation`, `rendering`, `sharing`, `access` and `jobs`, each with `domain/`, `application/` and `index.ts`. `ports/` and `adapters/` exist only at vendor seams. Code imports another module only through its `index.ts`, vendor SDKs appear only in `adapters/`, and `domain/` imports only from `src/shared`. Lint enforces these rules. `src/modules/integration` is reserved for Epic 7.
-- **Shared conventions:** `src/shared/env.ts` is the only reader of `process.env` and validates it with zod. Errors use `Result<T, AppError>` with SCREAMING_SNAKE codes. Logs are structured JSON with `caseId`, `jobId` and `actorId`, and never contain material. Tables are snake_case and singular, with uuid ids and `timestamptz` stored in UTC and shown in Europe/Rome. zod schemas live in `domain/`, and DB types are generated into `src/shared/db.types.ts`.
-- **Server actions:** every action first calls `access.getActor()` and then `access.authorize(actor, action, resource)`. A denial returns `FORBIDDEN` (HTTP 403) before the use case runs. The permission matrix exists only as code in `access/domain/policy.ts`. Until Epic 6 the actor is a seeded dev `owner_designer`, and the role is read from `profile` on every request. A `system` profile exists for the worker.
-- **Data access:** server-only, using the service-role key, which is read only in `env.ts` and in adapters. RLS is enabled on every table, with no access for `anon` or `authenticated`. The browser never queries tables directly.
-- **Status changes:** only `case-study.transition(caseId, event, actor)` writes `case_study.status`. It writes the status and its event in one transaction.
-- **Event log:** `case_event` (`case_id`, `revision_id`, `actor_id`, `type`, `at`, `data`) is append-only, and the database rejects UPDATE and DELETE. Every mutation writes its event, including create, upload confirmation, removal, favourite change and form save.
-- **S3:** the bucket is private and in the EU, with Block Public Access, versioning, and CORS limited to the app origin. Browsers upload directly with a presigned POST (`content-length-range` 100 MB, allowlisted `Content-Type`, `requestChecksumCalculation: "WHEN_REQUIRED"`). The server creates the asset row only after a HEAD check and a second check of the 20-file cap. Presigned GETs last at most 15 minutes. Keys follow `cases/{caseId}/assets/{assetId}/original.{ext}` and are built only in `material/adapters`. Supabase Storage is not used.
-- **Material refs:** `MaterialRef { kind: asset | form_field, id }`, resolved only through `material.resolveRefs`. Form fields use the stable keys `context`, `solution` and `results`.
-- **Migrations:** forward-only SQL. Never edit an applied migration. Deploys apply migrations to staging before the new image starts, and to prod only after staging. Each story creates the tables it needs.
-- **Deployment:** one Docker image on `mcr.microsoft.com/playwright:v1.63.0-noble` with ffmpeg pinned, and two processes: `node server.js` and `node dist/worker.js`. Staging has its own Supabase project and bucket. The EU container host is still undecided, which blocks only the "deployed to staging" criterion.
+- Stack pinned exactly (no ranges): Next.js 16 (`output: 'standalone'`, `cacheComponents` off), React 19, TS 6, Tailwind 4 + shadcn (new-york, neutral), supabase-js/ssr, AWS SDK v3, zod 4, Playwright, sharp; Node 24 LTS. Versions are listed in Story 2.1.
+- Modular monolith: `src/modules/{case-study,material,generation,rendering,sharing,access,jobs}` each with `domain/`, `application/`, `index.ts`; `ports/`/`adapters/` only at vendor seams. Lint enforces: cross-module imports via `index.ts` only, vendor SDKs only in `adapters/`, `domain/` imports only `src/shared`. `src/modules/integration` is reserved (Epic 7); no MAC Productive calls.
+- `src/shared/`: `env.ts` (zod-validated, the only `process.env` reader), `result.ts` (`Result<T, AppError>`, SCREAMING_SNAKE codes), structured JSON logger (`caseId`, `jobId`, `actorId`; never material or prompts), generated `db.types.ts`.
+- Every server action/route: `access.getActor()` then `access.authorize(actor, action, resource)`; denial returns `FORBIDDEN`/403 before the use case runs. Role read from `profile` on every request. The full permission matrix lives only in `access/domain/policy.ts` as code; "change permissions or guardrails" is denied to all roles. Pre-Epic 6 the actor is a seeded dev `owner_designer`; a `system` profile also exists. List scope: all statuses for owner/designer, approved only for account/sales/social.
+- Data access is server-only with the service-role key (read only in `env.ts` and adapters); RLS denies `anon` and `authenticated` on every table.
+- `case_study.status` changes only through `case-study.transition(caseId, event, actor)`, which writes status and event in one transaction.
+- Tables (snake_case singular, uuid ids, `timestamptz` UTC displayed Europe/Rome): `profile`, `case_study`, append-only `case_event` (UPDATE/DELETE rejected), `asset` (incl. `is_favourite boolean not null default false`), `context_form` (one row per case, keys `context`/`solution`/`results`). No taxonomy or text-item tables.
+- S3: private EU bucket per environment, Block Public Access, versioning, CORS for app origin only (POST, GET). Keys `cases/{caseId}/assets/{assetId}/original.{ext}`, built only in `material/adapters`. Browser uploads via presigned POST (`content-length-range` ≤ 100 MB, fixed Content-Type, `requestChecksumCalculation: "WHEN_REQUIRED"`); asset row created only after a server HEAD check and a re-check of the 20-file cap. Presigned GET ≤ 15 min. No Supabase Storage. Type allowlist lives in `material/domain/files.ts`.
+- `MaterialRef { asset | form_field, id }`, resolved only through `material.resolveRefs`; unknown form keys are rejected.
+- Migrations are forward-only; never edit an applied migration. Applied staging before prod, before the new image starts. Without local Docker, commit CI's regenerated `db.types.ts` when the drift check fails.
+- Deployment: one Docker image on the Playwright base with pinned ffmpeg, two processes (`node server.js`, `node dist/worker.js`); worker only idles in this epic. Basic auth enforced in `proxy.ts`; credentials never `NEXT_PUBLIC_`.
 
 ## UX & Interaction Patterns
 
-- **App shell:** a left sidebar with **+ New case study**, Case studies and the user menu. Controls a role can't use are absent, not disabled. Opening a forbidden URL redirects to the role's landing page, which `access` defines once. The sidebar collapses to icons at 1024–1279 px.
-- **Design tokens:** the names are fixed (colours, `status-*`, typography roles including `mono`, rounding) and start with placeholder values. They never style template output.
-- **`StatusBadge`:** always shows a colour token together with a text label, never colour alone.
-- **Accessibility:** focus is always visible via `focus-ring`. Dialogs trap focus and return it on close, and stack at most one level deep.
-- **Wizard:** full-screen, with a back arrow and no sidebar. Step 0 asks for name and client (both required) and the year, which defaults to the current year. The case is created at once and shows its mono ID and the Bozza badge in the header. Leaving and returning loses nothing.
-- **Step 1, Material:**
-  - Dropzone plus **browse**, with accepted-type chips and the copy "Up to 20 files, 100 MB each." There is no pasted-text input.
-  - Files upload in parallel, each with its own progress bar.
-  - Rejections appear inline on the file's row, and screen readers announce both progress and rejections.
-  - Each row shows a thumbnail (images: the original scaled by the browser, never cropped; other types: a type icon), the name, the size, a remove action, and a **Preferito** toggle on images and videos only.
-  - Removal is immediate, with no confirm and no undo.
-  - **Avanti** stays inactive until the first file has uploaded.
-- **Step 2, Details:** three textareas (Context, Solution, Results), each with a one-line prompt as placeholder. The footer counter reads "{n} di 3 compilati". Fields save on pause or blur, and **Avanti** is active from the start.
-- **Case studies table:**
-  - Columns: ID (mono), Name, Client, Year, Status, Updated, Links. Default sort is Updated, newest first, and clicking a header sorts by that column.
-  - Search runs after about 250 ms of debounce over name, client and ID, ignoring case and accents. `/` focuses the search field.
-  - Shows skeleton rows on first load and has its own empty and no-results states.
-  - Clicking a Bozza row opens the wizard at its first incomplete step.
-  - Below 1024 px the table is read-only, and the wizard shows "needs a larger screen".
+- **Design tokens** are theme variables (component code never hard-codes values; tool tokens never style template output). Dark chrome: `surface #000`, `surface-raised #151515`, `surface-control #1E1E1E`, `surface-selected #262626`, `border #262626`, `border-strong #303030`; text `foreground-strong #FFF`, `foreground #F2F2F2`, `foreground-muted #878787`. `primary #CBFF00` (lime) with black `primary-foreground`; `accent #007BFF` (blue); `info #B2D9EF` (text on blue tints); `danger #FF4D4F` with black text; `focus-ring` lime, 2px outline. No navy, gradients or panel shadows; depth is tonal.
+- **Colour use:** lime only for main CTAs (Avanti, Genera, *Nuovo case study*…), the dropzone *sfoglia* link, focus ring and Approvato badge; at most one primary button per view. Blue for the Preferito "on" state, upload progress bars, the Da approvare badge and inline links. Never muted grey on `surface-selected`, never blue text on a blue tint.
+- **Typography:** Inter (heading 14/500, body 14/400, label 12/400 muted, badge 13, button 14/400); JetBrains Mono 12 for IDs and sizes. Hierarchy by size and colour, not weight. **Radius:** sm 8, md 10 (buttons, fields, tiles), lg 16 (panels, dropzone), full (badges, favourite pill). Panel padding 16, section gap 16, label-to-field 6, segmented inset 3.
+- **Status badge:** pill, no dot, tinted fill and border, text in the status hue; always label plus colour. Bozza/In elaborazione: off-white tint; Da approvare: blue tint with `info` text; Approvato: lime tint.
+- **Shell:** left sidebar with white MAC wordmark on top, **+ New case study**, Case studies, user menu; controls a role can't use are absent, not disabled; direct URLs to forbidden surfaces redirect to the role's landing page. Sidebar collapses to icons at 1024–1279 px. Dialogs trap and return focus, max one level deep.
+- **Case studies table:** ID (mono), Name, Client, Year, Status, Updated, Links; default sort Updated newest; header sort toggles; search "name, client or ID", ~250 ms debounce, case/accent-insensitive; `/` focuses search; skeleton on first load; empty and no-results copy; below 1024 px read-only with "needs a larger screen" for the wizard. A Bozza row opens the wizard at the first incomplete step (Material if no files, else Details).
+- **Wizard layout (every step):** focused mode, no sidebar. Slim top bar (back arrow + case name left, status badge right). One centred column (~820 px), centred vertically and horizontally; scrolls from the top under the fixed top bar when taller. Column order: eyebrow *Nuovo case study*, case name as large title, horizontal segmented stepper **1 Materiale · 2 Dettagli · 3 Genera**, step heading + one-line intro, content, footer under a divider (left slot, step dots centre, **Avanti** right, no step name). Step 0 is name + client (required, field-level missing messages) with year prefilled and editable; the case is created as Bozza and its ID shown in mono; leaving and returning loses nothing. Visited steps are clickable; Dettagli and Genera are clickable only once step 1 has a file.
+- **Material step:** dropzone (dashed `border-strong` on `surface-raised`, lg radius) with **browse**, mono type chips (PDF, DOCX, TXT, PNG/JPG, MP4/MOV) and "Up to 20 files, 100 MB each."; it compacts above the rows once files exist, with an "n / 20 file" count. Parallel uploads, per-file progress bar; progress and rejections announced to screen readers. Rows: thumbnail (or type icon), name, size (mono), remove ✕; images/videos also get a **Preferito** pill toggle (star + label, `aria-pressed`; off: transparent, `border-strong`, muted; on: blue tint, blue star, `info` label), usable as soon as that file has uploaded. Inline rejections: "Over 100 MB. Not uploaded." / "This file type isn't supported. Use images, videos, texts or PDFs." / 20-file limit. Footer left: favourites are optional. **Avanti** inactive with 0 files.
+- **Details step:** heading "Racconta il progetto", intro saying the three fields are optional and not enough to generate alone. Contesto, Soluzione, Risultati textareas whose one-line prompt is the placeholder; autosave on pause/blur; footer left counter "{n} di 3 compilati"; **Avanti** active from the start.
+- Mockups (`mockups/material-step.html`, `details-step.html`) govern layout; token values and colour roles come from DESIGN.md, and EXPERIENCE.md behaviour wins on any conflict. Copy: plain verbs, no hype, no exclamation marks.
 
 ## Cross-Story Dependencies
 
-- Stories 2.1–2.4 are the foundation. Every later story relies on the module layout, `env.ts`, `Result`, the policy seam, the dictionary and the tokens.
-- Story 2.5 creates `case_study`, `case_event` and `transition`, which every material story uses.
-- Story 2.8 (cleanup migration) lands before 2.9. The UI parts of 2.7 and 2.10 follow 2.9.
-- Story 2.10's first-incomplete-step routing completes the row click from Story 2.6.
-- Later epics build on Epic 2:
-  - Epic 3's generation gate reuses `hasMaterial`, and its manifest carries `MaterialRef`s and favourites.
-  - Story 4.1 adds the status filter, row actions, delete and the To review queue to the table.
-  - Epic 6 swaps only how `getActor()` resolves the actor, and retires the basic-auth gate.
+- 2.1 → 2.2 → 2.3 are foundations for everything; 2.4 (shell, tokens, dictionary, StatusBadge) precedes all UI stories.
+- 2.5 creates `case_study`, `case_event` and `transition`, used by 2.6–2.10; 2.6's Bozza row click is completed by 2.10 (first-incomplete-step routing).
+- 2.8 (cleanup migration, `hasMaterial` = live asset) lands before 2.9 (favourites); the 2.7 and 2.10 UI parts follow both. 2.10's Avanti gate depends on `hasMaterial`.
+- Later epics: Epic 3 consumes `hasMaterial`, `resolveRefs` and the material manifest (favourites carried but ignored); Story 4.1 adds status filter, row actions, delete and To review; Epic 6 swaps only how `getActor()` resolves the actor and retires the basic-auth gate.
