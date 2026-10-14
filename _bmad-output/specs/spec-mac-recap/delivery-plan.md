@@ -4,7 +4,7 @@ Epics run one after another, in order, never in parallel. Non-dev activities are
 
 | Sprint | Due | Epics | Non-dev activities and decisions due |
 | --- | --- | --- | --- |
-| 1 | 2026-10-14 | Epic 2 — Asset upload and tagging (CAP-1, CAP-2, CAP-3) | Team setup: Claude Code with the BMAD method (formerly Epic 1); tool design definition; template wireframes (asset dimensions, formats); data processing logic (OP 2, decided before Sprint 2); taxonomy values (OP 3, by October 14); choose the container host |
+| 1 | 2026-10-14 | Epic 2 — Asset upload (CAP-1, CAP-2, CAP-3) | Team setup: Claude Code with the BMAD method (formerly Epic 1); tool design definition; template wireframes (asset dimensions, formats); data processing logic (OP 2, decided before Sprint 2); what a favourite means for generation (OP 14, decided before Sprint 2); choose the container host |
 | 2 | 2026-10-21 | Epic 3 — Graphic case study generation (CAP-4, CAP-5); Epic 4 — Review and approval (CAP-6, CAP-7, CAP-8); Epic 5 — Download and publishing (CAP-9, CAP-10) | Configurator visual design (Bento); account/sales/social user journey (OP 4); graphic template layouts and final case study templates (Epic 3 prerequisites); narrative structure and quality criteria (NFR5); **first guardrail check at the end of Sprint 2**. Decided before Sprint 2: export formats (OP 1), status lifecycle (OP 8), what counts as altering (OP 12). Decided before Epic 5 ships: shareable link access (OP 11) |
 | 3 | 2026-10-28 | Epic 6 — Login, users and permissions (CAP-11) | Mockups and assets for case studies; final guardrail check; demo preparation |
 | Demo | 2026-10-30 | — | Live run for the CEO against the four criteria in `success-metrics.md` (go / no-go) |
@@ -17,7 +17,7 @@ The first story of Epic 2 scaffolds the app from the architecture spine's starte
 
 ## Epic acceptance (PRD v2)
 
-- **Epic 2:** case study data is in Supabase and files are in S3. The owner/designer creates the case by hand, and it gets a unique ID ready for the project-order link. Files and text are linked to the case, the details form can be filled in, and tags, properties and flags are saved for each deliverable.
+- **Epic 2:** case study data is in Supabase and files are in S3. The owner/designer creates the case by hand, and it gets a unique ID ready for the project-order link. Files are linked to the case, the details form can be filled in, and images and videos can be marked as favourite.
 - **Epic 3:** the case is generated from graphic templates. Assets and template design are unchanged. The text follows challenge, approach and result and uses only the uploaded material and form answers. Layouts are generated for the MVP export formats (OP 1). The final template's adaptation rules are applied. With no material, generation is not available.
 - **Epic 4:** the dashboard shows cases awaiting review. The configurator follows the Bento design and edits generated text, layout, media and typography. Before approving, the owner/designer checks every claim against the material or form answers. Any owner/designer can approve. Approval moves the case to Approved and makes it available for export and sharing; an unapproved case cannot be exported or shared. An approved case can still be edited and stays approved (staging per conflict A1).
 - **Epic 5:** owner/designer and account/sales/social users can export an approved case in the MVP formats and publish it as a shareable link. Only approved cases can be exported or shared. The tool does not post to social channels or the website.

@@ -27,8 +27,8 @@ The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects clos
   - **intent:** The owner/designer creates a case study by hand, and it gets a unique, permanent ID that a project order can later be linked to.
   - **success:** Every new case study has an ID that never changes, is never reused, and is the only identifier other systems see (AD-2).
 - **CAP-2**
-  - **intent:** The owner/designer uploads material (images, videos, texts and PDFs) to a case study and tags each deliverable with tags, properties and flags.
-  - **success:** Up to 20 files of up to 100 MB each are stored with the case study, each carrying its own tags, properties and flags from a fixed list. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others.
+  - **intent:** The owner/designer uploads material (images, videos, text documents and PDFs) to a case study and can mark any number of images and videos as favourite.
+  - **success:** Up to 20 files of up to 100 MB each are stored with the case study, and each image or video can carry an optional favourite mark. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others.
 - **CAP-3**
   - **intent:** The owner/designer fills in a short details form on context, solution and results that feeds the narrative.
   - **success:** The answers are saved with the case study and can be cited as claim sources. The fields are optional, and the form never counts as material.
@@ -96,12 +96,12 @@ The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects clos
 
 ## Assumptions
 
-- Allowed upload types are JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown and DOCX. Pasted text counts as material.
+- Allowed upload types are JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown and DOCX. There is no pasted text: typed project text lives only in the details form, which is not material.
 - The deck exports as PDF only. Image formats export as a ZIP of PNGs.
 - Text and media selection are shared across formats; layout variant, spacing and text scale are set per format.
 - Templates are coded from the design team's specs. In the tool, the owner/designer only picks variant, shuffle, spacing, text scale and font pairing.
 - Each case's narrative is in Italian or English (default Italian). The UI is in Italian.
-- Tagging is optional per file. There is no review assignment: any owner/designer can open any case.
+- Favourites are optional, and any number of images and videos can be marked. There is no review assignment: any owner/designer can open any case.
 - Anyone who can share can turn off any link.
 - An in-app toast announces a ready draft.
 - Development and staging in Sprints 1–2 use the demo project's real material, but only inside environments gated under AD-12.
@@ -112,13 +112,14 @@ PRD v2 open points (decide before the epics that depend on them; see `delivery-p
 
 - OP 1: Which export formats are in the MVP? UX recommends the demo minimum (deck, carousel, A4) first.
 - OP 2: How does the tool turn uploaded material into text, including which material types the LLM reads?
-- OP 3: What are the tag, property and flag values? Due by October 14.
+- OP 3: Resolved 2026-10-14: no taxonomy. Tags, properties and flags are dropped; favourites replace them.
 - OP 4: How do account/sales/social users find and browse case studies? UX proposes a card library with search and facets.
 - OP 8: Which case study states and labels are used?
 - OP 10: How are inbound contacts and upsells attributed to a case study?
 - OP 11: Who can open a shareable link: anyone with it, only signed-in users, or until it expires?
 - OP 12: Do media-count adaptation, shuffle, replace and resizing for export count as altering?
 - OP 13: How are owner/designer time, editing and hallucinations recorded during the 8-week validation? UX has decided the tool records no hands-on time.
+- OP 14: What does a favourite mean for generation: must generation use favourites, prefer them, or simply show them first? Decide before Sprint 2.
 - OP 7 (post-MVP): MAC Productive data structure and confidentiality.
 
 Other open items:
