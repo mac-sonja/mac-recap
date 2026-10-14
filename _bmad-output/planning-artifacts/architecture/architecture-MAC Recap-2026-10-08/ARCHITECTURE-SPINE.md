@@ -25,7 +25,7 @@ Open-point references (OP n) use the PRD v2 numbering. `[CONFLICT An]` marks a t
 
 ## Design Paradigm
 
-**Modular monolith.** One Next.js app plus one worker process, built from the same codebase. Each module has `domain/` (pure), `application/` (use cases) and `index.ts` (its public surface). A module adds `ports/` and `adapters/` **only where a vendor sits behind it** (Supabase, S3, Anthropic, Chromium, ffmpeg). Generation is a **pipes-and-filters** pipeline over one canonical document.
+**Modular monolith.** One Next.js app plus one worker process, built from the same codebase. Each module has `domain/` (pure), `application/` (use cases) and `index.ts` (its public surface). A module adds `ports/` and `adapters/` **only where a vendor sits behind it** (Supabase, Anthropic, Chromium, ffmpeg). Generation is a **pipes-and-filters** pipeline over one canonical document.
 
 | Layer | Lives in | May import |
 | --- | --- | --- |
@@ -43,7 +43,7 @@ flowchart LR
   APP --> DOM[domain]
   APP --> PORT[ports]
   ADP[adapters] -.implements.-> PORT
-  ADP --> SDK[(Supabase · S3 · Anthropic · Chromium · ffmpeg)]
+  ADP --> SDK[(Supabase · Anthropic · Chromium · ffmpeg)]
   DOM --> SH[src/shared]
 ```
 
@@ -64,10 +64,10 @@ flowchart LR
 ### AD-1 — Modules talk only through their public index
 
 - **Binds:** all epics
-- **Prevents:** Epic 4 or 5 reading Epic 2's tables or S3 keys directly, and vendor SDK calls leaking into UI code
-- **Rule:** The MVP modules are `case-study`, `material`, `generation`, `rendering`, `sharing`, `access` and `jobs`. `integration` is created at Epic 7 (AD-16). Each module owns the tables and S3 prefixes listed below, and nothing else writes them. Code outside a module imports only that module's `index.ts`. Vendor SDKs are imported only in `adapters/`.
+- **Prevents:** Epic 4 or 5 reading Epic 2's tables or storage keys directly, and vendor SDK calls leaking into UI code
+- **Rule:** The MVP modules are `case-study`, `material`, `generation`, `rendering`, `sharing`, `access` and `jobs`. `integration` is created at Epic 7 (AD-16). Each module owns the tables and storage prefixes listed below, and nothing else writes them. Code outside a module imports only that module's `index.ts`. Vendor SDKs are imported only in `adapters/`.
 
-| Owner | Tables | S3 prefixes |
+| Owner | Tables | Storage prefixes |
 | --- | --- | --- |
 | `case-study` | `case_study`, `revision`, `case_event` | — |
 | `material` | `asset` (including `is_favourite`), `context_form` | `cases/{caseId}/assets/**` (originals and renditions) |
@@ -162,21 +162,22 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - The model id lives in one constant. Prompts are versioned files in `generation/adapters/prompts/`. Their content depends on OP 2 and the Sprint 2 quality checklist (NFR5).
   - Every revision records the served `response.model`, a `fellBack` flag, `promptVersion` and `schemaVersion`.
 
-### AD-8 — Binaries live only in S3, behind presigned requests [ADOPTED: S3]
+### AD-8 — Binaries live only in Supabase Storage, behind signed requests [ADOPTED: Supabase Storage]
 
-- **Binds:** FR2, FR7, Story 2.1, `material`, `rendering`, `sharing`
-- **Prevents:** files spread across Supabase Storage and S3, large uploads through the app server, limits that can't be enforced, public URLs leaking client material, and two writers to the renditions prefix
+- **Binds:** FR2, FR7, Story 2.1, Story 2.11, `material`, `rendering`, `sharing`
+- **Prevents:** binaries spread across two stores, large uploads through the app server, limits that can't be enforced, public URLs leaking client material, and two writers to the renditions prefix
 - **Rule:**
-  - The bucket is private, in the EU, with Block Public Access and versioning on. Its CORS rule allows only the app origin, for POST and GET.
-  - The browser uploads directly with a **presigned POST** that the server issues after `authorize`. It carries `content-length-range` (100 MB maximum) and a `Content-Type` from the allowlist in `material/domain/files.ts`: JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown and DOCX `[ASSUMPTION: text types]`.
-  - The S3 client that signs requests sets `requestChecksumCalculation: "WHEN_REQUIRED"`.
-  - An asset row is created only after a HEAD check confirms the upload's size and type. A case holds at most 20 non-deleted files, checked on the server when the presigned POST is issued and again at confirmation (FR2).
-  - Reads use presigned GET, valid for 15 minutes at most.
+  - Adopted 2026-10-14 in place of AWS S3 ([storage proposal](../../sprint-change-proposal-2026-10-14-storage.md)).
+  - The bucket `material` is private, in the project's EU region, and created by a migration. Supabase enforces its limits on every upload: `file_size_limit` 100 MB, and `allowed_mime_types` set to the allowlist in `material/domain/files.ts`: JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown and DOCX `[ASSUMPTION: text types]`.
+  - The browser uploads directly to a **signed upload URL** that the server issues after `authorize`, having checked the declared size and type.
+  - An asset row is created only after the server re-checks the upload's size and type from the object's metadata at confirm. A case holds at most 20 non-deleted files, checked on the server when the signed upload URL is issued and again at confirmation (FR2).
+  - Reads use signed GET URLs, valid for 15 minutes at most.
+  - The service role is the only reader and writer. There is no public access and no policy for `anon` or `authenticated`.
+  - The bucket has no versioning, so the app never deletes objects. Removing a file is a soft delete of its row (AR18), and the object stays.
   - Key layout, built only by the owning module's adapters:
     - `cases/{caseId}/assets/{assetId}/original.{ext}`
     - `cases/{caseId}/assets/{assetId}/renditions/{specHash}.{ext}`, owned by `material` and reached only through `material.getRendition(assetId, spec)`
     - `cases/{caseId}/revisions/{revisionId}/exports/{format}.{ext}`, owned by `rendering`
-  - Supabase Storage is not used.
 
 ### AD-9 — One layout implementation; renders never pass through a public route
 
@@ -253,7 +254,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
     - `accessMode`
   - Creating a link requires the case to have an `approved_revision_id`.
   - `/s/{token}` resolves the case through `getLiveRevision` (AD-3) at request time and renders it read-only through the AD-9 renderer. It never serves a working or superseded revision. A turned-off or expired token returns the "no longer available" page.
-  - The page offers no file download `[ASSUMPTION, from UX]`, and its media are display-size renditions and video poster frames or transcodes served by presigned GET, never originals.
+  - The page offers no file download `[ASSUMPTION, from UX]`, and its media are display-size renditions and video poster frames or transcodes served by signed GET, never originals.
   - `accessMode` is an enum. Until OP 11 is decided its only value in use is `unlisted`: anyone with the link can open it (FR7). The modes OP 11 adds (expiry, login, password or other) are added to the enum then; `expiresAt` already exists.
 
 ### AD-14 — Favourite is a property of an image or video asset
@@ -354,8 +355,7 @@ Starter: `npx create-next-app -e with-supabase`. The starter currently ships `ne
 | Next.js (App Router, `output: standalone`) | 16.3.8 |
 | React / react-dom | 19.3.0 |
 | Tailwind CSS / shadcn | 4.3.3 / 4.21.4 |
-| Supabase (Postgres + Auth), `@supabase/supabase-js` / `@supabase/ssr` / CLI | 2.117.3 / 0.12.7 / 2.120.0 |
-| AWS S3, `@aws-sdk/client-s3` + `s3-presigned-post` + `s3-request-presigner` | 3.1147.0 |
+| Supabase (Postgres + Auth + Storage), `@supabase/supabase-js` / `@supabase/ssr` / CLI | 2.117.3 / 0.12.7 / 2.120.0 |
 | `@anthropic-ai/sdk`, model `claude-opus-5-5` | 0.132.1 |
 | zod | 4.6.5 |
 | Playwright (Chromium, worker only; base image `mcr.microsoft.com/playwright:v1.63.0-noble`) | 1.63.0 |
@@ -383,15 +383,15 @@ flowchart LR
     WK[worker: bundled node entry<br/>jobs · LLM · Chromium · sharp · ffmpeg]
   end
   B[Browser] -->|HTTPS, basic-auth gate until Epic 6| WEB
-  B -->|presigned POST / GET| S3[(AWS S3 private bucket, EU)]
+  B -->|signed upload / GET| ST[(Supabase Storage<br/>private bucket material, EU)]
   WEB --> SB[(Supabase Postgres + Auth, EU)]
   WK --> SB
-  WK --> S3
+  WK --> ST
   WK --> AN[Anthropic API]
-  WEB --> S3
+  WEB --> ST
 ```
 
-There is one image, built on the Playwright base image `mcr.microsoft.com/playwright:v1.63.0-noble` (ships Node 24). It contains the Next standalone output (start command `node server.js`) and a separately bundled worker (start command `node dist/worker.js`) with its full dependencies. Environments are `local` (Supabase CLI stack and a dev bucket), `staging` (the demo environment, gated per AD-12) and `prod` (from Epic 6). Each environment has its own Supabase project and its own bucket.
+There is one image, built on the Playwright base image `mcr.microsoft.com/playwright:v1.63.0-noble` (ships Node 24). It contains the Next standalone output (start command `node server.js`) and a separately bundled worker (start command `node dist/worker.js`) with its full dependencies. Environments are `local` (Supabase CLI stack, including its storage), `staging` (the demo environment, gated per AD-12) and `prod` (from Epic 6). Each environment has its own Supabase project, with its own `material` bucket created by migration.
 
 ```text
 src/
@@ -461,5 +461,5 @@ Not resolved by this spine. Each AD carries an interim rule so building can cont
 - **Notification when a draft is ready.** In-app toast via polling for the MVP. Email or Slack later, through a new `notify` port.
 - **Sign-in method.** Supabase Auth email and password or magic link in Epic 6. Microsoft SSO can be added later without changing AD-11.
 - **MCP direction and data contract (OP 7).** Decided when MAC Productive is ready (AD-16).
-- **Observability beyond defaults.** Stdout logs, Supabase daily backups and S3 versioning until real usage after the 8-week validation.
+- **Observability beyond defaults.** Stdout logs and Supabase daily backups until real usage (storage has no versioning; the app never deletes objects, AD-8) after the 8-week validation.
 - **Attribution of inbound contacts and upsells (OP 10).** Not an MVP system concern. If needed, link views can be added as `case_event` types.
