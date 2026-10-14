@@ -34,8 +34,8 @@ export function makeListAssets({ assets, storage, cases }: Pick<MaterialDeps, "a
     for (const [i, asset] of live.value.entries()) {
       const url = urls[i];
       if (!url.ok) return url;
-      const { id, kind, originalFileName, contentType, sizeBytes, createdAt } = asset;
-      listed.push({ id, kind, originalFileName, contentType, sizeBytes, createdAt, thumbnailUrl: url.value });
+      const { id, kind, originalFileName, contentType, sizeBytes, createdAt, isFavourite } = asset;
+      listed.push({ id, kind, originalFileName, contentType, sizeBytes, createdAt, isFavourite, thumbnailUrl: url.value });
     }
     return ok(listed);
   };

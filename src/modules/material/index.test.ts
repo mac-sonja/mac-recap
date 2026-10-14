@@ -10,6 +10,8 @@ const m = vi.hoisted(() => ({
   repo: {
     listLive: vi.fn(),
     countLive: vi.fn(),
+    get: vi.fn(),
+    setFavourite: vi.fn(),
     create: vi.fn(),
     softDelete: vi.fn(),
     undoSoftDelete: vi.fn(),
@@ -60,10 +62,14 @@ beforeEach(() => {
   m.recordEvent.mockResolvedValue(ok({}));
   m.repo.countLive.mockResolvedValue(ok(0));
   m.repo.listLive.mockResolvedValue(
-    ok([{ id: ASSET_ID, caseId: CASE_ID, kind: "image", originalFileName: "a.png", contentType: "image/png", sizeBytes: 10, createdBy: actor.id, createdAt: "2026-10-13T10:00:00Z", deletedAt: null }]),
+    ok([{ id: ASSET_ID, caseId: CASE_ID, kind: "image", originalFileName: "a.png", contentType: "image/png", sizeBytes: 10, createdBy: actor.id, createdAt: "2026-10-13T10:00:00Z", deletedAt: null, isFavourite: false }]),
   );
   m.storage.presignDownload.mockResolvedValue(ok("https://s3.test/get"));
-  m.repo.create.mockImplementation(async (a) => ok({ ...a, createdAt: "2026-10-13T10:00:00Z", deletedAt: null }));
+  m.repo.create.mockImplementation(async (a) => ok({ ...a, createdAt: "2026-10-13T10:00:00Z", deletedAt: null, isFavourite: false }));
+  m.repo.get.mockResolvedValue(
+    ok({ id: ASSET_ID, caseId: CASE_ID, kind: "image", originalFileName: "a.png", contentType: "image/png", sizeBytes: 10, createdBy: actor.id, createdAt: "2026-10-13T10:00:00Z", deletedAt: null, isFavourite: false }),
+  );
+  m.repo.setFavourite.mockResolvedValue(ok(true));
   m.repo.softDelete.mockResolvedValue(ok(true));
   m.repo.undoSoftDelete.mockResolvedValue(ok(true));
   m.repo.hasMaterial.mockResolvedValue(ok(true));
@@ -118,7 +124,7 @@ describe("material index wiring", () => {
     const config = configure();
     const result = await material.listAssets({ caseId: CASE_ID });
     expect(result).toEqual(
-      ok([{ id: ASSET_ID, kind: "image", originalFileName: "a.png", contentType: "image/png", sizeBytes: 10, createdAt: "2026-10-13T10:00:00Z", thumbnailUrl: "https://s3.test/get" }]),
+      ok([{ id: ASSET_ID, kind: "image", originalFileName: "a.png", contentType: "image/png", sizeBytes: 10, createdAt: "2026-10-13T10:00:00Z", isFavourite: false, thumbnailUrl: "https://s3.test/get" }]),
     );
     expect(m.createS3ObjectStorage).toHaveBeenCalledWith(config);
     expect(m.repo.listLive).toHaveBeenCalledWith(CASE_ID);
@@ -163,6 +169,19 @@ describe("material index wiring", () => {
     expect(m.form.read).toHaveBeenCalledWith(CASE_ID);
   });
 
+  it("setFavourite reads the asset, sets the flag and records asset_favourited through case-study", async () => {
+    expect(await material.setFavourite(actor, { ...ref, isFavourite: true })).toEqual(ok(undefined));
+    expect(m.get).toHaveBeenCalledWith(CASE_ID);
+    expect(m.repo.get).toHaveBeenCalledWith(CASE_ID, ASSET_ID);
+    expect(m.repo.setFavourite).toHaveBeenCalledExactlyOnceWith(CASE_ID, ASSET_ID, true);
+    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "asset_favourited", data: { assetId: ASSET_ID } });
+  });
+
+  it("re-exports the favourite event types", () => {
+    expect(material.ASSET_FAVOURITED).toBe("asset_favourited");
+    expect(material.ASSET_UNFAVOURITED).toBe("asset_unfavourited");
+  });
+
   it("hasMaterial asks the asset repository's has_material", async () => {
     expect(await material.hasMaterial(CASE_ID)).toEqual(ok(true));
     expect(m.repo.hasMaterial).toHaveBeenCalledWith(CASE_ID);
@@ -173,6 +192,7 @@ describe("material index wiring", () => {
     ["saveDetailsField", () => material.saveDetailsField(actor, detailsInput)],
     ["getDetailsForm", () => material.getDetailsForm({ caseId: CASE_ID })],
     ["resolveRefs", () => material.resolveRefs(CASE_ID, [{ kind: "form_field", id: "results" }])],
+    ["setFavourite", () => material.setFavourite(actor, { ...ref, isFavourite: true })],
   ])("%s works without S3 and never resolves storage", async (_name, call) => {
     m.getStorageConfig.mockReturnValue(null);
     expect((await call()).ok).toBe(true);

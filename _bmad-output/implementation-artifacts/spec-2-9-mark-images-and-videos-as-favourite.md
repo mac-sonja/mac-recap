@@ -2,9 +2,10 @@
 title: 'Story 2.9: Mark images and videos as favourite'
 type: 'feature'
 created: '2026-10-14'
-status: 'draft'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
+baseline_commit: '58c5c9dc097be7b96b9418dc9cb5bbf5a22bd4ee'
 context: []
 ---
 
@@ -101,12 +102,12 @@ context: []
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/20261014140000_material_asset_favourite.sql` -- column + kind CHECK
-- [ ] `src/shared/db.types.ts` -- `is_favourite` in asset Row/Insert/Update and `create_asset` Returns
-- [ ] `src/modules/material/**` -- domain, port, adapter, `set-favourite.ts`, listing, index, unit tests
-- [ ] `src/modules/access/**` -- `mark favourites` action, `NOT_FAVOURITABLE` mapping, tests
-- [ ] `src/app/(tool)/case-studies/actions.ts` + test -- `setAssetFavourite`
-- [ ] `test/db/material.db.test.ts` -- favourites block, RLS update statement, schema-guard filter fix
+- [x] `supabase/migrations/20261014140000_material_asset_favourite.sql` -- column + kind CHECK
+- [x] `src/shared/db.types.ts` -- `is_favourite` in asset Row/Insert/Update and `create_asset` Returns
+- [x] `src/modules/material/**` -- domain, port, adapter, `set-favourite.ts`, listing, index, unit tests
+- [x] `src/modules/access/**` -- `mark favourites` action, `NOT_FAVOURITABLE` mapping, tests
+- [x] `src/app/(tool)/case-studies/actions.ts` + test -- `setAssetFavourite`
+- [x] `test/db/material.db.test.ts` -- favourites block, RLS update statement, schema-guard filter fix
 
 **Acceptance Criteria:**
 - Given a listed image, when `listAssets` runs, then each row carries `isFavourite`.
@@ -114,9 +115,30 @@ context: []
 
 ## Implementation Notes
 
+- Local: lint, typecheck, 1204 unit tests, build pass. DB tests (favourites block, CHECK 23514, RLS update, schema-guard by constraint name) and the db-types drift check run only in CI (no local Docker). Matrix rows Mark…Event write fails are unit-tested (`use-cases.test.ts` `describe("setFavourite")`); Direct SQL and Browser role are DB-tested.
+- Extra guard: if the asset vanishes between read and write, `NOT_FOUND`, no event. DB status test uses a setup-only `forceStatus` helper (sets `mac_recap.status_transition` like `transition_case_study`). Name-based schema guards assume Postgres auto-named `asset_kind_check` / `asset_content_type_check`.
+
+- Review patches applied (triage #1–3, #5–9, #11–13): compare-and-set update and revert, re-read on no-row change, listAssets favourite test, all four statuses, forceStatus rollback, doc and fixture fixes.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | edge, blind | Two concurrent identical requests both read the old value, both write, both record an event | medium | Real: `setFavourite` update filters only id/case_id/deleted_at; breaks "exactly one event" | patch (compare-and-set) |
+| 2 | edge, blind | Compensation revert is unconditional and can overwrite a concurrent toggle | medium | Real; same root as #1 | patch (with #1) |
+| 3 | blind | Revert `ok(false)` (asset vanished) log branch untested | low | Real | patch |
+| 4 | blind | DB kind CHECK surfaces as 500 `ASSET_WRITE_FAILED`, not 400 | low | Only reachable if the use-case pre-check and CHECK diverge; fix adds a mapping branch | reject |
+| 5 | edge, blind | DB status loop skips `generating` | low | Real; spec says any status | patch |
+| 6 | edge, blind | `forceStatus` doesn't roll back on failure | low | Real, test hygiene | patch |
+| 7 | blind | Port doc for `get` omits `ASSET_INVALID` | low | Real | patch |
+| 8 | blind | `setFavourite` / `setAssetFavourite` docs list only some error codes | low | Real; direct doc fix | patch |
+| 9 | edge, blind | Adapter `setFavourite` logs `error.code` without the `?? "no-code"` fallback | low | Real | patch |
+| 10 | blind | Spec `in-review` vs sprint-status `in-progress` | false | Workflow sets sprint-status to `review` at present step; states are mid-workflow | reject |
+| 11 | blind | "direct writes are rejected" favourite row checks only 23514, duplicates the dedicated test | low | Real | patch |
+| 12 | blind | `index.test.ts` create fixture lacks `isFavourite` | low | Real | patch |
+| 13 | verification-gap | `listAssets` never tested with a `true` favourite; DB test title "listAssets carries isFavourite" runs `listLive` | medium | Pre-verified gap | patch |
 
 ## Verification
 

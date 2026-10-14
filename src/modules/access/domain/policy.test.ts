@@ -10,6 +10,7 @@ const EXPECTED: Record<Action, Partial<Record<Role, Cell>>> = {
   "create case": { owner_designer: "all" },
   upload: { owner_designer: "all" },
   "fill details": { owner_designer: "all" },
+  "mark favourites": { owner_designer: "all" },
   generate: { owner_designer: "all" },
   edit: { owner_designer: "all" },
   "delete case": { owner_designer: "draft" },

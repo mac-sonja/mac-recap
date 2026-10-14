@@ -12,6 +12,7 @@ const {
   saveDetailsUseCase,
   getDetailsUseCase,
   listAssetsUseCase,
+  setFavouriteUseCase,
 } = vi.hoisted(() => ({
   getActor: vi.fn(),
   create: vi.fn(),
@@ -21,6 +22,7 @@ const {
   saveDetailsUseCase: vi.fn(),
   getDetailsUseCase: vi.fn(),
   listAssetsUseCase: vi.fn(),
+  setFavouriteUseCase: vi.fn(),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -36,6 +38,7 @@ vi.mock("@/modules/material", () => ({
   saveDetailsField: saveDetailsUseCase,
   getDetailsForm: getDetailsUseCase,
   listAssets: listAssetsUseCase,
+  setFavourite: setFavouriteUseCase,
 }));
 
 const {
@@ -46,6 +49,7 @@ const {
   saveDetailsField,
   getDetailsForm,
   listAssets,
+  setAssetFavourite,
 } = await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({
@@ -84,6 +88,7 @@ beforeEach(() => {
     saveDetailsUseCase,
     getDetailsUseCase,
     listAssetsUseCase,
+    setFavouriteUseCase,
   ])
     fn.mockReset();
 });
@@ -155,6 +160,7 @@ describe("material actions", () => {
     ],
     ["confirmAssetUpload", confirmAssetUpload, confirmUpload, { ...ref, contentType: "image/png", fileName: "a.png" }, { id: ref.assetId }],
     ["removeAsset", removeAsset, removeAssetUseCase, ref, undefined],
+    ["setAssetFavourite", setAssetFavourite, setFavouriteUseCase, { ...ref, isFavourite: true }, undefined],
   ] as const;
 
   it.each(actions)("%s passes its input unchanged to the use case for an owner/designer", async (_name, action, useCase, input, value) => {
@@ -307,6 +313,7 @@ describe("listAssets action", () => {
       contentType: "image/png",
       sizeBytes: 10,
       createdAt: "2026-10-13T10:00:00Z",
+      isFavourite: false,
       thumbnailUrl: "https://s3/get",
     },
   ];
@@ -350,6 +357,36 @@ describe("listAssets action", () => {
       ok: false,
       status: 400,
       error: { code: "INVALID_INPUT", message: "Invalid or missing: caseId.", fields: ["caseId"] },
+    });
+  });
+});
+
+describe("setAssetFavourite action", () => {
+  const favInput = {
+    caseId: "11111111-1111-4111-8111-111111111111",
+    assetId: "22222222-2222-4222-8222-222222222222",
+    isFavourite: true,
+  };
+
+  it.each([
+    ["NOT_FAVOURITABLE", 400],
+    ["NOT_FOUND", 404],
+    ["ASSET_WRITE_FAILED", 500],
+  ] as const)("maps %s to %i and keeps details server-side", async (code, status) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    setFavouriteUseCase.mockResolvedValue(err({ code, message: "m", details: { secret: 1 } }));
+    expect(await setAssetFavourite(favInput)).toEqual({ ok: false, status, error: { code, message: "m" } });
+  });
+
+  it("maps INVALID_INPUT to 400 with the failing field names", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    setFavouriteUseCase.mockResolvedValue(
+      err({ code: "INVALID_INPUT", message: "Invalid or missing: isFavourite.", details: { fields: ["isFavourite"], issues: [] } }),
+    );
+    expect(await setAssetFavourite({ ...favInput, isFavourite: "yes" })).toEqual({
+      ok: false,
+      status: 400,
+      error: { code: "INVALID_INPUT", message: "Invalid or missing: isFavourite.", fields: ["isFavourite"] },
     });
   });
 });

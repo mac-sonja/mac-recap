@@ -46,6 +46,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   // Details form (Story 2.10).
   UNKNOWN_FIELD: 400,
   UNKNOWN_REF: 400,
+  // Favourites (Story 2.9).
+  NOT_FAVOURITABLE: 400,
 };
 
 /** HTTP status for an `AppError` code; unknown codes are 500. */

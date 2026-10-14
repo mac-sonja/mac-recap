@@ -14,7 +14,7 @@ const RAISE_EXCEPTION = "P0001";
 const UNIQUE_VIOLATION = "23505";
 
 /** The columns `toAsset` maps; the S3 key is rebuilt by `assetKey` when needed, so it isn't read. */
-const ASSET_COLUMNS = "id, case_id, kind, original_file_name, content_type, size_bytes, created_by, created_at, deleted_at";
+const ASSET_COLUMNS = "id, case_id, kind, original_file_name, content_type, size_bytes, created_by, created_at, deleted_at, is_favourite";
 
 const REFUSALS: Readonly<Record<string, Omit<AppError, "details">>> = {
   NOT_FOUND: { code: "NOT_FOUND", message: "No such case study or file." },
@@ -37,6 +37,7 @@ export function toAsset(row: AssetRow): Result<Asset> {
     createdBy: row.created_by,
     createdAt: row.created_at,
     deletedAt: row.deleted_at,
+    isFavourite: row.is_favourite,
   });
   if (!parsed.success) {
     return err({ code: "ASSET_INVALID", message: "An asset row failed validation.", details: { id: row.id } });
@@ -112,6 +113,38 @@ export function createSupabaseAssetRepository(
         return err({ code: "ASSET_WRITE_FAILED", message: "Could not save the file." });
       }
       return toAsset(data as AssetRow);
+    },
+
+    async get(caseId, assetId) {
+      const { data, error } = await client()
+        .from("asset")
+        .select(ASSET_COLUMNS)
+        .eq("id", assetId)
+        .eq("case_id", caseId)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (error) {
+        log.error(`asset get failed: ${error.code ?? "no-code"}`, { caseId });
+        return err({ code: "ASSET_LOOKUP_FAILED", message: "Could not read the file." });
+      }
+      if (data === null) return ok(null);
+      return toAsset(data as AssetRow);
+    },
+
+    async setFavourite(caseId, assetId, value) {
+      const { data, error } = await client()
+        .from("asset")
+        .update({ is_favourite: value })
+        .eq("id", assetId)
+        .eq("case_id", caseId)
+        .eq("is_favourite", !value)
+        .is("deleted_at", null)
+        .select("id");
+      if (error) {
+        log.error(`asset set favourite failed: ${error.code ?? "no-code"}`, { caseId });
+        return err({ code: "ASSET_WRITE_FAILED", message: "Could not update the file." });
+      }
+      return ok(data.length > 0);
     },
 
     async softDelete(caseId, assetId) {

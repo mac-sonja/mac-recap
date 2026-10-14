@@ -95,6 +95,22 @@ export async function removeAsset(input: unknown): Promise<ActionResult<void>> {
 }
 
 /**
+ * Marks or unmarks one image or video as favourite: `{ caseId, assetId, isFavourite }`.
+ * Setting the current value again changes nothing. 403 `FORBIDDEN` unless the role
+ * may `mark favourites`; 400 `INVALID_INPUT` / `NOT_FAVOURITABLE`; 404 `NOT_FOUND`;
+ * 500 for `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`, `ASSET_WRITE_FAILED` and an event-write
+ * failure (the flag is then put back). Status never changes.
+ */
+export async function setAssetFavourite(input: unknown): Promise<ActionResult<void>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "mark favourites");
+  if (!decision.ok) return failure(decision.error);
+  const updated = await material.setFavourite(actor.value, input);
+  return updated.ok ? updated : failure(updated.error);
+}
+
+/**
  * Saves one details-form field: `{ caseId, field: 'context' | 'solution' | 'results', text }`
  * (`""` clears it; at most 5,000 characters). Saving the stored text again changes
  * nothing. 403 `FORBIDDEN` unless the role may `fill details`; 400 `UNKNOWN_FIELD`;

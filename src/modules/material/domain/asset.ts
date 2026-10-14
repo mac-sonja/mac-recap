@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ASSET_KINDS, contentTypeSchema, MAX_FILE_BYTES } from "@/modules/material/domain/files";
+import { ASSET_KINDS, contentTypeSchema, MAX_FILE_BYTES, type AssetKind } from "@/modules/material/domain/files";
 
 /** An `asset` row as the material module sees it. The S3 key stays in adapters. */
 export const assetSchema = z.object({
@@ -12,6 +12,7 @@ export const assetSchema = z.object({
   createdBy: z.uuid(),
   createdAt: z.string(),
   deletedAt: z.string().nullable(),
+  isFavourite: z.boolean(),
 });
 export type Asset = z.infer<typeof assetSchema>;
 
@@ -51,9 +52,20 @@ export const assetRefInputSchema = z.object({
 });
 export type AssetRefInput = z.infer<typeof assetRefInputSchema>;
 
+/** Sets or clears the favourite flag of one asset of one case. */
+export const favouriteInputSchema = assetRefInputSchema.extend({
+  isFavourite: z.boolean(),
+});
+export type FavouriteInput = z.infer<typeof favouriteInputSchema>;
+
+/** The only kinds that can be favourites. The `asset_favourite_kind_check` constraint lists exactly these. */
+export const FAVOURITABLE_KINDS = ["image", "video"] as const satisfies readonly AssetKind[];
+
 /** Event types the material module records through `case-study.recordEvent`, each with `{ assetId }`. */
 export const ASSET_UPLOADED = "asset_uploaded";
 export const ASSET_REMOVED = "asset_removed";
+export const ASSET_FAVOURITED = "asset_favourited";
+export const ASSET_UNFAVOURITED = "asset_unfavourited";
 
 /** Lists the live assets of one case. */
 export const listAssetsInputSchema = z.object({
@@ -64,10 +76,10 @@ export const listAssetsInputSchema = z.object({
 export const THUMBNAIL_URL_TTL_SECONDS = 15 * 60;
 
 /**
- * One row of a case's file list: the asset without its author or deletion
- * stamp, plus a presigned GET for images (`null` for other kinds, or when S3
+ * One row of a case's file list: the asset (with its favourite flag) without
+ * its author or deletion stamp, plus a presigned GET for images (`null` for other kinds, or when S3
  * isn't configured).
  */
-export type ListedAsset = Pick<Asset, "id" | "kind" | "originalFileName" | "contentType" | "sizeBytes" | "createdAt"> & {
+export type ListedAsset = Pick<Asset, "id" | "kind" | "originalFileName" | "contentType" | "sizeBytes" | "createdAt" | "isFavourite"> & {
   thumbnailUrl: string | null;
 };
