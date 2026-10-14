@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
+import { FAVOURITABLE_KINDS } from "@/modules/material/domain/asset";
 import { ALLOWED_CONTENT_TYPES, ASSET_KINDS, MAX_ASSETS_PER_CASE } from "@/modules/material/domain/files";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
 import { err } from "@/shared/result";
@@ -26,6 +27,7 @@ const env = Object.fromEntries(REQUIRED.map((name) => [name, process.env[name] a
 
 const UNKNOWN_ID = "11111111-1111-4111-8111-111111111111";
 const CREATE_ASSET = "select (public.create_asset($1, $2, 'image', 'f.png', 'image/png', 10, $3, $4)).id";
+const CREATE_DOCUMENT = "select (public.create_asset($1, $2, 'document', 'brief.pdf', 'application/pdf', 10, $3, $4)).id";
 
 let pool: pg.Pool;
 
@@ -355,6 +357,7 @@ describe("listing assets", () => {
           contentType: "image/png",
           sizeBytes: 10,
           createdAt: expect.any(String),
+          isFavourite: false,
           thumbnailUrl: null,
         },
       ],
@@ -433,12 +436,165 @@ describe("use cases against the real DB and case-study module (S3 stubbed)", () 
   });
 });
 
+describe("favourites", () => {
+  /** Inserts one live PDF (kind `document`) through `create_asset`; returns its id. */
+  async function seedDocument(caseId: string) {
+    const id = randomUUID();
+    await pool.query(CREATE_DOCUMENT, [id, caseId, `cases/${caseId}/assets/${id}/original.pdf`, DEV_ACTOR_ID]);
+    return id;
+  }
+
+  async function favourite(id: string) {
+    const { rows } = await pool.query<{ fav: boolean }>("select is_favourite as fav from public.asset where id = $1", [id]);
+    return rows[0].fav;
+  }
+
+  /** Sets a case's status directly, as `transition_case_study` does (setup only; skips the transition table). */
+  async function forceStatus(caseId: string, status: string) {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select set_config('mac_recap.status_transition', 'on', true)");
+      await client.query("update public.case_study set status = $2 where id = $1", [caseId, status]);
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async function realDeps() {
+    const caseStudy = await loadCaseStudy();
+    return { assets: createSupabaseAssetRepository(), cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent } };
+  }
+
+  it("a new asset is not a favourite", async () => {
+    const created = await createCase();
+    const [id] = await seedAssets(created.id, 1);
+    expect(await favourite(id)).toBe(false);
+  });
+
+  it("mark → no-op → unmark records one event per change; status unchanged in every status", async () => {
+    const { makeSetFavourite } = await import("@/modules/material/application/set-favourite");
+    const actor = await devActor();
+    for (const status of ["draft", "generating", "in_review", "approved"] as const) {
+      const created = await createCase();
+      await forceStatus(created.id, status);
+      const [a, b] = await seedAssets(created.id, 2);
+      const set = makeSetFavourite(await realDeps());
+
+      expect(await set(actor, { caseId: created.id, assetId: a, isFavourite: true })).toEqual({ ok: true, value: undefined });
+      expect(await set(actor, { caseId: created.id, assetId: b, isFavourite: true })).toEqual({ ok: true, value: undefined });
+      expect(await set(actor, { caseId: created.id, assetId: a, isFavourite: true })).toEqual({ ok: true, value: undefined });
+      expect([await favourite(a), await favourite(b)]).toEqual([true, true]);
+      expect(await set(actor, { caseId: created.id, assetId: a, isFavourite: false })).toEqual({ ok: true, value: undefined });
+      expect(await favourite(a)).toBe(false);
+
+      const { rows: events } = await pool.query<{ type: string; actor_id: string; data: unknown }>(
+        "select type, actor_id, data from public.case_event where case_id = $1 and type like 'asset_%favourited' order by at, id",
+        [created.id],
+      );
+      expect(events).toEqual([
+        { type: "asset_favourited", actor_id: actor.id, data: { assetId: a } },
+        { type: "asset_favourited", actor_id: actor.id, data: { assetId: b } },
+        { type: "asset_unfavourited", actor_id: actor.id, data: { assetId: a } },
+      ]);
+      const { rows } = await pool.query("select status from public.case_study where id = $1", [created.id]);
+      expect(rows).toEqual([{ status }]);
+    }
+  });
+
+  it("the listAssets use case carries isFavourite", async () => {
+    const { makeListAssets } = await import("@/modules/material/application/list-assets");
+    const created = await createCase();
+    const [a, b] = await seedAssets(created.id, 2);
+    await pool.query("update public.asset set is_favourite = true where id = $1", [b]);
+    const listed = await makeListAssets({ ...(await realDeps()), storage: null })({ caseId: created.id });
+    expect(listed.ok).toBe(true);
+    if (listed.ok) expect(listed.value.map((x) => [x.id, x.isFavourite])).toEqual([
+      [a, false],
+      [b, true],
+    ]);
+  });
+
+  it("a PDF → NOT_FAVOURITABLE, unchanged, no event; clearing it is a no-op", async () => {
+    const { makeSetFavourite } = await import("@/modules/material/application/set-favourite");
+    const actor = await devActor();
+    const created = await createCase();
+    const pdf = await seedDocument(created.id);
+    const set = makeSetFavourite(await realDeps());
+    const refused = await set(actor, { caseId: created.id, assetId: pdf, isFavourite: true });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.error.code).toBe("NOT_FAVOURITABLE");
+    expect(await set(actor, { caseId: created.id, assetId: pdf, isFavourite: false })).toEqual({ ok: true, value: undefined });
+    expect(await favourite(pdf)).toBe(false);
+    expect(await assetEvents(created.id)).toEqual([]);
+  });
+
+  it("a removed asset or another case's asset → NOT_FOUND, nothing written", async () => {
+    const { makeSetFavourite } = await import("@/modules/material/application/set-favourite");
+    const actor = await devActor();
+    const [a, b] = [await createCase(), await createCase()];
+    const [removed, foreign] = [(await seedAssets(a.id, 1))[0], (await seedAssets(b.id, 1))[0]];
+    await pool.query("update public.asset set deleted_at = now() where id = $1", [removed]);
+    const set = makeSetFavourite(await realDeps());
+    for (const assetId of [removed, foreign]) {
+      const result = await set(actor, { caseId: a.id, assetId, isFavourite: true });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
+    }
+    expect([await favourite(removed), await favourite(foreign)]).toEqual([false, false]);
+    expect(await assetEvents(a.id)).toEqual([]);
+  });
+
+  it("the adapter's setFavourite skips removed and foreign assets", async () => {
+    const [a, b] = [await createCase(), await createCase()];
+    const [id] = await seedAssets(a.id, 1);
+    const repo = createSupabaseAssetRepository();
+    expect(await repo.setFavourite(b.id, id, true)).toEqual({ ok: true, value: false });
+    expect(await repo.get(b.id, id)).toEqual({ ok: true, value: null });
+    expect(await repo.setFavourite(a.id, id, true)).toEqual({ ok: true, value: true });
+    const got = await repo.get(a.id, id);
+    expect(got.ok && got.value?.isFavourite).toBe(true);
+    await repo.softDelete(a.id, id);
+    expect(await repo.setFavourite(a.id, id, false)).toEqual({ ok: true, value: false });
+    expect(await repo.get(a.id, id)).toEqual({ ok: true, value: null });
+  });
+
+  it("the adapter maps the kind check violation to ASSET_WRITE_FAILED", async () => {
+    const created = await createCase();
+    const pdf = await seedDocument(created.id);
+    const result = await createSupabaseAssetRepository().setFavourite(created.id, pdf, true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("ASSET_WRITE_FAILED");
+    expect(await favourite(pdf)).toBe(false);
+  });
+
+  it("an event write failure puts the flag back and returns the error", async () => {
+    const { makeSetFavourite } = await import("@/modules/material/application/set-favourite");
+    const actor = await devActor();
+    const created = await createCase();
+    const [id] = await seedAssets(created.id, 1);
+    const real = await realDeps();
+    const failure = err({ code: "CASE_EVENT_WRITE_FAILED", message: "down" });
+    const set = makeSetFavourite({ ...real, cases: { ...real.cases, recordEvent: async () => failure } });
+    expect(await set(actor, { caseId: created.id, assetId: id, isFavourite: true })).toEqual(failure);
+    expect(await favourite(id)).toBe(false);
+    expect(await assetEvents(created.id)).toEqual([]);
+  });
+});
+
 describe("direct writes are rejected", () => {
   let assetId: string;
+  let documentId: string;
 
   beforeAll(async () => {
     const created = await createCase();
     [assetId] = await seedAssets(created.id, 1);
+    documentId = randomUUID();
+    await pool.query(CREATE_DOCUMENT, [documentId, created.id, `cases/${created.id}/assets/${documentId}/original.pdf`, DEV_ACTOR_ID]);
   });
 
   it("deleting an asset row", async () => {
@@ -457,6 +613,18 @@ describe("direct writes are rejected", () => {
   ])("the table checks reject %s", async (_label, sql) => {
     await expect(inRolledBackTx(sql, [assetId])).rejects.toMatchObject({ code: "23514" });
   });
+
+  it("the favourite check rejects marking a document", async () => {
+    await expect(inRolledBackTx("update public.asset set is_favourite = true where id = $1", [documentId])).rejects.toMatchObject({
+      code: "23514",
+      constraint: "asset_favourite_kind_check",
+    });
+  });
+
+  it("the favourite check allows marking an image", async () => {
+    const { rows } = await inRolledBackTx("update public.asset set is_favourite = true where id = $1 returning is_favourite", [assetId]);
+    expect(rows).toEqual([{ is_favourite: true }]);
+  });
 });
 
 describe("schema guards", () => {
@@ -469,22 +637,27 @@ describe("schema guards", () => {
     expect(rows).toEqual([{ rls: true, policies: 0 }]);
   });
 
-  const checkValues = async (column: string) => {
+  /** The quoted values of one named CHECK on `asset` (other checks, like the favourite one, may mention the same column). */
+  const checkValues = async (constraint: string) => {
     const { rows } = await pool.query<{ def: string }>(
       `select pg_catalog.pg_get_constraintdef(oid) as def from pg_catalog.pg_constraint
-       where conrelid = 'public.asset'::regclass and contype = 'c'`,
+       where conrelid = 'public.asset'::regclass and contype = 'c' and conname = $1`,
+      [constraint],
     );
-    const defs = rows.map(({ def }) => def).filter((def) => new RegExp(`\\b${column}\\b`).test(def));
-    expect(defs).toHaveLength(1);
-    return [...defs[0].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    expect(rows).toHaveLength(1);
+    return [...rows[0].def.matchAll(/'([^']+)'/g)].map((m) => m[1]);
   };
 
   it("checks content_type against exactly the allowlist", async () => {
-    expect((await checkValues("content_type")).sort()).toEqual([...ALLOWED_CONTENT_TYPES].sort());
+    expect((await checkValues("asset_content_type_check")).sort()).toEqual([...ALLOWED_CONTENT_TYPES].sort());
   });
 
   it("checks kind against exactly ASSET_KINDS", async () => {
-    expect(await checkValues("kind")).toEqual([...ASSET_KINDS]);
+    expect(await checkValues("asset_kind_check")).toEqual([...ASSET_KINDS]);
+  });
+
+  it("allows favourites on exactly FAVOURITABLE_KINDS", async () => {
+    expect(await checkValues("asset_favourite_kind_check")).toEqual([...FAVOURITABLE_KINDS]);
   });
 });
 
@@ -527,6 +700,7 @@ describe("RLS lockout", () => {
     insert: `insert into public.asset (case_id, kind, original_file_name, content_type, size_bytes, s3_key, created_by)
              values ('${UNKNOWN_ID}', 'image', 'x.png', 'image/png', 1, 'x', '${DEV_ACTOR_ID}')`,
     update: "update public.asset set deleted_at = now()",
+    "update is_favourite": "update public.asset set is_favourite = true",
     delete: "delete from public.asset",
     "create_asset": `select public.create_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'image', 'x.png', 'image/png', 1, 'x', '${DEV_ACTOR_ID}')`,
     "restore_asset": `select public.restore_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}')`,

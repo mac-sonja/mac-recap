@@ -12,6 +12,7 @@ import { makeListAssets } from "./list-assets";
 import type { CaseStudies, MaterialDeps } from "./deps";
 import { makePresignUpload } from "./presign-upload";
 import { makeRemoveAsset } from "./remove-asset";
+import { makeSetFavourite } from "./set-favourite";
 
 const actor: Actor = {
   id: "00000000-0000-4000-8000-000000000002",
@@ -48,6 +49,7 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
       createdBy: actor.id,
       createdAt: "2026-10-13T10:00:00Z",
       deletedAt,
+      isFavourite: false,
     });
     return id;
   };
@@ -63,9 +65,22 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
     create: vi.fn<AssetRepository["create"]>(async (a: NewAsset) => {
       if (liveCount(a.caseId) >= 20) return err({ code: "FILE_LIMIT_REACHED", message: "cap" });
       if (assets.has(a.id)) return err({ code: "ASSET_ALREADY_CONFIRMED", message: "dup" });
-      const row: Asset = { ...a, createdAt: "2026-10-13T12:00:00Z", deletedAt: null };
+      const row: Asset = { ...a, createdAt: "2026-10-13T12:00:00Z", deletedAt: null, isFavourite: false };
       assets.set(a.id, row);
       return ok(row);
+    }),
+    get: vi.fn<AssetRepository["get"]>(async (caseId, assetId) => {
+      const row = assets.get(assetId);
+      return ok(row && row.caseId === caseId && row.deletedAt === null ? row : null);
+    }),
+    setFavourite: vi.fn<AssetRepository["setFavourite"]>(async (caseId, assetId, value) => {
+      const row = assets.get(assetId);
+      // Compare-and-set, like the adapter: only a live row currently holding !value.
+      if (!row || row.caseId !== caseId || row.deletedAt !== null || row.isFavourite === value) return ok(false);
+      // Mirrors asset_favourite_kind_check.
+      if (value && row.kind !== "image" && row.kind !== "video") return err({ code: "ASSET_WRITE_FAILED", message: "check" });
+      assets.set(assetId, { ...row, isFavourite: value });
+      return ok(true);
     }),
     softDelete: vi.fn<AssetRepository["softDelete"]>(async (caseId, assetId) => {
       const row = assets.get(assetId);
@@ -315,6 +330,233 @@ describe("removeAsset", () => {
   });
 });
 
+describe("setFavourite", () => {
+  const OTHER_CASE_ID = "aaaaaaaa-0000-4000-8000-000000000003";
+  /** Seeds one live asset of `kind` (and `isFavourite`) and returns its id. */
+  function put(w: ReturnType<typeof world>, over: Partial<Asset> = {}) {
+    const id = w.seed(null);
+    w.assets.set(id, { ...w.assets.get(id)!, ...over });
+    return id;
+  }
+  const set = (w: ReturnType<typeof world>, input: unknown) => makeSetFavourite(w.deps)(actor, input);
+
+  it("marks a live image and records asset_favourited { assetId }; never touches status", async () => {
+    const w = world();
+    const id = put(w);
+    expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true })).toEqual(ok(undefined));
+    expect(w.assets.get(id)?.isFavourite).toBe(true);
+    expect(w.events).toEqual([{ caseId: CASE_ID, type: "asset_favourited", data: { assetId: id }, actorId: actor.id }]);
+    expect(w.repo.setFavourite).toHaveBeenCalledExactlyOnceWith(CASE_ID, id, true);
+  });
+
+  it("marks a live video", async () => {
+    const w = world();
+    const id = put(w, { kind: "video", contentType: "video/mp4" });
+    expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true })).toEqual(ok(undefined));
+    expect(w.assets.get(id)?.isFavourite).toBe(true);
+  });
+
+  it("unmarks a favourite video and records asset_unfavourited { assetId }", async () => {
+    const w = world();
+    const id = put(w, { kind: "video", contentType: "video/mp4", isFavourite: true });
+    expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: false })).toEqual(ok(undefined));
+    expect(w.assets.get(id)?.isFavourite).toBe(false);
+    expect(w.events).toEqual([{ caseId: CASE_ID, type: "asset_unfavourited", data: { assetId: id }, actorId: actor.id }]);
+  });
+
+  it("allows any number of favourites per case", async () => {
+    const w = world();
+    const ids = [put(w), put(w), put(w, { kind: "video", contentType: "video/mp4" })];
+    for (const id of ids) expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true })).toEqual(ok(undefined));
+    expect(ids.map((id) => w.assets.get(id)?.isFavourite)).toEqual([true, true, true]);
+    expect(w.events).toHaveLength(3);
+  });
+
+  it.each([true, false])("setting the current value (%s) again writes nothing and records no event", async (value) => {
+    const w = world();
+    const id = put(w, { isFavourite: value });
+    expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: value })).toEqual(ok(undefined));
+    expect(w.repo.setFavourite).not.toHaveBeenCalled();
+    expect(w.events).toEqual([]);
+  });
+
+  it.each([
+    ["document", "application/pdf"],
+    ["text", "text/plain"],
+  ] as const)("a %s asset → NOT_FAVOURITABLE; unchanged, no event", async (kind, contentType) => {
+    const w = world();
+    const id = put(w, { kind, contentType: contentType as Asset["contentType"] });
+    expect(codeOf(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true }))).toBe("NOT_FAVOURITABLE");
+    expect(w.assets.get(id)?.isFavourite).toBe(false);
+    expect(w.repo.setFavourite).not.toHaveBeenCalled();
+    expect(w.events).toEqual([]);
+  });
+
+  it("clearing a document (already false) is ok with no write and no event", async () => {
+    const w = world();
+    const id = put(w, { kind: "document", contentType: "application/pdf" });
+    expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: false })).toEqual(ok(undefined));
+    expect(w.repo.setFavourite).not.toHaveBeenCalled();
+    expect(w.events).toEqual([]);
+  });
+
+  it.each([
+    ["an unknown asset", () => "dddddddd-0000-4000-8000-000000000009"],
+    ["a removed asset", (w: ReturnType<typeof world>) => w.seed("2026-10-13T11:00:00Z")],
+    ["another case's asset", (w: ReturnType<typeof world>) => put(w, { caseId: OTHER_CASE_ID })],
+  ])("%s → NOT_FOUND; no write, no event", async (_label, pick) => {
+    const w = world();
+    w.cases.get.mockImplementation(async (id) =>
+      id === CASE_ID || id === OTHER_CASE_ID ? ok({ id }) : err({ code: "NOT_FOUND", message: "none" }),
+    );
+    const id = pick(w);
+    expect(codeOf(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true }))).toBe("NOT_FOUND");
+    expect(w.repo.setFavourite).not.toHaveBeenCalled();
+    expect(w.events).toEqual([]);
+  });
+
+  it.each([DELETED_CASE_ID, "aaaaaaaa-0000-4000-8000-000000000009"])("case %s unknown or deleted → NOT_FOUND via cases.get", async (caseId) => {
+    const w = world();
+    const id = put(w);
+    expect(codeOf(await set(w, { caseId, assetId: id, isFavourite: true }))).toBe("NOT_FOUND");
+    expect(w.cases.get).toHaveBeenCalledWith(caseId);
+    expect(w.repo.get).not.toHaveBeenCalled();
+    expect(w.repo.setFavourite).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ caseId: "nope", assetId: NEW_ASSET_ID, isFavourite: true }, ["caseId"]],
+    [{ caseId: CASE_ID, assetId: "nope", isFavourite: true }, ["assetId"]],
+    [{ caseId: CASE_ID, assetId: NEW_ASSET_ID, isFavourite: "true" }, ["isFavourite"]],
+    [{ caseId: CASE_ID, assetId: NEW_ASSET_ID }, ["isFavourite"]],
+  ])("malformed input %j → INVALID_INPUT naming %j, without a query", async (input, fields) => {
+    const w = world();
+    const result = await set(w, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("INVALID_INPUT");
+      expect((result.error.details as { fields: string[] }).fields).toEqual(fields);
+    }
+    expect(w.cases.get).not.toHaveBeenCalled();
+  });
+
+  it("passes a lookup failure through without writing", async () => {
+    const w = world();
+    const failure = err({ code: "ASSET_LOOKUP_FAILED", message: "down" });
+    w.repo.get.mockResolvedValueOnce(failure);
+    expect(await set(w, { caseId: CASE_ID, assetId: NEW_ASSET_ID, isFavourite: true })).toEqual(failure);
+    expect(w.repo.setFavourite).not.toHaveBeenCalled();
+  });
+
+  it("passes a write failure through without an event", async () => {
+    const w = world();
+    const id = put(w);
+    const failure = err({ code: "ASSET_WRITE_FAILED", message: "down" });
+    w.repo.setFavourite.mockResolvedValueOnce(failure);
+    expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true })).toEqual(failure);
+    expect(w.events).toEqual([]);
+  });
+
+  it("an asset removed between read and write → NOT_FOUND without an event", async () => {
+    const w = world();
+    const id = put(w);
+    w.repo.setFavourite.mockImplementationOnce(async () => {
+      w.assets.set(id, { ...w.assets.get(id)!, deletedAt: "2026-10-13T13:00:00Z" });
+      return ok(false);
+    });
+    expect(codeOf(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true }))).toBe("NOT_FOUND");
+    expect(w.repo.get).toHaveBeenCalledTimes(2);
+    expect(w.events).toEqual([]);
+  });
+
+  it("a concurrent request that already set the value → ok, no event (compare-and-set lost)", async () => {
+    const w = world();
+    const id = put(w);
+    w.repo.setFavourite.mockImplementationOnce(async () => {
+      w.assets.set(id, { ...w.assets.get(id)!, isFavourite: true });
+      return ok(false);
+    });
+    expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true })).toEqual(ok(undefined));
+    expect(w.repo.get).toHaveBeenCalledTimes(2);
+    expect(w.events).toEqual([]);
+  });
+
+  it("two concurrent identical requests record exactly one event", async () => {
+    const w = world();
+    const id = put(w);
+    const results = await Promise.all([
+      set(w, { caseId: CASE_ID, assetId: id, isFavourite: true }),
+      set(w, { caseId: CASE_ID, assetId: id, isFavourite: true }),
+    ]);
+    expect(results).toEqual([ok(undefined), ok(undefined)]);
+    expect(w.assets.get(id)?.isFavourite).toBe(true);
+    expect(w.events).toHaveLength(1);
+  });
+
+  it("passes a re-read failure through after a lost compare-and-set", async () => {
+    const w = world();
+    const id = put(w);
+    const failure = err({ code: "ASSET_LOOKUP_FAILED", message: "down" });
+    w.repo.setFavourite.mockResolvedValueOnce(ok(false));
+    w.repo.get.mockImplementationOnce(async () => ok(w.assets.get(id)!)).mockResolvedValueOnce(failure);
+    expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true })).toEqual(failure);
+    expect(w.events).toEqual([]);
+  });
+
+  it.each([
+    [false, true],
+    [true, false],
+  ])("if the event write fails, puts the flag back (%s → %s) and returns the error", async (before, after) => {
+    const w = world();
+    const id = put(w, { isFavourite: before });
+    const failure = err({ code: "CASE_EVENT_WRITE_FAILED", message: "down" });
+    w.cases.recordEvent.mockResolvedValueOnce(failure);
+    expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: after })).toEqual(failure);
+    expect(w.assets.get(id)?.isFavourite).toBe(before);
+    expect(w.repo.setFavourite.mock.calls).toEqual([
+      [CASE_ID, id, after],
+      [CASE_ID, id, before],
+    ]);
+  });
+
+  it("logs a failed compensation when the revert changes no row (a concurrent toggle) and returns the event error", async () => {
+    const w = world();
+    const id = put(w);
+    const failure = err({ code: "CASE_EVENT_WRITE_FAILED", message: "down" });
+    w.cases.recordEvent.mockImplementationOnce(async () => {
+      // A concurrent request flips the flag back before the revert runs.
+      w.assets.set(id, { ...w.assets.get(id)!, isFavourite: false });
+      return failure;
+    });
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true })).toEqual(failure);
+      expect(w.repo.setFavourite.mock.calls).toEqual([
+        [CASE_ID, id, true],
+        [CASE_ID, id, false],
+      ]);
+      expect(JSON.parse(String(write.mock.calls[0][0]))).toMatchObject({ level: "error", caseId: CASE_ID, actorId: actor.id });
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("returns the event error even when the compensation fails", async () => {
+    const w = world();
+    const id = put(w);
+    const failure = err({ code: "CASE_EVENT_WRITE_FAILED", message: "down" });
+    w.cases.recordEvent.mockResolvedValueOnce(failure);
+    w.repo.setFavourite.mockImplementationOnce(async () => ok(true)).mockResolvedValueOnce(err({ code: "ASSET_WRITE_FAILED", message: "x" }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      expect(await set(w, { caseId: CASE_ID, assetId: id, isFavourite: true })).toEqual(failure);
+      expect(JSON.parse(String(write.mock.calls[0][0]))).toMatchObject({ level: "error", caseId: CASE_ID, actorId: actor.id });
+    } finally {
+      write.mockRestore();
+    }
+  });
+});
+
 describe("hasMaterial", () => {
   it("none: no assets → false", async () => {
     expect(await makeHasMaterial(world().deps)(CASE_ID)).toEqual(ok(false));
@@ -367,6 +609,7 @@ describe("listAssets", () => {
       createdBy: actor.id,
       createdAt: "2026-10-13T10:00:00Z",
       deletedAt: null,
+      isFavourite: false,
       ...over,
     });
   }
@@ -401,10 +644,23 @@ describe("listAssets", () => {
       contentType: "application/pdf",
       sizeBytes: 2 * MB,
       createdAt: "2026-10-13T10:00:00Z",
+      isFavourite: false,
       thumbnailUrl: null,
     });
     expect(w.storage.presignDownload).toHaveBeenCalledOnce();
     expect(w.storage.presignDownload).toHaveBeenCalledWith({ caseId: CASE_ID, assetId: IMG, contentType: PNG }, 900);
+  });
+
+  it("carries isFavourite on each listed row", async () => {
+    const w = filled();
+    w.assets.set(MOV, { ...w.assets.get(MOV)!, isFavourite: true });
+    const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map((a) => [a.id, a.isFavourite])).toEqual([
+      [IMG, false],
+      [PDF, false],
+      [MOV, true],
+    ]);
   });
 
   it("keeps the repository's order (oldest first)", async () => {

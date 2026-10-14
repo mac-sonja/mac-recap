@@ -1,5 +1,6 @@
 // Public surface of the material module. Code outside this module imports only this file.
-// The module owns `asset`, `context_form` and S3 `cases/{caseId}/assets/**` (AD-11): nobody else writes them.
+// The module owns `asset` (including its favourite flag), `context_form` and S3
+// `cases/{caseId}/assets/**` (AD-11): nobody else writes them.
 import { randomUUID } from "node:crypto";
 import type { Actor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
@@ -15,13 +16,14 @@ import { makePresignUpload, type PresignedAssetUpload } from "@/modules/material
 import { makeRemoveAsset } from "@/modules/material/application/remove-asset";
 import { makeResolveRefs } from "@/modules/material/application/resolve-refs";
 import { makeSaveDetailsField } from "@/modules/material/application/save-details-field";
+import { makeSetFavourite } from "@/modules/material/application/set-favourite";
 import type { Asset, ListedAsset } from "@/modules/material/domain/asset";
 import type { DetailsFieldSaved, DetailsForm, ResolvedRef } from "@/modules/material/domain/details-form";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
 import { getStorageConfig } from "@/shared/env";
 import type { Result } from "@/shared/result";
 
-export { ASSET_REMOVED, ASSET_UPLOADED } from "@/modules/material/domain/asset";
+export { ASSET_FAVOURITED, ASSET_REMOVED, ASSET_UNFAVOURITED, ASSET_UPLOADED } from "@/modules/material/domain/asset";
 export type { Asset, ListedAsset } from "@/modules/material/domain/asset";
 export { DETAILS_SAVED, FORM_FIELDS, MATERIAL_REF_KINDS, MAX_FORM_FIELD_CHARS } from "@/modules/material/domain/details-form";
 export type {
@@ -63,7 +65,7 @@ function deps({ withStorage = true }: { withStorage?: boolean } = {}): MaterialD
   };
 }
 
-/** Dependencies without storage, for the paths that never touch S3 (details form, material refs). */
+/** Dependencies without storage, for the paths that never touch S3 (details form, material refs, favourites). */
 const storagelessDeps = () => deps({ withStorage: false });
 
 /**
@@ -99,6 +101,20 @@ export function listAssets(input: unknown): Promise<Result<ListedAsset[]>> {
 /** Soft-deletes one asset (`{ caseId, assetId }`) and records `asset_removed`. Authorize `upload` first. */
 export function removeAsset(actor: Actor, input: unknown): Promise<Result<void>> {
   return makeRemoveAsset(deps())(actor, input);
+}
+
+/**
+ * Sets or clears the favourite flag of one asset (`{ caseId, assetId, isFavourite }`)
+ * and records `asset_favourited` / `asset_unfavourited { assetId }`; setting the
+ * current value again changes nothing and records no event. Only images and
+ * videos can be favourites; any number per case, none required. Authorize
+ * `mark favourites` first. Errors: `INVALID_INPUT`, `NOT_FOUND`, `NOT_FAVOURITABLE`,
+ * `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`, `ASSET_WRITE_FAILED`, and the event-write
+ * error (the flag is then put back).
+ * Any status; status never changes; works without S3. Generation ignores the flag.
+ */
+export function setFavourite(actor: Actor, input: unknown): Promise<Result<void>> {
+  return makeSetFavourite(storagelessDeps())(actor, input);
 }
 
 /**

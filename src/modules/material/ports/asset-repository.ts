@@ -24,6 +24,18 @@ export interface AssetRepository {
    * `ASSET_ALREADY_CONFIRMED` (this asset id exists); nothing is written on any `err`.
    */
   create(asset: NewAsset): Promise<Result<Asset>>;
+  /**
+   * One non-deleted asset of the case; `ok(null)` when there is none. `err
+   * ASSET_LOOKUP_FAILED` when the read fails, `ASSET_INVALID` when the row fails validation.
+   */
+  get(caseId: string, assetId: string): Promise<Result<Asset | null>>;
+  /**
+   * Compare-and-set: sets `is_favourite = value` on a live asset of the case only
+   * where it is currently `!value`. `ok(true)` when a row changed, `ok(false)` when
+   * none did (no such live asset, or it already holds `value`). Only images and
+   * videos can be favourites (the DB check rejects others: `err ASSET_WRITE_FAILED`).
+   */
+  setFavourite(caseId: string, assetId: string, value: boolean): Promise<Result<boolean>>;
   /** Sets `deleted_at` on a live asset of the case; `ok(false)` when there is none. */
   softDelete(caseId: string, assetId: string): Promise<Result<boolean>>;
   /**

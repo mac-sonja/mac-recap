@@ -16,6 +16,7 @@ const row = (over: Record<string, unknown> = {}) => ({
   created_by: ACTOR_ID,
   created_at: "2026-10-13T10:00:00+00:00",
   deleted_at: null,
+  is_favourite: false,
   ...over,
 });
 
@@ -23,7 +24,7 @@ const row = (over: Record<string, unknown> = {}) => ({
 function stubClient(response: { data?: unknown; error: unknown; count?: number | null }) {
   const builder: Record<string, unknown> = {};
   const step = () => vi.fn(() => builder);
-  const calls = { select: step(), update: step(), eq: step(), is: step(), order: step() };
+  const calls = { select: step(), update: step(), eq: step(), is: step(), order: step(), maybeSingle: step() };
   Object.assign(builder, calls, { then: (resolve: (r: typeof response) => unknown) => resolve(response) });
   const from = vi.fn(() => builder);
   const rpc = vi.fn(async () => response);
@@ -67,6 +68,7 @@ describe("createSupabaseAssetRepository", () => {
         createdBy: ACTOR_ID,
         createdAt: "2026-10-13T10:00:00+00:00",
         deletedAt: null,
+        isFavourite: false,
       },
     });
   });
@@ -173,6 +175,90 @@ describe("createSupabaseAssetRepository", () => {
   it("softDelete returns false when no live asset matched", async () => {
     const stub = stubClient({ data: [], error: null });
     expect(await createSupabaseAssetRepository(stub.factory).softDelete(CASE_ID, ASSET_ID)).toEqual({ ok: true, value: false });
+  });
+
+  it("get reads one live asset of the case, including is_favourite", async () => {
+    const stub = stubClient({ data: row({ is_favourite: true }), error: null });
+    const result = await createSupabaseAssetRepository(stub.factory).get(CASE_ID, ASSET_ID);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toMatchObject({ id: ASSET_ID, kind: "image", isFavourite: true });
+    expect(stub.from).toHaveBeenCalledWith("asset");
+    expect(stub.select).toHaveBeenCalledWith(expect.stringContaining("is_favourite"));
+    expect(stub.eq.mock.calls).toEqual([
+      ["id", ASSET_ID],
+      ["case_id", CASE_ID],
+    ]);
+    expect(stub.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(stub.maybeSingle).toHaveBeenCalledOnce();
+  });
+
+  it("get returns null when no live asset matched", async () => {
+    const stub = stubClient({ data: null, error: null });
+    expect(await createSupabaseAssetRepository(stub.factory).get(CASE_ID, ASSET_ID)).toEqual({ ok: true, value: null });
+  });
+
+  it("get rejects a row outside the domain", async () => {
+    const stub = stubClient({ data: row({ is_favourite: null }), error: null });
+    const result = await createSupabaseAssetRepository(stub.factory).get(CASE_ID, ASSET_ID);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("ASSET_INVALID");
+  });
+
+  it("get returns ASSET_LOOKUP_FAILED and logs the case id when the read fails", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const stub = stubClient({ data: null, error: { code: "PGRST000", message: "down" } });
+      const result = await createSupabaseAssetRepository(stub.factory).get(CASE_ID, ASSET_ID);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("ASSET_LOOKUP_FAILED");
+      expect(JSON.parse(String(write.mock.calls[0][0]))).toMatchObject({ level: "error", caseId: CASE_ID });
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it.each([true, false])("setFavourite compare-and-sets is_favourite = %s only on a live asset of the case", async (value) => {
+    const stub = stubClient({ data: [{ id: ASSET_ID }], error: null });
+    expect(await createSupabaseAssetRepository(stub.factory).setFavourite(CASE_ID, ASSET_ID, value)).toEqual({ ok: true, value: true });
+    expect(stub.from).toHaveBeenCalledWith("asset");
+    expect(stub.update).toHaveBeenCalledWith({ is_favourite: value });
+    expect(stub.eq.mock.calls).toEqual([
+      ["id", ASSET_ID],
+      ["case_id", CASE_ID],
+      ["is_favourite", !value],
+    ]);
+    expect(stub.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(stub.select).toHaveBeenCalledWith("id");
+  });
+
+  it("setFavourite returns false when no row changed (no live asset, or it already holds the value)", async () => {
+    const stub = stubClient({ data: [], error: null });
+    expect(await createSupabaseAssetRepository(stub.factory).setFavourite(CASE_ID, ASSET_ID, true)).toEqual({ ok: true, value: false });
+  });
+
+  it("setFavourite returns ASSET_WRITE_FAILED and logs the case id when the write fails", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const stub = stubClient({ data: null, error: { code: "23514", message: "check" } });
+      const result = await createSupabaseAssetRepository(stub.factory).setFavourite(CASE_ID, ASSET_ID, true);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("ASSET_WRITE_FAILED");
+      expect(JSON.parse(String(write.mock.calls[0][0]))).toMatchObject({ level: "error", caseId: CASE_ID });
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("setFavourite logs no-code when the error has no code", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const stub = stubClient({ data: null, error: { message: "down" } });
+      const result = await createSupabaseAssetRepository(stub.factory).setFavourite(CASE_ID, ASSET_ID, true);
+      expect(result.ok).toBe(false);
+      expect(JSON.parse(String(write.mock.calls[0][0])).msg).toContain("no-code");
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it.each([

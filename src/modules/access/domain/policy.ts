@@ -13,6 +13,7 @@ export const ACTIONS = [
   "create case",
   "upload",
   "fill details",
+  "mark favourites",
   "generate",
   "edit",
   "delete case",
@@ -50,6 +51,8 @@ const MATRIX: Readonly<Record<Action, Readonly<Partial<Record<Role, Rule>>>>> = 
   "create case": { owner_designer: true },
   upload: { owner_designer: true },
   "fill details": { owner_designer: true },
+  // AD-14: favourites replace the retired taxonomy (Sprint Change Proposal 2026-10-14).
+  "mark favourites": { owner_designer: true },
   generate: { owner_designer: true },
   edit: { owner_designer: true },
   "delete case": { owner_designer: draft },

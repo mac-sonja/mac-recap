@@ -25,14 +25,14 @@ export type Database = {
           Tables: {
             "asset": {
                   Row: {
-                    "case_id": string,"content_type": string,"created_at": string,"created_by": string,"deleted_at": string | null,"id": string,"kind": string,"original_file_name": string,"s3_key": string,"size_bytes": number
+                    "case_id": string,"content_type": string,"created_at": string,"created_by": string,"deleted_at": string | null,"id": string,"is_favourite": boolean,"kind": string,"original_file_name": string,"s3_key": string,"size_bytes": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "case_id": string,"content_type": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"id"?: string,"kind": string,"original_file_name": string,"s3_key": string,"size_bytes": number
+                    "case_id": string,"content_type": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"id"?: string,"is_favourite"?: boolean,"kind": string,"original_file_name": string,"s3_key": string,"size_bytes": number
                   }
                   Update: {
-                    "case_id"?: string,"content_type"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"id"?: string,"kind"?: string,"original_file_name"?: string,"s3_key"?: string,"size_bytes"?: number
+                    "case_id"?: string,"content_type"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"id"?: string,"is_favourite"?: boolean,"kind"?: string,"original_file_name"?: string,"s3_key"?: string,"size_bytes"?: number
                   }
                   Relationships: [
                     {
@@ -149,6 +149,7 @@ isOneToOne: false
 "created_by": string,
 "deleted_at": string | null,
 "id": string,
+"is_favourite": boolean,
 "kind": string,
 "original_file_name": string,
 "s3_key": string,
