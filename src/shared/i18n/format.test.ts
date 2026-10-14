@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentYear, formatDateTime } from "./format";
+import { currentYear, formatBytes, formatDateTime } from "./format";
 
 describe("formatDateTime", () => {
   it.each([
@@ -15,5 +15,24 @@ describe("currentYear", () => {
     expect(currentYear(new Date("2026-10-14T10:00:00Z"))).toBe(2026);
     // 23:30 UTC on 31 December is already 1 January in Rome.
     expect(currentYear(new Date("2026-12-31T23:30:00Z"))).toBe(2027);
+  });
+});
+
+describe("formatBytes", () => {
+  it.each([
+    [820, "820 B"],
+    [1023, "1023 B"],
+    [1048575, "1 MB"],
+    [1048576, "1 MB"],
+    [1024 * 1024 - 60, "1023,9 KB"],
+    [1024, "1 KB"],
+    [512 * 1024, "512 KB"],
+    [1536, "1,5 KB"],
+    [4.2 * 1024 * 1024, "4,2 MB"],
+    [11.64 * 1024 * 1024, "11,6 MB"],
+    [100 * 1024 * 1024, "100 MB"],
+    [1234.5 * 1024 * 1024, "1234,5 MB"],
+  ])("formats %d bytes as %s", (bytes, expected) => {
+    expect(formatBytes(bytes)).toBe(expected);
   });
 });

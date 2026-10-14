@@ -83,7 +83,62 @@ export const it = {
     next: "Avanti",
     /** The wizard's error boundary: the case could not be loaded. */
     loadFailed: "Non è stato possibile aprire il case study. Riprova tra poco.",
-    materialPlaceholder: "Il caricamento del materiale non è ancora disponibile in questa versione.",
+    /** Step 1, Material (Story 2.7). */
+    material: {
+      heading: "Aggiungi il materiale del progetto",
+      intro: "Carica il materiale già verificato. La generazione parte solo da qui.",
+      drop: {
+        /** Followed by the lime `browse` link. */
+        lead: "Trascina qui i file o",
+        browse: "sfoglia",
+        /** `{max}` files, `{size}` MB each. */
+        hint: "Fino a {max} file, {size} MB ciascuno.",
+        /** Accepted-type chips, in display order. */
+        types: {
+          pdf: "PDF",
+          docx: "DOCX",
+          text: "TXT / MD",
+          image: "PNG / JPG / WEBP",
+          video: "MP4 / MOV",
+        },
+      },
+      list: {
+        label: "Materiale",
+        /** `{n}` live files of `{max}`. */
+        count: "{n} / {max} file",
+        favourite: "Preferito",
+        /** Accessible name of a row's ✕; `{name}` is the file name. */
+        remove: "Rimuovi {name}",
+        /** Accessible name of a row's progress bar; `{name}` is the file name. */
+        progress: "Caricamento di {name}",
+      },
+      errors: {
+        /** `{size}` is the per-file limit in MB. */
+        tooLarge: "Oltre {size} MB. Non caricato.",
+        type: "Questo tipo di file non è supportato. Usa immagini, video, testi o PDF.",
+        /** `{max}` is the per-case file limit. */
+        limit: "Limite di {max} file raggiunto. Non caricato.",
+        rejected: "Il file caricato non corrisponde a quello scelto. Non caricato.",
+        failed: "Caricamento non riuscito.",
+        storage:
+          "Il caricamento dei file non è disponibile: lo spazio di archiviazione non è configurato. Contatta un amministratore.",
+        favourite: "Non è stato possibile salvare il preferito. Riprova.",
+        remove: "Non è stato possibile rimuovere il file. Riprova.",
+      },
+      /** Polite live-region lines; `{name}` is the file name. */
+      announce: {
+        started: "Caricamento di {name} in corso.",
+        done: "{name} caricato.",
+        removed: "{name} rimosso.",
+        /** `{message}` is the row's error line. */
+        error: "{name}: {message}",
+      },
+      /** Why Avanti is inactive with no file. */
+      nextReason: "Aggiungi almeno un file per continuare.",
+      favouritesOptional: "I preferiti sono facoltativi.",
+    },
+    /** Step 2 until the Story 2.10 UI. */
+    detailsPlaceholder: "La compilazione dei dettagli non è ancora disponibile in questa versione.",
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {

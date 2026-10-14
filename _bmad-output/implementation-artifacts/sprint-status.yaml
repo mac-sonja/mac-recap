@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-14-2026 14:48
+last_updated: 10-14-2026 16:36
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -40,9 +40,9 @@ development_status:
   2-2-one-gated-image-deployable-to-staging: done
   2-3-actor-and-policy-seam-with-a-dev-owner-designer: done
   2-4-app-shell-navigation-tokens-italian-copy-status-badge: done
-  2-5-create-a-case-study-with-a-permanent-id: in-progress  # backend done (create + transition); UI frame + step 0 done (wizard shell, name step); step 1 waits on Story 2.7 UI
+  2-5-create-a-case-study-with-a-permanent-id: in-progress  # backend done (create + transition); UI frame + step 0 done (wizard shell, name step); step 1 done (Story 2.7 UI)
   2-6-find-and-reopen-case-studies-in-the-table: done
-  2-7-upload-project-files: in-progress  # backend done (#17, listing #22); UI, buckets open; remove without undo (SCP)
+  2-7-upload-project-files: review  # backend done (#17, listing #22); UI done (Material step, step 2 placeholder); buckets open; remove without undo (SCP)
   2-8-retire-pasted-text-and-the-taxonomy: done  # retires pasted text (#18), the taxonomy (#19) and the restore feature (#17) per SCP 2026-10-14; land first
   2-9-mark-images-and-videos-as-favourite: done  # replaces tagging (#19 backend) per SCP 2026-10-14
   2-10-fill-in-the-details-form: in-progress  # backend done (#20); UI open; gate = ≥1 file

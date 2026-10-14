@@ -2,9 +2,10 @@
 title: 'Story 2.7 UI: wizard step 1 Material'
 type: 'feature'
 created: '2026-10-14'
-status: 'draft'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
+baseline_commit: 'a422b3617b2254b1ba43b130c0322c7a1d07fdeb'
 context:
   - '{project-root}/_bmad-output/planning-artifacts/ux-designs/ux-MAC Recap-2026-10-08/EXPERIENCE.md'
   - '{project-root}/_bmad-output/planning-artifacts/ux-designs/ux-MAC Recap-2026-10-08/mockups/material-step.html'
@@ -110,12 +111,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/app/(wizard)/_lib/upload.ts` + test -- XHR POST with progress, content-type normalization
-- [ ] `src/shared/i18n/format.ts` + test -- `formatBytes`
-- [ ] `src/shared/i18n/it.ts` + `it.test.ts` -- `wizard.material.*` copy
-- [ ] `src/app/(wizard)/_components/material-step.tsx` (+ parts) + tests -- every matrix row
-- [ ] `src/app/(wizard)/case-studies/new/page.tsx` + test, `src/app/_lib/routes.ts` -- server props, `step=2` guard and placeholder
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 2.7 comment: UI done; 2.5 step 1 no longer waiting
+- [x] `src/app/(wizard)/_lib/upload.ts` + test -- XHR POST with progress, content-type normalization
+- [x] `src/shared/i18n/format.ts` + test -- `formatBytes`
+- [x] `src/shared/i18n/it.ts` + `it.test.ts` -- `wizard.material.*` copy
+- [x] `src/app/(wizard)/_components/material-step.tsx` (+ parts) + tests -- every matrix row
+- [x] `src/app/(wizard)/case-studies/new/page.tsx` + test, `src/app/_lib/routes.ts` -- server props, `step=2` guard and placeholder
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 2.7 comment: UI done; 2.5 step 1 no longer waiting
 
 **Acceptance Criteria:**
 - Given a draft with no files, when step 1 renders, then the drop zone, chips and hint show, Avanti is inactive with its reason, and no file list shows.
@@ -123,9 +124,42 @@ context:
 
 ## Implementation Notes
 
+- The whole drop zone is the keyboard control (`role="button"`, Enter/Space/click opens the hidden input); *sfoglia* is a styled span, so no interactive element is nested inside a button.
+- The live region (`role="status"`, polite) appends lines and keeps the last 5, so a quick "caricato" doesn't overwrite a rejection before it is read. It announces start, done, removed and every row error; each upload row also has a named `role="progressbar"`.
+- Rows keep their drop order in one list (listed and pending rows together); after an image confirms, `listAssets` is called and only thumbnail URLs are merged in by id, so slow listings can't drop or resurrect rows.
+- ✕ on an uploading row cancels it (aborts the XHR); if confirm already went through, the asset is removed again, and if that remove fails it shows as a listed row with the remove error. ✕ on a rejected row dismisses it.
+- `UPLOAD_REJECTED` has its own line ("Il file caricato non corrisponde a quello scelto. Non caricato."); presign/confirm codes outside the rejection list (and thrown errors) take the single re-presign retry. A 0-byte file is refused on the client with "Caricamento non riuscito.".
+- `STORAGE_NOT_CONFIGURED` drops the affected pending rows; the banner explains them.
+- `NOT_FOUND` on remove counts as removed.
+- `step=2` uses `material.hasMaterial`; false or a failed check redirects to the step 1 URL. A failed `listAssets` throws into the wizard error boundary.
+- After a confirm that threw or answered 5xx, `listAssets` is checked for that `assetId` before re-presigning, so a file stored anyway isn't uploaded twice. Unmounting aborts running S3 POSTs; confirmed files stay.
+- `it.wizard.materialPlaceholder` is replaced by `it.wizard.detailsPlaceholder` (step 2).
+
+- Review patches applied (triage #1–3, #5, #6, #8–11, #13–16). Full run: 53 files / 1371 tests, lint, typecheck, build pass.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge | Retry after a thrown/5xx confirm can leave a hidden duplicate asset | medium | Real: re-presign never checks whether the first `assetId` was stored | patch |
+| 2 | blind, edge | Uploads keep running after unmount (Avanti clicked mid-upload) | medium | Real: no abort on unmount | patch (abort on unmount) |
+| 3 | blind | Row error copy hardcodes 100 MB / 20 while the hint uses props | low | Real | patch |
+| 4 | blind | Type chips and type error not derived from the allowlist | low | Chips are mockup copy; allowlist changes need a migration anyway | reject |
+| 5 | blind | Drag highlight flickers on child dragleave | low | Real | patch |
+| 6 | blind | Expired thumbnail URL breaks the image | low | Real | patch (`onError` → type icon) |
+| 7 | blind | One `listAssets` per confirmed image | low | Coalescing adds machinery; ≤20 calls | reject |
+| 8 | blind, edge | ✕ ignored while a favourite save is in flight | low | Real: shared `busy` set | patch |
+| 9 | blind, edge | `formatBytes` prints "1024 KB" just under 1 MB | low | Real | patch |
+| 10 | vg, blind | Cancel-after-confirm cleanup untested | medium | Pre-verified gap | patch |
+| 11 | vg, blind | 0-byte refusal and live-region cap untested | low | Real | patch |
+| 12 | blind, edge | Failed remove restored after its slot was reused can show 21/20 | low | Rare; server cap still holds | reject |
+| 13 | blind | `&step=2` fallback keeps the wrong URL | low | Real | patch (redirect to step 1 URL) |
+| 14 | blind | `wizardHref` accepts step 3 the page ignores | low | Real | patch (narrow type) |
+| 15 | blind | Every Preferito toggle has the same accessible name | low | Real | patch (describe by file name) |
+| 16 | edge | Cancel-after-confirm cleanup failure is swallowed | low | Real: hidden asset holds a slot | patch (show it back as a row with the remove error) |
+| 17 | edge | XHR has no timeout | low | A timeout risks killing slow 100 MB uploads; stalls are rare | reject |
 
 ## Verification
 

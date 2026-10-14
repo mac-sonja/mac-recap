@@ -57,12 +57,42 @@ describe("wizard copy", () => {
     expect(t("wizard.errors.client")).toBe("Inserisci il cliente.");
     expect(fill(t("wizard.errors.year"), { min: 1900, max: 2100 })).toBe("Inserisci un anno tra 1900 e 2100.");
     expect(t("wizard.errors.generic")).toMatch(/^Non è stato possibile creare il case study\./);
-    expect(t("wizard.materialPlaceholder")).not.toBe("");
+    expect(t("wizard.detailsPlaceholder")).not.toBe("");
     expect(t("wizard.loadFailed")).toBe("Non è stato possibile aprire il case study. Riprova tra poco.");
   });
 
   test("names each missing required field", () => {
     expect(t("wizard.errors.name")).toContain("nome");
     expect(t("wizard.errors.client")).toContain("cliente");
+  });
+});
+
+describe("material step copy", () => {
+  const m = it.wizard.material;
+
+  test("has the mockup strings", () => {
+    expect(t("wizard.material.heading")).toBe("Aggiungi il materiale del progetto");
+    expect(t("wizard.material.intro")).toBe("Carica il materiale già verificato. La generazione parte solo da qui.");
+    expect(t("wizard.material.drop.lead")).toBe("Trascina qui i file o");
+    expect(t("wizard.material.drop.browse")).toBe("sfoglia");
+    expect(fill(t("wizard.material.drop.hint"), { max: 20, size: 100 })).toBe("Fino a 20 file, 100 MB ciascuno.");
+    expect(Object.values(m.drop.types)).toEqual(["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]);
+    expect(t("wizard.material.list.label")).toBe("Materiale");
+    expect(fill(t("wizard.material.list.count"), { n: 4, max: 20 })).toBe("4 / 20 file");
+    expect(t("wizard.material.list.favourite")).toBe("Preferito");
+    expect(fill(t("wizard.material.list.remove"), { name: "a.pdf" })).toBe("Rimuovi a.pdf");
+    expect(t("wizard.material.favouritesOptional")).toBe("I preferiti sono facoltativi.");
+    expect(t("wizard.material.nextReason")).toBe("Aggiungi almeno un file per continuare.");
+  });
+
+  test("has the rejection and failure lines", () => {
+    expect(fill(t("wizard.material.errors.tooLarge"), { size: 100 })).toBe("Oltre 100 MB. Non caricato.");
+    expect(t("wizard.material.errors.type")).toBe(
+      "Questo tipo di file non è supportato. Usa immagini, video, testi o PDF.",
+    );
+    expect(fill(t("wizard.material.errors.limit"), { max: 20 })).toBe("Limite di 20 file raggiunto. Non caricato.");
+    expect(t("wizard.material.errors.failed")).toBe("Caricamento non riuscito.");
+    expect(t("wizard.material.errors.storage")).not.toBe("");
+    expect(t("wizard.material.errors.rejected")).not.toBe("");
   });
 });
