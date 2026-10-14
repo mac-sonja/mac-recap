@@ -8,6 +8,8 @@ scope: moderate
 triggers: [S1]
 ---
 
+> **Addendum (2026-10-14, Story 2.11 review, owner decision C):** the hosted plan caps uploads at 50 MB (a 60 MB PUT returned 413), so the per-file limit is **50 MB** until the organization moves to Pro. Where this proposal says 100 MB / 104857600, read 50 MB / 52428800 for now.
+
 # Sprint Change Proposal: Supabase Storage, 2026-10-14
 
 ## 1. Issue summary

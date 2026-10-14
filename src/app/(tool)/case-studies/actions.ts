@@ -40,8 +40,8 @@ export async function createCaseStudy(input: unknown): Promise<ActionResult<Case
 }
 
 /**
- * A presigned POST for one project file: `{ assetId, url, fields }`; the browser
- * posts `fields` plus the file straight to S3. Input `{ caseId, contentType, sizeBytes }`.
+ * A signed upload for one project file: `{ assetId, url, method, headers }`; the
+ * browser sends the raw file straight to storage with those headers. Input `{ caseId, contentType, sizeBytes }`.
  * 403 `FORBIDDEN` unless the role may `upload`; 400 `FILE_TYPE_NOT_ALLOWED` /
  * `FILE_TOO_LARGE`; 409 `FILE_LIMIT_REACHED`; 404 `NOT_FOUND`; 503 `STORAGE_NOT_CONFIGURED`.
  */

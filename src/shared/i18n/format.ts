@@ -26,7 +26,7 @@ const MB = 1024 * 1024;
 
 /**
  * A file size in Italian format, binary units (1 MB = 1024 × 1024 bytes, as the
- * 100 MB upload limit), e.g. `4,2 MB`, `512 KB`, `820 B`.
+ * per-file upload limit), e.g. `4,2 MB`, `512 KB`, `820 B`.
  */
 export function formatBytes(bytes: number): string {
   if (bytes < KB) return `${SIZE.format(bytes)} B`;

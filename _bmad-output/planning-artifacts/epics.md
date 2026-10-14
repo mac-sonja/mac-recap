@@ -27,7 +27,7 @@ Scope: the standalone MVP, Epics 2–6, keeping PRD v2 numbering (Epic 1 is team
 ### Functional Requirements
 
 FR1: The owner/designer creates a case study by hand, and the system gives it a unique, permanent ID (a database-generated uuid that is never changed or reused). The ID is the only identifier exposed to other systems and is ready for the later project-order link. There is no trigger at project close. (CAP-1, Story 2.2)
-FR2: The owner/designer uploads material (images, videos, text documents, PDFs) to a case study. The limit is 20 files of at most 100 MB each, of an allowlisted type. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others. Any number of images and videos can be marked as favourite; the mark is optional. The owner/designer also fills in an optional details form (context, solution, results), which is the only place for typed project text, is saved, can be cited as a claim source, and never counts as material. (CAP-2, CAP-3, Stories 2.3–2.4)
+FR2: The owner/designer uploads material (images, videos, text documents, PDFs) to a case study. The limit is 20 files of at most 50 MB each, of an allowlisted type. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others. Any number of images and videos can be marked as favourite; the mark is optional. The owner/designer also fills in an optional details form (context, solution, results), which is the only place for typed project text, is saved, can be cited as a claim source, and never counts as material. (CAP-2, CAP-3, Stories 2.3–2.4)
 FR3: The system generates a graphic case study in the background by applying MAC templates to the uploaded material. The case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The narrative follows challenge, approach and result (always present, can't be removed or reordered), covers the technical and the graphic side, and uses only the uploaded material and form answers. Template design and assets stay unchanged. Generation is refused when there is no material, even with the form filled in. Layouts are produced for every MVP export format. (CAP-4, CAP-5, Story 3.1)
 FR4: Templates adapt their layout to the number of available media items, using the template's own media-count rules (slot mapping per count). (CAP-4, Story 3.2)
 FR5: The owner/designer reviews and edits case studies through the review dashboard (every case with its status, a To review queue oldest first, delete only in Bozza) and the configurator (generated text in place, layout variant, shuffle, spacing, media replace / reorder / remove, font pairing and text scale per format). Layout, spacing and typography accept only template-defined values; media come only from this case's material; the preview matches the exported files exactly; there is no canvas-ratio control. (CAP-6, CAP-7, Stories 4.1–4.2)
@@ -66,7 +66,7 @@ From the architecture spine (AD-1 to AD-20 are binding):
 - AR5 (AD-5): Guardrails are code (`generation/domain/guardrails.ts`, `access/domain/policy.ts`, `case-study` preconditions), never DB/env/UI. Each guardrail is enforced in a use case and covered by an automated test, so the end-of-Sprint-2 guardrail check runs on the pre-login build.
 - AR6 (AD-6): `generate` fails with `NO_MATERIAL` before any LLM call unless there's at least one non-deleted asset; the same check backs the Generate button and the worker's claim. Claims tagged `aspect: technical | graphic`; a draft missing one is `MISSING_ASPECT`.
 - AR7 (AD-7): One `NarrativeGenerator` port, worker only. Adapter uses `client.beta.messages.parse` with the zod schema, model `claude-opus-5-5` from one constant, adaptive thinking, `effort: "high"`, server-side refusal fallbacks; `refusal` → `LLM_REFUSAL`. Versioned prompt files. Each revision records `response.model`, `fellBack`, `promptVersion`, `schemaVersion`.
-- AR8 (AD-8): Private Supabase Storage bucket `material` in the project's EU region, created by migration, with `file_size_limit` 100 MB and `allowed_mime_types` set to the allowlist; no public access, service role is the only reader and writer. Browser uploads to a signed upload URL issued after `authorize`; size and type limits enforced by the bucket and re-checked from the object's metadata at confirm. Asset row only after that check. 20-file cap checked on issue and confirm. Signed GET ≤ 15 min. No versioning, so the app never deletes objects. Fixed key layout. No AWS S3.
+- AR8 (AD-8): Private Supabase Storage bucket `material` in the project's EU region, created by migration, with `file_size_limit` 50 MB and `allowed_mime_types` set to the allowlist; no public access, service role is the only reader and writer. Browser uploads to a signed upload URL issued after `authorize`; size and type limits enforced by the bucket and re-checked from the object's metadata at confirm. Asset row only after that check. 20-file cap checked on issue and confirm. Signed GET ≤ 15 min. No versioning, so the app never deletes objects. Fixed key layout. No AWS S3.
 - AR9 (AD-9): A format registry (`rendering/domain/formats.ts`) and one React renderer per format, used by the configurator, case study view, `/s/{token}` and exports. Exports: `renderToStaticMarkup` + Playwright `page.setContent`, no print route. Deck and A4 → PDF; image formats → ZIP of PNGs; Export all → one ZIP. Video shows its poster frame in static formats. `export` unique and immutable on `(revision_id, format)`; `ensureExport` is idempotent.
 - AR10 (AD-10): Postgres job table (`generate`, `export`, `rendition`), idempotent enqueue via partial unique index, `jobs_claim()` with `FOR UPDATE SKIP LOCKED`, 10-min lease renewed every minute, max 3 attempts then `failed` + `job_failed`. Web requests never call the LLM, Chromium or ffmpeg.
 - AR11 (AD-11): Every action and route calls `access.getActor()` + `access.authorize()`. Permission matrix lives only in `policy.ts`. Role read from `profile` on every request. A `system` actor for the worker. Server-only data access with the service-role key; RLS denies `anon` and `authenticated`. A seeded dev `owner_designer` until Epic 6, disabled at cutover and never reassigned.
@@ -91,7 +91,7 @@ UX-DR4: Owner/designer Case studies table. Columns ID (monospace), Name, Client,
 UX-DR5: To review queue. The table pre-filtered to Da approvare, oldest first; sidebar count; no assignment or claiming; empty copy "Nothing to review."
 UX-DR6: Library view. Card grid (cover = first slide of the 16:9 deck, name, client, year; no tags); approved only; no status filter or badge; same search; facets Client and Year as multi-select chips with active filters and Clear all; newest approved first; paginates at 24, no infinite scroll; empty copy "No approved case studies yet."; owner/designer Table / Library toggle.
 UX-DR7: Wizard step 0. Name (required) and client (required), year defaulting to the current year. The case is created and its ID shown in the header; saved as Bozza from that moment; leaving and returning loses nothing.
-UX-DR8: Wizard step 1 Material, in the focused wizard (per `mockups/material-step.html`). Dropzone plus browse button with accepted-type chips; no pasted text; copy "Up to 20 files, 100 MB each."; per-file inline rejections ("Over 100 MB. Not uploaded." / unsupported-type copy / 21st file) that don't block others; parallel uploads with per-file progress, progress and rejections announced to screen readers; rows (thumbnail, name, size, remove, plus a **Preferito** toggle on images and videos); remove is immediate, with no confirm and no undo; **Avanti** is active from the first uploaded file, and Dettagli and Genera can't be reached with 0 files.
+UX-DR8: Wizard step 1 Material, in the focused wizard (per `mockups/material-step.html`). Dropzone plus browse button with accepted-type chips; no pasted text; copy "Up to 20 files, 50 MB each."; per-file inline rejections ("Over 50 MB. Not uploaded." / unsupported-type copy / 21st file) that don't block others; parallel uploads with per-file progress, progress and rejections announced to screen readers; rows (thumbnail, name, size, remove, plus a **Preferito** toggle on images and videos); remove is immediate, with no confirm and no undo; **Avanti** is active from the first uploaded file, and Dettagli and Genera can't be reached with 0 files.
 UX-DR9: Wizard step 2 Details. Context, Solution, Results textareas with one-line prompts, a "{n} of 3" counter, all optional.
 UX-DR10: Wizard step 3 Generate. Summary "{n} files, {m} of 3 details filled."; Generate disabled without material, with the visible reason linked via `aria-describedby`; processing state with leave-page copy and Back to case studies; no ETA or percentage; failure banner "Generation didn't finish. Your material and details are saved." with Try again.
 UX-DR11: Draft-ready toast anywhere in the app: "{Name} is ready to review." with Open (C3).
@@ -150,7 +150,7 @@ These are the rules the stories are built against. None of them is a decision; e
 | Requirement | Epic | What it covers |
 | --- | --- | --- |
 | FR1 | Epic 2 | Manual creation with a permanent uuid |
-| FR2 | Epic 2 | Upload (20 × 100 MB, allowlist), favourites, details form |
+| FR2 | Epic 2 | Upload (20 × 50 MB, allowlist), favourites, details form |
 | FR3 | Epic 3 | Background generation, narrative from material only, NFR6 gate, layouts per format |
 | FR4 | Epic 3 | Media-count rules (re-applied when the media set changes in the Epic 4 configurator) |
 | FR5 | Epic 4 | Review dashboard, To review queue, configurator editing |
@@ -435,7 +435,7 @@ Covers: FR2 (files), CAP-2, AR8, AR18 (soft delete, upload doesn't change status
 **Given** the `material` module
 **When** the migration and infrastructure for this story are applied
 **Then** an `asset` table exists (uuid id, `case_id`, kind, original file name, content type, size, storage key, `created_by`, `created_at`, `deleted_at`) with RLS denying `anon` and `authenticated`
-**And** each environment's Supabase project has the private bucket `material`, created by migration, with `file_size_limit` 100 MB and `allowed_mime_types` set to the allowlist, no public access, and the service role as the only reader and writer
+**And** each environment's Supabase project has the private bucket `material`, created by migration, with `file_size_limit` 50 MB and `allowed_mime_types` set to the allowlist, no public access, and the service role as the only reader and writer
 **And** keys follow `cases/{caseId}/assets/{assetId}/original.{ext}` and are built only in `material/adapters`
 
 **Given** wizard step 1 (Material) for a draft case
@@ -448,9 +448,9 @@ Covers: FR2 (files), CAP-2, AR8, AR18 (soft delete, upload doesn't change status
 **Then** the server checks the object's metadata (size and type), re-checks the 20-file cap, and only then creates the `asset` row and records an `asset_uploaded` event
 **And** the case status does not change
 
-**Given** a file over 100 MB, a file of a type not on the allowlist, or a 21st file
+**Given** a file over 50 MB, a file of a type not on the allowlist, or a 21st file
 **When** I add it with other valid files
-**Then** only that file is rejected, inline on its row ("Over 100 MB. Not uploaded." / "This file type isn't supported. Use images, videos, texts or PDFs." / a 20-file limit message), and the other files upload normally
+**Then** only that file is rejected, inline on its row ("Over 50 MB. Not uploaded." / "This file type isn't supported. Use images, videos, texts or PDFs." / a 20-file limit message), and the other files upload normally
 **And** each rejection is announced to screen readers, like upload progress
 **And** a request that bypasses the UI and exceeds a limit is rejected by the bucket or by the confirm step, never stored as an asset
 
@@ -586,7 +586,7 @@ Covers: FR2, AD-8 ([storage proposal](sprint-change-proposal-2026-10-14-storage.
 
 **Given** the `material` module
 **When** this story's migration runs
-**Then** a private bucket `material` exists with `file_size_limit = 104857600` and `allowed_mime_types` set to the allowlist in `material/domain/files.ts`
+**Then** a private bucket `material` exists with `file_size_limit = 52428800` and `allowed_mime_types` set to the allowlist in `material/domain/files.ts`
 **And** it has no public access, and only the service role reads and writes it
 
 **Given** an upload request that passed `authorize` and the presign checks

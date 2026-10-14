@@ -14,7 +14,7 @@ import { wizardHref } from "@/app/_lib/routes";
 import type { Asset, ListedAsset } from "@/modules/material";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import { acceptFor, normalizeContentType, UploadError, uploadToS3 } from "../_lib/upload";
+import { acceptFor, normalizeContentType, uploadFile, UploadError } from "../_lib/upload";
 import { AssetRow, type ListedRow, type MaterialRow, type PendingRow, type RowKind } from "./asset-row";
 import { DropZone } from "./drop-zone";
 import { WizardFooter } from "./wizard-frame";
@@ -77,9 +77,9 @@ const listedRow = (asset: ListedAsset): ListedRow => ({ key: asset.id, state: "l
 
 /**
  * Step 1, Material (EXPERIENCE.md step 1, Story 2.7). Files go straight from the
- * browser to S3, in parallel: presign, a POST with progress, then confirm. Each
- * file is checked first (type from the allowlist, ≤ 100 MB, a free slot of 20
- * counting in-flight uploads); only that file is rejected, on its row. A POST or
+ * browser to storage, in parallel: presign, a PUT with progress, then confirm. Each
+ * file is checked first (type from the allowlist, ≤ `maxFileBytes`, a free slot of 20
+ * counting in-flight uploads); only that file is rejected, on its row. An upload or
  * confirm that fails for any other reason presigns again and retries once (a
  * confirmed `assetId` can't be reused). `STORAGE_NOT_CONFIGURED` shows one message
  * and turns the drop zone off. Favourite and remove apply at once and roll back on
@@ -103,7 +103,7 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
   const removeBusy = useRef(new Set<string>());
   const unmounted = useRef(false);
 
-  // Leaving the step aborts every S3 POST still running; confirmed files stay.
+  // Leaving the step aborts every upload still running; confirmed files stay.
   useEffect(() => {
     unmounted.current = false;
     const running = controllers.current;
@@ -157,8 +157,8 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
       const presigned = await presignAssetUpload({ caseId, contentType, sizeBytes: file.size });
       if (!presigned.ok) return classify(presigned.error.code);
       if (cancelled.current.has(key)) return { kind: "cancelled" };
-      const { assetId, url, fields } = presigned.value;
-      await uploadToS3(url, fields, file, (progress) => patchPending(key, { progress }), { signal });
+      const { assetId, url, method, headers } = presigned.value;
+      await uploadFile({ url, method, headers }, file, (progress) => patchPending(key, { progress }), { signal });
       if (cancelled.current.has(key) || unmounted.current) return { kind: "cancelled" };
       confirming = assetId;
       const confirmed = await confirmAssetUpload({ caseId, assetId, contentType, fileName: file.name });

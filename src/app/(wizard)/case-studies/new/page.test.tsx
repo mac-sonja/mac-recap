@@ -26,7 +26,7 @@ vi.mock("@/modules/material", () => ({
   listAssets: (input: unknown) => listAssets(input),
   hasMaterial: (caseId: unknown) => hasMaterial(caseId),
   MAX_ASSETS_PER_CASE: 20,
-  MAX_FILE_BYTES: 100 * 1024 * 1024,
+  MAX_FILE_BYTES: 50 * 1024 * 1024,
   ALLOWED_CONTENT_TYPES: ["image/png", "application/pdf"],
 }));
 vi.mock("@/app/(tool)/case-studies/actions", () => ({
@@ -138,7 +138,7 @@ describe("NewCaseStudyPage", () => {
     expect(listAssets).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
     expect(html).toContain("Carica il materiale già verificato. La generazione parte solo da qui.");
     expect(html).toMatch(/role="button"[^>]*aria-label="Trascina qui i file o sfoglia"/);
-    expect(html).toContain("Fino a 20 file, 100 MB ciascuno.");
+    expect(html).toContain("Fino a 20 file, 50 MB ciascuno.");
     for (const chip of ["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]) expect(html).toContain(`>${chip}</li>`);
     expect(html).toMatch(/<input type="file" multiple="" accept="image\/png,application\/pdf,\.png,\.pdf"/);
     const reason = html.match(/<span id="([^"]+)">Aggiungi almeno un file per continuare\.<\/span>/)?.[1];

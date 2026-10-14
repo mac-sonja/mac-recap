@@ -21,7 +21,7 @@ const isFavouritable = (kind: AssetKind) => (FAVOURITABLE_KINDS as readonly Asse
  * (compare-and-set). Only images and videos can be favourites
  * (`NOT_FAVOURITABLE`); an unknown or removed asset is `NOT_FOUND`. Case status
  * never changes. If the event write fails the flag is put back and the error
- * returned. Works without S3. The caller has already authorized `mark favourites`.
+ * returned. Never touches storage. The caller has already authorized `mark favourites`.
  */
 export function makeSetFavourite({ assets, cases }: Pick<MaterialDeps, "assets" | "cases">) {
   return async function setFavourite(actor: Actor, input: unknown): Promise<Result<void>> {

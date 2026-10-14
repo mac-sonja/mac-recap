@@ -168,7 +168,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Prevents:** binaries spread across two stores, large uploads through the app server, limits that can't be enforced, public URLs leaking client material, and two writers to the renditions prefix
 - **Rule:**
   - Adopted 2026-10-14 in place of AWS S3 ([storage proposal](../../sprint-change-proposal-2026-10-14-storage.md)).
-  - The bucket `material` is private, in the project's EU region, and created by a migration. Supabase enforces its limits on every upload: `file_size_limit` 100 MB, and `allowed_mime_types` set to the allowlist in `material/domain/files.ts`: JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown and DOCX `[ASSUMPTION: text types]`.
+  - The bucket `material` is private, in the project's EU region, and created by a migration. Supabase enforces its limits on every upload: `file_size_limit` 50 MB, and `allowed_mime_types` set to the allowlist in `material/domain/files.ts`: JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown and DOCX `[ASSUMPTION: text types]`.
   - The browser uploads directly to a **signed upload URL** that the server issues after `authorize`, having checked the declared size and type.
   - An asset row is created only after the server re-checks the upload's size and type from the object's metadata at confirm. A case holds at most 20 non-deleted files, checked on the server when the signed upload URL is issued and again at confirmation (FR2).
   - Reads use signed GET URLs, valid for 15 minutes at most.
@@ -178,6 +178,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
     - `cases/{caseId}/assets/{assetId}/original.{ext}`
     - `cases/{caseId}/assets/{assetId}/renditions/{specHash}.{ext}`, owned by `material` and reached only through `material.getRendition(assetId, spec)`
     - `cases/{caseId}/revisions/{revisionId}/exports/{format}.{ext}`, owned by `rendering`
+  - The per-file limit is 50 MB because the hosted Supabase plan caps uploads at 50 MB (verified 2026-10-14). Moving to 100 MB needs the Pro plan, a raised project upload limit, a bucket migration and `MAX_FILE_BYTES`.
 
 ### AD-9 — One layout implementation; renders never pass through a public route
 
@@ -410,7 +411,7 @@ supabase/migrations/        # forward-only SQL, incl. jobs_claim()
 | Capability | Lives in | Governed by |
 | --- | --- | --- |
 | FR1 unique ID | `case-study` | AD-2 |
-| FR2 upload (20 × 100 MB), favourites, details form | `material` | AD-8, AD-14, AD-18 |
+| FR2 upload (20 × 50 MB), favourites, details form | `material` | AD-8, AD-14, AD-18 |
 | FR3 generate from templates, only from material and form answers | `generation`, `jobs` | AD-4, AD-5, AD-6, AD-7, AD-10, AD-17 |
 | FR4 adapt to media count | `rendering/templates` | AD-15 |
 | FR5 review dashboard and configurator, text editing | `app/(tool)`, `case-study` | AD-3, AD-4, AD-17, AD-19 |
