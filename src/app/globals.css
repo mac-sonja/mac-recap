@@ -1,8 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Tool UI theme tokens. Names are fixed by DESIGN.md; the values are placeholders
- * until the MAC UI guidelines exist, which will change values only, never names.
+ * Tool UI theme tokens. Names and values come from DESIGN.md (2026-10-14).
  * Components use these through Tailwind theme utilities (`bg-surface`,
  * `text-foreground-muted`, `font-mono`, `rounded-md`, ...), never raw colours or
  * font stacks. Tailwind's default palette, fonts and radii are cleared so only
@@ -13,38 +12,54 @@
   --font-*: initial;
   --radius-*: initial;
 
-  /* Chrome: neutral greyscale placeholders. */
-  --color-surface: oklch(0.985 0 0);
-  --color-surface-raised: oklch(1 0 0);
-  --color-foreground: oklch(0.205 0 0);
-  --color-foreground-muted: oklch(0.45 0 0);
-  --color-border: oklch(0.87 0 0);
-  --color-primary: oklch(0.25 0 0);
-  --color-primary-foreground: oklch(0.985 0 0);
-  --color-focus-ring: oklch(0.5 0.2 260);
-  --color-danger: oklch(0.55 0.21 27);
+  /* Surfaces: black page, neutral grey ramp (DESIGN.md Colors). No navy in the tool UI. */
+  --color-surface: #000000;
+  --color-surface-raised: #151515;
+  --color-surface-control: #1e1e1e;
+  --color-surface-selected: #262626;
+  --color-border: #262626;
+  --color-border-strong: #303030;
 
-  /* Lifecycle status: four clearly distinct hues, always paired with a text label. */
-  --color-status-draft: oklch(0.6 0.13 240);
-  --color-status-generating: oklch(0.75 0.16 70);
-  --color-status-review: oklch(0.55 0.2 305);
-  --color-status-approved: oklch(0.6 0.15 150);
+  /* Text. `foreground-muted` never sits on `surface-selected` (4.21:1). */
+  --color-foreground-strong: #ffffff;
+  --color-foreground: #f2f2f2;
+  --color-foreground-muted: #878787;
 
-  /* Typography: system stacks, no web fonts. */
-  --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-heading: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-label: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  /* Brand: lime main calls to action with black labels, blue secondary emphasis. */
+  --color-primary: #cbff00;
+  --color-primary-foreground: #000000;
+  --color-accent: #007bff;
+  --color-info: #b2d9ef;
+  --color-danger: #ff4d4f;
+  --color-danger-foreground: #000000;
+  --color-focus-ring: #cbff00;
 
-  /* Rounding. */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
+  /* Lifecycle status hues: badge text and tint source, always paired with a text label. */
+  --color-status-draft: #f2f2f2;
+  --color-status-generating: #f2f2f2;
+  --color-status-review: #007bff;
+  --color-status-approved: #cbff00;
+
+  /* Typography: Inter for the UI, JetBrains Mono for IDs, sizes and readouts (next/font, see layout.tsx). */
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-label: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, Menlo, monospace;
+
+  /* Rounding: segments sm, controls md, panels and drop zones lg, badges full. */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
   --radius-full: 9999px;
+
+  /* Badge text size (DESIGN.md typography.badge). */
+  --text-badge: 13px;
 }
 
 @layer base {
   html {
+    color-scheme: dark;
     font-family: var(--font-body);
     color: var(--color-foreground);
     background-color: var(--color-surface);

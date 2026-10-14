@@ -111,3 +111,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-8-retire-pasted-text-and-the-taxonomy.md`
   summary: Harden `removeAsset`'s compensation — a cap-free / case-agnostic undo path (or a single-transaction remove+event), log the `ok(false)` no-op, and test the "event fails and undo fails" branch plus the adapter's generic undo error.
   evidence: Review of Story 2.8 (triage #1–#4): `restore_asset` re-checks the 20-file cap and the live case, so a concurrent upload filling the freed slot (or a case delete) between `softDelete` and a failed `recordEvent` leaves a removal without its event, with only a log line. Pre-existing since #17; medium, rare (needs an event-write failure plus a concurrent upload or delete).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-4-part-4-design-identity-tokens.md`
+  summary: Decide what brand mark the collapsed (64px, 1024–1279px) sidebar shows; today the wordmark is hidden there, as the text title was.
+  evidence: DESIGN.md places the white wordmark at the sidebar top but says nothing about the collapsed sidebar; the narrow-sidebar question raised in the 2026-10-13 UX session was never answered.

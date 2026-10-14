@@ -19,6 +19,22 @@ describe("Sidebar", () => {
     expect(html).toContain("Owner/designer");
   });
 
+  it("shows the MAC wordmark in currentColor, named after the app", () => {
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true });
+    const svg = html.match(/<svg [^>]*>/)?.[0] ?? "";
+    expect(svg).toContain('role="img"');
+    expect(svg).toContain('aria-label="MAC Recap"');
+    expect(svg).toContain('fill="currentColor"');
+    expect(html).not.toContain(">MAC Recap<");
+  });
+
+  it("marks the active entry with surface-selected and readable text", () => {
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true });
+    const active = html.match(/<a [^>]*aria-current="page"[^>]*>/)?.[0] ?? "";
+    expect(active).toContain("bg-surface-selected");
+    expect(active).toContain("text-foreground");
+  });
+
   it("has no To review, Templates, Users or sign-out entries", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });
     expect(html).not.toMatch(/Da rivedere|Template|Utenti|Esci|\/users|\/templates|\/review/i);

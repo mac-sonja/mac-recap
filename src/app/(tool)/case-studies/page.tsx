@@ -37,7 +37,7 @@ export default async function CaseStudiesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-heading text-2xl font-semibold text-foreground">{it.caseStudies.heading}</h1>
+      <h1 className="font-heading text-2xl font-medium text-foreground">{it.caseStudies.heading}</h1>
       <CaseStudiesTable rows={rows} canCreate={can(actor, "create case")} />
     </div>
   );

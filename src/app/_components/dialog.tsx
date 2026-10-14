@@ -99,7 +99,7 @@ export function Dialog({ open, onClose, title, description, children, actions }:
       tabIndex={-1}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      className="m-auto w-full max-w-md rounded-md border border-border bg-surface-raised p-6 text-foreground backdrop:bg-foreground/50"
+      className="m-auto w-full max-w-md rounded-lg border border-border bg-surface-raised p-6 text-foreground backdrop:bg-surface/70"
     >
       <h2 id={titleId} className="font-heading text-lg text-foreground">
         {title}

@@ -26,7 +26,7 @@ export function UserMenu({ displayName, roleLabel }: { displayName: string; role
       <div
         id={panelId}
         hidden={!open}
-        className="absolute bottom-full left-0 z-10 mb-2 w-56 rounded-md border bg-surface-raised p-3"
+        className="absolute bottom-full left-0 z-10 mb-2 w-56 rounded-lg border bg-surface-raised p-3"
       >
         <p className="font-body text-sm text-foreground">{displayName}</p>
         <p className="font-label text-xs text-foreground-muted">{roleLabel}</p>
@@ -38,7 +38,7 @@ export function UserMenu({ displayName, roleLabel }: { displayName: string; role
         aria-controls={panelId}
         title={it.shell.userMenu.button}
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-center gap-3 rounded-md px-3 py-2 font-label text-sm text-foreground-muted hover:bg-surface hover:text-foreground xl:justify-start"
+        className="flex w-full items-center justify-center gap-3 rounded-md px-3 py-2 font-label text-sm text-foreground-muted hover:bg-surface-control hover:text-foreground xl:justify-start"
       >
         <CircleUser aria-hidden="true" className="size-5 shrink-0" />
         <span className="sr-only xl:not-sr-only">{it.shell.userMenu.button}</span>

@@ -130,7 +130,7 @@ export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder={it.caseStudies.search.placeholder}
-          className="w-full rounded-md border bg-surface-raised px-3 py-2 font-body text-sm text-foreground placeholder:text-foreground-muted"
+          className="w-full rounded-md border bg-surface-control px-3 py-2 font-body text-sm text-foreground placeholder:text-foreground-muted"
         />
       </div>
 
@@ -144,13 +144,13 @@ export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
           <button
             type="button"
             onClick={clearSearch}
-            className="rounded-md border bg-surface-raised px-3 py-2 font-label text-sm text-foreground hover:bg-surface"
+            className="rounded-md bg-surface-control px-3 py-2 font-label text-sm text-foreground hover:bg-surface-selected"
           >
             {it.caseStudies.clearSearch}
           </button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border bg-surface-raised">
+        <div className="overflow-x-auto rounded-lg border bg-surface-raised">
           <table className="w-full border-collapse text-left font-body text-sm text-foreground">
             <caption className="sr-only">{it.caseStudies.table.caption}</caption>
             <thead className="border-b">
@@ -163,7 +163,7 @@ export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
                       key={key}
                       scope="col"
                       aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
-                      className="whitespace-nowrap px-3 py-2 font-label text-xs font-semibold text-foreground-muted"
+                      className="whitespace-nowrap px-3 py-2 font-label text-xs text-foreground-muted"
                     >
                       <button
                         type="button"
@@ -176,7 +176,7 @@ export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
                     </th>
                   );
                 })}
-                <th scope="col" className="px-3 py-2 font-label text-xs font-semibold text-foreground-muted">
+                <th scope="col" className="px-3 py-2 font-label text-xs text-foreground-muted">
                   {it.caseStudies.table.columns.links}
                 </th>
               </tr>
@@ -189,7 +189,7 @@ export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
                     key={row.id}
                     data-case-id={row.id}
                     onClick={href === null ? undefined : (event) => openRow(event, href)}
-                    className={cn("border-b last:border-b-0", href !== null && "cursor-pointer hover:bg-surface")}
+                    className={cn("border-b last:border-b-0", href !== null && "cursor-pointer hover:bg-surface-control")}
                   >
                     <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-foreground-muted">{row.id}</td>
                     <td className="px-3 py-2">

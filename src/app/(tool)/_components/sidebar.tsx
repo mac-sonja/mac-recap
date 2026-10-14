@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
+import { MacWordmark } from "@/app/_components/mac-wordmark";
 import { UserMenu } from "./user-menu";
 
 export interface SidebarProps {
@@ -25,8 +26,8 @@ function NavLink({ href, icon: Icon, label, active }: { href: string; icon: Luci
       aria-current={active ? "page" : undefined}
       title={label}
       className={cn(
-        "flex items-center justify-center gap-3 rounded-md px-3 py-2 font-label text-sm text-foreground-muted hover:bg-surface hover:text-foreground xl:justify-start",
-        active && "bg-surface text-foreground",
+        "flex items-center justify-center gap-3 rounded-md px-3 py-2 font-label text-sm text-foreground-muted hover:bg-surface-control hover:text-foreground xl:justify-start",
+        active && "bg-surface-selected text-foreground",
       )}
     >
       <Icon aria-hidden="true" className="size-5 shrink-0" />
@@ -42,8 +43,8 @@ export function Sidebar({ showNewCaseStudy, showCaseStudies, displayName, roleLa
   return (
     <aside className="flex w-16 shrink-0 flex-col border-r bg-surface-raised xl:w-60">
       <nav aria-label={it.shell.nav.label} className="flex flex-1 flex-col gap-1 p-2 xl:p-3">
-        <p className="mb-3 hidden px-3 pt-2 font-display text-base font-semibold text-foreground xl:block">
-          {it.app.name}
+        <p className="mb-3 hidden px-3 pt-3 text-foreground xl:block">
+          <MacWordmark label={it.app.name} className="h-6 w-auto" />
         </p>
         {showNewCaseStudy && (
           <Link
