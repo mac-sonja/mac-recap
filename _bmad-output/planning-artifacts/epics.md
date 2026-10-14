@@ -47,7 +47,7 @@ NFR4: Owner/designer hands-on time from upload to approval is at most 20 minutes
 NFR5: The narrative follows challenge, approach and result, meets the Sprint 2 quality checklist, and covers both the technical and the graphic side.
 NFR6 (guardrail): With no material, nothing is generated. The details form alone is not enough.
 NFR7 (guardrail): Nothing is exported or shared before review and approval by an owner/designer.
-NFR8 (constraint): Data lives in Supabase and files in a private AWS S3 bucket, both in the EU. Standalone from MAC Productive.
+NFR8 (constraint): Data lives in Supabase and files in a private Supabase Storage bucket, both in the EU. Standalone from MAC Productive.
 NFR9 (constraint): Until login ships in Sprint 3, every deployed environment, shareable links included, is gated (AD-12), because real client material is in use.
 NFR10 (constraint): Epics run one after another, never in parallel. Sprints due Oct 14, 21, 28; demo Oct 30, 2026.
 NFR11 (accessibility): WCAG 2.2 AA for the app and the shared link page.
@@ -58,15 +58,15 @@ NFR13 (language): UI in Italian through one dictionary file; each case's narrati
 
 From the architecture spine (AD-1 to AD-20 are binding):
 
-- **Starter template (Epic 2, first story):** `npx create-next-app -e with-supabase`. The first story pins every Stack version exactly (Node 24 LTS, TypeScript 6.0.3, Next.js 16.3.8 with `output: standalone`, React 19.3.0, Tailwind 4.3.3 / shadcn 4.21.4, supabase-js 2.117.3 / ssr 0.12.7 / CLI 2.120.0, AWS SDK 3.1147.0, `@anthropic-ai/sdk` 0.132.1, zod 4.6.5, Playwright 1.63.0, sharp 0.35.5, ffmpeg pinned in the Dockerfile), upgrades Tailwind to 4, and turns `cacheComponents` off.
-- AR1 (AD-1): Modular monolith with modules `case-study`, `material`, `generation`, `rendering`, `sharing`, `access`, `jobs`; each with `domain/`, `application/`, `index.ts`, plus `ports/` and `adapters/` only at vendor seams. Cross-module imports only through `index.ts`; vendor SDKs only in adapters. Table and S3-prefix ownership per AD-1. Enforced by a lint rule.
+- **Starter template (Epic 2, first story):** `npx create-next-app -e with-supabase`. The first story pins every Stack version exactly (Node 24 LTS, TypeScript 6.0.3, Next.js 16.3.8 with `output: standalone`, React 19.3.0, Tailwind 4.3.3 / shadcn 4.21.4, supabase-js 2.117.3 / ssr 0.12.7 / CLI 2.120.0, `@anthropic-ai/sdk` 0.132.1, zod 4.6.5, Playwright 1.63.0, sharp 0.35.5, ffmpeg pinned in the Dockerfile), upgrades Tailwind to 4, and turns `cacheComponents` off.
+- AR1 (AD-1): Modular monolith with modules `case-study`, `material`, `generation`, `rendering`, `sharing`, `access`, `jobs`; each with `domain/`, `application/`, `index.ts`, plus `ports/` and `adapters/` only at vendor seams. Cross-module imports only through `index.ts`; vendor SDKs only in adapters. Table and storage-prefix ownership per AD-1. Enforced by a lint rule.
 - AR2 (AD-2): `case_study.id` is a DB-generated uuid, immutable, never reused; `project_order_ref` nullable and unset in the MVP.
 - AR3 (AD-3): `case_study.status` changes only through `case-study.transition`. Revisions have `working | approved | superseded`. `head_revision_id` and `approved_revision_id` pointers; `getLiveRevision` and `getEditableRevision` reads. Generation only from `draft`; delete only in `draft`, soft (`deleted_at`).
 - AR4 (AD-4): `CaseStudyDocument` (zod, jsonb) stored twice per revision, `generated_doc` (immutable) and `doc` (editable). Shared part (template@version, blocks with stable `blockId`, claims and check state, media set) and per-format part (variant, slot assignments, spacing, text scale, font pairing). No canvas ratio. Schema rejects a missing challenge/approach/result. `rendering.relayout` is the only slot-assignment code. `schemaVersion` + `upgrade(doc)` on read. `FORMAT_NOT_IN_REVISION`.
 - AR5 (AD-5): Guardrails are code (`generation/domain/guardrails.ts`, `access/domain/policy.ts`, `case-study` preconditions), never DB/env/UI. Each guardrail is enforced in a use case and covered by an automated test, so the end-of-Sprint-2 guardrail check runs on the pre-login build.
 - AR6 (AD-6): `generate` fails with `NO_MATERIAL` before any LLM call unless there's at least one non-deleted asset; the same check backs the Generate button and the worker's claim. Claims tagged `aspect: technical | graphic`; a draft missing one is `MISSING_ASPECT`.
 - AR7 (AD-7): One `NarrativeGenerator` port, worker only. Adapter uses `client.beta.messages.parse` with the zod schema, model `claude-opus-5-5` from one constant, adaptive thinking, `effort: "high"`, server-side refusal fallbacks; `refusal` → `LLM_REFUSAL`. Versioned prompt files. Each revision records `response.model`, `fellBack`, `promptVersion`, `schemaVersion`.
-- AR8 (AD-8): Private EU S3 bucket, Block Public Access, versioning, CORS for app origin only. Browser uploads via presigned POST (`content-length-range` 100 MB, allowlisted Content-Type), `requestChecksumCalculation: "WHEN_REQUIRED"`. Asset row only after a HEAD check. 20-file cap checked on issue and confirm. Presigned GET ≤ 15 min. Fixed key layout. No Supabase Storage.
+- AR8 (AD-8): Private Supabase Storage bucket `material` in the project's EU region, created by migration, with `file_size_limit` 100 MB and `allowed_mime_types` set to the allowlist; no public access, service role is the only reader and writer. Browser uploads to a signed upload URL issued after `authorize`; size and type limits enforced by the bucket and re-checked from the object's metadata at confirm. Asset row only after that check. 20-file cap checked on issue and confirm. Signed GET ≤ 15 min. No versioning, so the app never deletes objects. Fixed key layout. No AWS S3.
 - AR9 (AD-9): A format registry (`rendering/domain/formats.ts`) and one React renderer per format, used by the configurator, case study view, `/s/{token}` and exports. Exports: `renderToStaticMarkup` + Playwright `page.setContent`, no print route. Deck and A4 → PDF; image formats → ZIP of PNGs; Export all → one ZIP. Video shows its poster frame in static formats. `export` unique and immutable on `(revision_id, format)`; `ensureExport` is idempotent.
 - AR10 (AD-10): Postgres job table (`generate`, `export`, `rendition`), idempotent enqueue via partial unique index, `jobs_claim()` with `FOR UPDATE SKIP LOCKED`, 10-min lease renewed every minute, max 3 attempts then `failed` + `job_failed`. Web requests never call the LLM, Chromium or ffmpeg.
 - AR11 (AD-11): Every action and route calls `access.getActor()` + `access.authorize()`. Permission matrix lives only in `policy.ts`. Role read from `profile` on every request. A `system` actor for the worker. Server-only data access with the service-role key; RLS denies `anon` and `authenticated`. A seeded dev `owner_designer` until Epic 6, disabled at cutover and never reassigned.
@@ -80,7 +80,7 @@ From the architecture spine (AD-1 to AD-20 are binding):
 - AR19 (AD-19): Per-block `check: { by, at, textHash } | null`, set only by a person, no bulk check. A check counts only while `textHash` matches. `approve(caseId, revisionId, expectedRevisionVersion, expectedHeadVersion)` checks every block on the server and requires an overflow-free result per format from the client. Claims carry `provenance` and optional validated `sourceRefs`, never shown as "verified".
 - AR20 (AD-20): `case_event` append-only rows (`case_id`, `revision_id`, `actor_id`, `type`, `at`, `data`) on every transition, upload confirmation, save, block check/uncheck, claim edit, approval, export, link create and turn-off.
 - AR21 (conventions): snake_case singular tables; uuid ids; `timestamptz` UTC, displayed Europe/Rome; zod in `domain/` as single definition; generated DB types; `Result<T, AppError>` with SCREAMING_SNAKE codes; structured JSON logs with no material or prompts; env read only in `src/shared/env.ts`; `case_study.locale` it|en default it.
-- AR22 (deployment): One Docker image on the Playwright base, two processes (`node server.js`, `node dist/worker.js`). Environments `local`, `staging` (demo, gated), `prod` (from Epic 6), each with its own Supabase project and bucket. EU container host chosen by end of Sprint 1.
+- AR22 (deployment): One Docker image on the Playwright base, two processes (`node server.js`, `node dist/worker.js`). Environments `local`, `staging` (demo, gated), `prod` (from Epic 6), each with its own Supabase project and storage bucket. EU container host chosen by end of Sprint 1.
 
 ### UX Design Requirements
 
@@ -171,7 +171,7 @@ These are the rules the stories are built against. None of them is a decision; e
 Epic numbering follows PRD v2 (Epic 1 is team setup, not product scope). Epics run strictly in order, never in parallel.
 
 ### Epic 2: Create a case study and collect its material (Sprint 1, due 2026-10-14)
-The owner/designer creates a case study by hand, gets its permanent ID, uploads files, marks favourite images and videos and fills in the details form, all saved in Supabase and S3 inside a gated environment. Also lays the foundation later epics build on: starter scaffold, module skeleton, actor and policy seam with a dev actor, basic-auth gate, event log, app shell, design tokens and a basic Case studies table.
+The owner/designer creates a case study by hand, gets its permanent ID, uploads files, marks favourite images and videos and fills in the details form, all saved in Supabase (database and storage) inside a gated environment. Also lays the foundation later epics build on: starter scaffold, module skeleton, actor and policy seam with a dev actor, basic-auth gate, event log, app shell, design tokens and a basic Case studies table.
 **FRs covered:** FR1, FR2, CAP-12
 
 ### Epic 3: Generate a graphic case study from the material (Sprint 2, due 2026-10-21)
@@ -195,11 +195,11 @@ Each user signs in with one of three fixed roles; the admin manages users and ro
 - `Covers:` lists the requirements a story implements. `⚑ Interim: IR-x` means the story is built on that interim rule and is revisited when it changes. `⛔ Blocked on: IR-x` means no interim rule exists: the story is built up to that point but can't close until the decision lands. `UX gap:` marks behaviour the sources require but EXPERIENCE.md doesn't design; the story uses the smallest placement consistent with EXPERIENCE.md and flags it for UX.
 - Every story that adds a server action or route calls `access.getActor()` and `access.authorize()` first (AR11), returns `Result<T, AppError>` (AR21), uses Italian copy from the dictionary (UX-DR29), and emits the `case_event` rows its mutations require (AR20). These are not repeated in each story's criteria.
 - NFR10 (sequential epics, sprint dates) is met by the epic order itself: stories within an epic depend only on earlier stories and earlier epics, never later ones.
-- Tables and S3 prefixes are created by the first story that needs them, through a forward-only migration (AR12).
+- Tables and storage prefixes are created by the first story that needs them, through a forward-only migration (AR12).
 
 ## Epic 2: Create a case study and collect its material
 
-The owner/designer creates a case study by hand, gets its permanent ID, uploads files, marks favourite images and videos and fills in the details form, all saved in Supabase and S3 inside a gated environment. The epic also lays the foundation the later epics build on.
+The owner/designer creates a case study by hand, gets its permanent ID, uploads files, marks favourite images and videos and fills in the details form, all saved in Supabase (database and storage) inside a gated environment. The epic also lays the foundation the later epics build on.
 
 ### Story 2.1: Scaffold the app from the starter and pin the stack
 
@@ -213,7 +213,7 @@ Covers: Starter template, AR1, AR16, AR21, Stack table
 
 **Given** an empty repository
 **When** the app is created with `npx create-next-app -e with-supabase`
-**Then** `package.json` pins every Stack version exactly (no `^`, `~` or `latest`): Next.js 16.3.8, React and react-dom 19.3.0, TypeScript 6.0.3, Tailwind CSS 4.3.3, shadcn 4.21.4, `@supabase/supabase-js` 2.117.3, `@supabase/ssr` 0.12.7, Supabase CLI 2.120.0, `@aws-sdk/client-s3` / `s3-presigned-post` / `s3-request-presigner` 3.1147.0, `@anthropic-ai/sdk` 0.132.1, zod 4.6.5, Playwright 1.63.0, sharp 0.35.5
+**Then** `package.json` pins every Stack version exactly (no `^`, `~` or `latest`): Next.js 16.3.8, React and react-dom 19.3.0, TypeScript 6.0.3, Tailwind CSS 4.3.3, shadcn 4.21.4, `@supabase/supabase-js` 2.117.3, `@supabase/ssr` 0.12.7, Supabase CLI 2.120.0, `@aws-sdk/client-s3` / `s3-presigned-post` / `s3-request-presigner` 3.1147.0 (removed in Story 2.11, AD-8), `@anthropic-ai/sdk` 0.132.1, zod 4.6.5, Playwright 1.63.0, sharp 0.35.5
 **And** `.nvmrc` / `engines` require Node 24 LTS
 **And** Tailwind is upgraded from the starter's 3.4 to 4.3.3, `cacheComponents` is off and `output: 'standalone'` is set in `next.config`
 
@@ -262,7 +262,7 @@ Covers: AR12, AR22, NFR8, NFR9
 
 **Given** the chosen EU container host (IR-HOST)
 **When** the image is deployed to staging
-**Then** both processes run, staging has its own Supabase project and its own private EU bucket, and the app responds only behind the basic-auth gate
+**Then** both processes run, staging has its own Supabase project and its own private storage bucket, and the app responds only behind the basic-auth gate
 
 ### Story 2.3: Actor and policy seam with a dev owner/designer
 
@@ -434,29 +434,29 @@ Covers: FR2 (files), CAP-2, AR8, AR18 (soft delete, upload doesn't change status
 
 **Given** the `material` module
 **When** the migration and infrastructure for this story are applied
-**Then** an `asset` table exists (uuid id, `case_id`, kind, original file name, content type, size, S3 key, `created_by`, `created_at`, `deleted_at`) with RLS denying `anon` and `authenticated`
-**And** each environment's bucket is private, in the EU, with Block Public Access and versioning on, and CORS allowing only the app origin for POST and GET
+**Then** an `asset` table exists (uuid id, `case_id`, kind, original file name, content type, size, storage key, `created_by`, `created_at`, `deleted_at`) with RLS denying `anon` and `authenticated`
+**And** each environment's Supabase project has the private bucket `material`, created by migration, with `file_size_limit` 100 MB and `allowed_mime_types` set to the allowlist, no public access, and the service role as the only reader and writer
 **And** keys follow `cases/{caseId}/assets/{assetId}/original.{ext}` and are built only in `material/adapters`
 
 **Given** wizard step 1 (Material) for a draft case
 **When** I drop files or use **browse**
-**Then** for each file the server, after `authorize`, checks the case has fewer than 20 non-deleted files and the type is on the allowlist in `material/domain/files.ts` (JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown, DOCX), then issues a presigned POST with `content-length-range` up to 100 MB and that `Content-Type`, signed with `requestChecksumCalculation: "WHEN_REQUIRED"`
-**And** the browser uploads directly to S3, several files in parallel, each with its own progress bar announced to screen readers
+**Then** for each file the server, after `authorize`, checks the case has fewer than 20 non-deleted files and the type is on the allowlist in `material/domain/files.ts` (JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown, DOCX), then issues a signed upload URL for that file; size and type limits are enforced by the bucket and re-checked at confirm
+**And** the browser uploads directly to storage, several files in parallel, each with its own progress bar announced to screen readers
 
 **Given** an upload has finished
 **When** the browser asks the server to confirm it
-**Then** the server HEAD-checks the object's size and type, re-checks the 20-file cap, and only then creates the `asset` row and records an `asset_uploaded` event
+**Then** the server checks the object's metadata (size and type), re-checks the 20-file cap, and only then creates the `asset` row and records an `asset_uploaded` event
 **And** the case status does not change
 
 **Given** a file over 100 MB, a file of a type not on the allowlist, or a 21st file
 **When** I add it with other valid files
 **Then** only that file is rejected, inline on its row ("Over 100 MB. Not uploaded." / "This file type isn't supported. Use images, videos, texts or PDFs." / a 20-file limit message), and the other files upload normally
 **And** each rejection is announced to screen readers, like upload progress
-**And** a request that bypasses the UI and exceeds a limit is rejected by S3 or by the confirm step, never stored as an asset
+**And** a request that bypasses the UI and exceeds a limit is rejected by the bucket or by the confirm step, never stored as an asset
 
 **Given** an uploaded file
 **When** its row appears
-**Then** it shows a thumbnail (images: the original fetched by a presigned GET valid ≤ 15 minutes and scaled to fit by the browser; other types: a type icon), the file name and size
+**Then** it shows a thumbnail (images: the original fetched by a signed GET valid ≤ 15 minutes and scaled to fit by the browser; other types: a type icon), the file name and size
 
 **Given** an uploaded file
 **When** I remove it
@@ -574,6 +574,45 @@ Covers: FR2 (details form), CAP-3, AR18 (form fields as stable-key refs, never m
 **When** it gets a `form_field` ref with key `context`, `solution` or `results`
 **Then** it returns that field's current text, and any other key is rejected as unknown
 
+### Story 2.11: Store project files in Supabase Storage
+
+As the team,
+I want project files stored in a private Supabase Storage bucket,
+So that the app runs with Supabase alone.
+
+Covers: FR2, AD-8 ([storage proposal](sprint-change-proposal-2026-10-14-storage.md); after the Story 2.7 UI)
+
+**Acceptance Criteria:**
+
+**Given** the `material` module
+**When** this story's migration runs
+**Then** a private bucket `material` exists with `file_size_limit = 104857600` and `allowed_mime_types` set to the allowlist in `material/domain/files.ts`
+**And** it has no public access, and only the service role reads and writes it
+
+**Given** an upload request that passed `authorize` and the presign checks
+**When** the server issues the upload
+**Then** the `adapters/supabase/object-storage.ts` adapter returns a signed upload URL (`createSignedUploadUrl`), and the browser PUTs the file to it
+
+**Given** an upload has finished
+**When** the browser asks the server to confirm it
+**Then** the adapter reads the object's metadata and the server checks its size and type before creating the `asset` row
+
+**Given** an uploaded file is displayed
+**When** its thumbnail is requested
+**Then** the adapter returns a signed GET URL valid ≤ 15 minutes
+
+**Given** the repository after this story
+**When** I search the code, `package.json`, `src/shared/env.ts` and `.env.example`
+**Then** the S3 adapter, the `@aws-sdk/*` dependencies and `S3_BUCKET` / `S3_REGION` are gone, and no `@aws-sdk` import remains
+
+**Given** the browser upload helper
+**When** it uploads a file
+**Then** it uses the signed-upload shape (method, URL and headers), not POST form fields
+
+**Given** the updated tests
+**When** CI runs
+**Then** the `check`, `db` and `image` jobs pass, and the DB tests run against the bucket
+
 ## Epic 3: Generate a graphic case study from the material
 
 The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
@@ -651,7 +690,7 @@ Covers: AR5 (allowed deterministic processing), AR8 (renditions prefix), NFR1
 
 **Given** another module needs a display copy
 **When** it calls `material.getRendition(assetId, spec)`
-**Then** it gets a presigned GET URL (≤ 15 minutes) for that rendition, and no other module builds rendition keys
+**Then** it gets a signed GET URL (≤ 15 minutes) for that rendition, and no other module builds rendition keys
 **And** the Material step's thumbnails (Story 2.7) switch to renditions once available, with a type icon while pending
 
 ### Story 3.3: The case study document, revisions and the format registry
@@ -1327,14 +1366,14 @@ As an account/sales/social user or owner/designer,
 I want to download the selected format as a file,
 So that I can attach it or drop it into my own slides.
 
-Covers: FR7 (export), CAP-9, NFR7, AR5 (guardrail test), AR8 (exports prefix, presigned GET), AR9 (export pipeline, file types, `ensureExport`), AR10, AR20, UX-DR21 (Export, progress, failure), UX-DR4 (Export row action), PRD Story 5.1
+Covers: FR7 (export), CAP-9, NFR7, AR5 (guardrail test), AR8 (exports prefix, signed GET), AR9 (export pipeline, file types, `ensureExport`), AR10, AR20, UX-DR21 (Export, progress, failure), UX-DR4 (Export row action), PRD Story 5.1
 ⚑ Interim: IR-OP1 (deck → PDF, carousel → ZIP of PNGs, A4 → PDF)
 
 **Acceptance Criteria:**
 
 **Given** the `rendering` module
 **When** the migration for this story runs
-**Then** an `export` table exists, unique and immutable on `(revision_id, format)`, with S3 keys `cases/{caseId}/revisions/{revisionId}/exports/{format}.{ext}` built only by `rendering` adapters, and RLS denying `anon` and `authenticated`
+**Then** an `export` table exists, unique and immutable on `(revision_id, format)`, with storage keys `cases/{caseId}/revisions/{revisionId}/exports/{format}.{ext}` built only by `rendering` adapters, and RLS denying `anon` and `authenticated`
 
 **Given** an approved case in the view with a format selected
 **When** I press **Export** (or **Export** in an Approvato row's overflow menu)
@@ -1348,7 +1387,7 @@ Covers: FR7 (export), CAP-9, NFR7, AR5 (guardrail test), AR8 (exports prefix, pr
 
 **Given** the export is ready
 **When** the job succeeds
-**Then** the browser downloads the file through a presigned GET valid ≤ 15 minutes, and an export event is recorded with my actor id
+**Then** the browser downloads the file through a signed GET valid ≤ 15 minutes, and an export event is recorded with my actor id
 
 **Given** the export job fails
 **When** it is marked failed
@@ -1431,7 +1470,7 @@ Covers: FR7, CAP-10 (current approved version, no download), NFR7, NFR11, AR3 (`
 **Given** a valid token
 **When** `/s/{token}` is requested
 **Then** the server resolves the case's live revision at request time and renders the link's format read-only with the shared renderer, full screen, with no app chrome, no editing and no download control
-**And** media are display renditions and video poster frames or transcodes served by presigned GET, never originals
+**And** media are display renditions and video poster frames or transcodes served by signed GET, never originals
 
 **Given** an owner/designer runs **Update approved version**
 **When** the link is opened afterwards
