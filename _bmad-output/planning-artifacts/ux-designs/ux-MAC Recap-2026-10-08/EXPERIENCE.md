@@ -2,7 +2,7 @@
 name: MAC Recap
 status: final
 created: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-14
 sources:
   - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/prd.md
   - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/addendum.md
@@ -22,8 +22,8 @@ MAC Recap turns a closed project's verified material into a finished, on-brand c
 ## Foundation
 
 - **Form factor:** desktop web, internal tool, standalone MVP. Primary viewport 1440px wide, minimum supported 1280px. The one exception is the **shared link page** (the hosted presentation), which clients and prospects open on any device and so must be responsive. See Responsive & Platform.
-- **UI system:** not decided (deferred to architecture). This spine stays system-agnostic and names behaviour only.
-- **Visual identity:** deferred. DESIGN.md holds token names only. Where this spine needs a visual hook it names a token (for example `{colors.status-approved}`); values come later. The dark navy and lime look in the A3 sketches is **not** adopted.
+- **UI system:** shadcn/ui (new-york style, neutral base), as set up in the codebase (`components.json`). This spine names behaviour only; DESIGN.md holds the visual deltas.
+- **Visual identity:** see [DESIGN.md](DESIGN.md) (updated 2026-10-13): dark grey chrome on black, blue calls to action, lime details, Inter + JetBrains Mono. Where this spine needs a visual hook it names a token (for example `{colors.status-approved}`). The UI references in `imports/ui-refs/` are look-only; this spine's behaviour wins over them (no card-ratio control, no duration/timeline, no template restyling).
 - **Two separate visual systems:** the **tool UI** (DESIGN.md) and the **case study templates** (MAC's graphic templates, owned by the design team). The tool chrome never restyles template output.
 - **UI language:** Italian (decided 2026-10-08), matching the A3 sketches and the team. Copy in this spine is written in English for the spec, with the Italian sketch label next to it where one exists; final Italian microcopy is written from these English lines.
 - **Authentication:** login arrives in Sprint 3 (FR8). Until then the tool runs unauthenticated in a dev environment. Role-dependent surfaces below assume login exists, as it will by the Oct 30 demo.
@@ -121,24 +121,37 @@ The Case studies table, pre-filtered to *To review* and sorted oldest first so n
 
 ### New case study wizard
 
-A three-step stepper: **1 Material · 2 Details · 3 Generate**. The case study is created, and its unique ID assigned (FR1), when the wizard opens with a name entered. It is saved as a Draft from that moment, so leaving and returning loses nothing.
+A three-step stepper: **1 Material · 2 Details · 3 Generate**, horizontal, above the content (decided 2026-10-13). `[ASSUMPTION]` The wizard is a focused mode: the sidebar is hidden on every wizard step (decided for the Material step 2026-10-13); the back arrow in the wizard header returns to Case studies. The footer button on each step reads **Avanti** (no step name).
+
+**Wizard layout** (every step; from the team's first hi-fi mock, layout only: [`imports/ui-refs/ref-hifi-material-layout.webp`](imports/ui-refs/ref-hifi-material-layout.webp)):
+
+- A slim top bar: back arrow and case study name on the left, status badge on the right.
+- One content column (about 820px), centred horizontally and **vertically** in the space under the top bar. When the content is taller than the viewport, the column starts at the top and scrolls; the top bar stays.
+- In the column, top to bottom: eyebrow *Nuovo case study*, the case study name as a large title, the stepper, the step heading and a one-line intro, the step's content, then a footer under a divider with step dots in the centre and **Avanti** on the right (inactive until the step's condition is met). The case study is created, and its unique ID assigned (FR1), when the wizard opens with a name entered. It is saved as a Draft from that moment, so leaving and returning loses nothing.
 
 **Step 0: Name.** A short header form: case study name (required) and client (required). `[ASSUMPTION]` Year defaults to the current year and is editable.
 
-**Step 1: Material** (FR2, NFR6).
+**Step 1: Material** (FR2, NFR6). Files only: text-document files are uploaded here like any file, but there's no pasted-text entry in this step; text is entered in step 2 ([CONFLICT] C7).
+
+→ Visual reference: [`mockups/material-step.html`](mockups/material-step.html). This spine wins on conflict.
 
 | Element | Behaviour |
 |---|---|
-| Dropzone | Drag and drop or **browse**. Accepts images, videos, text documents, PDFs. Copy: "Up to 20 files, 100 MB each." |
+| Dropzone | Drag and drop or **browse**. Accepts images, videos, text documents, PDFs; the accepted types show as small chips inside the empty dropzone. Copy: "Up to 20 files, 100 MB each." Once files are in, the dropzone compacts above the rows. |
 | Limits | A 21st file or a file over 100 MB is rejected inline on that file ("Over 100 MB. Not uploaded.") without blocking the others. A wrong file type gets "This file type isn't supported. Use images, videos, texts or PDFs." |
-| Upload progress | Per-file progress bar; files upload in parallel; the user can tag a file as soon as it has uploaded. |
-| Deliverable rows | Each uploaded file is a deliverable row: thumbnail, file name, size, then tags, properties and flags (FR2). Taxonomy pending ([OPEN 3]); controls are chip pickers from a fixed list, no free text. `[ASSUMPTION]` Tagging is optional per file so it doesn't eat the 15-minute budget, but the row shows a gentle "untagged" marker. |
-| Remove | Each row has a remove action; no confirm, with an **Undo** toast for 5 s. |
-| Continue | **Next: Details** is enabled as soon as one file has finished uploading. |
+| Upload progress | Per-file progress bar; files upload in parallel; the user can mark a file as favourite as soon as it has uploaded. |
+| Deliverable rows | Each uploaded file is a deliverable row: thumbnail, file name, size (mono), remove. No tags, properties or flags (decided 2026-10-13, [CONFLICT] C6). |
+| Favourite | Image and video rows carry a **Preferito** toggle (star); PDFs and documents don't. Any number of files can be favourites; it's optional and never blocks **Avanti**. Saves at once; a toggle button with `aria-pressed`. What a favourite means for generation is open ([OPEN F]). |
+| Remove | Each row has a remove action (✕). The file is removed at once: no confirm and no Undo toast (decided 2026-10-14, [CONFLICT] C8). |
+| Continue | **Avanti** is enabled as soon as one file has finished uploading. |
 
-**Step 2: Details** (FR2). A short form in three sections that mirror the PRD: **Context**, **Solution**, **Results**. Each is a textarea with a one-line prompt (for example "What did the client need, and why?"). A counter shows how many are filled ("2 of 3"). The fields are optional (decided 2026-10-08); the form alone never enables generation (NFR6). The A3 sketch's "0 di 4" counter and its four-field "Contesto & background" section are replaced by the PRD's three topics.
+**Step 2: Details** (FR2). A short form in three sections that mirror the PRD: **Context**, **Solution**, **Results** (*Contesto*, *Soluzione*, *Risultati*). Each is a textarea whose one-line prompt is its placeholder (for example "What did the client need, and why?"), decided 2026-10-14. These three fields are the only place for project text in the wizard: there is no extra free field and no pasted-text block ([CONFLICT] C7). A counter in the footer's left slot shows how many are filled ("2 di 3 compilati"); **Avanti** is active from the start. Each field autosaves. `[ASSUMPTION]` Visited steps are clickable in the stepper, so Materiale can be reopened.
+
+→ Visual reference: [`mockups/details-step.html`](mockups/details-step.html). This spine wins on conflict. The fields are optional (decided 2026-10-08); the form alone never enables generation (NFR6). The A3 sketch's "0 di 4" counter and its four-field "Contesto & background" section are replaced by the PRD's three topics.
 
 **Step 3: Generate** (FR3, NFR6).
+
+→ Visual reference: [`mockups/generate-step.html`](mockups/generate-step.html) (ready, blocked, generating, failed). This spine wins on conflict. The summary panel lists Materiale and Dettagli with a **Modifica** link back to each step; **Genera** is the main call to action. While generating, the stepper and footer give way to the processing message and an indeterminate bar (no percentage).
 
 | Element | Behaviour |
 |---|---|
@@ -154,6 +167,8 @@ A three-step stepper: **1 Material · 2 Details · 3 Generate**. The case study 
 Three panes, as in A3 1.6, with the changes noted. The canvas is a Bento-style template layout (PRD Story 4.2).
 
 → Layout reference: [`wireframes/flow-configurator-2026-10-08.excalidraw`](wireframes/flow-configurator-2026-10-08.excalidraw) (Edit tab, Check tab with material drawer, Approve confirm, editing an approved case study). Low fidelity, greyscale; open in Excalidraw. Placeholder content in it (file names, KPI values) is illustrative. This spine wins on conflict.
+
+→ Visual references (look only): [`imports/ui-refs/ref-templates-panel.png`](imports/ui-refs/ref-templates-panel.png) (left pane), [`imports/ui-refs/ref-properties-panel.png`](imports/ui-refs/ref-properties-panel.png) (right pane), [`imports/ui-refs/ref-canvas-toolbar-timeline.png`](imports/ui-refs/ref-canvas-toolbar-timeline.png) (canvas toolbar only; the timeline doesn't apply). Their controls for card ratio, duration and background aren't part of this product.
 
 **Top bar.** Back arrow · case study name · status badge · save state ("Saved" / "Saving…") · **Approve** (To review) or **Update approved version** (Approved). `[ASSUMPTION]` Edits autosave; there is no **Save draft** button (the A3 sketch shows one). Version history ("v2.4", "Cronologia Versioni") is out of MVP.
 
@@ -384,7 +399,7 @@ Behavioural. Visual contrast will live in DESIGN.md.
 ### Flow 1: First case study for the demo (Giada, owner/designer, Oct 30 dry run)
 
 1. Giada signs in and lands on Case studies. She clicks **+ New case study**, enters the project name and client. The ID appears in the header.
-2. **Material:** she drags in 14 files (final screens, the strategy deck as PDF, a results sheet, two videos). While they upload she tags the screens by deliverable. One 140 MB video is rejected; she leaves it out.
+2. **Material:** she drags in 14 files (final screens, the strategy deck as PDF, a results sheet, two videos). While they upload she stars the two key screens as favourites. One 140 MB video is rejected; she leaves it out.
 3. **Details:** she writes three short paragraphs: context, solution, results ("3 of 3").
 4. **Generate:** she presses **Generate**, sees "Generating your case study…", and goes back to Case studies. The wait doesn't count toward her hands-on time (NFR4).
 5. A toast says "{Name} is ready to review." She opens it from **To review**. The configurator shows the 16:9 deck.
@@ -425,9 +440,12 @@ Failure: nothing matches → "Nothing matches 'energy'." He clears filters and b
 - **C2. Text editing missing from the sketch.** FR5 requires text editing; the A3 configurator sketch has no text controls. This spine follows the PRD (in-place text editing).
 - **C3. Notifications, autosave and versioning** appear in the sketches but in no FR. This spine adds an in-app toast and autosave (needed for the time budget and to avoid losing work) and leaves out versioning and email.
 - **C4. Template maintenance** is in the role permissions (Story 6.2) but in no FR; the sketch marks it "SOON". Proposed MVP scope above; recommend its own FR.
+- **C6. Tags replaced by favourites (2026-10-13).** The owner wants no tags, properties or flags on deliverables, only a favourite mark on images and videos. FR2 and Story 2.9 require tags, properties and flags from a fixed list (2.9 backend merged, #19; OP 3 seed due 2026-10-14). Favourites exist in no FR or story. The library's tag facets and card tags (Case studies: library view) also depend on tags; that view isn't changed here. Route: `bmad-correct-course`.
+- **C7. Pasted text moved to Details (2026-10-13).** The owner wants text entered in step 2, not pasted in step 1. Story 2.8 / AR6 count pasted text as material (it can unlock generation, backend merged, #18); FR2 / NFR6 say the details form never counts as material. The PRD owner decides whether step-2 text counts as material. Route: `bmad-correct-course`.
+- **C8. No undo on file removal (2026-10-14).** The owner wants removal without the Undo toast. Stories 2.7 and 2.8 specify soft-delete with a 5 s **Undo** toast. Soft-delete can stay in the backend; the UI drops the toast. Route: `bmad-correct-course` with C6 and C7.
 - **C5. Brief vs PRD:** the brief limits export to account/sales/social and puts the hallucination target on "caught in review". The PRD (both roles export; zero reaching approved) wins; noted only.
 
-**PRD open points with options above:** [OPEN 1] export formats · [OPEN 8] status lifecycle · [OPEN 11] link access · [OPEN 12] what counts as altering. Waiting on [OPEN 3] (taxonomy) for tag pickers and library facets.
+**PRD open points with options above:** [OPEN 1] export formats · [OPEN 8] status lifecycle · [OPEN 11] link access · [OPEN 12] what counts as altering. Waiting on [OPEN 3] (taxonomy) for library facets (tag pickers dropped from the Material step, see C6). **[OPEN F]** what a favourite means for generation.
 
 **UX questions resolved (2026-10-08):**
 - **Q1.** UI language: Italian.
