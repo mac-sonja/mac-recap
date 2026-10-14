@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 import { err, type AppError, type Result } from "@/shared/result";
 
 export interface FieldIssue {
@@ -21,3 +21,17 @@ export function parseInput<S extends z.ZodType>(schema: S, input: unknown): Resu
     details: { fields, issues },
   });
 }
+
+/** At most `max` characters counted as code points (like Postgres `char_length`); cheap when the UTF-16 length is already within it. */
+export function withinCodePoints(value: string, max: number): boolean {
+  if (value.length <= max) return true;
+  if (value.length > max * 2) return false;
+  return Array.from(value).length <= max;
+}
+
+/** Postgres text cannot hold U+0000. */
+export const hasNoNul = (value: string) => !value.includes("\u0000");
+export const NUL_MESSAGE = "Must not contain the NUL character.";
+
+/** The case whose material is checked by `hasMaterial`. */
+export const caseIdSchema = z.uuid();

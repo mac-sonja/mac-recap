@@ -3,8 +3,6 @@ import type { Actor } from "@/modules/access";
 import { emptyDetailsForm, FORM_FIELDS, type DetailsForm, type FormField } from "@/modules/material/domain/details-form";
 import type { AssetRepository } from "@/modules/material/ports/asset-repository";
 import type { DetailsFormRepository } from "@/modules/material/ports/details-form-repository";
-import type { TaxonomyRepository } from "@/modules/material/ports/taxonomy-repository";
-import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
 import { err, ok } from "@/shared/result";
 import type { CaseStudies, MaterialDeps } from "./deps";
 import { makeGetDetailsForm } from "./get-details-form";
@@ -67,8 +65,6 @@ function world() {
 
   const deps: MaterialDeps = {
     assets: unused<AssetRepository>("assets"),
-    texts: unused<TextItemRepository>("texts"),
-    taxonomy: unused<TaxonomyRepository>("taxonomy"),
     form,
     storage: null,
     cases,
@@ -293,7 +289,8 @@ describe("resolveRefs", () => {
     expect(w.form.read).not.toHaveBeenCalled();
   });
 
-  it.each([["asset"], ["text"]])("a %s ref is not resolvable yet → UNKNOWN_REF", async (kind) => {
+  it("an asset ref is not resolvable yet → UNKNOWN_REF", async () => {
+    const kind = "asset";
     const w = world();
     const result = await resolve(w, [{ kind, id: "eeeeeeee-0000-4000-8000-000000000001" }]);
     expect(codeOf(result)).toBe("UNKNOWN_REF");
@@ -303,6 +300,7 @@ describe("resolveRefs", () => {
 
   it.each([
     ["an unknown kind", [{ kind: "budget", id: "context" }], ["refs.0.kind"]],
+    ["the retired text kind", [{ kind: "text", id: "eeeeeeee-0000-4000-8000-000000000001" }], ["refs.0.kind"]],
     ["refs not an array", "context", ["refs"]],
     ["a 65-character ref id", [{ kind: "form_field", id: "x".repeat(65) }], ["refs.0.id"]],
     ["101 refs", Array.from({ length: 101 }, () => ({ kind: "form_field", id: "context" })), ["refs"]],

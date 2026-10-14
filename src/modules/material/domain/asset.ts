@@ -44,7 +44,7 @@ export const confirmInputSchema = z.object({
 });
 export type ConfirmInput = z.infer<typeof confirmInputSchema>;
 
-/** Identifies one asset of one case (remove, restore). */
+/** Identifies one asset of one case (remove). */
 export const assetRefInputSchema = z.object({
   caseId: z.uuid(),
   assetId: z.uuid(),
@@ -54,7 +54,6 @@ export type AssetRefInput = z.infer<typeof assetRefInputSchema>;
 /** Event types the material module records through `case-study.recordEvent`, each with `{ assetId }`. */
 export const ASSET_UPLOADED = "asset_uploaded";
 export const ASSET_REMOVED = "asset_removed";
-export const ASSET_RESTORED = "asset_restored";
 
 /** Lists the live assets of one case. */
 export const listAssetsInputSchema = z.object({

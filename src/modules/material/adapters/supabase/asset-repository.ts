@@ -129,13 +129,22 @@ export function createSupabaseAssetRepository(
       return ok(data.length > 0);
     },
 
-    async restore(caseId, assetId) {
+    async undoSoftDelete(caseId, assetId) {
       const { data, error } = await client().rpc("restore_asset", { p_case_id: caseId, p_asset_id: assetId });
       if (error) {
         const refused = refusal(error);
         if (refused) return err({ ...refused, details: { caseId, assetId } });
-        log.error(`asset restore failed: ${error.code}`, { caseId });
-        return err({ code: "ASSET_WRITE_FAILED", message: "Could not restore the file." });
+        log.error(`asset undo soft delete failed: ${error.code}`, { caseId });
+        return err({ code: "ASSET_WRITE_FAILED", message: "Could not undo removing the file." });
+      }
+      return ok(data === true);
+    },
+
+    async hasMaterial(caseId) {
+      const { data, error } = await client().rpc("has_material", { p_case_id: caseId });
+      if (error) {
+        log.error(`has_material failed: ${error.code}`, { caseId });
+        return err({ code: "MATERIAL_LOOKUP_FAILED", message: "Could not check the case study's material." });
       }
       return ok(data === true);
     },

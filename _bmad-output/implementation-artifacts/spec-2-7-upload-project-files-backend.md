@@ -10,7 +10,7 @@ context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-2-context.md'
 ---
 
-> **Note 2026-10-14** ([Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-14.md)): the restore use case and `restore_asset` are removed by Story 2.8 (Retire pasted text and the taxonomy), because removal has no undo. The rest of this spec stands.
+> **Note 2026-10-14** ([Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-14.md)): the restore use case and action are removed by Story 2.8 (Retire pasted text and the taxonomy), because removal has no undo; `restore_asset` stays only as `removeAsset`'s internal compensation (port method `undoSoftDelete`). The rest of this spec stands.
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 

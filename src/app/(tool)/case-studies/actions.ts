@@ -4,17 +4,7 @@ import { authorize, getActor, httpStatusFor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import type { CaseStudy } from "@/modules/case-study";
 import * as material from "@/modules/material";
-import type {
-  Asset,
-  DeliverableTerms,
-  DetailsFieldSaved,
-  DetailsForm,
-  ListedAsset,
-  PresignedAssetUpload,
-  TermsByKind,
-  TermsSet,
-  TextItem,
-} from "@/modules/material";
+import type { Asset, DetailsFieldSaved, DetailsForm, ListedAsset, PresignedAssetUpload } from "@/modules/material";
 import type { AppError } from "@/shared/result";
 
 /**
@@ -102,101 +92,6 @@ export async function removeAsset(input: unknown): Promise<ActionResult<void>> {
   if (!decision.ok) return failure(decision.error);
   const removed = await material.removeAsset(actor.value, input);
   return removed.ok ? removed : failure(removed.error);
-}
-
-/** Restores one removed asset (Undo): `{ caseId, assetId }`. 409 `FILE_LIMIT_REACHED` at the cap. */
-export async function restoreAsset(input: unknown): Promise<ActionResult<void>> {
-  const actor = await getActor();
-  if (!actor.ok) return failure(actor.error);
-  const decision = authorize(actor.value, "upload");
-  if (!decision.ok) return failure(decision.error);
-  const restored = await material.restoreAsset(actor.value, input);
-  return restored.ok ? restored : failure(restored.error);
-}
-
-/**
- * Adds pasted text as material: `{ caseId, title, body }`. Never counts toward
- * the file cap. 400 `TEXT_EMPTY` for a whitespace-only body; 400 `INVALID_INPUT`
- * naming `title` / `body`; 404 `NOT_FOUND`.
- */
-export async function addTextItem(input: unknown): Promise<ActionResult<TextItem>> {
-  const actor = await getActor();
-  if (!actor.ok) return failure(actor.error);
-  const decision = authorize(actor.value, "upload");
-  if (!decision.ok) return failure(decision.error);
-  const added = await material.addTextItem(actor.value, input);
-  return added.ok ? added : failure(added.error);
-}
-
-/** Edits a live text item: `{ caseId, textItemId, title, body }`. 404 `NOT_FOUND` when unknown or removed. */
-export async function editTextItem(input: unknown): Promise<ActionResult<TextItem>> {
-  const actor = await getActor();
-  if (!actor.ok) return failure(actor.error);
-  const decision = authorize(actor.value, "upload");
-  if (!decision.ok) return failure(decision.error);
-  const edited = await material.editTextItem(actor.value, input);
-  return edited.ok ? edited : failure(edited.error);
-}
-
-/** Removes (soft-deletes) one text item: `{ caseId, textItemId }`. 404 `NOT_FOUND` when unknown or already removed. */
-export async function removeTextItem(input: unknown): Promise<ActionResult<void>> {
-  const actor = await getActor();
-  if (!actor.ok) return failure(actor.error);
-  const decision = authorize(actor.value, "upload");
-  if (!decision.ok) return failure(decision.error);
-  const removed = await material.removeTextItem(actor.value, input);
-  return removed.ok ? removed : failure(removed.error);
-}
-
-/** Restores one removed text item (Undo): `{ caseId, textItemId }`. 404 `NOT_FOUND` when unknown. */
-export async function restoreTextItem(input: unknown): Promise<ActionResult<void>> {
-  const actor = await getActor();
-  if (!actor.ok) return failure(actor.error);
-  const decision = authorize(actor.value, "upload");
-  if (!decision.ok) return failure(decision.error);
-  const restored = await material.restoreTextItem(actor.value, input);
-  return restored.ok ? restored : failure(restored.error);
-}
-
-/**
- * Every taxonomy term, `{ tag, property, flag }`, each `[{ key, label }]` ordered
- * by label; an unseeded kind is `[]`. 403 `FORBIDDEN` unless the role may `tag`.
- */
-export async function listTaxonomyTerms(): Promise<ActionResult<TermsByKind>> {
-  const actor = await getActor();
-  if (!actor.ok) return failure(actor.error);
-  const decision = authorize(actor.value, "tag");
-  if (!decision.ok) return failure(decision.error);
-  const terms = await material.listTerms();
-  return terms.ok ? terms : failure(terms.error);
-}
-
-/**
- * Replaces one deliverable's terms of one kind: `{ caseId, refKind: 'asset' | 'text',
- * refId, kind: 'tag' | 'property' | 'flag', keys }` (`[]` clears that kind).
- * 400 `UNKNOWN_TERM` naming the key; 404 `NOT_FOUND` for a removed or unknown
- * deliverable or another case's; 400 `INVALID_INPUT`. Status never changes.
- */
-export async function setDeliverableTerms(input: unknown): Promise<ActionResult<TermsSet>> {
-  const actor = await getActor();
-  if (!actor.ok) return failure(actor.error);
-  const decision = authorize(actor.value, "tag");
-  if (!decision.ok) return failure(decision.error);
-  const set = await material.setDeliverableTerms(actor.value, input);
-  return set.ok ? set : failure(set.error);
-}
-
-/**
- * The term keys of every live deliverable of a case: `{ caseId }` →
- * `[{ refKind, refId, tag, property, flag }]` (untagged: all `[]`). 404 `NOT_FOUND`.
- */
-export async function getCaseTerms(input: unknown): Promise<ActionResult<DeliverableTerms[]>> {
-  const actor = await getActor();
-  if (!actor.ok) return failure(actor.error);
-  const decision = authorize(actor.value, "tag");
-  if (!decision.ok) return failure(decision.error);
-  const terms = await material.getCaseTerms(input);
-  return terms.ok ? terms : failure(terms.error);
 }
 
 /**

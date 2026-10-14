@@ -12,20 +12,8 @@ const m = vi.hoisted(() => ({
     countLive: vi.fn(),
     create: vi.fn(),
     softDelete: vi.fn(),
-    restore: vi.fn(),
-  },
-  texts: {
-    create: vi.fn(),
-    getLive: vi.fn(),
-    update: vi.fn(),
-    softDelete: vi.fn(),
-    restore: vi.fn(),
+    undoSoftDelete: vi.fn(),
     hasMaterial: vi.fn(),
-  },
-  taxonomy: {
-    listTerms: vi.fn(),
-    setTerms: vi.fn(),
-    caseTerms: vi.fn(),
   },
   form: {
     saveField: vi.fn(),
@@ -39,12 +27,6 @@ vi.mock("@/shared/env", () => ({ getStorageConfig: m.getStorageConfig }));
 vi.mock("@/modules/material/adapters/s3/object-storage", () => ({ createS3ObjectStorage: m.createS3ObjectStorage }));
 vi.mock("@/modules/material/adapters/supabase/asset-repository", () => ({
   createSupabaseAssetRepository: () => m.repo,
-}));
-vi.mock("@/modules/material/adapters/supabase/text-item-repository", () => ({
-  createSupabaseTextItemRepository: () => m.texts,
-}));
-vi.mock("@/modules/material/adapters/supabase/taxonomy-repository", () => ({
-  createSupabaseTaxonomyRepository: () => m.taxonomy,
 }));
 vi.mock("@/modules/material/adapters/supabase/details-form-repository", () => ({
   createSupabaseDetailsFormRepository: () => m.form,
@@ -61,20 +43,7 @@ const actor: Actor = {
 const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const ASSET_ID = "bbbbbbbb-0000-4000-8000-000000000001";
 const ref = { caseId: CASE_ID, assetId: ASSET_ID };
-const TEXT_ID = "eeeeeeee-0000-4000-8000-000000000001";
-const textRef = { caseId: CASE_ID, textItemId: TEXT_ID };
 const detailsInput = { caseId: CASE_ID, field: "context", text: "Bando PNRR" };
-const termsInput = { caseId: CASE_ID, refKind: "asset", refId: ASSET_ID, kind: "tag", keys: ["app"] };
-const textItem = {
-  id: TEXT_ID,
-  caseId: CASE_ID,
-  title: "Brief",
-  body: "Testo",
-  createdBy: "00000000-0000-4000-8000-000000000002",
-  createdAt: "2026-10-13T10:00:00Z",
-  updatedAt: "2026-10-13T10:00:00Z",
-  deletedAt: null,
-};
 
 let bucketSeq = 0;
 /** A fresh bucket name per call, so the module-level memo never hides a factory call. */
@@ -96,18 +65,10 @@ beforeEach(() => {
   m.storage.presignDownload.mockResolvedValue(ok("https://s3.test/get"));
   m.repo.create.mockImplementation(async (a) => ok({ ...a, createdAt: "2026-10-13T10:00:00Z", deletedAt: null }));
   m.repo.softDelete.mockResolvedValue(ok(true));
-  m.repo.restore.mockResolvedValue(ok(true));
+  m.repo.undoSoftDelete.mockResolvedValue(ok(true));
+  m.repo.hasMaterial.mockResolvedValue(ok(true));
   m.storage.presignUpload.mockResolvedValue(ok({ url: "https://s3.test/", fields: { key: "k" } }));
   m.storage.head.mockResolvedValue(ok({ sizeBytes: 10, contentType: "image/png" }));
-  m.texts.create.mockImplementation(async (t) => ok({ ...textItem, ...t }));
-  m.texts.getLive.mockResolvedValue(ok(textItem));
-  m.texts.update.mockImplementation(async (_c, _id, content) => ok({ ...textItem, ...content }));
-  m.texts.softDelete.mockResolvedValue(ok(true));
-  m.texts.restore.mockResolvedValue(ok(true));
-  m.texts.hasMaterial.mockResolvedValue(ok(true));
-  m.taxonomy.listTerms.mockResolvedValue(ok([{ kind: "tag", key: "app", label: "App" }]));
-  m.taxonomy.setTerms.mockResolvedValue(ok([]));
-  m.taxonomy.caseTerms.mockResolvedValue(ok([{ refKind: "asset", refId: ASSET_ID, terms: [{ kind: "tag", key: "app" }] }]));
   m.form.saveField.mockResolvedValue(ok(""));
   m.form.read.mockResolvedValue(ok({ context: "Bando PNRR", solution: "", results: "" }));
 });
@@ -136,23 +97,14 @@ describe("material index wiring", () => {
     configure();
     expect(await material.removeAsset(actor, ref)).toEqual(ok(undefined));
     expect(m.repo.softDelete).toHaveBeenCalledWith(CASE_ID, ASSET_ID);
-    expect(m.repo.restore).not.toHaveBeenCalled();
+    expect(m.repo.undoSoftDelete).not.toHaveBeenCalled();
     expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "asset_removed", data: { assetId: ASSET_ID } });
-  });
-
-  it("restoreAsset restores and records asset_restored", async () => {
-    configure();
-    expect(await material.restoreAsset(actor, ref)).toEqual(ok(undefined));
-    expect(m.repo.restore).toHaveBeenCalledWith(CASE_ID, ASSET_ID);
-    expect(m.repo.softDelete).not.toHaveBeenCalled();
-    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "asset_restored", data: { assetId: ASSET_ID } });
   });
 
   it.each([
     ["presignUpload", () => material.presignUpload(actor, { caseId: CASE_ID, contentType: "image/png", sizeBytes: 10 })],
     ["confirmUpload", () => material.confirmUpload(actor, { ...ref, contentType: "image/png", fileName: "a.png" })],
     ["removeAsset", () => material.removeAsset(actor, ref)],
-    ["restoreAsset", () => material.restoreAsset(actor, ref)],
   ])("%s returns STORAGE_NOT_CONFIGURED when S3 is unset", async (_name, call) => {
     m.getStorageConfig.mockReturnValue(null);
     const result = await call();
@@ -185,62 +137,12 @@ describe("material index wiring", () => {
   it("builds the S3 adapter once per resolved config", async () => {
     const config = configure();
     await material.removeAsset(actor, ref);
-    await material.restoreAsset(actor, ref);
+    await material.listAssets({ caseId: CASE_ID });
     expect(m.createS3ObjectStorage).toHaveBeenCalledTimes(1);
     configure();
     await material.removeAsset(actor, ref);
     expect(m.createS3ObjectStorage).toHaveBeenCalledTimes(2);
     expect(m.createS3ObjectStorage.mock.calls[0][0]).toEqual(config);
-  });
-
-  it("addTextItem creates the item and records text_added through case-study", async () => {
-    const result = await material.addTextItem(actor, { caseId: CASE_ID, title: "Brief", body: "Testo" });
-    expect(result).toEqual(ok(textItem));
-    expect(m.texts.create).toHaveBeenCalledWith({ caseId: CASE_ID, title: "Brief", body: "Testo", createdBy: actor.id });
-    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "text_added", data: { textItemId: TEXT_ID } });
-  });
-
-  it("editTextItem updates the item and records text_edited", async () => {
-    const result = await material.editTextItem(actor, { ...textRef, title: "Nuovo", body: "B" });
-    expect(result.ok && result.value.title).toBe("Nuovo");
-    expect(m.texts.update).toHaveBeenCalledWith(CASE_ID, TEXT_ID, { title: "Nuovo", body: "B" });
-    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "text_edited", data: { textItemId: TEXT_ID } });
-  });
-
-  it("removeTextItem soft-deletes and records text_removed", async () => {
-    expect(await material.removeTextItem(actor, textRef)).toEqual(ok(undefined));
-    expect(m.texts.softDelete).toHaveBeenCalledWith(CASE_ID, TEXT_ID);
-    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "text_removed", data: { textItemId: TEXT_ID } });
-  });
-
-  it("restoreTextItem restores and records text_restored", async () => {
-    expect(await material.restoreTextItem(actor, textRef)).toEqual(ok(undefined));
-    expect(m.texts.restore).toHaveBeenCalledWith(CASE_ID, TEXT_ID);
-    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "text_restored", data: { textItemId: TEXT_ID } });
-  });
-
-  it("listTerms groups the taxonomy repository's terms by kind", async () => {
-    expect(await material.listTerms()).toEqual(ok({ tag: [{ key: "app", label: "App" }], property: [], flag: [] }));
-  });
-
-  it("setDeliverableTerms sets through the taxonomy repository and records terms_set", async () => {
-    expect(await material.setDeliverableTerms(actor, termsInput)).toEqual(
-      ok({ refKind: "asset", refId: ASSET_ID, kind: "tag", keys: ["app"] }),
-    );
-    expect(m.taxonomy.setTerms).toHaveBeenCalledWith(termsInput);
-    expect(m.recordEvent).toHaveBeenCalledWith(actor, {
-      caseId: CASE_ID,
-      type: "terms_set",
-      data: { refKind: "asset", refId: ASSET_ID, kind: "tag", keys: ["app"] },
-    });
-  });
-
-  it("getCaseTerms reads the taxonomy repository's case terms", async () => {
-    expect(await material.getCaseTerms({ caseId: CASE_ID })).toEqual(
-      ok([{ refKind: "asset", refId: ASSET_ID, tag: ["app"], property: [], flag: [] }]),
-    );
-    expect(m.get).toHaveBeenCalledWith(CASE_ID);
-    expect(m.taxonomy.caseTerms).toHaveBeenCalledWith(CASE_ID);
   });
 
   it("saveDetailsField saves through the details form repository and records details_saved { field }", async () => {
@@ -261,20 +163,13 @@ describe("material index wiring", () => {
     expect(m.form.read).toHaveBeenCalledWith(CASE_ID);
   });
 
-  it("hasMaterial asks the text item repository's has_material", async () => {
+  it("hasMaterial asks the asset repository's has_material", async () => {
     expect(await material.hasMaterial(CASE_ID)).toEqual(ok(true));
-    expect(m.texts.hasMaterial).toHaveBeenCalledWith(CASE_ID);
+    expect(m.repo.hasMaterial).toHaveBeenCalledWith(CASE_ID);
   });
 
   it.each([
-    ["addTextItem", () => material.addTextItem(actor, { caseId: CASE_ID, title: "Brief", body: "Testo" })],
-    ["editTextItem", () => material.editTextItem(actor, { ...textRef, title: "Brief", body: "Testo" })],
-    ["removeTextItem", () => material.removeTextItem(actor, textRef)],
-    ["restoreTextItem", () => material.restoreTextItem(actor, textRef)],
     ["hasMaterial", () => material.hasMaterial(CASE_ID)],
-    ["listTerms", () => material.listTerms()],
-    ["setDeliverableTerms", () => material.setDeliverableTerms(actor, termsInput)],
-    ["getCaseTerms", () => material.getCaseTerms({ caseId: CASE_ID })],
     ["saveDetailsField", () => material.saveDetailsField(actor, detailsInput)],
     ["getDetailsForm", () => material.getDetailsForm({ caseId: CASE_ID })],
     ["resolveRefs", () => material.resolveRefs(CASE_ID, [{ kind: "form_field", id: "results" }])],
