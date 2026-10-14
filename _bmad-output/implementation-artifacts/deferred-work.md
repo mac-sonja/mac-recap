@@ -108,3 +108,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-10-fill-in-the-details-form-backend.md`
   summary: Add a DB test firing two concurrent first saves of different details-form fields on a case with no row, asserting both succeed, one row holds both fields and two `details_saved` events are recorded (guards the per-case advisory lock in `save_context_field`).
   evidence: Review of the 2.10 backend: every DB test saves sequentially, so removing the lock would ship lost first saves; most relevant once the autosave UI lands.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-retire-pasted-text-and-the-taxonomy.md`
+  summary: Harden `removeAsset`'s compensation — a cap-free / case-agnostic undo path (or a single-transaction remove+event), log the `ok(false)` no-op, and test the "event fails and undo fails" branch plus the adapter's generic undo error.
+  evidence: Review of Story 2.8 (triage #1–#4): `restore_asset` re-checks the 20-file cap and the live case, so a concurrent upload filling the freed slot (or a case delete) between `softDelete` and a failed `recordEvent` leaves a removal without its event, with only a log line. Pre-existing since #17; medium, rare (needs an event-write failure plus a concurrent upload or delete).

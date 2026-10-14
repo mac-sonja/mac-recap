@@ -481,7 +481,7 @@ Covers: FR2, AR6 (material = at least one non-deleted asset), AR14 (no taxonomy)
 **Given** the `material` module
 **When** the forward migration for this story runs
 **Then** `has_material` is rewritten to "case exists and has at least one non-deleted asset"
-**And** `material_term`, `taxonomy_term`, `set_material_terms`, `case_material_terms`, `text_item`, their triggers and functions, and `restore_asset` are dropped
+**And** `material_term`, `taxonomy_term`, `set_material_terms`, `case_material_terms`, `text_item`, and their triggers and functions are dropped; `restore_asset` stays only as `removeAsset`'s internal compensation when the event write fails (owner decision 2026-10-14, no restore feature)
 **And** `src/shared/db.types.ts` is regenerated
 
 **Given** the code

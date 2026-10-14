@@ -121,26 +121,6 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"material_term": {
-                  Row: {
-                    "created_at": string,"id": string,"ref_id": string,"ref_kind": string,"term_id": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "created_at"?: string,"id"?: string,"ref_id": string,"ref_kind": string,"term_id": string
-                  }
-                  Update: {
-                    "created_at"?: string,"id"?: string,"ref_id"?: string,"ref_kind"?: string,"term_id"?: string
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "material_term_term_id_fkey"
-      columns: ["term_id"]
-isOneToOne: false
-      referencedRelation: "taxonomy_term"
-      referencedColumns: ["id"]
-    }
-                  ]
                 },"profile": {
                   Row: {
                     "created_at": string,"disabled_at": string | null,"display_name": string,"email": string,"id": string,"role": string
@@ -155,56 +135,13 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"taxonomy_term": {
-                  Row: {
-                    "id": string,"key": string,"kind": string,"label": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "id"?: string,"key": string,"kind": string,"label": string
-                  }
-                  Update: {
-                    "id"?: string,"key"?: string,"kind"?: string,"label"?: string
-                  }
-                  Relationships: [
-                    
-                  ]
-                },"text_item": {
-                  Row: {
-                    "body": string,"case_id": string,"created_at": string,"created_by": string,"deleted_at": string | null,"id": string,"title": string,"updated_at": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "body": string,"case_id": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"id"?: string,"title": string,"updated_at"?: string
-                  }
-                  Update: {
-                    "body"?: string,"case_id"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"id"?: string,"title"?: string,"updated_at"?: string
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "text_item_case_id_fkey"
-      columns: ["case_id"]
-isOneToOne: false
-      referencedRelation: "case_study"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "text_item_created_by_fkey"
-      columns: ["created_by"]
-isOneToOne: false
-      referencedRelation: "profile"
-      referencedColumns: ["id"]
-    }
-                  ]
                 }
           }
           Views: {
             [_ in never]: never
           }
           Functions: {
-            "case_material_terms":
-{ Args: { "p_case_id": string }; Returns: Json
-                           },
-"create_asset":
+            "create_asset":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_content_type": string,"p_id": string,"p_kind": string,"p_original_file_name": string,"p_s3_key": string,"p_size_bytes": number }; Returns: {
               "case_id": string,
 "content_type": string,
@@ -254,9 +191,6 @@ isOneToOne: false
                            },
 "save_context_field":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_field": string,"p_text": string }; Returns: string
-                           },
-"set_material_terms":
-{ Args: { "p_case_id": string,"p_keys": (string)[],"p_kind": string,"p_ref_id": string,"p_ref_kind": string }; Returns: (string)[]
                            },
 "transition_case_study":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {

@@ -6,8 +6,9 @@ import type { MaterialDeps } from "./deps";
 /**
  * Resolves material refs of a live case to their current text, in the order
  * given. Only `form_field` refs (`id` = `context` | `solution` | `results`)
- * resolve so far; any other ref (an unknown key, or an `asset` / `text` ref) is
- * `UNKNOWN_REF` naming it, and nothing is resolved. Errors: `INVALID_INPUT`,
+ * resolve so far; an `asset` ref or an unknown form key is `UNKNOWN_REF` naming
+ * it, and nothing is resolved. Any other kind (including the retired `text`) fails
+ * the schema as `INVALID_INPUT` at `refs.N.kind`. Errors: `INVALID_INPUT`,
  * `UNKNOWN_REF`, `NOT_FOUND`. Needs no storage. Module-only: no server action.
  */
 export function makeResolveRefs({ form, cases }: Pick<MaterialDeps, "form" | "cases">) {

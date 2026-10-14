@@ -1,5 +1,6 @@
-// DB-level checks of the `asset` migration, `create_asset` / `restore_asset` and
-// the real material adapter against the local Supabase stack. Run with
+// DB-level checks of the `asset` migration, `create_asset`, `restore_asset` (only
+// `removeAsset`'s compensation since Story 2.8), `has_material`, the details form
+// and the real material adapters against the local Supabase stack. Run with
 // `npm run test:db`. Asset and case rows can never be deleted, so every test
 // works on its own fresh case.
 import { randomUUID } from "node:crypto";
@@ -9,10 +10,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
-import { createSupabaseTaxonomyRepository } from "@/modules/material/adapters/supabase/taxonomy-repository";
-import { createSupabaseTextItemRepository } from "@/modules/material/adapters/supabase/text-item-repository";
 import { ALLOWED_CONTENT_TYPES, ASSET_KINDS, MAX_ASSETS_PER_CASE } from "@/modules/material/domain/files";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
+import { err } from "@/shared/result";
 
 const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -101,6 +101,11 @@ async function assetEvents(caseId: string) {
   );
   return rows;
 }
+
+const hasMaterialSql = async (caseId: string) => {
+  const { rows } = await pool.query<{ has: boolean }>("select public.has_material($1) as has", [caseId]);
+  return rows[0].has;
+};
 
 describe("create_asset", () => {
   it("inserts a row with the given id, key and actor", async () => {
@@ -230,16 +235,16 @@ describe("create_asset", () => {
   });
 });
 
-describe("soft delete and restore", () => {
-  it("removes, refuses a second removal, restores, then reports already live", async () => {
+describe("soft delete and its compensation (undoSoftDelete / restore_asset)", () => {
+  it("removes, refuses a second removal, undoes the removal, then reports already live", async () => {
     const created = await createCase();
     const [id] = await seedAssets(created.id, 1);
     const repo = createSupabaseAssetRepository();
     expect(await repo.softDelete(created.id, id)).toEqual({ ok: true, value: true });
     expect(await repo.softDelete(created.id, id)).toEqual({ ok: true, value: false });
     expect(await liveCount(created.id)).toBe(0);
-    expect(await repo.restore(created.id, id)).toEqual({ ok: true, value: true });
-    expect(await repo.restore(created.id, id)).toEqual({ ok: true, value: false });
+    expect(await repo.undoSoftDelete(created.id, id)).toEqual({ ok: true, value: true });
+    expect(await repo.undoSoftDelete(created.id, id)).toEqual({ ok: true, value: false });
     expect(await liveCount(created.id)).toBe(1);
   });
 
@@ -248,9 +253,9 @@ describe("soft delete and restore", () => {
     const [id] = await seedAssets(a.id, 1);
     const repo = createSupabaseAssetRepository();
     expect(await repo.softDelete(b.id, id)).toEqual({ ok: true, value: false });
-    const restored = await repo.restore(b.id, id);
-    expect(restored.ok).toBe(false);
-    if (!restored.ok) expect(restored.error.code).toBe("NOT_FOUND");
+    const undone = await repo.undoSoftDelete(b.id, id);
+    expect(undone.ok).toBe(false);
+    if (!undone.ok) expect(undone.error.code).toBe("NOT_FOUND");
     expect(await liveCount(a.id)).toBe(1);
   });
 
@@ -263,14 +268,14 @@ describe("soft delete and restore", () => {
       code: "P0001",
       message: "NOT_FOUND",
     });
-    const result = await createSupabaseAssetRepository().restore(created.id, id);
+    const result = await createSupabaseAssetRepository().undoSoftDelete(created.id, id);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
     const { rows } = await pool.query("select deleted_at is not null as removed from public.asset where id = $1", [id]);
     expect(rows).toEqual([{ removed: true }]);
   });
 
-  it("a restore racing a create at 19 live assets: exactly one takes the 20th slot", async () => {
+  it("restore_asset racing a create at 19 live assets: exactly one takes the 20th slot", async () => {
     const created = await createCase();
     const [removed] = await seedAssets(created.id, 1);
     await pool.query("update public.asset set deleted_at = now() where id = $1", [removed]);
@@ -278,24 +283,24 @@ describe("soft delete and restore", () => {
     const fresh = randomUUID();
     // pool.query checks out a separate connection for each call.
     const results = await Promise.allSettled([
-      pool.query("select public.restore_asset($1, $2) as restored", [created.id, removed]),
+      pool.query("select public.restore_asset($1, $2) as undone", [created.id, removed]),
       pool.query(CREATE_ASSET, [fresh, created.id, keyFor(created.id, fresh), DEV_ACTOR_ID]),
     ]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
     expect(rejected).toHaveLength(1);
     expect(rejected[0].reason).toMatchObject({ code: "P0001", message: "FILE_LIMIT_REACHED" });
-    if (results[0].status === "fulfilled") expect(results[0].value.rows).toEqual([{ restored: true }]);
+    if (results[0].status === "fulfilled") expect(results[0].value.rows).toEqual([{ undone: true }]);
     expect(await liveCount(created.id)).toBe(MAX_ASSETS_PER_CASE);
   });
 
-  it("restore re-checks the cap", async () => {
+  it("undoSoftDelete re-checks the cap", async () => {
     const created = await createCase();
     const [first] = await seedAssets(created.id, 1);
     const repo = createSupabaseAssetRepository();
     await repo.softDelete(created.id, first);
     await seedAssets(created.id, MAX_ASSETS_PER_CASE);
-    const result = await repo.restore(created.id, first);
+    const result = await repo.undoSoftDelete(created.id, first);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("FILE_LIMIT_REACHED");
     expect(await liveCount(created.id)).toBe(MAX_ASSETS_PER_CASE);
@@ -373,8 +378,6 @@ describe("use cases against the real DB and case-study module (S3 stubbed)", () 
     };
     return {
       assets: createSupabaseAssetRepository(),
-      texts: createSupabaseTextItemRepository(),
-      taxonomy: createSupabaseTaxonomyRepository(),
       form: createSupabaseDetailsFormRepository(),
       storage,
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
@@ -382,10 +385,9 @@ describe("use cases against the real DB and case-study module (S3 stubbed)", () 
     };
   }
 
-  it("confirm → remove → restore writes the rows and one event each; status stays draft", async () => {
+  it("confirm → remove writes the rows and one event each; status stays draft", async () => {
     const { makeConfirmUpload } = await import("@/modules/material/application/confirm-upload");
     const { makeRemoveAsset } = await import("@/modules/material/application/remove-asset");
-    const { makeRestoreAsset } = await import("@/modules/material/application/restore-asset");
     const actor = await devActor();
     const created = await createCase();
     const assetId = randomUUID();
@@ -399,22 +401,35 @@ describe("use cases against the real DB and case-study module (S3 stubbed)", () 
     });
     expect(confirmed.ok).toBe(true);
     expect(await makeRemoveAsset(deps)(actor, { caseId: created.id, assetId })).toEqual({ ok: true, value: undefined });
-    expect(await makeRestoreAsset(deps)(actor, { caseId: created.id, assetId })).toEqual({ ok: true, value: undefined });
 
     const { rows } = await pool.query(
-      "select kind, original_file_name, size_bytes::int as size, s3_key, deleted_at from public.asset where id = $1",
+      "select kind, original_file_name, size_bytes::int as size, s3_key, deleted_at is not null as removed from public.asset where id = $1",
       [assetId],
     );
     expect(rows).toEqual([
-      { kind: "image", original_file_name: "hero.webp", size: 4096, s3_key: `cases/${created.id}/assets/${assetId}/original.webp`, deleted_at: null },
+      { kind: "image", original_file_name: "hero.webp", size: 4096, s3_key: `cases/${created.id}/assets/${assetId}/original.webp`, removed: true },
     ]);
     expect(await assetEvents(created.id)).toEqual([
       { type: "asset_uploaded", actor_id: actor.id, data: { assetId } },
       { type: "asset_removed", actor_id: actor.id, data: { assetId } },
-      { type: "asset_restored", actor_id: actor.id, data: { assetId } },
     ]);
     const { rows: status } = await pool.query("select status from public.case_study where id = $1", [created.id]);
     expect(status).toEqual([{ status: "draft" }]);
+  });
+
+  it("remove whose event write fails: the asset is live again (undoSoftDelete) and the error is returned", async () => {
+    const { makeRemoveAsset } = await import("@/modules/material/application/remove-asset");
+    const actor = await devActor();
+    const created = await createCase();
+    const [assetId] = await seedAssets(created.id, 1);
+    const real = await realDeps(new Map());
+    const failure = err({ code: "CASE_EVENT_WRITE_FAILED", message: "down" });
+    const deps = { ...real, cases: { ...real.cases, recordEvent: async () => failure } };
+
+    expect(await makeRemoveAsset(deps)(actor, { caseId: created.id, assetId })).toEqual(failure);
+    expect(await liveCount(created.id)).toBe(1);
+    expect(await hasMaterialSql(created.id)).toBe(true);
+    expect(await assetEvents(created.id)).toEqual([]);
   });
 });
 
@@ -500,6 +515,7 @@ describe("RLS lockout", () => {
       },
     ],
     ["restore_asset", { p_case_id: UNKNOWN_ID, p_asset_id: UNKNOWN_ID }],
+    ["has_material", { p_case_id: UNKNOWN_ID }],
   ])("the browser key is refused calling %s", async (fn, args) => {
     const { data, error } = await browser().rpc(fn as "restore_asset", args as never);
     expect(data).toBeNull();
@@ -514,265 +530,6 @@ describe("RLS lockout", () => {
     delete: "delete from public.asset",
     "create_asset": `select public.create_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'image', 'x.png', 'image/png', 1, 'x', '${DEV_ACTOR_ID}')`,
     "restore_asset": `select public.restore_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}')`,
-  };
-  const cases = (["anon", "authenticated"] as const).flatMap((role) =>
-    Object.entries(statements).map(([verb, sql]) => [role, verb, sql] as const),
-  );
-
-  it.each(cases)("%s gets permission denied on %s", async (role, _verb, sql) => {
-    await expect(inRolledBackTx(sql, [], role)).rejects.toMatchObject({ code: "42501" });
-  });
-});
-
-// Story 2.8: text_item and has_material.
-
-const INSERT_TEXT = "insert into public.text_item (case_id, title, body, created_by) values ($1, $2, $3, $4) returning id";
-
-async function seedText(caseId: string, body = "Testo", title = "Brief") {
-  const { rows } = await pool.query<{ id: string }>(INSERT_TEXT, [caseId, title, body, DEV_ACTOR_ID]);
-  return rows[0].id;
-}
-
-const hasMaterialSql = async (caseId: string) => {
-  const { rows } = await pool.query<{ has: boolean }>("select public.has_material($1) as has", [caseId]);
-  return rows[0].has;
-};
-
-describe("text_item", () => {
-  it("stores the body as given and touches updated_at on update", async () => {
-    const created = await createCase();
-    const body = "  riga uno\n\n  riga due  \n";
-    const id = await seedText(created.id, body);
-    const { rows: before } = await pool.query("select body, updated_at, deleted_at from public.text_item where id = $1", [id]);
-    expect(before[0]).toMatchObject({ body, deleted_at: null });
-    await pool.query("update public.text_item set title = 'Nuovo' where id = $1", [id]);
-    const { rows: after } = await pool.query<{ updated_at: Date }>("select updated_at from public.text_item where id = $1", [id]);
-    expect(after[0].updated_at.getTime()).toBeGreaterThan((before[0].updated_at as Date).getTime());
-  });
-
-  it.each([
-    ["an empty body", "Brief", ""],
-    ["a whitespace-only body", "Brief", "  \n\t "],
-    ["a blank title", "   ", "Testo"],
-    ["a 201-char title", "t".repeat(201), "Testo"],
-    ["a 200,001-char body", "Brief", "b".repeat(200_001)],
-  ])("the table checks reject %s", async (_label, title, body) => {
-    const created = await createCase();
-    await expect(inRolledBackTx(INSERT_TEXT, [created.id, title, body, DEV_ACTOR_ID])).rejects.toMatchObject({ code: "23514" });
-  });
-
-  it("text items don't count toward the asset cap", async () => {
-    const created = await createCase();
-    await seedText(created.id);
-    await seedText(created.id);
-    await seedAssets(created.id, MAX_ASSETS_PER_CASE);
-    expect(await liveCount(created.id)).toBe(MAX_ASSETS_PER_CASE);
-    // A text item is still stored at the cap.
-    const result = await createSupabaseTextItemRepository().create({
-      caseId: created.id,
-      title: "At cap",
-      body: "Testo",
-      createdBy: DEV_ACTOR_ID,
-    });
-    expect(result.ok).toBe(true);
-  });
-
-  it("the adapter maps a whitespace-only body to TEXT_EMPTY and an unknown case to NOT_FOUND", async () => {
-    const created = await createCase();
-    const repo = createSupabaseTextItemRepository();
-    const empty = await repo.create({ caseId: created.id, title: "Brief", body: " \n ", createdBy: DEV_ACTOR_ID });
-    expect(empty.ok).toBe(false);
-    if (!empty.ok) expect(empty.error.code).toBe("TEXT_EMPTY");
-    const unknown = await repo.create({ caseId: UNKNOWN_ID, title: "Brief", body: "Testo", createdBy: DEV_ACTOR_ID });
-    expect(unknown.ok).toBe(false);
-    if (!unknown.ok) expect(unknown.error.code).toBe("NOT_FOUND");
-  });
-
-  it("the adapter edits, removes, refuses a second removal, restores, then reports already live", async () => {
-    const created = await createCase();
-    const id = await seedText(created.id);
-    const repo = createSupabaseTextItemRepository();
-    const edited = await repo.update(created.id, id, { title: "Nuovo", body: "Testo nuovo" });
-    expect(edited.ok && edited.value).toMatchObject({ id, title: "Nuovo", body: "Testo nuovo" });
-    expect(await repo.softDelete(created.id, id)).toEqual({ ok: true, value: true });
-    expect(await repo.softDelete(created.id, id)).toEqual({ ok: true, value: false });
-    expect(await repo.getLive(created.id, id)).toEqual({ ok: true, value: null });
-    expect(await repo.update(created.id, id, { title: "x", body: "y" })).toEqual({ ok: true, value: null });
-    expect(await repo.restore(created.id, id)).toEqual({ ok: true, value: true });
-    expect(await repo.restore(created.id, id)).toEqual({ ok: true, value: false });
-    const unknown = await repo.restore(created.id, UNKNOWN_ID);
-    expect(unknown.ok).toBe(false);
-    if (!unknown.ok) expect(unknown.error.code).toBe("NOT_FOUND");
-  });
-
-  it("does not touch a text item of another case", async () => {
-    const [a, b] = [await createCase(), await createCase()];
-    const id = await seedText(a.id);
-    const repo = createSupabaseTextItemRepository();
-    expect(await repo.softDelete(b.id, id)).toEqual({ ok: true, value: false });
-    expect(await repo.update(b.id, id, { title: "x", body: "y" })).toEqual({ ok: true, value: null });
-    const restored = await repo.restore(b.id, id);
-    expect(restored.ok).toBe(false);
-  });
-
-  it("deleting a text_item row is rejected", async () => {
-    const created = await createCase();
-    const id = await seedText(created.id);
-    await expect(inRolledBackTx("delete from public.text_item where id = $1", [id])).rejects.toThrow(/never deleted/);
-  });
-
-  it("truncating text_item is rejected", async () => {
-    await expect(inRolledBackTx("truncate public.text_item")).rejects.toThrow(/never deleted/);
-  });
-
-  it("enables RLS with no policies on text_item", async () => {
-    const { rows } = await pool.query<{ rls: boolean; policies: number }>(
-      `select c.relrowsecurity as rls,
-              (select count(*)::int from pg_catalog.pg_policy p where p.polrelid = c.oid) as policies
-       from pg_catalog.pg_class c where c.oid = 'public.text_item'::regclass`,
-    );
-    expect(rows).toEqual([{ rls: true, policies: 0 }]);
-  });
-});
-
-describe("has_material", () => {
-  it("none: no assets, no text items → false", async () => {
-    const created = await createCase();
-    expect(await hasMaterialSql(created.id)).toBe(false);
-    expect(await createSupabaseTextItemRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
-  });
-
-  it("an unknown case → false", async () => {
-    expect(await hasMaterialSql(UNKNOWN_ID)).toBe(false);
-  });
-
-  it("asset: one live asset → true", async () => {
-    const created = await createCase();
-    await seedAssets(created.id, 1);
-    expect(await hasMaterialSql(created.id)).toBe(true);
-    expect(await createSupabaseTextItemRepository().hasMaterial(created.id)).toEqual({ ok: true, value: true });
-  });
-
-  it("text: one live, non-empty text item → true", async () => {
-    const created = await createCase();
-    await seedText(created.id);
-    expect(await hasMaterialSql(created.id)).toBe(true);
-  });
-
-  it("removed only: assets and text items all soft-deleted → false", async () => {
-    const created = await createCase();
-    const [assetId] = await seedAssets(created.id, 1);
-    const textId = await seedText(created.id);
-    await pool.query("update public.asset set deleted_at = now() where id = $1", [assetId]);
-    await pool.query("update public.text_item set deleted_at = now() where id = $1", [textId]);
-    expect(await hasMaterialSql(created.id)).toBe(false);
-  });
-
-  it("a soft-deleted case with a live asset and a live text item → false", async () => {
-    const created = await createCase();
-    await seedAssets(created.id, 1);
-    await seedText(created.id);
-    expect(await hasMaterialSql(created.id)).toBe(true);
-    await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
-    expect(await hasMaterialSql(created.id)).toBe(false);
-    expect(await createSupabaseTextItemRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
-  });
-
-  it("only counts the given case", async () => {
-    const [a, b] = [await createCase(), await createCase()];
-    await seedText(a.id);
-    await seedAssets(a.id, 1);
-    expect(await hasMaterialSql(b.id)).toBe(false);
-  });
-});
-
-describe("text use cases against the real DB and case-study module (no S3)", () => {
-  async function textDeps() {
-    const caseStudy = await loadCaseStudy();
-    return {
-      assets: createSupabaseAssetRepository(),
-      texts: createSupabaseTextItemRepository(),
-      taxonomy: createSupabaseTaxonomyRepository(),
-      form: createSupabaseDetailsFormRepository(),
-      storage: null,
-      cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
-      newId: randomUUID,
-    };
-  }
-
-  async function textEvents(caseId: string) {
-    const { rows } = await pool.query<{ type: string; actor_id: string; data: unknown }>(
-      "select type, actor_id, data from public.case_event where case_id = $1 and type like 'text_%' order by at, type",
-      [caseId],
-    );
-    return rows;
-  }
-
-  it("add → edit → remove → restore writes the row and one event each; status stays draft", async () => {
-    const { makeAddTextItem } = await import("@/modules/material/application/add-text-item");
-    const { makeEditTextItem } = await import("@/modules/material/application/edit-text-item");
-    const { makeRemoveTextItem } = await import("@/modules/material/application/remove-text-item");
-    const { makeRestoreTextItem } = await import("@/modules/material/application/restore-text-item");
-    const actor = await devActor();
-    const created = await createCase();
-    const deps = await textDeps();
-
-    const added = await makeAddTextItem(deps)(actor, { caseId: created.id, title: " Brief ", body: "Testo" });
-    if (!added.ok) throw new Error(`add failed: ${added.error.code}`);
-    const textItemId = added.value.id;
-    expect(added.value).toMatchObject({ title: "Brief", body: "Testo", createdBy: actor.id, deletedAt: null });
-    const edited = await makeEditTextItem(deps)(actor, { caseId: created.id, textItemId, title: "Nuovo", body: "Testo nuovo" });
-    expect(edited.ok).toBe(true);
-    expect(await makeRemoveTextItem(deps)(actor, { caseId: created.id, textItemId })).toEqual({ ok: true, value: undefined });
-    expect(await makeRestoreTextItem(deps)(actor, { caseId: created.id, textItemId })).toEqual({ ok: true, value: undefined });
-
-    const { rows } = await pool.query("select title, body, deleted_at from public.text_item where id = $1", [textItemId]);
-    expect(rows).toEqual([{ title: "Nuovo", body: "Testo nuovo", deleted_at: null }]);
-    expect(await textEvents(created.id)).toEqual([
-      { type: "text_added", actor_id: actor.id, data: { textItemId } },
-      { type: "text_edited", actor_id: actor.id, data: { textItemId } },
-      { type: "text_removed", actor_id: actor.id, data: { textItemId } },
-      { type: "text_restored", actor_id: actor.id, data: { textItemId } },
-    ]);
-    const { rows: status } = await pool.query("select status from public.case_study where id = $1", [created.id]);
-    expect(status).toEqual([{ status: "draft" }]);
-  });
-
-  it("a soft-deleted case → NOT_FOUND; nothing stored", async () => {
-    const { makeAddTextItem } = await import("@/modules/material/application/add-text-item");
-    const created = await createCase();
-    await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
-    const result = await makeAddTextItem(await textDeps())(await devActor(), { caseId: created.id, title: "Brief", body: "Testo" });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
-    const { rows } = await pool.query("select count(*)::int as n from public.text_item where case_id = $1", [created.id]);
-    expect(rows).toEqual([{ n: 0 }]);
-  });
-});
-
-describe("text_item RLS lockout", () => {
-  const browser = () =>
-    createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-
-  it("the browser key is refused reading text_item", async () => {
-    const { data, error } = await browser().from("text_item").select("*");
-    expect(data).toBeNull();
-    expect(error?.code).toBe("42501");
-  });
-
-  it("the browser key is refused calling has_material", async () => {
-    const { data, error } = await browser().rpc("has_material", { p_case_id: UNKNOWN_ID });
-    expect(data).toBeNull();
-    expect(["42501", "PGRST202"]).toContain(error?.code);
-  });
-
-  const statements = {
-    select: "select * from public.text_item",
-    insert: `insert into public.text_item (case_id, title, body, created_by) values ('${UNKNOWN_ID}', 'x', 'y', '${DEV_ACTOR_ID}')`,
-    update: "update public.text_item set deleted_at = now()",
-    delete: "delete from public.text_item",
     has_material: `select public.has_material('${UNKNOWN_ID}')`,
   };
   const cases = (["anon", "authenticated"] as const).flatMap((role) =>
@@ -784,334 +541,85 @@ describe("text_item RLS lockout", () => {
   });
 });
 
-// Story 2.9: taxonomy_term, material_term, set_material_terms, case_material_terms.
-// Terms are seeded here with the `postgres` pool, as a migration would, under keys
-// unique to this run, and removed again afterwards (with the delete guard
-// disabled inside that one transaction, as only the table owner can).
+// has_material (Story 2.8: live assets only; pasted text and the taxonomy are retired).
 
-describe("taxonomy", () => {
-  const suffix = randomUUID().replace(/-/g, "").slice(0, 12);
-  const key = (name: string) => `zt_${suffix}_${name}`;
-  const TAG_A = key("tag_a");
-  const TAG_B = key("tag_b");
-  const PROP = key("prop");
-  const FLAG = key("flag");
-  const seededIds: string[] = [];
-
-  const serviceRole = () =>
-    createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-  const browser = () =>
-    createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-
-  beforeAll(async () => {
-    const { rows } = await pool.query<{ id: string }>(
-      `insert into public.taxonomy_term (kind, key, label) values
-         ('tag', $1, 'Zt ${suffix} Beta'), ('tag', $2, 'Zt ${suffix} Alfa'),
-         ('property', $3, 'Zt ${suffix} Proprietà'), ('flag', $4, 'Zt ${suffix} Riservato')
-       returning id`,
-      [TAG_A, TAG_B, PROP, FLAG],
-    );
-    seededIds.push(...rows.map((r) => r.id));
-  });
-
-  afterAll(async () => {
-    const client = await pool.connect();
-    try {
-      await client.query("begin");
-      await client.query("delete from public.material_term where term_id = any($1::uuid[])", [seededIds]);
-      await client.query("alter table public.taxonomy_term disable trigger taxonomy_term_reject_delete");
-      await client.query("delete from public.taxonomy_term where id = any($1::uuid[])", [seededIds]);
-      await client.query("alter table public.taxonomy_term enable trigger taxonomy_term_reject_delete");
-      await client.query("commit");
-    } catch (error) {
-      await client.query("rollback");
-      throw error;
-    } finally {
-      client.release();
-    }
-  });
-
-  async function taxonomyDeps() {
-    const caseStudy = await loadCaseStudy();
-    return {
-      assets: createSupabaseAssetRepository(),
-      texts: createSupabaseTextItemRepository(),
-      taxonomy: createSupabaseTaxonomyRepository(),
-      form: createSupabaseDetailsFormRepository(),
-      storage: null,
-      cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
-      newId: randomUUID,
-    };
-  }
-
-  async function setTerms(input: Record<string, unknown>) {
-    const { makeSetDeliverableTerms } = await import("@/modules/material/application/set-deliverable-terms");
-    return makeSetDeliverableTerms(await taxonomyDeps())(await devActor(), input);
-  }
-
-  async function caseTerms(caseId: string) {
-    const { makeGetCaseTerms } = await import("@/modules/material/application/get-case-terms");
-    const result = await makeGetCaseTerms(await taxonomyDeps())({ caseId });
-    if (!result.ok) throw new Error(`getCaseTerms failed: ${result.error.code}`);
-    return result.value;
-  }
-
-  async function linkedKeys(refId: string) {
-    const { rows } = await pool.query<{ key: string }>(
-      `select t.key from public.material_term mt join public.taxonomy_term t on t.id = mt.term_id
-       where mt.ref_id = $1 order by t.key collate "C"`,
-      [refId],
-    );
-    return rows.map((r) => r.key);
-  }
-
-  async function termEvents(caseId: string) {
-    const { rows } = await pool.query<{ type: string; actor_id: string; data: unknown }>(
-      "select type, actor_id, data from public.case_event where case_id = $1 and type = 'terms_set' order by at",
-      [caseId],
-    );
-    return rows;
-  }
-
-  const codeOf = (result: { ok: boolean; error?: { code: string } }) => (result.ok ? "OK" : result.error?.code);
-
-  it("listTerms groups the seeded terms by kind, ordered by label", async () => {
-    const { makeListTerms } = await import("@/modules/material/application/list-terms");
-    const result = await makeListTerms(await taxonomyDeps())();
-    if (!result.ok) throw new Error(result.error.code);
-    const ours = (terms: { key: string }[]) => terms.filter((t) => t.key.startsWith(`zt_${suffix}_`)).map((t) => t.key);
-    expect(ours(result.value.tag)).toEqual([TAG_B, TAG_A]);
-    expect(ours(result.value.property)).toEqual([PROP]);
-    expect(ours(result.value.flag)).toEqual([FLAG]);
-  });
-
-  it("set → replace → clear on an asset; other kinds untouched; one terms_set each; status unchanged", async () => {
-    const actor = await devActor();
+describe("has_material", () => {
+  it("none: no assets → false", async () => {
     const created = await createCase();
-    const [assetId] = await seedAssets(created.id, 1);
-    const ref = { caseId: created.id, refKind: "asset", refId: assetId };
-
-    expect(codeOf(await setTerms({ ...ref, kind: "tag", keys: [TAG_A, TAG_B] }))).toBe("OK");
-    expect(await linkedKeys(assetId)).toEqual([TAG_A, TAG_B].sort());
-    expect(codeOf(await setTerms({ ...ref, kind: "property", keys: [PROP] }))).toBe("OK");
-    expect(codeOf(await setTerms({ ...ref, kind: "tag", keys: [TAG_B] }))).toBe("OK");
-    expect(await linkedKeys(assetId)).toEqual([PROP, TAG_B].sort());
-    expect(codeOf(await setTerms({ ...ref, kind: "tag", keys: [] }))).toBe("OK");
-    expect(await linkedKeys(assetId)).toEqual([PROP]);
-
-    expect(await termEvents(created.id)).toEqual([
-      { type: "terms_set", actor_id: actor.id, data: { refKind: "asset", refId: assetId, kind: "tag", keys: [TAG_A, TAG_B] } },
-      { type: "terms_set", actor_id: actor.id, data: { refKind: "asset", refId: assetId, kind: "property", keys: [PROP] } },
-      { type: "terms_set", actor_id: actor.id, data: { refKind: "asset", refId: assetId, kind: "tag", keys: [TAG_B] } },
-      { type: "terms_set", actor_id: actor.id, data: { refKind: "asset", refId: assetId, kind: "tag", keys: [] } },
-    ]);
-    const { rows: status } = await pool.query("select status from public.case_study where id = $1", [created.id]);
-    expect(status).toEqual([{ status: "draft" }]);
+    expect(await hasMaterialSql(created.id)).toBe(false);
+    expect(await createSupabaseAssetRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
   });
 
-  it("set_material_terms returns the previous keys of that kind", async () => {
+  it("an unknown case → false", async () => {
+    expect(await hasMaterialSql(UNKNOWN_ID)).toBe(false);
+    expect(await createSupabaseAssetRepository().hasMaterial(UNKNOWN_ID)).toEqual({ ok: true, value: false });
+  });
+
+  it("one live asset → true", async () => {
     const created = await createCase();
-    const [assetId] = await seedAssets(created.id, 1);
-    const repo = createSupabaseTaxonomyRepository();
-    const target = { caseId: created.id, refKind: "asset" as const, refId: assetId, kind: "tag" as const };
-    expect(await repo.setTerms({ ...target, keys: [TAG_A, TAG_B, TAG_A] })).toEqual({ ok: true, value: [] });
-    expect(await repo.setTerms({ ...target, keys: [TAG_B] })).toEqual({ ok: true, value: [TAG_A, TAG_B].sort() });
-    expect(await repo.setTerms({ ...target, kind: "flag", keys: [] })).toEqual({ ok: true, value: [] });
+    await seedAssets(created.id, 1);
+    expect(await hasMaterialSql(created.id)).toBe(true);
+    expect(await createSupabaseAssetRepository().hasMaterial(created.id)).toEqual({ ok: true, value: true });
   });
 
-  it("a text item works like an asset", async () => {
+  it("only removed files: every asset soft-deleted → false", async () => {
     const created = await createCase();
-    const textId = await seedText(created.id);
-    expect(codeOf(await setTerms({ caseId: created.id, refKind: "text", refId: textId, kind: "flag", keys: [FLAG] }))).toBe("OK");
-    expect(await linkedKeys(textId)).toEqual([FLAG]);
+    const ids = await seedAssets(created.id, 2);
+    await pool.query("update public.asset set deleted_at = now() where id = any($1::uuid[])", [ids]);
+    expect(await hasMaterialSql(created.id)).toBe(false);
+    expect(await createSupabaseAssetRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
   });
 
-  it.each([
-    ["an unknown key", () => [TAG_A, key("missing")], key("missing")],
-    ["a property key sent as tag", () => [PROP], PROP],
-  ])("%s → UNKNOWN_TERM naming the key; nothing changes", async (_label, keys, named) => {
+  it("a soft-deleted case with a live asset → false", async () => {
     const created = await createCase();
-    const [assetId] = await seedAssets(created.id, 1);
-    const ref = { caseId: created.id, refKind: "asset", refId: assetId };
-    await setTerms({ ...ref, kind: "tag", keys: [TAG_B] });
-    const result = await setTerms({ ...ref, kind: "tag", keys: keys() });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toMatchObject({ code: "UNKNOWN_TERM", details: { key: named } });
-    expect(await linkedKeys(assetId)).toEqual([TAG_B]);
-    expect(await termEvents(created.id)).toHaveLength(1);
-  });
-
-  it("removed deliverables and another case's deliverables → NOT_FOUND; nothing changes", async () => {
-    const [a, b] = [await createCase(), await createCase()];
-    const [assetId] = await seedAssets(a.id, 1);
-    const textId = await seedText(a.id);
-    await pool.query("update public.asset set deleted_at = now() where id = $1", [assetId]);
-    await pool.query("update public.text_item set deleted_at = now() where id = $1", [textId]);
-    const [otherAsset] = await seedAssets(b.id, 1);
-
-    for (const input of [
-      { caseId: a.id, refKind: "asset", refId: assetId },
-      { caseId: a.id, refKind: "text", refId: textId },
-      { caseId: a.id, refKind: "asset", refId: otherAsset },
-      { caseId: a.id, refKind: "text", refId: otherAsset },
-    ]) {
-      expect(codeOf(await setTerms({ ...input, kind: "tag", keys: [TAG_A] }))).toBe("NOT_FOUND");
-    }
-    expect(await linkedKeys(assetId)).toEqual([]);
-    expect(await linkedKeys(textId)).toEqual([]);
-    expect(await linkedKeys(otherAsset)).toEqual([]);
-    expect(await termEvents(a.id)).toEqual([]);
-  });
-
-  it("set_material_terms raises NOT_FOUND for a soft-deleted case", async () => {
-    const created = await createCase();
-    const [assetId] = await seedAssets(created.id, 1);
+    await seedAssets(created.id, 1);
+    expect(await hasMaterialSql(created.id)).toBe(true);
     await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
-    await expect(
-      pool.query("select public.set_material_terms($1, 'asset', $2, 'tag', $3::text[])", [created.id, assetId, [TAG_A]]),
-    ).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+    expect(await hasMaterialSql(created.id)).toBe(false);
+    expect(await createSupabaseAssetRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
   });
 
-  it("read: tagged and untagged deliverables; a removed one keeps its links and comes back on restore", async () => {
-    const created = await createCase();
-    const [tagged, untagged] = await seedAssets(created.id, 2);
-    const textId = await seedText(created.id);
-    await setTerms({ caseId: created.id, refKind: "asset", refId: tagged, kind: "tag", keys: [TAG_A, TAG_B] });
-    await setTerms({ caseId: created.id, refKind: "asset", refId: tagged, kind: "flag", keys: [FLAG] });
-    await setTerms({ caseId: created.id, refKind: "text", refId: textId, kind: "property", keys: [PROP] });
-
-    const expected = [
-      { refKind: "asset", refId: tagged, tag: [TAG_B, TAG_A], property: [], flag: [FLAG] },
-      { refKind: "asset", refId: untagged, tag: [], property: [], flag: [] },
-      { refKind: "text", refId: textId, tag: [], property: [PROP], flag: [] },
-    ];
-    expect(await caseTerms(created.id)).toEqual(expected);
-
-    const repo = createSupabaseAssetRepository();
-    await repo.softDelete(created.id, tagged);
-    expect((await caseTerms(created.id)).map((d) => d.refId)).toEqual([untagged, textId]);
-    expect(await linkedKeys(tagged)).toEqual([FLAG, TAG_A, TAG_B].sort());
-    await repo.restore(created.id, tagged);
-    expect(await caseTerms(created.id)).toEqual(expected);
+  it("only counts the given case", async () => {
+    const [a, b] = [await createCase(), await createCase()];
+    await seedAssets(a.id, 1);
+    expect(await hasMaterialSql(b.id)).toBe(false);
   });
 
-  it("an unknown case reads as NOT_FOUND; case_material_terms gives []", async () => {
-    const { makeGetCaseTerms } = await import("@/modules/material/application/get-case-terms");
-    const result = await makeGetCaseTerms(await taxonomyDeps())({ caseId: UNKNOWN_ID });
-    expect(codeOf(result)).toBe("NOT_FOUND");
-    const { rows } = await pool.query("select public.case_material_terms($1) as terms", [UNKNOWN_ID]);
-    expect(rows).toEqual([{ terms: [] }]);
-  });
-
-  it("a label renamed by a migration leaves key-based set and read working", async () => {
-    const created = await createCase();
-    const [assetId] = await seedAssets(created.id, 1);
-    await setTerms({ caseId: created.id, refKind: "asset", refId: assetId, kind: "tag", keys: [TAG_A] });
-    await pool.query("update public.taxonomy_term set label = $2 where key = $1", [TAG_A, `Zt ${suffix} Rinominato`]);
-    expect((await caseTerms(created.id))[0].tag).toEqual([TAG_A]);
-    expect(codeOf(await setTerms({ caseId: created.id, refKind: "asset", refId: assetId, kind: "tag", keys: [TAG_A, TAG_B] }))).toBe(
-      "OK",
+  it("keeps security invoker, search_path = '' and service-role-only execute", async () => {
+    const { rows } = await pool.query(
+      `select p.prosecdef as definer, p.proconfig as config,
+              has_function_privilege('service_role', p.oid, 'execute') as service_role,
+              has_function_privilege('anon', p.oid, 'execute') as anon,
+              has_function_privilege('authenticated', p.oid, 'execute') as authenticated
+       from pg_catalog.pg_proc p where p.oid = 'public.has_material(uuid)'::regprocedure`,
     );
-    expect(await linkedKeys(assetId)).toEqual([TAG_A, TAG_B].sort());
+    expect(rows).toEqual([{ definer: false, config: ['search_path=""'], service_role: true, anon: false, authenticated: false }]);
   });
+});
 
-  it("the service role can read terms but never write them", async () => {
-    const db = serviceRole();
-    const read = await db.from("taxonomy_term").select("key").eq("key", TAG_A);
-    expect(read.error).toBeNull();
-    expect(read.data).toEqual([{ key: TAG_A }]);
-
-    const insert = await db.from("taxonomy_term").insert({ kind: "tag", key: key("injected"), label: "X" });
-    expect(insert.error?.code).toBe("42501");
-    const update = await db.from("taxonomy_term").update({ label: "X" }).eq("key", TAG_A);
-    expect(update.error?.code).toBe("42501");
-    const remove = await db.from("taxonomy_term").delete().eq("key", TAG_A);
-    expect(remove.error?.code).toBe("42501");
-
-    const { rows } = await pool.query("select count(*)::int as n from public.taxonomy_term where key in ($1, $2)", [
-      TAG_A,
-      key("injected"),
-    ]);
-    expect(rows).toEqual([{ n: 1 }]);
-  });
-
-  it("select is the service role's only privilege on taxonomy_term", async () => {
-    const { rows } = await pool.query<{ privilege: string }>(
-      `select privilege_type as privilege from information_schema.role_table_grants
-       where table_schema = 'public' and table_name = 'taxonomy_term' and grantee = 'service_role'
-       order by privilege_type`,
+describe("retired objects (Story 2.8)", () => {
+  it("the pasted-text and taxonomy tables and functions are gone", async () => {
+    const { rows: tables } = await pool.query(
+      `select pg_catalog.to_regclass('public.text_item') as text_item,
+              pg_catalog.to_regclass('public.material_term') as material_term,
+              pg_catalog.to_regclass('public.taxonomy_term') as taxonomy_term`,
     );
-    expect(rows).toEqual([{ privilege: "SELECT" }]);
-    const { rows: checks } = await pool.query(
-      `select ${["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
-        .map((p) => `has_table_privilege('service_role', 'public.taxonomy_term', '${p}') as "${p}"`)
-        .join(", ")}`,
+    expect(tables).toEqual([{ text_item: null, material_term: null, taxonomy_term: null }]);
+    const { rows: functions } = await pool.query(
+      `select p.proname from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname = any($1::text[])`,
+      [["set_material_terms", "case_material_terms", "text_item_touch_updated_at", "text_item_reject_delete", "taxonomy_term_reject_delete"]],
     );
-    expect(checks).toEqual([
-      { SELECT: true, INSERT: false, UPDATE: false, DELETE: false, TRUNCATE: false, REFERENCES: false, TRIGGER: false },
-    ]);
+    expect(functions).toEqual([]);
   });
+});
 
-  it("deleting or truncating taxonomy_term is rejected even for the owner", async () => {
-    await expect(inRolledBackTx("delete from public.taxonomy_term where key = $1", [TAG_A])).rejects.toThrow(/never deleted/);
-    await expect(inRolledBackTx("truncate public.taxonomy_term cascade")).rejects.toThrow(/never deleted/);
-  });
-
-  it.each([
-    ["an upper-case key", "insert into public.taxonomy_term (kind, key, label) values ('tag', 'Bad', 'X')"],
-    ["a key with a space", "insert into public.taxonomy_term (kind, key, label) values ('tag', 'a b', 'X')"],
-    ["an unknown kind", "insert into public.taxonomy_term (kind, key, label) values ('category', 'zt_ok', 'X')"],
-    ["a blank label", "insert into public.taxonomy_term (kind, key, label) values ('tag', 'zt_ok', '  ')"],
-    ["an unknown ref kind", `insert into public.material_term (ref_kind, ref_id, term_id) select 'form_field', '${UNKNOWN_ID}', id from public.taxonomy_term limit 1`],
-  ])("the table checks reject %s", async (_label, sql) => {
-    await expect(inRolledBackTx(sql)).rejects.toMatchObject({ code: "23514" });
-  });
-
-  it.each(["taxonomy_term", "material_term"])("enables RLS with no policies on %s", async (table) => {
-    const { rows } = await pool.query<{ rls: boolean; policies: number }>(
-      `select c.relrowsecurity as rls,
-              (select count(*)::int from pg_catalog.pg_policy p where p.polrelid = c.oid) as policies
-       from pg_catalog.pg_class c where c.oid = $1::regclass`,
-      [`public.${table}`],
+describe("restore_asset after Story 2.8", () => {
+  it("restore_asset stays, documented as compensation only", async () => {
+    const { rows } = await pool.query(
+      "select pg_catalog.obj_description('public.restore_asset(uuid, uuid)'::regprocedure, 'pg_proc') as comment",
     );
-    expect(rows).toEqual([{ rls: true, policies: 0 }]);
-  });
-
-  it.each(["taxonomy_term", "material_term"])("the browser key is refused reading %s", async (table) => {
-    const { data, error } = await browser().from(table as "taxonomy_term").select("*");
-    expect(data).toBeNull();
-    expect(error?.code).toBe("42501");
-  });
-
-  it.each([
-    ["set_material_terms", { p_case_id: UNKNOWN_ID, p_ref_kind: "asset", p_ref_id: UNKNOWN_ID, p_kind: "tag", p_keys: [] }],
-    ["case_material_terms", { p_case_id: UNKNOWN_ID }],
-  ])("the browser key is refused calling %s", async (fn, args) => {
-    const { data, error } = await browser().rpc(fn as "case_material_terms", args as never);
-    expect(data).toBeNull();
-    expect(["42501", "PGRST202"]).toContain(error?.code);
-  });
-
-  const statements = {
-    "select taxonomy_term": "select * from public.taxonomy_term",
-    "insert taxonomy_term": "insert into public.taxonomy_term (kind, key, label) values ('tag', 'zt_x', 'X')",
-    "update taxonomy_term": "update public.taxonomy_term set label = 'X'",
-    "select material_term": "select * from public.material_term",
-    "insert material_term": `insert into public.material_term (ref_kind, ref_id, term_id) values ('asset', '${UNKNOWN_ID}', '${UNKNOWN_ID}')`,
-    "delete material_term": "delete from public.material_term",
-    set_material_terms: `select public.set_material_terms('${UNKNOWN_ID}', 'asset', '${UNKNOWN_ID}', 'tag', '{}')`,
-    case_material_terms: `select public.case_material_terms('${UNKNOWN_ID}')`,
-  };
-  const roleCases = (["anon", "authenticated"] as const).flatMap((role) =>
-    Object.entries(statements).map(([verb, sql]) => [role, verb, sql] as const),
-  );
-
-  it.each(roleCases)("%s gets permission denied on %s", async (role, _verb, sql) => {
-    await expect(inRolledBackTx(sql, [], role)).rejects.toMatchObject({ code: "42501" });
+    expect(rows[0].comment).toMatch(/^Compensation only/);
   });
 });
 
@@ -1127,8 +635,6 @@ describe("details form (context_form)", () => {
     const caseStudy = await loadCaseStudy();
     return {
       assets: createSupabaseAssetRepository(),
-      texts: createSupabaseTextItemRepository(),
-      taxonomy: createSupabaseTaxonomyRepository(),
       form: createSupabaseDetailsFormRepository(),
       storage: null,
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
@@ -1260,13 +766,13 @@ describe("details form (context_form)", () => {
     });
   });
 
-  it("the form is not material: a filled form with no assets or text items → has_material false", async () => {
+  it("the form is not material: a filled form with no assets → has_material false", async () => {
     const created = await createCase();
     for (const field of ["context", "solution", "results"]) {
       expect(codeOf(await saveField({ caseId: created.id, field, text: "Compilato" }))).toBe("OK");
     }
     expect(await hasMaterialSql(created.id)).toBe(false);
-    expect(await createSupabaseTextItemRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
+    expect(await createSupabaseAssetRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
   });
 
   it("deleting or truncating context_form is rejected", async () => {

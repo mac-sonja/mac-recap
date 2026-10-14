@@ -16,8 +16,6 @@ describe("respondToAppError", () => {
     ["UPLOAD_REJECTED", 400],
     ["ASSET_ALREADY_CONFIRMED", 409],
     ["STORAGE_NOT_CONFIGURED", 503],
-    ["TEXT_EMPTY", 400],
-    ["UNKNOWN_TERM", 400],
     ["UNKNOWN_FIELD", 400],
     ["UNKNOWN_REF", 400],
     ["PROFILE_LOOKUP_FAILED", 500],

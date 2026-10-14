@@ -12,6 +12,8 @@ source: "_bmad-output/planning-artifacts/ux-designs/ux-MAC Recap-2026-10-08/EXPE
 
 # Sprint Change Proposal, 2026-10-14
 
+> **Implementation note (2026-10-14, Story 2.8 planning, owner decision):** `restore_asset` is **kept** as `removeAsset`'s internal compensation when the `asset_removed` event write fails; the restore use cases and actions are still removed. Where this proposal says `restore_asset` is dropped, read "kept as compensation only".
+
 ## 1. Issue summary
 
 During the UX update of 2026-10-13/14 (DESIGN.md and EXPERIENCE.md, PR #24), the product owner made three decisions about the new-case-study wizard. Each one conflicts with the PRD, the epics and Sprint 1 backend work that is already merged:

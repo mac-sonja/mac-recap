@@ -5,15 +5,13 @@ import { MAX_FILE_BYTES } from "@/modules/material/domain/files";
 import type { AssetRepository, NewAsset } from "@/modules/material/ports/asset-repository";
 import type { DetailsFormRepository } from "@/modules/material/ports/details-form-repository";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
-import type { TaxonomyRepository } from "@/modules/material/ports/taxonomy-repository";
-import type { TextItemRepository } from "@/modules/material/ports/text-item-repository";
 import { err, ok } from "@/shared/result";
 import { makeConfirmUpload } from "./confirm-upload";
+import { makeHasMaterial } from "./has-material";
 import { makeListAssets } from "./list-assets";
 import type { CaseStudies, MaterialDeps } from "./deps";
 import { makePresignUpload } from "./presign-upload";
 import { makeRemoveAsset } from "./remove-asset";
-import { makeRestoreAsset } from "./restore-asset";
 
 const actor: Actor = {
   id: "00000000-0000-4000-8000-000000000002",
@@ -30,7 +28,7 @@ const PNG = "image/png";
 
 /**
  * In-memory material world: a live case and a soft-deleted one, assets that
- * mirror `create_asset` / `restore_asset` (cap of 20 non-deleted), stored S3
+ * mirror `create_asset` / `restore_asset` (cap of 20 non-deleted) and `has_material`, stored S3
  * objects by asset id, and the recorded events.
  */
 function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = {}) {
@@ -75,7 +73,7 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
       assets.set(assetId, { ...row, deletedAt: "2026-10-13T13:00:00Z" });
       return ok(true);
     }),
-    restore: vi.fn<AssetRepository["restore"]>(async (caseId, assetId) => {
+    undoSoftDelete: vi.fn<AssetRepository["undoSoftDelete"]>(async (caseId, assetId) => {
       const row = assets.get(assetId);
       if (!row || row.caseId !== caseId) return err({ code: "NOT_FOUND", message: "none" });
       if (row.deletedAt === null) return ok(false);
@@ -83,6 +81,7 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
       assets.set(assetId, { ...row, deletedAt: null });
       return ok(true);
     }),
+    hasMaterial: vi.fn<AssetRepository["hasMaterial"]>(async (caseId) => ok(caseId === CASE_ID && liveCount(caseId) > 0)),
   } satisfies AssetRepository;
 
   const storage = {
@@ -105,23 +104,9 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
     }),
   } satisfies CaseStudies;
 
-  const deps: MaterialDeps = { assets: repo, texts: unusedTexts, taxonomy: unusedTaxonomy, form: unusedForm, storage, cases, newId: () => NEW_ASSET_ID };
+  const deps: MaterialDeps = { assets: repo, form: unusedForm, storage, cases, newId: () => NEW_ASSET_ID };
   return { deps, repo, storage, cases, assets, objects, events, seed };
 }
-
-/** Asset use cases never touch text items. */
-const unusedTexts = new Proxy({} as TextItemRepository, {
-  get: (_target, name) => () => {
-    throw new Error(`asset use case called texts.${String(name)}`);
-  },
-});
-
-/** Asset use cases never touch the taxonomy. */
-const unusedTaxonomy = new Proxy({} as TaxonomyRepository, {
-  get: (_target, name) => () => {
-    throw new Error(`asset use case called taxonomy.${String(name)}`);
-  },
-});
 
 /** Asset use cases never touch the details form. */
 const unusedForm = new Proxy({} as DetailsFormRepository, {
@@ -320,7 +305,7 @@ describe("removeAsset", () => {
     expect(w.repo.softDelete).not.toHaveBeenCalled();
   });
 
-  it("if the event write fails, restores the asset and returns the error", async () => {
+  it("if the event write fails, undoes the soft delete and returns the error", async () => {
     const w = world();
     const id = w.seed(null);
     const failure = err({ code: "CASE_EVENT_WRITE_FAILED", message: "down" });
@@ -330,49 +315,36 @@ describe("removeAsset", () => {
   });
 });
 
-describe("restoreAsset", () => {
-  it("clears deleted_at and records asset_restored { assetId }", async () => {
-    const w = world({ live: 3 });
-    const id = w.seed("2026-10-13T11:00:00Z");
-    expect(await makeRestoreAsset(w.deps)(actor, { caseId: CASE_ID, assetId: id })).toEqual(ok(undefined));
-    expect(w.assets.get(id)?.deletedAt).toBeNull();
-    expect(w.events).toEqual([{ caseId: CASE_ID, type: "asset_restored", data: { assetId: id }, actorId: actor.id }]);
+describe("hasMaterial", () => {
+  it("none: no assets → false", async () => {
+    expect(await makeHasMaterial(world().deps)(CASE_ID)).toEqual(ok(false));
   });
 
-  it("a live asset → ok, no event", async () => {
+  it("one live asset → true", async () => {
+    expect(await makeHasMaterial(world({ live: 1 }).deps)(CASE_ID)).toEqual(ok(true));
+  });
+
+  it("only removed files → false", async () => {
+    expect(await makeHasMaterial(world({ removed: 2 }).deps)(CASE_ID)).toEqual(ok(false));
+  });
+
+  it("a malformed case id → INVALID_INPUT without a query", async () => {
     const w = world();
-    const id = w.seed(null);
-    expect(await makeRestoreAsset(w.deps)(actor, { caseId: CASE_ID, assetId: id })).toEqual(ok(undefined));
-    expect(w.events).toEqual([]);
+    expect(codeOf(await makeHasMaterial(w.deps)("nope"))).toBe("INVALID_INPUT");
+    expect(w.repo.hasMaterial).not.toHaveBeenCalled();
   });
 
-  it("at the cap → FILE_LIMIT_REACHED; stays removed", async () => {
-    const w = world({ live: 20 });
-    const id = w.seed("2026-10-13T11:00:00Z");
-    expect(codeOf(await makeRestoreAsset(w.deps)(actor, { caseId: CASE_ID, assetId: id }))).toBe("FILE_LIMIT_REACHED");
-    expect(w.assets.get(id)?.deletedAt).not.toBeNull();
-    expect(w.events).toEqual([]);
-  });
-
-  it("an unknown asset → NOT_FOUND", async () => {
+  it("passes a lookup failure through", async () => {
     const w = world();
-    expect(codeOf(await makeRestoreAsset(w.deps)(actor, { caseId: CASE_ID, assetId: NEW_ASSET_ID }))).toBe("NOT_FOUND");
-  });
-
-  it("if the event write fails, removes the asset again and returns the error", async () => {
-    const w = world();
-    const id = w.seed("2026-10-13T11:00:00Z");
-    const failure = err({ code: "CASE_EVENT_WRITE_FAILED", message: "down" });
-    w.cases.recordEvent.mockResolvedValueOnce(failure);
-    expect(await makeRestoreAsset(w.deps)(actor, { caseId: CASE_ID, assetId: id })).toEqual(failure);
-    expect(w.assets.get(id)?.deletedAt).not.toBeNull();
+    const failure = err({ code: "MATERIAL_LOOKUP_FAILED", message: "down" });
+    w.repo.hasMaterial.mockResolvedValueOnce(failure);
+    expect(await makeHasMaterial(w.deps)(CASE_ID)).toEqual(failure);
   });
 });
 
 describe("every use case", () => {
   it.each([
     ["remove", makeRemoveAsset],
-    ["restore", makeRestoreAsset],
   ] as const)("%s returns STORAGE_NOT_CONFIGURED when S3 is not configured", async (_label, make) => {
     const w = world();
     expect(codeOf(await make({ ...w.deps, storage: null })(actor, { caseId: CASE_ID, assetId: NEW_ASSET_ID }))).toBe(
@@ -459,7 +431,7 @@ describe("listAssets", () => {
     await makeListAssets(w.deps)({ caseId: CASE_ID });
     expect(w.repo.create).not.toHaveBeenCalled();
     expect(w.repo.softDelete).not.toHaveBeenCalled();
-    expect(w.repo.restore).not.toHaveBeenCalled();
+    expect(w.repo.undoSoftDelete).not.toHaveBeenCalled();
     expect(w.events).toEqual([]);
   });
 

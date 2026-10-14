@@ -27,9 +27,17 @@ export interface AssetRepository {
   /** Sets `deleted_at` on a live asset of the case; `ok(false)` when there is none. */
   softDelete(caseId: string, assetId: string): Promise<Result<boolean>>;
   /**
-   * Clears `deleted_at` under the same lock as `create`: `ok(true)` restored,
-   * `ok(false)` it was already live (nothing written). `err NOT_FOUND` (no such
-   * asset in the case), `FILE_LIMIT_REACHED` (cap reached).
+   * Compensation only: undoes `softDelete` when its `asset_removed` event could
+   * not be written (no feature restores a removed file). Clears `deleted_at`
+   * under the same lock as `create`: `ok(true)` undone, `ok(false)` it was
+   * already live (nothing written). `err NOT_FOUND` (no such asset in the case),
+   * `FILE_LIMIT_REACHED` (cap reached).
    */
-  restore(caseId: string, assetId: string): Promise<Result<boolean>>;
+  undoSoftDelete(caseId: string, assetId: string): Promise<Result<boolean>>;
+  /**
+   * True when the case exists, is not soft-deleted and has at least one
+   * non-deleted asset (the details form never counts). `err MATERIAL_LOOKUP_FAILED`
+   * only when the check fails.
+   */
+  hasMaterial(caseId: string): Promise<Result<boolean>>;
 }

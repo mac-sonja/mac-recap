@@ -8,8 +8,8 @@ import { storageNotConfigured, type MaterialDeps } from "./deps";
 /**
  * Soft-deletes one live asset of a non-deleted case and records `asset_removed
  * { assetId }`; the S3 object stays. An unknown or already removed asset is
- * `NOT_FOUND`. If the event write fails the asset is restored and the error
- * returned. The caller has already authorized `upload`.
+ * `NOT_FOUND`. If the event write fails the soft delete is undone
+ * (`undoSoftDelete`) and the error returned. The caller has already authorized `upload`.
  */
 export function makeRemoveAsset({ assets, storage, cases }: MaterialDeps) {
   return async function removeAsset(actor: Actor, input: unknown): Promise<Result<void>> {
@@ -29,7 +29,7 @@ export function makeRemoveAsset({ assets, storage, cases }: MaterialDeps) {
 
     const event = await cases.recordEvent(actor, { caseId, type: ASSET_REMOVED, data: { assetId } });
     if (!event.ok) {
-      const undone = await assets.restore(caseId, assetId);
+      const undone = await assets.undoSoftDelete(caseId, assetId);
       if (!undone.ok) log.error("asset removed without its asset_removed event: compensation failed", { caseId, actorId: actor.id });
       return event;
     }

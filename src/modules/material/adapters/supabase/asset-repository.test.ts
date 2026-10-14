@@ -178,19 +178,41 @@ describe("createSupabaseAssetRepository", () => {
   it.each([
     [true, { ok: true, value: true }],
     [false, { ok: true, value: false }],
-  ])("restore returns the function's %s", async (data, expected) => {
+  ])("undoSoftDelete returns the function's %s", async (data, expected) => {
     const stub = stubClient({ data, error: null });
-    expect(await createSupabaseAssetRepository(stub.factory).restore(CASE_ID, ASSET_ID)).toEqual(expected);
+    expect(await createSupabaseAssetRepository(stub.factory).undoSoftDelete(CASE_ID, ASSET_ID)).toEqual(expected);
     expect(stub.rpc).toHaveBeenCalledWith("restore_asset", { p_case_id: CASE_ID, p_asset_id: ASSET_ID });
   });
 
   it.each([
     ["FILE_LIMIT_REACHED", "FILE_LIMIT_REACHED"],
     ["NOT_FOUND", "NOT_FOUND"],
-  ])("restore maps the %s refusal", async (message, code) => {
+  ])("undoSoftDelete maps the %s refusal", async (message, code) => {
     const stub = stubClient({ data: null, error: { code: "P0001", message } });
-    const result = await createSupabaseAssetRepository(stub.factory).restore(CASE_ID, ASSET_ID);
+    const result = await createSupabaseAssetRepository(stub.factory).undoSoftDelete(CASE_ID, ASSET_ID);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe(code);
+  });
+
+  it.each([
+    [true, true],
+    [false, false],
+  ])("hasMaterial calls has_material and returns %s", async (data, expected) => {
+    const stub = stubClient({ data, error: null });
+    expect(await createSupabaseAssetRepository(stub.factory).hasMaterial(CASE_ID)).toEqual({ ok: true, value: expected });
+    expect(stub.rpc).toHaveBeenCalledWith("has_material", { p_case_id: CASE_ID });
+  });
+
+  it("hasMaterial returns MATERIAL_LOOKUP_FAILED and logs the case id when the call fails", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const stub = stubClient({ data: null, error: { code: "PGRST000", message: "down" } });
+      const result = await createSupabaseAssetRepository(stub.factory).hasMaterial(CASE_ID);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("MATERIAL_LOOKUP_FAILED");
+      expect(JSON.parse(String(write.mock.calls[0][0]))).toMatchObject({ level: "error", caseId: CASE_ID });
+    } finally {
+      write.mockRestore();
+    }
   });
 });

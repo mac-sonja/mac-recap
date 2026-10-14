@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { hasNoNul, NUL_MESSAGE, withinCodePoints } from "@/modules/material/domain/text-item";
+import { hasNoNul, NUL_MESSAGE, withinCodePoints } from "@/modules/material/domain/validation";
 
 /** The details form's stable field keys (the `save_context_field` check and the `context_form` columns match). */
 export const FORM_FIELDS = ["context", "solution", "results"] as const;
@@ -74,11 +74,11 @@ export const unknownField = (field: string) => {
 };
 
 /**
- * A reference to a piece of material a claim can cite (AD: `MaterialRef`).
- * Only `form_field` refs (id = a FORM_FIELDS key) resolve so far; `asset` and
- * `text` refs arrive with the first Epic 3/4 story that needs them.
+ * A reference to a piece of material a claim can cite (AD-18: `MaterialRef`).
+ * Only `form_field` refs (id = a FORM_FIELDS key) resolve so far; `asset` refs
+ * arrive with the first Epic 3/4 story that needs them.
  */
-export const MATERIAL_REF_KINDS = ["asset", "text", "form_field"] as const;
+export const MATERIAL_REF_KINDS = ["asset", "form_field"] as const;
 export type MaterialRefKind = (typeof MATERIAL_REF_KINDS)[number];
 
 export const materialRefSchema = z.object({
