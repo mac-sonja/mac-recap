@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Details step mock</title>
+<style>
+/* Governs: EXPERIENCE.md > New case study wizard > Step 2 Details; Story 2.10.
+   Layout: wizard layout (imports/ui-refs/ref-hifi-material-layout.webp, layout only). Look: DESIGN.md (2026-10-14).
+   Three optional fields are the only text input (C7). Prompts as placeholders. Spines win on conflict. */
+:root{
+  --surface:#000;--raised:#151515;--control:#1E1E1E;--selected:#262626;--border:#262626;--border-strong:#303030;
+  --fg-strong:#FFF;--fg:#F2F2F2;--muted:#878787;--primary:#CBFF00;--accent:#007BFF;--info:#B2D9EF;--focus:#CBFF00;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#0A0A0A;color:var(--fg);font:400 14px/1.5 var(--sans);padding:32px 24px 64px}
+.cap{max-width:1440px;margin:0 auto 12px;color:var(--muted);font-size:13px}
+.cap b{color:var(--fg);font-weight:500}
+.frame{max-width:1440px;min-height:900px;margin:0 auto 56px;border:1px solid var(--border-strong);border-radius:12px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:16px;padding:0 32px;height:60px;border-bottom:1px solid var(--border);flex-shrink:0}
+.back{font-size:18px}
+.badge{margin-left:auto;font-size:13px;padding:3px 12px;border-radius:9999px;border:1px solid rgba(242,242,242,.22);background:rgba(242,242,242,.06)}
+.stage{flex:1;display:flex;padding:40px 24px}
+.col{width:100%;max-width:820px;margin:auto}
+.eyebrow{color:var(--muted);font-size:12px;margin:0 0 8px}
+h1{font-size:40px;line-height:1.15;font-weight:500;color:var(--fg-strong);margin:0 0 32px;letter-spacing:-.01em}
+.stepper{display:flex;gap:4px;background:var(--control);border-radius:10px;padding:3px;margin-bottom:40px}
+.step{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 0;border-radius:8px;color:var(--muted)}
+.step.on{background:var(--selected);color:var(--fg)}
+.step.done{color:var(--fg)}
+.step i{font-style:normal;font-family:var(--mono);font-size:12px}
+.step .ok{color:var(--fg);font-style:normal}
+h2{font-size:20px;font-weight:500;color:var(--fg-strong);margin:0 0 6px}
+.intro{color:var(--muted);margin:0 0 24px}
+.fields{display:flex;flex-direction:column;gap:20px}
+.lbl{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin:0 0 6px}
+.area{background:var(--control);border:1px solid transparent;border-radius:10px;padding:12px;min-height:120px;color:var(--fg);white-space:pre-wrap}
+.area.ph{color:var(--muted)}
+.area.focus{outline:2px solid var(--focus);outline-offset:0}
+.caret{display:inline-block;width:1px;height:16px;background:var(--fg);vertical-align:-3px}
+.mono{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.foot{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;margin-top:32px;padding-top:20px;border-top:1px solid var(--border)}
+.dots{display:flex;gap:6px;justify-content:center}
+.dots span{width:6px;height:6px;border-radius:9999px;background:var(--selected)}
+.dots span.on{width:20px;background:var(--fg)}
+.btn{justify-self:end;border:none;border-radius:10px;padding:10px 18px;font:400 14px var(--sans);background:var(--primary);color:#000}
+</style>
+</head>
+<body>
+
+<p class="cap"><b>1 · Details step, empty.</b> Three optional fields; prompts sit as placeholders. Avanti is active from the start because the fields are optional. Materiale shows as done and can be reopened from the stepper.</p>
+<div class="frame">
+  <div class="top"><span class="back">←</span><span>Rebrand Lumen 2026</span><span class="badge">Bozza</span></div>
+  <div class="stage"><div class="col">
+    <p class="eyebrow">Nuovo case study</p>
+    <h1>Rebrand Lumen 2026</h1>
+    <div class="stepper"><div class="step done"><em class="ok">✓</em> Materiale</div><div class="step on"><i>2</i> Dettagli</div><div class="step"><i>3</i> Genera</div></div>
+    <h2>Racconta il progetto</h2>
+    <p class="intro">Tre campi facoltativi. Servono come fonte, ma da soli non bastano per generare.</p>
+    <div class="fields">
+      <div><p class="lbl"><span>Contesto</span></p><div class="area ph">Di cosa aveva bisogno il cliente, e perché?</div></div>
+      <div><p class="lbl"><span>Soluzione</span></p><div class="area ph">Cosa avete fatto, e come?</div></div>
+      <div><p class="lbl"><span>Risultati</span></p><div class="area ph">Cosa è cambiato? Indica i numeri dove li hai.</div></div>
+    </div>
+    <div class="foot"><span class="mono">0 di 3 compilati</span><div class="dots"><span></span><span class="on"></span><span></span></div><button class="btn">Avanti</button></div>
+  </div></div>
+</div>
+
+<p class="cap"><b>2 · Details step, partly filled.</b> Contesto filled; Soluzione in focus (lime focus ring); Risultati still empty. Each field saves on its own (autosave, "Salvato" not shown in the bar here).</p>
+<div class="frame">
+  <div class="top"><span class="back">←</span><span>Rebrand Lumen 2026</span><span class="badge">Bozza</span></div>
+  <div class="stage"><div class="col">
+    <p class="eyebrow">Nuovo case study</p>
+    <h1>Rebrand Lumen 2026</h1>
+    <div class="stepper"><div class="step done"><em class="ok">✓</em> Materiale</div><div class="step on"><i>2</i> Dettagli</div><div class="step"><i>3</i> Genera</div></div>
+    <h2>Racconta il progetto</h2>
+    <p class="intro">Tre campi facoltativi. Servono come fonte, ma da soli non bastano per generare.</p>
+    <div class="fields">
+      <div><p class="lbl"><span>Contesto</span></p><div class="area">Lumen voleva un'identità unica per il retail e per il B2B, dopo due fusioni che avevano lasciato tre marchi diversi sugli scaffali.</div></div>
+      <div><p class="lbl"><span>Soluzione</span></p><div class="area focus">Un sistema con un solo logotipo e due registri di colore<span class="caret"></span></div></div>
+      <div><p class="lbl"><span>Risultati</span></p><div class="area ph">Cosa è cambiato? Indica i numeri dove li hai.</div></div>
+    </div>
+    <div class="foot"><span class="mono">2 di 3 compilati</span><div class="dots"><span></span><span class="on"></span><span></span></div><button class="btn">Avanti</button></div>
+  </div></div>
+</div>
+
+</body>
+</html>
