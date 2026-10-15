@@ -43,8 +43,12 @@ export function Sidebar({ showNewCaseStudy, showCaseStudies, displayName, roleLa
   return (
     <aside className="flex w-16 shrink-0 flex-col border-r bg-surface-raised xl:w-60">
       <nav aria-label={it.shell.nav.label} className="flex flex-1 flex-col gap-1 p-2 xl:p-3">
-        <p className="mb-3 hidden px-3 pt-3 text-foreground xl:block">
+        <p className="mb-3 hidden items-end gap-2 px-3 pt-3 text-foreground xl:flex">
           <MacWordmark label={it.app.name} className="h-6 w-auto" />
+          {/* The wordmark's label already reads "MAC Recap". */}
+          <span aria-hidden="true" className="font-label text-sm leading-none font-medium tracking-[0.2em]">
+            {it.app.wordmarkSuffix}
+          </span>
         </p>
         {showNewCaseStudy && (
           <Link

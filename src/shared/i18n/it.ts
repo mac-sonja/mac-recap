@@ -5,24 +5,26 @@
 export const it = {
   app: {
     name: "MAC Recap",
+    /** Shown next to the MAC wordmark in the sidebar. */
+    wordmarkSuffix: "RECAP",
   },
   shell: {
     nav: {
       label: "Navigazione principale",
-      newCaseStudy: "Nuovo case study",
-      caseStudies: "Case study",
+      newCaseStudy: "Nuova case history",
+      caseStudies: "Case history",
     },
     userMenu: {
-      button: "Menu utente",
+      button: "Account",
     },
     noActor:
       "Non è stato possibile identificare il tuo profilo. Ricarica la pagina; se il problema continua, contatta un amministratore.",
   },
   caseStudies: {
-    heading: "Case study",
+    heading: "Case history",
     table: {
       /** Read by screen readers only. */
-      caption: "Elenco dei case study",
+      caption: "Elenco delle case history",
       columns: {
         id: "ID",
         name: "Nome",
@@ -40,16 +42,16 @@ export const it = {
     /** `{query}` is filled with the search text. */
     noResults: "Nessun risultato per '{query}'.",
     clearSearch: "Cancella ricerca e filtri",
-    empty: "Ancora nessun case study. Inizia dal materiale di un progetto chiuso.",
+    empty: "Ancora nessuna case history. Inizia dal materiale di un progetto chiuso.",
     narrowScreen: "Questa pagina richiede uno schermo più grande.",
     /** Read by screen readers while the table loads. */
     loading: "Caricamento…",
   },
   /** The new-case-study wizard (Story 2.5): frame, stepper and step 0. */
   wizard: {
-    eyebrow: "Nuovo case study",
+    eyebrow: "Nuova case history",
     /** Accessible name of the top bar's back arrow. */
-    back: "Torna ai case study",
+    back: "Torna alle case history",
     /** Read by screen readers before the case ID in the top bar. */
     caseId: "ID",
     stepper: {
@@ -65,7 +67,7 @@ export const it = {
       generate: "Genera",
     },
     fields: {
-      name: "Nome del case study",
+      name: "Nome della case history",
       client: "Cliente",
       year: "Anno",
       locale: "Lingua del testo",
@@ -75,16 +77,16 @@ export const it = {
       en: "English",
     },
     errors: {
-      name: "Inserisci il nome del case study.",
+      name: "Inserisci il nome della case history.",
       client: "Inserisci il cliente.",
       /** `{min}` and `{max}` are filled with the accepted years. */
       year: "Inserisci un anno tra {min} e {max}.",
       locale: "Scegli la lingua del testo.",
-      generic: "Non è stato possibile creare il case study. I dati inseriti sono ancora qui: riprova.",
+      generic: "Non è stato possibile creare la case history. I dati inseriti sono ancora qui: riprova.",
     },
     next: "Avanti",
     /** The wizard's error boundary: the case could not be loaded. */
-    loadFailed: "Non è stato possibile aprire il case study. Riprova tra poco.",
+    loadFailed: "Non è stato possibile aprire la case history. Riprova tra poco.",
     /** Step 1, Material (Story 2.7). */
     material: {
       heading: "Aggiungi il materiale del progetto",

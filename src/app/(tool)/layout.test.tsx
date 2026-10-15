@@ -39,7 +39,7 @@ describe("ToolLayout", () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     const html = await renderLayout();
     expect(html).toContain("<nav");
-    expect(html).toContain("Nuovo case study");
+    expect(html).toContain("Nuova case history");
     expect(html).toContain('href="/case-studies"');
     expect(html).toContain("Owner/designer");
     expect(html).toContain("content");
@@ -51,7 +51,7 @@ describe("ToolLayout", () => {
   ] as const)("shows neither nav item for %s", async (role, label) => {
     getActor.mockResolvedValue(ok(actor(role)));
     const html = await renderLayout();
-    expect(html).not.toContain("Nuovo case study");
+    expect(html).not.toContain("Nuova case history");
     expect(html).not.toContain('href="/case-studies"');
     expect(html).toContain(label);
   });

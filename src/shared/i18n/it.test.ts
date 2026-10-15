@@ -3,7 +3,7 @@ import { fill, it, t } from "./it";
 
 describe("Italian dictionary", () => {
   test("resolves dot-path keys", () => {
-    expect(t("shell.nav.caseStudies")).toBe("Case study");
+    expect(t("shell.nav.caseStudies")).toBe("Case history");
     expect(t("status.in_review")).toBe("Da approvare");
   });
 
@@ -38,28 +38,28 @@ describe("case studies table copy", () => {
     expect(t("caseStudies.search.label")).toBe("Cerca nome, cliente o ID");
     expect(t("caseStudies.search.placeholder")).toBe("Cerca nome, cliente o ID");
     expect(t("caseStudies.clearSearch")).toBe("Cancella ricerca e filtri");
-    expect(t("caseStudies.empty")).toBe("Ancora nessun case study. Inizia dal materiale di un progetto chiuso.");
+    expect(t("caseStudies.empty")).toBe("Ancora nessuna case history. Inizia dal materiale di un progetto chiuso.");
     expect(t("caseStudies.narrowScreen")).toBe("Questa pagina richiede uno schermo più grande.");
-    expect(t("caseStudies.table.caption")).toBe("Elenco dei case study");
+    expect(t("caseStudies.table.caption")).toBe("Elenco delle case history");
     expect(t("caseStudies.loading")).toBe("Caricamento…");
   });
 });
 
 describe("wizard copy", () => {
   test("has the approved strings", () => {
-    expect(t("wizard.eyebrow")).toBe("Nuovo case study");
-    expect(t("wizard.back")).toBe("Torna ai case study");
+    expect(t("wizard.eyebrow")).toBe("Nuova case history");
+    expect(t("wizard.back")).toBe("Torna alle case history");
     expect(Object.values(it.wizard.steps)).toEqual(["Materiale", "Dettagli", "Genera"]);
-    expect(Object.values(it.wizard.fields)).toEqual(["Nome del case study", "Cliente", "Anno", "Lingua del testo"]);
+    expect(Object.values(it.wizard.fields)).toEqual(["Nome della case history", "Cliente", "Anno", "Lingua del testo"]);
     expect(it.wizard.locales).toEqual({ it: "Italiano", en: "English" });
     expect(t("wizard.next")).toBe("Avanti");
-    expect(t("wizard.errors.name")).toBe("Inserisci il nome del case study.");
+    expect(t("wizard.errors.name")).toBe("Inserisci il nome della case history.");
     expect(t("wizard.errors.client")).toBe("Inserisci il cliente.");
     expect(fill(t("wizard.errors.year"), { min: 1900, max: 2100 })).toBe("Inserisci un anno tra 1900 e 2100.");
-    expect(t("wizard.errors.generic")).toMatch(/^Non è stato possibile creare il case study\./);
+    expect(t("wizard.errors.generic")).toMatch(/^Non è stato possibile creare la case history\./);
     expect(t("wizard.generatePlaceholder")).toBe("La generazione non è ancora disponibile in questa versione.");
     expect(t("wizard.stepper.goTo")).toBe("vai a");
-    expect(t("wizard.loadFailed")).toBe("Non è stato possibile aprire il case study. Riprova tra poco.");
+    expect(t("wizard.loadFailed")).toBe("Non è stato possibile aprire la case history. Riprova tra poco.");
   });
 
   test("names each missing required field", () => {
