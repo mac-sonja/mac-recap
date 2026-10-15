@@ -2,7 +2,7 @@
 title: 'Story 2.12: Clients as records, with readable case history codes'
 type: 'feature'
 created: '2026-10-15'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'b7d7444a834c509eb756e8425108a385a9166597'
 route: 'dispatch'
 review_loop_iteration: 0
