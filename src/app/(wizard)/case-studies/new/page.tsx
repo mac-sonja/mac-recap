@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
 import { wizardHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
+import { authorize } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import { currentYear } from "@/shared/i18n/format";
@@ -21,7 +22,9 @@ export interface NewCaseStudyPageProps {
 
 /**
  * The new-case-study wizard (Story 2.5). Owner/designer only (`create case`).
- * Without `?caseId=` it shows step 0, the name form. With `?caseId=` it loads that
+ * Without `?caseId=` it shows step 0, the name form, with the client picker
+ * (Story 2.12): it authorizes `list clients` (denied → the actor's landing) and
+ * loads every client; a failed load throws into the error boundary. With `?caseId=` it loads that
  * case server-side; an unknown, malformed or deleted id
  * (`NOT_FOUND`) or a case that is no longer a draft goes back to Case studies, and any other lookup failure throws into
  * the error boundary. The case's material is checked once: with no `step` (or an
@@ -38,9 +41,17 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
 
   const { caseId, step } = await searchParams;
   if (caseId === undefined) {
+    if (!authorize(shell.actor, "list clients").ok) redirect(shell.landing);
+    const clients = await caseStudy.listClients();
+    if (!clients.ok) throw new Error(`Clients could not be listed: ${clients.error.code}`);
     return (
       <WizardFrame caseStudy={null} current={0}>
-        <NameStep defaultYear={currentYear()} yearMin={caseStudy.YEAR_MIN} yearMax={caseStudy.YEAR_MAX} />
+        <NameStep
+          clients={clients.value}
+          defaultYear={currentYear()}
+          yearMin={caseStudy.YEAR_MIN}
+          yearMax={caseStudy.YEAR_MAX}
+        />
       </WizardFrame>
     );
   }
@@ -53,8 +64,8 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   }
   // The wizard edits drafts only; any other status goes back to Case studies.
   if (found.value.status !== "draft") redirect("/case-studies");
-  const { id, name, status } = found.value;
-  const wizardCase = { id, name, status };
+  const { id, code, name, status } = found.value;
+  const wizardCase = { id, code, name, status };
 
   // One material check decides the opening step, the gate on steps 2 and 3, and the stepper links.
   // A failed check counts as no material: the case opens at step 1.

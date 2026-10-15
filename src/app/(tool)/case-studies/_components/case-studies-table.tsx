@@ -48,9 +48,11 @@ function isTextField(el: Element | null): boolean {
 }
 
 /**
- * The Case studies table: ID, Name, Client, Year, Status, Updated and Links (blank).
- * Default sort Updated newest first; a header click sorts by it, again reverses.
- * Search covers name, client and ID (case- and accent-insensitive, debounced);
+ * The Case studies table: ID (the case history code, mono), Name, Client (its
+ * current name), Year, Status, Updated and Links (blank). Default sort Updated
+ * newest first; a header click sorts by it, again reverses; ID sorts codes
+ * naturally. Search covers name, client name, client code and case code (case- and
+ * accent-insensitive, debounced);
  * `/` focuses it unless focus is already in a text field. A Bozza row opens
  * `/case-studies/new?caseId={id}`; other rows are not links yet.
  */
@@ -188,7 +190,7 @@ export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
                     onClick={href === null ? undefined : (event) => openRow(event, href)}
                     className={cn("border-b last:border-b-0", href !== null && "cursor-pointer hover:bg-surface-control")}
                   >
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-foreground-muted">{row.id}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-foreground-muted">{row.code}</td>
                     <td className="px-3 py-2">
                       {href === null ? (
                         row.name
@@ -198,7 +200,7 @@ export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
                         </Link>
                       )}
                     </td>
-                    <td className="px-3 py-2">{row.client}</td>
+                    <td className="px-3 py-2">{row.clientName}</td>
                     <td className="px-3 py-2 tabular-nums">{row.year}</td>
                     <td className="whitespace-nowrap px-3 py-2">
                       <StatusBadge status={row.status} />

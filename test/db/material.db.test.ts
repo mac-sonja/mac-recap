@@ -18,6 +18,7 @@ import { FAVOURITABLE_KINDS } from "@/modules/material/domain/asset";
 import { ALLOWED_CONTENT_TYPES, ASSET_KINDS, MAX_ASSETS_PER_CASE, MAX_FILE_BYTES, type AllowedContentType } from "@/modules/material/domain/files";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
 import { err } from "@/shared/result";
+import { createTestClient } from "../helpers/db-clients";
 
 const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -34,11 +35,14 @@ const CREATE_ASSET = "select (public.create_asset($1, $2, 'image', 'f.png', 'ima
 const CREATE_DOCUMENT = "select (public.create_asset($1, $2, 'document', 'brief.pdf', 'application/pdf', 10, $3, $4)).id";
 
 let pool: pg.Pool;
+/** The client every case in this file belongs to. */
+let clientId: string;
 
 beforeAll(async () => {
   // Enough connections for the concurrent create_asset calls.
   pool = new pg.Pool({ connectionString: env.SUPABASE_DB_URL, max: 6 });
   await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
+  clientId = (await createTestClient(pool, DEV_ACTOR_ID)).id;
 });
 
 afterAll(async () => {
@@ -74,7 +78,7 @@ async function devActor() {
 
 async function createCase() {
   const { create } = await loadCaseStudy();
-  const result = await create(await devActor(), { name: "Material", client: "Acme", year: 2026 });
+  const result = await create(await devActor(), { name: "Material", clientId, year: 2026 });
   if (!result.ok) throw new Error(`setup create failed: ${result.error.code}`);
   return result.value;
 }

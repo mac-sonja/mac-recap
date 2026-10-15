@@ -26,9 +26,11 @@ function failure(error: AppError): ActionResult<never> {
 }
 
 /**
- * Creates a case study (status `draft`, permanent id) with its `case_created`
- * event. Input: `{ name, client, year, locale? }`. 403 `FORBIDDEN` when the
- * actor's role may not `create case`; 400 `INVALID_INPUT` names each field.
+ * Creates a case study (status `draft`, permanent id, readable code such as
+ * `LUM-2026-01`) with its `case_created` event. Input: `{ name, clientId, year, locale? }`.
+ * 403 `FORBIDDEN` when the actor's role may not `create case`; 400 `INVALID_INPUT`
+ * names each field; 404 `CLIENT_NOT_FOUND` for an unknown client. Nothing is
+ * written on any error.
  */
 export async function createCaseStudy(input: unknown): Promise<ActionResult<CaseStudy>> {
   const actor = await getActor();

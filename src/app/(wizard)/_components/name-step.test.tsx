@@ -3,7 +3,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionResult } from "@/app/(tool)/case-studies/actions";
-import type { CaseStudy } from "@/modules/case-study";
+import type { CaseStudy, Client } from "@/modules/case-study";
 
 const replace = vi.fn();
 const createCaseStudy = vi.fn<(input: unknown) => Promise<ActionResult<CaseStudy>>>();
@@ -17,8 +17,10 @@ const ID = "aaaaaaaa-0000-4000-8000-000000000001";
 
 const created = (over: Partial<CaseStudy> = {}): CaseStudy => ({
   id: ID,
+  code: "LUM-2026-01",
+  number: 1,
   name: "Rebrand",
-  client: "Acme",
+  client: { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
   year: 2026,
   locale: "it",
   status: "draft",
@@ -33,18 +35,22 @@ const created = (over: Partial<CaseStudy> = {}): CaseStudy => ({
   ...over,
 });
 
+const LUMEN: Client = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" };
+const TORINO: Client = { id: "cccccccc-0000-4000-8000-000000000002", name: "Città di Torino", code: "CIT" };
+const CLIENTS: Client[] = [TORINO, LUMEN];
+
 const field = (name: string) => screen.getByLabelText(name);
 const avanti = () => screen.getByRole("button", { name: "Avanti" });
 
-function setup() {
+function setup(clients: Client[] = CLIENTS) {
   const user = userEvent.setup();
-  render(<NameStep defaultYear={2026} yearMin={1900} yearMax={2100} />);
+  render(<NameStep clients={clients} defaultYear={2026} yearMin={1900} yearMax={2100} />);
   return user;
 }
 
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.type(field("Nome della case history"), "  Rebrand  ");
-  await user.type(field("Cliente"), "Acme");
+  await user.selectOptions(field("Cliente"), LUMEN.id);
 }
 
 beforeEach(() => {
@@ -59,6 +65,7 @@ describe("NameStep", () => {
     setup();
     expect(field("Nome della case history")).toHaveProperty("required", true);
     expect(field("Cliente")).toHaveProperty("required", true);
+    expect(field("Cliente").tagName).toBe("SELECT");
     expect(field("Anno")).toHaveProperty("value", "2026");
     const locale = field("Lingua del testo") as HTMLSelectElement;
     expect(locale.value).toBe("it");
@@ -75,18 +82,57 @@ describe("NameStep", () => {
     await user.selectOptions(field("Lingua del testo"), "en");
     expect(avanti().getAttribute("aria-disabled")).toBe("false");
     await user.click(avanti());
-    expect(createCaseStudy).toHaveBeenCalledExactlyOnceWith({ name: "Rebrand", client: "Acme", year: 2024, locale: "en" });
+    expect(createCaseStudy).toHaveBeenCalledExactlyOnceWith({ name: "Rebrand", clientId: LUMEN.id, year: 2024, locale: "en" });
     expect(replace).toHaveBeenCalledExactlyOnceWith(`/case-studies/new?caseId=${ID}`);
     // Stays busy while the wizard moves on to step 1.
     expect(avanti().getAttribute("aria-busy")).toBe("true");
   });
 
+  it("lists the clients as given, '{name} ({code})', after a placeholder first option; no free text", () => {
+    setup();
+    const select = field("Cliente") as HTMLSelectElement;
+    expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([
+      ["", "Scegli un cliente"],
+      [TORINO.id, "Città di Torino (CIT)"],
+      [LUMEN.id, "Lumen Srl (LUM)"],
+    ]);
+    expect(select.value).toBe("");
+    expect(screen.queryByRole("textbox", { name: "Cliente" })).toBeNull();
+  });
+
+  it("with no clients shows the note instead of the field, keeps Avanti inactive and sends nothing", async () => {
+    const user = setup([]);
+    const note = screen.getByText("Nessun cliente. Aggiungilo nella pagina Clienti.");
+    expect(screen.queryByRole("combobox", { name: "Cliente" })).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
+    await user.type(field("Nome della case history"), "Rebrand");
+    expect(avanti().getAttribute("aria-disabled")).toBe("true");
+    // The inactive Avanti names its reason: the note.
+    expect(note.id).not.toBe("");
+    expect(avanti().getAttribute("aria-describedby")).toBe(note.id);
+    expect(document.getElementById(avanti().getAttribute("aria-describedby") ?? "")?.textContent).toBe(
+      "Nessun cliente. Aggiungilo nella pagina Clienti.",
+    );
+    await user.click(avanti());
+    expect(createCaseStudy).not.toHaveBeenCalled();
+    // The note stays the explanation after the press.
+    expect(avanti().getAttribute("aria-describedby")).toBe(note.id);
+  });
+
+  it("does not describe Avanti by the note when there are clients", () => {
+    setup();
+    expect(avanti().hasAttribute("aria-describedby")).toBe(false);
+  });
+
   it.each([
-    ["name", "Cliente", "Acme", "Nome della case history", "Inserisci il nome della case history."],
-    ["client", "Nome della case history", "Rebrand", "Cliente", "Inserisci il cliente."],
-  ])("sends nothing when %s is empty and names it on that field", async (_label, filled, value, missing, message) => {
+    ["name", "Nome della case history", "Inserisci il nome della case history."],
+    ["client", "Cliente", "Scegli il cliente."],
+  ])("sends nothing when %s is missing and names it on that field", async (label, missing, message) => {
     const user = setup();
-    await user.type(field(filled), value);
+    if (label === "name") await user.selectOptions(field("Cliente"), LUMEN.id);
+    else await user.type(field("Nome della case history"), "Rebrand");
+    const filled = label === "name" ? "Cliente" : "Nome della case history";
+    expect(avanti().getAttribute("aria-disabled")).toBe("true");
     await user.click(avanti());
     expect(createCaseStudy).not.toHaveBeenCalled();
     const input = field(missing);
@@ -98,14 +144,13 @@ describe("NameStep", () => {
     expect(field(filled).getAttribute("aria-invalid")).toBeNull();
   });
 
-  it("treats blank (spaces only) name and client as missing and names both", async () => {
+  it("treats a blank (spaces only) name and no picked client as missing and names both", async () => {
     const user = setup();
     await user.type(field("Nome della case history"), "   ");
-    await user.type(field("Cliente"), "  ");
     await user.keyboard("{Enter}");
     expect(createCaseStudy).not.toHaveBeenCalled();
     expect(screen.getByText("Inserisci il nome della case history.")).toBeTruthy();
-    expect(screen.getByText("Inserisci il cliente.")).toBeTruthy();
+    expect(screen.getByText("Scegli il cliente.")).toBeTruthy();
     expect(document.activeElement).toBe(field("Nome della case history"));
   });
 
@@ -115,7 +160,45 @@ describe("NameStep", () => {
     expect(screen.queryByText("Inserisci il nome della case history.")).not.toBeNull();
     await user.type(field("Nome della case history"), "R");
     expect(screen.queryByText("Inserisci il nome della case history.")).toBeNull();
-    expect(screen.queryByText("Inserisci il cliente.")).not.toBeNull();
+    expect(screen.queryByText("Scegli il cliente.")).not.toBeNull();
+    await user.selectOptions(field("Cliente"), TORINO.id);
+    expect(screen.queryByText("Scegli il cliente.")).toBeNull();
+  });
+
+  it("shows a CLIENT_NOT_FOUND refusal on the client select (reload), not the generic line", async () => {
+    createCaseStudy.mockResolvedValue({
+      ok: false,
+      status: 404,
+      error: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
+    });
+    const user = setup();
+    await fillRequired(user);
+    await user.click(avanti());
+    const select = field("Cliente");
+    expect(select.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(select.getAttribute("aria-describedby") ?? "")?.textContent).toBe(
+      "Questo cliente non è più disponibile. Ricarica la pagina e scegli di nuovo.",
+    );
+    expect(document.activeElement).toBe(select);
+    expect(screen.getByRole("alert").textContent).toBe("");
+    expect(document.body.textContent).not.toContain("No client");
+    expect(replace).not.toHaveBeenCalled();
+    expect(avanti().getAttribute("aria-busy")).toBeNull();
+  });
+
+  it("maps a server INVALID_INPUT on clientId to the message on the select", async () => {
+    createCaseStudy.mockResolvedValue({
+      ok: false,
+      status: 400,
+      error: { code: "INVALID_INPUT", message: "clientId: Invalid UUID.", fields: ["clientId"] },
+    });
+    const user = setup();
+    await fillRequired(user);
+    await user.click(avanti());
+    const select = field("Cliente");
+    expect(select.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(select.getAttribute("aria-describedby") ?? "")?.textContent).toBe("Scegli il cliente.");
+    expect(screen.getByRole("alert").textContent).toBe("");
   });
 
   it("rejects a year outside the range on the field without a request", async () => {
@@ -191,7 +274,7 @@ describe("NameStep", () => {
     );
     expect(document.body.textContent).not.toMatch(/Not allowed|db down/);
     expect(field("Nome della case history")).toHaveProperty("value", "  Rebrand  ");
-    expect(field("Cliente")).toHaveProperty("value", "Acme");
+    expect(field("Cliente")).toHaveProperty("value", LUMEN.id);
     expect(avanti().getAttribute("aria-disabled")).toBe("false");
     expect(replace).not.toHaveBeenCalled();
   });

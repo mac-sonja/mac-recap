@@ -27,8 +27,10 @@ const shell = (role: Role, landing = "/case-studies"): ShellActor => ({
 
 const caseStudy = (over: Partial<CaseStudy>): CaseStudy => ({
   id: "aaaaaaaa-0000-4000-8000-000000000001",
+  code: "LUM-2026-01",
+  number: 1,
   name: "Rebrand",
-  client: "Acme",
+  client: { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
   year: 2026,
   locale: "it",
   status: "draft",
@@ -61,6 +63,10 @@ describe("CaseStudiesPage", () => {
     expect(html).toContain("Elenco delle case history");
     expect(html).toContain("Rebrand");
     expect(html).toContain("13/10/2026, 09:05");
+    // The ID column shows the code and the Client column the client's name; the uuid is only a key.
+    expect(html).toMatch(/<td class="[^"]*font-mono[^"]*">LUM-2026-01<\/td>/);
+    expect(html).toContain("<td class=\"px-3 py-2\">Lumen Srl</td>");
+    expect(html).not.toMatch(/<td[^>]*>aaaaaaaa-0000-4000-8000-000000000001<\/td>/);
   });
 
   it("queries approved cases only for account/sales/social", async () => {

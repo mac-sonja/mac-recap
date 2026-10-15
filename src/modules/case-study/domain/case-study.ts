@@ -11,11 +11,34 @@ export const DEFAULT_LOCALE: Locale = "it";
 export const YEAR_MIN = 1900;
 export const YEAR_MAX = 2100;
 
-/** A `case_study` row as the case-study module sees it. Timestamps are ISO strings. */
-export const caseStudySchema = z.object({
+/** Accepted client name length after trimming (AD-21 rule 7; the DB only checks non-blank). */
+export const CLIENT_NAME_MAX = 120;
+
+/**
+ * A client as the case-study module sees it. `code` is automatic and fixed
+ * (AD-21): it is computed only in SQL, never here.
+ */
+export const clientSchema = z.object({
   id: z.uuid(),
   name: z.string(),
-  client: z.string(),
+  code: z.string(),
+});
+export type Client = z.infer<typeof clientSchema>;
+
+/** A client name a person supplies: trimmed, 1–120 characters. */
+export const clientNameSchema = z.string().trim().min(1, "Required.").max(CLIENT_NAME_MAX);
+
+/**
+ * A `case_study` row with its client, as the case-study module sees it.
+ * `code` (e.g. `LUM-2026-01`) is the readable display code, fixed at creation;
+ * `id` stays the only key (AD-2). Timestamps are ISO strings.
+ */
+export const caseStudySchema = z.object({
+  id: z.uuid(),
+  code: z.string(),
+  number: z.number().int().positive(),
+  name: z.string(),
+  client: clientSchema,
   year: z.number().int(),
   locale: localeSchema,
   status: z.enum(CASE_STATUSES),
@@ -33,13 +56,13 @@ export type CaseStudy = z.infer<typeof caseStudySchema>;
 const requiredText = z.string().trim().min(1, "Required.");
 
 /**
- * What a person supplies to create a case (wizard step 0). Name and client are
- * trimmed and required; year is an integer in 1900–2100; locale defaults to `it`.
- * Any other key (status, project_order_ref, …) is dropped.
+ * What a person supplies to create a case (wizard step 0). Name is trimmed and
+ * required; `clientId` is a picked client's id; year is an integer in 1900–2100;
+ * locale defaults to `it`. Any other key (status, code, project_order_ref, …) is dropped.
  */
 export const createCaseStudyInputSchema = z.object({
   name: requiredText,
-  client: requiredText,
+  clientId: z.uuid("Required."),
   year: z.number().int("Must be a whole number.").min(YEAR_MIN).max(YEAR_MAX),
   locale: localeSchema.default(DEFAULT_LOCALE),
 });

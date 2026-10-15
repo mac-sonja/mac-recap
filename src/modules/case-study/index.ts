@@ -1,28 +1,34 @@
 // Public surface of the case-study module. Code outside this module imports only this file.
-// The module owns `case_study` and `case_event` (AD-11): nobody else writes them.
+// The module owns `case_study`, `client`, `case_number_counter` and `case_event` (AD-1):
+// nobody else writes them.
 import type { Actor } from "@/modules/access";
 import { createSupabaseCaseStudyRepository } from "@/modules/case-study/adapters/supabase/case-study-repository";
+import { createSupabaseClientRepository } from "@/modules/case-study/adapters/supabase/client-repository";
 import { makeCreateCaseStudy } from "@/modules/case-study/application/create-case-study";
 import { makeGetCaseStudy } from "@/modules/case-study/application/get-case-study";
 import { makeListCaseStudies } from "@/modules/case-study/application/list-case-studies";
+import { makeListClients } from "@/modules/case-study/application/list-clients";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
 import { makeTransition } from "@/modules/case-study/application/transition";
 import type { CaseEvent } from "@/modules/case-study/domain/case-event";
-import type { CaseStudy, ListScope } from "@/modules/case-study/domain/case-study";
+import type { CaseStudy, Client, ListScope } from "@/modules/case-study/domain/case-study";
 import type { Result } from "@/shared/result";
 
 export { CASE_CREATED, TRANSITION } from "@/modules/case-study/domain/case-event";
 export type { CaseEvent, RecordEventInput } from "@/modules/case-study/domain/case-event";
-export { LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
-export type { CaseStudy, CreateCaseStudyInput, ListScope, Locale } from "@/modules/case-study/domain/case-study";
+export { CLIENT_NAME_MAX, LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
+export type { CaseStudy, Client, CreateCaseStudyInput, ListScope, Locale } from "@/modules/case-study/domain/case-study";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
 export type { TransitionEvent } from "@/modules/case-study/domain/transition";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
 
 /**
- * Creates a case study (status `draft`, permanent DB-generated id) and its
- * `case_created` event in one transaction. Call only after `authorize(actor, 'create case')`.
- * `INVALID_INPUT` names each failing field in `details.fields`.
+ * Creates a case study (status `draft`, permanent DB-generated id, and the next
+ * readable code for its client and year, e.g. `LUM-2026-01`) and its
+ * `case_created` event in one transaction. Input `{ name, clientId, year, locale? }`.
+ * Call only after `authorize(actor, 'create case')`. `INVALID_INPUT` names each
+ * failing field in `details.fields`; `CLIENT_NOT_FOUND` for an unknown client.
+ * Nothing is written on any error.
  */
 export function create(actor: Actor, input: unknown): Promise<Result<CaseStudy>> {
   return makeCreateCaseStudy(createSupabaseCaseStudyRepository())(actor, input);
@@ -41,6 +47,14 @@ export function get(id: unknown): Promise<Result<CaseStudy>> {
  */
 export function list(scope: ListScope): Promise<Result<CaseStudy[]>> {
   return makeListCaseStudies(createSupabaseCaseStudyRepository())(scope);
+}
+
+/**
+ * Every client (`{ id, name, code }`), sorted by name. Call only after
+ * `authorize(actor, 'list clients')`.
+ */
+export function listClients(): Promise<Result<Client[]>> {
+  return makeListClients(createSupabaseClientRepository())();
 }
 
 /**

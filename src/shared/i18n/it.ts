@@ -36,8 +36,8 @@ export const it = {
       },
     },
     search: {
-      label: "Cerca nome, cliente o ID",
-      placeholder: "Cerca nome, cliente o ID",
+      label: "Cerca nome, cliente o codice",
+      placeholder: "Cerca nome, cliente o codice",
     },
     /** `{query}` is filled with the search text. */
     noResults: "Nessun risultato per '{query}'.",
@@ -52,7 +52,7 @@ export const it = {
     eyebrow: "Nuova case history",
     /** Accessible name of the top bar's back arrow. */
     back: "Torna alle case history",
-    /** Read by screen readers before the case ID in the top bar. */
+    /** Read by screen readers before the case history code in the top bar. */
     caseId: "ID",
     stepper: {
       label: "Passaggi",
@@ -76,9 +76,17 @@ export const it = {
       it: "Italiano",
       en: "English",
     },
+    /** The step 0 client select's first option (value ""), shown until a client is picked. */
+    clientPlaceholder: "Scegli un cliente",
+    /** A step 0 client option: `{name}` and its `{code}`. */
+    clientOption: "{name} ({code})",
+    /** Step 0 with no clients: replaces the client field; Avanti stays inactive. */
+    noClients: "Nessun cliente. Aggiungilo nella pagina Clienti.",
     errors: {
       name: "Inserisci il nome della case history.",
-      client: "Inserisci il cliente.",
+      client: "Scegli il cliente.",
+      /** `CLIENT_NOT_FOUND`: the picked client is no longer in the list the page loaded. */
+      clientNotFound: "Questo cliente non è più disponibile. Ricarica la pagina e scegli di nuovo.",
       /** `{min}` and `{max}` are filled with the accepted years. */
       year: "Inserisci un anno tra {min} e {max}.",
       locale: "Scegli la lingua del testo.",

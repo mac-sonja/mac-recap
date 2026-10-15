@@ -6,12 +6,14 @@ import { flushSync } from "react-dom";
 import { createCaseStudy } from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
 import { wizardHref } from "@/app/_lib/routes";
-import type { Locale } from "@/modules/case-study";
+import type { Client, Locale } from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { WizardFooter } from "./wizard-frame";
 
 export interface NameStepProps {
+  /** Every client, sorted by name (`case-study.listClients`). Empty: the field gives way to a note. */
+  clients: readonly Client[];
   /** Prefilled year: the current year in Europe/Rome. */
   defaultYear: number;
   /** Accepted years (`YEAR_MIN`, `YEAR_MAX` from the case-study module). */
@@ -19,10 +21,11 @@ export interface NameStepProps {
   yearMax: number;
 }
 
-type Field = "name" | "client" | "year" | "locale";
+/** Form fields, named as the server's `INVALID_INPUT` names them. */
+type Field = "name" | "clientId" | "year" | "locale";
 type FieldErrors = Partial<Record<Field, string>>;
 
-const FIELDS: readonly Field[] = ["name", "client", "year", "locale"];
+const FIELDS: readonly Field[] = ["name", "clientId", "year", "locale"];
 const LOCALE_OPTIONS: ReadonlyArray<{ value: Locale; label: string }> = [
   { value: "it", label: it.wizard.locales.it },
   { value: "en", label: it.wizard.locales.en },
@@ -32,34 +35,40 @@ const INPUT =
   "w-full rounded-md border bg-surface-control px-3 py-2 font-body text-sm text-foreground placeholder:text-foreground-muted aria-invalid:border-danger";
 
 /**
- * Step 0: name and client (required), year (prefilled, editable) and narrative
- * language (*Italiano* default). **Avanti** stays inactive while name or client is
- * blank; pressing it then sends nothing and names each missing field. Otherwise it
- * calls `createCaseStudy` once (create is not idempotent: the button is busy until
+ * Step 0: name (required), client (required, picked from a native select of the
+ * existing clients, "{name} ({code})", empty first option; no free text and no
+ * adding here), year (prefilled, editable) and narrative language (*Italiano*
+ * default). With no clients the select gives way to "Nessun cliente…" and
+ * **Avanti** stays inactive. **Avanti** is inactive while the name is blank or no
+ * client is picked; pressing it then sends nothing and names each missing field.
+ * Otherwise it calls `createCaseStudy({ name, clientId, year, locale })` once (create is not idempotent: the button is busy until
  * the request ends, and stays busy while the wizard moves on), then replaces the
- * URL with `?caseId=`. Server `INVALID_INPUT` fields map to their Italian messages;
+ * URL with `?caseId=`. Server `INVALID_INPUT` fields map to their Italian messages,
+ * and `CLIENT_NOT_FOUND` (a stale list) to a reload message on the client field;
  * any other failure, or a field the form doesn't have, keeps the form filled and
  * shows one generic line.
  */
-export function NameStep({ defaultYear, yearMin, yearMax }: NameStepProps) {
+export function NameStep({ clients, defaultYear, yearMin, yearMax }: NameStepProps) {
   const router = useRouter();
-  const ids = { name: useId(), client: useId(), year: useId(), locale: useId() };
+  const ids = { name: useId(), clientId: useId(), year: useId(), locale: useId() };
+  const noClientsId = useId();
+  const hasClients = clients.length > 0;
   const errorId = (field: Field) => `${ids[field]}-error`;
   const inFlight = useRef(false);
 
   const [name, setName] = useState("");
-  const [client, setClient] = useState("");
+  const [clientId, setClientId] = useState("");
   const [year, setYear] = useState(String(defaultYear));
   const [locale, setLocale] = useState<Locale>("it");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failed, setFailed] = useState(false);
   const [pending, setPending] = useState(false);
 
-  const ready = name.trim() !== "" && client.trim() !== "";
+  const ready = name.trim() !== "" && clientId !== "";
   const yearMessage = fill(it.wizard.errors.year, { min: yearMin, max: yearMax });
   const messageFor: Record<Field, string> = {
     name: it.wizard.errors.name,
-    client: it.wizard.errors.client,
+    clientId: it.wizard.errors.client,
     year: yearMessage,
     locale: it.wizard.errors.locale,
   };
@@ -87,9 +96,10 @@ export function NameStep({ defaultYear, yearMin, yearMax }: NameStepProps) {
     const parsedYear = /^\d+$/.test(year.trim()) ? Number(year.trim()) : Number.NaN;
     const missing: FieldErrors = {};
     if (name.trim() === "") missing.name = messageFor.name;
-    if (client.trim() === "") missing.client = messageFor.client;
+    // With no clients there is no field to name: the note already says why.
+    if (clientId === "" && hasClients) missing.clientId = messageFor.clientId;
     if (!Number.isInteger(parsedYear) || parsedYear < yearMin || parsedYear > yearMax) missing.year = messageFor.year;
-    if (Object.keys(missing).length > 0) {
+    if (Object.keys(missing).length > 0 || !hasClients) {
       setFailed(false);
       show(missing);
       return;
@@ -101,10 +111,16 @@ export function NameStep({ defaultYear, yearMin, yearMax }: NameStepProps) {
     setErrors({});
     let moved = false;
     try {
-      const result = await createCaseStudy({ name: name.trim(), client: client.trim(), year: parsedYear, locale });
+      const result = await createCaseStudy({ name: name.trim(), clientId, year: parsedYear, locale });
       if (result.ok) {
         moved = true;
         router.replace(wizardHref(result.value.id));
+        return;
+      }
+      if (result.error.code === "CLIENT_NOT_FOUND") {
+        // A stale list: retrying the same pick fails again, so say so on the field.
+        setFailed(false);
+        show({ clientId: it.wizard.errors.clientNotFound });
         return;
       }
       const fields = result.error.code === "INVALID_INPUT" ? (result.error.fields ?? []) : [];
@@ -158,26 +174,42 @@ export function NameStep({ defaultYear, yearMin, yearMax }: NameStepProps) {
           {fieldError("name")}
         </div>
         <div className="col-span-2 flex flex-col gap-1.5">
-          <label htmlFor={ids.client} className={label}>
-            {it.wizard.fields.client}
-          </label>
-          <input
-            id={ids.client}
-            name="client"
-            type="text"
-            autoComplete="off"
-            required
-            aria-required="true"
-            aria-invalid={errors.client !== undefined || undefined}
-            aria-describedby={describedBy("client")}
-            value={client}
-            onChange={(event) => {
-              setClient(event.target.value);
-              clearError("client");
-            }}
-            className={INPUT}
-          />
-          {fieldError("client")}
+          {hasClients ? (
+            <>
+              <label htmlFor={ids.clientId} className={label}>
+                {it.wizard.fields.client}
+              </label>
+              <select
+                id={ids.clientId}
+                name="clientId"
+                required
+                aria-required="true"
+                aria-invalid={errors.clientId !== undefined || undefined}
+                aria-describedby={describedBy("clientId")}
+                value={clientId}
+                onChange={(event) => {
+                  setClientId(event.target.value);
+                  clearError("clientId");
+                }}
+                className={INPUT}
+              >
+                <option value="">{it.wizard.clientPlaceholder}</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {fill(it.wizard.clientOption, { name: client.name, code: client.code })}
+                  </option>
+                ))}
+              </select>
+              {fieldError("clientId")}
+            </>
+          ) : (
+            <>
+              <span className={label}>{it.wizard.fields.client}</span>
+              <p id={noClientsId} className="font-body text-sm text-foreground">
+                {it.wizard.noClients}
+              </p>
+            </>
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor={ids.year} className={label}>
@@ -240,7 +272,8 @@ export function NameStep({ defaultYear, yearMin, yearMax }: NameStepProps) {
         action={
           <button
             type="submit"
-            aria-disabled={!ready || pending}
+            aria-disabled={!ready || !hasClients || pending}
+            aria-describedby={hasClients ? undefined : noClientsId}
             aria-busy={pending || undefined}
             className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, "px-[18px] py-2.5")}
           >
