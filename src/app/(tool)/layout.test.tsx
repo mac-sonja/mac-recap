@@ -41,6 +41,7 @@ describe("ToolLayout", () => {
     expect(html).toContain("<nav");
     expect(html).toContain("Nuova case history");
     expect(html).toContain('href="/case-studies"');
+    expect(html).toContain('href="/clients"');
     expect(html).toContain("Owner/designer");
     expect(html).toContain("content");
   });
@@ -53,6 +54,7 @@ describe("ToolLayout", () => {
     const html = await renderLayout();
     expect(html).not.toContain("Nuova case history");
     expect(html).not.toContain('href="/case-studies"');
+    expect(html).not.toContain('href="/clients"');
     expect(html).toContain(label);
   });
 

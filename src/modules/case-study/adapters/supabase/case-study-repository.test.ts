@@ -162,6 +162,12 @@ describe("createSupabaseCaseStudyRepository().list", () => {
     expect(await createSupabaseCaseStudyRepository(factory).list({ status: "approved" })).toEqual({ ok: true, value: [] });
     expect(eq).toHaveBeenCalledExactlyOnceWith("status", "approved");
   });
+
+  it("filters by client when the scope sets one", async () => {
+    const { factory, eq } = stubClient({ data: [], error: null });
+    expect(await createSupabaseCaseStudyRepository(factory).list({ clientId: CLIENT_ID })).toEqual({ ok: true, value: [] });
+    expect(eq).toHaveBeenCalledExactlyOnceWith("client_id", CLIENT_ID);
+  });
 });
 
 describe("re-read after a successful write", () => {

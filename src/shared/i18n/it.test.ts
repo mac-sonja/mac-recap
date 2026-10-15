@@ -45,6 +45,20 @@ describe("case studies table copy", () => {
   });
 });
 
+describe("clients copy", () => {
+  test("has the approved strings", () => {
+    expect(t("shell.nav.clients")).toBe("Clienti");
+    expect(t("clients.heading")).toBe("Clienti");
+    expect(Object.values(it.clients.table.columns)).toEqual(["Codice", "Nome", "Case history"]);
+    expect(t("clients.add")).toBe("Aggiungi cliente");
+    expect(t("clients.rename")).toBe("Modifica nome");
+    expect(t("clients.empty")).toBe("Nessun cliente. Aggiungi il primo.");
+    expect(t("clients.errors.nameTaken")).toBe("Esiste già un cliente con questo nome.");
+    expect(fill(t("clients.dialog.renameDescription"), { code: "LUM" })).toBe("Il codice LUM non cambia.");
+    expect(t("clients.detail.noCases")).toBe("Nessuna case history per questo cliente.");
+  });
+});
+
 describe("wizard copy", () => {
   test("has the approved strings", () => {
     expect(t("wizard.eyebrow")).toBe("Nuova case history");
@@ -56,7 +70,7 @@ describe("wizard copy", () => {
     expect(t("wizard.errors.name")).toBe("Inserisci il nome della case history.");
     expect(t("wizard.errors.client")).toBe("Scegli il cliente.");
     expect(fill(t("wizard.clientOption"), { name: "Lumen Srl", code: "LUM" })).toBe("Lumen Srl (LUM)");
-    expect(t("wizard.noClients")).toBe("Nessun cliente. Aggiungilo nella pagina Clienti.");
+    expect(fill(t("wizard.noClients"), { link: t("wizard.noClientsLink") })).toBe("Nessun cliente. Aggiungilo nella pagina Clienti.");
     expect(t("wizard.clientPlaceholder")).toBe("Scegli un cliente");
     expect(t("wizard.errors.clientNotFound")).toMatch(/^Questo cliente non è più disponibile\. Ricarica la pagina/);
     expect(fill(t("wizard.errors.year"), { min: 1900, max: 2100 })).toBe("Inserisci un anno tra 1900 e 2100.");

@@ -2,7 +2,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ActionResult } from "@/app/(tool)/case-studies/actions";
+import type { ActionResult } from "@/app/_lib/action-result";
 import type { CaseStudy, Client } from "@/modules/case-study";
 
 const replace = vi.fn();
@@ -102,9 +102,10 @@ describe("NameStep", () => {
 
   it("with no clients shows the note instead of the field, keeps Avanti inactive and sends nothing", async () => {
     const user = setup([]);
-    const note = screen.getByText("Nessun cliente. Aggiungilo nella pagina Clienti.");
+    const note = screen.getByText((_content, el) => el?.tagName === "P" && el.textContent === "Nessun cliente. Aggiungilo nella pagina Clienti.");
     expect(screen.queryByRole("combobox", { name: "Cliente" })).toBeNull();
-    expect(screen.queryByRole("link")).toBeNull();
+    // "pagina Clienti" links to the Clients page, where clients are added.
+    expect(screen.getByRole("link", { name: "pagina Clienti" }).getAttribute("href")).toBe("/clients");
     await user.type(field("Nome della case history"), "Rebrand");
     expect(avanti().getAttribute("aria-disabled")).toBe("true");
     // The inactive Avanti names its reason: the note.
@@ -117,6 +118,29 @@ describe("NameStep", () => {
     expect(createCaseStudy).not.toHaveBeenCalled();
     // The note stays the explanation after the press.
     expect(avanti().getAttribute("aria-describedby")).toBe(note.id);
+  });
+
+  it("preselects initialClientId and creates the case for it", async () => {
+    const user = userEvent.setup();
+    render(<NameStep clients={CLIENTS} initialClientId={LUMEN.id} defaultYear={2026} yearMin={1900} yearMax={2100} />);
+    expect((field("Cliente") as HTMLSelectElement).value).toBe(LUMEN.id);
+    createCaseStudy.mockResolvedValue({ ok: true, value: created() });
+    await user.type(field("Nome della case history"), "Rebrand");
+    await user.click(avanti());
+    expect(createCaseStudy).toHaveBeenCalledWith({ name: "Rebrand", clientId: LUMEN.id, year: 2026, locale: "it" });
+  });
+
+  it("ignores an initialClientId that is not in the list", () => {
+    render(
+      <NameStep
+        clients={CLIENTS}
+        initialClientId="cccccccc-0000-4000-8000-00000000ffff"
+        defaultYear={2026}
+        yearMin={1900}
+        yearMax={2100}
+      />,
+    );
+    expect((field("Cliente") as HTMLSelectElement).value).toBe("");
   });
 
   it("does not describe Avanti by the note when there are clients", () => {

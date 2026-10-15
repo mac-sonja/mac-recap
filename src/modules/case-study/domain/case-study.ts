@@ -28,6 +28,17 @@ export type Client = z.infer<typeof clientSchema>;
 /** A client name a person supplies: trimmed, 1–120 characters. */
 export const clientNameSchema = z.string().trim().min(1, "Required.").max(CLIENT_NAME_MAX);
 
+/** What a person supplies to add a client: the name only; the code is assigned in SQL. Any other key is dropped. */
+export const createClientInputSchema = z.object({ name: clientNameSchema });
+export type CreateClientInput = z.infer<typeof createClientInputSchema>;
+
+/** What a person supplies to rename a client: its id and the new name. The code never changes. */
+export const renameClientInputSchema = z.object({ clientId: z.uuid("Required."), name: clientNameSchema });
+export type RenameClientInput = z.infer<typeof renameClientInputSchema>;
+
+/** A client with the number of its non-deleted case studies (the Clients page). */
+export type ClientSummary = Client & { caseCount: number };
+
 /**
  * A `case_study` row with its client, as the case-study module sees it.
  * `code` (e.g. `LUM-2026-01`) is the readable display code, fixed at creation;
@@ -69,8 +80,12 @@ export const createCaseStudyInputSchema = z.object({
 export type CreateCaseStudyInput = z.infer<typeof createCaseStudyInputSchema>;
 
 /**
- * The status scope of a list, as authorized by `list cases`: `{}` is every status,
- * `{ status }` only that one. Any other key is rejected.
+ * The scope of a list, as authorized by `list cases`: `{}` is every status,
+ * `{ status }` only that one; `clientId` further limits it to one client's cases.
+ * Any other key is rejected.
  */
-export const listScopeSchema = z.strictObject({ status: z.enum(CASE_STATUSES).optional() });
+export const listScopeSchema = z.strictObject({
+  status: z.enum(CASE_STATUSES).optional(),
+  clientId: z.uuid().optional(),
+});
 export type ListScope = z.infer<typeof listScopeSchema>;

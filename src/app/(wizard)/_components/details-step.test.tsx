@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ActionResult } from "@/app/(tool)/case-studies/actions";
+import type { ActionResult } from "@/app/_lib/action-result";
 import type { DetailsFieldSaved, DetailsForm } from "@/modules/material";
 
 const saveDetailsField = vi.fn<(input: unknown) => Promise<ActionResult<DetailsFieldSaved>>>();

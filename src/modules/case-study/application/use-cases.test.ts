@@ -2,12 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { CASE_CREATED, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import type { CaseStatus } from "@/shared/case-status";
-import type { CaseStudy, Client } from "@/modules/case-study/domain/case-study";
+import type { CaseStudy, Client, ClientSummary } from "@/modules/case-study/domain/case-study";
 import { err, ok } from "@/shared/result";
 import { makeCreateCaseStudy } from "./create-case-study";
+import { makeCreateClient } from "./create-client";
 import { makeGetCaseStudy } from "./get-case-study";
+import { makeGetClient } from "./get-client";
 import { makeListCaseStudies } from "./list-case-studies";
+import { makeListClientSummaries } from "./list-client-summaries";
 import { makeListClients } from "./list-clients";
+import { makeRenameClient } from "./rename-client";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
 import { makeRecordEvent } from "./record-event";
@@ -89,7 +93,12 @@ function fakeRepository() {
     list: vi.fn<CaseStudyRepository["list"]>(async (scope) =>
       ok(
         [...cases.values()]
-          .filter((row) => row.deletedAt === null && (scope.status === undefined || row.status === scope.status))
+          .filter(
+            (row) =>
+              row.deletedAt === null &&
+              (scope.status === undefined || row.status === scope.status) &&
+              (scope.clientId === undefined || row.client.id === scope.clientId),
+          )
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
       ),
     ),
@@ -185,6 +194,145 @@ describe("create", () => {
   });
 });
 
+/**
+ * In-memory ClientRepository: mirrors `create_client` / `rename_client` refusals
+ * (name key: trimmed, collapsed whitespace, lower-cased, accents stripped). The
+ * real code comes from SQL only; this fake hands out a fixed one.
+ */
+function fakeClientRepository(rows: ClientSummary[] = []) {
+  const clients = new Map(rows.map((c) => [c.id, c]));
+  const nameKey = (name: string) =>
+    name.trim().replace(/\s+/g, " ").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  let n = 0;
+  const repo = {
+    list: vi.fn<ClientRepository["list"]>(async () => ok([...clients.values()].map(({ id, name, code }) => ({ id, name, code })))),
+    listWithCaseCounts: vi.fn<ClientRepository["listWithCaseCounts"]>(async () => ok([...clients.values()])),
+    findById: vi.fn<ClientRepository["findById"]>(async (id) => {
+      const found = clients.get(id);
+      return ok(found ? { id: found.id, name: found.name, code: found.code } : null);
+    }),
+    create: vi.fn<ClientRepository["create"]>(async (name) => {
+      if ([...clients.values()].some((c) => nameKey(c.name) === nameKey(name))) {
+        return err({ code: "CLIENT_NAME_TAKEN", message: "taken" });
+      }
+      const client = { id: `dddddddd-0000-4000-8000-${String(++n).padStart(12, "0")}`, name, code: `C${String(n).padStart(2, "0")}` };
+      clients.set(client.id, { ...client, caseCount: 0 });
+      return ok(client);
+    }),
+    rename: vi.fn<ClientRepository["rename"]>(async (id, name) => {
+      const found = clients.get(id);
+      if (!found) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
+      if ([...clients.values()].some((c) => c.id !== id && nameKey(c.name) === nameKey(name))) {
+        return err({ code: "CLIENT_NAME_TAKEN", message: "taken" });
+      }
+      clients.set(id, { ...found, name });
+      return ok({ id, name, code: found.code });
+    }),
+  } satisfies ClientRepository;
+  return { repo, clients };
+}
+
+const LUMEN: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000010", name: "Lumen Srl", code: "LUM", caseCount: 2 };
+
+describe("createClient", () => {
+  it("adds the trimmed name with the actor and returns the client", async () => {
+    const { repo } = fakeClientRepository();
+    const result = await makeCreateClient(repo)(actor, { name: "  Lumen Srl ", code: "ZZZ" });
+    expect(result.ok).toBe(true);
+    expect(repo.create).toHaveBeenCalledExactlyOnceWith("Lumen Srl", actor.id);
+  });
+
+  it.each([["   "], ["x".repeat(121)], [undefined]])("rejects the name %j as INVALID_INPUT without writing", async (name) => {
+    const { repo } = fakeClientRepository();
+    const result = await makeCreateClient(repo)(actor, { name });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["name"] } });
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it.each(["lumen  srl", "LUMEN SRL", "Lùmen Srl"])("passes CLIENT_NAME_TAKEN through for %j", async (name) => {
+    const { repo, clients } = fakeClientRepository([LUMEN]);
+    const result = await makeCreateClient(repo)(actor, { name });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("CLIENT_NAME_TAKEN");
+    expect(clients.size).toBe(1);
+  });
+});
+
+describe("renameClient", () => {
+  it("renames with the actor; the code stays", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    const result = await makeRenameClient(repo)(actor, { clientId: LUMEN.id, name: " Lumen S.r.l. " });
+    expect(result).toEqual(ok({ id: LUMEN.id, name: "Lumen S.r.l.", code: "LUM" }));
+    expect(repo.rename).toHaveBeenCalledExactlyOnceWith(LUMEN.id, "Lumen S.r.l.", actor.id);
+  });
+
+  it.each(["Lumen Srl", "lumen srl"])("allows renaming to its own name or a variant (%j)", async (name) => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    expect(await makeRenameClient(repo)(actor, { clientId: LUMEN.id, name })).toEqual(ok({ id: LUMEN.id, name, code: "LUM" }));
+  });
+
+  it("rejects a malformed id or blank name as INVALID_INPUT without writing", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    const result = await makeRenameClient(repo)(actor, { clientId: "LUM", name: " " });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["clientId", "name"] } });
+    expect(repo.rename).not.toHaveBeenCalled();
+  });
+
+  it("passes CLIENT_NOT_FOUND and CLIENT_NAME_TAKEN through", async () => {
+    const other: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000011", name: "Acme", code: "ACM", caseCount: 0 };
+    const { repo } = fakeClientRepository([LUMEN, other]);
+    const unknown = await makeRenameClient(repo)(actor, { clientId: UNKNOWN_CLIENT_ID, name: "X" });
+    expect(unknown.ok || unknown.error.code).toBe("CLIENT_NOT_FOUND");
+    const taken = await makeRenameClient(repo)(actor, { clientId: other.id, name: "LUMEN SRL" });
+    expect(taken.ok || taken.error.code).toBe("CLIENT_NAME_TAKEN");
+  });
+});
+
+describe("getClient", () => {
+  it("returns a known client", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    expect(await makeGetClient(repo)(LUMEN.id)).toEqual(ok({ id: LUMEN.id, name: LUMEN.name, code: LUMEN.code }));
+  });
+
+  it.each([["an unknown id", UNKNOWN_CLIENT_ID], ["a malformed id", "LUM"], ["a non-string", ["a", "b"]]])(
+    "returns CLIENT_NOT_FOUND for %s",
+    async (_label, id) => {
+      const { repo } = fakeClientRepository([LUMEN]);
+      const result = await makeGetClient(repo)(id);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("CLIENT_NOT_FOUND");
+    },
+  );
+
+  it("does not query for a malformed id", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    await makeGetClient(repo)("not-a-uuid");
+    expect(repo.findById).not.toHaveBeenCalled();
+  });
+});
+
+describe("listClientSummaries", () => {
+  it("returns every client with its case count, sorted by name, case- and accent-insensitive", async () => {
+    const rows: ClientSummary[] = [
+      { id: "cccccccc-0000-4000-8000-000000000001", name: "Zeta", code: "ZET", caseCount: 0 },
+      { id: "cccccccc-0000-4000-8000-000000000002", name: "città di Torino", code: "CIT", caseCount: 4 },
+      { id: "cccccccc-0000-4000-8000-000000000003", name: "Acme", code: "ACM", caseCount: 1 },
+    ];
+    const result = await makeListClientSummaries(fakeClientRepository(rows).repo)();
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map((c) => [c.code, c.caseCount])).toEqual([["ACM", 1], ["CIT", 4], ["ZET", 0]]);
+  });
+
+  it("passes a repository failure through", async () => {
+    const failure = err({ code: "CLIENT_LOOKUP_FAILED", message: "down" });
+    const { repo } = fakeClientRepository();
+    repo.listWithCaseCounts.mockResolvedValueOnce(failure);
+    expect(await makeListClientSummaries(repo)()).toEqual(failure);
+  });
+});
+
 describe("listClients", () => {
   const client = (name: string, code: string, n: number): Client => ({
     id: `cccccccc-0000-4000-8000-${String(n).padStart(12, "0")}`,
@@ -193,7 +341,7 @@ describe("listClients", () => {
   });
 
   function fakeClients(rows: Client[]) {
-    return { list: vi.fn<ClientRepository["list"]>(async () => ok(rows)) } satisfies ClientRepository;
+    return { ...fakeClientRepository().repo, list: vi.fn<ClientRepository["list"]>(async () => ok(rows)) } satisfies ClientRepository;
   }
 
   it("returns every client sorted by name, case- and accent-insensitive", async () => {
@@ -317,6 +465,27 @@ describe("list", () => {
     const { repo } = fakeRepository();
     repo.list.mockResolvedValueOnce(failure);
     expect(await makeListCaseStudies(repo)({})).toEqual(failure);
+  });
+
+  it("limits the list to one client when the scope names it", async () => {
+    const { repo, ids, clients } = await seeded();
+    const other: Client = { id: "cccccccc-0000-4000-8000-000000000002", name: "Beta", code: "BET" };
+    clients.set(other.id, other);
+    const created = await makeCreateCaseStudy(repo)(actor, { name: "Other", clientId: other.id, year: 2026 });
+    if (!created.ok) throw new Error("setup");
+    const result = await makeListCaseStudies(repo)({ clientId: other.id });
+    expect(repo.list).toHaveBeenCalledWith({ clientId: other.id });
+    expect(result.ok && result.value.map((c) => c.id)).toEqual([created.value.id]);
+    const acme = await makeListCaseStudies(repo)({ clientId: ACME.id });
+    expect(acme.ok && acme.value.map((c) => c.id)).not.toContain(created.value.id);
+    expect(acme.ok && acme.value.map((c) => c.id)).toContain(ids.draft);
+  });
+
+  it("rejects a malformed client id as INVALID_INPUT without querying", async () => {
+    const { repo } = fakeRepository();
+    const result = await makeListCaseStudies(repo)({ clientId: "LUM" });
+    expect(result.ok).toBe(false);
+    expect(repo.list).not.toHaveBeenCalled();
   });
 });
 

@@ -211,6 +211,87 @@ describe("forbidden", () => {
   });
 });
 
+describe("clients page (Story 2.13)", () => {
+  const loadClientActions = () => import("@/app/(tool)/clients/actions");
+
+  async function summaryOf(clientId: string) {
+    const { listClientSummaries } = await loadCaseStudy();
+    const result = await listClientSummaries();
+    if (!result.ok) throw new Error(`listClientSummaries failed: ${result.error.code}`);
+    return result.value.find((c) => c.id === clientId);
+  }
+
+  it("counts only non-deleted cases; a client with only soft-deleted cases counts 0", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const onlyDeleted = await createTestClient(pool, DEV_ACTOR_ID);
+    await createCase({ name: "Count live 1", clientId: client.id });
+    await createCase({ name: "Count live 2", clientId: client.id });
+    const deleted = await createCase({ name: "Count deleted", clientId: client.id });
+    const deletedOnly = await createCase({ name: "Count deleted only", clientId: onlyDeleted.id });
+    await pool.query("update public.case_study set deleted_at = now() where id = any($1::uuid[])", [[deleted.id, deletedOnly.id]]);
+
+    expect(await summaryOf(client.id)).toEqual({ ...client, caseCount: 2 });
+    expect(await summaryOf(onlyDeleted.id)).toEqual({ ...onlyDeleted, caseCount: 0 });
+  });
+
+  it("lists one client's non-deleted cases when the scope names it", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const mine = await createCase({ name: "Scoped mine", clientId: client.id });
+    const gone = await createCase({ name: "Scoped gone", clientId: client.id });
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [gone.id]);
+    await createCase({ name: "Scoped other" });
+    const { list } = await loadCaseStudy();
+    const result = await list({ clientId: client.id });
+    expect(result.ok && result.value.map((c) => c.id)).toEqual([mine.id]);
+  });
+
+  it("adds a client through the action, refuses a name-key duplicate, and renames without touching any code", async () => {
+    const { createClient, renameClient } = await loadClientActions();
+    const name = nameWithLetters(await freshPrefix(pool));
+    const added = await createClient({ name: `  ${name} ` });
+    if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
+    expect(added.value.name).toBe(name);
+    const created = await createCase({ name: "Rename keeps codes", clientId: added.value.id });
+
+    const before = await counts();
+    const duplicate = await createClient({ name: name.toUpperCase().replace(" ", "  ") });
+    expect(duplicate).toEqual({ ok: false, status: 409, error: { code: "CLIENT_NAME_TAKEN", message: expect.any(String) } });
+    expect(await counts()).toEqual(before);
+
+    const renamed = await renameClient({ clientId: added.value.id, name: `${name} S.r.l.` });
+    expect(renamed).toEqual({ ok: true, value: { id: added.value.id, name: `${name} S.r.l.`, code: added.value.code } });
+    const { get } = await loadCaseStudy();
+    const reread = await get(created.id);
+    expect(reread.ok && reread.value).toMatchObject({ code: created.code, client: { name: `${name} S.r.l.`, code: added.value.code } });
+
+    // Its own name, and a case/space variant of it, are not "taken": saved as typed, code unchanged.
+    for (const own of [`${name} S.r.l.`, `${name.toLowerCase().replace(" ", "  ")} s.r.l.`]) {
+      const same = await renameClient({ clientId: added.value.id, name: own });
+      expect(same).toEqual({
+        ok: true,
+        value: { id: added.value.id, name: own.replace(/\s+/g, " "), code: added.value.code },
+      });
+    }
+
+    const unknown = await renameClient({ clientId: UNKNOWN_ID, name: "Nobody" });
+    expect(unknown).toMatchObject({ ok: false, status: 404, error: { code: "CLIENT_NOT_FOUND" } });
+  });
+
+  it("returns 403 FORBIDDEN for a role that cannot manage clients, and writes nothing", async () => {
+    const { createClient, renameClient } = await loadClientActions();
+    await pool.query("update public.profile set role = 'account_sales_social' where id = $1", [DEV_ACTOR_ID]);
+    try {
+      const before = await counts();
+      const forbidden = { ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } };
+      expect(await createClient({ name: nameWithLetters(await freshPrefix(pool)) })).toEqual(forbidden);
+      expect(await renameClient({ clientId: acme.id, name: "Intruder" })).toEqual(forbidden);
+      expect(await counts()).toEqual(before);
+    } finally {
+      await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
+    }
+  });
+});
+
 describe("get", () => {
   it("returns an existing case", async () => {
     const created = await createCase();

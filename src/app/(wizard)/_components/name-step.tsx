@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
@@ -14,6 +15,8 @@ import { WizardFooter } from "./wizard-frame";
 export interface NameStepProps {
   /** Every client, sorted by name (`case-study.listClients`). Empty: the field gives way to a note. */
   clients: readonly Client[];
+  /** A client to preselect (`?clientId=` from a client's page); the page passes it only when it is in `clients`. */
+  initialClientId?: string;
   /** Prefilled year: the current year in Europe/Rome. */
   defaultYear: number;
   /** Accepted years (`YEAR_MIN`, `YEAR_MAX` from the case-study module). */
@@ -34,11 +37,26 @@ const LOCALE_OPTIONS: ReadonlyArray<{ value: Locale; label: string }> = [
 const INPUT =
   "w-full rounded-md border bg-surface-control px-3 py-2 font-body text-sm text-foreground placeholder:text-foreground-muted aria-invalid:border-danger";
 
+/** "Nessun cliente. Aggiungilo nella pagina Clienti.", with "pagina Clienti" a link to the Clients page. */
+function noClientsNote() {
+  const [before, after = ""] = it.wizard.noClients.split("{link}");
+  return (
+    <>
+      {before}
+      <Link href="/clients" className="text-foreground underline underline-offset-2 hover:text-foreground-strong">
+        {it.wizard.noClientsLink}
+      </Link>
+      {after}
+    </>
+  );
+}
+
 /**
  * Step 0: name (required), client (required, picked from a native select of the
  * existing clients, "{name} ({code})", empty first option; no free text and no
  * adding here), year (prefilled, editable) and narrative language (*Italiano*
- * default). With no clients the select gives way to "Nessun cliente…" and
+ * default). A client named by `initialClientId` starts selected. With no clients
+ * the select gives way to "Nessun cliente…" (linking to the Clients page) and
  * **Avanti** stays inactive. **Avanti** is inactive while the name is blank or no
  * client is picked; pressing it then sends nothing and names each missing field.
  * Otherwise it calls `createCaseStudy({ name, clientId, year, locale })` once (create is not idempotent: the button is busy until
@@ -48,7 +66,7 @@ const INPUT =
  * any other failure, or a field the form doesn't have, keeps the form filled and
  * shows one generic line.
  */
-export function NameStep({ clients, defaultYear, yearMin, yearMax }: NameStepProps) {
+export function NameStep({ clients, initialClientId, defaultYear, yearMin, yearMax }: NameStepProps) {
   const router = useRouter();
   const ids = { name: useId(), clientId: useId(), year: useId(), locale: useId() };
   const noClientsId = useId();
@@ -57,7 +75,9 @@ export function NameStep({ clients, defaultYear, yearMin, yearMax }: NameStepPro
   const inFlight = useRef(false);
 
   const [name, setName] = useState("");
-  const [clientId, setClientId] = useState("");
+  const [clientId, setClientId] = useState(
+    initialClientId !== undefined && clients.some((client) => client.id === initialClientId) ? initialClientId : "",
+  );
   const [year, setYear] = useState(String(defaultYear));
   const [locale, setLocale] = useState<Locale>("it");
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -206,7 +226,7 @@ export function NameStep({ clients, defaultYear, yearMin, yearMax }: NameStepPro
             <>
               <span className={label}>{it.wizard.fields.client}</span>
               <p id={noClientsId} className="font-body text-sm text-foreground">
-                {it.wizard.noClients}
+                {noClientsNote()}
               </p>
             </>
           )}

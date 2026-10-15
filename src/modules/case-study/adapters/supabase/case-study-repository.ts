@@ -3,8 +3,9 @@ import { caseEventSchema, type CaseEvent } from "@/modules/case-study/domain/cas
 import { caseStudySchema, type CaseStudy } from "@/modules/case-study/domain/case-study";
 import type { Json, Tables } from "@/shared/db.types";
 import { log } from "@/shared/log";
-import { err, type AppError, type Result } from "@/shared/result";
+import { err, type Result } from "@/shared/result";
 import { createSupabaseAdminClient } from "./admin";
+import { refusalOf, type Refusals } from "./refusal";
 
 type CaseEventRow = Tables<"case_event">;
 
@@ -22,25 +23,16 @@ const CASE_EVENT_COLUMNS = "id, case_id, revision_id, actor_id, type, at, data";
 const FOREIGN_KEY_VIOLATION = "23503";
 const CASE_FK = "case_event_case_id_fkey";
 
-/** Postgres raise_exception: `transition_case_study` and `create_case_study` raise it with one of these messages. */
-const RAISE_EXCEPTION = "P0001";
-const TRANSITION_REFUSALS: Readonly<Record<string, Omit<AppError, "details">>> = {
+/** `transition_case_study` raises these as P0001; nothing is written then. */
+const TRANSITION_REFUSALS: Refusals = {
   NOT_FOUND: { code: "NOT_FOUND", message: "No case study with this id." },
   STALE_STATUS: { code: "STALE_STATUS", message: "The case study status changed since it was read." },
   INVALID_TRANSITION: { code: "INVALID_TRANSITION", message: "This status change is not allowed." },
 };
 /** `create_case_study` raises these (AD-21); nothing is written then. */
-const CREATE_REFUSALS: Readonly<Record<string, Omit<AppError, "details">>> = {
+const CREATE_REFUSALS: Refusals = {
   CLIENT_NOT_FOUND: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
 };
-
-/** The refusal a Postgres function raised as P0001 with one of `refusals`' messages, if any. */
-function refusalOf(
-  error: { code: string; message: string },
-  refusals: Readonly<Record<string, Omit<AppError, "details">>>,
-): Omit<AppError, "details"> | undefined {
-  return error.code === RAISE_EXCEPTION && Object.hasOwn(refusals, error.message) ? refusals[error.message] : undefined;
-}
 
 /** Maps a `case_study` row to the domain shape, rejecting values outside the domain. */
 export function toCaseStudy(row: CaseStudyRow): Result<CaseStudy> {
@@ -142,6 +134,7 @@ export function createSupabaseCaseStudyRepository(
     async list(scope) {
       let query = client().from("case_study").select(CASE_STUDY_COLUMNS).is("deleted_at", null);
       if (scope.status !== undefined) query = query.eq("status", scope.status);
+      if (scope.clientId !== undefined) query = query.eq("client_id", scope.clientId);
       // `id` breaks ties so equal timestamps keep a stable order between loads.
       const { data, error } = await query.order("updated_at", { ascending: false }).order("id", { ascending: true });
       if (error) {

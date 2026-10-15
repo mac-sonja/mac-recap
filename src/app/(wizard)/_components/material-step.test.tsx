@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ActionResult } from "@/app/(tool)/case-studies/actions";
+import type { ActionResult } from "@/app/_lib/action-result";
 import type { Asset, ListedAsset, PresignedAssetUpload } from "@/modules/material";
 
 const presignAssetUpload = vi.fn<(input: unknown) => Promise<ActionResult<PresignedAssetUpload>>>();
