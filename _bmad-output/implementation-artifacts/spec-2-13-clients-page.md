@@ -2,7 +2,7 @@
 title: 'Story 2.13: Clients page'
 type: 'feature'
 created: '2026-10-15'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'ffe93d114ef9bb870ba5790fdefb9990470e73ae'
 route: 'dispatch'
 review_loop_iteration: 0
