@@ -8,6 +8,7 @@ type Cell = "all" | "approved" | "draft";
 const EXPECTED: Record<Action, Partial<Record<Role, Cell>>> = {
   "list cases": { owner_designer: "all", account_sales_social: "approved" },
   "create case": { owner_designer: "all" },
+  "list clients": { owner_designer: "all" },
   upload: { owner_designer: "all" },
   "fill details": { owner_designer: "all" },
   "mark favourites": { owner_designer: "all" },

@@ -61,8 +61,10 @@ const actor = (role: Actor["role"]): Actor => ({
 
 const created: CaseStudy = {
   id: "11111111-1111-4111-8111-111111111111",
+  code: "LUM-2026-01",
+  number: 1,
   name: "Rebrand",
-  client: "Acme",
+  client: { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
   year: 2026,
   locale: "it",
   status: "draft",
@@ -76,7 +78,7 @@ const created: CaseStudy = {
   deletedAt: null,
 };
 
-const input = { name: "Rebrand", client: "Acme", year: 2026 };
+const input = { name: "Rebrand", clientId: "cccccccc-0000-4000-8000-000000000001", year: 2026 };
 
 beforeEach(() => {
   for (const fn of [
@@ -126,14 +128,14 @@ describe("createCaseStudy", () => {
     create.mockResolvedValue(
       err({
         code: "INVALID_INPUT",
-        message: "Invalid or missing: name, client.",
-        details: { fields: ["name", "client"], issues: [] },
+        message: "Invalid or missing: name, clientId.",
+        details: { fields: ["name", "clientId"], issues: [] },
       }),
     );
     expect(await createCaseStudy({ year: 2026 })).toEqual({
       ok: false,
       status: 400,
-      error: { code: "INVALID_INPUT", message: "Invalid or missing: name, client.", fields: ["name", "client"] },
+      error: { code: "INVALID_INPUT", message: "Invalid or missing: name, clientId.", fields: ["name", "clientId"] },
     });
   });
 

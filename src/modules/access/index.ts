@@ -35,6 +35,10 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   NOT_FOUND: 404,
   INVALID_TRANSITION: 409,
   STALE_STATUS: 409,
+  // Clients and case history codes (Story 2.12, AD-21).
+  CLIENT_NOT_FOUND: 404,
+  CLIENT_NAME_TAKEN: 409,
+  CLIENT_CODE_EXHAUSTED: 409,
   // Material uploads (Story 2.7).
   FILE_TYPE_NOT_ALLOWED: 400,
   FILE_TOO_LARGE: 400,

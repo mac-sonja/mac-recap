@@ -11,6 +11,7 @@ export { CASE_STATUSES, type CaseStatus } from "@/shared/case-status";
 export const ACTIONS = [
   "list cases",
   "create case",
+  "list clients",
   "upload",
   "fill details",
   "mark favourites",
@@ -49,6 +50,8 @@ const draft: Rule = (r) => r.status === "draft";
 const MATRIX: Readonly<Record<Action, Readonly<Partial<Record<Role, Rule>>>>> = {
   "list cases": { owner_designer: true, account_sales_social: approved },
   "create case": { owner_designer: true },
+  // AD-21: the step 0 client picker (Sprint Change Proposal 2026-10-15).
+  "list clients": { owner_designer: true },
   upload: { owner_designer: true },
   "fill details": { owner_designer: true },
   // AD-14: favourites replace the retired taxonomy (Sprint Change Proposal 2026-10-14).

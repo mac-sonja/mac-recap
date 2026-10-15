@@ -120,3 +120,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-10-details-step-ui.md`
   summary: Keep the wizard stepper's Dettagli/Genera links in sync with client-side uploads and removals on step 1 (today `reachable` comes from one server-side `hasMaterial` check per page load).
   evidence: After the first upload on step 1 the stepper shows Dettagli and Genera as plain segments until a reload; after removing the last file they stay links that redirect back to step 1. A plain `router.refresh()` would redirect a no-step URL to step 2 mid-upload, so the fix needs a design choice.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-12-clients-and-readable-case-history-codes.md`
+  summary: Before any feature lets people change a case history's client or year, decide how the fixed code coexists with the unique key `(client_id, year, number)` and the per-pair counter.
+  evidence: A moved case keeps its number, so moving it into a pair that already has (or will reach) that number fails on the unique key or makes later creates for that pair fail. No edit path exists today (owner answer 4 in SCP 2026-10-15).

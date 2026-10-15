@@ -9,8 +9,10 @@ import {
 } from "./filter-sort";
 
 const row = (over: Partial<CaseStudyRow> & Pick<CaseStudyRow, "id">): CaseStudyRow => ({
+  code: "ACM-2026-01",
   name: "Rebrand",
-  client: "Acme",
+  clientName: "Acme",
+  clientCode: "ACM",
   year: 2026,
   status: "draft",
   updatedAt: "2026-10-01T10:00:00+00:00",
@@ -19,9 +21,9 @@ const row = (over: Partial<CaseStudyRow> & Pick<CaseStudyRow, "id">): CaseStudyR
 });
 
 const rows: CaseStudyRow[] = [
-  row({ id: "aaaaaaaa-0000-4000-8000-000000000001", name: "Zeta", client: "Città di Roma", year: 2024, status: "approved", updatedAt: "2026-10-02T10:00:00+00:00" }),
-  row({ id: "bbbbbbbb-0000-4000-8000-000000000002", name: "alfa", client: "Acme", year: 2026, status: "draft", updatedAt: "2026-10-12T10:00:00.123456+00:00" }),
-  row({ id: "cccccccc-0000-4000-8000-000000000003", name: "Émile", client: "Beta", year: 2025, status: "in_review", updatedAt: "2026-10-05T10:00:00+00:00" }),
+  row({ id: "aaaaaaaa-0000-4000-8000-000000000001", code: "CIT-2024-10", name: "Zeta", clientName: "Città di Roma", clientCode: "CIT", year: 2024, status: "approved", updatedAt: "2026-10-02T10:00:00+00:00" }),
+  row({ id: "bbbbbbbb-0000-4000-8000-000000000002", code: "ACM-2026-01", name: "alfa", clientName: "Acme", clientCode: "ACM", year: 2026, status: "draft", updatedAt: "2026-10-12T10:00:00.123456+00:00" }),
+  row({ id: "cccccccc-0000-4000-8000-000000000003", code: "CIT-2024-9", name: "Émile", clientName: "Beta", clientCode: "BET", year: 2025, status: "in_review", updatedAt: "2026-10-05T10:00:00+00:00" }),
 ];
 const ids = (list: CaseStudyRow[]) => list.map((r) => r.id.slice(0, 1));
 
@@ -36,8 +38,11 @@ describe("filterRows", () => {
     ["an unaccented query against an accented client", "citta", ["a"]],
     ["an accented query against an unaccented name", "ÈMILE", ["c"]],
     ["a case difference", "ALFA", ["b"]],
-    ["an ID fragment", "bbbbbbbb-0000", ["b"]],
-    ["a fragment of a client", "cme", ["b"]],
+    ["a case code fragment", "2026-01", ["b"]],
+    ["a case code, case-insensitively", "cit-2024-9", ["c"]],
+    ["a client code", "bet", ["c"]],
+    ["a fragment of a client name", "cme", ["b"]],
+    ["not the uuid", "bbbbbbbb-0000", []],
     ["no match", "nessuno", []],
   ])("matches %s", (_label, query, expected) => {
     expect(ids(filterRows(rows, query))).toEqual(expected);
@@ -72,7 +77,8 @@ describe("sort", () => {
     ["client", { key: "client", direction: "asc" }, ["b", "c", "a"]],
     ["year", { key: "year", direction: "asc" }, ["a", "c", "b"]],
 
-    ["ID", { key: "id", direction: "desc" }, ["c", "b", "a"]],
+    ["ID (code, naturally)", { key: "id", direction: "asc" }, ["b", "c", "a"]],
+    ["ID Z→A", { key: "id", direction: "desc" }, ["a", "c", "b"]],
     ["updated, oldest first", { key: "updated", direction: "asc" }, ["a", "c", "b"]],
   ] as const)("sorts by %s", (_label, sort, expected) => {
     expect(ids(sortRows(rows, sort))).toEqual(expected);
@@ -84,10 +90,19 @@ describe("sort", () => {
     expect(ids(sortRows(withGenerating, { key: "status", direction: "desc" }))).toEqual(["a", "c", "d", "b"]);
   });
 
-  it("compares IDs lexically, not by numeric digit runs", () => {
-    // A numeric collator would put "9…" after "10…" (9 < 10); lexically "10…" < "9…".
-    const hex = [row({ id: "9aaaaaaa-0000-4000-8000-000000000001" }), row({ id: "10aaaaaa-0000-4000-8000-000000000002" })];
-    expect(sortRows(hex, { key: "id", direction: "asc" }).map((r) => r.id.slice(0, 2))).toEqual(["10", "9a"]);
+  it("compares codes naturally: LUM-2026-9 before LUM-2026-10 before LUM-2026-100", () => {
+    const coded = ["LUM-2026-100", "LUM-2026-10", "LUM-2026-9", "LUM-2025-11"].map((code, i) => row({ id: String(i), code }));
+    expect(sortRows(coded, { key: "id", direction: "asc" }).map((r) => r.code)).toEqual([
+      "LUM-2025-11",
+      "LUM-2026-9",
+      "LUM-2026-10",
+      "LUM-2026-100",
+    ]);
+  });
+
+  it("sorts Client by the client's current name, not its code", () => {
+    const named = [row({ id: "1", clientName: "Zeta", clientCode: "AAA" }), row({ id: "2", clientName: "Alfa", clientCode: "ZZZ" })];
+    expect(sortRows(named, { key: "client", direction: "asc" }).map((r) => r.id)).toEqual(["2", "1"]);
   });
 
   it("keeps the incoming order for ties and does not mutate its input", () => {

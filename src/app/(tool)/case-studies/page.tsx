@@ -27,8 +27,10 @@ export default async function CaseStudiesPage() {
 
   const rows: CaseStudyRow[] = listed.value.map((c) => ({
     id: c.id,
+    code: c.code,
     name: c.name,
-    client: c.client,
+    clientName: c.client.name,
+    clientCode: c.client.code,
     year: c.year,
     status: c.status,
     updatedAt: c.updatedAt,

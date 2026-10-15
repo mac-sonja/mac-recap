@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
-import type { CaseStudy } from "@/modules/case-study";
+import type { CaseStudy, Client } from "@/modules/case-study";
 import type { DetailsForm, ListedAsset } from "@/modules/material";
 import { err, ok, type Result } from "@/shared/result";
 
@@ -10,6 +10,7 @@ const get = vi.fn<(id: unknown) => Promise<Result<CaseStudy>>>();
 const listAssets = vi.fn<(input: unknown) => Promise<Result<ListedAsset[]>>>();
 const hasMaterial = vi.fn<(caseId: unknown) => Promise<Result<boolean>>>();
 const getDetailsForm = vi.fn<(input: unknown) => Promise<Result<DetailsForm>>>();
+const listClients = vi.fn<() => Promise<Result<Client[]>>>();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -18,7 +19,12 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
-vi.mock("@/modules/case-study", () => ({ get: (id: unknown) => get(id), YEAR_MIN: 1900, YEAR_MAX: 2100 }));
+vi.mock("@/modules/case-study", () => ({
+  get: (id: unknown) => get(id),
+  listClients: () => listClients(),
+  YEAR_MIN: 1900,
+  YEAR_MAX: 2100,
+}));
 vi.mock("@/shared/i18n/format", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/shared/i18n/format")>()),
   currentYear: () => 2031,
@@ -53,8 +59,10 @@ const shell: ShellActor = {
 
 const draft: CaseStudy = {
   id: ID,
+  code: "LUM-2026-01",
+  number: 1,
   name: "Rebrand Lumen 2026",
-  client: "Lumen",
+  client: { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
   year: 2026,
   locale: "it",
   status: "draft",
@@ -67,6 +75,11 @@ const draft: CaseStudy = {
   updatedAt: "2026-10-14T10:00:00+00:00",
   deletedAt: null,
 };
+
+const clients: Client[] = [
+  { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
+  { id: "cccccccc-0000-4000-8000-000000000002", name: "Città di Torino", code: "CIT" },
+];
 
 const asset: ListedAsset = {
   id: "bbbbbbbb-0000-4000-8000-000000000001",
@@ -88,7 +101,9 @@ beforeEach(() => {
   listAssets.mockReset();
   hasMaterial.mockReset();
   getDetailsForm.mockReset();
+  listClients.mockReset();
   requireSurface.mockResolvedValue(shell);
+  listClients.mockResolvedValue(ok(clients));
   listAssets.mockResolvedValue(ok([]));
   hasMaterial.mockResolvedValue(ok(false));
   getDetailsForm.mockResolvedValue(ok({ context: "", solution: "", results: "" }));
@@ -110,6 +125,43 @@ describe("NewCaseStudyPage", () => {
     expect(html).not.toContain("<nav");
   });
 
+  it("step 0 lists every client in a select, as given (sorted by name), with a placeholder first option", async () => {
+    const html = await render();
+    expect(listClients).toHaveBeenCalledOnce();
+    const select = html.match(/<select [^>]*name="clientId"[^>]*>.*?<\/select>/)?.[0] ?? "";
+    expect([...select.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].map((m) => [m[1], m[2]])).toEqual([
+      ["", "Scegli un cliente"],
+      [clients[0].id, "Lumen Srl (LUM)"],
+      [clients[1].id, "Città di Torino (CIT)"],
+    ]);
+    expect(html).not.toMatch(/<input [^>]*name="client/);
+  });
+
+  it("step 0 with no clients shows the note instead of the select", async () => {
+    listClients.mockResolvedValue(ok([]));
+    const html = await render();
+    expect(html).toContain("Nessun cliente. Aggiungilo nella pagina Clienti.");
+    expect(html).not.toContain("<select name=\"clientId\"");
+    expect(html).not.toContain('href="/clients');
+  });
+
+  it("step 0 throws into the error boundary when the clients can't be listed", async () => {
+    listClients.mockResolvedValue(err({ code: "CLIENT_LOOKUP_FAILED", message: "down" }));
+    await expect(render()).rejects.toThrow("CLIENT_LOOKUP_FAILED");
+  });
+
+  it("step 0 goes to the landing for a role that may not list clients", async () => {
+    requireSurface.mockResolvedValue({ ...shell, actor: { ...shell.actor, role: "account_sales_social" }, landing: "/library" });
+    await expect(render()).rejects.toThrow("REDIRECT /library");
+    expect(listClients).not.toHaveBeenCalled();
+  });
+
+  it("does not list clients when reopening a case", async () => {
+    get.mockResolvedValue(ok(draft));
+    await render({ caseId: ID });
+    expect(listClients).not.toHaveBeenCalled();
+  });
+
   it("shows the larger-screen message below lg and hides the form there", async () => {
     const html = await render();
     expect(html).toMatch(/<p class="[^"]*\blg:hidden\b[^"]*">Questa pagina richiede uno schermo più grande\.<\/p>/);
@@ -129,7 +181,8 @@ describe("NewCaseStudyPage", () => {
     const html = await render({ caseId: ID });
     expect(get).toHaveBeenCalledExactlyOnceWith(ID);
     expect(html).toMatch(/<h1 class="[^"]*">Rebrand Lumen 2026<\/h1>/);
-    expect(html).toMatch(new RegExp(`<span class="[^"]*font-mono[^"]*"><span class="sr-only">ID </span>${ID}</span>`));
+    expect(html).toMatch(/<span class="[^"]*font-mono[^"]*"><span class="sr-only">ID <\/span>LUM-2026-01<\/span>/);
+    expect(html).not.toContain(`>${ID}<`);
     expect(html).toContain('data-status="draft"');
     expect(html).toContain(">Bozza</span>");
     expect(html).toMatch(/<li data-step="1" aria-current="step"/);

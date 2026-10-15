@@ -8,7 +8,10 @@ import { StepDots, Stepper, type WizardStep } from "./stepper";
 
 /** The case the wizard is on; absent at step 0 until the case is created. */
 export interface WizardCase {
+  /** The uuid: links and keys only, never shown. */
   id: string;
+  /** The readable case history code (e.g. `LUM-2026-01`), shown in the top bar. */
+  code: string;
   name: string;
   status: CaseStatus;
 }
@@ -25,7 +28,7 @@ export interface WizardFrameProps {
 
 /**
  * The focused wizard frame (EXPERIENCE.md, Wizard layout): no sidebar; a slim top
- * bar with the back arrow, the case name and ID (mono) and the status badge; one
+ * bar with the back arrow, the case name and its code (mono) and the status badge; one
  * column about 820px wide, centred both ways under the top bar, which starts at
  * the top and scrolls when it is taller than the viewport while the top bar stays.
  * In the column: eyebrow, large title, stepper (its reachable steps are links),
@@ -48,7 +51,7 @@ export function WizardFrame({ caseStudy, current, reachable = false, children }:
             <span className="min-w-0 truncate font-body text-sm text-foreground">{caseStudy.name}</span>
             <span className="shrink-0 font-mono text-xs text-foreground-muted">
               <span className="sr-only">{`${it.wizard.caseId} `}</span>
-              {caseStudy.id}
+              {caseStudy.code}
             </span>
             <StatusBadge status={caseStudy.status} className="ml-auto shrink-0" />
           </>

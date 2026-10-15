@@ -2,9 +2,14 @@ import { CASE_STATUSES, type CaseStatus } from "@/shared/case-status";
 
 /** One row of the Case studies table, as the server hands it to the browser. */
 export interface CaseStudyRow {
+  /** The uuid: keys and hrefs only, never shown. */
   id: string;
+  /** The readable case history code (e.g. `LUM-2026-01`), shown in the ID column. */
+  code: string;
   name: string;
-  client: string;
+  /** The client's current name. */
+  clientName: string;
+  clientCode: string;
   year: number;
   status: CaseStatus;
   /** ISO timestamp, used for sorting. */
@@ -35,12 +40,15 @@ export function normalizeForSearch(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
-/** Rows whose name, client or ID contains `query` (normalized); a blank query keeps every row. */
+/**
+ * Rows whose name, client name, client code or case code contains `query`
+ * (normalized); a blank query keeps every row.
+ */
 export function filterRows(rows: readonly CaseStudyRow[], query: string): CaseStudyRow[] {
   const needle = normalizeForSearch(query.trim());
   if (needle === "") return [...rows];
   return rows.filter((row) =>
-    [row.name, row.client, row.id].some((field) => normalizeForSearch(field).includes(needle)),
+    [row.name, row.clientName, row.clientCode, row.code].some((field) => normalizeForSearch(field).includes(needle)),
   );
 }
 
@@ -56,8 +64,10 @@ function compare(a: CaseStudyRow, b: CaseStudyRow, key: SortKey): number {
     case "updated":
       return Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
     case "id":
-      // Lexical: UUIDs are hex, so the numeric collator would misorder digit runs.
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      // Natural order on the code: `LUM-2026-9` before `LUM-2026-10`.
+      return collator.compare(a.code, b.code);
+    case "client":
+      return collator.compare(a.clientName, b.clientName);
     default:
       return collator.compare(a[key], b[key]);
   }

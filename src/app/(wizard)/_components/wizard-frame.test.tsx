@@ -32,13 +32,14 @@ describe("WizardFrame", () => {
     expect(html).toContain('<div class="m-auto w-full max-w-[820px]">');
   });
 
-  it("shows the case name, its ID in mono and its status badge", () => {
+  it("shows the case name, its code (not the uuid) in mono and its status badge", () => {
     const html = renderToStaticMarkup(
-      <WizardFrame caseStudy={{ id: ID, name: "Rebrand Lumen 2026", status: "draft" }} current={1}>
+      <WizardFrame caseStudy={{ id: ID, code: "LUM-2026-01", name: "Rebrand Lumen 2026", status: "draft" }} current={1}>
         <p>step</p>
       </WizardFrame>,
     );
-    expect(html).toContain(`<span class="shrink-0 font-mono text-xs text-foreground-muted"><span class="sr-only">ID </span>${ID}</span>`);
+    expect(html).toContain(`<span class="shrink-0 font-mono text-xs text-foreground-muted"><span class="sr-only">ID </span>LUM-2026-01</span>`);
+    expect(html).not.toContain(`>${ID}<`);
     expect(html).toMatch(/<span data-status="draft" class="[^"]*\bml-auto\b[^"]*">Bozza<\/span>/);
     expect(html).toMatch(/<h1 [^>]*>Rebrand Lumen 2026<\/h1>/);
     expect(html).toContain('<p class="mb-2 font-label text-xs text-foreground-muted">Nuova case history</p>');
@@ -47,7 +48,7 @@ describe("WizardFrame", () => {
   it("forwards the case id and reachable to the stepper links", () => {
     const frame = (reachable: boolean) =>
       renderToStaticMarkup(
-        <WizardFrame caseStudy={{ id: ID, name: "Rebrand Lumen 2026", status: "draft" }} current={1} reachable={reachable}>
+        <WizardFrame caseStudy={{ id: ID, code: "LUM-2026-01", name: "Rebrand Lumen 2026", status: "draft" }} current={1} reachable={reachable}>
           <p>step</p>
         </WizardFrame>,
       );

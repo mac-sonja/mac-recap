@@ -9,6 +9,9 @@ describe("respondToAppError", () => {
     ["NOT_FOUND", 404],
     ["INVALID_TRANSITION", 409],
     ["STALE_STATUS", 409],
+    ["CLIENT_NOT_FOUND", 404],
+    ["CLIENT_NAME_TAKEN", 409],
+    ["CLIENT_CODE_EXHAUSTED", 409],
     ["FILE_TYPE_NOT_ALLOWED", 400],
     ["FILE_TOO_LARGE", 400],
     ["FILE_LIMIT_REACHED", 409],
@@ -39,6 +42,9 @@ describe("can", () => {
     expect(can(actor("account_sales_social"), "list cases")).toBe(false);
     expect(can(actor("account_sales_social"), "list cases", { status: "approved" })).toBe(true);
     expect(can(actor("admin"), "list cases")).toBe(false);
+    expect(can(actor("owner_designer"), "list clients")).toBe(true);
+    expect(can(actor("account_sales_social"), "list clients")).toBe(false);
+    expect(can(actor("admin"), "list clients")).toBe(false);
   });
 });
 

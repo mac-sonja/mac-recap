@@ -11,12 +11,15 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 const { CaseStudiesTable, SEARCH_DEBOUNCE_MS } = await import("./case-studies-table");
 
 const DRAFT_ID = "bbbbbbbb-0000-4000-8000-000000000002";
+const DRAFT_CODE = "ACM-2026-01";
 
 const rows: CaseStudyRow[] = [
   {
     id: "aaaaaaaa-0000-4000-8000-000000000001",
+    code: "CIT-2024-10",
     name: "Zeta",
-    client: "Città di Roma",
+    clientName: "Città di Roma",
+    clientCode: "CIT",
     year: 2024,
     status: "approved",
     updatedAt: "2026-10-02T10:00:00+00:00",
@@ -24,8 +27,10 @@ const rows: CaseStudyRow[] = [
   },
   {
     id: DRAFT_ID,
+    code: DRAFT_CODE,
     name: "Alfa",
-    client: "Acme",
+    clientName: "Acme",
+    clientCode: "ACM",
     year: 2026,
     status: "draft",
     updatedAt: "2026-10-12T10:00:00+00:00",
@@ -33,8 +38,10 @@ const rows: CaseStudyRow[] = [
   },
   {
     id: "cccccccc-0000-4000-8000-000000000003",
+    code: "CIT-2024-9",
     name: "Émile",
-    client: "Beta",
+    clientName: "Beta Lumen",
+    clientCode: "BET",
     year: 2025,
     status: "in_review",
     updatedAt: "2026-10-05T10:00:00+00:00",
@@ -82,8 +89,11 @@ describe("CaseStudiesTable", () => {
 
     const first = within(table).getAllByRole("row")[1];
     const cells = first.querySelectorAll("td");
-    expect(cells[0].textContent).toBe(DRAFT_ID);
+    // The ID column shows the code, never the uuid (which stays in keys and hrefs).
+    expect(cells[0].textContent).toBe(DRAFT_CODE);
     expect(cells[0].className).toContain("font-mono");
+    expect(table.textContent).not.toContain(DRAFT_ID);
+    expect(first.getAttribute("data-case-id")).toBe(DRAFT_ID);
     expect(cells[2].textContent).toBe("Acme");
     expect(cells[3].textContent).toBe("2026");
     expect(cells[4].textContent).toBe("Bozza");
@@ -114,11 +124,26 @@ describe("CaseStudiesTable", () => {
     expect(names()).toEqual(["Zeta"]);
   });
 
-  it("matches an ID fragment", () => {
+  it.each([
+    ["a case code fragment", "2026-01", ["Alfa"]],
+    ["a client code", "bet", ["Émile"]],
+    ["a client name", "lumen", ["Émile"]],
+    ["a uuid fragment (not searchable)", "cccccccc-0000", []],
+  ])("matches %s", (_label, query, expected) => {
     render(<CaseStudiesTable rows={rows} canCreate />);
-    setSearch("cccccccc-0000");
+    setSearch(query);
     act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
-    expect(names()).toEqual(["Émile"]);
+    if (expected.length === 0) expect(screen.queryByRole("table")).toBeNull();
+    else expect(names()).toEqual(expected);
+  });
+
+  it("sorts ID by code naturally: CIT-2024-9 before CIT-2024-10", async () => {
+    const user = userEvent.setup();
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    await user.click(within(header("ID")).getByRole("button"));
+    expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
+    await user.click(within(header("ID")).getByRole("button"));
+    expect(names()).toEqual(["Zeta", "Émile", "Alfa"]);
   });
 
   it("shows the no-results message with the query; clearing restores every row", () => {
@@ -200,13 +225,13 @@ describe("CaseStudiesTable", () => {
     fireEvent.click(cell, { shiftKey: true });
     expect(push).not.toHaveBeenCalled();
 
-    // Drag-selecting the ID to copy it ends in a click on the row.
-    const idCell = within(table).getByText(DRAFT_ID);
+    // Drag-selecting the code to copy it ends in a click on the row.
+    const idCell = within(table).getByText(DRAFT_CODE);
     const range = document.createRange();
     range.selectNodeContents(idCell);
     window.getSelection()?.removeAllRanges();
     window.getSelection()?.addRange(range);
-    expect(window.getSelection()?.toString()).toBe(DRAFT_ID);
+    expect(window.getSelection()?.toString()).toBe(DRAFT_CODE);
     fireEvent.click(idCell);
     expect(push).not.toHaveBeenCalled();
 
@@ -243,7 +268,7 @@ describe("CaseStudiesTable", () => {
 
     push.mockReset();
     await user.click(within(table).getByText("Zeta"));
-    await user.click(within(table).getByText("Beta"));
+    await user.click(within(table).getByText("Beta Lumen"));
     expect(push).not.toHaveBeenCalled();
   });
 });

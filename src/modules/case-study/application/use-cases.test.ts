@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { CASE_CREATED, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import type { CaseStatus } from "@/shared/case-status";
-import type { CaseStudy } from "@/modules/case-study/domain/case-study";
+import type { CaseStudy, Client } from "@/modules/case-study/domain/case-study";
 import { err, ok } from "@/shared/result";
 import { makeCreateCaseStudy } from "./create-case-study";
 import { makeGetCaseStudy } from "./get-case-study";
 import { makeListCaseStudies } from "./list-case-studies";
+import { makeListClients } from "./list-clients";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
+import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
 import { makeRecordEvent } from "./record-event";
 import { makeTransition } from "./transition";
 
@@ -18,18 +20,35 @@ const actor: Actor = {
   role: "owner_designer",
 };
 
-/** In-memory CaseStudyRepository: mirrors the DB defaults and the create transaction. */
+const ACME: Client = { id: "cccccccc-0000-4000-8000-000000000001", name: "Acme", code: "ACM" };
+const UNKNOWN_CLIENT_ID = "cccccccc-0000-4000-8000-00000000ffff";
+
+/**
+ * In-memory CaseStudyRepository: mirrors the DB defaults and the create
+ * transaction, including `create_case_study`'s number per (client, year) and its
+ * `CLIENT_NOT_FOUND` (the real codes come from SQL only).
+ */
 function fakeRepository() {
   const cases = new Map<string, CaseStudy>();
   const events: CaseEvent[] = [];
+  const clients = new Map<string, Client>([[ACME.id, ACME]]);
+  const counters = new Map<string, number>();
   let n = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
   const now = "2026-10-09T10:00:00.000000+00:00";
 
   const repo = {
-    create: vi.fn<CaseStudyRepository["create"]>(async (input, actorId) => {
+    create: vi.fn<CaseStudyRepository["create"]>(async ({ clientId, ...input }, actorId) => {
+      const client = clients.get(clientId);
+      if (client === undefined) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
+      const pair = `${clientId}/${input.year}`;
+      const number = (counters.get(pair) ?? 0) + 1;
+      counters.set(pair, number);
       const row: CaseStudy = {
         id: uuid(),
+        code: `${client.code}-${input.year}-${String(number).padStart(2, "0")}`,
+        number,
+        client,
         ...input,
         status: "draft",
         projectOrderRef: null,
@@ -50,7 +69,15 @@ function fakeRepository() {
         type: CASE_CREATED,
         at: now,
         // Same payload create_case_study writes.
-        data: { name: row.name, client: row.client, year: row.year, locale: row.locale },
+        data: {
+          name: row.name,
+          client: client.name,
+          clientId: client.id,
+          clientCode: client.code,
+          code: row.code,
+          year: row.year,
+          locale: row.locale,
+        },
       });
       return ok(row);
     }),
@@ -84,34 +111,50 @@ function fakeRepository() {
     }),
   } satisfies CaseStudyRepository;
 
-  return { repo, cases, events };
+  return { repo, cases, events, clients };
 }
 
 describe("create", () => {
-  it("creates a draft case with locale it, created_by the actor and one case_created event", async () => {
+  it("creates a draft case with its code, locale it, created_by the actor and one case_created event", async () => {
     const { repo, events } = fakeRepository();
-    const result = await makeCreateCaseStudy(repo)(actor, { name: " Rebrand ", client: "Acme", year: 2026 });
+    const result = await makeCreateCaseStudy(repo)(actor, { name: " Rebrand ", clientId: ACME.id, year: 2026 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toMatchObject({
       name: "Rebrand",
-      client: "Acme",
+      client: ACME,
+      code: "ACM-2026-01",
+      number: 1,
       year: 2026,
       locale: "it",
       status: "draft",
       createdBy: actor.id,
     });
-    expect(repo.create).toHaveBeenCalledWith({ name: "Rebrand", client: "Acme", year: 2026, locale: "it" }, actor.id);
-    expect(events).toEqual([expect.objectContaining({ caseId: result.value.id, type: CASE_CREATED, actorId: actor.id })]);
+    expect(repo.create).toHaveBeenCalledWith({ name: "Rebrand", clientId: ACME.id, year: 2026, locale: "it" }, actor.id);
+    expect(events).toEqual([
+      expect.objectContaining({
+        caseId: result.value.id,
+        type: CASE_CREATED,
+        actorId: actor.id,
+        data: expect.objectContaining({ clientId: ACME.id, clientCode: "ACM", code: "ACM-2026-01" }),
+      }),
+    ]);
+  });
+
+  it("drops a free-text client and any code the caller sends", async () => {
+    const { repo } = fakeRepository();
+    await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, client: "Acme", code: "ZZZ-1999-01", year: 2026 });
+    expect(repo.create).toHaveBeenCalledWith({ name: "R", clientId: ACME.id, year: 2026, locale: "it" }, actor.id);
   });
 
   it.each([
-    ["empty name", { name: "", client: "Acme", year: 2026 }, ["name"]],
-    ["whitespace client", { name: "Rebrand", client: "  ", year: 2026 }, ["client"]],
-    ["both missing", { year: 2026 }, ["name", "client"]],
-    ["non-integer year", { name: "R", client: "A", year: 2026.1 }, ["year"]],
-    ["year out of range", { name: "R", client: "A", year: 1850 }, ["year"]],
-    ["bad locale", { name: "R", client: "A", year: 2026, locale: "de" }, ["locale"]],
+    ["empty name", { name: "", clientId: ACME.id, year: 2026 }, ["name"]],
+    ["no client picked", { name: "Rebrand", clientId: "", year: 2026 }, ["clientId"]],
+    ["a free-text client", { name: "Rebrand", client: "Acme", year: 2026 }, ["clientId"]],
+    ["both missing", { year: 2026 }, ["name", "clientId"]],
+    ["non-integer year", { name: "R", clientId: ACME.id, year: 2026.1 }, ["year"]],
+    ["year out of range", { name: "R", clientId: ACME.id, year: 1850 }, ["year"]],
+    ["bad locale", { name: "R", clientId: ACME.id, year: 2026, locale: "de" }, ["locale"]],
   ])("%s → INVALID_INPUT naming the fields; nothing written", async (_label, input, fields) => {
     const { repo, cases, events } = fakeRepository();
     const result = await makeCreateCaseStudy(repo)(actor, input);
@@ -125,18 +168,57 @@ describe("create", () => {
     expect(events).toEqual([]);
   });
 
+  it("an unknown client → CLIENT_NOT_FOUND; nothing written", async () => {
+    const { repo, cases, events } = fakeRepository();
+    const result = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: UNKNOWN_CLIENT_ID, year: 2026 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("CLIENT_NOT_FOUND");
+    expect(cases.size).toBe(0);
+    expect(events).toEqual([]);
+  });
+
   it("passes a repository failure through", async () => {
     const failure = err({ code: "CASE_STUDY_WRITE_FAILED", message: "down" });
     const { repo } = fakeRepository();
     repo.create.mockResolvedValueOnce(failure);
-    expect(await makeCreateCaseStudy(repo)(actor, { name: "R", client: "A", year: 2026 })).toEqual(failure);
+    expect(await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026 })).toEqual(failure);
+  });
+});
+
+describe("listClients", () => {
+  const client = (name: string, code: string, n: number): Client => ({
+    id: `cccccccc-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    name,
+    code,
+  });
+
+  function fakeClients(rows: Client[]) {
+    return { list: vi.fn<ClientRepository["list"]>(async () => ok(rows)) } satisfies ClientRepository;
+  }
+
+  it("returns every client sorted by name, case- and accent-insensitive", async () => {
+    const rows = [client("Zeta", "ZET", 1), client("città di Torino", "CIT", 2), client("Acme", "ACM", 3), client("Beta", "BET", 4)];
+    const result = await makeListClients(fakeClients(rows))();
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map((c) => c.code)).toEqual(["ACM", "BET", "CIT", "ZET"]);
+  });
+
+  it("returns an empty list when there are no clients", async () => {
+    expect(await makeListClients(fakeClients([]))()).toEqual(ok([]));
+  });
+
+  it("passes a repository failure through", async () => {
+    const failure = err({ code: "CLIENT_LOOKUP_FAILED", message: "down" });
+    const repo = fakeClients([]);
+    repo.list.mockResolvedValueOnce(failure);
+    expect(await makeListClients(repo)()).toEqual(failure);
   });
 });
 
 describe("get", () => {
   it("returns an existing case", async () => {
     const { repo } = fakeRepository();
-    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", client: "A", year: 2026 });
+    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026 });
     if (!created.ok) throw new Error("setup");
     expect(await makeGetCaseStudy(repo)(created.value.id)).toEqual(ok(created.value));
   });
@@ -149,7 +231,7 @@ describe("get", () => {
 
   it("returns NOT_FOUND for a soft-deleted case", async () => {
     const { repo, cases } = fakeRepository();
-    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", client: "A", year: 2026 });
+    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026 });
     if (!created.ok) throw new Error("setup");
     cases.set(created.value.id, { ...created.value, deletedAt: "2026-10-09T11:00:00Z" });
     const result = await makeGetCaseStudy(repo)(created.value.id);
@@ -178,7 +260,7 @@ describe("list", () => {
   async function seeded() {
     const fake = fakeRepository();
     const make = async (name: string, status: CaseStatus, updatedAt: string, deletedAt: string | null = null) => {
-      const created = await makeCreateCaseStudy(fake.repo)(actor, { name, client: "Acme", year: 2026 });
+      const created = await makeCreateCaseStudy(fake.repo)(actor, { name, clientId: ACME.id, year: 2026 });
       if (!created.ok) throw new Error("setup");
       fake.cases.set(created.value.id, { ...created.value, status, updatedAt, deletedAt });
       return created.value.id;
@@ -241,7 +323,7 @@ describe("list", () => {
 describe("recordEvent", () => {
   it("appends one event with the actor", async () => {
     const { repo, events } = fakeRepository();
-    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", client: "A", year: 2026 });
+    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026 });
     if (!created.ok) throw new Error("setup");
     const result = await makeRecordEvent(repo)(actor, {
       caseId: created.value.id,
@@ -275,7 +357,7 @@ describe("transition", () => {
   /** A fake repository holding one case in `status`, with the create event cleared. */
   async function caseIn(status: CaseStatus, deletedAt: string | null = null) {
     const fake = fakeRepository();
-    const created = await makeCreateCaseStudy(fake.repo)(actor, { name: "R", client: "A", year: 2026 });
+    const created = await makeCreateCaseStudy(fake.repo)(actor, { name: "R", clientId: ACME.id, year: 2026 });
     if (!created.ok) throw new Error("setup");
     fake.cases.set(created.value.id, { ...created.value, status, deletedAt });
     fake.events.length = 0;

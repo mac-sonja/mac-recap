@@ -75,20 +75,66 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"case_study": {
+                },"case_number_counter": {
                   Row: {
-                    "approved_revision_id": string | null,"client": string,"created_at": string,"created_by": string,"deleted_at": string | null,"head_revision_id": string | null,"head_version": number,"id": string,"locale": string,"name": string,"project_order_ref": string | null,"status": string,"updated_at": string,"year": number
+                    "client_id": string,"last_number": number,"year": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "approved_revision_id"?: string | null,"client": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"head_revision_id"?: string | null,"head_version"?: number,"id"?: string,"locale"?: string,"name": string,"project_order_ref"?: string | null,"status"?: string,"updated_at"?: string,"year": number
+                    "client_id": string,"last_number": number,"year": number
                   }
                   Update: {
-                    "approved_revision_id"?: string | null,"client"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"head_revision_id"?: string | null,"head_version"?: number,"id"?: string,"locale"?: string,"name"?: string,"project_order_ref"?: string | null,"status"?: string,"updated_at"?: string,"year"?: number
+                    "client_id"?: string,"last_number"?: number,"year"?: number
                   }
                   Relationships: [
                     {
+      foreignKeyName: "case_number_counter_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "client"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"case_study": {
+                  Row: {
+                    "approved_revision_id": string | null,"client_id": string,"code": string,"created_at": string,"created_by": string,"deleted_at": string | null,"head_revision_id": string | null,"head_version": number,"id": string,"locale": string,"name": string,"number": number,"project_order_ref": string | null,"status": string,"updated_at": string,"year": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "approved_revision_id"?: string | null,"client_id": string,"code": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"head_revision_id"?: string | null,"head_version"?: number,"id"?: string,"locale"?: string,"name": string,"number": number,"project_order_ref"?: string | null,"status"?: string,"updated_at"?: string,"year": number
+                  }
+                  Update: {
+                    "approved_revision_id"?: string | null,"client_id"?: string,"code"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"head_revision_id"?: string | null,"head_version"?: number,"id"?: string,"locale"?: string,"name"?: string,"number"?: number,"project_order_ref"?: string | null,"status"?: string,"updated_at"?: string,"year"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "case_study_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "client"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "case_study_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"client": {
+                  Row: {
+                    "code": string,"created_at": string,"created_by": string,"id": string,"name": string,"name_key": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "code": string,"created_at"?: string,"created_by": string,"id"?: string,"name": string,"name_key": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "code"?: string,"created_at"?: string,"created_by"?: string,"id"?: string,"name"?: string,"name_key"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_created_by_fkey"
       columns: ["created_by"]
 isOneToOne: false
       referencedRelation: "profile"
@@ -141,7 +187,16 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "create_asset":
+            "case_study_code":
+{ Args: { "p_client_code": string,"p_number": number,"p_year": number }; Returns: string
+                           },
+"client_code_letters":
+{ Args: { "p_name": string }; Returns: string
+                           },
+"client_name_key":
+{ Args: { "p_name": string }; Returns: string
+                           },
+"create_asset":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_content_type": string,"p_id": string,"p_kind": string,"p_original_file_name": string,"p_s3_key": string,"p_size_bytes": number }; Returns: {
               "case_id": string,
 "content_type": string,
@@ -162,9 +217,10 @@ isOneToOne: false
         isSetofReturn: false
       } },
 "create_case_study":
-{ Args: { "p_actor_id": string,"p_client": string,"p_locale": string,"p_name": string,"p_year": number }; Returns: {
+{ Args: { "p_actor_id": string,"p_client_id": string,"p_locale": string,"p_name": string,"p_year": number }; Returns: {
               "approved_revision_id": string | null,
-"client": string,
+"client_id": string,
+"code": string,
 "created_at": string,
 "created_by": string,
 "deleted_at": string | null,
@@ -173,6 +229,7 @@ isOneToOne: false
 "id": string,
 "locale": string,
 "name": string,
+"number": number,
 "project_order_ref": string | null,
 "status": string,
 "updated_at": string,
@@ -184,9 +241,41 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"create_client":
+{ Args: { "p_actor_id": string,"p_name": string }; Returns: {
+              "code": string,
+"created_at": string,
+"created_by": string,
+"id": string,
+"name": string,
+"name_key": string,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "client"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "has_material":
 { Args: { "p_case_id": string }; Returns: boolean
                            },
+"rename_client":
+{ Args: { "p_actor_id": string,"p_client_id": string,"p_name": string }; Returns: {
+              "code": string,
+"created_at": string,
+"created_by": string,
+"id": string,
+"name": string,
+"name_key": string,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "client"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "restore_asset":
 { Args: { "p_asset_id": string,"p_case_id": string }; Returns: boolean
                            },
@@ -196,7 +285,8 @@ isOneToOne: false
 "transition_case_study":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {
               "approved_revision_id": string | null,
-"client": string,
+"client_id": string,
+"code": string,
 "created_at": string,
 "created_by": string,
 "deleted_at": string | null,
@@ -205,6 +295,7 @@ isOneToOne: false
 "id": string,
 "locale": string,
 "name": string,
+"number": number,
 "project_order_ref": string | null,
 "status": string,
 "updated_at": string,

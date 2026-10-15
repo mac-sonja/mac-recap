@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { createCaseStudyInputSchema } from "./case-study";
+import { CLIENT_NAME_MAX, caseStudySchema, clientNameSchema, createCaseStudyInputSchema } from "./case-study";
 import { recordEventInputSchema } from "./case-event";
 import { parseInput } from "./validation";
 
-const valid = { name: "Rebrand", client: "Acme", year: 2026 };
+const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
+const valid = { name: "Rebrand", clientId: CLIENT_ID, year: 2026 };
 
 describe("createCaseStudyInputSchema", () => {
   it("trims text and defaults locale to it", () => {
-    expect(parseInput(createCaseStudyInputSchema, { name: "  Rebrand ", client: " Acme", year: 2026 })).toEqual({
+    expect(parseInput(createCaseStudyInputSchema, { name: "  Rebrand ", clientId: CLIENT_ID, year: 2026 })).toEqual({
       ok: true,
-      value: { name: "Rebrand", client: "Acme", year: 2026, locale: "it" },
+      value: { name: "Rebrand", clientId: CLIENT_ID, year: 2026, locale: "it" },
     });
   });
 
@@ -19,6 +20,8 @@ describe("createCaseStudyInputSchema", () => {
       locale: "en",
       status: "approved",
       project_order_ref: "PO-1",
+      code: "LUM-2026-01",
+      client: "Acme",
     });
     expect(result).toEqual({ ok: true, value: { ...valid, locale: "en" } });
   });
@@ -28,9 +31,19 @@ describe("createCaseStudyInputSchema", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("INVALID_INPUT");
-      expect((result.error.details as { fields: string[] }).fields).toEqual(["name", "client"]);
-      expect(result.error.message).toContain("name, client");
+      expect((result.error.details as { fields: string[] }).fields).toEqual(["name", "clientId"]);
+      expect(result.error.message).toContain("name, clientId");
     }
+  });
+
+  it.each([
+    ["a free-text client name", { name: "R", clientId: "Acme", year: 2026 }],
+    ["an empty client id", { name: "R", clientId: "", year: 2026 }],
+    ["a numeric client id", { name: "R", clientId: 7, year: 2026 }],
+  ])("rejects %s as clientId", (_label, input) => {
+    const result = parseInput(createCaseStudyInputSchema, input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect((result.error.details as { fields: string[] }).fields).toEqual(["clientId"]);
   });
 
   it.each([
@@ -55,6 +68,55 @@ describe("createCaseStudyInputSchema", () => {
     const result = parseInput(createCaseStudyInputSchema, undefined);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
+  });
+});
+
+describe("clientNameSchema", () => {
+  it("trims and accepts 1 to 120 characters", () => {
+    expect(clientNameSchema.parse("  Lumen Srl ")).toBe("Lumen Srl");
+    expect(clientNameSchema.safeParse("x".repeat(CLIENT_NAME_MAX)).success).toBe(true);
+  });
+
+  it.each([
+    ["blank", "   "],
+    ["empty", ""],
+    ["121 characters", "x".repeat(CLIENT_NAME_MAX + 1)],
+  ])("rejects a %s name", (_label, name) => {
+    expect(clientNameSchema.safeParse(name).success).toBe(false);
+  });
+});
+
+describe("caseStudySchema", () => {
+  const row = {
+    id: "aaaaaaaa-0000-4000-8000-000000000001",
+    code: "LUM-2026-01",
+    number: 1,
+    name: "Rebrand",
+    client: { id: CLIENT_ID, name: "Lumen Srl", code: "LUM" },
+    year: 2026,
+    locale: "it",
+    status: "draft",
+    projectOrderRef: null,
+    headRevisionId: null,
+    approvedRevisionId: null,
+    headVersion: 0,
+    createdBy: "00000000-0000-4000-8000-000000000002",
+    createdAt: "2026-10-15T10:00:00+00:00",
+    updatedAt: "2026-10-15T10:00:00+00:00",
+    deletedAt: null,
+  };
+
+  it("takes the client as a record with its code", () => {
+    expect(caseStudySchema.parse(row).client).toEqual({ id: CLIENT_ID, name: "Lumen Srl", code: "LUM" });
+  });
+
+  it.each([
+    ["a free-text client", { ...row, client: "Lumen Srl" }],
+    ["a missing client", { ...row, client: null }],
+    ["a missing code", { ...row, code: undefined }],
+    ["a zero number", { ...row, number: 0 }],
+  ])("rejects %s", (_label, input) => {
+    expect(caseStudySchema.safeParse(input).success).toBe(false);
   });
 });
 
