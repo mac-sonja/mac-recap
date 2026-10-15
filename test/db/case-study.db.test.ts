@@ -866,12 +866,12 @@ describe("clients and readable case history codes (AD-21)", () => {
         }
         expect(made).toEqual([prefix, ...[..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].map((l) => prefix + l)]);
         const before = (await client.query("select count(*)::int as n from public.client")).rows[0].n;
-        await client.query("savepoint full");
+        await client.query("savepoint all_taken");
         await expect(client.query(createClientSql, [nameWithLetters(`${prefix}QQ`), DEV_ACTOR_ID])).rejects.toMatchObject({
           code: "P0001",
           message: "CLIENT_CODE_EXHAUSTED",
         });
-        await client.query("rollback to savepoint full");
+        await client.query("rollback to savepoint all_taken");
         expect((await client.query("select count(*)::int as n from public.client")).rows[0].n).toBe(before);
       });
     });
