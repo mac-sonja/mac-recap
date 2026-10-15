@@ -1,6 +1,6 @@
 "use client";
 
-import { File, FileText, Film, Star, X } from "lucide-react";
+import { File, FileText, Film, Star, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import type { AssetKind, ListedAsset } from "@/modules/material";
 import { formatBytes } from "@/shared/i18n/format";
@@ -125,7 +125,7 @@ export function AssetRow({
         onClick={() => onRemove(row)}
         className="grid size-7 shrink-0 place-items-center rounded-sm text-foreground-muted hover:text-foreground"
       >
-        <X aria-hidden="true" className="size-4" />
+        <Trash2 aria-hidden="true" className="size-4" />
       </button>
     </li>
   );
