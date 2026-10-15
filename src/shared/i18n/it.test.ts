@@ -73,7 +73,6 @@ describe("material step copy", () => {
 
   test("has the mockup strings", () => {
     expect(t("wizard.material.heading")).toBe("Aggiungi il materiale del progetto");
-    expect(t("wizard.material.intro")).toBe("Carica il materiale già verificato. La generazione parte solo da qui.");
     expect(t("wizard.material.drop.lead")).toBe("Trascina qui i file o");
     expect(t("wizard.material.drop.browse")).toBe("sfoglia");
     expect(fill(t("wizard.material.drop.hint"), { max: 20, size: 50 })).toBe("Fino a 20 file, 50 MB ciascuno.");
@@ -82,7 +81,6 @@ describe("material step copy", () => {
     expect(fill(t("wizard.material.list.count"), { n: 4, max: 20 })).toBe("4 / 20 file");
     expect(t("wizard.material.list.favourite")).toBe("Preferito");
     expect(fill(t("wizard.material.list.remove"), { name: "a.pdf" })).toBe("Rimuovi a.pdf");
-    expect(t("wizard.material.favouritesOptional")).toBe("I preferiti sono facoltativi.");
     expect(t("wizard.material.nextReason")).toBe("Aggiungi almeno un file per continuare.");
   });
 
@@ -101,7 +99,6 @@ describe("material step copy", () => {
 describe("wizard details copy", () => {
   test("has the approved strings", () => {
     expect(t("wizard.details.heading")).toBe("Racconta il progetto");
-    expect(t("wizard.details.intro")).toBe("Tre campi facoltativi. Servono come fonte, ma da soli non bastano per generare.");
     expect(it.wizard.details.labels).toEqual({ context: "Contesto", solution: "Soluzione", results: "Risultati" });
     expect(it.wizard.details.placeholders).toEqual({
       context: "Di cosa aveva bisogno il cliente, e perché?",

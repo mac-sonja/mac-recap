@@ -227,8 +227,7 @@ export function DetailsStep({ caseId, initial, maxChars }: DetailsStepProps) {
 
   return (
     <div>
-      <h2 className="font-heading text-xl font-medium text-foreground-strong">{copy.heading}</h2>
-      <p className="mt-1.5 mb-6 font-body text-sm text-foreground-muted">{copy.intro}</p>
+      <h2 className="font-heading text-xl font-medium text-foreground-strong mb-6">{copy.heading}</h2>
 
       <div className="flex flex-col gap-5">
         {FIELDS.map((field) => {

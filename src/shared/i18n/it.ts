@@ -88,7 +88,6 @@ export const it = {
     /** Step 1, Material (Story 2.7). */
     material: {
       heading: "Aggiungi il materiale del progetto",
-      intro: "Carica il materiale già verificato. La generazione parte solo da qui.",
       drop: {
         /** Followed by the lime `browse` link. */
         lead: "Trascina qui i file o",
@@ -137,12 +136,10 @@ export const it = {
       },
       /** Why Avanti is inactive with no file. */
       nextReason: "Aggiungi almeno un file per continuare.",
-      favouritesOptional: "I preferiti sono facoltativi.",
     },
     /** Step 2, Details (Story 2.10). */
     details: {
       heading: "Racconta il progetto",
-      intro: "Tre campi facoltativi. Servono come fonte, ma da soli non bastano per generare.",
       /** Keyed by the details-form field (`FORM_FIELDS`). */
       labels: {
         context: "Contesto",

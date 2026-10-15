@@ -53,10 +53,10 @@ afterEach(() => {
 });
 
 describe("DetailsStep", () => {
-  it("shows the heading, intro, three labelled fields with their prompts, and the saved answers", () => {
+  it("shows the heading (no intro), three labelled fields with their prompts, and the saved answers", () => {
     setup({ context: "Lumen voleva un'identità unica.", solution: "", results: "" });
     expect(screen.getByRole("heading", { level: 2, name: "Racconta il progetto" })).toBeTruthy();
-    expect(screen.getByText("Tre campi facoltativi. Servono come fonte, ma da soli non bastano per generare.")).toBeTruthy();
+    expect(screen.queryByText(/Tre campi facoltativi/)).toBeNull();
     expect(field("Contesto").value).toBe("Lumen voleva un'identità unica.");
     expect(field("Contesto").placeholder).toBe("Di cosa aveva bisogno il cliente, e perché?");
     expect(field("Soluzione").placeholder).toBe("Cosa avete fatto, e come?");

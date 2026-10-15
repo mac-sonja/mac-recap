@@ -142,7 +142,7 @@ describe("NewCaseStudyPage", () => {
     get.mockResolvedValue(ok(draft));
     const html = await render({ caseId: ID });
     expect(listAssets).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
-    expect(html).toContain("Carica il materiale già verificato. La generazione parte solo da qui.");
+    expect(html).not.toContain("Carica il materiale già verificato");
     expect(html).toMatch(/role="button"[^>]*aria-label="Trascina qui i file o sfoglia"/);
     expect(html).toContain("Fino a 20 file, 50 MB ciascuno.");
     for (const chip of ["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]) expect(html).toContain(`>${chip}</li>`);
@@ -165,7 +165,7 @@ describe("NewCaseStudyPage", () => {
     expect(html).toContain('<img src="https://bucket.s3/thumb?sig=1" alt=""');
     expect(html).toContain("4,2 MB");
     expect(html).toMatch(new RegExp(`<a [^>]*href="/case-studies/new\\?caseId=${ID}&amp;step=2"[^>]*>Avanti</a>`));
-    expect(html).toContain("I preferiti sono facoltativi.");
+    expect(html).not.toContain("I preferiti sono facoltativi");
   });
 
   it("throws into the error boundary when the files cannot be listed", async () => {
