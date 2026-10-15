@@ -81,9 +81,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-6-find-and-reopen-case-studies-in-the-table.md`
   summary: Add an app-wide Italian `error.tsx` (and `global-error.tsx`) so failed loads such as the Case studies list show dictionary copy and a retry instead of Next's default English error screen.
   evidence: No `error.tsx` or `global-error.tsx` exists under `src/app`; `/case-studies` throws on a failed `list` by design.
-- source_spec: `_bmad-output/implementation-artifacts/spec-2-6-find-and-reopen-case-studies-in-the-table.md`
-  summary: Test that clicking a Bozza row's name link does not also call `router.push` (the `closest("a")` guard in `openRow`).
-  evidence: No test clicks the link itself; double navigation goes to the same placeholder until the Story 2.5 wizard, so add it when the row target becomes the wizard.
 - source_spec: none
   summary: Story 2.7 UI part — wizard step 1 (Material) dropzone and browse, parallel direct-to-storage uploads (Supabase Storage after Story 2.11) with per-file progress announced to screen readers, inline per-file rejections (over 100 MB, unsupported type, 20-file limit), rows with thumbnail (signed GET ≤ 15 min, scaled by the browser) or type icon plus name and size, and Remove (immediate, no undo).
   evidence: Split from Story 2.7 at the user's choice; depends on the Story 2.5 wizard UI, which is not built yet, and on the backend part's presign/confirm/remove contract.
@@ -120,3 +117,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-11-store-project-files-in-supabase-storage.md`
   summary: Decide and implement cleanup for orphaned storage objects (rejected confirms, abandoned 2 h signed uploads, soft-deleted assets), or record storage-quota monitoring, since AD-8 says the app never deletes objects.
   evidence: Review of Story 2.11 (triage #12): nothing ever removes objects from the `material` bucket; storage is billed against the Supabase plan.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-10-details-step-ui.md`
+  summary: Keep the wizard stepper's Dettagli/Genera links in sync with client-side uploads and removals on step 1 (today `reachable` comes from one server-side `hasMaterial` check per page load).
+  evidence: After the first upload on step 1 the stepper shows Dettagli and Genera as plain segments until a reload; after removing the last file they stay links that redirect back to step 1. A plain `router.refresh()` would redirect a no-step URL to step 2 mid-upload, so the fix needs a design choice.

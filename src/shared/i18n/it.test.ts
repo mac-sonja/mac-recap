@@ -57,7 +57,8 @@ describe("wizard copy", () => {
     expect(t("wizard.errors.client")).toBe("Inserisci il cliente.");
     expect(fill(t("wizard.errors.year"), { min: 1900, max: 2100 })).toBe("Inserisci un anno tra 1900 e 2100.");
     expect(t("wizard.errors.generic")).toMatch(/^Non è stato possibile creare il case study\./);
-    expect(t("wizard.detailsPlaceholder")).not.toBe("");
+    expect(t("wizard.generatePlaceholder")).toBe("La generazione non è ancora disponibile in questa versione.");
+    expect(t("wizard.stepper.goTo")).toBe("vai a");
     expect(t("wizard.loadFailed")).toBe("Non è stato possibile aprire il case study. Riprova tra poco.");
   });
 
@@ -72,7 +73,6 @@ describe("material step copy", () => {
 
   test("has the mockup strings", () => {
     expect(t("wizard.material.heading")).toBe("Aggiungi il materiale del progetto");
-    expect(t("wizard.material.intro")).toBe("Carica il materiale già verificato. La generazione parte solo da qui.");
     expect(t("wizard.material.drop.lead")).toBe("Trascina qui i file o");
     expect(t("wizard.material.drop.browse")).toBe("sfoglia");
     expect(fill(t("wizard.material.drop.hint"), { max: 20, size: 50 })).toBe("Fino a 20 file, 50 MB ciascuno.");
@@ -81,7 +81,6 @@ describe("material step copy", () => {
     expect(fill(t("wizard.material.list.count"), { n: 4, max: 20 })).toBe("4 / 20 file");
     expect(t("wizard.material.list.favourite")).toBe("Preferito");
     expect(fill(t("wizard.material.list.remove"), { name: "a.pdf" })).toBe("Rimuovi a.pdf");
-    expect(t("wizard.material.favouritesOptional")).toBe("I preferiti sono facoltativi.");
     expect(t("wizard.material.nextReason")).toBe("Aggiungi almeno un file per continuare.");
   });
 
@@ -94,5 +93,20 @@ describe("material step copy", () => {
     expect(t("wizard.material.errors.failed")).toBe("Caricamento non riuscito.");
     expect(t("wizard.material.errors.storage")).not.toBe("");
     expect(t("wizard.material.errors.rejected")).not.toBe("");
+  });
+});
+
+describe("wizard details copy", () => {
+  test("has the approved strings", () => {
+    expect(t("wizard.details.heading")).toBe("Racconta il progetto");
+    expect(it.wizard.details.labels).toEqual({ context: "Contesto", solution: "Soluzione", results: "Risultati" });
+    expect(it.wizard.details.placeholders).toEqual({
+      context: "Di cosa aveva bisogno il cliente, e perché?",
+      solution: "Cosa avete fatto, e come?",
+      results: "Cosa è cambiato? Indica i numeri dove li hai.",
+    });
+    expect(fill(t("wizard.details.counter"), { n: 2 })).toBe("2 di 3 compilati");
+    expect(t("wizard.details.errors.saveFailed")).toBe("Non salvato. Riprova modificando il testo.");
+    expect(fill(t("wizard.details.errors.tooLong"), { max: 5000 })).toBe("Massimo 5000 caratteri.");
   });
 });

@@ -179,6 +179,7 @@ export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
             </thead>
             <tbody>
               {visible.map((row) => {
+                // A Bozza reopens the wizard with no step: it picks the first incomplete one.
                 const href = row.status === "draft" ? wizardHref(row.id) : null;
                 return (
                   <tr

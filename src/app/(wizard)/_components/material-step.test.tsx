@@ -136,10 +136,10 @@ function deferred<T = void>() {
 }
 
 describe("MaterialStep: empty", () => {
-  it("shows heading, intro, drop zone with chips and hint; Avanti inactive with its reason; no list", () => {
+  it("shows heading (no intro), drop zone with chips and hint; Avanti inactive with its reason; no list", () => {
     setup();
     expect(screen.getByRole("heading", { level: 2, name: "Aggiungi il materiale del progetto" })).toBeTruthy();
-    expect(screen.getByText("Carica il materiale già verificato. La generazione parte solo da qui.")).toBeTruthy();
+    expect(screen.queryByText(/Carica il materiale già verificato/)).toBeNull();
     expect(dropZone().getAttribute("tabindex")).toBe("0");
     expect(screen.getByText("sfoglia").className).toContain("text-primary");
     expect(screen.getByText("Fino a 20 file, 50 MB ciascuno.")).toBeTruthy();
@@ -209,7 +209,7 @@ describe("MaterialStep: uploads", () => {
     const link = avanti();
     expect(link.tagName).toBe("A");
     expect(link.getAttribute("href")).toBe(`/case-studies/new?caseId=${CASE_ID}&step=2`);
-    expect(screen.getByText("I preferiti sono facoltativi.")).toBeTruthy();
+    expect(screen.queryByText(/I preferiti sono facoltativi/)).toBeNull();
     expect(liveRegion().textContent).toContain("key.png caricato.");
     // The image's thumbnail is refreshed from the listing.
     expect(listAssets).toHaveBeenCalledWith({ caseId: CASE_ID });

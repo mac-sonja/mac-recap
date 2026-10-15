@@ -345,8 +345,7 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
 
   return (
     <div>
-      <h2 className="font-heading text-xl font-medium text-foreground-strong">{copy.heading}</h2>
-      <p className="mt-1.5 mb-6 font-body text-sm text-foreground-muted">{copy.intro}</p>
+      <h2 className="font-heading text-xl font-medium text-foreground-strong mb-6">{copy.heading}</h2>
 
       {/* Always mounted, so screen readers announce the message when it appears. */}
       <div role="alert" className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 font-body text-sm text-foreground empty:hidden">
@@ -388,7 +387,7 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
 
       <WizardFooter
         current={1}
-        start={ready ? copy.favouritesOptional : <span id={reasonId}>{copy.nextReason}</span>}
+        start={ready ? undefined : <span id={reasonId}>{copy.nextReason}</span>}
         action={
           ready ? (
             <Link href={wizardHref(caseId, 2)} className={cn(PRIMARY_ACTION, "px-[18px] py-2.5")}>

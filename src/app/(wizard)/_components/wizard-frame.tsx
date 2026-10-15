@@ -17,6 +17,8 @@ export interface WizardFrameProps {
   /** `null` before the case exists: the title then reads *Nuovo case study*. */
   caseStudy: WizardCase | null;
   current: WizardStep;
+  /** Whether the case has material: Dettagli and Genera are stepper links only then. */
+  reachable?: boolean;
   /** The step's content. Hidden below 1024px, where the larger-screen message shows instead. */
   children: ReactNode;
 }
@@ -26,10 +28,11 @@ export interface WizardFrameProps {
  * bar with the back arrow, the case name and ID (mono) and the status badge; one
  * column about 820px wide, centred both ways under the top bar, which starts at
  * the top and scrolls when it is taller than the viewport while the top bar stays.
- * In the column: eyebrow, large title, stepper, then the step content. Below
- * 1024px the stepper and the content give way to the larger-screen message.
+ * In the column: eyebrow, large title, stepper (its reachable steps are links),
+ * then the step content. Below 1024px the stepper and the content give way to
+ * the larger-screen message.
  */
-export function WizardFrame({ caseStudy, current, children }: WizardFrameProps) {
+export function WizardFrame({ caseStudy, current, reachable = false, children }: WizardFrameProps) {
   return (
     <div className="flex h-dvh flex-col bg-surface text-foreground">
       <header className="flex h-15 shrink-0 items-center gap-4 border-b px-8">
@@ -60,7 +63,7 @@ export function WizardFrame({ caseStudy, current, children }: WizardFrameProps) 
           <p className="max-w-prose font-body text-base text-foreground lg:hidden">{it.caseStudies.narrowScreen}</p>
           <div className="hidden lg:block">
             <div className="mb-10">
-              <Stepper current={current} />
+              <Stepper current={current} caseId={caseStudy?.id} reachable={reachable} />
             </div>
             {children}
           </div>

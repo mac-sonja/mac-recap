@@ -56,6 +56,8 @@ export const it = {
       label: "Passaggi",
       /** Read by screen readers after a completed step. */
       done: "completato",
+      /** Read by screen readers before the name of a step that is a link. */
+      goTo: "vai a",
     },
     steps: {
       material: "Materiale",
@@ -86,7 +88,6 @@ export const it = {
     /** Step 1, Material (Story 2.7). */
     material: {
       heading: "Aggiungi il materiale del progetto",
-      intro: "Carica il materiale già verificato. La generazione parte solo da qui.",
       drop: {
         /** Followed by the lime `browse` link. */
         lead: "Trascina qui i file o",
@@ -135,10 +136,33 @@ export const it = {
       },
       /** Why Avanti is inactive with no file. */
       nextReason: "Aggiungi almeno un file per continuare.",
-      favouritesOptional: "I preferiti sono facoltativi.",
     },
-    /** Step 2 until the Story 2.10 UI. */
-    detailsPlaceholder: "La compilazione dei dettagli non è ancora disponibile in questa versione.",
+    /** Step 2, Details (Story 2.10). */
+    details: {
+      heading: "Racconta il progetto",
+      /** Keyed by the details-form field (`FORM_FIELDS`). */
+      labels: {
+        context: "Contesto",
+        solution: "Soluzione",
+        results: "Risultati",
+      },
+      placeholders: {
+        context: "Di cosa aveva bisogno il cliente, e perché?",
+        solution: "Cosa avete fatto, e come?",
+        results: "Cosa è cambiato? Indica i numeri dove li hai.",
+      },
+      /** `{n}` filled fields of 3. */
+      counter: "{n} di 3 compilati",
+      errors: {
+        saveFailed: "Non salvato. Riprova modificando il testo.",
+        /** `{max}` is the per-field limit in characters. */
+        tooLong: "Massimo {max} caratteri.",
+      },
+      /** Polite live-region line when a save fails; `{field}` is the field label, `{message}` its error. */
+      announceError: "{field}: {message}",
+    },
+    /** Step 3 until Epic 3; also the reason the inactive Avanti gives. */
+    generatePlaceholder: "La generazione non è ancora disponibile in questa versione.",
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {
