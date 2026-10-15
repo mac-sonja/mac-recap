@@ -44,6 +44,17 @@ describe("WizardFrame", () => {
     expect(html).toContain('<p class="mb-2 font-label text-xs text-foreground-muted">Nuovo case study</p>');
   });
 
+  it("forwards the case id and reachable to the stepper links", () => {
+    const frame = (reachable: boolean) =>
+      renderToStaticMarkup(
+        <WizardFrame caseStudy={{ id: ID, name: "Rebrand Lumen 2026", status: "draft" }} current={1} reachable={reachable}>
+          <p>step</p>
+        </WizardFrame>,
+      );
+    expect(frame(true)).toContain(`href="/case-studies/new?caseId=${ID}&amp;step=2"`);
+    expect(frame(false)).not.toContain("step=2");
+  });
+
   it("shows the step content only from lg and the larger-screen message below it", () => {
     const html = renderToStaticMarkup(
       <WizardFrame caseStudy={null} current={0}>

@@ -57,7 +57,8 @@ describe("wizard copy", () => {
     expect(t("wizard.errors.client")).toBe("Inserisci il cliente.");
     expect(fill(t("wizard.errors.year"), { min: 1900, max: 2100 })).toBe("Inserisci un anno tra 1900 e 2100.");
     expect(t("wizard.errors.generic")).toMatch(/^Non è stato possibile creare il case study\./);
-    expect(t("wizard.detailsPlaceholder")).not.toBe("");
+    expect(t("wizard.generatePlaceholder")).toBe("La generazione non è ancora disponibile in questa versione.");
+    expect(t("wizard.stepper.goTo")).toBe("vai a");
     expect(t("wizard.loadFailed")).toBe("Non è stato possibile aprire il case study. Riprova tra poco.");
   });
 
@@ -94,5 +95,21 @@ describe("material step copy", () => {
     expect(t("wizard.material.errors.failed")).toBe("Caricamento non riuscito.");
     expect(t("wizard.material.errors.storage")).not.toBe("");
     expect(t("wizard.material.errors.rejected")).not.toBe("");
+  });
+});
+
+describe("wizard details copy", () => {
+  test("has the approved strings", () => {
+    expect(t("wizard.details.heading")).toBe("Racconta il progetto");
+    expect(t("wizard.details.intro")).toBe("Tre campi facoltativi. Servono come fonte, ma da soli non bastano per generare.");
+    expect(it.wizard.details.labels).toEqual({ context: "Contesto", solution: "Soluzione", results: "Risultati" });
+    expect(it.wizard.details.placeholders).toEqual({
+      context: "Di cosa aveva bisogno il cliente, e perché?",
+      solution: "Cosa avete fatto, e come?",
+      results: "Cosa è cambiato? Indica i numeri dove li hai.",
+    });
+    expect(fill(t("wizard.details.counter"), { n: 2 })).toBe("2 di 3 compilati");
+    expect(t("wizard.details.errors.saveFailed")).toBe("Non salvato. Riprova modificando il testo.");
+    expect(fill(t("wizard.details.errors.tooLong"), { max: 5000 })).toBe("Massimo 5000 caratteri.");
   });
 });

@@ -2,16 +2,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { CaseStudy } from "@/modules/case-study";
-import type { ListedAsset } from "@/modules/material";
+import type { DetailsForm, ListedAsset } from "@/modules/material";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const get = vi.fn<(id: unknown) => Promise<Result<CaseStudy>>>();
 const listAssets = vi.fn<(input: unknown) => Promise<Result<ListedAsset[]>>>();
 const hasMaterial = vi.fn<(caseId: unknown) => Promise<Result<boolean>>>();
+const getDetailsForm = vi.fn<(input: unknown) => Promise<Result<DetailsForm>>>();
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT ${path}`);
   }),
@@ -25,7 +26,9 @@ vi.mock("@/shared/i18n/format", async (importOriginal) => ({
 vi.mock("@/modules/material", () => ({
   listAssets: (input: unknown) => listAssets(input),
   hasMaterial: (caseId: unknown) => hasMaterial(caseId),
+  getDetailsForm: (input: unknown) => getDetailsForm(input),
   MAX_ASSETS_PER_CASE: 20,
+  MAX_FORM_FIELD_CHARS: 5000,
   MAX_FILE_BYTES: 50 * 1024 * 1024,
   ALLOWED_CONTENT_TYPES: ["image/png", "application/pdf"],
 }));
@@ -36,6 +39,7 @@ vi.mock("@/app/(tool)/case-studies/actions", () => ({
   listAssets: vi.fn(),
   removeAsset: vi.fn(),
   setAssetFavourite: vi.fn(),
+  saveDetailsField: vi.fn(),
 }));
 
 const { default: NewCaseStudyPage } = await import("./page");
@@ -83,9 +87,11 @@ beforeEach(() => {
   get.mockReset();
   listAssets.mockReset();
   hasMaterial.mockReset();
+  getDetailsForm.mockReset();
   requireSurface.mockResolvedValue(shell);
   listAssets.mockResolvedValue(ok([]));
   hasMaterial.mockResolvedValue(ok(false));
+  getDetailsForm.mockResolvedValue(ok({ context: "", solution: "", results: "" }));
 });
 
 describe("NewCaseStudyPage", () => {
@@ -148,10 +154,11 @@ describe("NewCaseStudyPage", () => {
     expect(html).not.toContain("<img");
   });
 
-  it("reopens a draft with its files listed from the server and an active Avanti to step 2", async () => {
+  it("opens step 1 explicitly with the files listed from the server and an active Avanti to step 2", async () => {
     get.mockResolvedValue(ok(draft));
     listAssets.mockResolvedValue(ok([asset, { ...asset, id: "bbbbbbbb-0000-4000-8000-000000000002", kind: "document", contentType: "application/pdf", originalFileName: "brief.pdf", thumbnailUrl: null, isFavourite: false }]));
-    const html = await render({ caseId: ID });
+    hasMaterial.mockResolvedValue(ok(true));
+    const html = await render({ caseId: ID, step: "1" });
     expect(html).toContain(">Materiale</h3>");
     expect(html).toContain("2 / 20 file");
     expect(html.indexOf("lumen-keyvisual-final.png")).toBeLessThan(html.indexOf("brief.pdf"));
@@ -167,31 +174,90 @@ describe("NewCaseStudyPage", () => {
     await expect(render({ caseId: ID })).rejects.toThrow(/ASSET_LOOKUP_FAILED/);
   });
 
-  it("opens the step 2 placeholder with step=2 when the case has material", async () => {
+  it("reopens a case with material at Dettagli (first incomplete step)", async () => {
     get.mockResolvedValue(ok(draft));
     hasMaterial.mockResolvedValue(ok(true));
-    const html = await render({ caseId: ID, step: "2" });
+    await expect(render({ caseId: ID })).rejects.toThrow(`REDIRECT /case-studies/new?caseId=${ID}&step=2`);
     expect(hasMaterial).toHaveBeenCalledExactlyOnceWith(ID);
-    expect(html).toMatch(/<li data-step="2" aria-current="step"/);
-    expect(html).toContain("La compilazione dei dettagli non è ancora disponibile");
-    expect(html).not.toContain("Aggiungi il materiale del progetto");
     expect(listAssets).not.toHaveBeenCalled();
   });
 
   it.each([
     ["without material", ok(false)],
     ["when the material check fails", err({ code: "MATERIAL_LOOKUP_FAILED", message: "down" })],
-  ] as const)("redirects step=2 %s to the step 1 URL", async (_label, result) => {
+  ] as const)("reopens a case %s at step 1, Dettagli and Genera not links", async (_label, result) => {
     get.mockResolvedValue(ok(draft));
     hasMaterial.mockResolvedValue(result);
-    await expect(render({ caseId: ID, step: "2" })).rejects.toThrow(`REDIRECT /case-studies/new?caseId=${ID}`);
+    const html = await render({ caseId: ID });
+    expect(html).toMatch(/<li data-step="1" aria-current="step"/);
+    expect(html).toContain("Aggiungi il materiale del progetto");
+    expect(html).not.toContain("step=2");
+    expect(html).not.toContain("step=3");
+  });
+
+  it("opens step 1 with step=1 even when the case has material; Dettagli and Genera are links", async () => {
+    get.mockResolvedValue(ok(draft));
+    hasMaterial.mockResolvedValue(ok(true));
+    const html = await render({ caseId: ID, step: "1" });
+    expect(html).toMatch(/<li data-step="1" aria-current="step"/);
+    expect(html).toMatch(new RegExp(`<li data-step="2"[^>]*><a [^>]*href="/case-studies/new\\?caseId=${ID}&amp;step=2"`));
+    expect(html).toMatch(new RegExp(`<li data-step="3"[^>]*><a [^>]*href="/case-studies/new\\?caseId=${ID}&amp;step=3"`));
+  });
+
+  it("opens the Details step with step=2: saved answers, counter, active Avanti, Materiale a link", async () => {
+    get.mockResolvedValue(ok(draft));
+    hasMaterial.mockResolvedValue(ok(true));
+    getDetailsForm.mockResolvedValue(ok({ context: "Lumen voleva un'identità unica.", solution: "", results: "" }));
+    const html = await render({ caseId: ID, step: "2" });
+    expect(getDetailsForm).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
+    expect(html).toMatch(/<li data-step="2" aria-current="step"/);
+    expect(html).toContain("Racconta il progetto");
+    expect(html).toMatch(/<textarea [^>]*name="context"[^>]*>Lumen voleva un&#x27;identità unica\.<\/textarea>/);
+    expect(html).toContain("1 di 3 compilati");
+    expect(html).toMatch(/<button type="button"[^>]*>Avanti<\/button>/);
+    expect(html).not.toContain('aria-disabled="true"');
+    expect(html).toMatch(new RegExp(`<li data-step="1"[^>]*><a [^>]*href="/case-studies/new\\?caseId=${ID}&amp;step=1"`));
+    expect(html).not.toMatch(/<li data-step="2"[^>]*><a /);
     expect(listAssets).not.toHaveBeenCalled();
   });
 
-  it("renders step 1 for any other step value without checking material", async () => {
+  it("throws into the error boundary when the details cannot be loaded", async () => {
     get.mockResolvedValue(ok(draft));
+    hasMaterial.mockResolvedValue(ok(true));
+    getDetailsForm.mockResolvedValue(err({ code: "DETAILS_LOOKUP_FAILED", message: "down" }));
+    await expect(render({ caseId: ID, step: "2" })).rejects.toThrow(/DETAILS_LOOKUP_FAILED/);
+  });
+
+  it("opens the Genera placeholder with step=3: inactive Avanti tied to its reason", async () => {
+    get.mockResolvedValue(ok(draft));
+    hasMaterial.mockResolvedValue(ok(true));
     const html = await render({ caseId: ID, step: "3" });
-    expect(hasMaterial).not.toHaveBeenCalled();
+    expect(html).toMatch(/<li data-step="3" aria-current="step"/);
+    expect(html).toContain('<p id="wizard-step-note" class="mt-1.5 font-body text-sm text-foreground-muted">La generazione non è ancora disponibile in questa versione.</p>');
+    expect(html).toMatch(/<button type="button" aria-disabled="true" aria-describedby="wizard-step-note"[^>]*>Avanti<\/button>/);
+    expect(getDetailsForm).not.toHaveBeenCalled();
+    expect(listAssets).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["2", "without material", ok(false)],
+    ["3", "without material", ok(false)],
+    ["2", "when the material check fails", err({ code: "MATERIAL_LOOKUP_FAILED", message: "down" })],
+    ["3", "when the material check fails", err({ code: "MATERIAL_LOOKUP_FAILED", message: "down" })],
+  ] as const)("redirects step=%s %s to the step 1 URL", async (step, _label, result) => {
+    get.mockResolvedValue(ok(draft));
+    hasMaterial.mockResolvedValue(result);
+    await expect(render({ caseId: ID, step })).rejects.toThrow(`REDIRECT /case-studies/new?caseId=${ID}&step=1`);
+    expect(listAssets).not.toHaveBeenCalled();
+    expect(getDetailsForm).not.toHaveBeenCalled();
+  });
+
+  it.each([["4"], [["2", "2"]]] as const)("treats any other step value (%j) like no step", async (step) => {
+    get.mockResolvedValue(ok(draft));
+    hasMaterial.mockResolvedValue(ok(true));
+    await expect(render({ caseId: ID, step: step as string | string[] })).rejects.toThrow(`REDIRECT /case-studies/new?caseId=${ID}&step=2`);
+    hasMaterial.mockResolvedValue(ok(false));
+    const html = await render({ caseId: ID, step: step as string | string[] });
     expect(html).toMatch(/<li data-step="1" aria-current="step"/);
   });
 

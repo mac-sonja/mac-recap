@@ -215,6 +215,15 @@ describe("CaseStudiesTable", () => {
     expect(push).toHaveBeenCalledExactlyOnceWith(`/case-studies/new?caseId=${DRAFT_ID}`);
   });
 
+  it("does not also push when the Bozza name link itself is clicked", () => {
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    const link = within(screen.getByRole("table")).getByRole("link", { name: "Alfa" });
+    // Keep happy-dom from following the link; the row handler still sees the click.
+    link.addEventListener("click", (event) => event.preventDefault());
+    fireEvent.click(link);
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("keeps the status region mounted and empty while there are results", () => {
     render(<CaseStudiesTable rows={rows} canCreate />);
     expect(screen.getByRole("status").textContent).toBe("");

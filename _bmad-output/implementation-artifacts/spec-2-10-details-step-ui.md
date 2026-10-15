@@ -2,7 +2,8 @@
 title: 'Story 2.10 UI: wizard step 2 Details, first-incomplete-step, clickable stepper'
 type: 'feature'
 created: '2026-10-14'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: '389e645ed9b13e5c983250a8814a6d0e6ceae4ee'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -110,13 +111,13 @@ Two navigation changes come with it:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/app/_lib/routes.ts` -- step 1/2/3
-- [ ] `src/app/(wizard)/_components/stepper.tsx`, `wizard-frame.tsx` + tests -- clickable reachable steps
-- [ ] `src/app/(wizard)/_components/details-step.tsx` + test -- autosave form
-- [ ] `src/app/(wizard)/case-studies/new/page.tsx` + test -- first-incomplete redirect, step 2 with data, step 3 placeholder
-- [ ] `src/shared/i18n/it.ts` + test -- copy
-- [ ] `case-studies-table.tsx` -- comment (+ optional link test)
-- [ ] `sprint-status.yaml` -- 2.10 and 2.5 comments (wizard steps 0–2 done; step 3 waits on Epic 3)
+- [x] `src/app/_lib/routes.ts` -- step 1/2/3
+- [x] `src/app/(wizard)/_components/stepper.tsx`, `wizard-frame.tsx` + tests -- clickable reachable steps
+- [x] `src/app/(wizard)/_components/details-step.tsx` + test -- autosave form
+- [x] `src/app/(wizard)/case-studies/new/page.tsx` + test -- first-incomplete redirect, step 2 with data, step 3 placeholder
+- [x] `src/shared/i18n/it.ts` + test -- copy
+- [x] `case-studies-table.tsx` -- comment (+ optional link test)
+- [x] `sprint-status.yaml` -- 2.10 and 2.5 comments (wizard steps 0–2 done; step 3 waits on Epic 3)
 
 **Acceptance Criteria:**
 - Given a Bozza case with files, when its row is clicked in Case studies, then the wizard opens at Dettagli with saved answers filled in.
@@ -124,9 +125,40 @@ Two navigation changes come with it:
 
 ## Implementation Notes
 
+- Leaving the step (Avanti, or any same-origin link click captured at the document while text is unsaved: stepper, back arrow) flushes first and stays on the step, focusing the field, when a field could not be saved (failed save or over the limit), so typed text is never dropped silently. `beforeunload` and unmount flush best-effort.
+- An unknown `step` value is treated like no `step` (first incomplete step). A failed material check counts as no material.
+- The limit message shows from exactly 5,000 code points (saves still allowed) and becomes an error above it (no request). `maxChars` is formatted with `it-IT` locale, which prints "5000" (CLDR: no grouping for 4 digits).
+- "Filled" for the counter means non-blank after trim.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Source | Finding | Verdict | Route | Evidence |
+|---|--------|---------|---------|-------|----------|
+| 1 | verification-gap, blind | "leaves link clicks alone" test passes with the `settled` guard removed | low | patch | `push` runs after an await; the test asserts synchronously and never checks the link's own handler. |
+| 2 | verification-gap, blind | Leaving with over-limit text untested | low | patch | Only failed-save leave is tested; the limit test never clicks Avanti. |
+| 3 | verification-gap, blind | `beforeunload` flush untested | low | patch | No test dispatches `beforeunload`; a trivial test pins the wiring. |
+| 4 | edge-case | Editing back to the saved text after a failed save keeps the error | low | patch | `save()` returns early on `text === saved` without `markFailed(field, false)`. |
+| 5 | edge-case, blind | Save failure hidden when text is exactly `maxChars` | low | patch | Message priority puts `atLimit` before `failed`. |
+| 6 | edge-case, blind | Unmount flush skips fields whose save failed | medium | patch | Cleanup flushes only when a timer is pending; a failed field has no timer, so browser Back drops it. |
+| 7 | blind | Double activation of `leave` can push twice | low | patch | Guard reads `leaving` state from a render closure; a ref is the direct correction. |
+| 8 | blind, verification-gap | `it.test.ts` fills "5.000" but the UI renders "5000" | low | patch | `toLocaleString("it-IT")` doesn't group 4 digits; the details-step test asserts "5000". |
+| 9 | blind | Material-check-failure redirect tested for step=2 only | low | patch | it.each has no step=3 failure row. |
+| 10 | blind | `wizard-frame.tsx` doc comment breaks mid-sentence | low | patch | "then the step content. Below / 1024px". |
+| 11 | blind | Resolved deferred item left in the open list with false evidence | low | patch | Entry reworded to "Resolved" but kept. |
+| 12 | edge-case, blind | Stepper `reachable` goes stale after the first upload / last removal on step 1 | low | defer | Computed once server-side as the Code Map prescribes; a `router.refresh()` would redirect a no-step URL to step 2 mid-upload, so the fix isn't trivial. Avanti still works; stale links redirect safely. |
+| 13 | blind | User can't leave the step while a save keeps failing | low | reject | Rare (backend down); reload still works and the alternative drops text silently; a "leave anyway" path adds complexity. |
+| 14 | blind | `beforeunload` doesn't warn about unsaved text | low | reject | Only text typed < 800 ms before a reload; a native prompt is new UX the intent didn't ask for. |
+| 15 | blind, edge-case | Hash / same-URL links intercepted, leaving `leaving` stuck | false | reject | No hash links or links to the current step exist on the wizard page (current step isn't a link). |
+| 16 | edge-case | SVG `<a>` bypasses the flush | false | reject | No SVG anchors exist in the wizard. |
+| 17 | blind | Over-limit state not announced / no "Salvato" indicator | false | reject | Intent excludes a "Salvato" indicator; announcements are for save failures only, and over-limit sends no request. |
+| 18 | blind | Failed details load shows Next's English error page | low | reject | Pre-existing and already in deferred-work (app-wide `error.tsx`). |
+| 19 | blind | Stepper links lack a focus-visible style | false | reject | Global `:focus-visible` lime ring covers links (spec Code Map). |
+| 20 | blind | Not-done step links announce no state | false | reject | They are named "vai a {step}"; current step uses `aria-current`, done ones ", completato". |
+| 21 | blind | Counter hard-codes 3; `FIELDS` duplicates `FORM_FIELDS` | false | reject | Copy is from the approved mockup; `FIELDS` is typed `satisfies readonly FormField[]`, no named divergence. |
+| 22 | blind | Modifier / middle click / `_blank` / `download` paths untested | low | reject | Simple early returns; unlikely to regress. |
+| 23 | blind | `stopPropagation` drops Next `<Link>` options | low | reject | Only while text is unsaved; stepper links use default options. |
 
 ## Verification
 

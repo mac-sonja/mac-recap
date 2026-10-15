@@ -7,11 +7,12 @@ import * as material from "@/modules/material";
 import { currentYear } from "@/shared/i18n/format";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
+import { DetailsStep } from "../../_components/details-step";
 import { MaterialStep } from "../../_components/material-step";
 import { NameStep } from "../../_components/name-step";
 import { WizardFooter, WizardFrame } from "../../_components/wizard-frame";
 
-/** The step 2 placeholder line; it is also the reason the inactive Avanti gives. */
+/** The step 3 placeholder line; it is also the reason the inactive Avanti gives. */
 const STEP_NOTE_ID = "wizard-step-note";
 
 export interface NewCaseStudyPageProps {
@@ -21,13 +22,15 @@ export interface NewCaseStudyPageProps {
 /**
  * The new-case-study wizard (Story 2.5). Owner/designer only (`create case`).
  * Without `?caseId=` it shows step 0, the name form. With `?caseId=` it loads that
- * case server-side and opens step 1; an unknown, malformed or deleted id
+ * case server-side; an unknown, malformed or deleted id
  * (`NOT_FOUND`) or a case that is no longer a draft goes back to Case studies, and any other lookup failure throws into
- * the error boundary. Step 1 is the Material step (Story 2.7): its files, limits
- * and allowlist are loaded here and passed down. `&step=2` opens the step 2
- * placeholder (until the Story 2.10 UI) only when the case has material; without
- * material (or when the check fails) it redirects to step 1's URL. Any other
- * `step` renders step 1.
+ * the error boundary. The case's material is checked once: with no `step` (or an
+ * unknown one) the wizard opens the first incomplete step, Dettagli
+ * (`redirect(&step=2)`) when the case has at least one file, else Materiale.
+ * `step=1` is the Material step (Story 2.7). `step=2` (the Details step, Story
+ * 2.10, with the saved form) and `step=3` (a placeholder until Epic 3) need
+ * material; without it, or when the check fails, they redirect to `&step=1`.
+ * Dettagli and Genera are stepper links only while the case has material.
  */
 export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPageProps) {
   const shell = await requireSurface("create case");
@@ -53,19 +56,34 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   const { id, name, status } = found.value;
   const wizardCase = { id, name, status };
 
-  // Step 2 is reachable only with material; otherwise the URL goes back to step 1.
-  if (step === "2") {
-    const has = await material.hasMaterial(id);
-    if (!has.ok || !has.value) redirect(wizardHref(id));
+  // One material check decides the opening step, the gate on steps 2 and 3, and the stepper links.
+  // A failed check counts as no material: the case opens at step 1.
+  const has = await material.hasMaterial(id);
+  const hasMaterial = has.ok && has.value;
+  const requested = step === "1" ? 1 : step === "2" ? 2 : step === "3" ? 3 : null;
+  if (requested === null && hasMaterial) redirect(wizardHref(id, 2));
+  if ((requested === 2 || requested === 3) && !hasMaterial) redirect(wizardHref(id, 1));
+
+  if (requested === 2) {
+    const form = await material.getDetailsForm({ caseId: id });
+    if (!form.ok) throw new Error(`Details could not be loaded: ${form.error.code}`);
     return (
-      <WizardFrame caseStudy={wizardCase} current={2}>
-        <h2 className="font-heading text-xl font-medium text-foreground-strong">{it.wizard.steps.details}</h2>
+      <WizardFrame caseStudy={wizardCase} current={2} reachable={hasMaterial}>
+        <DetailsStep caseId={id} initial={form.value} maxChars={material.MAX_FORM_FIELD_CHARS} />
+      </WizardFrame>
+    );
+  }
+
+  if (requested === 3) {
+    return (
+      <WizardFrame caseStudy={wizardCase} current={3} reachable={hasMaterial}>
+        <h2 className="font-heading text-xl font-medium text-foreground-strong">{it.wizard.steps.generate}</h2>
         <p id={STEP_NOTE_ID} className="mt-1.5 font-body text-sm text-foreground-muted">
-          {it.wizard.detailsPlaceholder}
+          {it.wizard.generatePlaceholder}
         </p>
-        {/* Step 2 content arrives with the Story 2.10 UI. */}
+        {/* Step 3 content arrives with Epic 3. */}
         <WizardFooter
-          current={2}
+          current={3}
           action={
             <button
               type="button"
@@ -85,7 +103,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   if (!assets.ok) throw new Error(`Material could not be loaded: ${assets.error.code}`);
 
   return (
-    <WizardFrame caseStudy={wizardCase} current={1}>
+    <WizardFrame caseStudy={wizardCase} current={1} reachable={hasMaterial}>
       <MaterialStep
         caseId={id}
         initialAssets={assets.value}
