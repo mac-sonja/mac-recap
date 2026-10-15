@@ -92,7 +92,7 @@ const asset: ListedAsset = {
   thumbnailUrl: "https://bucket.s3/thumb?sig=1",
 };
 
-const render = async (params: { caseId?: string | string[]; step?: string | string[] } = {}) =>
+const render = async (params: { caseId?: string | string[]; step?: string | string[]; clientId?: string | string[] } = {}) =>
   renderToStaticMarkup(await NewCaseStudyPage({ searchParams: Promise.resolve(params) }));
 
 beforeEach(() => {
@@ -140,9 +140,29 @@ describe("NewCaseStudyPage", () => {
   it("step 0 with no clients shows the note instead of the select", async () => {
     listClients.mockResolvedValue(ok([]));
     const html = await render();
-    expect(html).toContain("Nessun cliente. Aggiungilo nella pagina Clienti.");
+    expect(html.replace(/<[^>]+>/g, "")).toContain("Nessun cliente. Aggiungilo nella pagina Clienti.");
     expect(html).not.toContain("<select name=\"clientId\"");
-    expect(html).not.toContain('href="/clients');
+    expect(html).toMatch(/<a [^>]*href="\/clients"[^>]*>pagina Clienti<\/a>/);
+  });
+
+  const selected = (html: string) =>
+    [...(html.match(/<select [^>]*name="clientId"[^>]*>.*?<\/select>/)?.[0] ?? "").matchAll(/<option value="([^"]*)"[^>]*selected=""/g)].map(
+      (m) => m[1],
+    );
+
+  it("step 0 preselects a known ?clientId=", async () => {
+    const html = await render({ clientId: clients[1].id });
+    expect(selected(html)).toEqual([clients[1].id]);
+  });
+
+  it.each([
+    ["unknown", "cccccccc-0000-4000-8000-00000000ffff"],
+    ["malformed", "LUM"],
+    ["repeated", [clients[0].id, clients[1].id]],
+  ])("step 0 ignores a %s ?clientId= without an error", async (_label, clientId) => {
+    const html = await render({ clientId });
+    expect(selected(html)).toEqual([""]);
+    expect(html).toContain("Nome della case history");
   });
 
   it("step 0 throws into the error boundary when the clients can't be listed", async () => {

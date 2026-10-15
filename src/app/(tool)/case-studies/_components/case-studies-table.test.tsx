@@ -171,6 +171,14 @@ describe("CaseStudiesTable", () => {
     if (links) expect(create[0].getAttribute("href")).toBe("/case-studies/new");
   });
 
+  it("takes the empty message and the new-case link from its props", () => {
+    const href = "/case-studies/new?clientId=cccccccc-0000-4000-8000-000000000001";
+    render(<CaseStudiesTable rows={[]} canCreate emptyMessage={dict.clients.detail.noCases} newHref={href} />);
+    expect(screen.getByText(dict.clients.detail.noCases)).toBeTruthy();
+    expect(screen.queryByText(dict.caseStudies.empty)).toBeNull();
+    expect(screen.getByRole("link", { name: dict.shell.nav.newCaseStudy }).getAttribute("href")).toBe(href);
+  });
+
   it("focuses search on / outside a text field", async () => {
     const user = userEvent.setup();
     render(<CaseStudiesTable rows={rows} canCreate />);

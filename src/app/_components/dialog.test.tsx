@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { StrictMode } from "react";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -113,6 +114,24 @@ describe("Dialog", () => {
     dialogs()[0].close();
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it("stays open under StrictMode: a close event from the first effect cleanup is ignored", async () => {
+    // Browsers fire `close` as a queued task after close(); model that here.
+    vi.spyOn(HTMLDialogElement.prototype, "close").mockImplementation(function (this: HTMLDialogElement) {
+      this.removeAttribute("open");
+      setTimeout(() => this.dispatchEvent(new Event("close")), 0);
+    });
+    const onClose = vi.fn();
+    render(
+      <StrictMode>
+        <Page dialogs={[{ id: "a", open: true, onClose }]} />
+      </StrictMode>,
+    );
+    // Let any queued `close` event from the double-run effect arrive.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(dialogs()[0].open).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("does not close on a backdrop click", async () => {

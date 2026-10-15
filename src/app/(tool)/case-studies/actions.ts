@@ -1,29 +1,11 @@
 "use server";
 
-import { authorize, getActor, httpStatusFor } from "@/modules/access";
+import { failure, type ActionResult } from "@/app/_lib/action-result";
+import { authorize, getActor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import type { CaseStudy } from "@/modules/case-study";
 import * as material from "@/modules/material";
 import type { Asset, DetailsFieldSaved, DetailsForm, ListedAsset, PresignedAssetUpload } from "@/modules/material";
-import type { AppError } from "@/shared/result";
-
-/**
- * What a server action returns to the client: the value, or the HTTP-style
- * status with `{ error: { code, message } }`. `details` stays server-side;
- * only an `INVALID_INPUT` adds the names of the failing fields.
- */
-export type ActionResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; status: number; error: { code: string; message: string; fields?: string[] } };
-
-function failure(error: AppError): ActionResult<never> {
-  const { code, message } = error;
-  const fields =
-    code === "INVALID_INPUT" && error.details && typeof error.details === "object" && "fields" in error.details
-      ? (error.details as { fields: string[] }).fields
-      : undefined;
-  return { ok: false, status: httpStatusFor(error), error: fields ? { code, message, fields } : { code, message } };
-}
 
 /**
  * Creates a case study (status `draft`, permanent id, readable code such as

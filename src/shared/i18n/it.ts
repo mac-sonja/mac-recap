@@ -13,6 +13,7 @@ export const it = {
       label: "Navigazione principale",
       newCaseStudy: "Nuova case history",
       caseStudies: "Case history",
+      clients: "Clienti",
     },
     userMenu: {
       button: "Account",
@@ -80,8 +81,9 @@ export const it = {
     clientPlaceholder: "Scegli un cliente",
     /** A step 0 client option: `{name}` and its `{code}`. */
     clientOption: "{name} ({code})",
-    /** Step 0 with no clients: replaces the client field; Avanti stays inactive. */
-    noClients: "Nessun cliente. Aggiungilo nella pagina Clienti.",
+    /** Step 0 with no clients: replaces the client field; Avanti stays inactive. `{link}` is `noClientsLink`, a link to /clients. */
+    noClients: "Nessun cliente. Aggiungilo nella {link}.",
+    noClientsLink: "pagina Clienti",
     errors: {
       name: "Inserisci il nome della case history.",
       client: "Scegli il cliente.",
@@ -173,6 +175,60 @@ export const it = {
     },
     /** Step 3 until Epic 3; also the reason the inactive Avanti gives. */
     generatePlaceholder: "La generazione non è ancora disponibile in questa versione.",
+  },
+  /** The Clients page and a client's page (Story 2.13). Owner/designer only. */
+  clients: {
+    heading: "Clienti",
+    table: {
+      /** Read by screen readers only. */
+      caption: "Elenco dei clienti",
+      columns: {
+        code: "Codice",
+        name: "Nome",
+        caseCount: "Case history",
+      },
+    },
+    search: {
+      label: "Cerca nome o codice",
+      placeholder: "Cerca nome o codice",
+    },
+    /** `{query}` is filled with the search text. */
+    noResults: "Nessun cliente per '{query}'.",
+    clearSearch: "Cancella ricerca",
+    empty: "Nessun cliente. Aggiungi il primo.",
+    /** The empty state where clients can't be added: below 1024 px, or without `manage clients`. */
+    emptyReadOnly: "Nessun cliente.",
+    /** Read by screen readers while the table loads. */
+    loading: "Caricamento…",
+    add: "Aggiungi cliente",
+    rename: "Modifica nome",
+    dialog: {
+      addTitle: "Aggiungi cliente",
+      addDescription: "Il codice viene assegnato automaticamente.",
+      renameTitle: "Modifica nome",
+      /** `{code}` is the client code, which a rename never changes. */
+      renameDescription: "Il codice {code} non cambia.",
+      nameLabel: "Nome del cliente",
+      cancel: "Annulla",
+      submitAdd: "Aggiungi",
+      submitRename: "Salva",
+    },
+    errors: {
+      nameRequired: "Inserisci il nome del cliente.",
+      /** `{max}` is the name limit in characters. */
+      nameTooLong: "Massimo {max} caratteri.",
+      nameTaken: "Esiste già un cliente con questo nome.",
+      codeExhausted: "Non è stato possibile assegnare un codice a questo nome. Usa un nome diverso.",
+      generic: "Non è stato possibile salvare. Riprova.",
+    },
+    /** A client's page. */
+    detail: {
+      /** Read by screen readers before the client code. */
+      code: "Codice",
+      casesHeading: "Case history",
+      noCases: "Nessuna case history per questo cliente.",
+      back: "Tutti i clienti",
+    },
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {

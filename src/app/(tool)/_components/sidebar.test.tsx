@@ -1,12 +1,17 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/case-studies" }));
+const pathname = vi.hoisted(() => ({ current: "/case-studies" }));
+vi.mock("next/navigation", () => ({ usePathname: () => pathname.current }));
 
 const { Sidebar } = await import("./sidebar");
 
-const render = (show: { showNewCaseStudy: boolean; showCaseStudies: boolean }) =>
-  renderToStaticMarkup(<Sidebar {...show} displayName="Dev Owner" roleLabel="Owner/designer" />);
+const render = (show: { showNewCaseStudy: boolean; showCaseStudies: boolean; showClients?: boolean }) =>
+  renderToStaticMarkup(<Sidebar showClients={false} {...show} displayName="Dev Owner" roleLabel="Owner/designer" />);
+
+afterEach(() => {
+  pathname.current = "/case-studies";
+});
 
 describe("Sidebar", () => {
   it("shows the new-case-study action, Case studies and the user menu", () => {
@@ -45,10 +50,33 @@ describe("Sidebar", () => {
     expect(html.match(/sr-only xl:not-sr-only/g)?.length).toBe(3);
   });
 
+  it("puts Clienti right after Case history when allowed", () => {
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true });
+    const hrefs = [...html.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1]);
+    expect(hrefs).toEqual(["/case-studies/new", "/case-studies", "/clients"]);
+    expect(html).toContain("Clienti");
+    expect(html.match(/sr-only xl:not-sr-only/g)?.length).toBe(4);
+  });
+
+  it.each(["/clients", "/clients/cccccccc-0000-4000-8000-000000000001"])("marks Clienti active on %s", (path) => {
+    pathname.current = path;
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true });
+    const active = [...html.matchAll(/<a [^>]*aria-current="page"[^>]*>/g)].map((m) => m[0]);
+    expect(active).toHaveLength(1);
+    expect(active[0]).toContain('href="/clients"');
+  });
+
+  it("does not mark Clienti active on a lookalike path", () => {
+    pathname.current = "/clientsx";
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true });
+    expect(html).not.toContain('aria-current="page"');
+  });
+
   it("omits items the policy denies instead of disabling them", () => {
     const html = render({ showNewCaseStudy: false, showCaseStudies: false });
     expect(html).not.toContain("Nuova case history");
     expect(html).not.toContain('href="/case-studies"');
+    expect(html).not.toContain('href="/clients"');
     expect(html).not.toContain("disabled");
   });
 });

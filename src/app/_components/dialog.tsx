@@ -66,8 +66,12 @@ export function Dialog({ open, onClose, title, description, children, actions }:
       onCloseRef.current();
     };
     // A browser may still close the dialog itself (e.g. repeated Esc without user
-    // activation); keep the caller's state in sync.
-    const handleNativeClose = () => onCloseRef.current();
+    // activation); keep the caller's state in sync. `close` fires asynchronously, so
+    // one queued by an earlier cleanup (React StrictMode runs effects twice in dev)
+    // can arrive after the dialog was shown again: ignore it while the dialog is open.
+    const handleNativeClose = () => {
+      if (!dialog.open) onCloseRef.current();
+    };
 
     // Claim the slot only once showModal() has succeeded, so a throw never leaks it.
     dialog.showModal();

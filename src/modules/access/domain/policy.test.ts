@@ -9,6 +9,7 @@ const EXPECTED: Record<Action, Partial<Record<Role, Cell>>> = {
   "list cases": { owner_designer: "all", account_sales_social: "approved" },
   "create case": { owner_designer: "all" },
   "list clients": { owner_designer: "all" },
+  "manage clients": { owner_designer: "all" },
   upload: { owner_designer: "all" },
   "fill details": { owner_designer: "all" },
   "mark favourites": { owner_designer: "all" },
@@ -67,6 +68,12 @@ describe("AD-11 permission matrix", () => {
       for (const action of ["view", "export", "create link", "list cases"] as const) {
         expect(can("account_sales_social", action, { status })).toBe(false);
       }
+    }
+  });
+
+  it("lets only owner/designer list and manage clients", () => {
+    for (const action of ["list clients", "manage clients"] as const) {
+      expect(ROLES.filter((role) => can(role, action))).toEqual(["owner_designer"]);
     }
   });
 

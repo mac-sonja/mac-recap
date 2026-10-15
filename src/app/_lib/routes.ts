@@ -6,3 +6,6 @@
  */
 export const wizardHref = (id: string, step?: 1 | 2 | 3) =>
   `/case-studies/new?caseId=${encodeURIComponent(id)}${step === undefined ? "" : `&step=${step}`}`;
+
+/** The wizard's step 0 with `clientId` preselected in the client picker (a client's page). */
+export const newCaseForClientHref = (clientId: string) => `/case-studies/new?clientId=${encodeURIComponent(clientId)}`;

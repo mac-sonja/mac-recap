@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { CLIENT_NAME_MAX, caseStudySchema, clientNameSchema, createCaseStudyInputSchema } from "./case-study";
+import {
+  CLIENT_NAME_MAX,
+  caseStudySchema,
+  clientNameSchema,
+  createCaseStudyInputSchema,
+  createClientInputSchema,
+  listScopeSchema,
+  renameClientInputSchema,
+} from "./case-study";
 import { recordEventInputSchema } from "./case-event";
 import { parseInput } from "./validation";
 
@@ -138,5 +146,47 @@ describe("recordEventInputSchema", () => {
     const result = parseInput(recordEventInputSchema, input);
     expect(result.ok).toBe(false);
     if (!result.ok) expect((result.error.details as { fields: string[] }).fields).toEqual([field]);
+  });
+});
+
+describe("createClientInputSchema", () => {
+  it("trims the name and drops any code the caller sends", () => {
+    expect(parseInput(createClientInputSchema, { name: "  Lumen Srl ", code: "ZZZ" })).toEqual({
+      ok: true,
+      value: { name: "Lumen Srl" },
+    });
+  });
+
+  it.each([["   "], ["x".repeat(CLIENT_NAME_MAX + 1)], [undefined]])("names the field for %j", (name) => {
+    const result = parseInput(createClientInputSchema, { name });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.details).toMatchObject({ fields: ["name"] });
+  });
+});
+
+describe("renameClientInputSchema", () => {
+  it("takes a client id and a trimmed name", () => {
+    expect(parseInput(renameClientInputSchema, { clientId: CLIENT_ID, name: " Lumen S.r.l. " })).toEqual({
+      ok: true,
+      value: { clientId: CLIENT_ID, name: "Lumen S.r.l." },
+    });
+  });
+
+  it("names a malformed client id and a blank name", () => {
+    const result = parseInput(renameClientInputSchema, { clientId: "LUM", name: " " });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.details).toMatchObject({ fields: ["clientId", "name"] });
+  });
+});
+
+describe("listScopeSchema", () => {
+  it("accepts an optional status and client id", () => {
+    expect(listScopeSchema.safeParse({}).success).toBe(true);
+    expect(listScopeSchema.safeParse({ status: "approved", clientId: CLIENT_ID }).success).toBe(true);
+  });
+
+  it("rejects a malformed client id and unknown keys", () => {
+    expect(listScopeSchema.safeParse({ clientId: "LUM" }).success).toBe(false);
+    expect(listScopeSchema.safeParse({ client: "Lumen" }).success).toBe(false);
   });
 });

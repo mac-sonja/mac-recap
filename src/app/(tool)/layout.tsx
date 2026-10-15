@@ -24,6 +24,7 @@ export default async function ToolLayout({ children }: Readonly<{ children: Reac
       <Sidebar
         showNewCaseStudy={can(actor, "create case")}
         showCaseStudies={can(actor, "list cases")}
+        showClients={can(actor, "list clients")}
         displayName={actor.displayName}
         roleLabel={roleLabel(actor.role)}
       />

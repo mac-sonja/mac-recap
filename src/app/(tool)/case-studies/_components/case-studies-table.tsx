@@ -22,8 +22,12 @@ import {
 export interface CaseStudiesTableProps {
   /** The scoped list, loaded once by the page; search and sort run here. */
   rows: CaseStudyRow[];
-  /** Policy decision (`create case`): whether the empty state offers "Nuovo case study". */
+  /** Policy decision (`create case`): whether the empty state offers "Nuova case history". */
   canCreate: boolean;
+  /** The empty-state line; defaults to the Case history page's. */
+  emptyMessage?: string;
+  /** Where the empty state's "Nuova case history" goes; defaults to the wizard's step 0. */
+  newHref?: string;
 }
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -56,7 +60,12 @@ function isTextField(el: Element | null): boolean {
  * `/` focuses it unless focus is already in a text field. A Bozza row opens
  * `/case-studies/new?caseId={id}`; other rows are not links yet.
  */
-export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
+export function CaseStudiesTable({
+  rows,
+  canCreate,
+  emptyMessage = it.caseStudies.empty,
+  newHref = "/case-studies/new",
+}: CaseStudiesTableProps) {
   const router = useRouter();
   const searchId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -89,9 +98,9 @@ export function CaseStudiesTable({ rows, canCreate }: CaseStudiesTableProps) {
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-start gap-4">
-        <p className="max-w-prose font-body text-base text-foreground">{it.caseStudies.empty}</p>
+        <p className="max-w-prose font-body text-base text-foreground">{emptyMessage}</p>
         {canCreate && (
-          <Link href="/case-studies/new" className={PRIMARY_ACTION}>
+          <Link href={newHref} className={PRIMARY_ACTION}>
             <Plus aria-hidden="true" className="size-4" />
             {it.shell.nav.newCaseStudy}
           </Link>

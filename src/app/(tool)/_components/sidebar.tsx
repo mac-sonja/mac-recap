@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderOpen, Plus, type LucideIcon } from "lucide-react";
+import { Building2, FolderOpen, Plus, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { it } from "@/shared/i18n/it";
@@ -12,6 +12,8 @@ export interface SidebarProps {
   /** Policy decisions made by the layout through `access.can`; absent items are not rendered. */
   showNewCaseStudy: boolean;
   showCaseStudies: boolean;
+  /** `list clients`: the Clienti item, right after Case history. */
+  showClients: boolean;
   displayName: string;
   roleLabel: string;
 }
@@ -36,9 +38,11 @@ function NavLink({ href, icon: Icon, label, active }: { href: string; icon: Luci
   );
 }
 
-export function Sidebar({ showNewCaseStudy, showCaseStudies, displayName, roleLabel }: SidebarProps) {
+export function Sidebar({ showNewCaseStudy, showCaseStudies, showClients, displayName, roleLabel }: SidebarProps) {
   const pathname = usePathname();
   const isCaseStudies = pathname === "/case-studies";
+  // The list and every client's page.
+  const isClients = pathname === "/clients" || pathname.startsWith("/clients/");
 
   return (
     <aside className="flex w-16 shrink-0 flex-col border-r bg-surface-raised xl:w-60">
@@ -63,6 +67,7 @@ export function Sidebar({ showNewCaseStudy, showCaseStudies, displayName, roleLa
         {showCaseStudies && (
           <NavLink href="/case-studies" icon={FolderOpen} label={it.shell.nav.caseStudies} active={isCaseStudies} />
         )}
+        {showClients && <NavLink href="/clients" icon={Building2} label={it.shell.nav.clients} active={isClients} />}
       </nav>
       <div className="border-t p-2 xl:p-3">
         <UserMenu displayName={displayName} roleLabel={roleLabel} />
