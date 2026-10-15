@@ -46,7 +46,7 @@ export function Sidebar({ showNewCaseStudy, showCaseStudies, displayName, roleLa
         <p className="mb-3 hidden items-end gap-2 px-3 pt-3 text-foreground xl:flex">
           <MacWordmark label={it.app.name} className="h-6 w-auto" />
           {/* The wordmark's label already reads "MAC Recap". */}
-          <span aria-hidden="true" className="font-label text-sm leading-none font-medium tracking-[0.2em]">
+          <span aria-hidden="true" className="font-label text-sm leading-none font-medium tracking-wide">
             {it.app.wordmarkSuffix}
           </span>
         </p>
