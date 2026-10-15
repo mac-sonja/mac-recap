@@ -95,13 +95,13 @@ beforeEach(() => {
 });
 
 describe("NewCaseStudyPage", () => {
-  it("guards on create case and shows step 0: eyebrow and title Nuovo case study, no step active", async () => {
+  it("guards on create case and shows step 0: eyebrow and title Nuova case history, no step active", async () => {
     const html = await render();
     expect(requireSurface).toHaveBeenCalledWith("create case");
     expect(get).not.toHaveBeenCalled();
-    expect(html).toMatch(/<h1 class="[^"]*">Nuovo case study<\/h1>/);
+    expect(html).toMatch(/<h1 class="[^"]*">Nuova case history<\/h1>/);
     expect(html).not.toContain('aria-current="step"');
-    expect(html).toContain("Nome del case study");
+    expect(html).toContain("Nome della case history");
     const year = html.match(/<input [^>]*name="year"[^>]*>/)?.[0] ?? "";
     expect(year).toContain('min="1900"');
     expect(year).toContain('max="2100"');

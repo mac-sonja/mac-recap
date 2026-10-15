@@ -12,9 +12,9 @@ describe("Sidebar", () => {
   it("shows the new-case-study action, Case studies and the user menu", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });
     expect(html).toContain('aria-label="Navigazione principale"');
-    expect(html).toContain("Nuovo case study");
+    expect(html).toContain("Nuova case history");
     expect(html.match(/<a [^>]*aria-current="page"[^>]*>/)?.[0]).toContain('href="/case-studies"');
-    expect(html).toContain("Menu utente");
+    expect(html).toContain("Account");
     expect(html).toContain("Dev Owner");
     expect(html).toContain("Owner/designer");
   });
@@ -47,7 +47,7 @@ describe("Sidebar", () => {
 
   it("omits items the policy denies instead of disabling them", () => {
     const html = render({ showNewCaseStudy: false, showCaseStudies: false });
-    expect(html).not.toContain("Nuovo case study");
+    expect(html).not.toContain("Nuova case history");
     expect(html).not.toContain('href="/case-studies"');
     expect(html).not.toContain("disabled");
   });

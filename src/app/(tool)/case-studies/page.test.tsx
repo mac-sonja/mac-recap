@@ -58,7 +58,7 @@ describe("CaseStudiesPage", () => {
     expect(requireSurface).toHaveBeenCalledWith("list cases");
     expect(list).toHaveBeenCalledExactlyOnceWith({});
     expect(html).toContain("<h1");
-    expect(html).toContain("Elenco dei case study");
+    expect(html).toContain("Elenco delle case history");
     expect(html).toContain("Rebrand");
     expect(html).toContain("13/10/2026, 09:05");
   });
@@ -82,11 +82,11 @@ describe("CaseStudiesPage", () => {
     expect(list).not.toHaveBeenCalled();
   });
 
-  it("shows the empty state with Nuovo case study for owner/designer", async () => {
+  it("shows the empty state with Nuova case history for owner/designer", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     list.mockResolvedValue(ok([]));
     const html = await renderPage();
-    expect(html).toContain("Ancora nessun case study.");
+    expect(html).toContain("Ancora nessuna case history.");
     expect(html).toContain('href="/case-studies/new"');
   });
 

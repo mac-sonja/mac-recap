@@ -43,7 +43,7 @@ function setup() {
 }
 
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(field("Nome del case study"), "  Rebrand  ");
+  await user.type(field("Nome della case history"), "  Rebrand  ");
   await user.type(field("Cliente"), "Acme");
 }
 
@@ -57,7 +57,7 @@ afterEach(cleanup);
 describe("NameStep", () => {
   it("shows labelled fields: year prefilled and editable, Italiano by default", () => {
     setup();
-    expect(field("Nome del case study")).toHaveProperty("required", true);
+    expect(field("Nome della case history")).toHaveProperty("required", true);
     expect(field("Cliente")).toHaveProperty("required", true);
     expect(field("Anno")).toHaveProperty("value", "2026");
     const locale = field("Lingua del testo") as HTMLSelectElement;
@@ -82,8 +82,8 @@ describe("NameStep", () => {
   });
 
   it.each([
-    ["name", "Cliente", "Acme", "Nome del case study", "Inserisci il nome del case study."],
-    ["client", "Nome del case study", "Rebrand", "Cliente", "Inserisci il cliente."],
+    ["name", "Cliente", "Acme", "Nome della case history", "Inserisci il nome della case history."],
+    ["client", "Nome della case history", "Rebrand", "Cliente", "Inserisci il cliente."],
   ])("sends nothing when %s is empty and names it on that field", async (_label, filled, value, missing, message) => {
     const user = setup();
     await user.type(field(filled), value);
@@ -100,21 +100,21 @@ describe("NameStep", () => {
 
   it("treats blank (spaces only) name and client as missing and names both", async () => {
     const user = setup();
-    await user.type(field("Nome del case study"), "   ");
+    await user.type(field("Nome della case history"), "   ");
     await user.type(field("Cliente"), "  ");
     await user.keyboard("{Enter}");
     expect(createCaseStudy).not.toHaveBeenCalled();
-    expect(screen.getByText("Inserisci il nome del case study.")).toBeTruthy();
+    expect(screen.getByText("Inserisci il nome della case history.")).toBeTruthy();
     expect(screen.getByText("Inserisci il cliente.")).toBeTruthy();
-    expect(document.activeElement).toBe(field("Nome del case study"));
+    expect(document.activeElement).toBe(field("Nome della case history"));
   });
 
   it("clears a field's message once it is edited", async () => {
     const user = setup();
     await user.click(avanti());
-    expect(screen.queryByText("Inserisci il nome del case study.")).not.toBeNull();
-    await user.type(field("Nome del case study"), "R");
-    expect(screen.queryByText("Inserisci il nome del case study.")).toBeNull();
+    expect(screen.queryByText("Inserisci il nome della case history.")).not.toBeNull();
+    await user.type(field("Nome della case history"), "R");
+    expect(screen.queryByText("Inserisci il nome della case history.")).toBeNull();
     expect(screen.queryByText("Inserisci il cliente.")).not.toBeNull();
   });
 
@@ -174,7 +174,7 @@ describe("NameStep", () => {
     await fillRequired(user);
     await user.click(avanti());
     expect(field("Anno").getAttribute("aria-invalid")).toBe("true");
-    expect(screen.getByRole("alert").textContent).toContain("Non è stato possibile creare il case study.");
+    expect(screen.getByRole("alert").textContent).toContain("Non è stato possibile creare la case history.");
   });
 
   it.each([
@@ -187,10 +187,10 @@ describe("NameStep", () => {
     await fillRequired(user);
     await user.click(avanti());
     expect(screen.getByRole("alert").textContent).toBe(
-      "Non è stato possibile creare il case study. I dati inseriti sono ancora qui: riprova.",
+      "Non è stato possibile creare la case history. I dati inseriti sono ancora qui: riprova.",
     );
     expect(document.body.textContent).not.toMatch(/Not allowed|db down/);
-    expect(field("Nome del case study")).toHaveProperty("value", "  Rebrand  ");
+    expect(field("Nome della case history")).toHaveProperty("value", "  Rebrand  ");
     expect(field("Cliente")).toHaveProperty("value", "Acme");
     expect(avanti().getAttribute("aria-disabled")).toBe("false");
     expect(replace).not.toHaveBeenCalled();
@@ -201,7 +201,7 @@ describe("NameStep", () => {
     const user = setup();
     await fillRequired(user);
     await user.click(avanti());
-    expect(screen.getByRole("alert").textContent).toContain("Non è stato possibile creare il case study.");
+    expect(screen.getByRole("alert").textContent).toContain("Non è stato possibile creare la case history.");
   });
 
   it("sends one request when Avanti is pressed twice: busy while pending", async () => {
