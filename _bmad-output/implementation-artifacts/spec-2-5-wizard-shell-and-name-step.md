@@ -11,6 +11,8 @@ context:
   - '{project-root}/_bmad-output/planning-artifacts/ux-designs/ux-MAC Recap-2026-10-08/mockups/material-step.html'
 ---
 
+> **Amended 2026-10-15** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-15.md): client record and readable code, see Story 2.12 (Clients as records, with readable case history codes).
+
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
 ## Intent

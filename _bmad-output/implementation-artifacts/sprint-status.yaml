@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-15-2026 12:08
+last_updated: 10-15-2026 12:53
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -40,13 +40,15 @@ development_status:
   2-2-one-gated-image-deployable-to-staging: done
   2-3-actor-and-policy-seam-with-a-dev-owner-designer: done
   2-4-app-shell-navigation-tokens-italian-copy-status-badge: done
-  2-5-create-a-case-study-with-a-permanent-id: in-progress  # backend done (create + transition); UI frame + step 0 done (wizard shell, name step); step 1 done (Story 2.7 UI); step 2 done (Story 2.10 UI); step 3 waits on Epic 3
-  2-6-find-and-reopen-case-studies-in-the-table: done
+  2-5-create-a-case-study-with-a-permanent-id: in-progress  # backend done (create + transition); UI frame + step 0 done (wizard shell, name step); step 1 done (Story 2.7 UI); step 2 done (Story 2.10 UI); step 3 waits on Epic 3; client picker and code via Story 2.12 (SCP 2026-10-15)
+  2-6-find-and-reopen-case-studies-in-the-table: done  # ID column shows the code and search matches it via Story 2.12 (SCP 2026-10-15)
   2-7-upload-project-files: done  # backend done (#17, listing #22); UI done (Material step, step 2 placeholder; #33); bucket now Story 2.11; remove without undo (SCP)
   2-8-retire-pasted-text-and-the-taxonomy: done  # retires pasted text (#18), the taxonomy (#19) and the restore feature (#17) per SCP 2026-10-14; land first
   2-9-mark-images-and-videos-as-favourite: done  # replaces tagging (#19 backend) per SCP 2026-10-14
   2-10-fill-in-the-details-form: done  # backend done (#20); UI done (Details step, first-incomplete step, clickable stepper; #36); gate = ≥1 file
   2-11-store-project-files-in-supabase-storage: done  # SCP 2026-10-14 (storage); after the 2.7 UI
+  2-12-clients-and-readable-case-history-codes: backlog  # SCP 2026-10-15; land first, before Epic 3
+  2-13-clients-page: backlog  # SCP 2026-10-15; after 2.12
   epic-2-retrospective: optional
 
   epic-3: backlog

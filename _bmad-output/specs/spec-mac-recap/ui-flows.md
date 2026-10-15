@@ -29,7 +29,7 @@ Bozza → In elaborazione → Da approvare → Approvato. Shared links are a cou
 
 ## Flow 1 — Create and approve (owner/designer)
 
-1. **+ New case study:** enter name and client; the case is created with its ID and saved as Bozza (CAP-1).
+1. **+ New case study:** enter name and pick the client; the case is created with its code and saved as Bozza (CAP-1).
 2. **Material:** drop up to 20 files of up to 50 MB; oversized or unsupported files are rejected per file. Optionally mark images and videos as favourite; removing a file is immediate, with no undo (CAP-2).
 3. **Details:** Context, Solution, Results, all optional (CAP-3).
 4. **Generate:** enabled only once one material file has uploaded; otherwise disabled with the reason. The case moves to In elaborazione, and the user can leave. On failure it returns to Bozza with **Try again** (CAP-4).

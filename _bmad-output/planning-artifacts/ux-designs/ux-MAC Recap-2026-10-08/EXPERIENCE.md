@@ -2,7 +2,7 @@
 name: MAC Recap
 status: final
 created: 2026-10-08
-updated: 2026-10-14
+updated: 2026-10-15
 sources:
   - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/prd.md
   - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/addendum.md
@@ -26,13 +26,14 @@ MAC Recap turns a closed project's verified material into a finished, on-brand c
 - **Visual identity:** see [DESIGN.md](DESIGN.md) (updated 2026-10-13): dark grey chrome on black, blue calls to action, lime details, Inter + JetBrains Mono. Where this spine needs a visual hook it names a token (for example `{colors.status-approved}`). The UI references in `imports/ui-refs/` are look-only; this spine's behaviour wins over them (no card-ratio control, no duration/timeline, no template restyling).
 - **Two separate visual systems:** the **tool UI** (DESIGN.md) and the **case study templates** (MAC's graphic templates, owned by the design team). The tool chrome never restyles template output.
 - **UI language:** Italian (decided 2026-10-08), matching the A3 sketches and the team. Copy in this spine is written in English for the spec, with the Italian sketch label next to it where one exists; final Italian microcopy is written from these English lines.
+- **Terminology:** the Italian UI says *case history* (PR #38); "case study" stays the internal term in these documents, story keys, tables (`case_study`) and code.
 - **Authentication:** login arrives in Sprint 3 (FR8). Until then the tool runs unauthenticated in a dev environment. Role-dependent surfaces below assume login exists, as it will by the Oct 30 demo.
 
 ## Roles and what each one sees
 
 | Role (PRD name) | Lands on | Sees | Can do |
 |---|---|---|---|
-| Owner/designer | Case studies (table view) | Every case study, every status | Create, upload, mark favourites, fill details, generate, edit in configurator, check claims, approve, export, share, maintain templates |
+| Owner/designer | Case studies (table view) | Every case study, every status | Create, upload, mark favourites, fill details, generate, edit in configurator, check claims, approve, export, share, maintain templates, manage clients |
 | Account/sales/social | Case studies (library view) | Approved case studies only | Browse, search, filter, preview, export, create shareable links |
 | Admin | Users | Users and their roles | Add and remove users, assign one role per user. Nothing else: no permission or guardrail settings exist anywhere in the UI (NFR3) |
 
@@ -50,11 +51,12 @@ The A3 entry steps inside MAC Productive (slides 15 and 22) are out of the MVP. 
 | New case study wizard | **+ New case study** | Owner/designer | Three steps: 1 Material, 2 Details, 3 Generate (A3 1.2–1.4). |
 | Configurator | Click a row in *To review* or *Approved* (owner/designer) | Owner/designer | Review, edit, check claims, approve. Three panes: formats · canvas · edit and check (A3 1.6). |
 | Case study view | Click a card (account/sales/social) or **View** (owner/designer) | Owner/designer, account/sales/social | Read-only preview of an approved case study in every MVP format; export and share (A3 2.2). |
+| Clients | Sidebar | Owner/designer | Client list with automatic codes; add and rename; open a client to see its case studies. |
 | Templates | Sidebar | Owner/designer | Maintain templates. See *Templates* below for the MVP meaning. |
 | Users | Sidebar | Admin | User list and role assignment. |
 | Shared link page | A shareable link, outside the app | Anyone with the link (interim, [OPEN 11]) | Hosted presentation of one approved case study in one format. No app chrome. |
 
-**Navigation:** a left sidebar holds **+ New case study** (owner/designer only), Case studies, To review (owner/designer only), Templates (owner/designer only), Users (admin only), and the user menu with sign-out. The wizard and the configurator are full-screen task surfaces with a back arrow to the list; they hide the sidebar. Dialogs stack at most one level deep.
+**Navigation:** a left sidebar holds **+ New case study** (owner/designer only), Case studies, To review (owner/designer only), Clients (owner/designer only), Templates (owner/designer only), Users (admin only), and the **Account** menu with sign-out. The wizard and the configurator are full-screen task surfaces with a back arrow to the list; they hide the sidebar. Dialogs stack at most one level deep.
 
 **Surface closure check:** every PRD capability (FR1–FR8) maps to a surface above. FR1 → wizard (ID assigned on create). FR2 → wizard steps 1–2. FR3/FR4 → wizard step 3 and the configurator. FR5/FR6 → configurator. FR7 → case study view and the shared link page. FR8 → sign in and Users.
 
@@ -90,8 +92,8 @@ Behavioural. Visual specs live in `DESIGN.md.Components`.
 
 | Element | Behaviour |
 |---|---|
-| Columns | ID (FR1, monospace, `{typography.mono}`), Name, Client, Year, Status, Updated, Links (count, Approved only). |
-| Search | One field, placeholder "Search name, client or ID" (*Cerca progetto o cliente…*). Matches as you type (debounce ~250 ms), case- and accent-insensitive, over name, client and ID. |
+| Columns | ID (the case history code, e.g. `LUM-2026-01`, FR1, monospace, `{typography.mono}`), Name, Client, Year, Status, Updated, Links (count, Approved only). |
+| Search | One field, placeholder "Search name, client or ID" (*Cerca progetto o cliente…*). Matches as you type (debounce ~250 ms), case- and accent-insensitive, over name, client name, client code and case code. |
 | Status filter | Segmented control: All · Draft · Generating · To review · Approved (names follow whichever [OPEN 8] option is chosen). Each segment shows its count. Combines with search (AND). |
 | Sort | Default: Updated, newest first. Column headers sort on click. |
 | Row click | Draft → reopens the wizard at the first incomplete step. Generating → no-op with tooltip "Still generating". To review → configurator. Approved → configurator (edit) with a **View** action to the case study view. |
@@ -125,11 +127,11 @@ A three-step stepper: **1 Material · 2 Details · 3 Generate**, horizontal, abo
 
 **Wizard layout** (every step; from the team's first hi-fi mock, layout only: [`imports/ui-refs/ref-hifi-material-layout.webp`](imports/ui-refs/ref-hifi-material-layout.webp)):
 
-- A slim top bar: back arrow and case study name on the left, status badge on the right.
+- A slim top bar: back arrow, case study name and its code (mono) on the left, status badge on the right.
 - One content column (about 820px), centred horizontally and **vertically** in the space under the top bar. When the content is taller than the viewport, the column starts at the top and scrolls; the top bar stays.
 - In the column, top to bottom: eyebrow *Nuovo case study*, the case study name as a large title, the stepper, the step heading and a one-line intro, the step's content, then a footer under a divider with step dots in the centre and **Avanti** on the right (inactive until the step's condition is met). The case study is created, and its unique ID assigned (FR1), when the wizard opens with a name entered. It is saved as a Draft from that moment, so leaving and returning loses nothing.
 
-**Step 0: Name.** A short header form: case study name (required) and client (required). `[ASSUMPTION]` Year defaults to the current year and is editable.
+**Step 0: Name.** A short header form: case study name (required) and client (required), picked from a list of existing clients showing name and code. Clients are added only on the Clients page; with none, the field says so and links there. `[ASSUMPTION]` Year defaults to the current year and is editable.
 
 **Step 1: Material** (FR2, NFR6). Files only: text-document files are uploaded here like any file, but there's no pasted-text entry in this step; text is entered in step 2 (C7, resolved).
 
@@ -281,6 +283,20 @@ Out of MVP: uploading new templates, editing template design in the tool, templa
 
 Recommendation for the PRD: give template maintenance its own FR with this scope, because Story 6.2 grants "manage templates" but no FR says what it does ([CONFLICT] C4). The A3 sidebar marks Templates "SOON"; this proposal makes the MVP version small so it can ship.
 
+### Clients
+
+Owner/designer only. Decided 2026-10-15 ([Sprint Change Proposal 2026-10-15](../../sprint-change-proposal-2026-10-15.md)). Codes are always automatic (spine AD-21).
+
+| Element | Behaviour |
+|---|---|
+| List | Table of clients: Code (mono), Name, Case histories (count). Default sort Name A–Z; header sort. |
+| Search | Over name and code, with the Case studies table's rules. |
+| Add client | **Add client** dialog: name only. The code is assigned automatically; there is no code field. |
+| Edit name | **Edit name** dialog that states the code stays the same. The new name shows everywhere, including the client's case studies. |
+| Client page | Row click opens the client page: client name and code, **Edit name**, and the Case studies table limited to that client, with **New case history** preselecting the client. |
+| Absent | No delete. |
+| Below 1024 px | Read-only list. |
+
 ### Users (admin)
 
 | Element | Behaviour |
@@ -398,7 +414,7 @@ Behavioural. Visual contrast will live in DESIGN.md.
 
 ### Flow 1: First case study for the demo (Giada, owner/designer, Oct 30 dry run)
 
-1. Giada signs in and lands on Case studies. She clicks **+ New case study**, enters the project name and client. The ID appears in the header.
+1. Giada signs in and lands on Case studies. She clicks **+ New case study**, enters the project name and picks the client. The code appears in the header.
 2. **Material:** she drags in 14 files (final screens, the strategy deck as PDF, a results sheet, two videos). While they upload she stars the two key screens as favourites. One 140 MB video is rejected; she leaves it out.
 3. **Details:** she writes three short paragraphs: context, solution, results ("3 of 3").
 4. **Generate:** she presses **Generate**, sees "Generating your case study…", and goes back to Case studies. The wait doesn't count toward her hands-on time (NFR4).
@@ -443,6 +459,10 @@ Failure: nothing matches → "Nothing matches 'energy'." He clears filters and b
 - **C6. Tags replaced by favourites (2026-10-13). Resolved 2026-10-14 by the owner** ([Sprint Change Proposal](../../sprint-change-proposal-2026-10-14.md)): favourites per AD-14 (`asset.is_favourite`, images and videos only); no taxonomy; library facets are Client and Year. Original note: The owner wants no tags, properties or flags on deliverables, only a favourite mark on images and videos. FR2 and Story 2.9 require tags, properties and flags from a fixed list (2.9 backend merged, #19; OP 3 seed due 2026-10-14). Favourites exist in no FR or story. The library's tag facets and card tags (Case studies: library view) also depend on tags; that view isn't changed here. Route: `bmad-correct-course`.
 - **C7. Pasted text moved to Details (2026-10-13). Resolved 2026-10-14 by the owner:** Details text is not material (NFR6 unchanged); generation needs at least one uploaded file; Story 2.8 is repurposed to retire pasted text. Original note: The owner wants text entered in step 2, not pasted in step 1. Story 2.8 / AR6 count pasted text as material (it can unlock generation, backend merged, #18); FR2 / NFR6 say the details form never counts as material. The PRD owner decides whether step-2 text counts as material. Route: `bmad-correct-course`.
 - **C8. No undo on file removal (2026-10-14). Resolved 2026-10-14 by the owner:** removal is immediate; soft delete stays; the restore backend is removed. Original note: The owner wants removal without the Undo toast. Stories 2.7 and 2.8 specify soft-delete with a 5 s **Undo** toast. Soft-delete can stay in the backend; the UI drops the toast. Route: `bmad-correct-course` with C6 and C7.
+- **C9. Readable case code. Resolved 2026-10-15 by the owner** ([Sprint Change Proposal](../../sprint-change-proposal-2026-10-15.md)): people see a code such as `LUM-2026-01` (client code, year, number) instead of the uuid; the uuid stays in URLs and keys (spine AD-21).
+- **C10. Client as a record. Resolved 2026-10-15 by the owner:** every case study belongs to one client record; free-text clients were migrated to records with codes.
+- **C11. Clients page. Resolved 2026-10-15 by the owner:** owner/designers list, add and rename clients and open a client's case studies; codes never change and clients can't be deleted.
+- **C12. Picking the client. Resolved 2026-10-15 by the owner:** step 0 offers only existing clients; clients are added only on the Clients page.
 - **C5. Brief vs PRD:** the brief limits export to account/sales/social and puts the hallucination target on "caught in review". The PRD (both roles export; zero reaching approved) wins; noted only.
 
 **PRD open points with options above:** [OPEN 1] export formats · [OPEN 8] status lifecycle · [OPEN 11] link access · [OPEN 12] what counts as altering. **[OPEN 14]** what a favourite means for generation. [OPEN 3] taxonomy resolved 2026-10-14: dropped.

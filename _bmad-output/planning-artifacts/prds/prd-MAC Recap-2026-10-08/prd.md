@@ -2,7 +2,7 @@
 title: "MAC Recap – MVP PRD (v2)"
 status: final
 created: 2026-10-07
-updated: 2026-10-14
+updated: 2026-10-15
 version: 2
 supersedes: "docs/sources/MAC Recap-PRD-EN v1.pdf"
 ---
@@ -12,6 +12,8 @@ supersedes: "docs/sources/MAC Recap-PRD-EN v1.pdf"
 Oct 8, 2026 · @Sonja
 
 Updated Oct 14, 2026: favourites replace tags, properties and flags, there is no pasted text, and removing a file has no undo ([Sprint Change Proposal 2026-10-14](../../sprint-change-proposal-2026-10-14.md)). Files are stored in Supabase Storage, not AWS S3 ([storage proposal](../../sprint-change-proposal-2026-10-14-storage.md)).
+
+Updated Oct 15, 2026: case studies belong to client records managed on a Clients page, and show a readable code such as LUM-2026-01 next to the permanent ID ([Sprint Change Proposal 2026-10-15](../../sprint-change-proposal-2026-10-15.md)).
 
 This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR, epic, story and open-point numbers are unchanged from v1. Retired items are marked, not renumbered, and new items are added at the end.
 
@@ -87,7 +89,9 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 ### 2.1 Terms
 
-- **Case study.** The output for one project: graphic layouts plus text structured as challenge, approach and result. Each has a unique ID.
+- **Case study.** The output for one project: graphic layouts plus text structured as challenge, approach and result. Each has a unique ID and a readable case history code, and belongs to one client. In the Italian UI a case study is called a *case history* (PR #38); "case study" stays the internal term in these documents, story keys, tables (`case_study`) and code.
+- **Client.** A company MAC worked for. Each has an automatic short code (e.g. LUM). Clients are managed on the Clients page.
+- **Case history code.** Client code, year and a number per client and year, e.g. LUM-2026-01. Fixed once the case study is created.
 - **Material.** Uploaded files: images, videos, text documents and PDFs. The details form is not material.
 - **Deliverable.** One uploaded file of material. Images and videos can be marked as favourite.
 - **Approved case study.** A case study the owner/designer has reviewed and approved. Only approved case studies can be exported or shared.
@@ -99,7 +103,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 ### MVP (by October 30, 2026)
 
-**FR1** – The system creates every case study with a unique ID, ready to be linked to the project order later. The owner/designer creates the case study manually. There is no trigger at project close.
+**FR1** – The system creates every case study with a unique ID, ready to be linked to the project order later, and a readable case history code. The owner/designer picks the case study's client from the client list. The owner/designer creates the case study manually. There is no trigger at project close.
 
 **FR2** – The owner/designer uploads material (images, videos, text documents and PDFs), can mark any number of images and videos as favourite, and fills in a short details form on context, solution and results. The details form is the only place for typed project text.
 - Upload is limited to 20 files of at most 50 MB each. (50 MB is the hosted Supabase plan's upload cap; it returns to 100 MB when the plan is upgraded. Owner decision 2026-10-14.)
@@ -169,7 +173,7 @@ The order follows the development plan. Non-dev activities are prerequisites for
 ## 7. Epic list
 
 1. ~~Epic 1 – Setup with BMAD~~. Removed from the epic list. It is team setup, not product scope, and now sits in Sprint 1's non-dev activities.
-2. Epic 2 – Asset upload: create the case study with a unique ID and handle file upload, favourites and the details form
+2. Epic 2 – Asset upload: create the case study with a unique ID and a readable code for a client from the client list, and handle file upload, favourites and the details form
 3. Epic 3 – Graphic case study generation: generate case studies by applying graphic templates to the uploaded material
 4. Epic 4 – Review and approval: review, edit and approve case studies through the configurator and review dashboard
 5. Epic 5 – Download and publishing: export approved case studies as files and publish them as shareable links
@@ -191,6 +195,8 @@ Prerequisites: tool design definition, template wireframes (asset dimensions, fo
 - I create the case study manually in MAC Recap
 - Every case study receives a unique ID on creation
 - The ID is ready for the future link to the project order
+- I pick the client from the existing clients
+- The case study shows a readable code, e.g. LUM-2026-01, that never changes
 
 **Story 2.3** – As an owner/designer, I want to upload files to the case study.
 - The file upload flow is complete
@@ -199,6 +205,11 @@ Prerequisites: tool design definition, template wireframes (asset dimensions, fo
 
 **Story 2.4** – As an owner/designer, I want to mark images and videos as favourite.
 - The favourite mark is saved for each image or video; it's optional and any number can be marked
+
+**Story 2.5** – As an owner/designer, I want to manage the client list.
+- I can add a client and edit its name
+- The client code is automatic and never changes
+- I can open a client to see only its case studies
 
 ### Epic 3 – Graphic case study generation (Sprint 2)
 

@@ -26,7 +26,7 @@ Scope: the standalone MVP, Epics 2–6, keeping PRD v2 numbering (Epic 1 is team
 
 ### Functional Requirements
 
-FR1: The owner/designer creates a case study by hand, and the system gives it a unique, permanent ID (a database-generated uuid that is never changed or reused). The ID is the only identifier exposed to other systems and is ready for the later project-order link. There is no trigger at project close. (CAP-1, Story 2.2)
+FR1: The owner/designer creates a case study by hand, and the system gives it a unique, permanent ID (a database-generated uuid that is never changed or reused) and a readable **case history code** (client code, year, number, e.g. `LUM-2026-01`), fixed at creation. The code is what people see; the uuid is the only identifier exposed to other systems and used in URLs, and is ready for the later project-order link. Every case belongs to one client record, picked from the client list. There is no trigger at project close. (CAP-1, Stories 2.2 and 2.5)
 FR2: The owner/designer uploads material (images, videos, text documents, PDFs) to a case study. The limit is 20 files of at most 50 MB each, of an allowlisted type. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others. Any number of images and videos can be marked as favourite; the mark is optional. The owner/designer also fills in an optional details form (context, solution, results), which is the only place for typed project text, is saved, can be cited as a claim source, and never counts as material. (CAP-2, CAP-3, Stories 2.3–2.4)
 FR3: The system generates a graphic case study in the background by applying MAC templates to the uploaded material. The case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The narrative follows challenge, approach and result (always present, can't be removed or reordered), covers the technical and the graphic side, and uses only the uploaded material and form answers. Template design and assets stay unchanged. Generation is refused when there is no material, even with the form filled in. Layouts are produced for every MVP export format. (CAP-4, CAP-5, Story 3.1)
 FR4: Templates adapt their layout to the number of available media items, using the template's own media-count rules (slot mapping per count). (CAP-4, Story 3.2)
@@ -56,11 +56,11 @@ NFR13 (language): UI in Italian through one dictionary file; each case's narrati
 
 ### Additional Requirements
 
-From the architecture spine (AD-1 to AD-20 are binding):
+From the architecture spine (AD-1 to AD-21 are binding):
 
 - **Starter template (Epic 2, first story):** `npx create-next-app -e with-supabase`. The first story pins every Stack version exactly (Node 24 LTS, TypeScript 6.0.3, Next.js 16.3.8 with `output: standalone`, React 19.3.0, Tailwind 4.3.3 / shadcn 4.21.4, supabase-js 2.117.3 / ssr 0.12.7 / CLI 2.120.0, `@anthropic-ai/sdk` 0.132.1, zod 4.6.5, Playwright 1.63.0, sharp 0.35.5, ffmpeg pinned in the Dockerfile), upgrades Tailwind to 4, and turns `cacheComponents` off.
 - AR1 (AD-1): Modular monolith with modules `case-study`, `material`, `generation`, `rendering`, `sharing`, `access`, `jobs`; each with `domain/`, `application/`, `index.ts`, plus `ports/` and `adapters/` only at vendor seams. Cross-module imports only through `index.ts`; vendor SDKs only in adapters. Table and storage-prefix ownership per AD-1. Enforced by a lint rule.
-- AR2 (AD-2): `case_study.id` is a DB-generated uuid, immutable, never reused; `project_order_ref` nullable and unset in the MVP.
+- AR2 (AD-2): `case_study.id` is a DB-generated uuid, immutable, never reused; `project_order_ref` nullable and unset in the MVP. `case_study.code` is a separate, unique, immutable display code (AD-21); it is never used as a key or in URLs.
 - AR3 (AD-3): `case_study.status` changes only through `case-study.transition`. Revisions have `working | approved | superseded`. `head_revision_id` and `approved_revision_id` pointers; `getLiveRevision` and `getEditableRevision` reads. Generation only from `draft`; delete only in `draft`, soft (`deleted_at`).
 - AR4 (AD-4): `CaseStudyDocument` (zod, jsonb) stored twice per revision, `generated_doc` (immutable) and `doc` (editable). Shared part (template@version, blocks with stable `blockId`, claims and check state, media set) and per-format part (variant, slot assignments, spacing, text scale, font pairing). No canvas ratio. Schema rejects a missing challenge/approach/result. `rendering.relayout` is the only slot-assignment code. `schemaVersion` + `upgrade(doc)` on read. `FORMAT_NOT_IN_REVISION`.
 - AR5 (AD-5): Guardrails are code (`generation/domain/guardrails.ts`, `access/domain/policy.ts`, `case-study` preconditions), never DB/env/UI. Each guardrail is enforced in a use case and covered by an automated test, so the end-of-Sprint-2 guardrail check runs on the pre-login build.
@@ -81,16 +81,17 @@ From the architecture spine (AD-1 to AD-20 are binding):
 - AR20 (AD-20): `case_event` append-only rows (`case_id`, `revision_id`, `actor_id`, `type`, `at`, `data`) on every transition, upload confirmation, save, block check/uncheck, claim edit, approval, export, link create and turn-off.
 - AR21 (conventions): snake_case singular tables; uuid ids; `timestamptz` UTC, displayed Europe/Rome; zod in `domain/` as single definition; generated DB types; `Result<T, AppError>` with SCREAMING_SNAKE codes; structured JSON logs with no material or prompts; env read only in `src/shared/env.ts`; `case_study.locale` it|en default it.
 - AR22 (deployment): One Docker image on the Playwright base, two processes (`node server.js`, `node dist/worker.js`). Environments `local`, `staging` (demo, gated), `prod` (from Epic 6), each with its own Supabase project and storage bucket. EU container host chosen by end of Sprint 1.
+- AR23 (AD-21): `client` (uuid id, unique `name_key`, unique immutable `code`) owned by `case-study`; every case has `client_id`. Case code `{clientCode}-{year}-{nn}` is assigned inside `create_case_study` from `case_number_counter`, fixed once created, never reused.
 
 ### UX Design Requirements
 
-UX-DR1: Navigation shell. Left sidebar with + New case study (owner/designer), Case studies, To review with count (owner/designer), Templates (owner/designer, scope per C4), Users (admin), user menu with sign-out. Wizard and configurator are full-screen with a back arrow and no sidebar. Dialogs stack at most one level deep.
+UX-DR1: Navigation shell. Left sidebar with + New case study (owner/designer), Case studies, To review with count (owner/designer), **Clients** (owner/designer), Templates (owner/designer, scope per C4), Users (admin), the **Account** menu with sign-out. *RECAP* sits by the logo. Wizard and configurator are full-screen with a back arrow and no sidebar. Dialogs stack at most one level deep.
 UX-DR2: Role-based absence. A control a role can't use is absent, not disabled. Guardrail controls are shown disabled with their reason. A direct URL to a surface the role can't use returns to the role's landing page (owner/designer: Case studies table; account/sales/social: library; admin: Users).
 UX-DR3: Status badge. Always colour plus text label, using tokens `status-draft`, `status-generating`, `status-review`, `status-approved`. Labels from the OP 8 interim (Bozza, In elaborazione, Da approvare, Approvato).
-UX-DR4: Owner/designer Case studies table. Columns ID (monospace), Name, Client, Year, Status, Updated, Links (count, Approvato only). Search "Search name, client or ID", ~250 ms debounce, case- and accent-insensitive over name, client, ID. Status segmented filter with per-segment counts, combined with search (AND). Default sort Updated newest; header click sorts. Row click by status (Bozza → wizard at first incomplete step; In elaborazione → no-op with "Still generating" tooltip; Da approvare → configurator; Approvato → configurator plus View). Overflow menu: View, Export, Share (Approvato), Delete (Bozza, with confirm). Rows in In elaborazione update without reload. Empty and no-results states with their copy.
+UX-DR4: Owner/designer Case studies table. Columns ID (the case history code, monospace), Name, Client, Year, Status, Updated, Links (count, Approvato only). Search "Search name, client or code", ~250 ms debounce, case- and accent-insensitive over name, client name, client code and case code. Sorting by ID orders codes naturally (`LUM-2026-9` < `LUM-2026-10`). Status segmented filter with per-segment counts, combined with search (AND). Default sort Updated newest; header click sorts. Row click by status (Bozza → wizard at first incomplete step; In elaborazione → no-op with "Still generating" tooltip; Da approvare → configurator; Approvato → configurator plus View). Overflow menu: View, Export, Share (Approvato), Delete (Bozza, with confirm). Rows in In elaborazione update without reload. Empty and no-results states with their copy.
 UX-DR5: To review queue. The table pre-filtered to Da approvare, oldest first; sidebar count; no assignment or claiming; empty copy "Nothing to review."
 UX-DR6: Library view. Card grid (cover = first slide of the 16:9 deck, name, client, year; no tags); approved only; no status filter or badge; same search; facets Client and Year as multi-select chips with active filters and Clear all; newest approved first; paginates at 24, no infinite scroll; empty copy "No approved case studies yet."; owner/designer Table / Library toggle.
-UX-DR7: Wizard step 0. Name (required) and client (required), year defaulting to the current year. The case is created and its ID shown in the header; saved as Bozza from that moment; leaving and returning loses nothing.
+UX-DR7: Wizard step 0. Name (required) and client (required, picked from the existing clients; no free text, no adding here), year defaulting to the current year. The case is created and its code shown in the header; saved as Bozza from that moment; leaving and returning loses nothing.
 UX-DR8: Wizard step 1 Material, in the focused wizard (per `mockups/material-step.html`). Dropzone plus browse button with accepted-type chips; no pasted text; copy "Up to 20 files, 50 MB each."; per-file inline rejections ("Over 50 MB. Not uploaded." / unsupported-type copy / 21st file) that don't block others; parallel uploads with per-file progress, progress and rejections announced to screen readers; rows (thumbnail, name, size, remove, plus a **Preferito** toggle on images and videos); remove is immediate, with no confirm and no undo; **Avanti** is active from the first uploaded file, and Dettagli and Genera can't be reached with 0 files.
 UX-DR9: Wizard step 2 Details. Context, Solution, Results textareas with one-line prompts, a "{n} of 3" counter, all optional.
 UX-DR10: Wizard step 3 Generate. Summary "{n} files, {m} of 3 details filled."; Generate disabled without material, with the visible reason linked via `aria-describedby`; processing state with leave-page copy and Back to case studies; no ETA or percentage; failure banner "Generation didn't finish. Your material and details are saved." with Try again.
@@ -118,6 +119,7 @@ UX-DR30: Responsive rules. Case studies / Users / Templates: sidebar collapses t
 UX-DR31: Design tokens (DESIGN.md). Implement the fixed token names (colours, typography roles incl. mono, rounded, components button-primary, status-badge, focus-indicator) as theme variables with placeholder values, so values can be filled later without code changes. Tool chrome tokens never style template output.
 UX-DR32: Templates surface (conditional on C4). Browse templates and their variants per format with sample content; turn variants on and off (at least one per format stays on); see usage counts.
 UX-DR33: `MISSING_ASPECT` warning shown in the configurator (spine AD-6; placement and blocking are conflict A3).
+UX-DR35: Clients (owner/designer). Table of clients (Code mono, Name, Case histories count), search over name and code, default sort Name A–Z; **Add client** dialog (name); **Edit name** dialog that states the code stays the same; row click opens the client page: client name and code, Edit name, and the Case history table limited to that client, with **New case history** preselecting the client. No delete. Below 1024 px read-only.
 
 ### Interim Rules Register
 
@@ -149,7 +151,7 @@ These are the rules the stories are built against. None of them is a decision; e
 
 | Requirement | Epic | What it covers |
 | --- | --- | --- |
-| FR1 | Epic 2 | Manual creation with a permanent uuid |
+| FR1 | Epic 2 | Manual creation with a permanent uuid, readable code and client record |
 | FR2 | Epic 2 | Upload (20 × 50 MB, allowlist), favourites, details form |
 | FR3 | Epic 3 | Background generation, narrative from material only, NFR6 gate, layouts per format |
 | FR4 | Epic 3 | Media-count rules (re-applied when the media set changes in the Epic 4 configurator) |
@@ -349,6 +351,7 @@ So that it gets a permanent ID and is saved as a draft I can fill in later.
 Covers: FR1, CAP-1, AR2, AR3 (create, `draft`), AR20, UX-DR7, PRD Story 2.2
 ⚑ Interim: IR-OP8, IR-OP13 (the `case_event` log is what the tool keeps for the measures; no hands-on time)
 UX gap: narrative language (`it` | `en`) has no designed control; it is placed in this form as a select defaulting to Italiano.
+Note (amended 2026-10-15, [Sprint Change Proposal 2026-10-15](sprint-change-proposal-2026-10-15.md)): the client is picked from the client list and the header shows the case history code; Story 2.12 delivers these ACs. The migration AC's free-text `client` column is superseded by Story 2.12.
 
 **Acceptance Criteria:**
 
@@ -359,9 +362,9 @@ UX gap: narrative language (`it` | `en`) has no designed control; it is placed i
 **And** RLS denies `anon` and `authenticated` on both
 
 **Given** I click **+ New case study**
-**When** I enter a name and a client (both required) and confirm, with year prefilled to the current year and editable
-**Then** the case is created in status `draft`, the wizard header shows its ID in the `mono` style and the Bozza badge, and a `case_created` event is recorded with my actor id
-**And** the form doesn't submit while name or client is empty, and says which field is missing
+**When** I enter a name, pick a client from the list (both required) and confirm, with year prefilled to the current year and editable
+**Then** the case is created in status `draft`, the wizard header shows its case history code (e.g. `LUM-2026-01`) in the `mono` style and the Bozza badge, and a `case_created` event is recorded with my actor id
+**And** the form doesn't submit while the name is empty or no client is picked, and says which field is missing
 
 **Given** an existing case
 **When** any code path tries to change `case_study.id` or reuse an id
@@ -385,19 +388,20 @@ So that I can find a draft I started and carry on where I left off.
 Covers: UX-DR4 (columns, search, sort, Bozza row click, empty and no-results states, `/` shortcut), UX-DR30 (skeleton, below 1024 px), CAP-6 (list part), AR11 (list scope)
 ⚑ Interim: IR-OP8
 Note: the status filter, row actions, delete and the To review queue come in Story 4.1, when more than one status exists.
+Note (amended 2026-10-15, [Sprint Change Proposal 2026-10-15](sprint-change-proposal-2026-10-15.md)): the ID column shows the case history code and search matches the codes; Story 2.12 delivers these ACs.
 
 **Acceptance Criteria:**
 
 **Given** case studies exist
 **When** I open Case studies
-**Then** a table shows ID (monospace), Name, Client, Year, Status (badge), Updated and Links (blank for now), sorted by Updated, newest first
+**Then** a table shows ID (the case history code, monospace), Name, Client (the client's name), Year, Status (badge), Updated and Links (blank for now), sorted by Updated, newest first
 **And** clicking a column header sorts by it, and clicking again reverses the order
 **And** skeleton rows show while the first load is in progress
 **And** soft-deleted cases never appear
 
-**Given** the search field ("Search name, client or ID")
+**Given** the search field ("Search name, client or code")
 **When** I type, with a ~250 ms debounce
-**Then** rows filter by name, client or ID, case- and accent-insensitively (e.g. "citta" matches "Città")
+**Then** rows filter by name, client name, client code or case code, case- and accent-insensitively (e.g. "citta" matches "Città")
 **And** pressing `/` anywhere on the page focuses the search field
 
 **Given** a search with no matches
@@ -612,6 +616,126 @@ Covers: FR2, AD-8 ([storage proposal](sprint-change-proposal-2026-10-14-storage.
 **Given** the updated tests
 **When** CI runs
 **Then** the `check`, `db` and `image` jobs pass, and the DB tests run against the bucket
+
+### Story 2.12: Clients as records, with readable case history codes
+
+As an owner/designer,
+I want every case history to belong to a client record and to carry a short code like `LUM-2026-01`,
+So that I can recognise and quote a case history at a glance, and clients are spelled one way.
+
+Covers: FR1 (amended), CAP-1, AR2, AR23, AR12, AR20, UX-DR4, UX-DR7 ([Sprint Change Proposal 2026-10-15](sprint-change-proposal-2026-10-15.md)). It delivers the amended ACs of Stories 2.5 and 2.6.
+Order: first. It has to land before 2.13 and before Epic 3.
+
+**Acceptance Criteria:**
+
+**Given** the forward migration for this story
+**When** it runs on a database that has cases with free-text clients
+**Then** a `client` table exists (uuid `id`, `name`, unique `name_key`, unique `code`, `created_by`, `created_at`, `updated_at`), with RLS denying `anon` and `authenticated`
+**And** every existing case has a `client_id`, a `number` and a `code` per AD-21, including soft-deleted cases
+**And** identical clients after normalisation (rule 2 in AD-21, e.g. "Lumen Srl" and "lumen  srl") share one client
+**And** `case_study.client` (text) no longer exists
+**And** `case_number_counter` holds each (client, year) pair's highest number
+**And** the migration aborts, with nothing applied, if any case would be left without a client or code
+**And** no applied migration is edited
+
+**Given** the dev case "Test Lumen" with client "Lumen Srl" and year 2026, and no other Lumen client
+**When** the migration has run
+**Then** a client *Lumen Srl* with code `LUM` exists, and the case's code is `LUM-2026-01`
+
+**Given** the client code rules (AD-21 rules 1–3)
+**When** the DB tests run `create_client` on these names in this order: "Lumen Srl", "Lumina S.p.A.", "Lume", "Città di Torino", "A2A", "3M"
+**Then** the codes are `LUM`, `LUMI`, `LUME`, `CIT`, `AAX` and `MXX`
+**And** a name equal to an existing client's after normalisation is rejected with `CLIENT_NAME_TAKEN`, and nothing is written
+
+**Given** wizard step 0
+**When** it loads
+**Then** the client field is a select of every client, sorted by name, each option showing the name and its code
+**And** with no clients, the field is replaced by "Nessun cliente. Aggiungilo nella pagina Clienti." and **Avanti** stays inactive
+**And** there is no way to type a new client here
+
+**Given** a name and a picked client
+**When** I press **Avanti**
+**Then** `createCaseStudy({ name, clientId, year, locale })` creates the case with the next number for that client and year
+**And** the top bar shows the code in mono, not the uuid
+**And** `case_created` records `clientId`, `clientCode` and `code`
+**And** an unknown `clientId` returns `CLIENT_NOT_FOUND` and writes nothing
+
+**Given** a client with cases `LUM-2025-01` and `LUM-2025-02`
+**When** the first 2026 case for that client is created
+**Then** its code is `LUM-2026-01`
+**And** the 100th case of a client in one year gets `LUM-2026-100`
+
+**Given** two owner/designers create a case for the same client and year at the same moment (a DB test runs both in parallel)
+**When** both commit
+**Then** they get consecutive numbers with no duplicate, and a failed create leaves no gap
+
+**Given** an existing case
+**When** any code path tries to change `code` or `number`, or to change or reuse `client.code`
+**Then** the database rejects it
+**And** URLs and every foreign key still use the uuid
+
+**Given** the Case history table
+**When** it loads
+**Then** the ID column shows the code
+**And** search matches name, client name, client code and case code
+**And** sorting by ID orders codes naturally
+**And** the Client column shows the client's current name
+
+**Given** CI
+**When** the `check`, `db` and `image` jobs run
+**Then** they pass, and `db.types.ts` matches the generated types
+
+### Story 2.13: Clients page
+
+As an owner/designer,
+I want a Clients page where I add and rename clients and see each client's case histories,
+So that the client list stays clean and I can find everything we did for one client.
+
+Covers: UX-DR1 (Clients item), UX-DR35, UX-DR30, AR11 (`list clients`, `manage clients`), AR23 ([Sprint Change Proposal 2026-10-15](sprint-change-proposal-2026-10-15.md))
+Order: after 2.12, before Epic 3.
+
+**Acceptance Criteria:**
+
+**Given** an owner/designer
+**When** the sidebar renders
+**Then** it shows **Clienti** between Case history and Templates
+**And** account/sales/social and admin users don't see it
+**And** a direct URL to `/clients` from those roles returns to their landing page (UX-DR2)
+
+**Given** the Clients page
+**When** it loads
+**Then** a table lists every client with Code (mono), Name and Case histories (count of non-deleted cases), sorted by name A–Z, with header sort
+**And** search over name and code works with the table's rules (case- and accent-insensitive, ~250 ms debounce)
+**And** it has skeleton, empty ("Nessun cliente. Aggiungi il primo.") and no-results states
+
+**Given** **Aggiungi cliente**
+**When** I enter a name (1–120 characters after trimming) and confirm
+**Then** the client is created with its automatic code (AD-21) and appears in the list with that code
+**And** a duplicate name shows "Esiste già un cliente con questo nome." and keeps the dialog open
+**And** there is no code field
+
+**Given** **Modifica nome** on a client
+**When** I save a new name
+**Then** the name changes everywhere it is shown, including its case histories
+**And** the dialog says "Il codice {code} non cambia." and the code and every case code stay the same
+**And** a duplicate name is rejected as on add
+
+**Given** a client row
+**When** I click it
+**Then** `/clients/{clientId}` shows the client's name and code, **Modifica nome**, and the Case history table limited to that client's non-deleted cases, with the same columns, search, sort and row click
+**And** with no cases it shows "Nessuna case history per questo cliente." and **Nuova case history**, which opens step 0 with the client preselected
+
+**Given** a client
+**When** I look for a delete action
+**Then** there is none, and no delete action exists on the server
+
+**Given** a viewport narrower than 1024 px
+**When** I open Clients
+**Then** the list still loads, searches and sorts, read-only, with no add or edit
+
+**Given** the policy tests
+**When** they run
+**Then** `list clients` and `manage clients` are allowed for owner_designer only
 
 ## Epic 3: Generate a graphic case study from the material
 
@@ -1309,7 +1433,7 @@ Covers: FR7 (find), CAP-9 (approved only), AR3 (`getLiveRevision` only), AR11 (a
 
 **Given** the search field
 **When** I type
-**Then** it matches name, client and ID with the same rules as the table (Story 2.6)
+**Then** it matches name, client name, client code and case code with the same rules as the table (Story 2.6)
 
 **Given** facets for Client and Year
 **When** I pick chips
