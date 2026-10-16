@@ -167,6 +167,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"job": {
+                  Row: {
+                    "attempts": number,"created_at": string,"error": Json | null,"finished_at": string | null,"id": string,"input_hash": string,"kind": string,"locked_until": string | null,"max_attempts": number,"payload": NonNullable<Json>,"status": string,"subject_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"created_at"?: string,"error"?: Json | null,"finished_at"?: string | null,"id"?: string,"input_hash": string,"kind": string,"locked_until"?: string | null,"max_attempts"?: number,"payload"?: NonNullable<Json>,"status"?: string,"subject_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "attempts"?: number,"created_at"?: string,"error"?: Json | null,"finished_at"?: string | null,"id"?: string,"input_hash"?: string,"kind"?: string,"locked_until"?: string | null,"max_attempts"?: number,"payload"?: NonNullable<Json>,"status"?: string,"subject_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"profile": {
                   Row: {
                     "created_at": string,"disabled_at": string | null,"display_name": string,"email": string,"id": string,"role": string
@@ -259,6 +273,81 @@ isOneToOne: false
       } },
 "has_material":
 { Args: { "p_case_id": string }; Returns: boolean
+                           },
+"jobs_claim":
+{ Args: { "p_kinds": (string)[] }; Returns: {
+              "attempts": number,
+"created_at": string,
+"error": Json | null,
+"finished_at": string | null,
+"id": string,
+"input_hash": string,
+"kind": string,
+"locked_until": string | null,
+"max_attempts": number,
+"payload": NonNullable<Json>,
+"status": string,
+"subject_id": string,
+"updated_at": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "job"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
+"jobs_enqueue":
+{ Args: { "p_input_hash": string,"p_kind": string,"p_payload": Json,"p_subject_id": string }; Returns: {
+              "attempts": number,
+"created_at": string,
+"error": Json | null,
+"finished_at": string | null,
+"id": string,
+"input_hash": string,
+"kind": string,
+"locked_until": string | null,
+"max_attempts": number,
+"payload": NonNullable<Json>,
+"status": string,
+"subject_id": string,
+"updated_at": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "job"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
+"jobs_fail":
+{ Args: { "p_attempts": number,"p_error": Json,"p_id": string,"p_retry_after": number,"p_retryable": boolean }; Returns: {
+              "attempts": number,
+"created_at": string,
+"error": Json | null,
+"finished_at": string | null,
+"id": string,
+"input_hash": string,
+"kind": string,
+"locked_until": string | null,
+"max_attempts": number,
+"payload": NonNullable<Json>,
+"status": string,
+"subject_id": string,
+"updated_at": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "job"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
+"jobs_finish":
+{ Args: { "p_attempts": number,"p_id": string }; Returns: boolean
+                           },
+"jobs_release":
+{ Args: { "p_attempts": number,"p_id": string }; Returns: boolean
+                           },
+"jobs_renew":
+{ Args: { "p_attempts": number,"p_id": string }; Returns: boolean
                            },
 "rename_client":
 { Args: { "p_actor_id": string,"p_client_id": string,"p_name": string }; Returns: {

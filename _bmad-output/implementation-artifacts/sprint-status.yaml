@@ -52,8 +52,8 @@ development_status:
   2-14-client-info-description-sector-logo: backlog  # SCP 2026-10-16; first in Sprint 2, before 3.3
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-background-job-queue-and-worker-loop: backlog
+  epic-3: in-progress
+  3-1-background-job-queue-and-worker-loop: review  # #45; migration applied to mac-recap-dev 2026-10-16 (not staging/prod)
   3-2-display-renditions-for-uploaded-media: backlog
   3-3-the-case-study-document-revisions-and-the-format-registry: backlog  # About block and client snapshot per SCP 2026-10-16; after 2.14
   3-4-templates-as-versioned-code-with-media-count-rules: backlog  # About the client area per SCP 2026-10-16

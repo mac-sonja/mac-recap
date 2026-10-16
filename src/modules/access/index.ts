@@ -1,6 +1,7 @@
 // Public surface of the access module. Code outside this module imports only this file.
 import { createSupabaseProfileRepository } from "@/modules/access/adapters/supabase/profile-repository";
 import { makeGetActor } from "@/modules/access/application/get-actor";
+import { makeGetSystemActor } from "@/modules/access/application/get-system-actor";
 import type { Actor } from "@/modules/access/domain/actor";
 import { can as policyCan, type Action, type Resource } from "@/modules/access/domain/policy";
 import type { AppError, Result } from "@/shared/result";
@@ -26,6 +27,16 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
  */
 export function getActor(): Promise<Result<Actor>> {
   return makeGetActor(createSupabaseProfileRepository())();
+}
+
+/**
+ * The worker's built-in `system` actor (the seeded profile, AD-11), read fresh
+ * on every call. Only the worker calls this; it still authorizes `job work`
+ * before each job. `UNAUTHENTICATED` when the profile is missing, disabled or
+ * not `system`. Nothing outside this module knows the system profile's id.
+ */
+export function getSystemActor(): Promise<Result<Actor>> {
+  return makeGetSystemActor(createSupabaseProfileRepository())();
 }
 
 const STATUS_BY_CODE: Readonly<Record<string, number>> = {

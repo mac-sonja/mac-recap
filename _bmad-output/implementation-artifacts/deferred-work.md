@@ -16,8 +16,8 @@
   summary: profile.email uniqueness is case-sensitive.
   evidence: email text unique allows A@x and a@x; Epic 6 matches session emails to profiles, so use citext or a lower(email) unique index then.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-actor-and-policy-seam-with-a-dev-owner-designer.md`
-  summary: The worker has no way to obtain the system actor from @/modules/access.
-  evidence: The index exports no system-actor resolver or SYSTEM_ACTOR_ID; the job loop needs one to authorize job work.
+  summary: Resolved by Story 3.1 (`access.getSystemActor()` resolves the seeded system profile; the worker calls it at start and `SYSTEM_ACTOR_ID` stays inside `access`, checked by `test/system-actor.test.ts`). Was: the worker has no way to obtain the system actor from @/modules/access.
+  evidence: The index exported no system-actor resolver or SYSTEM_ACTOR_ID; the job loop needs one to authorize job work.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-actor-and-policy-seam-with-a-dev-owner-designer.md`
   summary: The list cases approved-only scope for account_sales_social is not tied to what the list query returns.
   evidence: authorize accepts { status: 'approved' } as the scope, but the Story 2.6 use case must filter by that same scope or the check is moot.
@@ -123,3 +123,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-12-clients-and-readable-case-history-codes.md`
   summary: Before any feature lets people change a case history's client or year, decide how the fixed code coexists with the unique key `(client_id, year, number)` and the per-pair counter.
   evidence: A moved case keeps its number, so moving it into a pair that already has (or will reach) that number fails on the unique key or makes later creates for that pair fail. No edit path exists today (owner answer 4 in SCP 2026-10-15).
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-background-job-queue-and-worker-loop.md`
+  summary: Make the `job_failed` case event durable — today a job reaches `failed` (via `jobs_fail` or the LEASE_EXPIRED path in `jobs_claim`) before the event is written in a separate call, so a worker crash or a `recordEvent` error in between loses the event for good.
+  evidence: Story 3.1 registers no handlers, so no case depends on it yet; Story 3.7 (case status back to Bozza on failure) must not rely on a lost event — e.g. a `failure_reported_at` column set only after the event is written and re-reported by the next claim, or write the event in the same transaction.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-background-job-queue-and-worker-loop.md`
+  summary: Add retention for finished (`succeeded` / `failed`) job rows.
+  evidence: Rows are never pruned; the partial indexes keep claims fast, but the table and per-subject history grow without bound.

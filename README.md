@@ -85,7 +85,7 @@ applies every migration, runs `npm run test:db` and checks `db.types.ts` for dri
 ```text
 src/
   app/        pages, server actions, route handlers
-  worker/     worker entry, bundled to dist/worker.js (idles until the job loop lands)
+  worker/     worker entry, bundled to dist/worker.js (runs the jobs loop as the system actor)
   preflight.ts  env + gate check loaded before server.js, bundled to dist/preflight.js
   shared/     env.ts, result.ts, log.ts, utils.ts, db.types.ts (committed, see below)
   modules/
@@ -176,10 +176,32 @@ module call (AD-11); `test/authorize-guard.test.ts` enforces this for
 `"use server"` modules, inline server actions and `route.ts` handlers. The
 role matrix lives only in `src/modules/access/domain/policy.ts`. Until Epic 6,
 `getActor()` resolves the seeded dev owner/designer profile; the seeded
-`system` profile is the worker's actor.
+`system` profile is the worker's actor, resolved only through `getSystemActor()`
+(its id never leaves `access`). The worker still calls
+`authorize(system, "job work")` before every job.
 
 Exact versions only: `test/scaffold.test.ts` fails if any dependency in `package.json`
 uses `^`, `~` or a tag.
+
+## Background jobs
+
+Long work (renditions, generation, exports) runs in the worker, never in a web
+request (AD-10). The `jobs` module owns the `job` table, whose state changes only
+through the `jobs_*` SQL functions in
+`supabase/migrations/20261016120000_jobs_job.sql` (database clock, service role
+only; the service role can read `job` but not write it directly):
+
+- `enqueue({ kind, subjectId, inputHash, payload })` is idempotent: while a job
+  with the same kind, subject and input hash is queued or running, that job is returned.
+- The worker claims one job at a time with a 10-minute lease (`FOR UPDATE SKIP
+  LOCKED`) and renews it every minute, so the lease only detects a crashed
+  worker. A failed attempt is retried after 30 s, 60 s; after 3 attempts (or a
+  non-retryable error) the job is `failed` and `job_failed` is written on its case.
+- The UI reads outcomes only through `getJobsFor(subjectId)`.
+
+Web code never loads the worker-only packages: `test/web-imports.test.ts`
+bundles `src/app/**`, `src/proxy.ts` and `src/instrumentation*.ts` with esbuild
+and fails if they reach `@anthropic-ai/sdk`, Playwright, `sharp` or `child_process`.
 
 ## Deploy
 
@@ -214,7 +236,7 @@ the basic-auth pair):
 | Process | Command | Notes |
 | --- | --- | --- |
 | Web | default `CMD`: `node --require ./dist/preflight.js server.js` | Listens on 3000. The preflight checks the environment and the basic-auth gate first, so a missing or invalid variable exits 1 before the port opens. |
-| Worker | `node dist/worker.js` | Logs one JSON readiness line, then idles (no job loop yet). Exits 0 on SIGTERM or SIGINT, 1 on an invalid environment. |
+| Worker | `node dist/worker.js` | Resolves the `system` profile, then logs one JSON readiness line (`"msg":"worker ready"` with its `actorId`) and polls the `job` queue every 2 s, one job at a time (no job handlers are registered yet, so it claims nothing). On SIGTERM or SIGINT it stops claiming, gives a running job up to 10 s, releases it if unfinished, and exits 0. Exits 1 without a readiness line on an invalid environment or when the `system` profile can't be read (Supabase unreachable, missing or disabled). |
 
 ```sh
 docker run --env-file staging.env -p 3000:3000 mac-recap:<version>
@@ -229,6 +251,14 @@ because the worker shares it. Configure the host instead:
 - **Web:** a TCP check on port 3000, or an HTTP check that sends
   `Authorization: Basic <base64 of user:password>` (without it every path answers 401).
 - **Worker:** process liveness only; it opens no port.
+
+### Stop timeout
+
+On SIGTERM the worker gives a running job up to 10 s, then releases it so another
+worker can pick it up at once. Set the host's stop timeout (the time between
+SIGTERM and SIGKILL) to **at least 15 s** for the worker; Docker's default is 10 s,
+so use `docker stop --time 15` (or `stop_grace_period: 15s` in Compose). With less,
+SIGKILL can land before the release and the job waits for its 10-minute lease to expire.
 
 ### Caching
 
