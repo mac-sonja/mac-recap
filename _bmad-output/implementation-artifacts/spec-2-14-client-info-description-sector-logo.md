@@ -2,7 +2,7 @@
 title: 'Story 2.14: Client info (description, sector and logo)'
 type: 'feature'
 created: '2026-10-16'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'a6e6eb7be180938c333ae4d4dce76617b7d47c2f'
 route: 'dispatch'
 review_loop_iteration: 0
