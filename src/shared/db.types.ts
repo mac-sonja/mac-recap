@@ -275,7 +275,7 @@ isOneToOne: false
 { Args: { "p_case_id": string }; Returns: boolean
                            },
 "jobs_claim":
-{ Args: { "p_kinds": string[] }; Returns: {
+{ Args: { "p_kinds": (string)[] }; Returns: {
               "attempts": number,
 "created_at": string,
 "error": Json | null,

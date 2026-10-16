@@ -31,13 +31,15 @@ create table public.job (
   -- `{ code, message }` of the latest failed attempt.
   error jsonb null check (
     error is null
-    or (
+    -- coalesce: a missing key makes the test NULL, which a check would accept.
+    or coalesce(
       jsonb_typeof(error) = 'object'
       and jsonb_typeof(error -> 'code') = 'string'
       and jsonb_typeof(error -> 'message') = 'string'
       -- JOB_ERROR_CODE_MAX and JOB_ERROR_MESSAGE_MAX in jobs/domain/job.ts.
       and char_length(error ->> 'code') between 1 and 64
-      and char_length(error ->> 'message') <= 1000
+      and char_length(error ->> 'message') <= 1000,
+      false
     )
   ),
   created_at timestamptz not null default now(),
