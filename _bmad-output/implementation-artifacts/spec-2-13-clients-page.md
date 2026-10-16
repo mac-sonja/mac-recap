@@ -11,6 +11,8 @@ context:
   - '{project-root}/_bmad-output/planning-artifacts/ux-designs/ux-MAC Recap-2026-10-08/EXPERIENCE.md'
 ---
 
+> **Amended 2026-10-16** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-16.md): the dialogs gain sector, description and logo, see Story 2.14 (Client info).
+
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
 ## Intent
