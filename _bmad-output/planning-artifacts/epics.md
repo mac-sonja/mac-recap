@@ -28,7 +28,7 @@ Scope: the standalone MVP, Epics 2–6, keeping PRD v2 numbering (Epic 1 is team
 
 FR1: The owner/designer creates a case study by hand, and the system gives it a unique, permanent ID (a database-generated uuid that is never changed or reused) and a readable **case history code** (client code, year, number, e.g. `LUM-2026-01`), fixed at creation. The code is what people see; the uuid is the only identifier exposed to other systems and used in URLs, and is ready for the later project-order link. Every case belongs to one client record, picked from the client list. There is no trigger at project close. (CAP-1, Stories 2.2 and 2.5)
 FR2: The owner/designer uploads material (images, videos, text documents, PDFs) to a case study. The limit is 20 files of at most 50 MB each, of an allowlisted type. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others. Any number of images and videos can be marked as favourite; the mark is optional. The owner/designer also fills in an optional details form (context, solution, results), which is the only place for typed project text, is saved, can be cited as a claim source, and never counts as material. (CAP-2, CAP-3, Stories 2.3–2.4)
-FR3: The system generates a graphic case study in the background by applying MAC templates to the uploaded material. The case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The narrative follows challenge, approach and result (always present, can't be removed or reordered), covers the technical and the graphic side, and uses only the uploaded material and form answers. Template design and assets stay unchanged. Generation is refused when there is no material, even with the form filled in. Layouts are produced for every MVP export format. (CAP-4, CAP-5, Story 3.1)
+FR3: The system generates a graphic case study in the background by applying MAC templates to the uploaded material. The case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The narrative follows challenge, approach and result (always present, can't be removed or reordered), covers the technical and the graphic side, and uses only the uploaded material, the form answers and the client's info (description and sector). Every case study shows an About the client block with the client's logo, name, sector and description, as entered on the client and copied when the draft is generated. Template design and assets stay unchanged. Generation is refused when there is no material, even with the form filled in. Layouts are produced for every MVP export format. (CAP-4, CAP-5, Story 3.1)
 FR4: Templates adapt their layout to the number of available media items, using the template's own media-count rules (slot mapping per count). (CAP-4, Story 3.2)
 FR5: The owner/designer reviews and edits case studies through the review dashboard (every case with its status, a To review queue oldest first, delete only in Bozza) and the configurator (generated text in place, layout variant, shuffle, spacing, media replace / reorder / remove, font pairing and text scale per format). Layout, spacing and typography accept only template-defined values; media come only from this case's material; the preview matches the exported files exactly; there is no canvas-ratio control. (CAP-6, CAP-7, Stories 4.1–4.2)
 FR6: Any owner/designer approves a case study after manually checking every text block against the material and form answers. Approve stays disabled until every block has a current manual check, no block overflows in any format, and no referenced material is deleted. There is no bulk check or bulk approve. Approval makes the case available for export and sharing. Editing an approved case keeps it approved. (CAP-8, Story 4.3)
@@ -62,9 +62,9 @@ From the architecture spine (AD-1 to AD-21 are binding):
 - AR1 (AD-1): Modular monolith with modules `case-study`, `material`, `generation`, `rendering`, `sharing`, `access`, `jobs`; each with `domain/`, `application/`, `index.ts`, plus `ports/` and `adapters/` only at vendor seams. Cross-module imports only through `index.ts`; vendor SDKs only in adapters. Table and storage-prefix ownership per AD-1. Enforced by a lint rule.
 - AR2 (AD-2): `case_study.id` is a DB-generated uuid, immutable, never reused; `project_order_ref` nullable and unset in the MVP. `case_study.code` is a separate, unique, immutable display code (AD-21); it is never used as a key or in URLs.
 - AR3 (AD-3): `case_study.status` changes only through `case-study.transition`. Revisions have `working | approved | superseded`. `head_revision_id` and `approved_revision_id` pointers; `getLiveRevision` and `getEditableRevision` reads. Generation only from `draft`; delete only in `draft`, soft (`deleted_at`).
-- AR4 (AD-4): `CaseStudyDocument` (zod, jsonb) stored twice per revision, `generated_doc` (immutable) and `doc` (editable). Shared part (template@version, blocks with stable `blockId`, claims and check state, media set) and per-format part (variant, slot assignments, spacing, text scale, font pairing). No canvas ratio. Schema rejects a missing challenge/approach/result. `rendering.relayout` is the only slot-assignment code. `schemaVersion` + `upgrade(doc)` on read. `FORMAT_NOT_IN_REVISION`.
+- AR4 (AD-4): `CaseStudyDocument` (zod, jsonb) stored twice per revision, `generated_doc` (immutable) and `doc` (editable). Shared part (template@version, blocks with stable `blockId`, claims and check state, media set) and per-format part (variant, slot assignments, spacing, text scale, font pairing). No canvas ratio. Schema rejects a missing challenge/approach/result. The shared part also holds `about` (AD-22). `rendering.relayout` is the only slot-assignment code. `schemaVersion` + `upgrade(doc)` on read. `FORMAT_NOT_IN_REVISION`.
 - AR5 (AD-5): Guardrails are code (`generation/domain/guardrails.ts`, `access/domain/policy.ts`, `case-study` preconditions), never DB/env/UI. Each guardrail is enforced in a use case and covered by an automated test, so the end-of-Sprint-2 guardrail check runs on the pre-login build.
-- AR6 (AD-6): `generate` fails with `NO_MATERIAL` before any LLM call unless there's at least one non-deleted asset; the same check backs the Generate button and the worker's claim. Claims tagged `aspect: technical | graphic`; a draft missing one is `MISSING_ASPECT`.
+- AR6 (AD-6): `generate` fails with `NO_MATERIAL` before any LLM call unless there's at least one non-deleted asset; the same check backs the Generate button and the worker's claim. Claims tagged `aspect: technical | graphic`; a draft missing one is `MISSING_ASPECT`. The LLM also receives the client snapshot's name, sector and description (AD-22).
 - AR7 (AD-7): One `NarrativeGenerator` port, worker only. Adapter uses `client.beta.messages.parse` with the zod schema, model `claude-opus-5-5` from one constant, adaptive thinking, `effort: "high"`, server-side refusal fallbacks; `refusal` → `LLM_REFUSAL`. Versioned prompt files. Each revision records `response.model`, `fellBack`, `promptVersion`, `schemaVersion`.
 - AR8 (AD-8): Private Supabase Storage bucket `material` in the project's EU region, created by migration, with `file_size_limit` 50 MB and `allowed_mime_types` set to the allowlist; no public access, service role is the only reader and writer. Browser uploads to a signed upload URL issued after `authorize`; size and type limits enforced by the bucket and re-checked from the object's metadata at confirm. Asset row only after that check. 20-file cap checked on issue and confirm. Signed GET ≤ 15 min. No versioning, so the app never deletes objects. Fixed key layout. No AWS S3.
 - AR9 (AD-9): A format registry (`rendering/domain/formats.ts`) and one React renderer per format, used by the configurator, case study view, `/s/{token}` and exports. Exports: `renderToStaticMarkup` + Playwright `page.setContent`, no print route. Deck and A4 → PDF; image formats → ZIP of PNGs; Export all → one ZIP. Video shows its poster frame in static formats. `export` unique and immutable on `(revision_id, format)`; `ensureExport` is idempotent.
@@ -76,12 +76,13 @@ From the architecture spine (AD-1 to AD-21 are binding):
 - AR15 (AD-15): Templates are versioned code folders `rendering/templates/{templateId}/v{n}/` (variants, slots, media-count rules, allowed values, one renderer per format); a published version is never edited. `rendering.listVariants(templateId, format, mediaCount)` is the only variant source.
 - AR16 (AD-16): No MVP code calls MAC Productive.
 - AR17 (AD-17): Compare-and-set on `revision.version` (`STALE_REVISION`) and `case_study.head_version` (`STALE_HEAD`); no edits while `generating`; only `working` revisions writable (`REVISION_NOT_WRITABLE`); explicit idempotent `forkHead`; generate results create a new revision, discarded on head mismatch.
-- AR18 (AD-18): `MaterialRef { asset | form_field, id }` resolved only via `material.resolveRefs`. Generate jobs carry a material manifest (refs + hashes) stored on the revision. Referenced material is soft-deleted only; `approve` fails with `MATERIAL_MISSING`. Upload and favourite never change case status. Anthropic limits (32 MB request, 600-page PDF, no DOCX, no video); Files API not used.
+- AR18 (AD-18): `MaterialRef { asset | form_field, id }` resolved only via `material.resolveRefs`. Generate jobs carry a material manifest (refs + hashes) stored on the revision. Referenced material is soft-deleted only; `approve` fails with `MATERIAL_MISSING`. Upload and favourite never change case status. Anthropic limits (32 MB request, 600-page PDF, no DOCX, no video); Files API not used. `MaterialRef.kind` gains `client_field` (`description` or `sector`), resolved from the revision's client snapshot; a valid claim source that never counts as material.
 - AR19 (AD-19): Per-block `check: { by, at, textHash } | null`, set only by a person, no bulk check. A check counts only while `textHash` matches. `approve(caseId, revisionId, expectedRevisionVersion, expectedHeadVersion)` checks every block on the server and requires an overflow-free result per format from the client. Claims carry `provenance` and optional validated `sourceRefs`, never shown as "verified".
 - AR20 (AD-20): `case_event` append-only rows (`case_id`, `revision_id`, `actor_id`, `type`, `at`, `data`) on every transition, upload confirmation, save, block check/uncheck, claim edit, approval, export, link create and turn-off.
 - AR21 (conventions): snake_case singular tables; uuid ids; `timestamptz` UTC, displayed Europe/Rome; zod in `domain/` as single definition; generated DB types; `Result<T, AppError>` with SCREAMING_SNAKE codes; structured JSON logs with no material or prompts; env read only in `src/shared/env.ts`; `case_study.locale` it|en default it.
 - AR22 (deployment): One Docker image on the Playwright base, two processes (`node server.js`, `node dist/worker.js`). Environments `local`, `staging` (demo, gated), `prod` (from Epic 6), each with its own Supabase project and storage bucket. EU container host chosen by end of Sprint 1.
 - AR23 (AD-21): `client` (uuid id, unique `name_key`, unique immutable `code`) owned by `case-study`; every case has `client_id`. Case code `{clientCode}-{year}-{nn}` is assigned inside `create_case_study` from `case_number_counter`, fixed once created, never reused.
+- AR24 (AD-22): `client` gains optional `description` (≤400), `sector` (≤60) and `logo_id`; logos live in append-only `client_logo` rows under `clients/{clientId}/logos/`. A `generate` job snapshots `{ clientId, name, sector, description, logoId }` at enqueue; the revision stores it, and the document's `about` block is filled from it by code. Later client edits never change an existing revision.
 
 ### UX Design Requirements
 
@@ -119,7 +120,8 @@ UX-DR30: Responsive rules. Case studies / Users / Templates: sidebar collapses t
 UX-DR31: Design tokens (DESIGN.md). Implement the fixed token names (colours, typography roles incl. mono, rounded, components button-primary, status-badge, focus-indicator) as theme variables with placeholder values, so values can be filled later without code changes. Tool chrome tokens never style template output.
 UX-DR32: Templates surface (conditional on C4). Browse templates and their variants per format with sample content; turn variants on and off (at least one per format stays on); see usage counts.
 UX-DR33: `MISSING_ASPECT` warning shown in the configurator (spine AD-6; placement and blocking are conflict A3).
-UX-DR35: Clients (owner/designer). Table of clients (Code mono, Name, Case histories count), search over name and code, default sort Name A–Z; **Add client** dialog (name); **Edit name** dialog that states the code stays the same; row click opens the client page: client name and code, Edit name, and the Case history table limited to that client, with **New case history** preselecting the client. No delete. Below 1024 px read-only.
+UX-DR35: Clients (owner/designer). Table of clients (Code mono, Name, Case histories count), search over name and code, default sort Name A–Z; **Add client** dialog (name, sector, description, logo); **Edit client** dialog with the same fields, stating that the code stays the same and that approved case histories keep the info they were generated with; row click opens the client page: logo, client name and code, sector, description, **Edit client**, and the Case history table limited to that client, with **New case history** preselecting the client. No delete. Below 1024 px read-only.
+UX-DR36: About the client block. Shown in every format of a case study: logo, client name, sector, description, as copied at generation. Read-only in the configurator, with the hint "Modifica i dati nella pagina del cliente. Valgono dalla prossima generazione." Not in the Check tab list. Parts without a value are hidden; the block is hidden when the client had no description, sector or logo.
 
 ### Interim Rules Register
 
@@ -153,7 +155,7 @@ These are the rules the stories are built against. None of them is a decision; e
 | --- | --- | --- |
 | FR1 | Epic 2 | Manual creation with a permanent uuid, readable code and client record |
 | FR2 | Epic 2 | Upload (20 × 50 MB, allowlist), favourites, details form |
-| FR3 | Epic 3 | Background generation, narrative from material only, NFR6 gate, layouts per format |
+| FR3 | Epic 2, Epic 3 | Background generation, narrative from material, form and client info only, About the client block, NFR6 gate, layouts per format |
 | FR4 | Epic 3 | Media-count rules (re-applied when the media set changes in the Epic 4 configurator) |
 | FR5 | Epic 4 | Review dashboard, To review queue, configurator editing |
 | FR6 | Epic 4 | Manual per-block check, approval, approved-case editing |
@@ -709,12 +711,12 @@ Order: after 2.12, before Epic 3.
 **And** it has skeleton, empty ("Nessun cliente. Aggiungi il primo.") and no-results states
 
 **Given** **Aggiungi cliente**
-**When** I enter a name (1–120 characters after trimming) and confirm
+**When** I enter a name (1–120 characters after trimming) and optionally a sector, a description and a logo (amended 2026-10-16, delivered by Story 2.14), and confirm
 **Then** the client is created with its automatic code (AD-21) and appears in the list with that code
 **And** a duplicate name shows "Esiste già un cliente con questo nome." and keeps the dialog open
 **And** there is no code field
 
-**Given** **Modifica nome** on a client
+**Given** **Modifica cliente** (was **Modifica nome**; amended 2026-10-16, delivered by Story 2.14) on a client
 **When** I save a new name
 **Then** the name changes everywhere it is shown, including its case histories
 **And** the dialog says "Il codice {code} non cambia." and the code and every case code stay the same
@@ -722,7 +724,7 @@ Order: after 2.12, before Epic 3.
 
 **Given** a client row
 **When** I click it
-**Then** `/clients/{clientId}` shows the client's name and code, **Modifica nome**, and the Case history table limited to that client's non-deleted cases, with the same columns, search, sort and row click
+**Then** `/clients/{clientId}` shows the client's name and code, **Modifica cliente**, and the Case history table limited to that client's non-deleted cases, with the same columns, search, sort and row click
 **And** with no cases it shows "Nessuna case history per questo cliente." and **Nuova case history**, which opens step 0 with the client preselected
 
 **Given** a client
@@ -737,11 +739,72 @@ Order: after 2.12, before Epic 3.
 **When** they run
 **Then** `list clients` and `manage clients` are allowed for owner_designer only
 
+### Story 2.14: Client info (description, sector and logo)
+
+As an owner/designer,
+I want to store a short description, the sector and the logo with each client,
+So that every case history for that client introduces them without my retyping it.
+
+Covers: FR3 (amended), AR24, AR8 (key layout), AR11 (`manage clients`), AR12, UX-DR35 (amended), UX-DR30 ([Sprint Change Proposal 2026-10-16](sprint-change-proposal-2026-10-16.md)). It delivers the amended ACs of Story 2.13.
+Order: first in Sprint 2. It has to land before Story 3.3.
+
+**Acceptance Criteria:**
+
+**Given** the forward migration for this story
+**When** it runs
+**Then** `client` has nullable `description`, `sector` and `logo_id`, and every existing client has them empty
+**And** a `client_logo` table exists (uuid `id`, `client_id`, `path`, `mime_type`, `size_bytes`, `created_by`, `created_at`), with RLS denying `anon` and `authenticated`
+**And** the database rejects any update or delete on `client_logo`, and a `description` over 400 or a `sector` over 60 characters after trimming
+**And** no applied migration is edited
+
+**Given** **Aggiungi cliente** or **Modifica cliente**
+**When** the dialog opens
+**Then** it shows Name (required), Settore (optional, up to 60 characters), Descrizione (optional textarea, up to 400 characters, with a live counter) and Logo (optional upload with preview and **Rimuovi**)
+**And** the edit dialog says "Il codice {code} non cambia. Le case history già approvate mantengono i dati con cui sono state generate."
+
+**Given** a logo file
+**When** I pick it
+**Then** PNG, JPEG or WebP up to 5 MB, at least 400 px on the short side, uploads through a signed upload URL to `clients/{clientId}/logos/{logoId}.{ext}`
+**And** any other type, size or a smaller image is rejected with an inline message, and nothing is written
+**And** the server re-checks type and size at confirm, as for project files (AD-8)
+
+**Given** a client with a logo
+**When** I upload a new one or press **Rimuovi** and save
+**Then** `logo_id` points to the new row or is cleared, and the old row and object stay
+
+**Given** a description of 401 characters or a sector of 61 after trimming
+**When** I try to save
+**Then** the field shows an inline error, no server call is made, and a direct action call fails with `CLIENT_FIELD_TOO_LONG` and writes nothing
+
+**Given** a client page
+**When** it loads
+**Then** it shows the logo (signed URL), name, code, sector and description above the Case history table, and an empty field shows nothing (no placeholder)
+
+**Given** the Clients table
+**When** it loads
+**Then** it is unchanged (Code, Name, Case histories); sector isn't a column or a search field in this story
+
+**Given** the `case-study` index
+**When** `generation` asks for `getClientSnapshot(caseId)`
+**Then** it returns `{ clientId, name, sector, description, logoId }` with the client's current values
+
+**Given** account/sales/social or admin
+**When** they call any client update or logo action
+**Then** it fails with `FORBIDDEN` and writes nothing
+
+**Given** a viewport narrower than 1024 px
+**When** I open a client page
+**Then** the info shows read-only, with no edit
+
+**Given** CI
+**When** the `check`, `db` and `image` jobs run
+**Then** they pass, and `db.types.ts` matches the generated types
+
 ## Epic 3: Generate a graphic case study from the material
 
 The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
 
-Epic prerequisites (non-dev): graphic template layouts and final case study templates (Sprint 2, decided 2026-10-09), narrative structure and quality criteria (NFR5, Sprint 2), and data processing logic (OP 2, Sprint 1). Stories 3.4–3.7 can't close before their prerequisites land; when in Sprint 2 the templates arrive is the schedule risk.
+Epic prerequisites (non-dev): graphic template layouts and final case study templates (Sprint 2, decided 2026-10-09), each with an About the client area in every format (logo, name, sector, description up to 400 characters, and what shows when any of them is missing; SCP 2026-10-16), narrative structure and quality criteria (NFR5, Sprint 2), and data processing logic (OP 2, Sprint 1). Stories 3.4–3.7 can't close before their prerequisites land; when in Sprint 2 the templates arrive is the schedule risk.
 
 ### Story 3.1: Background job queue and worker loop
 
@@ -837,11 +900,13 @@ Covers: AR3 (revision model, live and editable reads), AR4, AR9 (format registry
 **When** a document is validated
 **Then** it has a `schemaVersion`, `templateId@version`, a shared part (text blocks with stable `blockId`, section, text, claims with `aspect` ∈ technical | graphic, `provenance` ∈ generated | human_edited | human_added, optional `sourceRefs: MaterialRef[]`, and `check: { by, at, textHash } | null`; the selected media set) and a per-format part keyed by format id (variant, slot → assetId, spacing, text scale, font pairing)
 **And** a document missing the challenge, approach or result block, or with them out of order, is rejected
+**And** the shared part has `about: { name, sector, description, logoId } | null`, which is not a text block, has no `check` and no claims (AD-22, SCP 2026-10-16)
 
 **Given** the `case-study` module
 **When** the migration for this story runs
 **Then** a `revision` table exists (uuid id, `case_id`, `status` ∈ working | approved | superseded, `version`, `generated_doc` jsonb, `doc` jsonb, `manifest` jsonb, `model`, `fell_back`, `prompt_version`, `schema_version`, timestamps), with RLS denying `anon` and `authenticated`
 **And** `generated_doc` can't be changed after insert (trigger)
+**And** `manifest` includes the client snapshot taken at enqueue (AD-22)
 **And** foreign keys from `case_study.head_revision_id` and `approved_revision_id` (columns added in Story 2.5) to `revision` are added here
 
 **Given** a revision
@@ -860,7 +925,7 @@ So that the draft looks designed whether I uploaded three media items or twelve.
 
 Covers: FR4, CAP-4 (slot mapping per media count), AR4 (`relayout`), AR15, NFR1 (template design unchanged), PRD Story 3.2
 ⚑ Interim: IR-OP1, IR-OP12 (adaptation chooses only among designed variants), IR-C4 (no variant on/off state)
-⛔ Blocked on: IR-A4 (the zero-images-or-videos rule) and the graphic template layouts and final templates (Sprint 2 non-dev prerequisites)
+⛔ Blocked on: IR-A4 (the zero-images-or-videos rule), the graphic template layouts and final templates (Sprint 2 non-dev prerequisites), and the About the client area in the final templates (SCP 2026-10-16)
 
 **Acceptance Criteria:**
 
@@ -889,6 +954,11 @@ Covers: FR4, CAP-4 (slot mapping per media count), AR4 (`relayout`), AR15, NFR1 
 **Given** a case whose material has no images or videos
 **When** relayout runs
 **Then** it applies the template's zero-media rule (IR-A4: not yet supplied; until it is, this criterion stays open and the case is not silently rendered with empty slots)
+
+**Given** the design team's template specs
+**When** a template is coded
+**Then** every format has an About the client area with its rules for a missing logo, sector or description (AD-22)
+**And** its layout fits a 400-character description without overflow (a test renders the longest allowed description in every format)
 
 ### Story 3.5: One renderer per format
 
@@ -943,14 +1013,15 @@ Covers: FR3, CAP-5, AR6 (aspects, MISSING_ASPECT), AR7, AR18 (manifest, limits, 
 
 **Given** a material manifest
 **When** the adapter builds the request
-**Then** it includes only items in the manifest plus the form answers: form answers as text, other types per the OP 2 rule (blocked until decided)
+**Then** it includes only items in the manifest, the form answers, and the client snapshot's name, sector and description as text (AD-22): form answers and client info as text, other types per the OP 2 rule (blocked until decided)
 **And** it respects the API limits (32 MB request, 600 PDF pages; DOCX and video are not API inputs) by extracting or splitting rather than failing, and never uploads to the Anthropic Files API
 
 **Given** the model's response
 **When** it is parsed
 **Then** the output contains only narrative text fields (blocks, claims with `aspect` and optional `sourceRefs`); no layout, template, asset or slot field exists in the output schema
 **And** every claim gets `provenance: generated` and `check: null`
-**And** any `sourceRef` not in the manifest fails validation and the attempt fails
+**And** any `sourceRef` not in the manifest fails validation and the attempt fails; `client_field` refs (`description`, `sector`) are allowed
+**And** the output schema has no `about` field; the LLM never writes or rewrites the About block
 
 **Given** the claims
 **When** none is tagged `technical` or none is tagged `graphic`
@@ -988,7 +1059,7 @@ Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, f
 
 **Given** a draft case with material
 **When** I press **Generate**
-**Then** the server re-checks `material.hasMaterial`, enqueues one `generate` job whose payload carries the material manifest (refs plus content hashes) and `baseHeadVersion`, and transitions the case to `generating`
+**Then** the server re-checks `material.hasMaterial`, enqueues one `generate` job whose payload carries the material manifest (refs plus content hashes), the client snapshot (AD-22) and `baseHeadVersion`, and transitions the case to `generating`
 **And** a double click enqueues only one job
 **And** the screen shows "Generating your case study. You can leave this page; it will appear in To review when it's ready." with **Back to case studies**, and no ETA or percentage
 **And** generate is rejected for any case not in `draft`
@@ -1013,6 +1084,12 @@ Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, f
 **Given** material added after the job was enqueued
 **When** the job runs
 **Then** it isn't used, because only the manifest's items are read
+
+**Given** the client is edited after the job was enqueued
+**When** the job runs
+**Then** it uses the snapshot, not the new values
+**And** the new revision's `about` block is filled from the snapshot by code, or is `null` when the snapshot has no description, sector or logo
+**And** client info never enables Generate (NFR6): a case with only client info and the form still has no material
 
 ### Story 3.8: Tell me when the draft is ready
 
@@ -1159,6 +1236,10 @@ Covers: FR5 (text editing), CAP-7, NFR5 (sections locked), AR4, AR17, AR19 (prov
 **Given** the case is `generating`
 **When** a save arrives
 **Then** it is rejected
+
+**Given** the About the client block (UX-DR36)
+**When** I click it
+**Then** it isn't editable and a hint says "Modifica i dati nella pagina del cliente. Valgono dalla prossima generazione."
 
 ### Story 4.4: Adjust the layout per format
 
@@ -1308,6 +1389,11 @@ Covers: NFR2, FR6 (manual check), CAP-8, AR19 (`check { by, at, textHash }`, no 
 **Given** the counter
 **When** checks change
 **Then** it reads "{n} blocks still to check" (or "All blocks checked") and is announced with `aria-live="polite"`
+
+**Given** the About the client block (UX-DR36)
+**When** the Check tab lists blocks
+**Then** it isn't listed and doesn't count towards the every-block check
+**And** claims citing `client_field` refs are checked like any other claim
 
 ### Story 4.8: Approve a case study
 
