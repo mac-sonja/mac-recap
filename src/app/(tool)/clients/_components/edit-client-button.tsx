@@ -9,7 +9,7 @@ import { ClientDialog, type ClientLimits } from "./client-dialog";
 
 /**
  * **Modifica cliente** on a client's page: opens the edit dialog, which states the
- * code stays the same and that approved case histories keep their data. Hidden
+ * code stays the same. Hidden
  * below 1024 px (read-only there). After a save the page refreshes, so the new
  * info shows everywhere; focus returns to this button.
  */

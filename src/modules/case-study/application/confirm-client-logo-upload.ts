@@ -23,7 +23,7 @@ const FORMAT_OF: Readonly<Record<LogoContentType, string>> = {
  * after re-checking the stored object: present, 1 B–5 MB, the declared
  * `Content-Type`, and its real bytes decode as that format with a short side of at
  * least 400 px and no side over 8000 px. Anything else is `CLIENT_LOGO_INVALID` and no row is written (the
- * object stays orphaned, harmlessly: objects are never deleted). The logo is not
+ * object stays orphaned, harmlessly). The logo is not
  * shown yet: the dialog's save links it with `updateClient`. The caller has already
  * authorized `manage clients`. Errors: `INVALID_INPUT`, `CLIENT_LOGO_INVALID`,
  * `CLIENT_NOT_FOUND`, `STORAGE_FAILED`, `CLIENT_WRITE_FAILED`.

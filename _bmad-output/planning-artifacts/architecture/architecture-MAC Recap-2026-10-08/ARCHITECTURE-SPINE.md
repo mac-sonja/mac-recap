@@ -124,11 +124,11 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - Shared: `templateId@version`; the text blocks, each with a stable `blockId` and its claims and check state (AD-19); the selected media set. The block set (challenge, approach, result, plus the headline and KPI tiles) is defined once per template, not per format, so the Check tab and `approve` see the same blocks.
   - Per format, keyed by format id: the layout variant, the slot → `assetId` assignments, spacing, text scale and font pairing, all drawn from the values the template allows. A revision's per-format entries are exactly the registry formats when the revision was created; export, share and approve reject any other format with `FORMAT_NOT_IN_REVISION`.
   - There is no canvas-ratio field. The format registry owns the ratio.
-  - The shared part also holds `about` (AD-22): the client's name, sector, description and logo id, copied from the snapshot by code. It is not a text block: no check, no claims, not editable.
+  - The document stores no client values. The About the client block (AD-22) is filled at render time from the client's current info. It is not a text block: no check, no claims, not editable.
   - The challenge / approach / result sections cannot be removed or reordered; the schema rejects a document that lacks one.
   - Slot assignments are computed only by the pure `rendering.relayout(doc, template)`. The pipeline calls it, and every change to the media set calls it in the same write.
 
-  Renderers are pure functions of (document, format, template, asset URLs). A schema change bumps `schemaVersion` and adds an `upgrade(doc)` function. Documents are upgraded **when read** and the upgraded version is never written back to a non-working revision.
+  Renderers are pure functions of (document, format, template, asset URLs, the client's current info for the About block). A schema change bumps `schemaVersion` and adds an `upgrade(doc)` function. Documents are upgraded **when read** and the upgraded version is never written back to a non-working revision.
 
   The shared/per-format split follows an `[ASSUMPTION]` in EXPERIENCE.md; if UX changes it, this AD changes with it.
 
@@ -150,7 +150,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Rule:**
   - `generate` fails with `NO_MATERIAL` before any LLM call unless the case has at least one non-deleted asset of any allowed type (image, video, text document, PDF). Typed text lives only in the details form, which never counts (NFR6). The wizard's Generate button and the worker (again, when it claims the job) use the same check through `material.index`.
   - The template's media-count rule (AD-15) then picks the layout. What a template renders with zero images or videos is a template rule the design team supplies (see Deferred).
-  - The LLM receives only the case's material snapshot, form answers and the client snapshot's name, sector and description (AD-18, AD-22). Client info never counts as material. It gets no web or other server tools.
+  - The LLM receives only the case's material snapshot, form answers and the client's current name, sector and description, read when the job runs (AD-18, AD-22). Client info never counts as material. It gets no web or other server tools.
   - The structured output tags each claim with `aspect`, `technical` or `graphic`. A draft without both aspects is marked `MISSING_ASPECT` and the warning is shown in the configurator. It does not block approval. `[CONFLICT A3]`
 
 ### AD-7 — One LLM port, one model setting, recorded per revision
@@ -175,12 +175,12 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - An asset row is created only after the server re-checks the upload's size and type from the object's metadata at confirm. A case holds at most 20 non-deleted files, checked on the server when the signed upload URL is issued and again at confirmation (FR2).
   - Reads use signed GET URLs, valid for 15 minutes at most.
   - The service role is the only reader and writer. There is no public access and no policy for `anon` or `authenticated`.
-  - The bucket has no versioning, so the app never deletes objects. Removing a file is a soft delete of its row (AR18), and the object stays.
+  - The bucket has no versioning, so the app never deletes material objects. Removing a file is a soft delete of its row (AR18), and the object stays. The one exception is client logos: replacing or removing a logo deletes the old object (AD-22).
   - Key layout, built only by the owning module's adapters:
     - `cases/{caseId}/assets/{assetId}/original.{ext}`
     - `cases/{caseId}/assets/{assetId}/renditions/{specHash}.{ext}`, owned by `material` and reached only through `material.getRendition(assetId, spec)`
     - `cases/{caseId}/revisions/{revisionId}/exports/{format}.{ext}`, owned by `rendering`
-    - `clients/{clientId}/logos/{logoId}.{ext}`, owned by `case-study` (AD-22). Logos are PNG, JPEG or WebP, at most 5 MB and at least 400 px on the short side, checked when the signed upload URL is issued and again at confirm.
+    - `clients/{clientId}/logos/{logoId}.{ext}`, owned by `case-study` (AD-22). Logos are PNG, JPEG or WebP, at most 5 MB and at least 400 px on the short side, checked when the signed upload URL is issued and again at confirm. Replacing or removing a logo deletes the old object.
   - The per-file limit is 50 MB because the hosted Supabase plan caps uploads at 50 MB (verified 2026-10-14). Moving to 100 MB needs the Pro plan, a raised project upload limit, a bucket migration and `MAX_FILE_BYTES`.
 
 ### AD-9 — One layout implementation; renders never pass through a public route
@@ -192,7 +192,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - For an export, the worker renders HTML server-side (`renderToStaticMarkup`) and loads it into Playwright Chromium with `page.setContent`. **No print route exists.**
   - File types: deck and A4 → PDF; image formats → ZIP of PNGs `[ASSUMPTION, from UX]`; **Export all** → one ZIP, stored as export `(revision_id, 'all')`, built only after `ensureExport` has produced every format of that same revision. No PPTX in the MVP (UX decision).
   - Video assets show as their poster frame in static formats. Motion formats (social video 9:16) stay out of the registry until OP 1 adds them.
-  - `export` is unique on `(revision_id, format)` and immutable. Jobs call `rendering.ensureExport(revisionId, format)`, which returns the existing export if there is one.
+  - `export` is unique on `(revision_id, format, client_info_hash)` and immutable, where `client_info_hash` identifies the client info it was rendered with (AD-22). Jobs call `rendering.ensureExport(revisionId, format)`, which returns the existing export if there is one for the client's current info and renders again otherwise.
 
 ### AD-10 — Long work runs as leased Postgres jobs in the worker
 
@@ -307,7 +307,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Binds:** FR2, FR3, NFR2, NFR6, `material`, `generation`, OP 2
 - **Prevents:** generation inventing ids for form fields, uploads arriving mid-job being included at random, and deleting an asset breaking approved revisions or the material drawer a reviewer uses
 - **Rule:**
-  - Material is referred to only as `MaterialRef { kind: 'asset' | 'form_field', id }`, where form fields have stable keys. Refs are resolved only through `material.resolveRefs(caseId, refs)`. A `form_field` ref is a valid source for a claim (NFR2) but never counts as material (AD-6). A `client_field` ref (`description` or `sector`, AD-22) resolves from the revision's client snapshot and follows the same rule.
+  - Material is referred to only as `MaterialRef { kind: 'asset' | 'form_field', id }`, where form fields have stable keys. Refs are resolved only through `material.resolveRefs(caseId, refs)`. A `form_field` ref is a valid source for a claim (NFR2) but never counts as material (AD-6). A `client_field` ref (`description` or `sector`, AD-22) resolves from the client's current values and follows the same rule.
   - A `generate` job's payload carries a material manifest (refs plus content hashes) taken when it is enqueued. The revision stores that manifest.
   - How each material type is turned into LLM input is a `generation` adapter concern decided with OP 2; it does not change the ref or manifest shape. Known limits: a request is capped at 32 MB and PDFs at 600 pages, DOCX is not an API input, and video is not an API input. A file over those limits goes in as extracted text or split. The Anthropic Files API is not used, because it stores client material at Anthropic.
   - Material that any revision or any queued or running job references can only be soft-deleted (`deleted_at`). `approve` fails with `MATERIAL_MISSING` if anything the revision references is deleted. The UI offers no restore.
@@ -354,17 +354,19 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   7. **Single definition.** These rules live once, in SQL (`client_code_letters`, `create_client`, `create_case_study`), used by both the data migration and the app. The TypeScript domain only validates the name length (1–120) and never computes codes.
   8. **Where it shows.** The code appears in the app's tables, wizard and library. It is not shown on the shared link page or in exports.
 
-### AD-22 — Client info is copied into each revision when it is generated
+### AD-22 — Client info is read live from the client
 
-- **Binds:** FR3 (amended), PRD Story 2.5, `case-study`, `generation`, `rendering` ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md))
-- **Prevents:** an approved case history changing because a client was edited, an About block that differs between formats, the LLM rewriting the client's own words, and a missing logo breaking an old revision
+- **Binds:** FR3 (amended), PRD Story 2.5, `case-study`, `generation`, `rendering` ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md), as amended by the owner the same day)
+- **Prevents:** a case history showing an outdated client name, logo or text, an About block that differs between formats, the LLM rewriting the client's own words, and old logo files piling up
 - **Rule:**
-  1. `client.description` (≤400) and `client.sector` (≤60) are optional plain text. `client.logo_id` points to a `client_logo` row. Rows in `client_logo` are never updated or deleted.
-  2. When a `generate` job is enqueued, `case-study.getClientSnapshot(caseId)` (`{ clientId, name, sector, description, logoId }`) is copied into the job payload. The revision stores it in its manifest.
-  3. The document's `about` block is filled by code from the snapshot. The LLM never writes it. It is `null` when the snapshot has no description, sector or logo.
-  4. Editing the client never changes an existing revision, whatever its status. The new values reach a case only at its next generation.
-  5. Every template fits the maximum description length in every format, so the About block can never cause an overflow that blocks approval.
-  6. The About block appears in every format, export and shared link, like the rest of the document. AD-21 rule 8 (no case code there) is unchanged.
+  1. `client.description` (≤400) and `client.sector` (≤60) are optional plain text. `client.logo_id` points to the client's current `client_logo` row. Replacing or removing a logo deletes the old row and its storage object; there is no logo history.
+  2. There is no client snapshot. Nothing about the client is copied into a `generate` job, a revision's manifest or the document. `case-study.getClientInfoForCase(caseId)` (`{ clientId, name, sector, description, logoId }`) is a read of the client's current values, called each time they are needed.
+  3. The About block is filled at render time from the client's current info, passed to the renderer next to the document. The LLM never writes it. It is hidden when the client has no description, sector or logo.
+  4. Editing the client changes the About block of every case history of that client at once, drafts and approved ones alike, with no new generation or approval. Only owner/designers can edit clients (`manage clients`).
+  5. The `generate` job reads the client's current name, sector and description when it runs, for the LLM input only (AD-6). Text the LLM wrote stays as written; a later client edit doesn't rewrite it. `client_field` refs resolve against the client's current values (AD-18).
+  6. A downloaded export can't change after it is made. A stored export is reused only if it was rendered with the client's current info (AD-9); after a client edit, the next export renders again.
+  7. Every template fits the maximum description length in every format, so the About block can never cause an overflow that blocks approval.
+  8. The About block appears in every format, export and shared link, like the rest of the document. AD-21 rule 8 (no case code there) is unchanged.
 
 ## Consistency Conventions
 
@@ -503,5 +505,5 @@ Not resolved by this spine. Each AD carries an interim rule so building can cont
 - **Notification when a draft is ready.** In-app toast via polling for the MVP. Email or Slack later, through a new `notify` port.
 - **Sign-in method.** Supabase Auth email and password or magic link in Epic 6. Microsoft SSO can be added later without changing AD-11.
 - **MCP direction and data contract (OP 7).** Decided when MAC Productive is ready (AD-16).
-- **Observability beyond defaults.** Stdout logs and Supabase daily backups until real usage (storage has no versioning; the app never deletes objects, AD-8) after the 8-week validation.
+- **Observability beyond defaults.** Stdout logs and Supabase daily backups until real usage (storage has no versioning; the app never deletes material objects, AD-8) after the 8-week validation.
 - **Attribution of inbound contacts and upsells (OP 10).** Not an MVP system concern. If needed, link views can be added as `case_event` types.

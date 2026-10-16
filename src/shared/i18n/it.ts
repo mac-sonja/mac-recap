@@ -208,7 +208,7 @@ export const it = {
       editTitle: "Modifica cliente",
       /** `{code}` is the client code, which an edit never changes. */
       editDescription:
-        "Il codice {code} non cambia. Le case history già approvate mantengono i dati con cui sono state generate.",
+        "Il codice {code} non cambia. Le modifiche si vedono in tutte le sue case history.",
       nameLabel: "Nome del cliente",
       sectorLabel: "Settore",
       descriptionLabel: "Descrizione",

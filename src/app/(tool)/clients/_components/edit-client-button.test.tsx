@@ -59,7 +59,7 @@ describe("EditClientButton", () => {
     const dialog = screen.getByRole("dialog", { name: "Modifica cliente" });
     expect(dialog.getAttribute("aria-describedby")).not.toBeNull();
     expect(document.getElementById(dialog.getAttribute("aria-describedby") ?? "")?.textContent).toBe(
-      "Il codice LUM non cambia. Le case history già approvate mantengono i dati con cui sono state generate.",
+      "Il codice LUM non cambia. Le modifiche si vedono in tutte le sue case history.",
     );
     expect(field().value).toBe("Lumen Srl");
     updateClient.mockResolvedValue({ ok: true, value: { ...LUMEN_SAVED, name: "Lumen S.r.l." } });

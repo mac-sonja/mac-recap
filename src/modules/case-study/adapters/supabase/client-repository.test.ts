@@ -277,6 +277,21 @@ describe("createSupabaseClientRepository() logos", () => {
     if (!result.ok) expect(result.error.code).toBe("CLIENT_LOGO_INVALID");
   });
 
+  it("deletes a logo row through delete_client_logo", async () => {
+    const { factory, rpc } = stubClient({ data: null, error: null }, { data: true, error: null });
+    expect(await createSupabaseClientRepository(factory).deleteLogo(LOGO_ID)).toEqual({ ok: true, value: true });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("delete_client_logo", { p_logo_id: LOGO_ID });
+  });
+
+  it("maps P0001 CLIENT_LOGO_IN_USE, and any other error to CLIENT_WRITE_FAILED", async () => {
+    const inUse = stubClient({ data: null, error: null }, { data: null, error: { code: "P0001", message: "CLIENT_LOGO_IN_USE" } });
+    const refused = await createSupabaseClientRepository(inUse.factory).deleteLogo(LOGO_ID);
+    expect(refused.ok || refused.error.code).toBe("CLIENT_LOGO_IN_USE");
+    const down = stubClient({ data: null, error: null }, { data: null, error: { code: "PGRST000", message: "down" } });
+    const { result } = await quietly(() => createSupabaseClientRepository(down.factory).deleteLogo(LOGO_ID));
+    expect(result.ok || result.error.code).toBe("CLIENT_WRITE_FAILED");
+  });
+
   it("finds a logo row, or null", async () => {
     const found = stubClient({ data: logoRow, error: null });
     expect(await createSupabaseClientRepository(found.factory).findLogo(LOGO_ID)).toEqual({ ok: true, value: logo });
@@ -285,13 +300,13 @@ describe("createSupabaseClientRepository() logos", () => {
   });
 });
 
-describe("createSupabaseClientRepository().findSnapshotByCaseId", () => {
+describe("createSupabaseClientRepository().findClientInfoByCaseId", () => {
   const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 
   it("reads the non-deleted case's client info", async () => {
     const row = { id: CASE_ID, client: { id: client().id, name: "Lumen Srl", sector: "Moda", description: "Brand.", logo_id: LOGO_ID } };
     const { factory, from, select, eq, is } = stubClient({ data: row, error: null });
-    expect(await createSupabaseClientRepository(factory).findSnapshotByCaseId(CASE_ID)).toEqual({
+    expect(await createSupabaseClientRepository(factory).findClientInfoByCaseId(CASE_ID)).toEqual({
       ok: true,
       value: { clientId: client().id, name: "Lumen Srl", sector: "Moda", description: "Brand.", logoId: LOGO_ID },
     });
@@ -304,12 +319,12 @@ describe("createSupabaseClientRepository().findSnapshotByCaseId", () => {
   it("returns CLIENT_INVALID for a malformed client row", async () => {
     const row = { id: CASE_ID, client: { id: "not-a-uuid", name: "Lumen Srl", sector: 7, description: null, logo_id: "x" } };
     const { factory } = stubClient({ data: row, error: null });
-    const { result } = await quietly(() => createSupabaseClientRepository(factory).findSnapshotByCaseId(CASE_ID));
+    const { result } = await quietly(() => createSupabaseClientRepository(factory).findClientInfoByCaseId(CASE_ID));
     expect(result.ok || result.error.code).toBe("CLIENT_INVALID");
   });
 
   it("returns null for an unknown or deleted case", async () => {
     const { factory } = stubClient({ data: null, error: null });
-    expect(await createSupabaseClientRepository(factory).findSnapshotByCaseId(CASE_ID)).toEqual({ ok: true, value: null });
+    expect(await createSupabaseClientRepository(factory).findClientInfoByCaseId(CASE_ID)).toEqual({ ok: true, value: null });
   });
 });

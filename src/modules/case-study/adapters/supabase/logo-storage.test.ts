@@ -18,6 +18,7 @@ function stubClient(download: () => Promise<{ data: Blob | null; error: unknown 
     createSignedUrl: vi.fn(async (path: string) => ({ data: { signedUrl: `https://x/sign/${path}?token=g` }, error: null as unknown })),
     info: vi.fn(async () => ({ data: { size: 42, contentType: "image/webp" }, error: null as unknown })),
     download: vi.fn(download),
+    remove: vi.fn<(paths: string[]) => Promise<{ data: unknown; error: unknown }>>(async () => ({ data: [], error: null })),
   };
   const from = vi.fn(() => bucket);
   const factory = (() => ({ storage: { from } })) as unknown as Parameters<typeof createSupabaseLogoStorage>[0];
@@ -87,5 +88,20 @@ describe("createSupabaseLogoStorage", () => {
     expect(await createSupabaseLogoStorage(junk.factory).dimensions(target)).toEqual({ ok: true, value: { format: null, width: 0, height: 0 } });
     const missing = stubClient(async () => ({ data: null, error: new StorageApiError("Object not found", 404, "404") }));
     expect(await createSupabaseLogoStorage(missing.factory).dimensions(target)).toEqual({ ok: true, value: null });
+  });
+
+  it("deletes the logo object by its key", async () => {
+    const stub = stubClient();
+    expect(await createSupabaseLogoStorage(stub.factory).remove(target)).toEqual({ ok: true, value: undefined });
+    expect(stub.bucket.remove).toHaveBeenCalledWith([KEY]);
+  });
+
+  it("answers STORAGE_FAILED and logs the client id only when the delete fails", async () => {
+    const stub = stubClient();
+    stub.bucket.remove.mockResolvedValueOnce({ data: null as never, error: new StorageApiError("boom", 500, "500") });
+    const { result, lines } = await quietly(() => createSupabaseLogoStorage(stub.factory).remove(target));
+    expect(result).toMatchObject({ ok: false, error: { code: "STORAGE_FAILED" } });
+    expect(lines.join("")).toContain(CLIENT_ID);
+    expect(lines.join("")).not.toContain(KEY);
   });
 });

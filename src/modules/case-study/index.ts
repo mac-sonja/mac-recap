@@ -12,7 +12,7 @@ import { makeCreateCaseStudy } from "@/modules/case-study/application/create-cas
 import { makeCreateClient } from "@/modules/case-study/application/create-client";
 import { makeGetCaseStudy } from "@/modules/case-study/application/get-case-study";
 import { makeGetClient } from "@/modules/case-study/application/get-client";
-import { makeGetClientSnapshot } from "@/modules/case-study/application/get-client-snapshot";
+import { makeGetClientInfoForCase } from "@/modules/case-study/application/get-client-info-for-case";
 import { makeListCaseStudies } from "@/modules/case-study/application/list-case-studies";
 import { makeListClientSummaries } from "@/modules/case-study/application/list-client-summaries";
 import { makeListClients } from "@/modules/case-study/application/list-clients";
@@ -30,7 +30,7 @@ import type {
   Client,
   ClientDetail,
   ClientRef,
-  ClientSnapshot,
+  CaseClientInfo,
   ClientSummary,
   ListScope,
 } from "@/modules/case-study/domain/case-study";
@@ -55,7 +55,7 @@ export type {
   Client,
   ClientDetail,
   ClientRef,
-  ClientSnapshot,
+  CaseClientInfo,
   ClientSummary,
   CreateCaseStudyInput,
   CreateClientInput,
@@ -148,13 +148,15 @@ export function createClient(actor: Actor, input: unknown): Promise<Result<Clien
 /**
  * Edits a client: input `{ clientId, name, sector, description, logoId }` (sector, description and logoId required, each may be null), every
  * field as it should be after the save (`logoId` null clears the logo). The client
- * code and every case history code stay the same; old logos stay stored. Call only
+ * code and every case history code stay the same. Client info is live: every case
+ * history shows the new values. A replaced or removed logo is deleted (row and
+ * object); a failed delete never fails the save. Call only
  * after `authorize(actor, 'manage clients')`. `INVALID_INPUT`, `CLIENT_FIELD_TOO_LONG`,
  * `CLIENT_NOT_FOUND`, `CLIENT_NAME_TAKEN`, `CLIENT_LOGO_INVALID` (unknown logo, or
  * another client's); nothing is written on any error. Clients are never deleted.
  */
 export function updateClient(actor: Actor, input: unknown): Promise<Result<Client>> {
-  return makeUpdateClient(createSupabaseClientRepository())(actor, input);
+  return makeUpdateClient(createSupabaseClientRepository(), logoStorage())(actor, input);
 }
 
 /**
@@ -179,12 +181,13 @@ export function confirmClientLogoUpload(actor: Actor, input: unknown): Promise<R
 }
 
 /**
- * The client info of a case with the client's current values (AD-22):
- * `{ clientId, name, sector, description, logoId }`, for `generation` to copy into a
- * job and its revision. Unknown, malformed or soft-deleted case ids are `NOT_FOUND`.
+ * The current client info for a case: `{ clientId, name, sector, description,
+ * logoId }`, always the client's current values (client info is live, owner
+ * 2026-10-16). Epic 3 reads it at render time, not at enqueue. Unknown, malformed
+ * or soft-deleted case ids are `NOT_FOUND`.
  */
-export function getClientSnapshot(caseId: unknown): Promise<Result<ClientSnapshot>> {
-  return makeGetClientSnapshot(createSupabaseClientRepository())(caseId);
+export function getClientInfoForCase(caseId: unknown): Promise<Result<CaseClientInfo>> {
+  return makeGetClientInfoForCase(createSupabaseClientRepository())(caseId);
 }
 
 /**

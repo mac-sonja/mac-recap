@@ -55,7 +55,7 @@ describe("clients copy", () => {
     expect(t("clients.empty")).toBe("Nessun cliente. Aggiungi il primo.");
     expect(t("clients.errors.nameTaken")).toBe("Esiste già un cliente con questo nome.");
     expect(fill(t("clients.dialog.editDescription"), { code: "LUM" })).toBe(
-      "Il codice LUM non cambia. Le case history già approvate mantengono i dati con cui sono state generate.",
+      "Il codice LUM non cambia. Le modifiche si vedono in tutte le sue case history.",
     );
     expect(t("clients.dialog.sectorLabel")).toBe("Settore");
     expect(t("clients.dialog.descriptionLabel")).toBe("Descrizione");

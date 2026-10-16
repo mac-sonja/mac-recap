@@ -309,6 +309,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"delete_client_logo":
+{ Args: { "p_logo_id": string }; Returns: boolean
+                           },
 "has_material":
 { Args: { "p_case_id": string }; Returns: boolean
                            },

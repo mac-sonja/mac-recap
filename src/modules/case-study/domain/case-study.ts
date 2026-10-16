@@ -122,17 +122,18 @@ export type Client = z.infer<typeof clientSchema>;
 export type ClientDetail = Client & { logoUrl: string | null };
 
 /**
- * What `case-study` hands to `generation` (AD-22): the client's current values.
- * Epic 3 copies it into each `generate` job and revision.
+ * A case's client info, always the client's current values: client info is live
+ * (owner, 2026-10-16), so nothing is copied per case or per revision. Epic 3 reads
+ * it at render time, not at enqueue.
  */
-export const clientSnapshotSchema = z.object({
+export const caseClientInfoSchema = z.object({
   clientId: z.uuid(),
   name: z.string(),
   sector: z.string().nullable(),
   description: z.string().nullable(),
   logoId: z.uuid().nullable(),
 });
-export type ClientSnapshot = z.infer<typeof clientSnapshotSchema>;
+export type CaseClientInfo = z.infer<typeof caseClientInfoSchema>;
 
 /** A client name a person supplies: trimmed, 1–120 characters. */
 export const clientNameSchema = z.string().trim().min(1, "Required.").max(CLIENT_NAME_MAX);

@@ -76,6 +76,11 @@ const loadCaseStudy = () => import("@/modules/case-study");
 const loadAccess = () => import("@/modules/access");
 const loadActions = () => import("@/app/(tool)/case-studies/actions");
 const loadClientActions = () => import("@/app/(tool)/clients/actions");
+/** A service-role client, to inspect the storage bucket. */
+const createSupabaseAdmin = () =>
+  createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
 
 async function devActor() {
   const { getActor } = await loadAccess();
@@ -592,6 +597,7 @@ describe("RLS lockout", () => {
     `public.create_client('Intruder', null, null, '${DEV_ACTOR_ID}')`,
     `public.update_client('${UNKNOWN_ID}', 'Intruder', null, null, null, '${DEV_ACTOR_ID}')`,
     "public.client_info_text(' x ')",
+    `public.delete_client_logo('${UNKNOWN_ID}')`,
     "public.client_code_letters('Intruder')",
     "public.client_name_key('Intruder')",
     "public.case_study_code('III', 2026, 1)",
@@ -1279,26 +1285,68 @@ describe("client info (Story 2.14, AD-22)", () => {
     ).rejects.toMatchObject({ code: "23514" });
   });
 
-  it("replacing a logo keeps the old row; the DB refuses to update or delete any client_logo row", async () => {
+  it("client_logo rows can now be updated and deleted directly (no append-only guard)", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const logoId = await insertLogo(client.id);
+    const { rows } = await inRolledBackTx("update public.client_logo set path = 'x' where id = $1 returning path", [logoId]);
+    expect(rows).toEqual([{ path: "x" }]);
+    const deleted = await inRolledBackTx("delete from public.client_logo where id = $1", [logoId]);
+    expect(deleted.rowCount).toBe(1);
+    const { rows: triggers } = await pool.query(
+      "select tgname from pg_catalog.pg_trigger where tgrelid = 'public.client_logo'::regclass and not tgisinternal",
+    );
+    expect(triggers).toEqual([]);
+  });
+
+  it("delete_client_logo deletes a logo no client shows, and refuses one in use with CLIENT_LOGO_IN_USE", async () => {
     const client = await createTestClient(pool, DEV_ACTOR_ID);
     const first = await insertLogo(client.id);
     const second = await insertLogo(client.id);
-    const link = (logoId: string | null) =>
-      pool.query("select logo_id from public.update_client($1, $2, null, null, $3, $4)", [client.id, client.name, logoId, DEV_ACTOR_ID]);
-    expect((await link(first)).rows).toEqual([{ logo_id: first }]);
-    expect((await link(second)).rows).toEqual([{ logo_id: second }]);
-    expect((await link(null)).rows).toEqual([{ logo_id: null }]);
-    const { rows } = await pool.query("select id from public.client_logo where client_id = $1 order by created_at, id", [client.id]);
-    expect(rows.map((r) => r.id).sort()).toEqual([first, second].sort());
+    await pool.query("select public.update_client($1, $2, null, null, $3, $4)", [client.id, client.name, second, DEV_ACTOR_ID]);
 
-    for (const sql of [
-      "update public.client_logo set path = 'x' where id = $1",
-      "update public.client_logo set client_id = client_id where id = $1",
-      "delete from public.client_logo where id = $1",
-    ]) {
-      await expect(inRolledBackTx(sql, [first])).rejects.toMatchObject({ code: "P0001" });
-    }
-    await expect(inRolledBackTx("truncate public.client_logo cascade")).rejects.toMatchObject({ code: "P0001" });
+    await expect(pool.query("select public.delete_client_logo($1)", [second])).rejects.toMatchObject({
+      code: "P0001",
+      message: "CLIENT_LOGO_IN_USE",
+    });
+    expect((await pool.query("select count(*)::int as n from public.client_logo where id = $1", [second])).rows[0].n).toBe(1);
+
+    expect((await pool.query("select public.delete_client_logo($1) as deleted", [first])).rows).toEqual([{ deleted: true }]);
+    expect((await pool.query("select public.delete_client_logo($1) as deleted", [first])).rows).toEqual([{ deleted: false }]);
+    expect((await pool.query("select count(*)::int as n from public.client_logo where id = $1", [first])).rows[0].n).toBe(0);
+  });
+
+  it("through the action, replacing and removing a logo deletes the old row and object", async () => {
+    const { createClient, updateClient, requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
+    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)) });
+    if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
+    const clientId = added.value.id;
+    const upload = async () => {
+      const bytes = await png(800, 400);
+      const presigned = await requestClientLogoUpload({ clientId, contentType: "image/png", sizeBytes: bytes.byteLength });
+      if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+      const { logoId, url, method, headers } = presigned.value;
+      expect((await fetch(url, { method, headers, body: new Blob([new Uint8Array(bytes)]) })).status).toBe(200);
+      expect(await confirmClientLogoUpload({ clientId, logoId, contentType: "image/png" })).toEqual({ ok: true, value: { logoId } });
+      return logoId;
+    };
+    const link = (logoId: string | null) => updateClient({ clientId, name: added.value.name, sector: null, description: null, logoId });
+    const objects = async () => {
+      const { data } = await createSupabaseAdmin().storage.from("material").list(`clients/${clientId}/logos`);
+      return (data ?? []).map((o) => o.name).sort();
+    };
+    const rows = async () =>
+      (await pool.query("select id from public.client_logo where client_id = $1", [clientId])).rows.map((r) => r.id);
+
+    const first = await upload();
+    expect(await link(first)).toMatchObject({ ok: true, value: { logoId: first } });
+    const second = await upload();
+    expect(await link(second)).toMatchObject({ ok: true, value: { logoId: second } });
+    expect(await rows()).toEqual([second]);
+    expect(await objects()).toEqual([`${second}.png`]);
+
+    expect(await link(null)).toMatchObject({ ok: true, value: { logoId: null } });
+    expect(await rows()).toEqual([]);
+    expect(await objects()).toEqual([]);
   });
 
   it.each([
@@ -1315,19 +1363,19 @@ describe("client info (Story 2.14, AD-22)", () => {
     expect(rows).toEqual([{ name: client.name, sector: null, logo_id: null }]);
   });
 
-  it("getClientSnapshot returns the client's current values; a deleted or unknown case is NOT_FOUND", async () => {
+  it("getClientInfoForCase returns the client's current values; a deleted or unknown case is NOT_FOUND", async () => {
     const client = await createTestClient(pool, DEV_ACTOR_ID);
     const logoId = await insertLogo(client.id);
     await pool.query("select public.update_client($1, $2, 'Moda', 'Brand.', $3, $4)", [client.id, client.name, logoId, DEV_ACTOR_ID]);
     const created = await createCase({ clientId: client.id });
-    const { getClientSnapshot } = await loadCaseStudy();
-    expect(await getClientSnapshot(created.id)).toEqual({
+    const { getClientInfoForCase } = await loadCaseStudy();
+    expect(await getClientInfoForCase(created.id)).toEqual({
       ok: true,
       value: { clientId: client.id, name: client.name, sector: "Moda", description: "Brand.", logoId },
     });
     await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
-    expect(await getClientSnapshot(created.id)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
-    expect(await getClientSnapshot(UNKNOWN_ID)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect(await getClientInfoForCase(created.id)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect(await getClientInfoForCase(UNKNOWN_ID)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
   });
 
   it("round trip: presign → PUT under clients/{clientId}/logos/ → confirm → link → signed GET on the client page", async () => {

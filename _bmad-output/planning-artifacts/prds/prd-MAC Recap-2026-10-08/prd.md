@@ -15,7 +15,7 @@ Updated Oct 14, 2026: favourites replace tags, properties and flags, there is no
 
 Updated Oct 15, 2026: case studies belong to client records managed on a Clients page, and show a readable code such as LUM-2026-01 next to the permanent ID ([Sprint Change Proposal 2026-10-15](../../sprint-change-proposal-2026-10-15.md)).
 
-Updated Oct 16, 2026: clients have a description, sector and logo, shown in every case study as an About the client block and used by the AI; approved case studies keep the info they were generated with ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md)).
+Updated Oct 16, 2026: clients have a description, sector and logo, shown in every case study as an About the client block and used by the AI; client info is live, so every case study, approved ones included, always shows the client's current info ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md), with its owner amendment of the same day).
 
 This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR, epic, story and open-point numbers are unchanged from v1. Retired items are marked, not renumbered, and new items are added at the end.
 
@@ -93,7 +93,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 - **Case study.** The output for one project: graphic layouts plus text structured as challenge, approach and result. Each has a unique ID and a readable case history code, and belongs to one client. In the Italian UI a case study is called a *case history* (PR #38); "case study" stays the internal term in these documents, story keys, tables (`case_study`) and code.
 - **Client.** A company MAC worked for. Each has an automatic short code (e.g. LUM). Clients are managed on the Clients page. Each can have a short description, a sector and a logo.
-- **About the client block.** The part of every case study that shows the client's logo, name, sector and description, copied from the client when the draft is generated.
+- **About the client block.** The part of every case study that shows the client's logo, name, sector and description, always as they currently are on the client. A change to the client shows in all its case studies, drafts and approved ones alike.
 - **Case history code.** Client code, year and a number per client and year, e.g. LUM-2026-01. Fixed once the case study is created.
 - **Material.** Uploaded files: images, videos, text documents and PDFs. The details form is not material.
 - **Deliverable.** One uploaded file of material. Images and videos can be marked as favourite.
@@ -214,7 +214,8 @@ Prerequisites: tool design definition, template wireframes (asset dimensions, fo
 - The client code is automatic and never changes
 - I can open a client to see only its case studies
 - I can add a short description, a sector and a logo to a client
-- Case studies already approved keep the client info they were generated with
+- A change to a client's info (name, logo, sector, description) shows in all its case studies, approved ones included
+- Replacing or removing a logo deletes the old one
 
 ### Epic 3 – Graphic case study generation (Sprint 2)
 

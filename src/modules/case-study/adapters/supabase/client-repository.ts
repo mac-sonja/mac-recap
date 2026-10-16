@@ -3,7 +3,7 @@ import type { ClientLogo, ClientRepository } from "@/modules/case-study/ports/cl
 import {
   clientRefSchema,
   clientSchema,
-  clientSnapshotSchema,
+  caseClientInfoSchema,
   isLogoContentType,
   type Client,
   type ClientRef,
@@ -20,7 +20,7 @@ const CLIENT_COLUMNS = "id, name, code, sector, description, logo_id";
 const CLIENT_SUMMARY_COLUMNS = "id, name, code, case_study(count)";
 const LOGO_COLUMNS = "id, client_id, mime_type, size_bytes";
 /** A case's client, embedded through `case_study.client_id` (the only FK from case_study to client). */
-const SNAPSHOT_COLUMNS = "id, client(id, name, sector, description, logo_id)";
+const CASE_CLIENT_COLUMNS = "id, client(id, name, sector, description, logo_id)";
 
 /** `create_client` raises these as P0001 (AD-21); nothing is written then. */
 const CREATE_REFUSALS: Refusals = {
@@ -32,6 +32,11 @@ const UPDATE_REFUSALS: Refusals = {
   CLIENT_NOT_FOUND: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
   CLIENT_NAME_TAKEN: CREATE_REFUSALS.CLIENT_NAME_TAKEN,
   CLIENT_LOGO_INVALID: { code: "CLIENT_LOGO_INVALID", message: "This logo does not belong to the client." },
+};
+
+/** `delete_client_logo` raises this as P0001; nothing is deleted then. */
+const DELETE_LOGO_REFUSALS: Refusals = {
+  CLIENT_LOGO_IN_USE: { code: "CLIENT_LOGO_IN_USE", message: "A client still shows this logo." },
 };
 
 /** Postgres check_violation; the sector and description checks are the length backstop. */
@@ -240,24 +245,35 @@ export function createSupabaseClientRepository(
       return toClientLogo(data);
     },
 
-    async findSnapshotByCaseId(caseId) {
+    async deleteLogo(id) {
+      const { data, error } = await client().rpc("delete_client_logo", { p_logo_id: id });
+      if (error) {
+        const refused = refusalOf(error, DELETE_LOGO_REFUSALS);
+        if (refused) return err(refused);
+        log.error(`client logo delete failed: ${error.code}`);
+        return err({ code: "CLIENT_WRITE_FAILED", message: "Could not delete the logo." });
+      }
+      return ok(data === true);
+    },
+
+    async findClientInfoByCaseId(caseId) {
       const { data, error } = await client()
         .from("case_study")
-        .select(SNAPSHOT_COLUMNS)
+        .select(CASE_CLIENT_COLUMNS)
         .eq("id", caseId)
         .is("deleted_at", null)
         .maybeSingle();
       if (error) {
-        log.error(`client snapshot lookup failed: ${error.code}`, { caseId });
+        log.error(`case client info lookup failed: ${error.code}`, { caseId });
         return err({ code: "CLIENT_LOOKUP_FAILED", message: "Could not read the case's client.", details: { caseId } });
       }
       if (data === null) return ok(null);
       const owner = data.client;
       if (owner === null) {
-        log.error("client snapshot lookup failed: case without client", { caseId });
+        log.error("case client info lookup failed: case without client", { caseId });
         return err({ code: "CLIENT_LOOKUP_FAILED", message: "Could not read the case's client.", details: { caseId } });
       }
-      const parsed = clientSnapshotSchema.safeParse({
+      const parsed = caseClientInfoSchema.safeParse({
         clientId: owner.id,
         name: owner.name,
         sector: owner.sector,
@@ -265,7 +281,7 @@ export function createSupabaseClientRepository(
         logoId: owner.logo_id,
       });
       if (!parsed.success) {
-        log.error("client snapshot failed validation", { caseId, clientId: owner.id });
+        log.error("case client info failed validation", { caseId, clientId: owner.id });
         return err({ code: "CLIENT_INVALID", message: "A client row failed validation.", details: { caseId } });
       }
       return ok(parsed.data);

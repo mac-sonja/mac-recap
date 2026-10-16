@@ -132,3 +132,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-14-client-info-description-sector-logo.md`
   summary: Record who last changed a client's info and when (`update_client` takes `p_actor_id` but stores nothing), and consider a composite FK so `client.logo_id` can only point at the same client's logo.
   evidence: Approved case histories will read client info (3.3/3.7); today only `update_client` enforces the same-client rule and there is no edit trail. Needs a new forward migration (the 2.14 one is applied to mac-recap-dev).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-client-info-description-sector-logo.md`
+  summary: Story 5.1 must settle where an export is stored now that client info is live — the AD-8 address `…/exports/{format}.{ext}` would let a new export after a client edit land on the old file's address (e.g. add the client-info hash to the key).
+  evidence: Owner decision 2026-10-16 (client info is live, approved case histories show current info); AD-9 and Story 5.1 now reuse an export only if it was made with the current client info.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-client-info-description-sector-logo.md`
+  summary: Decide whether a client edit should un-tick claims that cite the client's description (`client_field` refs), since they are now checked against the current text, and whether owners should be warned that a client edit changes approved case histories too.
+  evidence: Owner decision 2026-10-16; AD-18 resolves `client_field` refs against current values, so a reviewed claim can drift after a client edit.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-client-info-description-sector-logo.md`
+  summary: Clean up logos that were confirmed but never linked (a failed link the user then abandons).
+  evidence: Such `client_logo` rows and objects stay forever; replace/remove now deletes linked old logos only.

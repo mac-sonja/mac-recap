@@ -30,7 +30,8 @@ export interface LogoImage {
 
 /**
  * Client logos in the private `material` bucket, under `clients/{clientId}/logos/`.
- * Implemented by `adapters/supabase/logo-storage.ts`. Objects are never deleted.
+ * Implemented by `adapters/supabase/logo-storage.ts`. A replaced or removed logo's
+ * object is deleted (client info is live, owner 2026-10-16).
  */
 export interface LogoStorage {
   /** A signed upload URL that never overwrites an existing object. `err` only on failure. */
@@ -41,4 +42,6 @@ export interface LogoStorage {
   head(target: LogoTarget): Promise<Result<StoredLogo | null>>;
   /** The stored image's real format and pixel size; `ok(null)` when the object is missing. */
   dimensions(target: LogoTarget): Promise<Result<LogoImage | null>>;
+  /** Deletes the object; a missing object is fine. `err` only on failure. */
+  remove(target: LogoTarget): Promise<Result<void>>;
 }

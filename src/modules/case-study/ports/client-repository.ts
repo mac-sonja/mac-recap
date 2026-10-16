@@ -2,13 +2,13 @@ import type {
   Client,
   ClientInfo,
   ClientRef,
-  ClientSnapshot,
+  CaseClientInfo,
   ClientSummary,
   LogoContentType,
 } from "@/modules/case-study/domain/case-study";
 import type { Result } from "@/shared/result";
 
-/** A `client_logo` row as the module sees it. Rows are never updated or deleted. */
+/** A `client_logo` row as the module sees it. A replaced or removed logo's row is deleted. */
 export interface ClientLogo {
   id: string;
   clientId: string;
@@ -61,11 +61,18 @@ export interface ClientRepository {
   update(input: ClientUpdate, actorId: string): Promise<Result<Client>>;
   /** `ok(null)` when no logo row has this id; `err` only when the lookup fails. */
   findLogo(id: string): Promise<Result<ClientLogo | null>>;
+  /**
+   * Deletes one `client_logo` row through `delete_client_logo`, only when no client
+   * points at it: `err CLIENT_LOGO_IN_USE` otherwise. `ok(false)` when no row has
+   * this id; `err` when the write fails.
+   */
+  deleteLogo(id: string): Promise<Result<boolean>>;
   /** Inserts one `client_logo` row (the path is built by the adapter). `err` when the write fails. */
   insertLogo(logo: NewClientLogo): Promise<Result<ClientLogo>>;
   /**
-   * The current client info of a non-deleted case (AD-22). `ok(null)` when no
+   * The client's current info for a non-deleted case (live: AD-22 as amended
+   * 2026-10-16). `ok(null)` when no
    * non-deleted case has this id; `err` only when the lookup fails.
    */
-  findSnapshotByCaseId(caseId: string): Promise<Result<ClientSnapshot | null>>;
+  findClientInfoByCaseId(caseId: string): Promise<Result<CaseClientInfo | null>>;
 }

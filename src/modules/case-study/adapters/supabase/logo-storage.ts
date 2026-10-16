@@ -36,8 +36,8 @@ function isNotFound(error: unknown): boolean {
 /**
  * Supabase Storage adapter for client logos, through the service-role client
  * (the bucket has no policies, so no browser key can reach it). Copied from the
- * material adapter's pattern, never imported (module boundary). Objects are never
- * deleted. Errors are logged with the client id only, never the key.
+ * material adapter's pattern, never imported (module boundary). Only a replaced or
+ * removed logo's object is deleted. Errors are logged with the client id only, never the key.
  */
 export function createSupabaseLogoStorage(client: () => AdminClient = createSupabaseAdminClient): LogoStorage {
   let memo: AdminClient | undefined;
@@ -100,6 +100,17 @@ export function createSupabaseLogoStorage(client: () => AdminClient = createSupa
       }
       // Not a readable PNG, JPEG or WebP: the use case rejects it as an invalid logo.
       return ok(imageSize(bytes) ?? { format: null, width: 0, height: 0 });
+    },
+
+    async remove(target) {
+      try {
+        const { error } = await bucket().remove([keyOf(target)]);
+        if (error) throw error;
+        return ok(undefined);
+      } catch (error) {
+        log.error(`logo remove failed: ${errorLabel(error)}`, { clientId: target.clientId });
+        return err({ code: "STORAGE_FAILED", message: "Could not delete the old logo." });
+      }
     },
   };
 }
