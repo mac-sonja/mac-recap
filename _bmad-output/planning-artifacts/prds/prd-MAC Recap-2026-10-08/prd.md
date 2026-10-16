@@ -2,7 +2,7 @@
 title: "MAC Recap – MVP PRD (v2)"
 status: final
 created: 2026-10-07
-updated: 2026-10-15
+updated: 2026-10-16
 version: 2
 supersedes: "docs/sources/MAC Recap-PRD-EN v1.pdf"
 ---
@@ -14,6 +14,8 @@ Oct 8, 2026 · @Sonja
 Updated Oct 14, 2026: favourites replace tags, properties and flags, there is no pasted text, and removing a file has no undo ([Sprint Change Proposal 2026-10-14](../../sprint-change-proposal-2026-10-14.md)). Files are stored in Supabase Storage, not AWS S3 ([storage proposal](../../sprint-change-proposal-2026-10-14-storage.md)).
 
 Updated Oct 15, 2026: case studies belong to client records managed on a Clients page, and show a readable code such as LUM-2026-01 next to the permanent ID ([Sprint Change Proposal 2026-10-15](../../sprint-change-proposal-2026-10-15.md)).
+
+Updated Oct 16, 2026: clients have a description, sector and logo, shown in every case study as an About the client block and used by the AI; approved case studies keep the info they were generated with ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md)).
 
 This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR, epic, story and open-point numbers are unchanged from v1. Retired items are marked, not renumbered, and new items are added at the end.
 
@@ -90,7 +92,8 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 ### 2.1 Terms
 
 - **Case study.** The output for one project: graphic layouts plus text structured as challenge, approach and result. Each has a unique ID and a readable case history code, and belongs to one client. In the Italian UI a case study is called a *case history* (PR #38); "case study" stays the internal term in these documents, story keys, tables (`case_study`) and code.
-- **Client.** A company MAC worked for. Each has an automatic short code (e.g. LUM). Clients are managed on the Clients page.
+- **Client.** A company MAC worked for. Each has an automatic short code (e.g. LUM). Clients are managed on the Clients page. Each can have a short description, a sector and a logo.
+- **About the client block.** The part of every case study that shows the client's logo, name, sector and description, copied from the client when the draft is generated.
 - **Case history code.** Client code, year and a number per client and year, e.g. LUM-2026-01. Fixed once the case study is created.
 - **Material.** Uploaded files: images, videos, text documents and PDFs. The details form is not material.
 - **Deliverable.** One uploaded file of material. Images and videos can be marked as favourite.
@@ -108,7 +111,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 **FR2** – The owner/designer uploads material (images, videos, text documents and PDFs), can mark any number of images and videos as favourite, and fills in a short details form on context, solution and results. The details form is the only place for typed project text.
 - Upload is limited to 20 files of at most 50 MB each. (50 MB is the hosted Supabase plan's upload cap; it returns to 100 MB when the plan is upgraded. Owner decision 2026-10-14.)
 
-**FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material and form answers.
+**FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material, the form answers and the client's description and sector. Every case study shows the client's info in an About the client block.
 - If no material is uploaded, generation is not available (NFR6).
 
 **FR4** – Templates adapt their layout to the number of available media items.
@@ -210,15 +213,18 @@ Prerequisites: tool design definition, template wireframes (asset dimensions, fo
 - I can add a client and edit its name
 - The client code is automatic and never changes
 - I can open a client to see only its case studies
+- I can add a short description, a sector and a logo to a client
+- Case studies already approved keep the client info they were generated with
 
 ### Epic 3 – Graphic case study generation (Sprint 2)
 
-Prerequisites: graphic template layouts, final case study templates, narrative structure and quality criteria, data processing logic.
+Prerequisites: graphic template layouts, final case study templates (each with an About the client area), narrative structure and quality criteria, data processing logic.
 
 **Story 3.1** – As an owner/designer, I want to generate a case study by applying graphic templates to the uploaded material.
 - The case study is generated from the graphic templates
 - Graphic assets and template design remain unchanged
-- Texts follow the challenge, approach, result structure and use only the uploaded material and form answers
+- Texts follow the challenge, approach, result structure and use only the uploaded material, form answers and the client's info
+- The case study shows an About the client block
 - Layouts are generated for the MVP export formats (open point 1)
 - If no material is uploaded, generation is not available
 

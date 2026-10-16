@@ -7,7 +7,7 @@ paradigm: 'modular monolith with ports at vendor seams; generation as a pipes-an
 scope: 'MAC Recap standalone MVP (Epics 2-6): case creation, upload and favourites, generation, review and approval, export and shareable links, auth. Plus the seam for the later MAC Productive (MCP) integration'
 status: final
 created: '2026-10-08'
-updated: '2026-10-15'
+updated: '2026-10-16'
 binds: [FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, NFR1, NFR2, NFR3, NFR4, NFR5, NFR6, NFR7, FR9-seam]
 sources:
   - '_bmad-output/planning-artifacts/prds/prd-MAC Recap-2026-10-08/prd.md (PRD v2, final)'
@@ -69,7 +69,7 @@ flowchart LR
 
 | Owner | Tables | Storage prefixes |
 | --- | --- | --- |
-| `case-study` | `case_study`, `client`, `case_number_counter`, `revision`, `case_event` | — |
+| `case-study` | `case_study`, `client`, `client_logo`, `case_number_counter`, `revision`, `case_event` | `clients/{clientId}/logos/**` |
 | `material` | `asset` (including `is_favourite`), `context_form` | `cases/{caseId}/assets/**` (originals and renditions) |
 | `generation` | — (writes revisions only via `case-study`) | — |
 | `rendering` | `export`, `template_variant_state` (only if AD-15's conditional applies) | `cases/{caseId}/revisions/{revisionId}/exports/**` |
@@ -124,6 +124,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - Shared: `templateId@version`; the text blocks, each with a stable `blockId` and its claims and check state (AD-19); the selected media set. The block set (challenge, approach, result, plus the headline and KPI tiles) is defined once per template, not per format, so the Check tab and `approve` see the same blocks.
   - Per format, keyed by format id: the layout variant, the slot → `assetId` assignments, spacing, text scale and font pairing, all drawn from the values the template allows. A revision's per-format entries are exactly the registry formats when the revision was created; export, share and approve reject any other format with `FORMAT_NOT_IN_REVISION`.
   - There is no canvas-ratio field. The format registry owns the ratio.
+  - The shared part also holds `about` (AD-22): the client's name, sector, description and logo id, copied from the snapshot by code. It is not a text block: no check, no claims, not editable.
   - The challenge / approach / result sections cannot be removed or reordered; the schema rejects a document that lacks one.
   - Slot assignments are computed only by the pure `rendering.relayout(doc, template)`. The pipeline calls it, and every change to the media set calls it in the same write.
 
@@ -149,7 +150,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Rule:**
   - `generate` fails with `NO_MATERIAL` before any LLM call unless the case has at least one non-deleted asset of any allowed type (image, video, text document, PDF). Typed text lives only in the details form, which never counts (NFR6). The wizard's Generate button and the worker (again, when it claims the job) use the same check through `material.index`.
   - The template's media-count rule (AD-15) then picks the layout. What a template renders with zero images or videos is a template rule the design team supplies (see Deferred).
-  - The LLM receives only the case's material snapshot and form answers (AD-18). It gets no web or other server tools.
+  - The LLM receives only the case's material snapshot, form answers and the client snapshot's name, sector and description (AD-18, AD-22). Client info never counts as material. It gets no web or other server tools.
   - The structured output tags each claim with `aspect`, `technical` or `graphic`. A draft without both aspects is marked `MISSING_ASPECT` and the warning is shown in the configurator. It does not block approval. `[CONFLICT A3]`
 
 ### AD-7 — One LLM port, one model setting, recorded per revision
@@ -179,6 +180,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
     - `cases/{caseId}/assets/{assetId}/original.{ext}`
     - `cases/{caseId}/assets/{assetId}/renditions/{specHash}.{ext}`, owned by `material` and reached only through `material.getRendition(assetId, spec)`
     - `cases/{caseId}/revisions/{revisionId}/exports/{format}.{ext}`, owned by `rendering`
+    - `clients/{clientId}/logos/{logoId}.{ext}`, owned by `case-study` (AD-22). Logos are PNG, JPEG or WebP, at most 5 MB and at least 400 px on the short side, checked when the signed upload URL is issued and again at confirm.
   - The per-file limit is 50 MB because the hosted Supabase plan caps uploads at 50 MB (verified 2026-10-14). Moving to 100 MB needs the Pro plan, a raised project upload limit, a bucket migration and `MAX_FILE_BYTES`.
 
 ### AD-9 — One layout implementation; renders never pass through a public route
@@ -305,7 +307,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Binds:** FR2, FR3, NFR2, NFR6, `material`, `generation`, OP 2
 - **Prevents:** generation inventing ids for form fields, uploads arriving mid-job being included at random, and deleting an asset breaking approved revisions or the material drawer a reviewer uses
 - **Rule:**
-  - Material is referred to only as `MaterialRef { kind: 'asset' | 'form_field', id }`, where form fields have stable keys. Refs are resolved only through `material.resolveRefs(caseId, refs)`. A `form_field` ref is a valid source for a claim (NFR2) but never counts as material (AD-6).
+  - Material is referred to only as `MaterialRef { kind: 'asset' | 'form_field', id }`, where form fields have stable keys. Refs are resolved only through `material.resolveRefs(caseId, refs)`. A `form_field` ref is a valid source for a claim (NFR2) but never counts as material (AD-6). A `client_field` ref (`description` or `sector`, AD-22) resolves from the revision's client snapshot and follows the same rule.
   - A `generate` job's payload carries a material manifest (refs plus content hashes) taken when it is enqueued. The revision stores that manifest.
   - How each material type is turned into LLM input is a `generation` adapter concern decided with OP 2; it does not change the ref or manifest shape. Known limits: a request is capped at 32 MB and PDFs at 600 pages, DOCX is not an API input, and video is not an API input. A file over those limits goes in as extracted text or split. The Anthropic Files API is not used, because it stores client material at Anthropic.
   - Material that any revision or any queued or running job references can only be soft-deleted (`deleted_at`). `approve` fails with `MATERIAL_MISSING` if anything the revision references is deleted. The UI offers no restore.
@@ -352,6 +354,18 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   7. **Single definition.** These rules live once, in SQL (`client_code_letters`, `create_client`, `create_case_study`), used by both the data migration and the app. The TypeScript domain only validates the name length (1–120) and never computes codes.
   8. **Where it shows.** The code appears in the app's tables, wizard and library. It is not shown on the shared link page or in exports.
 
+### AD-22 — Client info is copied into each revision when it is generated
+
+- **Binds:** FR3 (amended), PRD Story 2.5, `case-study`, `generation`, `rendering` ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md))
+- **Prevents:** an approved case history changing because a client was edited, an About block that differs between formats, the LLM rewriting the client's own words, and a missing logo breaking an old revision
+- **Rule:**
+  1. `client.description` (≤400) and `client.sector` (≤60) are optional plain text. `client.logo_id` points to a `client_logo` row. Rows in `client_logo` are never updated or deleted.
+  2. When a `generate` job is enqueued, `case-study.getClientSnapshot(caseId)` (`{ clientId, name, sector, description, logoId }`) is copied into the job payload. The revision stores it in its manifest.
+  3. The document's `about` block is filled by code from the snapshot. The LLM never writes it. It is `null` when the snapshot has no description, sector or logo.
+  4. Editing the client never changes an existing revision, whatever its status. The new values reach a case only at its next generation.
+  5. Every template fits the maximum description length in every format, so the About block can never cause an overflow that blocks approval.
+  6. The About block appears in every format, export and shared link, like the rest of the document. AD-21 rule 8 (no case code there) is unchanged.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -392,6 +406,8 @@ erDiagram
   PROFILE ||--o{ CASE_STUDY : created
   PROFILE ||--o{ CLIENT : created
   CLIENT ||--o{ CASE_STUDY : owns
+  CLIENT ||--o{ CLIENT_LOGO : has
+  %% CLIENT.logo_id -> current CLIENT_LOGO (AD-22)
   %% CASE_STUDY carries code + number (AD-21)
   CASE_STUDY ||--o{ ASSET : has
   %% ASSET carries is_favourite (boolean, default false; images and videos only, AD-14)
@@ -437,7 +453,7 @@ supabase/migrations/        # forward-only SQL, incl. jobs_claim()
 | --- | --- | --- |
 | FR1 unique ID, readable code, client | `case-study` | AD-2, AD-21 |
 | FR2 upload (20 × 50 MB), favourites, details form | `material` | AD-8, AD-14, AD-18 |
-| FR3 generate from templates, only from material and form answers | `generation`, `jobs` | AD-4, AD-5, AD-6, AD-7, AD-10, AD-17 |
+| FR3 generate from templates, only from material, form answers and client info; About the client block | `generation`, `jobs`, `case-study` | AD-4, AD-5, AD-6, AD-7, AD-10, AD-17, AD-22 |
 | FR4 adapt to media count | `rendering/templates` | AD-15 |
 | FR5 review dashboard and configurator, text editing | `app/(tool)`, `case-study` | AD-3, AD-4, AD-17, AD-19 |
 | FR6 approval by any owner/designer | `case-study` | AD-3, AD-19 |

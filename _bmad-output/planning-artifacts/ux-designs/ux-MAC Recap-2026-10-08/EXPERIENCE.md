@@ -2,7 +2,7 @@
 name: MAC Recap
 status: final
 created: 2026-10-08
-updated: 2026-10-15
+updated: 2026-10-16
 sources:
   - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/prd.md
   - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/addendum.md
@@ -191,6 +191,7 @@ Three panes, as in A3 1.6, with the changes noted. The canvas is a Bento-style t
 - Plain text with line breaks only. No font, colour or size control inside a text block; those belong to typography.
 - Overflow: if text no longer fits its slot, the block shows an overflow marker and the Check tab lists it. The tool does not shrink text silently below the template's minimum size.
 - Every edited block is marked "edited" and needs its claim check again (see Check below).
+- **About the client block** (decided 2026-10-16): logo, name, sector and description, copied from the client at generation. Read-only, with the hint "Modifica i dati nella pagina del cliente. Valgono dalla prossima generazione." It isn't in the Check tab; claims the AI based on the client's description are checked like any other.
 
 **Layout**
 - **Layout variant:** pick one of the template's designed variants for this format (thumbnail grid; the A3 sketch shows "10 varianti").
@@ -247,6 +248,8 @@ Read-only. Available only for Approved case studies (NFR7); a non-approved case 
 | Share | Opens the Share dialog (below). |
 | Owner/designer | Also sees **Edit**, which opens the configurator. |
 
+The About the client block shows in every format, as generated.
+
 The A3 "Asset e Risorse" tab and the "Pacchetto PNG HD" source-material pack are out of MVP unless [OPEN 1] adds them.
 
 ### Share dialog and shareable links [OPEN 11]
@@ -291,9 +294,9 @@ Owner/designer only. Decided 2026-10-15 ([Sprint Change Proposal 2026-10-15](../
 |---|---|
 | List | Table of clients: Code (mono), Name, Case histories (count). Default sort Name A–Z; header sort. |
 | Search | Over name and code, with the Case studies table's rules. |
-| Add client | **Add client** dialog: name only. The code is assigned automatically; there is no code field. |
-| Edit name | **Edit name** dialog that states the code stays the same. The new name shows everywhere, including the client's case studies. |
-| Client page | Row click opens the client page: client name and code, **Edit name**, and the Case studies table limited to that client, with **New case history** preselecting the client. |
+| Add client | **Add client** dialog: name, sector (optional, up to 60 characters), description (optional, up to 400 characters, live counter) and logo (optional upload with preview; PNG, JPEG or WebP). The code is assigned automatically; there is no code field. |
+| Edit client | **Edit client** dialog with the same fields. It states that the code stays the same and that approved case studies keep the info they were generated with. A new name shows everywhere, including the client's case studies. |
+| Client page | Row click opens the client page: logo, client name and code, sector, description, **Edit client**, and the Case studies table limited to that client, with **New case history** preselecting the client. |
 | Absent | No delete. |
 | Below 1024 px | Read-only list. |
 
@@ -463,6 +466,7 @@ Failure: nothing matches → "Nothing matches 'energy'." He clears filters and b
 - **C10. Client as a record. Resolved 2026-10-15 by the owner:** every case study belongs to one client record; free-text clients were migrated to records with codes.
 - **C11. Clients page. Resolved 2026-10-15 by the owner:** owner/designers list, add and rename clients and open a client's case studies; codes never change and clients can't be deleted.
 - **C12. Picking the client. Resolved 2026-10-15 by the owner:** step 0 offers only existing clients; clients are added only on the Clients page.
+- **C13. Client info. Resolved 2026-10-16 by the owner** ([Sprint Change Proposal](../../sprint-change-proposal-2026-10-16.md)): clients have a description, sector and logo; every case study shows them in an About the client block and the AI uses them; approved case studies keep the info they were generated with.
 - **C5. Brief vs PRD:** the brief limits export to account/sales/social and puts the hallucination target on "caught in review". The PRD (both roles export; zero reaching approved) wins; noted only.
 
 **PRD open points with options above:** [OPEN 1] export formats · [OPEN 8] status lifecycle · [OPEN 11] link access · [OPEN 12] what counts as altering. **[OPEN 14]** what a favourite means for generation. [OPEN 3] taxonomy resolved 2026-10-14: dropped.

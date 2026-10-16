@@ -24,7 +24,7 @@ The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects clos
 ## Capabilities
 
 - **CAP-1**
-  - **intent:** The owner/designer creates a case study by hand, and it gets a unique, permanent ID that a project order can later be linked to, and a readable code, under a client from the client list.
+  - **intent:** The owner/designer creates a case study by hand, and it gets a unique, permanent ID that a project order can later be linked to, and a readable code, under a client from the client list. Clients carry a description, sector and logo (SCP 2026-10-16).
   - **success:** Every new case study has an ID that never changes, is never reused, and is the only identifier other systems see (AD-2).
 - **CAP-2**
   - **intent:** The owner/designer uploads material (images, videos, text documents and PDFs) to a case study and can mark any number of images and videos as favourite.
