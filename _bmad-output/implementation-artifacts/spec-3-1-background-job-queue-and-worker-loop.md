@@ -2,7 +2,7 @@
 title: 'Story 3.1: Background job queue and worker loop'
 type: 'feature'
 created: '2026-10-16'
-status: 'in-review'
+status: 'done'
 baseline_commit: '7264176036d3c4471fa51e3c6891a85c37fb77c4'
 route: 'dispatch'
 review_loop_iteration: 0
