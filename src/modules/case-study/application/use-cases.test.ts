@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { CASE_CREATED, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import type { CaseStatus } from "@/shared/case-status";
-import type { CaseStudy, Client, ClientSummary } from "@/modules/case-study/domain/case-study";
+import type { CaseStudy, Client, ClientRef, ClientSummary } from "@/modules/case-study/domain/case-study";
 import { err, ok } from "@/shared/result";
 import { makeCreateCaseStudy } from "./create-case-study";
 import { makeCreateClient } from "./create-client";
@@ -11,9 +11,13 @@ import { makeGetClient } from "./get-client";
 import { makeListCaseStudies } from "./list-case-studies";
 import { makeListClientSummaries } from "./list-client-summaries";
 import { makeListClients } from "./list-clients";
-import { makeRenameClient } from "./rename-client";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
-import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
+import type { ClientLogo, ClientRepository } from "@/modules/case-study/ports/client-repository";
+import type { LogoImage, LogoStorage, StoredLogo } from "@/modules/case-study/ports/logo-storage";
+import { makeConfirmClientLogoUpload } from "./confirm-client-logo-upload";
+import { makeGetClientInfoForCase } from "./get-client-info-for-case";
+import { makeRequestClientLogoUpload } from "./request-client-logo-upload";
+import { makeUpdateClient } from "./update-client";
 import { makeRecordEvent } from "./record-event";
 import { makeTransition } from "./transition";
 
@@ -24,7 +28,7 @@ const actor: Actor = {
   role: "owner_designer",
 };
 
-const ACME: Client = { id: "cccccccc-0000-4000-8000-000000000001", name: "Acme", code: "ACM" };
+const ACME: ClientRef = { id: "cccccccc-0000-4000-8000-000000000001", name: "Acme", code: "ACM" };
 const UNKNOWN_CLIENT_ID = "cccccccc-0000-4000-8000-00000000ffff";
 
 /**
@@ -35,7 +39,7 @@ const UNKNOWN_CLIENT_ID = "cccccccc-0000-4000-8000-00000000ffff";
 function fakeRepository() {
   const cases = new Map<string, CaseStudy>();
   const events: CaseEvent[] = [];
-  const clients = new Map<string, Client>([[ACME.id, ACME]]);
+  const clients = new Map<string, ClientRef>([[ACME.id, ACME]]);
   const counters = new Map<string, number>();
   let n = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
@@ -194,52 +198,125 @@ describe("create", () => {
   });
 });
 
+type StoredClient = Client & { caseCount: number };
+
 /**
- * In-memory ClientRepository: mirrors `create_client` / `rename_client` refusals
- * (name key: trimmed, collapsed whitespace, lower-cased, accents stripped). The
- * real code comes from SQL only; this fake hands out a fixed one.
+ * In-memory ClientRepository: mirrors `create_client` / `update_client` refusals
+ * (name key: trimmed, collapsed whitespace, lower-cased, accents stripped; a logo
+ * of another client; a logo still shown can't be deleted). The real code comes
+ * from SQL only; this fake hands out a fixed one.
  */
-function fakeClientRepository(rows: ClientSummary[] = []) {
-  const clients = new Map(rows.map((c) => [c.id, c]));
+function fakeClientRepository(rows: (ClientSummary | StoredClient)[] = []) {
+  const clients = new Map<string, StoredClient>(
+    rows.map((c) => [c.id, { sector: null, description: null, logoId: null, ...c }]),
+  );
+  const logos = new Map<string, ClientLogo>();
+  /** caseId → clientId for the non-deleted cases `findClientInfoByCaseId` knows. */
+  const cases = new Map<string, string>();
   const nameKey = (name: string) =>
     name.trim().replace(/\s+/g, " ").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const view = ({ id, name, code, sector, description, logoId }: StoredClient): Client => ({ id, name, code, sector, description, logoId });
   let n = 0;
   const repo = {
     list: vi.fn<ClientRepository["list"]>(async () => ok([...clients.values()].map(({ id, name, code }) => ({ id, name, code })))),
-    listWithCaseCounts: vi.fn<ClientRepository["listWithCaseCounts"]>(async () => ok([...clients.values()])),
+    listWithCaseCounts: vi.fn<ClientRepository["listWithCaseCounts"]>(async () =>
+      ok([...clients.values()].map(({ id, name, code, caseCount }) => ({ id, name, code, caseCount }))),
+    ),
     findById: vi.fn<ClientRepository["findById"]>(async (id) => {
       const found = clients.get(id);
-      return ok(found ? { id: found.id, name: found.name, code: found.code } : null);
+      return ok(found ? view(found) : null);
     }),
-    create: vi.fn<ClientRepository["create"]>(async (name) => {
+    create: vi.fn<ClientRepository["create"]>(async (name, info) => {
       if ([...clients.values()].some((c) => nameKey(c.name) === nameKey(name))) {
         return err({ code: "CLIENT_NAME_TAKEN", message: "taken" });
       }
-      const client = { id: `dddddddd-0000-4000-8000-${String(++n).padStart(12, "0")}`, name, code: `C${String(n).padStart(2, "0")}` };
+      const client: Client = {
+        id: `dddddddd-0000-4000-8000-${String(++n).padStart(12, "0")}`,
+        name,
+        code: `C${String(n).padStart(2, "0")}`,
+        ...info,
+        logoId: null,
+      };
       clients.set(client.id, { ...client, caseCount: 0 });
       return ok(client);
     }),
-    rename: vi.fn<ClientRepository["rename"]>(async (id, name) => {
+    update: vi.fn<ClientRepository["update"]>(async ({ id, name, sector, description, logoId }) => {
       const found = clients.get(id);
       if (!found) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
       if ([...clients.values()].some((c) => c.id !== id && nameKey(c.name) === nameKey(name))) {
         return err({ code: "CLIENT_NAME_TAKEN", message: "taken" });
       }
-      clients.set(id, { ...found, name });
-      return ok({ id, name, code: found.code });
+      if (logoId !== null && logos.get(logoId)?.clientId !== id) return err({ code: "CLIENT_LOGO_INVALID", message: "foreign" });
+      const next = { ...found, name, sector, description, logoId };
+      clients.set(id, next);
+      return ok(view(next));
+    }),
+    findLogo: vi.fn<ClientRepository["findLogo"]>(async (id) => ok(logos.get(id) ?? null)),
+    insertLogo: vi.fn<ClientRepository["insertLogo"]>(async ({ id, clientId, contentType, sizeBytes }) => {
+      const logo = { id, clientId, contentType, sizeBytes };
+      if (logos.has(logo.id)) return err({ code: "CLIENT_LOGO_INVALID", message: "already confirmed" });
+      logos.set(logo.id, logo);
+      return ok(logo);
+    }),
+    deleteLogo: vi.fn<ClientRepository["deleteLogo"]>(async (id) => {
+      if ([...clients.values()].some((c) => c.logoId === id)) return err({ code: "CLIENT_LOGO_IN_USE", message: "in use" });
+      return ok(logos.delete(id));
+    }),
+    findClientInfoByCaseId: vi.fn<ClientRepository["findClientInfoByCaseId"]>(async (caseId) => {
+      const client = clients.get(cases.get(caseId) ?? "");
+      if (!client) return ok(null);
+      const { id, name, sector, description, logoId } = client;
+      return ok({ clientId: id, name, sector, description, logoId });
     }),
   } satisfies ClientRepository;
-  return { repo, clients };
+  return { repo, clients, logos, cases };
 }
 
+const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
+const OTHER_LOGO_ID = "eeeeeeee-0000-4000-8000-000000000002";
 const LUMEN: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000010", name: "Lumen Srl", code: "LUM", caseCount: 2 };
+const LUMEN_CLIENT: Client = { id: LUMEN.id, name: LUMEN.name, code: LUMEN.code, sector: null, description: null, logoId: null };
+
+/** In-memory LogoStorage: a stored object per key, as the browser's PUT left it. */
+function fakeLogoStorage() {
+  const objects = new Map<string, { stored: StoredLogo; image: LogoImage }>();
+  const keyOf = (t: { clientId: string; logoId: string }) => `${t.clientId}/${t.logoId}`;
+  const storage = {
+    presignUpload: vi.fn<LogoStorage["presignUpload"]>(async (t) =>
+      ok({ url: `https://storage/${keyOf(t)}`, method: "PUT" as const, headers: { "content-type": t.contentType, "x-upsert": "false" } }),
+    ),
+    presignDownload: vi.fn<LogoStorage["presignDownload"]>(async (t) => ok(`https://storage/${keyOf(t)}?sig`)),
+    head: vi.fn<LogoStorage["head"]>(async (t) => ok(objects.get(keyOf(t))?.stored ?? null)),
+    dimensions: vi.fn<LogoStorage["dimensions"]>(async (t) => ok(objects.get(keyOf(t))?.image ?? null)),
+    remove: vi.fn<LogoStorage["remove"]>(async (t) => {
+      objects.delete(keyOf(t));
+      return ok(undefined);
+    }),
+  } satisfies LogoStorage;
+  const put = (
+    clientId: string,
+    logoId: string,
+    over: { sizeBytes?: number; contentType?: string | null; format?: string | null; width?: number; height?: number } = {},
+  ) =>
+    objects.set(keyOf({ clientId, logoId }), {
+      stored: { sizeBytes: over.sizeBytes ?? 2048, contentType: over.contentType === undefined ? "image/png" : over.contentType },
+      image: { format: over.format === undefined ? "png" : over.format, width: over.width ?? 800, height: over.height ?? 400 },
+    });
+  return { storage, put, objects, keyOf };
+}
 
 describe("createClient", () => {
-  it("adds the trimmed name with the actor and returns the client", async () => {
+  it("adds the trimmed name and info with the actor and returns the client", async () => {
     const { repo } = fakeClientRepository();
-    const result = await makeCreateClient(repo)(actor, { name: "  Lumen Srl ", code: "ZZZ" });
+    const result = await makeCreateClient(repo)(actor, { name: "  Lumen Srl ", code: "ZZZ", sector: " Moda ", description: "  " });
     expect(result.ok).toBe(true);
-    expect(repo.create).toHaveBeenCalledExactlyOnceWith("Lumen Srl", actor.id);
+    expect(repo.create).toHaveBeenCalledExactlyOnceWith("Lumen Srl", { sector: "Moda", description: null }, actor.id);
+  });
+
+  it("adds a client with no info as empty fields", async () => {
+    const { repo } = fakeClientRepository();
+    const result = await makeCreateClient(repo)(actor, { name: "Lumen Srl" });
+    expect(result.ok && result.value).toMatchObject({ sector: null, description: null, logoId: null });
   });
 
   it.each([["   "], ["x".repeat(121)], [undefined]])("rejects the name %j as INVALID_INPUT without writing", async (name) => {
@@ -248,6 +325,23 @@ describe("createClient", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["name"] } });
     expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["description", 401],
+    ["sector", 61],
+  ] as const)("refuses a %s of %i characters as CLIENT_FIELD_TOO_LONG without writing", async (field, length) => {
+    const { repo } = fakeClientRepository();
+    const result = await makeCreateClient(repo)(actor, { name: "Lumen", [field]: "é".repeat(length) });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: [field] } });
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts 400 emoji as a 400-character description", async () => {
+    const { repo } = fakeClientRepository();
+    const result = await makeCreateClient(repo)(actor, { name: "Lumen", description: "😀".repeat(400) });
+    expect(result.ok).toBe(true);
   });
 
   it.each(["lumen  srl", "LUMEN SRL", "Lùmen Srl"])("passes CLIENT_NAME_TAKEN through for %j", async (name) => {
@@ -259,48 +353,315 @@ describe("createClient", () => {
   });
 });
 
-describe("renameClient", () => {
-  it("renames with the actor; the code stays", async () => {
-    const { repo } = fakeClientRepository([LUMEN]);
-    const result = await makeRenameClient(repo)(actor, { clientId: LUMEN.id, name: " Lumen S.r.l. " });
-    expect(result).toEqual(ok({ id: LUMEN.id, name: "Lumen S.r.l.", code: "LUM" }));
-    expect(repo.rename).toHaveBeenCalledExactlyOnceWith(LUMEN.id, "Lumen S.r.l.", actor.id);
+describe("updateClient", () => {
+  const input = (over: Record<string, unknown> = {}) => ({
+    clientId: LUMEN.id,
+    name: "Lumen Srl",
+    sector: null,
+    description: null,
+    logoId: null,
+    ...over,
   });
 
-  it.each(["Lumen Srl", "lumen srl"])("allows renaming to its own name or a variant (%j)", async (name) => {
+  it("saves every field with the actor; the code stays", async () => {
     const { repo } = fakeClientRepository([LUMEN]);
-    expect(await makeRenameClient(repo)(actor, { clientId: LUMEN.id, name })).toEqual(ok({ id: LUMEN.id, name, code: "LUM" }));
+    const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ name: " Lumen S.r.l. ", sector: "Moda", description: " Brand. " }));
+    expect(result).toEqual(ok({ ...LUMEN_CLIENT, name: "Lumen S.r.l.", sector: "Moda", description: "Brand." }));
+    expect(repo.update).toHaveBeenCalledExactlyOnceWith(
+      { id: LUMEN.id, name: "Lumen S.r.l.", sector: "Moda", description: "Brand.", logoId: null },
+      actor.id,
+    );
   });
 
-  it("rejects a malformed id or blank name as INVALID_INPUT without writing", async () => {
+  it.each(["Lumen Srl", "lumen srl"])("allows its own name or a variant (%j)", async (name) => {
     const { repo } = fakeClientRepository([LUMEN]);
-    const result = await makeRenameClient(repo)(actor, { clientId: "LUM", name: " " });
+    expect(await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ name }))).toEqual(ok({ ...LUMEN_CLIENT, name }));
+  });
+
+  it("stores blank fields as null", async () => {
+    const { repo } = fakeClientRepository([{ ...LUMEN_CLIENT, sector: "Moda", description: "Brand.", caseCount: 0 }]);
+    const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ sector: "   ", description: "" }));
+    expect(result.ok && result.value).toMatchObject({ sector: null, description: null });
+  });
+
+  it("replacing the logo deletes the old row and object once the client points at the new one", async () => {
+    const { repo, logos, clients } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: OTHER_LOGO_ID, caseCount: 0 }]);
+    const { storage, put, objects } = fakeLogoStorage();
+    logos.set(OTHER_LOGO_ID, { id: OTHER_LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
+    logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
+    put(LUMEN.id, OTHER_LOGO_ID);
+    put(LUMEN.id, LOGO_ID);
+    const result = await makeUpdateClient(repo, storage)(actor, input({ logoId: LOGO_ID }));
+    expect(result.ok && result.value.logoId).toBe(LOGO_ID);
+    expect(clients.get(LUMEN.id)?.logoId).toBe(LOGO_ID);
+    expect(repo.deleteLogo).toHaveBeenCalledExactlyOnceWith(OTHER_LOGO_ID);
+    expect(storage.remove).toHaveBeenCalledExactlyOnceWith({ clientId: LUMEN.id, logoId: OTHER_LOGO_ID, contentType: "image/png" });
+    expect([...logos.keys()]).toEqual([LOGO_ID]);
+    expect(objects.size).toBe(1);
+    // The delete runs only after the client row stopped pointing at the old logo.
+    expect(repo.update.mock.invocationCallOrder[0]).toBeLessThan(repo.deleteLogo.mock.invocationCallOrder[0]);
+  });
+
+  it("removing the logo clears logo_id and deletes the old row and object", async () => {
+    const { repo, logos } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
+    const { storage, put, objects } = fakeLogoStorage();
+    logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/webp", sizeBytes: 10 });
+    put(LUMEN.id, LOGO_ID);
+    const cleared = await makeUpdateClient(repo, storage)(actor, input({ logoId: null }));
+    expect(cleared.ok && cleared.value.logoId).toBeNull();
+    expect(logos.size).toBe(0);
+    expect(objects.size).toBe(0);
+    expect(storage.remove).toHaveBeenCalledWith({ clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/webp" });
+  });
+
+  it("keeping the same logo deletes nothing", async () => {
+    const { repo, logos } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
+    const { storage } = fakeLogoStorage();
+    logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
+    expect((await makeUpdateClient(repo, storage)(actor, input({ logoId: LOGO_ID, sector: "Moda" }))).ok).toBe(true);
+    expect(repo.deleteLogo).not.toHaveBeenCalled();
+    expect(storage.remove).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["the file delete fails", "remove"],
+    ["the row delete fails", "deleteLogo"],
+  ] as const)("still saves when %s, and warns with the client id only", async (_label, failing) => {
+    const { repo, logos } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
+    const { storage } = fakeLogoStorage();
+    logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
+    if (failing === "remove") storage.remove.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "down" }));
+    else repo.deleteLogo.mockResolvedValueOnce(err({ code: "CLIENT_WRITE_FAILED", message: "down" }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const result = await makeUpdateClient(repo, storage)(actor, input({ logoId: null }));
+      expect(result).toEqual(ok({ ...LUMEN_CLIENT, logoId: null }));
+      const entry = JSON.parse(String(write.mock.calls[0][0]));
+      expect(entry).toMatchObject({ level: "warn", clientId: LUMEN.id });
+      expect(Object.keys(entry).sort()).toEqual(["clientId", "level", "msg", "time"]);
+    } finally {
+      write.mockRestore();
+    }
+    if (failing === "deleteLogo") expect(storage.remove).not.toHaveBeenCalled();
+  });
+
+  it("deletes nothing when the save is refused", async () => {
+    const { repo, logos } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
+    const { storage } = fakeLogoStorage();
+    logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
+    const result = await makeUpdateClient(repo, storage)(actor, input({ logoId: "eeeeeeee-0000-4000-8000-00000000ffff" }));
+    expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
+    expect(logos.has(LOGO_ID)).toBe(true);
+    expect(storage.remove).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["another client's logo", OTHER_LOGO_ID],
+    ["an unknown logo", "eeeeeeee-0000-4000-8000-00000000ffff"],
+  ])("refuses %s as CLIENT_LOGO_INVALID", async (_label, logoId) => {
+    const { repo, logos } = fakeClientRepository([LUMEN]);
+    logos.set(OTHER_LOGO_ID, { id: OTHER_LOGO_ID, clientId: UNKNOWN_CLIENT_ID, contentType: "image/png", sizeBytes: 10 });
+    const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ logoId }));
+    expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
+  });
+
+  it("rejects a malformed id, a blank name or missing sector, description or logo id as INVALID_INPUT without writing", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, { clientId: "LUM", name: " " });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["clientId", "name"] } });
-    expect(repo.rename).not.toHaveBeenCalled();
+    if (!result.ok) {
+      expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["clientId", "name", "sector", "description", "logoId"] } });
+    }
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses a 401-character description as CLIENT_FIELD_TOO_LONG without writing", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ description: "x".repeat(401) }));
+    expect(result.ok || result.error.code).toBe("CLIENT_FIELD_TOO_LONG");
+    expect(repo.update).not.toHaveBeenCalled();
   });
 
   it("passes CLIENT_NOT_FOUND and CLIENT_NAME_TAKEN through", async () => {
     const other: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000011", name: "Acme", code: "ACM", caseCount: 0 };
     const { repo } = fakeClientRepository([LUMEN, other]);
-    const unknown = await makeRenameClient(repo)(actor, { clientId: UNKNOWN_CLIENT_ID, name: "X" });
+    const unknown = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ clientId: UNKNOWN_CLIENT_ID, name: "X" }));
     expect(unknown.ok || unknown.error.code).toBe("CLIENT_NOT_FOUND");
-    const taken = await makeRenameClient(repo)(actor, { clientId: other.id, name: "LUMEN SRL" });
+    const taken = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ clientId: other.id, name: "LUMEN SRL" }));
     expect(taken.ok || taken.error.code).toBe("CLIENT_NAME_TAKEN");
   });
 });
 
+describe("requestClientLogoUpload", () => {
+  const deps = () => {
+    const clients = fakeClientRepository([LUMEN]);
+    const storage = fakeLogoStorage();
+    return { ...clients, ...storage, run: makeRequestClientLogoUpload({ clients: clients.repo, storage: storage.storage, newId: () => LOGO_ID }) };
+  };
+
+  it("issues a signed PUT for a new logo id of the client", async () => {
+    const { run, storage } = deps();
+    const result = await run(actor, { clientId: LUMEN.id, contentType: "image/webp", sizeBytes: 5 * 1024 * 1024 });
+    expect(result).toEqual(
+      ok({ logoId: LOGO_ID, url: `https://storage/${LUMEN.id}/${LOGO_ID}`, method: "PUT", headers: { "content-type": "image/webp", "x-upsert": "false" } }),
+    );
+    expect(storage.presignUpload).toHaveBeenCalledWith({ clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/webp" });
+  });
+
+  it.each([
+    ["an SVG", { contentType: "image/svg+xml", sizeBytes: 10 }],
+    ["a GIF", { contentType: "image/gif", sizeBytes: 10 }],
+    ["a PDF", { contentType: "application/pdf", sizeBytes: 10 }],
+    ["an empty file", { contentType: "image/png", sizeBytes: 0 }],
+    ["a file over 5 MB", { contentType: "image/png", sizeBytes: 5 * 1024 * 1024 + 1 }],
+  ])("refuses %s as CLIENT_LOGO_INVALID before signing", async (_label, declared) => {
+    const { run, storage } = deps();
+    const result = await run(actor, { clientId: LUMEN.id, ...declared });
+    expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
+    expect(storage.presignUpload).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unknown client as CLIENT_NOT_FOUND", async () => {
+    const { run } = deps();
+    const result = await run(actor, { clientId: UNKNOWN_CLIENT_ID, contentType: "image/png", sizeBytes: 10 });
+    expect(result.ok || result.error.code).toBe("CLIENT_NOT_FOUND");
+  });
+});
+
+describe("confirmClientLogoUpload", () => {
+  const deps = () => {
+    const clients = fakeClientRepository([LUMEN]);
+    const storage = fakeLogoStorage();
+    return { ...clients, ...storage, run: makeConfirmClientLogoUpload({ clients: clients.repo, storage: storage.storage, newId: () => LOGO_ID }) };
+  };
+  const input = { clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/png" };
+
+  it("records the logo row after re-checking the stored object, without linking it", async () => {
+    const { run, put, logos, clients } = deps();
+    put(LUMEN.id, LOGO_ID, { sizeBytes: 4096, width: 400, height: 1200 });
+    expect(await run(actor, input)).toEqual(ok({ logoId: LOGO_ID }));
+    expect(logos.get(LOGO_ID)).toEqual({ id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 4096 });
+    expect(clients.get(LUMEN.id)?.logoId).toBeNull();
+  });
+
+  it.each([
+    ["no uploaded object", null],
+    ["an empty object", { sizeBytes: 0 }],
+    ["an object over 5 MB", { sizeBytes: 5 * 1024 * 1024 + 1 }],
+    ["a different stored content type", { contentType: "image/gif" }],
+    ["bytes of another format", { format: "gif" }],
+    ["bytes that are not an image", { format: null }],
+    ["a 399 px short side", { width: 1200, height: 399 }],
+    ["a side over 8000 px", { width: 8001, height: 400 }],
+  ] as const)("refuses %s as CLIENT_LOGO_INVALID and writes no row", async (_label, over) => {
+    const { run, put, logos } = deps();
+    if (over !== null) put(LUMEN.id, LOGO_ID, over);
+    const result = await run(actor, input);
+    expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
+    expect(logos.size).toBe(0);
+  });
+
+  it("refuses the same logo id confirmed twice; the first row stands", async () => {
+    const { run, put, logos } = deps();
+    put(LUMEN.id, LOGO_ID);
+    expect(await run(actor, input)).toEqual(ok({ logoId: LOGO_ID }));
+    const again = await run(actor, input);
+    expect(again.ok || again.error.code).toBe("CLIENT_LOGO_INVALID");
+    expect(logos.size).toBe(1);
+  });
+
+  it("refuses an SVG content type before reading storage", async () => {
+    const { run, storage } = deps();
+    const result = await run(actor, { ...input, contentType: "image/svg+xml" });
+    expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
+    expect(storage.head).not.toHaveBeenCalled();
+  });
+
+  it("refuses an object uploaded under another client's id", async () => {
+    const { run, put, logos } = deps();
+    put(UNKNOWN_CLIENT_ID, LOGO_ID);
+    const result = await run(actor, input);
+    expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
+    expect(logos.size).toBe(0);
+  });
+});
+
+describe("getClientInfoForCase", () => {
+  const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+
+  it("returns the client's current values for the case", async () => {
+    const { repo, cases } = fakeClientRepository([{ ...LUMEN_CLIENT, sector: "Moda", description: "Brand.", logoId: LOGO_ID, caseCount: 1 }]);
+    cases.set(CASE_ID, LUMEN.id);
+    expect(await makeGetClientInfoForCase(repo)(CASE_ID)).toEqual(
+      ok({ clientId: LUMEN.id, name: "Lumen Srl", sector: "Moda", description: "Brand.", logoId: LOGO_ID }),
+    );
+  });
+
+  it.each([["an unknown or deleted case", "aaaaaaaa-0000-4000-8000-00000000ffff"], ["a malformed id", "LUM-2026-01"]])(
+    "returns NOT_FOUND for %s",
+    async (_label, id) => {
+      const { repo } = fakeClientRepository([LUMEN]);
+      const result = await makeGetClientInfoForCase(repo)(id);
+      expect(result.ok || result.error.code).toBe("NOT_FOUND");
+    },
+  );
+});
+
 describe("getClient", () => {
-  it("returns a known client", async () => {
+  it("returns a known client without a logo", async () => {
     const { repo } = fakeClientRepository([LUMEN]);
-    expect(await makeGetClient(repo)(LUMEN.id)).toEqual(ok({ id: LUMEN.id, name: LUMEN.name, code: LUMEN.code }));
+    expect(await makeGetClient(repo, fakeLogoStorage().storage)(LUMEN.id)).toEqual(ok({ ...LUMEN_CLIENT, logoUrl: null }));
+  });
+
+  it("signs the current logo for at most 15 minutes", async () => {
+    const { repo, logos } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
+    logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/webp", sizeBytes: 10 });
+    const { storage } = fakeLogoStorage();
+    const result = await makeGetClient(repo, storage)(LUMEN.id);
+    expect(result.ok && result.value.logoUrl).toBe(`https://storage/${LUMEN.id}/${LOGO_ID}?sig`);
+    const [target, ttl] = storage.presignDownload.mock.calls[0];
+    expect(target).toEqual({ clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/webp" });
+    expect(ttl).toBeLessThanOrEqual(15 * 60);
+  });
+
+  it.each([
+    ["fails", err({ code: "CLIENT_LOOKUP_FAILED", message: "down" })],
+    ["finds no row", ok(null)],
+  ] as const)("leaves the logo out and warns with the client id when the logo lookup %s", async (_label, answer) => {
+    const { repo } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
+    repo.findLogo.mockResolvedValueOnce(answer);
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const result = await makeGetClient(repo, fakeLogoStorage().storage)(LUMEN.id);
+      expect(result).toEqual(ok({ ...LUMEN_CLIENT, logoId: LOGO_ID, logoUrl: null }));
+      expect(JSON.parse(String(write.mock.calls[0][0]))).toMatchObject({ level: "warn", clientId: LUMEN.id });
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("leaves the logo out and logs the client id only when signing fails", async () => {
+    const { repo, logos } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
+    logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
+    const { storage } = fakeLogoStorage();
+    storage.presignDownload.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "down" }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const result = await makeGetClient(repo, storage)(LUMEN.id);
+      expect(result).toEqual(ok({ ...LUMEN_CLIENT, logoId: LOGO_ID, logoUrl: null }));
+      const entry = JSON.parse(String(write.mock.calls[0][0]));
+      expect(entry).toMatchObject({ level: "warn", clientId: LUMEN.id });
+      expect(Object.keys(entry).sort()).toEqual(["clientId", "level", "msg", "time"]);
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it.each([["an unknown id", UNKNOWN_CLIENT_ID], ["a malformed id", "LUM"], ["a non-string", ["a", "b"]]])(
     "returns CLIENT_NOT_FOUND for %s",
     async (_label, id) => {
       const { repo } = fakeClientRepository([LUMEN]);
-      const result = await makeGetClient(repo)(id);
+      const result = await makeGetClient(repo, fakeLogoStorage().storage)(id);
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.code).toBe("CLIENT_NOT_FOUND");
     },
@@ -308,7 +669,7 @@ describe("getClient", () => {
 
   it("does not query for a malformed id", async () => {
     const { repo } = fakeClientRepository([LUMEN]);
-    await makeGetClient(repo)("not-a-uuid");
+    await makeGetClient(repo, fakeLogoStorage().storage)("not-a-uuid");
     expect(repo.findById).not.toHaveBeenCalled();
   });
 });
@@ -334,13 +695,13 @@ describe("listClientSummaries", () => {
 });
 
 describe("listClients", () => {
-  const client = (name: string, code: string, n: number): Client => ({
+  const client = (name: string, code: string, n: number): ClientRef => ({
     id: `cccccccc-0000-4000-8000-${String(n).padStart(12, "0")}`,
     name,
     code,
   });
 
-  function fakeClients(rows: Client[]) {
+  function fakeClients(rows: ClientRef[]) {
     return { ...fakeClientRepository().repo, list: vi.fn<ClientRepository["list"]>(async () => ok(rows)) } satisfies ClientRepository;
   }
 
@@ -469,7 +830,7 @@ describe("list", () => {
 
   it("limits the list to one client when the scope names it", async () => {
     const { repo, ids, clients } = await seeded();
-    const other: Client = { id: "cccccccc-0000-4000-8000-000000000002", name: "Beta", code: "BET" };
+    const other: ClientRef = { id: "cccccccc-0000-4000-8000-000000000002", name: "Beta", code: "BET" };
     clients.set(other.id, other);
     const created = await makeCreateCaseStudy(repo)(actor, { name: "Other", clientId: other.id, year: 2026 });
     if (!created.ok) throw new Error("setup");

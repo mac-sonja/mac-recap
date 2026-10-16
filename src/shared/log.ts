@@ -7,6 +7,7 @@ export interface LogContext {
   caseId?: string;
   jobId?: string;
   actorId?: string;
+  clientId?: string;
 }
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -16,11 +17,12 @@ function write(level: LogLevel, msg: string, context: LogContext = {}): void {
   process.stdout.write(`${JSON.stringify(entry)}\n`);
 }
 
-function pick({ caseId, jobId, actorId }: LogContext): LogContext {
+function pick({ caseId, jobId, actorId, clientId }: LogContext): LogContext {
   const out: LogContext = {};
   if (caseId !== undefined) out.caseId = caseId;
   if (jobId !== undefined) out.jobId = jobId;
   if (actorId !== undefined) out.actorId = actorId;
+  if (clientId !== undefined) out.clientId = clientId;
   return out;
 }
 

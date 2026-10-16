@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-16-2026 11:29
+last_updated: 10-16-2026 15:59
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -49,17 +49,17 @@ development_status:
   2-11-store-project-files-in-supabase-storage: done  # SCP 2026-10-14 (storage); after the 2.7 UI
   2-12-clients-and-readable-case-history-codes: done  # SCP 2026-10-15; #40; migration applied to mac-recap-dev 2026-10-15 (not staging/prod; ship with 2.13)
   2-13-clients-page: done  # SCP 2026-10-15; #43; no migration; ship to prod together with 2.12; dialogs extended by 2.14 (SCP 2026-10-16)
-  2-14-client-info-description-sector-logo: backlog  # SCP 2026-10-16; first in Sprint 2, before 3.3
+  2-14-client-info-description-sector-logo: review  # SCP 2026-10-16; first in Sprint 2, before 3.3; #48; client info live (owner 2026-10-16); both migrations applied to mac-recap-dev (not staging/prod)
   epic-2-retrospective: optional
 
   epic-3: in-progress
   3-1-background-job-queue-and-worker-loop: done  # #45; migration applied to mac-recap-dev 2026-10-16 (not staging/prod)
   3-2-display-renditions-for-uploaded-media: backlog
-  3-3-the-case-study-document-revisions-and-the-format-registry: backlog  # About block and client snapshot per SCP 2026-10-16; after 2.14
+  3-3-the-case-study-document-revisions-and-the-format-registry: backlog  # About block per SCP 2026-10-16; client info read live, no snapshot (owner amendment); after 2.14
   3-4-templates-as-versioned-code-with-media-count-rules: backlog  # About the client area per SCP 2026-10-16
   3-5-one-renderer-per-format: backlog
   3-6-narrative-generator-port-and-anthropic-adapter: backlog  # client info as LLM input per SCP 2026-10-16
-  3-7-generate-a-case-study: backlog  # client snapshot at enqueue per SCP 2026-10-16
+  3-7-generate-a-case-study: backlog  # no client snapshot; job reads current client info when it runs (SCP 2026-10-16 owner amendment)
   3-8-tell-me-when-the-draft-is-ready: backlog
   epic-3-retrospective: optional
 

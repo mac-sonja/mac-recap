@@ -15,8 +15,21 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
-vi.mock("@/modules/case-study", () => ({ listClientSummaries: () => listClientSummaries(), CLIENT_NAME_MAX: 120 }));
-vi.mock("@/app/(tool)/clients/actions", () => ({ createClient: vi.fn(), renameClient: vi.fn() }));
+vi.mock("@/modules/case-study", () => ({
+  listClientSummaries: () => listClientSummaries(),
+  CLIENT_NAME_MAX: 120,
+  CLIENT_SECTOR_MAX: 60,
+  CLIENT_DESCRIPTION_MAX: 400,
+  LOGO_CONTENT_TYPES: ["image/png", "image/jpeg", "image/webp"],
+  LOGO_MAX_BYTES: 5 * 1024 * 1024,
+  LOGO_MIN_SHORT_SIDE_PX: 400,
+}));
+vi.mock("@/app/(tool)/clients/actions", () => ({
+  createClient: vi.fn(),
+  updateClient: vi.fn(),
+  requestClientLogoUpload: vi.fn(),
+  confirmClientLogoUpload: vi.fn(),
+}));
 
 const { default: ClientsPage } = await import("./page");
 const { default: Loading } = await import("./loading");

@@ -3,7 +3,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionResult } from "@/app/_lib/action-result";
-import type { CaseStudy, Client } from "@/modules/case-study";
+import type { CaseStudy, ClientRef } from "@/modules/case-study";
 
 const replace = vi.fn();
 const createCaseStudy = vi.fn<(input: unknown) => Promise<ActionResult<CaseStudy>>>();
@@ -35,14 +35,14 @@ const created = (over: Partial<CaseStudy> = {}): CaseStudy => ({
   ...over,
 });
 
-const LUMEN: Client = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" };
-const TORINO: Client = { id: "cccccccc-0000-4000-8000-000000000002", name: "Città di Torino", code: "CIT" };
-const CLIENTS: Client[] = [TORINO, LUMEN];
+const LUMEN: ClientRef = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" };
+const TORINO: ClientRef = { id: "cccccccc-0000-4000-8000-000000000002", name: "Città di Torino", code: "CIT" };
+const CLIENTS: ClientRef[] = [TORINO, LUMEN];
 
 const field = (name: string) => screen.getByLabelText(name);
 const avanti = () => screen.getByRole("button", { name: "Avanti" });
 
-function setup(clients: Client[] = CLIENTS) {
+function setup(clients: ClientRef[] = CLIENTS) {
   const user = userEvent.setup();
   render(<NameStep clients={clients} defaultYear={2026} yearMin={1900} yearMax={2100} />);
   return user;
