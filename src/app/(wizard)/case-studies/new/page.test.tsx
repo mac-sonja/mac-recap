@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
-import type { CaseStudy, Client } from "@/modules/case-study";
+import type { CaseStudy, ClientRef } from "@/modules/case-study";
 import type { DetailsForm, ListedAsset } from "@/modules/material";
 import { err, ok, type Result } from "@/shared/result";
 
@@ -10,7 +10,7 @@ const get = vi.fn<(id: unknown) => Promise<Result<CaseStudy>>>();
 const listAssets = vi.fn<(input: unknown) => Promise<Result<ListedAsset[]>>>();
 const hasMaterial = vi.fn<(caseId: unknown) => Promise<Result<boolean>>>();
 const getDetailsForm = vi.fn<(input: unknown) => Promise<Result<DetailsForm>>>();
-const listClients = vi.fn<() => Promise<Result<Client[]>>>();
+const listClients = vi.fn<() => Promise<Result<ClientRef[]>>>();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -76,7 +76,7 @@ const draft: CaseStudy = {
   deletedAt: null,
 };
 
-const clients: Client[] = [
+const clients: ClientRef[] = [
   { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
   { id: "cccccccc-0000-4000-8000-000000000002", name: "Città di Torino", code: "CIT" },
 ];

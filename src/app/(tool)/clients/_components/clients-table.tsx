@@ -8,7 +8,7 @@ import { PRIMARY_ACTION } from "@/app/_components/button-styles";
 import { SEARCH_DEBOUNCE_MS } from "@/app/(tool)/case-studies/_components/case-studies-table";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import { ClientNameDialog } from "./client-name-dialog";
+import { ClientDialog, type ClientLimits } from "./client-dialog";
 import {
   DEFAULT_CLIENT_SORT,
   filterClientRows,
@@ -24,8 +24,8 @@ export interface ClientsTableProps {
   rows: ClientRow[];
   /** Policy decision (`manage clients`): whether **Aggiungi cliente** exists. */
   canManage: boolean;
-  /** `CLIENT_NAME_MAX`. */
-  nameMaxLength: number;
+  /** The add dialog's limits (`CLIENT_*_MAX`, `LOGO_*`). */
+  limits: ClientLimits;
 }
 
 const COLUMNS: ReadonlyArray<{ key: ClientSortKey; label: string; numeric?: boolean }> = [
@@ -58,7 +58,7 @@ export const clientHref = (id: string) => `/clients/${encodeURIComponent(id)}`;
  * is hidden below 1024 px, where the page is read-only. After a save the page is
  * refreshed and focus goes back to **Aggiungi cliente**.
  */
-export function ClientsTable({ rows, canManage, nameMaxLength }: ClientsTableProps) {
+export function ClientsTable({ rows, canManage, limits }: ClientsTableProps) {
   const router = useRouter();
   const searchId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -107,9 +107,9 @@ export function ClientsTable({ rows, canManage, nameMaxLength }: ClientsTablePro
   ) : null;
 
   const dialog = adding ? (
-    <ClientNameDialog
+    <ClientDialog
       mode={{ kind: "add" }}
-      maxLength={nameMaxLength}
+      limits={limits}
       onClose={() => {
         refocusAdd.current = false;
         setAdding(false);

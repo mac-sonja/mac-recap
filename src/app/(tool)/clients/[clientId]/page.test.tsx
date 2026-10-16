@@ -2,11 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
-import type { CaseStudy, Client, ListScope } from "@/modules/case-study";
+import type { CaseStudy, ClientDetail, ListScope } from "@/modules/case-study";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
-const getClient = vi.fn<(id: unknown) => Promise<Result<Client>>>();
+const getClient = vi.fn<(id: unknown) => Promise<Result<ClientDetail>>>();
 const list = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
 
 vi.mock("next/navigation", () => ({
@@ -20,8 +20,18 @@ vi.mock("@/modules/case-study", () => ({
   getClient: (id: unknown) => getClient(id),
   list: (scope: ListScope) => list(scope),
   CLIENT_NAME_MAX: 120,
+  CLIENT_SECTOR_MAX: 60,
+  CLIENT_DESCRIPTION_MAX: 400,
+  LOGO_CONTENT_TYPES: ["image/png", "image/jpeg", "image/webp"],
+  LOGO_MAX_BYTES: 5 * 1024 * 1024,
+  LOGO_MIN_SHORT_SIDE_PX: 400,
 }));
-vi.mock("@/app/(tool)/clients/actions", () => ({ createClient: vi.fn(), renameClient: vi.fn() }));
+vi.mock("@/app/(tool)/clients/actions", () => ({
+  createClient: vi.fn(),
+  updateClient: vi.fn(),
+  requestClientLogoUpload: vi.fn(),
+  confirmClientLogoUpload: vi.fn(),
+}));
 
 const { default: ClientPage } = await import("./page");
 const { default: Loading } = await import("./loading");
@@ -31,14 +41,23 @@ const shell = (role: Role, landing = "/case-studies"): ShellActor => ({
   landing,
 });
 
-const LUMEN: Client = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" };
+const LUMEN: ClientDetail = {
+  id: "cccccccc-0000-4000-8000-000000000001",
+  name: "Lumen Srl",
+  code: "LUM",
+  sector: null,
+  description: null,
+  logoId: null,
+  logoUrl: null,
+};
+const LOGO_URL = "https://project.supabase.co/storage/v1/object/sign/material/clients/x/logos/y.png?token=g";
 
 const caseStudy = (over: Partial<CaseStudy> = {}): CaseStudy => ({
   id: "aaaaaaaa-0000-4000-8000-000000000001",
   code: "LUM-2026-01",
   number: 1,
   name: "Rebrand",
-  client: LUMEN,
+  client: { id: LUMEN.id, name: LUMEN.name, code: LUMEN.code },
   year: 2026,
   locale: "it",
   status: "draft",
@@ -68,19 +87,43 @@ beforeEach(() => {
 const NEW_HREF = `/case-studies/new?clientId=${LUMEN.id}`;
 
 describe("ClientPage", () => {
-  it("shows the name, the code, Modifica nome, Nuova case history and the client's cases only", async () => {
+  it("shows the name, the code, Modifica cliente, Nuova case history and the client's cases only", async () => {
     const html = await renderPage();
     expect(requireSurface).toHaveBeenCalledWith("list clients");
     expect(getClient).toHaveBeenCalledWith(LUMEN.id);
     expect(list).toHaveBeenCalledExactlyOnceWith({ clientId: LUMEN.id });
     expect(html).toMatch(/<h1[^>]*>Lumen Srl<\/h1>/);
     expect(html).toMatch(/font-mono[^>]*>.*LUM<\/p>/);
-    const rename = html.match(/<button [^>]*>(?:(?!<\/button>).)*Modifica nome<\/button>/)?.[0] ?? "";
-    expect(rename).toContain("hidden");
-    expect(rename).toContain("lg:inline-flex");
+    const edit = html.match(/<button [^>]*>(?:(?!<\/button>).)*Modifica cliente<\/button>/)?.[0] ?? "";
+    expect(edit).toContain("hidden");
+    expect(edit).toContain("lg:inline-flex");
     expect(html).toContain(`href="${NEW_HREF}"`);
     expect(html).toContain("LUM-2026-01");
     expect(html).toContain("Rebrand");
+  });
+
+  it("shows nothing for an existing client with no info: no logo, no placeholders", async () => {
+    const html = await renderPage();
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("Settore");
+    expect(html).not.toContain("bg-logo-tile");
+  });
+
+  it("shows the logo on a white tile, the sector and the description above the cases", async () => {
+    getClient.mockResolvedValue(ok({ ...LUMEN, sector: "Moda", description: "Brand di moda\ndal 1990.", logoId: "eeeeeeee-0000-4000-8000-000000000001", logoUrl: LOGO_URL }));
+    const html = await renderPage();
+    expect(html).toMatch(/<div class="[^"]*bg-logo-tile[^"]*"><img src="[^"]+" alt="Logo Lumen Srl"/);
+    expect(html).toContain(`src="${LOGO_URL.replace(/&/g, "&amp;")}"`);
+    expect(html).toMatch(/<span class="sr-only">Settore <\/span>Moda/);
+    expect(html).toContain("Brand di moda\ndal 1990.");
+    expect(html.indexOf("Brand di moda")).toBeLessThan(html.indexOf("client-cases-heading"));
+  });
+
+  it("renders without the logo when it could not be signed", async () => {
+    getClient.mockResolvedValue(ok({ ...LUMEN, logoId: "eeeeeeee-0000-4000-8000-000000000001", logoUrl: null }));
+    const html = await renderPage();
+    expect(html).not.toContain("<img");
+    expect(html).toMatch(/<h1[^>]*>Lumen Srl<\/h1>/);
   });
 
   it("shows the no-cases line with Nuova case history preselecting the client", async () => {

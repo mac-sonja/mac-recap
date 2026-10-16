@@ -7,14 +7,14 @@ import { flushSync } from "react-dom";
 import { createCaseStudy } from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
 import { wizardHref } from "@/app/_lib/routes";
-import type { Client, Locale } from "@/modules/case-study";
+import type { ClientRef, Locale } from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { WizardFooter } from "./wizard-frame";
 
 export interface NameStepProps {
   /** Every client, sorted by name (`case-study.listClients`). Empty: the field gives way to a note. */
-  clients: readonly Client[];
+  clients: readonly ClientRef[];
   /** A client to preselect (`?clientId=` from a client's page); the page passes it only when it is in `clients`. */
   initialClientId?: string;
   /** Prefilled year: the current year in Europe/Rome. */

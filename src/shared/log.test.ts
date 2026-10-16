@@ -10,14 +10,14 @@ function capture() {
 describe("log", () => {
   it("writes one JSON line with level, msg, time and context ids", () => {
     const write = capture();
-    log.info("x", { caseId: "c1", jobId: "j1", actorId: "a1" });
+    log.info("x", { caseId: "c1", jobId: "j1", actorId: "a1", clientId: "k1" });
 
     expect(write).toHaveBeenCalledTimes(1);
     const line = String(write.mock.calls[0][0]);
     expect(line.endsWith("\n")).toBe(true);
     expect(line.trim().split("\n")).toHaveLength(1);
     const entry = JSON.parse(line);
-    expect(entry).toMatchObject({ level: "info", msg: "x", caseId: "c1", jobId: "j1", actorId: "a1" });
+    expect(entry).toMatchObject({ level: "info", msg: "x", caseId: "c1", jobId: "j1", actorId: "a1", clientId: "k1" });
     expect(new Date(entry.time).toISOString()).toBe(entry.time);
   });
 

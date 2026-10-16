@@ -129,3 +129,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-1-background-job-queue-and-worker-loop.md`
   summary: Add retention for finished (`succeeded` / `failed`) job rows.
   evidence: Rows are never pruned; the partial indexes keep claims fast, but the table and per-subject history grow without bound.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-client-info-description-sector-logo.md`
+  summary: Record who last changed a client's info and when (`update_client` takes `p_actor_id` but stores nothing), and consider a composite FK so `client.logo_id` can only point at the same client's logo.
+  evidence: Approved case histories will read client info (3.3/3.7); today only `update_client` enforces the same-client rule and there is no edit trail. Needs a new forward migration (the 2.14 one is applied to mac-recap-dev).

@@ -9,15 +9,28 @@ import type { ClientRow } from "./filter-sort";
 const push = vi.fn();
 const refresh = vi.fn();
 const createClient = vi.fn<(input: unknown) => Promise<ActionResult<Client>>>();
-const renameClient = vi.fn<(input: unknown) => Promise<ActionResult<Client>>>();
+const updateClient = vi.fn<(input: unknown) => Promise<ActionResult<Client>>>();
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
 vi.mock("@/app/(tool)/clients/actions", () => ({
   createClient: (input: unknown) => createClient(input),
-  renameClient: (input: unknown) => renameClient(input),
+  updateClient: (input: unknown) => updateClient(input),
+  requestClientLogoUpload: vi.fn(),
+  confirmClientLogoUpload: vi.fn(),
 }));
 
 const { ClientsTable } = await import("./clients-table");
+
+const LIMITS = {
+  nameMax: 120,
+  sectorMax: 60,
+  descriptionMax: 400,
+  logoTypes: ["image/png", "image/jpeg", "image/webp"],
+  logoMaxBytes: 5 * 1024 * 1024,
+  logoMinShortSide: 400,
+};
+/** A client as the actions return it. */
+const saved = (id: string, name: string, code: string): Client => ({ id, name, code, sector: null, description: null, logoId: null });
 const { SEARCH_DEBOUNCE_MS } = await import("@/app/(tool)/case-studies/_components/case-studies-table");
 
 const LUMEN: ClientRow = { id: "cccccccc-0000-4000-8000-000000000001", code: "LUM", name: "Lumen Srl", caseCount: 2 };
@@ -42,7 +55,7 @@ beforeEach(() => {
   push.mockReset();
   refresh.mockReset();
   createClient.mockReset();
-  renameClient.mockReset();
+  updateClient.mockReset();
 });
 afterEach(() => {
   cleanup();
@@ -51,7 +64,7 @@ afterEach(() => {
 
 describe("ClientsTable", () => {
   it("lists by name A–Z with the code in mono and the count", () => {
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     expect(names()).toEqual(["Acme", "Città di Torino", "Lumen Srl"]);
     expect(header("Nome").getAttribute("aria-sort")).toBe("ascending");
     const cells = within(screen.getAllByRole("row")[3]).getAllByRole("cell");
@@ -61,7 +74,7 @@ describe("ClientsTable", () => {
   });
 
   it("sorts by a header click and reverses on a second click", () => {
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     fireEvent.click(within(header("Case history")).getByRole("button"));
     expect(names()).toEqual(["Acme", "Lumen Srl", "Città di Torino"]);
     fireEvent.click(within(header("Case history")).getByRole("button"));
@@ -72,7 +85,7 @@ describe("ClientsTable", () => {
 
   it("searches name and code after the debounce, ignoring case and accents", () => {
     vi.useFakeTimers();
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     fireEvent.change(screen.getByRole("searchbox", { name: "Cerca nome o codice" }), { target: { value: "CITTA" } });
     expect(names()).toHaveLength(3);
     act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
@@ -84,7 +97,7 @@ describe("ClientsTable", () => {
 
   it("shows no results in a live status region with a clear-search button", () => {
     vi.useFakeTimers();
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz" } });
     act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
     expect(screen.getByRole("status").textContent).toBe("Nessun cliente per 'zzz'.");
@@ -95,23 +108,23 @@ describe("ClientsTable", () => {
   });
 
   it("opens the client's page on a row click and links the name", () => {
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     expect(screen.getByRole("link", { name: "Lumen Srl" }).getAttribute("href")).toBe(`/clients/${LUMEN.id}`);
     fireEvent.click(within(screen.getAllByRole("row")[3]).getAllByRole("cell")[0]);
     expect(push).toHaveBeenCalledWith(`/clients/${LUMEN.id}`);
   });
 
   it("hides Aggiungi cliente below 1024 px and omits it without manage clients; search still works", () => {
-    const { unmount } = render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    const { unmount } = render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     expect(addButton().className).toContain("hidden lg:inline-flex");
     unmount();
-    render(<ClientsTable rows={rows} canManage={false} nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage={false} limits={LIMITS} />);
     expect(screen.queryByRole("button", { name: "Aggiungi cliente" })).toBeNull();
     expect(screen.getByRole("searchbox")).toBeTruthy();
   });
 
   it("shows the empty state with Aggiungi cliente from 1024 px, and a read-only line below", () => {
-    render(<ClientsTable rows={[]} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={[]} canManage limits={LIMITS} />);
     expect(screen.getByText("Nessun cliente. Aggiungi il primo.").className).toBe("hidden lg:inline");
     expect(screen.getByText("Nessun cliente.").className).toBe("lg:hidden");
     expect(addButton().className).toContain("hidden lg:inline-flex");
@@ -119,7 +132,7 @@ describe("ClientsTable", () => {
   });
 
   it("shows only the read-only empty line without manage clients", () => {
-    render(<ClientsTable rows={[]} canManage={false} nameMaxLength={120} />);
+    render(<ClientsTable rows={[]} canManage={false} limits={LIMITS} />);
     expect(screen.getByText("Nessun cliente.").tagName).toBe("P");
     expect(screen.queryByText(/Aggiungi il primo/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Aggiungi cliente" })).toBeNull();
@@ -127,7 +140,7 @@ describe("ClientsTable", () => {
 
   it("focuses search on / outside a text field, and types / inside one", async () => {
     const user = userEvent.setup();
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     within(header("Nome")).getByRole("button").focus();
     await user.keyboard("/");
     expect(document.activeElement).toBe(screen.getByRole("searchbox"));
@@ -138,28 +151,31 @@ describe("ClientsTable", () => {
 });
 
 describe("Aggiungi cliente dialog", () => {
-  it("asks for the name only, adds it, closes, refreshes and returns focus to Aggiungi cliente", async () => {
+  it("asks for name, sector, description and logo (no code), adds it, closes, refreshes and returns focus to Aggiungi cliente", async () => {
     const user = userEvent.setup();
-    const { rerender } = render(<ClientsTable rows={[]} canManage nameMaxLength={120} />);
+    const { rerender } = render(<ClientsTable rows={[]} canManage limits={LIMITS} />);
     await user.click(addButton());
     expect(dialog()).not.toBeNull();
-    expect(within(dialog() as HTMLElement).getAllByRole("textbox")).toHaveLength(1);
+    expect(within(dialog() as HTMLElement).getAllByRole("textbox")).toHaveLength(3);
+    expect(screen.getByLabelText(/Settore/)).not.toBeNull();
+    expect(screen.getByLabelText(/Descrizione/)).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Scegli il logo" })).not.toBeNull();
     expect(screen.queryByLabelText(/codice/i)).toBeNull();
     expect(document.activeElement).toBe(nameField());
-    createClient.mockResolvedValue({ ok: true, value: { id: LUMEN.id, name: "Lumen Srl", code: "LUM" } });
+    createClient.mockResolvedValue({ ok: true, value: saved(LUMEN.id, "Lumen Srl", "LUM") });
     await user.type(nameField(), "Lumen Srl");
     await user.click(submit());
-    expect(createClient).toHaveBeenCalledExactlyOnceWith({ name: "Lumen Srl" });
+    expect(createClient).toHaveBeenCalledExactlyOnceWith({ name: "Lumen Srl", sector: null, description: null });
     await waitFor(() => expect(dialog()).toBeNull());
     expect(refresh).toHaveBeenCalledOnce();
     // The refreshed list replaces the empty state; focus lands on the toolbar's button.
-    rerender(<ClientsTable rows={[LUMEN]} canManage nameMaxLength={120} />);
+    rerender(<ClientsTable rows={[LUMEN]} canManage limits={LIMITS} />);
     expect(document.activeElement).toBe(addButton());
   });
 
   it.each([["   "], ["x".repeat(121)]])("rejects %j inline without a request, focus in the field", async (value) => {
     const user = userEvent.setup();
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     await user.click(addButton());
     fireEvent.change(nameField(), { target: { value } });
     await user.click(submit());
@@ -176,7 +192,7 @@ describe("Aggiungi cliente dialog", () => {
     ["CLIENT_CODE_EXHAUSTED", 409, "Non è stato possibile assegnare un codice a questo nome. Usa un nome diverso."],
   ])("keeps the dialog open with the typed name on %s", async (code, status, message) => {
     const user = userEvent.setup();
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     await user.click(addButton());
     createClient.mockResolvedValue({ ok: false, status, error: { code, message: "m" } });
     await user.type(nameField(), "lumen  srl");
@@ -190,7 +206,7 @@ describe("Aggiungi cliente dialog", () => {
 
   it("shows the generic line for any other failure and when the action throws", async () => {
     const user = userEvent.setup();
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     await user.click(addButton());
     createClient.mockResolvedValueOnce({ ok: false, status: 403, error: { code: "FORBIDDEN", message: "m" } });
     await user.type(nameField(), "Acme");
@@ -206,7 +222,7 @@ describe("Aggiungi cliente dialog", () => {
     let resolve: (value: ActionResult<Client>) => void = () => undefined;
     createClient.mockReturnValue(new Promise((r) => (resolve = r)));
     const user = userEvent.setup();
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     await user.click(addButton());
     await user.type(nameField(), "Lumen Arte");
     await user.click(submit());
@@ -215,7 +231,7 @@ describe("Aggiungi cliente dialog", () => {
     await user.click(submit());
     await user.keyboard("{Enter}");
     expect(createClient).toHaveBeenCalledOnce();
-    await act(async () => resolve({ ok: true, value: { id: "cccccccc-0000-4000-8000-000000000009", name: "Lumen Arte", code: "LUMA" } }));
+    await act(async () => resolve({ ok: true, value: saved("cccccccc-0000-4000-8000-000000000009", "Lumen Arte", "LUMA") }));
     await waitFor(() => expect(dialog()).toBeNull());
     expect(refresh).toHaveBeenCalledOnce();
   });
@@ -224,7 +240,7 @@ describe("Aggiungi cliente dialog", () => {
     let resolve: (value: ActionResult<Client>) => void = () => undefined;
     createClient.mockReturnValue(new Promise((r) => (resolve = r)));
     const user = userEvent.setup();
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     await user.click(addButton());
     await user.type(nameField(), "Lumen Arte");
     await user.click(submit());
@@ -242,32 +258,32 @@ describe("Aggiungi cliente dialog", () => {
 
   it("does not take focus back after a cancelled dialog when the rows later change", async () => {
     const user = userEvent.setup();
-    const { rerender } = render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    const { rerender } = render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     await user.click(addButton());
     await user.click(screen.getByRole("button", { name: "Annulla" }));
     screen.getByRole("searchbox").focus();
-    rerender(<ClientsTable rows={[...rows]} canManage nameMaxLength={120} />);
+    rerender(<ClientsTable rows={[...rows]} canManage limits={LIMITS} />);
     expect(document.activeElement).toBe(screen.getByRole("searchbox"));
   });
 
   it("forgets the refocus when a refresh brings no new rows", async () => {
     const user = userEvent.setup();
-    const { rerender } = render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    const { rerender } = render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     await user.click(addButton());
-    createClient.mockResolvedValue({ ok: true, value: { id: "cccccccc-0000-4000-8000-000000000009", name: "Nuovo", code: "NUO" } });
+    createClient.mockResolvedValue({ ok: true, value: saved("cccccccc-0000-4000-8000-000000000009", "Nuovo", "NUO") });
     await user.type(nameField(), "Nuovo");
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await user.click(submit());
     await waitFor(() => expect(dialog()).toBeNull());
     act(() => vi.advanceTimersByTime(5000));
     screen.getByRole("searchbox").focus();
-    rerender(<ClientsTable rows={[...rows]} canManage nameMaxLength={120} />);
+    rerender(<ClientsTable rows={[...rows]} canManage limits={LIMITS} />);
     expect(document.activeElement).toBe(screen.getByRole("searchbox"));
   });
 
   it("closes on Annulla without a request", async () => {
     const user = userEvent.setup();
-    render(<ClientsTable rows={rows} canManage nameMaxLength={120} />);
+    render(<ClientsTable rows={rows} canManage limits={LIMITS} />);
     await user.click(addButton());
     await user.click(screen.getByRole("button", { name: "Annulla" }));
     expect(dialog()).toBeNull();

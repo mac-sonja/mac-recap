@@ -1,4 +1,4 @@
-import type { Client } from "@/modules/case-study/domain/case-study";
+import type { ClientRef } from "@/modules/case-study/domain/case-study";
 import { ok, type Result } from "@/shared/result";
 import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
 
@@ -9,7 +9,7 @@ const collator = new Intl.Collator("it", { sensitivity: "base", numeric: true })
  * the repository's order). The caller has already authorized `list clients`.
  */
 export function makeListClients(clients: ClientRepository) {
-  return async function listClients(): Promise<Result<Client[]>> {
+  return async function listClients(): Promise<Result<ClientRef[]>> {
     const listed = await clients.list();
     if (!listed.ok) return listed;
     return ok(

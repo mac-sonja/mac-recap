@@ -51,10 +51,15 @@ describe("clients copy", () => {
     expect(t("clients.heading")).toBe("Clienti");
     expect(Object.values(it.clients.table.columns)).toEqual(["Codice", "Nome", "Case history"]);
     expect(t("clients.add")).toBe("Aggiungi cliente");
-    expect(t("clients.rename")).toBe("Modifica nome");
+    expect(t("clients.edit")).toBe("Modifica cliente");
     expect(t("clients.empty")).toBe("Nessun cliente. Aggiungi il primo.");
     expect(t("clients.errors.nameTaken")).toBe("Esiste già un cliente con questo nome.");
-    expect(fill(t("clients.dialog.renameDescription"), { code: "LUM" })).toBe("Il codice LUM non cambia.");
+    expect(fill(t("clients.dialog.editDescription"), { code: "LUM" })).toBe(
+      "Il codice LUM non cambia. Le case history già approvate mantengono i dati con cui sono state generate.",
+    );
+    expect(t("clients.dialog.sectorLabel")).toBe("Settore");
+    expect(t("clients.dialog.descriptionLabel")).toBe("Descrizione");
+    expect(t("clients.dialog.logoRemove")).toBe("Rimuovi");
     expect(t("clients.detail.noCases")).toBe("Nessuna case history per questo cliente.");
   });
 });

@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { err, ok } from "@/shared/result";
 
-const { getActor, createClientUseCase, renameClientUseCase } = vi.hoisted(() => ({
+const { getActor, createClientUseCase, updateClientUseCase, requestLogoUseCase, confirmLogoUseCase } = vi.hoisted(() => ({
   getActor: vi.fn(),
   createClientUseCase: vi.fn(),
-  renameClientUseCase: vi.fn(),
+  updateClientUseCase: vi.fn(),
+  requestLogoUseCase: vi.fn(),
+  confirmLogoUseCase: vi.fn(),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -13,10 +15,15 @@ vi.mock("@/modules/access", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/modules/access")>()),
   getActor,
 }));
-vi.mock("@/modules/case-study", () => ({ createClient: createClientUseCase, renameClient: renameClientUseCase }));
+vi.mock("@/modules/case-study", () => ({
+  createClient: createClientUseCase,
+  updateClient: updateClientUseCase,
+  requestClientLogoUpload: requestLogoUseCase,
+  confirmClientLogoUpload: confirmLogoUseCase,
+}));
 
 const actions = await import("./actions");
-const { createClient, renameClient } = actions;
+const { createClient, updateClient, requestClientLogoUpload, confirmClientLogoUpload } = actions;
 
 const actor = (role: Actor["role"]): Actor => ({
   id: "00000000-0000-4000-8000-000000000002",
@@ -25,20 +32,23 @@ const actor = (role: Actor["role"]): Actor => ({
   role,
 });
 
-const LUMEN = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" };
+const LUMEN = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM", sector: null, description: null, logoId: null };
+const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
 
 const cases = [
-  ["createClient", createClient, createClientUseCase, { name: "Lumen Srl" }],
-  ["renameClient", renameClient, renameClientUseCase, { clientId: LUMEN.id, name: "Lumen S.r.l." }],
+  ["createClient", createClient, createClientUseCase, { name: "Lumen Srl", sector: "Moda", description: "Brand." }],
+  ["updateClient", updateClient, updateClientUseCase, { clientId: LUMEN.id, name: "Lumen S.r.l.", sector: null, description: null, logoId: null }],
+  ["requestClientLogoUpload", requestClientLogoUpload, requestLogoUseCase, { clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 }],
+  ["confirmClientLogoUpload", confirmClientLogoUpload, confirmLogoUseCase, { clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/png" }],
 ] as const;
 
 beforeEach(() => {
-  for (const fn of [getActor, createClientUseCase, renameClientUseCase]) fn.mockReset();
+  for (const fn of [getActor, createClientUseCase, updateClientUseCase, requestLogoUseCase, confirmLogoUseCase]) fn.mockReset();
 });
 
 describe("client actions", () => {
-  it("exports only createClient and renameClient: no delete", () => {
-    expect(Object.keys(actions).sort()).toEqual(["createClient", "renameClient"]);
+  it("exports only add, edit and the two logo steps: no delete", () => {
+    expect(Object.keys(actions).sort()).toEqual(["confirmClientLogoUpload", "createClient", "requestClientLogoUpload", "updateClient"]);
   });
 
   it.each(cases)("%s passes the actor and its input unchanged for an owner/designer", async (_name, action, useCase, input) => {
@@ -68,11 +78,31 @@ describe("client actions", () => {
     ["CLIENT_NAME_TAKEN", 409],
     ["CLIENT_CODE_EXHAUSTED", 409],
     ["CLIENT_NOT_FOUND", 404],
+    ["CLIENT_LOGO_INVALID", 400],
     ["CLIENT_WRITE_FAILED", 500],
   ] as const)("maps %s to %i and keeps details server-side", async (code, status) => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
-    renameClientUseCase.mockResolvedValue(err({ code, message: "m", details: { clientId: LUMEN.id } }));
-    expect(await renameClient({ clientId: LUMEN.id, name: "X" })).toEqual({ ok: false, status, error: { code, message: "m" } });
+    updateClientUseCase.mockResolvedValue(err({ code, message: "m", details: { clientId: LUMEN.id } }));
+    expect(await updateClient({ clientId: LUMEN.id, name: "X", sector: null, description: null, logoId: null })).toEqual({ ok: false, status, error: { code, message: "m" } });
+  });
+
+  it("maps CLIENT_FIELD_TOO_LONG to 400 with the failing field names", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    updateClientUseCase.mockResolvedValue(err({ code: "CLIENT_FIELD_TOO_LONG", message: "m", details: { fields: ["description"] } }));
+    expect(await updateClient({ clientId: LUMEN.id, name: "X", sector: null, logoId: null, description: "x".repeat(401) })).toEqual({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_FIELD_TOO_LONG", message: "m", fields: ["description"] },
+    });
+  });
+
+  it.each([
+    ["requestClientLogoUpload", requestClientLogoUpload, requestLogoUseCase],
+    ["confirmClientLogoUpload", confirmClientLogoUpload, confirmLogoUseCase],
+  ] as const)("%s maps CLIENT_LOGO_INVALID to 400", async (_name, action, useCase) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    useCase.mockResolvedValue(err({ code: "CLIENT_LOGO_INVALID", message: "m", details: { clientId: LUMEN.id } }));
+    expect(await action({})).toEqual({ ok: false, status: 400, error: { code: "CLIENT_LOGO_INVALID", message: "m" } });
   });
 
   it.each([
