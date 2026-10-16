@@ -13,7 +13,7 @@ context:
 
 > **Amended 2026-10-16** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-16.md): the dialogs gain sector, description and logo, see Story 2.14 (Client info).
 
-> **Amended 2026-10-16 (client intro and collections)** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-16-client-intro-and-collections.md): after the demo, Add client asks for 2–3 images and starts the intro; Modifica cliente opens the client overview (Stories 2.15, 4.12).
+> **Amended 2026-10-16 (client intro and collections)** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-16-client-intro-and-collections.md), built before the demo (owner amendment the same day): Add client asks for 2–3 images and starts the intro; Modifica cliente opens the client overview (Stories 2.15, 4.12).
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 

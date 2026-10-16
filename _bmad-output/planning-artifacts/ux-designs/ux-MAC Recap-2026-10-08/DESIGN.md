@@ -223,8 +223,8 @@ Rounded but tight. `{rounded.sm}` for segments inside a track, `{rounded.md}` fo
 *Bozza* and *In elaborazione* look the same and are told apart by their label.
 
 - **Focus indicator:** 2px `{colors.focus-ring}` lime outline (17.8:1 on black, 15.5:1 on panels).
-- **Selectable card** (library multi-select, after the demo; [Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md)): a checkbox in the card's top-left corner. Selected cards get `{colors.surface-selected}` and a 1px `{colors.border-strong}` border. No new token.
-- **Sortable list row** (client overview and collection left panes, after the demo): a row with a drag handle on the left and an overflow menu with *Sposta su* / *Sposta giù* as the keyboard alternative; the focused row shows the focus indicator. No new token.
+- **Selectable card** (library multi-select; [Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md)): a checkbox in the card's top-left corner. Selected cards get `{colors.surface-selected}` and a 1px `{colors.border-strong}` border. No new token.
+- **Sortable list row** (client overview and collection left panes): a row with a drag handle on the left and an overflow menu with *Sposta su* / *Sposta giù* as the keyboard alternative; the focused row shows the focus indicator. No new token.
 
 ## Do's and Don'ts
 

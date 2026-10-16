@@ -65,7 +65,7 @@ flowchart LR
 
 - **Binds:** all epics
 - **Prevents:** Epic 4 or 5 reading Epic 2's tables or storage keys directly, and vendor SDK calls leaking into UI code
-- **Rule:** The MVP modules are `case-study`, `material`, `generation`, `rendering`, `sharing`, `access` and `jobs`. `collection` is added after the demo (AD-24). `integration` is created at Epic 7 (AD-16). Each module owns the tables and storage prefixes listed below, and nothing else writes them. Code outside a module imports only that module's `index.ts`. Vendor SDKs are imported only in `adapters/`.
+- **Rule:** The MVP modules are `case-study`, `material`, `generation`, `rendering`, `sharing`, `access` and `jobs`. `collection` is added by the client intro and collections change, before the demo (AD-24). `integration` is created at Epic 7 (AD-16). Each module owns the tables and storage prefixes listed below, and nothing else writes them. Code outside a module imports only that module's `index.ts`. Vendor SDKs are imported only in `adapters/`.
 
 | Owner | Tables | Storage prefixes |
 | --- | --- | --- |
@@ -73,7 +73,7 @@ flowchart LR
 | `material` | `asset` (including `is_favourite`), `context_form` | `cases/{caseId}/assets/**` (originals and renditions) |
 | `generation` | — (writes revisions only via `case-study`) | — |
 | `rendering` | `export`, `template_variant_state` (only if AD-15's conditional applies) | `exports/{contentHash}/**` |
-| `collection` (Phase 2, AD-24) | `collection`, `collection_item`, `collection_text_edit`, `collection_hidden_page` | — |
+| `collection` (AD-24) | `collection`, `collection_item`, `collection_text_edit`, `collection_hidden_page` | — |
 | `sharing` | `share_link` | — |
 | `access` | `profile` | — |
 | `jobs` | `job` | — |
@@ -231,12 +231,12 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 | --- | --- | --- | --- | --- |
 | list cases | all statuses | approved only | — | — |
 | create case, upload, mark favourites, fill details, generate, edit | any case | — | — | — |
-| list clients | ✓ | Phase 2: clients with an approved case, read-only | — | — |
+| list clients | ✓ | clients with an approved case, read-only (SCP 2026-10-16 client intro and collections) | — | — |
 | manage clients (add, edit, images) | ✓ | — | — | — |
-| generate, edit, approve a client intro (Phase 2) | ✓ | — | — | — |
-| download client pack (Phase 2) | approved content | approved content | — | — |
-| manage collections: create, rename, reorder, add/remove, hide pages, delete, export (Phase 2) | ✓ | ✓ | — | — |
-| edit collection text (Phase 2) | ✓ | — (IR-COLL-EDIT, OP 15 resolved 2026-10-16) | — | — |
+| generate, edit, approve a client intro | ✓ | — | — | — |
+| download client pack | approved content | approved content | — | — |
+| manage collections: create, rename, reorder, add/remove, hide pages, delete, export | ✓ | ✓ | — | — |
+| edit collection text | ✓ | — (IR-COLL-EDIT, OP 15 resolved 2026-10-16) | — | — |
 | delete case | any `draft` case | — | — | — |
 | approve, update approved version, discard | any case (AD-19) | — | — | — |
 | view, export | any approved | any approved | — | — |
@@ -480,7 +480,7 @@ There is one image, built on the Playwright base image `mcr.microsoft.com/playwr
 src/
   app/                      # (tool)/… pages and actions, s/[token]
   modules/
-    case-study/ material/ generation/ rendering/ sharing/ access/ jobs/ collection/ (Phase 2)
+    case-study/ material/ generation/ rendering/ sharing/ access/ jobs/ collection/
       domain/ application/ index.ts   (+ ports/ adapters/ only at vendor seams)
     rendering/templates/{templateId}/v{n}/
   worker/                   # job loop entry
@@ -506,9 +506,9 @@ supabase/migrations/        # forward-only SQL, incl. jobs_claim()
 | NFR5 narrative structure, both sides | `generation` | AD-4, AD-6, AD-7 |
 | NFR6 no material, no generation | `generation` gate + wizard | AD-6 |
 | NFR7 approval before export or share | `case-study`, `rendering`, `sharing` | AD-3, AD-13, AD-19 |
-| FR11 client intro (Phase 2) | `case-study`, `generation`, `rendering` | AD-23 |
-| FR12 client overview (Phase 2) | `app/(tool)`, `case-study` | AD-3, AD-17 |
-| FR13 client packs and collections (Phase 2) | `collection`, `rendering`, `jobs` | AD-9, AD-24 |
+| FR11 client intro | `case-study`, `generation`, `rendering` | AD-23 |
+| FR12 client overview | `app/(tool)`, `case-study` | AD-3, AD-17 |
+| FR13 client packs and collections | `collection`, `rendering`, `jobs` | AD-9, AD-24 |
 | FR9 MAC Productive seam | `integration` (Epic 7) | AD-2, AD-16 |
 
 ## Conflicts flagged

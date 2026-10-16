@@ -8,10 +8,69 @@ scope: major
 mode: batch
 triggers: [C14, C15, C16, C17, C18]
 source: "Owner change request of 2026-10-16 (Italian, translated; 'deliverable' = case history), with the owner's answers to the clarifying questions the same day"
+amended: 2026-10-16 (owner: all features before the demo, nothing cut; see Amendment)
 builds_on: "Sprint Change Proposal 2026-10-16 (client info) and its owner amendment: client info is live, no snapshots, a replaced logo is deleted"
 ---
 
 # Sprint Change Proposal, 2026-10-16: client intro pages, client overview and collections
+
+## Amendment (2026-10-16, owner): all features before the demo
+
+Later on 2026-10-16 the owner reversed open question 10. Her words, translated: "the changes weren't for after the demo but for now". She was shown that the plan meant about 15 dev days of new work on top of an unbuilt Sprint 2, and was offered three options: part of it in the demo, moving the demo by about 3 weeks, or cutting the social carousel, the A4 PDF and login. She chose: "Tutto. dovremmo farcela" ("Everything. We should make it").
+
+**Decision.** All five decisions (C14–C18) and all eight new stories (2.15, 3.9, 4.11, 4.12, 5.9, 5.10, 5.11, 6.5) are MVP. They are built before the demo, which stays on **2026-10-30**. Nothing is cut: the three MVP formats, shareable links and login all stay.
+
+**What it supersedes** (each superseded statement below is struck through and marked inline):
+- **Open question 10** and its recommended answer (features after the demo, from 2026-11-02).
+- **The Phase 1 / Phase 2 split.** There is one phase. The section 4 changes marked "[1]" and "Phase 1" are built inside their stories, as before. The ones marked "[2]" or "Phase 2", and every "after the demo", now mean *before the demo, in the order below*. Labels inside section 4 are left as written; this paragraph is how to read them.
+- **The "after the demo, from Nov 2" timing**: Phase 2 starting 2026-11-02, the intro and overview by about 2026-11-11, client packs and collections by about 2026-11-20, and the intro template by 2026-11-02.
+- **The hybrid recommendation** in section 3. The selected path is now direct adjustment, all before the demo.
+
+**What stays.** Everything else, including:
+- every story and AC in section 4, the data model and the two new architecture decisions (AD-23, AD-24)
+- the guardrail answer to open question 4 (only owner/designers edit collection text) and the other nine answers, except 10
+- the live client info rule (SCP 2026-10-16 amendment)
+
+**Schedule risk, plainly.**
+- About **15 dev days** of new work (section 3 table) now has to land before 2026-10-30.
+- Of Epics 3–5, only Story 3.1 is built. Sprint 2 (due 2026-10-21) already carries all of Epics 3, 4 and 5, which was the tightest part of the plan before this change (PRD Known risks).
+- With the eight new stories, about 36 stories remain for about 9 working days (2026-10-19 to 2026-10-29, with 10-29 kept for the dry run). That is roughly double the pace of Epic 2, which delivered 14 stories between 2026-10-09 and 2026-10-16.
+- The design team's **client intro template** is now needed before the demo: by **2026-10-20**, so Story 3.9 can close in Sprint 2. Page names and intro pages are needed by 2026-10-19, with the final templates, which are themselves still due.
+- **The four demo criteria are at risk.** These are upload to approval in 15–20 minutes, several formats, both technical and graphic sides, and every claim checked. The risk comes from the time the new work takes away from Epics 3–5, not from the new features themselves.
+
+**Proposed in-sprint order.** Epics stay in order (NFR10). Inside each epic, the new stories come right after the stories they depend on and after that epic's demo-path stories, so the demo path is always built first.
+
+| When | Order |
+|---|---|
+| Sprint 2, 2026-10-19 → 10-21 | Merge 3.1 and 2.14 (both in review) → **2.15** → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → 3.7 → 3.8 → **3.9** → 4.1 → 4.2 → 4.3 → 4.4 → 4.5 → 4.6 → 4.7 → 4.8 → **4.11** → 4.9 → **4.12** |
+| Sprint 3, 2026-10-22 → 10-28 | 5.1 → 5.2 → 5.3 → 5.4 → 5.5 → 5.6 → 5.7 → 5.8 → **5.9** → **5.10** → **5.11** → 6.1 → 6.2 → 6.3 → 6.4 → **6.5** |
+| 2026-10-29 | Final guardrail check and the dry run (PRD Sprint 3 non-dev) |
+| 2026-10-30 | Demo |
+
+Why each new story sits where it does:
+- **2.15** needs only 2.14.
+- **3.9** needs 2.15 and 3.3–3.8.
+- **4.11** needs 4.8 (approve) and goes before 4.9, so 4.9's approved-edit flow covers intros too.
+- **4.12** needs 4.9 and 4.11.
+- **5.9** needs 5.3–5.4 and 4.11.
+- **5.10** needs 5.9 and 5.1.
+- **5.11** needs 5.10.
+- **6.5** needs 6.4.
+
+Checkpoints:
+- **2026-10-21:** Epic 3 done, including 3.9.
+- **2026-10-23:** Epic 4 done, including 4.11 and 4.12.
+- **2026-10-27:** Epic 5 done, including 5.9–5.11.
+- **2026-10-28:** Epic 6 done, including 6.5.
+
+**What slips first if the dates don't hold.** This is a proposal; the owner decides at each checkpoint. Order, first to slip first:
+1. 5.11 (collection text edits and hidden pages)
+2. 5.10 (collections)
+3. 4.12 (client overview)
+4. 5.9 (client pack)
+5. 3.9, 4.11 and 2.15 (the client intro)
+
+The demo path never slips: 3.2–3.8, 4.1–4.8 and 5.1–5.4. If Epic 6 is late, the demo can still run on the gated pre-login build, as Sprint 2 already does (AD-12). That is the owner's call, since nothing is cut by plan. Moving the demo stays the fallback for a miss on the demo path itself.
 
 ## 1. Issue summary
 
@@ -44,7 +103,7 @@ Evidence (code on `main` at `35f1c1a`):
 
 ### Epics
 
-The four new features map onto the existing epics. Most of the new work is **Phase 2, after the demo** (section 3). Phase 1 only makes room for it in stories that aren't built yet.
+The four new features map onto the existing epics. ~~Most of the new work is **Phase 2, after the demo** (section 3). Phase 1 only makes room for it in stories that aren't built yet.~~ *(superseded by the amendment: everything is built before the demo)*
 
 | Epic | Phase 1 (now, MVP) | Phase 2 (after the demo) |
 |---|---|---|
@@ -54,7 +113,7 @@ The four new features map onto the existing epics. Most of the new work is **Pha
 | **Epic 5** (backlog) | Amend **5.3** (an export takes an ordered list of parts; MVP passes one; storage key from a content hash) | New **5.9** Combined export and client pack download, **5.10** Collections, **5.11** Edit texts and remove pages in a collection. Amend **5.1** (multi-select). |
 | **Epic 6** (backlog) | No change | New **6.5** Permission check for intros, client packs and collections |
 
-No epic becomes obsolete and the epic order stays the same. Phase 2 stories run after Epic 6, as a second pass in epic order (2.15 → 3.9 → 4.11 → 4.12 → 5.9 → 5.10 → 5.11 → 6.5).
+No epic becomes obsolete and the epic order stays the same. ~~Phase 2 stories run after Epic 6, as a second pass in epic order (2.15 → 3.9 → 4.11 → 4.12 → 5.9 → 5.10 → 5.11 → 6.5).~~ *(superseded by the amendment: the new stories are built before the demo, in the amendment's in-sprint order)*
 
 ### Stories
 
@@ -84,7 +143,7 @@ No epic becomes obsolete and the epic order stays the same. Phase 2 stories run 
 - **Architecture:** AD-1 (new `collection` module; `client_image`, `client_intro` in `case-study`), AD-3 (the same lifecycle for a client intro), AD-4 (document `kind`, page keys and roles), AD-6 (no images, no intro), AD-8 (client images prefix, combined export prefix), AD-9 (combined exports, export key), AD-11 (matrix rows), AD-17 (one compare-and-set per document in a multi-document session), new AD-23 (client intro), new AD-24 (collections), ER diagram, capability map.
 - **UX (EXPERIENCE.md):** roles table, IA table (Client overview, Collections, Clients for account/sales/social), Clients pattern, Configurator (three modes), Library (multi-select), new Collections pattern, Export, a new key flow, conflicts log C14–C18.
 - **UX (DESIGN.md):** no token change. Two component notes: a selected state for library cards, and a sortable list row with a drag handle and a keyboard alternative.
-- **Design team (non-dev):** Phase 1: mark each format's intro pages and give every page a name (this week, with the templates). Phase 2: a client intro template in every format, designed for 2–3 images.
+- **Design team (non-dev):** Phase 1: mark each format's intro pages and give every page a name (this week, with the templates). ~~Phase 2: a client intro template in every format, designed for 2–3 images.~~ *(superseded by the amendment: the client intro template is needed by 2026-10-20)*
 - **Tracking:** `sprint-status.yaml`, `epic-2-context.md`, `epic-3-context.md`, spec banners on `spec-2-13-clients-page.md` and `spec-2-14-client-info-description-sector-logo.md`, `deferred-work.md` (the export-key item is closed by the 5.3 amendment).
 
 ### Technical impact
@@ -115,22 +174,22 @@ No epic becomes obsolete and the epic order stays the same. Phase 2 stories run 
 
 ## 3. Recommended approach
 
-**Hybrid: direct adjustment, in two phases. The demo scope stays as it is.**
+~~**Hybrid: direct adjustment, in two phases. The demo scope stays as it is.**~~ *(superseded by the amendment: direct adjustment, everything before the demo, nothing cut)*
 
 | Path | Verdict |
 |---|---|
-| A. Direct adjustment, all before the demo | **Not viable.** About 15 dev days of new work on top of Sprint 2, which already carries Epics 3–5 by 2026-10-21 and waits on the final templates. It would put all four demo criteria at risk. |
+| A. Direct adjustment, all before the demo | ~~**Not viable.**~~ *(superseded by the amendment: selected by the owner; the schedule risk is in the amendment)* About 15 dev days of new work on top of Sprint 2, which already carries Epics 3–5 by 2026-10-21 and waits on the final templates. It would put all four demo criteria at risk. |
 | B. Rollback | **Not viable.** Nothing built is wrong. Stories 2.13 and 2.14 are extended, not undone. |
 | C. MVP review: move features out of the MVP | **Needed for timing, not for content.** None of the four demo criteria needs the intro, the overview or collections. Moving them to Phase 2 shrinks nothing that is in the MVP today. |
-| **Hybrid (recommended)** | **Phase 1, now:** amend Stories 3.3, 3.4, 3.5, 4.2 and 5.3 (not built yet) so the document, templates, renderers and exports can hold intros and combined files later. Ask the design team to name pages and mark intro pages this week. **Phase 2, after the demo:** Stories 2.15, 3.9, 4.11, 4.12, 5.9, 5.10, 5.11, 6.5, in that order. |
+| ~~**Hybrid (recommended)**~~ | ~~**Phase 1, now:** amend Stories 3.3, 3.4, 3.5, 4.2 and 5.3 (not built yet) so the document, templates, renderers and exports can hold intros and combined files later. Ask the design team to name pages and mark intro pages this week. **Phase 2, after the demo:** Stories 2.15, 3.9, 4.11, 4.12, 5.9, 5.10, 5.11, 6.5, in that order.~~ *(superseded by the amendment: not selected)* |
 
 **Why do Phase 1 now.** The document schema, revision table, template page model and export key are decided in Stories 3.3–3.5 and 5.3 over the next days. Changing them after the demo would mean migrating stored revisions, re-cutting published template versions (AD-15 never edits a published version) and re-keying exports. Doing it now costs about one dev day plus a small design ask.
 
-**Why Phase 2 waits.**
+~~**Why Phase 2 waits.**~~ *(superseded by the amendment: the dependencies below now set the in-sprint order instead of a later phase)*
 - Every Phase 2 feature needs Epics 3–5 to exist first. The intro needs the generator, templates and renderers (3.3–3.6) and the configurator (4.2–4.8). The overview needs the single-case configurator and approved-case editing (4.2–4.9). Collections and client packs need the export pipeline (5.3–5.4).
 - Sprint 2 is already the tightest sprint (PRD Known risks).
 
-**Can anything move earlier?** Story 2.15 (client images) is data and upload only, about one day. If Sprint 3 ends with slack, it can land before the demo so the demo client already has its images. Recommended only if Epic 6 is done.
+~~**Can anything move earlier?**~~ *(superseded by the amendment: everything moves earlier)* Story 2.15 (client images) is data and upload only, about one day. If Sprint 3 ends with slack, it can land before the demo so the demo client already has its images. Recommended only if Epic 6 is done.
 
 **How the pieces fit.**
 - **Client intro (C14).** It is a document of its own, with the same lifecycle as a case history: Bozza, In elaborazione, Da approvare, Approvato (Open question 2). The AI writes only text, and only from the client's info. The layout comes from the intro template and the 2–3 images. Client name, sector, description, logo and images are read live (AD-22), so a client edit shows at once. The AI's text stays as written.
@@ -158,14 +217,14 @@ No epic becomes obsolete and the epic order stays the same. Phase 2 stories run 
 | 6.5 Permission check | 2 | 0.5 day |
 | **Total Phase 2** | | **~14–15 dev days, about 3 weeks** |
 
-- **Schedule.** Phase 1 adds about one day to Sprint 2 (due 2026-10-21), spread over Stories 3.3–3.5 and 5.3. The demo date (2026-10-30) doesn't move. Phase 2 starts 2026-11-02, after the go/no-go. The client intro and overview could land by about 2026-11-11, and client packs and collections by about 2026-11-20.
-- **After a no-go**, the gap fixes come first and Phase 2 shifts by the same time.
-- Phase 2 overlaps the start of the 8-week validation. Each Phase 2 story ships on its own, so validation runs on a working tool throughout.
+- **Schedule.** Phase 1 adds about one day to Sprint 2 (due 2026-10-21), spread over Stories 3.3–3.5 and 5.3. The demo date (2026-10-30) doesn't move. ~~Phase 2 starts 2026-11-02, after the go/no-go. The client intro and overview could land by about 2026-11-11, and client packs and collections by about 2026-11-20.~~ *(superseded by the amendment: all of it lands before 2026-10-30; see the in-sprint order)*
+- ~~**After a no-go**, the gap fixes come first and Phase 2 shifts by the same time.~~ *(superseded by the amendment: everything is built before the demo)*
+- ~~Phase 2 overlaps the start of the 8-week validation. Each Phase 2 story ships on its own, so validation runs on a working tool throughout.~~ *(superseded by the amendment: everything is built before the demo)*
 
 **Risk.**
 - *Guardrail (high if ignored).* Collection text edits by account/sales/social would send unreviewed text to clients (NFR7). It is handled by IR-COLL-EDIT and Open question 4. It must not be built as "anyone edits, anyone exports" without the owner explicitly amending NFR7.
 - *Thin intro text (medium).* The AI has only the client's name, sector and a 400-character description to write from. A longer intro tempts it to invent. Mitigation: the intro template has little text (a headline and one short paragraph), the per-block check applies, and Open question 7 offers an optional longer intro note.
-- *Design dependency (medium).* Page names and intro pages are needed this week. The intro template is needed by 2026-11-02. Mitigation: send the request with this week's stakeholder update.
+- *Design dependency (medium).* Page names and intro pages are needed this week. ~~The intro template is needed by 2026-11-02.~~ *(superseded by the amendment: by 2026-10-20)* Mitigation: send the request with this week's stakeholder update.
 - *Overview complexity (medium).* Several documents, each with its own version, in one session. Mitigation: each part saves on its own through the existing compare-and-set (AD-17). A stale part reloads alone.
 - *Long combined exports (low).* Many case histories in one PDF take longer to render. Exports already run as worker jobs with no time limit and a progress state (AD-10).
 
@@ -654,11 +713,11 @@ Acceptance criteria:
 | Role | Responsibility | When |
 |---|---|---|
 | Product owner (Sonja) | Approve this proposal and the phasing; answer the open questions, above all 1 (approved only) and 4 (collection text edits and NFR7); send the design ask | Now |
-| Design team | Phase 1: name every page of every format and mark the intro pages, with this week's templates. Phase 2: the client intro template in every format, for 2–3 images. | This week; intro template by 2026-11-02 |
+| Design team | Page names and intro pages in every format, with the final templates; the client intro template in every format, for 2–3 images (amended: before the demo) | ~~This week; intro template by 2026-11-02~~ *(superseded by the amendment)* page names by 2026-10-19, intro template by 2026-10-20 |
 | PO / Dev (docs) | Apply 4.1–4.5 in one docs PR against `main` (this branch) | On approval |
 | Architect (`bmad-architecture`, update mode) | Write AD-23 and AD-24 and the AD-1/AD-3/AD-4/AD-9/AD-11 edits in full | With the docs PR |
-| Developer (`bmad-build`) | Phase 1: the amended ACs inside Stories 3.3, 3.4, 3.5, 4.2, 5.3 as they're built. Phase 2 from 2026-11-02, in order: 2.15 → 3.9 → 4.11 → 4.12 → 5.9 → 5.10 → 5.11 → 6.5. One PR per story, with Auto-fix. | Phase 1 in Sprint 2; Phase 2 after the demo |
-| UX (`bmad-ux`, update mode) | Turn UX-DR37–UX-DR40 into EXPERIENCE sections; add a low-fidelity wireframe of the overview and the collection configurator before 4.12 and 5.10 | Before 2026-11-02 |
+| Developer (`bmad-build`) | ~~Phase 1 inside 3.3–3.5, 4.2, 5.3; Phase 2 from 2026-11-02 in order 2.15 → 3.9 → 4.11 → 4.12 → 5.9 → 5.10 → 5.11 → 6.5~~ *(superseded by the amendment)* All stories in the amendment's in-sprint order, including the section 4 amendments inside 3.3–3.5, 4.2 and 5.3. One PR per story, with Auto-fix. | Sprints 2–3, before 2026-10-29 |
+| UX (`bmad-ux`, update mode) | Turn UX-DR37–UX-DR40 into EXPERIENCE sections; add a low-fidelity wireframe of the overview and the collection configurator before 4.12 and 5.10 | ~~Before 2026-11-02~~ *(superseded by the amendment)* Before 4.12 starts (about 2026-10-22) |
 
 **Success criteria**
 - *Phase 1:* the document and revision schemas accept a `client_intro` subject. Every template page has a `pageKey` and a `role`. Exports are keyed by content hash. The demo flow is unchanged and the demo date holds.
@@ -680,19 +739,19 @@ Acceptance criteria:
 | 2.2 Epic-level changes | [x] | Epics 3–6 gain Phase 1 AC amendments (3.3, 3.4, 3.5, 4.2, 5.3) and Phase 2 stories (3.9, 4.11, 4.12, 5.9–5.11, 6.5) |
 | 2.3 Future epics | [x] | Dependencies: 3.9 needs 3.3–3.6 and 4.2–4.8; 4.12 needs 4.2–4.9 and 4.11; 5.9 needs 5.3–5.4 and 4.11; 5.10 needs 5.9; 5.11 needs 5.10 |
 | 2.4 Obsolete or new epics | [x] | None obsolete. No new epic recommended (Epic 9 noted as a bookkeeping alternative). |
-| 2.5 Epic order | [x] | Unchanged for the MVP. Phase 2 runs after Epic 6 as a second pass in epic order. |
+| 2.5 Epic order | [x] | Epic order unchanged. ~~Phase 2 runs after Epic 6 as a second pass in epic order.~~ *(superseded by the amendment: the new stories sit inside Sprints 2–3 by dependency)* |
 | 3.1 PRD | [!] | New FR11–FR13, NFR6 and NFR7 wording, roles, terms, new open point 15. **NFR7 conflict** for collection text edits by account/sales/social, held by IR-COLL-EDIT until the owner decides. MVP criteria unchanged. |
 | 3.2 Architecture | [x] | AD-1, AD-3, AD-4, AD-6, AD-8, AD-9, AD-11, AD-17, new AD-23 and AD-24, ER diagram, capability map |
 | 3.3 UI/UX | [x] | EXPERIENCE: roles, IA, Clients, Configurator modes, Library, Collections, Flow 5, conflicts C14–C18. DESIGN: two component notes. Wireframes needed for the overview and collection configurator before Phase 2. |
 | 3.4 Other artifacts | [x] | sprint-status, two spec banners, epic contexts, deferred-work (export key resolved), SPEC, DB and guardrail tests, `db.types.ts` from CI. No CI or deploy config change. |
-| 4.1 Direct adjustment | [x] Viable in two phases | All at once before the demo: not viable (about 15 days on Sprint 2). Phase 1 only: low effort, low risk. |
+| 4.1 Direct adjustment | [x] Viable in two phases | ~~All at once before the demo: not viable (about 15 days on Sprint 2).~~ *(superseded by the amendment: chosen by the owner, high schedule risk)* Phase 1 only: low effort, low risk. |
 | 4.2 Rollback | [x] Not viable | Nothing built is wrong |
-| 4.3 MVP review | [x] Viable | The new features move to Phase 2. Nothing in today's MVP is reduced and the demo criteria are untouched. |
-| 4.4 Selected path | [x] | Hybrid: Phase 1 amendments now, Phase 2 stories after the demo (section 3) |
+| 4.3 MVP review | [x] Viable | ~~The new features move to Phase 2.~~ *(superseded by the amendment: the new features join the MVP; nothing is cut)* Nothing in today's MVP is reduced. |
+| 4.4 Selected path | [x] | ~~Hybrid: Phase 1 amendments now, Phase 2 stories after the demo (section 3)~~ *(superseded by the amendment: direct adjustment, everything before the demo)* |
 | 5.1 Issue summary | [x] | Section 1 |
 | 5.2 Epic and artifact impact | [x] | Section 2 |
 | 5.3 Path and rationale | [x] | Section 3 |
-| 5.4 MVP impact and plan | [x] | MVP content unaffected; about +1 day in Sprint 2; Phase 2 about 3 weeks from 2026-11-02 |
+| 5.4 MVP impact and plan | [x] | ~~MVP content unaffected; about +1 day in Sprint 2; Phase 2 about 3 weeks from 2026-11-02~~ *(superseded by the amendment: the MVP gains about 15 dev days before 2026-10-30; the demo criteria are at risk)* |
 | 5.5 Handoff | [x] | Section 5 |
 | 6.1 Checklist complete | [x] | All applicable items addressed; the one [!] item (NFR7) is documented with an interim rule and Open question 4 |
 | 6.2 Proposal accuracy | [x] | Each new rule is stated once (AD-23, AD-24, IR-COLL-EDIT) and referenced elsewhere |
@@ -700,7 +759,7 @@ Acceptance criteria:
 | 6.4 sprint-status update | [x] Done | Eight Phase 2 stories added as `backlog` in order (2-15, 3-9, 4-11, 4-12, 5-9, 5-10, 5-11, 6-5), Phase 1 notes on 3-3, 3-4, 3-5, 4-2, 5-3, notes on 2-13, 2-14, 5-1, `last_updated` refreshed. No new epic key (none created). |
 | 6.5 Next steps confirmed | [x] Done | Section 4 applied on `docs/scp-2026-10-16-client-intro-and-collections` (epics, PRD, spine, EXPERIENCE, DESIGN, epic 2/3 contexts, sprint-status, spec banners, deferred-work, SPEC). Next: docs PR, design ask, Phase 1 inside 3.3–3.5, 4.2 and 5.3, Phase 2 from 2026-11-02. |
 
-## 6. Open questions for the owner (resolved 2026-10-16: all recommended answers accepted)
+## 6. Open questions for the owner (resolved 2026-10-16: all recommended answers accepted; answer 10 later reversed by the owner amendment)
 
 **Assumption recorded at approval:** the owner did not say who "PM" is. We read "PM" as an owner/designer in the tool, so under answer 4 (a) PMs can edit collection text. If PMs turn out to use the account/sales/social role, answer 4's upgrade (b) applies.
 
@@ -742,4 +801,5 @@ Acceptance criteria:
 
 10. **Phasing: is it fine that these features arrive after the October 30 demo?**
     - Options: (a) Phase 1 amendments now, the features from 2026-11-02 (about 3 weeks); (b) pull client images (2.15) before the demo if Sprint 3 has slack; (c) try to fit the intro before the demo.
-    - *Recommended: (a), with (b) if Epic 6 finishes early.* (c) would put the four demo criteria at risk for a feature the demo doesn't need.
+    - ~~*Recommended: (a), with (b) if Epic 6 finishes early.* (c) would put the four demo criteria at risk for a feature the demo doesn't need.~~
+    - *Superseded by the owner amendment of 2026-10-16:* everything before the demo, the demo stays on 2026-10-30 and nothing is cut (see Amendment).
