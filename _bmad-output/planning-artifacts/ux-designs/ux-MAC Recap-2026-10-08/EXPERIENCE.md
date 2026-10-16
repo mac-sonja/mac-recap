@@ -33,8 +33,8 @@ MAC Recap turns a closed project's verified material into a finished, on-brand c
 
 | Role (PRD name) | Lands on | Sees | Can do |
 |---|---|---|---|
-| Owner/designer | Case studies (table view) | Every case study, every status | Create, upload, mark favourites, fill details, generate, edit in configurator, check claims, approve, export, share, maintain templates, manage clients |
-| Account/sales/social | Case studies (library view) | Approved case studies only | Browse, search, filter, preview, export, create shareable links |
+| Owner/designer | Case studies (table view) | Every case study, every status | Create, upload, mark favourites, fill details, generate, edit in configurator, check claims, approve, export, share, maintain templates, manage clients. After the demo: client intros, client overview, collections (including text edits) |
+| Account/sales/social | Case studies (library view) | Approved case studies only | Browse, search, filter, preview, export, create shareable links. After the demo: client packs from a read-only Clients list, collections (reorder, hide pages, export; no text edits) |
 | Admin | Users | Users and their roles | Add and remove users, assign one role per user. Nothing else: no permission or guardrail settings exist anywhere in the UI (NFR3) |
 
 Permissions are fixed (PRD Story 6.2). A control a role can't use is **absent**, not disabled. The exception is the guardrail controls below, which are shown disabled with a reason so the owner/designer knows why.
@@ -51,12 +51,15 @@ The A3 entry steps inside MAC Productive (slides 15 and 22) are out of the MVP. 
 | New case study wizard | **+ New case study** | Owner/designer | Three steps: 1 Material, 2 Details, 3 Generate (A3 1.2–1.4). |
 | Configurator | Click a row in *To review* or *Approved* (owner/designer) | Owner/designer | Review, edit, check claims, approve. Three panes: formats · canvas · edit and check (A3 1.6). |
 | Case study view | Click a card (account/sales/social) or **View** (owner/designer) | Owner/designer, account/sales/social | Read-only preview of an approved case study in every MVP format; export and share (A3 2.2). |
-| Clients | Sidebar | Owner/designer | Client list with automatic codes; add and rename; open a client to see its case studies. |
+| Clients | Sidebar | Owner/designer; account/sales/social read-only after the demo | Client list with automatic codes; add and edit; open a client to see its case studies. Account/sales/social see clients with an approved case study and **Scarica** (client pack). |
+| Client overview | **Modifica cliente** (after the demo) | Owner/designer | The client's intro and every case study as one preview; edit any part in place; **Dati cliente**. |
+| Collections | Sidebar **Raccolte** (after the demo) | Owner/designer, account/sales/social | Saved, named collections: open, rename, delete. |
+| Collection configurator | **Crea raccolta** in the library, or a collection row (after the demo) | Owner/designer, account/sales/social | Reorder, hide pages, edit text (owner/designer only), export. |
 | Templates | Sidebar | Owner/designer | Maintain templates. See *Templates* below for the MVP meaning. |
 | Users | Sidebar | Admin | User list and role assignment. |
 | Shared link page | A shareable link, outside the app | Anyone with the link (interim, [OPEN 11]) | Hosted presentation of one approved case study in one format. No app chrome. |
 
-**Navigation:** a left sidebar holds **+ New case study** (owner/designer only), Case studies, To review (owner/designer only), Clients (owner/designer only), Templates (owner/designer only), Users (admin only), and the **Account** menu with sign-out. The wizard and the configurator are full-screen task surfaces with a back arrow to the list; they hide the sidebar. Dialogs stack at most one level deep.
+**Navigation:** a left sidebar holds **+ New case study** (owner/designer only), Case studies, To review (owner/designer only), Clients (owner/designer only), Templates (owner/designer only), Users (admin only), and the **Account** menu with sign-out. The wizard and the configurator are full-screen task surfaces with a back arrow to the list; they hide the sidebar. Dialogs stack at most one level deep. After the demo, **Raccolte** joins the sidebar for owner/designer and account/sales/social, and **Clients** shows for account/sales/social as a read-only list.
 
 **Surface closure check:** every PRD capability (FR1–FR8) maps to a surface above. FR1 → wizard (ID assigned on create). FR2 → wizard steps 1–2. FR3/FR4 → wizard step 3 and the configurator. FR5/FR6 → configurator. FR7 → case study view and the shared link page. FR8 → sign in and Users.
 
@@ -120,6 +123,7 @@ The Case studies table, pre-filtered to *To review* and sorted oldest first so n
 | Card click | Opens the case study view. |
 | Empty | "No approved case studies yet." No action (they can't create). |
 | Owner/designer access | `[ASSUMPTION]` Owner/designers can switch Case studies to the library view with a Table / Library toggle, so they see what account/sales/social see. |
+| Multi-select (after the demo) | Each card has a checkbox (Space on a focused card). With one or more selected, a bar shows "{n} selezionate" with **Crea raccolta** and **Annulla selezione**. |
 
 ### New case study wizard
 
@@ -235,6 +239,14 @@ The PRD decides that editing an approved case study updates it and its shareable
 - **Discard changes** returns to the live version.
 - [CONFLICT] C1: if the PRD intends edits to go live immediately, an unchecked claim could reach clients through a live link, which goes against NFR2 and NFR7. This staging is the proposed resolution.
 
+#### Configurator modes (after the demo)
+
+Added by the [Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md). The same frame serves three modes:
+
+- **Case history:** as above.
+- **Client intro:** the same panes for the client's intro pages. Text, designed layout variants, image order and typography are edited as for a case history. The Check tab lists the intro's blocks; the material drawer shows the client's data and images. **Approve** and **Update approved version** work as for a case history.
+- **Client overview** (from **Modifica cliente**): the left pane lists **Introduzione** (with its badge), then every case history of the client, newest first, with code, name and badge. Bozza case histories are greyed ("Non ancora generata"). The centre shows the selected format as one continuous preview of every part, with a divider per part, and the format switch moves to the top bar. Editing a block edits that case history itself, through its own save state. For an Approvato case history the change goes live only through that part's **Update approved version**. **Dati cliente** in the top bar holds the client's data and images. There is no reordering and no bulk approve. Below 1024 px: "The configurator needs a larger screen."
+
 ### Case study view (FR7)
 
 Read-only. Available only for Approved case studies (NFR7); a non-approved case study has no view, export or share entry point at all.
@@ -299,6 +311,26 @@ Owner/designer only. Decided 2026-10-15 ([Sprint Change Proposal 2026-10-15](../
 | Client page | Row click opens the client page: logo, client name and code, sector, description, **Edit client**, and the Case studies table limited to that client, with **New case history** preselecting the client. |
 | Absent | No delete. |
 | Below 1024 px | Read-only list. |
+| After the demo: Add client | Two steps: the data, then 2–3 images (required; PNG, JPEG or WebP, ≤20 MB, ≥1600 px on the short side; "Carica 2 o 3 immagini. Servono per le pagine di introduzione del cliente."). **Crea cliente** creates the client and starts its intro draft ("Stiamo preparando l'introduzione di {client}. Puoi lasciare questa pagina."); the intro opens in the configurator when ready. |
+| After the demo: Edit client | **Modifica cliente** opens the client overview (Configurator modes). The data and images are edited in **Dati cliente**: **Sostituisci**, **Rimuovi** (not below 2), reorder by drag or menu. |
+| After the demo: client page | Also shows the intro's status and **Apri introduzione**. |
+| After the demo: account/sales/social | A read-only list of clients with at least one approved case study, with **Scarica** per row and on the client page: one file (Deck 16:9 or PDF A4) with the approved intro and the approved case studies, newest first. With 2+ case studies the client intro replaces their own intro pages; otherwise, or when the intro isn't approved, each keeps its own ("L'introduzione di {client} non è ancora approvata: le sue case history usano la propria introduzione."). |
+
+### Collections (after the demo)
+
+Decided 2026-10-16 by the owner ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md)). Owner/designer and account/sales/social.
+
+| Element | Behaviour |
+|---|---|
+| Create | Select approved cards in the library, **Crea raccolta**, enter a name. The collection configurator opens. Only approved case studies can be added. |
+| Left pane | The parts in order. A client with 2+ case studies gets its approved intro in front of them, shown locked, and its case studies stay together as a group. Reorder groups and case studies within a group by drag handle or "Sposta su / giù". **Aggiungi** adds approved case studies; removing one is in its menu. |
+| Centre | Continuous preview of the selected format through the shared renderer. |
+| Right pane | **Testo:** edit the selected block, only in this collection, owner/designers only (account/sales/social see "Solo i designer possono modificare i testi. Puoi nascondere le pagine o riordinare."). Edited blocks show "Modificato in questa raccolta" and **Ripristina testo originale**; if the original changed, "Il testo originale è cambiato" with **Vedi originale** and **Usa originale**. **Pagine:** hide or show the selected page; hidden pages show as a collapsed strip with **Mostra**. |
+| Absent | Layout, media, typography, section and About block controls. |
+| Top bar | Name (editable), save state, **Esporta** and **Esporta tutto**, Deck 16:9 and PDF A4 only, with progress and the browser download. |
+| Follows the originals | Untouched text shows the current approved version and the client's current info; a case study with no approved version shows "Non disponibile" and is left out of exports. |
+| **Raccolte** list | Every collection (name, number of case studies, updated, created by); open, rename, delete with confirm. Everyone who can export sees and changes every collection. |
+
 
 ### Users (admin)
 
@@ -446,6 +478,13 @@ Failure: nothing matches → "Nothing matches 'energy'." He clears filters and b
 3. She fixes the name; the block unticks; she checks it against the material and ticks it again.
 4. **Climax:** she presses **Update approved version**, confirms "2 links will show the new version", and the fix is live everywhere. The status never left Approved.
 
+### Flow 5: A custom case for a pitch (Daniele, account/sales/social, after the demo)
+
+1. Daniele selects four approved case studies in the library, two of them for Lumen, and presses **Crea raccolta**. He names it "Pitch energia".
+2. The collection configurator shows Lumen's intro in front of its two case studies, grouped, and the other two with their own intros.
+3. He hides a gallery page he doesn't need and moves the Lumen group to the end.
+4. **Climax:** he presses **Esporta**, keeps the 16:9 deck, and gets one PDF. A week later he reopens "Pitch energia" from **Raccolte**, adds one case study and exports again.
+
 ### Flow 4: Giving Daniele access (Alessandro, admin)
 
 1. Alessandro signs in and lands on Users.
@@ -467,6 +506,11 @@ Failure: nothing matches → "Nothing matches 'energy'." He clears filters and b
 - **C11. Clients page. Resolved 2026-10-15 by the owner:** owner/designers list, add and rename clients and open a client's case studies; codes never change and clients can't be deleted.
 - **C12. Picking the client. Resolved 2026-10-15 by the owner:** step 0 offers only existing clients; clients are added only on the Clients page.
 - **C13. Client info. Resolved 2026-10-16 by the owner** ([Sprint Change Proposal](../../sprint-change-proposal-2026-10-16.md)): clients have a description, sector and logo; every case study shows them in an About the client block and the AI uses them. Amended the same day by the owner: client info is live, so every case study, drafts and approved ones alike, always shows the client's current info, and a replaced or removed logo is deleted.
+- **C14. Client intro. Resolved 2026-10-16 by the owner** ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md); after the demo): adding a client asks for 2–3 images; the AI drafts the client's intro pages, which the owner/designer refines, checks and approves like a case study.
+- **C15. Client page.** Confirmed 2026-10-16: the client page lists its case studies and creates new ones (already built).
+- **C16. Client overview. Resolved 2026-10-16 by the owner** (after the demo): **Modifica cliente** opens the intro and every case study as one preview; editing there edits the case study itself.
+- **C17. Downloads. Resolved 2026-10-16 by the owner** (after the demo): approved case studies download from the library; account/sales/social also download a client pack (approved intro plus approved case studies) from a read-only Clients list.
+- **C18. Collections. Resolved 2026-10-16 by the owner** (after the demo): named, saved collections of approved case studies, reorderable, with hidden pages and text edits that apply only to the collection; a client with 2+ case studies gets its intro in front, grouped. Open point 15 resolved: only owner/designers edit collection text (IR-COLL-EDIT). Assumption: "PM" means an owner/designer.
 - **C5. Brief vs PRD:** the brief limits export to account/sales/social and puts the hallucination target on "caught in review". The PRD (both roles export; zero reaching approved) wins; noted only.
 
 **PRD open points with options above:** [OPEN 1] export formats · [OPEN 8] status lifecycle · [OPEN 11] link access · [OPEN 12] what counts as altering. **[OPEN 14]** what a favourite means for generation. [OPEN 3] taxonomy resolved 2026-10-14: dropped.

@@ -59,6 +59,9 @@ The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects clos
 - **CAP-12**
   - **intent:** The team can reconstruct each case's lifecycle and editing effort for the 8-week validation.
   - **success:** Every transition, upload, save, block check, claim edit, approval, export and link change is an append-only, timestamped event with its actor, and the generated draft is kept next to the approved version. The tool does not record hands-on time; how the measures are recorded is OP 13.
+- **CAP-13** (after the demo; [Sprint Change Proposal 2026-10-16, client intro and collections](../../planning-artifacts/sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
+  - **intent:** A client gets AI-drafted intro pages from its data and 2–3 images; editing a client shows its intro and case studies as one file; users download a client pack or build named collections of approved case studies.
+  - **success:** The intro is checked and approved like a case study. A client with 2+ case studies in a combined file gets its intro in front of them. Collection text edits (owner/designers only) and hidden pages never change the original case studies, and no combined file contains unapproved content.
 
 ## Constraints
 
