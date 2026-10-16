@@ -17,6 +17,8 @@ Updated Oct 15, 2026: case studies belong to client records managed on a Clients
 
 Updated Oct 16, 2026: clients have a description, sector and logo, shown in every case study as an About the client block and used by the AI; client info is live, so every case study, approved ones included, always shows the client's current info ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md), with its owner amendment of the same day).
 
+Updated Oct 16, 2026 (second): after the demo, a client gets AI-drafted intro pages from its data and 2–3 images; editing a client opens an overview of its intro and case histories; users can download a client's intro and approved case histories in one file, or build named collections of approved case histories ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md)).
+
 This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR, epic, story and open-point numbers are unchanged from v1. Retired items are marked, not renumbered, and new items are added at the end.
 
 **Changes from v1**
@@ -81,8 +83,8 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 | Role | What they do in the tool |
 |---|---|
-| Owner/designer | Creates the case study, uploads project material, marks favourite images and videos, maintains templates, reviews, edits and approves the case study. Can also export and share approved case studies |
-| Account/sales/social | Finds approved case studies, exports them as files, and publishes them as shareable links. Does not create, edit or approve case studies |
+| Owner/designer | Creates the case study, uploads project material, marks favourite images and videos, maintains templates, reviews, edits and approves the case study. Can also export and share approved case studies. After the demo: creates and approves client intros, edits clients and their case histories from the client overview, builds collections and edits their text |
+| Account/sales/social | Finds approved case studies, exports them as files, and publishes them as shareable links. Does not create, edit or approve case studies. After the demo: downloads a client's pack from the Clients list and builds collections (reorder, hide pages; no text edits, open point 15) |
 | Admin | Manages users and assigns them to roles. Cannot change role permissions or the guardrails |
 
 - Requests for a case study happen outside the tool, as today. MAC Recap has no request feature.
@@ -101,6 +103,10 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 - **Shareable link.** A link to a hosted version of an approved case study, such as a hosted presentation. Who can open it is open point 11.
 - **Configurator.** The editing screen where the owner/designer adjusts text, layout, media and typography before approving.
 - **Review dashboard.** The list of case studies and their statuses, including those waiting for review.
+- **Client intro.** Pages that introduce a client, drafted by the AI from the client's data and 2–3 images and approved like a case study. They show the client's current info.
+- **Client overview.** The configurator view of a client's intro and all its case studies as one file.
+- **Client pack.** One file with a client's approved intro and approved case studies.
+- **Collection.** A named, saved set of approved case studies in a chosen order, with its own text edits and hidden pages.
 
 ## 3. Functional requirements
 
@@ -134,6 +140,16 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 **FR10** – The system generates text-based case studies and whitepapers from project order data, for projects without visual material.
 
+### After the demo (Phase 2, from November 2, 2026)
+
+Added by the [Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md). Not part of the October 30 demo.
+
+**FR11** – Creating a client asks for 2–3 images. The system drafts the client's intro pages from the client's name, sector, description and images, and the owner/designer edits, checks and approves them in the configurator.
+
+**FR12** – Editing a client opens the client overview: the intro and every case study of the client in one preview. Editing a case study there edits that case study.
+
+**FR13** – Owner/designer and account/sales/social users download a client pack, or build, save and export collections of approved case studies (16:9 deck and A4 PDF). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Text edits and hidden pages in a collection apply only to that collection. Only owner/designers edit text in a collection (open point 15).
+
 ## 4. Non-functional requirements and guardrails
 
 Guardrails are non-negotiable constraints. Any requirement that contradicts them must be flagged, not implemented.
@@ -149,9 +165,9 @@ Guardrails are non-negotiable constraints. Any requirement that contradicts them
 
 **NFR5** – Texts follow the defined narrative structure (challenge, approach, result) and the quality checklist, which is defined in the Sprint 2 non-dev deliverable "narrative structure and quality criteria". They cover both the technical and the graphic side of the project.
 
-**NFR6** – If no material is uploaded, nothing is generated. A filled-in details form without material is not enough.
+**NFR6** – If no material is uploaded, nothing is generated. A filled-in details form without material is not enough. For a client intro, the same rule: no images, no intro.
 
-**NFR7** – No case study is exported or published as a shareable link without human review and approval by an owner/designer.
+**NFR7** – No case study is exported or published as a shareable link without human review and approval by an owner/designer. This includes client intros, client packs and collections. A collection contains only approved content and text written by an owner/designer (open point 15).
 
 ## 5. Technical assumptions
 
@@ -170,6 +186,7 @@ The order follows the development plan. Non-dev activities are prerequisites for
 | Sprint 1 | October 14 | Epic 2 – Asset upload | Team setup: Claude Code with the BMAD method (formerly Epic 1); tool design definition; template wireframes; data processing logic |
 | Sprint 2 | October 21 | Epic 3 – Graphic case study generation; Epic 4 – Review and approval; Epic 5 – Download and publishing | Configurator visual design (Bento); account/sales/social user journey; final case study templates; narrative structure and quality criteria; first guardrail check |
 | Sprint 3 | October 28 | Epic 6 – Login, users and permissions | Mockups and assets for case studies; final guardrail check; demo preparation; demo (October 30) |
+| After the demo (from Nov 2) | — | Client intros, client overview, client packs and collections (Phase 2 of the Sprint Change Proposal 2026-10-16, client intro and collections) | Client intro template |
 | After MAC Productive is ready (no date) | — | Epic 7 – MAC Productive integration; Epic 8 – Text-based case study generation | — |
 | Post-MVP (no date) | — | — | Mockup and asset guidelines |
 
@@ -216,6 +233,12 @@ Prerequisites: tool design definition, template wireframes (asset dimensions, fo
 - I can add a short description, a sector and a logo to a client
 - A change to a client's info (name, logo, sector, description) shows in all its case studies, approved ones included
 - Replacing or removing a logo deletes the old one
+- After the demo: creating a client asks for 2–3 images
+- After the demo: editing a client opens the client overview
+
+**Story 2.6 (after the demo)** – As an owner/designer, I want to add 2–3 images to each client.
+- Adding a client asks for 2–3 images (required), PNG, JPEG or WebP, at least 1600 px on the short side
+- Replacing or removing an image deletes the old one; a client keeps at least 2
 
 ### Epic 3 – Graphic case study generation (Sprint 2)
 
@@ -231,6 +254,10 @@ Prerequisites: graphic template layouts, final case study templates (each with a
 
 **Story 3.2** – As an owner/designer, I want the template to adapt to the number of available media items.
 - The adaptation rules defined in the final template are applied
+
+**Story 3.3 (after the demo)** – As an owner/designer, I want the AI to draft a client's intro pages.
+- The draft is made from the client's name, sector and description (a headline and one short paragraph) and laid out with its 2–3 images
+- Without images, no intro is generated
 
 ### Epic 4 – Review and approval (Sprint 2)
 
@@ -250,6 +277,13 @@ Prerequisite: configurator visual design (Bento).
 - A case study that is not approved cannot be exported or shared
 - An owner/designer can still edit an approved case study. Saved changes update the case study and its shareable links, and it stays approved.
 
+**Story 4.4 (after the demo)** – As an owner/designer, I want to review, edit and approve a client intro like a case study.
+- Every block is checked before approval; only an approved intro appears in downloads
+
+**Story 4.5 (after the demo)** – As an owner/designer, I want editing a client to open the client overview.
+- The intro and every case study of the client show as one preview
+- Editing a case study there edits that case study; an approved one goes live only when its approved version is updated
+
 ### Epic 5 – Download and publishing (Sprint 2)
 
 Prerequisite: account/sales/social user journey.
@@ -262,6 +296,17 @@ Prerequisite: account/sales/social user journey.
 - The approved case study can be published as a shareable link, such as a hosted presentation
 - Only approved case studies can be shared
 - The tool does not post to social channels or the website
+
+**Story 5.3 (after the demo)** – As an owner/designer or account/sales/social user, I want to download a client pack from the Clients list.
+- One file with the client's approved intro and approved case studies; with only one case study, or no approved intro, each case study keeps its own intro
+
+**Story 5.4 (after the demo)** – As an owner/designer or account/sales/social user, I want to build a collection.
+- I pick approved case studies, name the collection, reorder it and export it as a 16:9 deck or A4 PDF
+- A client with 2 or more case studies gets its intro in front of them, and its case studies stay together
+- Collections are saved, visible to everyone who can export, and can be reopened, changed and exported again
+
+**Story 5.5 (after the demo)** – As the person preparing a collection, I want to hide pages and, as an owner/designer, edit texts only in that collection.
+- The original case studies never change; untouched text follows the current approved version, and an edited block whose original changed is flagged
 
 ### Epic 6 – Login, users and permissions (Sprint 3)
 
@@ -316,6 +361,7 @@ Prerequisite: account/sales/social user journey.
 - **Requesting a case study inside the tool.**
 - **Onboarding and feedback collection inside the tool.** Both happen in person. v1's "pilot test and onboarding" is replaced by the demo dry run.
 - **Internal communication,** which the A3 analysis scoped out.
+- **A shareable link to a collection or a client pack.** These are downloads only.
 
 ## 11. Known risks
 
@@ -342,3 +388,4 @@ These points must be resolved before the epics that depend on them. Owners are n
 12. **What counts as altering** (Epics 3 and 4, NFR1; decide before Sprint 2). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary.
 13. **Recording the 8-week measures.** How owner/designer time, editing and hallucinations are recorded during validation.
 14. **What a favourite means for generation** (Epic 3; decide before Sprint 2). Whether generation must use, prefers, or simply shows favourites first.
+15. **Who may edit text in a collection** (Epic 5, after the demo). Resolved 2026-10-16 by the owner: only owner/designers edit text in a collection; account/sales/social reorder, hide pages and export. If sales people need to change wording, the planned upgrade is an owner/designer approval of their edits before export. Assumption: "PM" in the owner's request means an owner/designer in the tool.

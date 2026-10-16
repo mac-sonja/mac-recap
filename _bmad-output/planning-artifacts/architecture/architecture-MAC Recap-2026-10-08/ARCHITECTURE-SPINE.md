@@ -8,7 +8,7 @@ scope: 'MAC Recap standalone MVP (Epics 2-6): case creation, upload and favourit
 status: final
 created: '2026-10-08'
 updated: '2026-10-16'
-binds: [FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, NFR1, NFR2, NFR3, NFR4, NFR5, NFR6, NFR7, FR9-seam]
+binds: [FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, FR11, FR12, FR13, NFR1, NFR2, NFR3, NFR4, NFR5, NFR6, NFR7, FR9-seam]
 sources:
   - '_bmad-output/planning-artifacts/prds/prd-MAC Recap-2026-10-08/prd.md (PRD v2, final)'
   - '_bmad-output/planning-artifacts/prds/prd-MAC Recap-2026-10-08/addendum.md'
@@ -65,14 +65,15 @@ flowchart LR
 
 - **Binds:** all epics
 - **Prevents:** Epic 4 or 5 reading Epic 2's tables or storage keys directly, and vendor SDK calls leaking into UI code
-- **Rule:** The MVP modules are `case-study`, `material`, `generation`, `rendering`, `sharing`, `access` and `jobs`. `integration` is created at Epic 7 (AD-16). Each module owns the tables and storage prefixes listed below, and nothing else writes them. Code outside a module imports only that module's `index.ts`. Vendor SDKs are imported only in `adapters/`.
+- **Rule:** The MVP modules are `case-study`, `material`, `generation`, `rendering`, `sharing`, `access` and `jobs`. `collection` is added after the demo (AD-24). `integration` is created at Epic 7 (AD-16). Each module owns the tables and storage prefixes listed below, and nothing else writes them. Code outside a module imports only that module's `index.ts`. Vendor SDKs are imported only in `adapters/`.
 
 | Owner | Tables | Storage prefixes |
 | --- | --- | --- |
-| `case-study` | `case_study`, `client`, `client_logo`, `case_number_counter`, `revision`, `case_event` | `clients/{clientId}/logos/**` |
+| `case-study` | `case_study`, `client`, `client_logo`, `client_image`, `client_intro`, `client_event`, `case_number_counter`, `revision`, `case_event` | `clients/{clientId}/logos/**`, `clients/{clientId}/images/**` |
 | `material` | `asset` (including `is_favourite`), `context_form` | `cases/{caseId}/assets/**` (originals and renditions) |
 | `generation` | — (writes revisions only via `case-study`) | — |
-| `rendering` | `export`, `template_variant_state` (only if AD-15's conditional applies) | `cases/{caseId}/revisions/{revisionId}/exports/**` |
+| `rendering` | `export`, `template_variant_state` (only if AD-15's conditional applies) | `exports/{contentHash}/**` |
+| `collection` (Phase 2, AD-24) | `collection`, `collection_item`, `collection_text_edit`, `collection_hidden_page` | — |
 | `sharing` | `share_link` | — |
 | `access` | `profile` | — |
 | `jobs` | `job` | — |
@@ -99,6 +100,7 @@ flowchart LR
   - Generation is available only from `draft`. A failed generation job, or a result discarded under AD-17, returns the case to `draft` with its material and details intact.
   - Delete is allowed only in `draft` and is a soft delete (`deleted_at`).
   - The stored state set and its labels depend on OP 8; the revision model does not.
+  - A client intro (AD-23) uses the same states, pointers, compare-and-set and fork rules, on `client_intro`, through `case-study.transitionIntro`. A revision belongs to exactly one subject (`case_id` or `client_intro_id`). `getLiveRevision(subject)` and `getEditableRevision(subject)` take the subject.
 
 ```mermaid
 stateDiagram-v2
@@ -126,6 +128,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - There is no canvas-ratio field. The format registry owns the ratio.
   - The document stores no client values. The About the client block (AD-22) is filled at render time from the client's current info. It is not a text block: no check, no claims, not editable.
   - The challenge / approach / result sections cannot be removed or reordered; the schema rejects a document that lacks one.
+  - The document has `kind` (`case_history` | `client_intro`). The challenge / approach / result rule applies to `case_history` only. Pages have a stable `pageKey` and a `role` (`intro` | `body`) defined by the template version.
   - Slot assignments are computed only by the pure `rendering.relayout(doc, template)`. The pipeline calls it, and every change to the media set calls it in the same write.
 
   Renderers are pure functions of (document, format, template, asset URLs, the client's current info for the About block). A schema change bumps `schemaVersion` and adds an `upgrade(doc)` function. Documents are upgraded **when read** and the upgraded version is never written back to a non-working revision.
@@ -151,6 +154,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - `generate` fails with `NO_MATERIAL` before any LLM call unless the case has at least one non-deleted asset of any allowed type (image, video, text document, PDF). Typed text lives only in the details form, which never counts (NFR6). The wizard's Generate button and the worker (again, when it claims the job) use the same check through `material.index`.
   - The template's media-count rule (AD-15) then picks the layout. What a template renders with zero images or videos is a template rule the design team supplies (see Deferred).
   - The LLM receives only the case's material snapshot, form answers and the client's current name, sector and description, read when the job runs (AD-18, AD-22). Client info never counts as material. It gets no web or other server tools.
+  - A client intro is generated only when the client has at least 2 images (`NO_CLIENT_IMAGES`). Its LLM input is only the client's current name, sector and description, plus images if OP 2 allows (AD-23).
   - The structured output tags each claim with `aspect`, `technical` or `graphic`. A draft without both aspects is marked `MISSING_ASPECT` and the warning is shown in the configurator. It does not block approval. `[CONFLICT A3]`
 
 ### AD-7 — One LLM port, one model setting, recorded per revision
@@ -179,8 +183,9 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - Key layout, built only by the owning module's adapters:
     - `cases/{caseId}/assets/{assetId}/original.{ext}`
     - `cases/{caseId}/assets/{assetId}/renditions/{specHash}.{ext}`, owned by `material` and reached only through `material.getRendition(assetId, spec)`
-    - `cases/{caseId}/revisions/{revisionId}/exports/{format}.{ext}`, owned by `rendering`
+    - `exports/{contentHash}/{format}.{ext}`, owned by `rendering` (replaces `cases/{caseId}/revisions/{revisionId}/exports/…`, AD-9)
     - `clients/{clientId}/logos/{logoId}.{ext}`, owned by `case-study` (AD-22). Logos are PNG, JPEG or WebP, at most 5 MB and at least 400 px on the short side, checked when the signed upload URL is issued and again at confirm. Replacing or removing a logo deletes the old object.
+    - `clients/{clientId}/images/{imageId}.{ext}`, owned by `case-study` (AD-23). Client images are PNG, JPEG or WebP, at most 20 MB and at least 1600 px on the short side, 2–3 per client. Replacing or removing an image deletes the old object.
   - The per-file limit is 50 MB because the hosted Supabase plan caps uploads at 50 MB (verified 2026-10-14). Moving to 100 MB needs the Pro plan, a raised project upload limit, a bucket migration and `MAX_FILE_BYTES`.
 
 ### AD-9 — One layout implementation; renders never pass through a public route
@@ -192,7 +197,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - For an export, the worker renders HTML server-side (`renderToStaticMarkup`) and loads it into Playwright Chromium with `page.setContent`. **No print route exists.**
   - File types: deck and A4 → PDF; image formats → ZIP of PNGs `[ASSUMPTION, from UX]`; **Export all** → one ZIP, stored as export `(revision_id, 'all')`, built only after `ensureExport` has produced every format of that same revision. No PPTX in the MVP (UX decision).
   - Video assets show as their poster frame in static formats. Motion formats (social video 9:16) stay out of the registry until OP 1 adds them.
-  - `export` is unique on `(revision_id, format, client_info_hash)` and immutable, where `client_info_hash` identifies the client info it was rendered with (AD-22). Jobs call `rendering.ensureExport(revisionId, format)`, which returns the existing export if there is one for the client's current info and renders again otherwise.
+  - An export renders an ordered list of parts through `rendering.composeParts` (one part for a single case history). `export` is unique on `content_hash` (parts, revision ids, each part's client info, collection edits and hidden pages, format) and immutable. `ensureExport` reuses an export on a hash match and renders again otherwise, so a client edit (AD-22) leads to a new render. **Export all** is one ZIP of the per-format exports for the same parts. Combined files (client packs, collections) come in Deck 16:9 and PDF A4 only.
 
 ### AD-10 — Long work runs as leased Postgres jobs in the worker
 
@@ -226,8 +231,12 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 | --- | --- | --- | --- | --- |
 | list cases | all statuses | approved only | — | — |
 | create case, upload, mark favourites, fill details, generate, edit | any case | — | — | — |
-| list clients | ✓ | — | — | — |
-| manage clients (add, rename) | ✓ | — | — | — |
+| list clients | ✓ | Phase 2: clients with an approved case, read-only | — | — |
+| manage clients (add, edit, images) | ✓ | — | — | — |
+| generate, edit, approve a client intro (Phase 2) | ✓ | — | — | — |
+| download client pack (Phase 2) | approved content | approved content | — | — |
+| manage collections: create, rename, reorder, add/remove, hide pages, delete, export (Phase 2) | ✓ | ✓ | — | — |
+| edit collection text (Phase 2) | ✓ | — (IR-COLL-EDIT, OP 15 resolved 2026-10-16) | — | — |
 | delete case | any `draft` case | — | — | — |
 | approve, update approved version, discard | any case (AD-19) | — | — | — |
 | view, export | any approved | any approved | — | — |
@@ -300,6 +309,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - Every change to `head_revision_id` or `approved_revision_id` (fork, generate result, approve, update approved version, discard) passes the expected `case_study.head_version` and fails with `STALE_HEAD` on a mismatch.
   - Edits are rejected while the case is `generating`.
   - Only `working` revisions are writable; a write to any other revision fails with `REVISION_NOT_WRITABLE` and the client reloads. Saves never fork. Forking is the explicit, idempotent `case-study.forkHead(caseId, expectedHeadVersion)`, which copies only from `approved_revision_id` and returns the existing working head if there is one.
+  - A session that shows several documents (client overview, collection) does one compare-and-set per document. A stale document reloads alone.
   - A `generate` job records `baseHeadVersion` when it is enqueued. On success it creates a **new** working revision, never overwriting an existing one, and sets the head by compare-and-set against `baseHeadVersion`; on a mismatch the result is discarded (AD-3).
 
 ### AD-18 — Material is referenced by typed refs and snapshotted per revision
@@ -368,6 +378,28 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   7. Every template fits the maximum description length in every format, so the About block can never cause an overflow that blocks approval.
   8. The About block appears in every format, export and shared link, like the rest of the document. AD-21 rule 8 (no case code there) is unchanged.
 
+### AD-23 — A client has one intro, a document reviewed like a case history
+
+- **Binds:** FR11, FR12, `case-study`, `generation`, `rendering` ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
+- **Prevents:** unreviewed AI text reaching clients through an intro, a second editing model for intros, intros with stale client data
+- **Rule:**
+  1. One `client_intro` per client, with the case lifecycle (AD-3) and revisions of kind `client_intro`. Its events go to the append-only `client_event`.
+  2. Generated only with 2+ client images. The LLM writes text blocks only (a headline and one short paragraph, from the client's name, sector and description); layout is `relayout` over the images (AD-5, AD-15).
+  3. Client info and images are read live at render time (AD-22); AI text stays as written.
+  4. Checked and approved as in AD-19. Only an approved intro appears in a client pack or a collection; otherwise case histories keep their own intro pages.
+
+### AD-24 — A collection is an overlay on live approved revisions
+
+- **Binds:** FR13, NFR7, `collection`, `rendering` ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
+- **Prevents:** collection edits changing a case history, unapproved content leaving the tool through a collection, two copies of a case history's text drifting silently
+- **Rule:**
+  1. A collection stores a name, an ordered list of case ids, its text edits (by part and `blockId`, with the original text's hash) and hidden pages (by part, format and `pageKey`). It never stores or writes a revision.
+  2. It always reads `getLiveRevision`; a case with no approved revision is shown as unavailable and left out.
+  3. The intro rule is computed: a client with 2+ case histories in the collection gets its approved intro before them, its case histories stay together as a group, and their `intro` pages are left out.
+  4. Text edits apply to a copy of the document at render time. Only owner/designers can make them (`edit collection text`, IR-COLL-EDIT). Untouched text follows the live approved version; a changed original under an edit is flagged, never merged silently.
+  5. Layout, media, typography, sections and the About block can't be changed in a collection.
+  6. Every user who can manage collections sees and changes every collection; `created_by` is shown.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -418,6 +450,13 @@ erDiagram
   CASE_STUDY ||--o{ CASE_EVENT : logs
   CASE_STUDY ||--o{ SHARE_LINK : shared_as
   REVISION ||--o{ EXPORT : renders
+  CLIENT ||--o{ CLIENT_IMAGE : has
+  CLIENT ||--o| CLIENT_INTRO : introduced_by
+  CLIENT_INTRO ||--o{ REVISION : versions
+  COLLECTION ||--o{ COLLECTION_ITEM : lists
+  CASE_STUDY ||--o{ COLLECTION_ITEM : in
+  COLLECTION ||--o{ COLLECTION_TEXT_EDIT : edits
+  COLLECTION ||--o{ COLLECTION_HIDDEN_PAGE : hides
 ```
 
 ```mermaid
@@ -441,7 +480,7 @@ There is one image, built on the Playwright base image `mcr.microsoft.com/playwr
 src/
   app/                      # (tool)/… pages and actions, s/[token]
   modules/
-    case-study/ material/ generation/ rendering/ sharing/ access/ jobs/
+    case-study/ material/ generation/ rendering/ sharing/ access/ jobs/ collection/ (Phase 2)
       domain/ application/ index.ts   (+ ports/ adapters/ only at vendor seams)
     rendering/templates/{templateId}/v{n}/
   worker/                   # job loop entry
@@ -467,6 +506,9 @@ supabase/migrations/        # forward-only SQL, incl. jobs_claim()
 | NFR5 narrative structure, both sides | `generation` | AD-4, AD-6, AD-7 |
 | NFR6 no material, no generation | `generation` gate + wizard | AD-6 |
 | NFR7 approval before export or share | `case-study`, `rendering`, `sharing` | AD-3, AD-13, AD-19 |
+| FR11 client intro (Phase 2) | `case-study`, `generation`, `rendering` | AD-23 |
+| FR12 client overview (Phase 2) | `app/(tool)`, `case-study` | AD-3, AD-17 |
+| FR13 client packs and collections (Phase 2) | `collection`, `rendering`, `jobs` | AD-9, AD-24 |
 | FR9 MAC Productive seam | `integration` (Epic 7) | AD-2, AD-16 |
 
 ## Conflicts flagged

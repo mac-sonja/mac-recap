@@ -22,6 +22,7 @@ The owner/designer creates a case study by hand for a client picked from the cli
 - Story 2.12: Clients as records, with readable case history codes
 - Story 2.13: Clients page
 - Story 2.14: Client info (description, sector and logo)
+- Story 2.15: Client images (Phase 2, after the demo; SCP 2026-10-16 client intro and collections)
 
 ## Requirements & Constraints
 
@@ -30,6 +31,7 @@ The owner/designer creates a case study by hand for a client picked from the cli
 - **Case history code:** `{clientCode}-{year}-{number}` (number padded to at least 2 digits, no upper limit), fixed at creation, unique, never reused. Display only: never a key or in URLs; shown in app tables, wizard and library, never on shared link pages or in exports.
 - **Clients:** automatic, immutable code (e.g. `LUM`). Names are editable (1–120 characters after trimming) without changing any code, and unique after normalisation (`CLIENT_NAME_TAKEN`). Clients are never deleted. Only owner/designers list and manage clients.
 - **Client info:** sector (optional plain text, ≤60 characters after trimming), description (optional plain text, ≤400) and logo (optional; PNG, JPEG or WebP, ≤5 MB, ≥400 px on the short side). All three are optional and existing clients start empty. Replacing or removing a logo deletes the old one (row and object); there is no logo history. Client info is live: every case history of the client, approved ones included, shows its current info (SCP 2026-10-16 amendment). Client info is never material: it never enables Generate.
+- **Client images and Add/Edit flows (Phase 2, after the demo; SCP 2026-10-16 client intro and collections):** each client has 2–3 images (required on Add client; PNG, JPEG or WebP, ≤20 MB, ≥1600 px on the short side) in `client_image`, under `clients/{clientId}/images/{imageId}.{ext}`. Replacing or removing one deletes the old row and object, and a client keeps at least 2. Add client becomes two steps (data, then images) and **Crea cliente** starts the client intro draft (Story 3.9). **Modifica cliente** opens the client overview (Story 4.12), with the data in **Dati cliente**. Account/sales/social get a read-only Clients list of clients with an approved case history.
 - **Material is uploaded files only:** at most 20 non-deleted files per case, 50 MB each (the hosted-plan cap). Allowlist: JPEG, PNG, WebP, MP4, MOV, PDF, plain text, Markdown, DOCX. A rejected file fails on its own; others keep uploading. No pasted text, no taxonomy.
 - **Favourites:** any number of images and videos; optional, never blocks progress; stored and shown but not yet used by generation.
 - **Details form:** three optional fields (context, solution, results), the only place for typed project text. A valid claim source that **never counts as material**: `hasMaterial` is true only with at least one non-deleted asset.
@@ -81,4 +83,5 @@ The owner/designer creates a case study by hand for a client picked from the cli
 - 2.7 builds the upload UI and asset table; 2.11 swaps the storage adapter behind the `ObjectStorage` port and moved the browser helper to the signed-upload shape. 2.8 lands before 2.9 and makes `has_material` count assets only. 2.10 completes the Bozza row routing (2.6) and the Avanti gate (2.7).
 - 2.12 delivers the amended ACs of 2.5 and 2.6; its migration backfilled every existing case with a client, number and code. 2.13 follows 2.12.
 - 2.14 delivers the amended dialog ACs of 2.13 (Edit name becomes Edit client), reusing the signed-upload pattern of 2.11 under the `clients/` prefix. It must land before Story 3.3, which adds the `about` block to the document; 3.6 (the LLM gets the client's name, sector and description, and claims may cite `client_field` refs) and 3.5/3.7 (renderers read the client's current info at render time; the job reads it when it runs, with no snapshot) build on `getClientInfoForCase`.
+- 2.15 (Phase 2) runs after Epic 6 and extends the 2.13/2.14 dialogs; it lands before 3.9 (client intro draft).
 - Hand-offs to Epic 3: `material.hasMaterial` backs the NO_MATERIAL guardrail, `material.resolveRefs` and form-field refs feed the manifest, and the `material` bucket also holds renditions and exports. Epic 6 swaps only how `getActor()` resolves the actor and retires the basic-auth gate; admin gets no client rights.
