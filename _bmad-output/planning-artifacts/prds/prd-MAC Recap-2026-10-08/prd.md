@@ -84,7 +84,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 | Role | What they do in the tool |
 |---|---|
 | Owner/designer | Creates the case study, uploads project material, marks favourite images and videos, maintains templates, reviews, edits and approves the case study. Can also export and share approved case studies. After the demo: creates and approves client intros, edits clients and their case histories from the client overview, builds collections and edits their text |
-| Account/sales/social | Finds approved case studies, exports them as files, and publishes them as shareable links. Does not create, edit or approve case studies. After the demo: downloads a client's pack from the Clients list and builds collections (reorder, hide pages; no text edits, open point 15) |
+| Account/sales/social | Finds approved case studies, exports them as files, and publishes them as shareable links. Does not create, edit or approve case studies. After the demo: downloads a client's pack from the Clients list and builds collections (reorder, hide pages; no text edits, decided by the owner on 2026-10-16) |
 | Admin | Manages users and assigns them to roles. Cannot change role permissions or the guardrails |
 
 - Requests for a case study happen outside the tool, as today. MAC Recap has no request feature.
@@ -148,7 +148,7 @@ Added by the [Sprint Change Proposal 2026-10-16, client intro and collections](.
 
 **FR12** – Editing a client opens the client overview: the intro and every case study of the client in one preview. Editing a case study there edits that case study.
 
-**FR13** – Owner/designer and account/sales/social users download a client pack, or build, save and export collections of approved case studies (16:9 deck and A4 PDF). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Text edits and hidden pages in a collection apply only to that collection. Only owner/designers edit text in a collection (open point 15).
+**FR13** – Owner/designer and account/sales/social users download a client pack, or build, save and export collections of approved case studies (16:9 deck and A4 PDF). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Text edits and hidden pages in a collection apply only to that collection. Only owner/designers edit text in a collection (decided by the owner on 2026-10-16).
 
 ## 4. Non-functional requirements and guardrails
 
@@ -167,7 +167,7 @@ Guardrails are non-negotiable constraints. Any requirement that contradicts them
 
 **NFR6** – If no material is uploaded, nothing is generated. A filled-in details form without material is not enough. For a client intro, the same rule: no images, no intro.
 
-**NFR7** – No case study is exported or published as a shareable link without human review and approval by an owner/designer. This includes client intros, client packs and collections. A collection contains only approved content and text written by an owner/designer (open point 15).
+**NFR7** – No case study is exported or published as a shareable link without human review and approval by an owner/designer. This includes client intros, client packs and collections. A collection contains only approved content and text written by an owner/designer (decided by the owner on 2026-10-16).
 
 ## 5. Technical assumptions
 
