@@ -2,8 +2,10 @@
 # Smoke-tests a built MAC Recap image against the Story 2.2 I/O matrix:
 #   web without gate vars  -> exit 1 naming BASIC_AUTH_USER, port never opened
 #   web with gate vars     -> / and /s/x 401 without credentials, / not 401 with them
-#   worker                 -> one readiness JSON line, keeps running, exit 0 on SIGTERM/SIGINT,
-#                             exit 1 on invalid env
+#   worker                 -> against a stub Supabase (system profile, empty queue): one readiness
+#                             JSON line with actorId, keeps running, exit 0 on SIGTERM/SIGINT;
+#                             exit 1 on invalid env; exit 1 with no readiness line when Supabase
+#                             is unreachable (no system actor)
 #   ffmpeg -version        -> 6.1.1
 #   id -un                 -> pwuser
 # Usage: scripts/smoke-image.sh <image-tag>. Needs docker, curl and jq. Exits non-zero on any failure.
@@ -132,10 +134,38 @@ web_gated() {
 }
 
 # --- Worker: readiness line, keeps running, exits 0 on SIGTERM / SIGINT --------
+# The worker resolves the system actor and polls jobs_claim before it is ready, so
+# these rows run it against a tiny PostgREST stand-in in its own container (same
+# image, same node) and share that container's network: 127.0.0.1:54321 is the stub.
+# The stub echoes the requested profile id back as an enabled `system` profile and
+# answers every jobs_claim with an empty queue.
+STUB_JS='
+const http = require("http");
+http.createServer((req, res) => {
+  const url = new URL(req.url, "http://stub");
+  res.setHeader("content-type", "application/json");
+  if (req.method === "GET" && url.pathname === "/rest/v1/profile") {
+    const id = (url.searchParams.get("id") || "").replace(/^eq\./, "");
+    res.end(JSON.stringify([{ id, email: "system@smoke.invalid", display_name: "System", role: "system", disabled_at: null }]));
+  } else if (req.method === "POST" && url.pathname === "/rest/v1/rpc/jobs_claim") {
+    res.end("[]");
+  } else {
+    res.statusCode = 404;
+    res.end("{}");
+  }
+}).listen(54321, "127.0.0.1", () => console.log("stub listening"));
+'
+STUB="$PREFIX-supabase-stub"
+
+start_stub() {
+  docker run -d --name "$STUB" "$IMAGE" node -e "$STUB_JS" >/dev/null || return 1
+  wait_for_log "$STUB" 'stub listening' || { dump_logs "$STUB"; return 1; }
+}
+
 worker_signal() {
   local signal="$1" name ready code
   name="$PREFIX-worker-$(tr '[:upper:]' '[:lower:]' <<<"$signal")"
-  docker run -d --name "$name" "${SUPABASE_ENV[@]}" "$IMAGE" node dist/worker.js >/dev/null \
+  docker run -d --name "$name" --network "container:$STUB" "${SUPABASE_ENV[@]}" "$IMAGE" node dist/worker.js >/dev/null \
     || { fail "worker $signal: docker run"; return; }
   if ! wait_for_log "$name" '"msg":"worker ready"'; then
     fail "worker $signal: no readiness line"
@@ -145,13 +175,19 @@ worker_signal() {
   ready="$(docker logs "$name" 2>&1 | grep -c '"msg":"worker ready"')"
   [ "$ready" = "1" ] && pass "worker $signal: one readiness line" || fail "worker $signal: $ready readiness lines"
   if docker logs "$name" 2>&1 | grep '"msg":"worker ready"' | head -n1 \
-    | jq -e '.level == "info" and .msg == "worker ready"' >/dev/null 2>&1; then
-    pass "worker $signal: readiness line is JSON"
+    | jq -e '.level == "info" and .msg == "worker ready" and (.actorId | type) == "string"' >/dev/null 2>&1; then
+    pass "worker $signal: readiness line is JSON with the actorId"
   else
-    fail "worker $signal: readiness line is not a JSON info entry"
+    fail "worker $signal: readiness line is not a JSON info entry with an actorId"
   fi
   sleep 3
   running "$name" && pass "worker $signal: keeps running" || { fail "worker $signal: exited while idle"; dump_logs "$name"; return; }
+  if docker logs "$name" 2>&1 | grep -q '"level":"error"'; then
+    fail "worker $signal: logged errors while polling"
+    dump_logs "$name"
+  else
+    pass "worker $signal: polls quietly"
+  fi
 
   docker kill --signal "$signal" "$name" >/dev/null
   if ! wait_stopped "$name"; then
@@ -160,6 +196,21 @@ worker_signal() {
   fi
   code="$(exit_code "$name")"
   [ "$code" = "0" ] && pass "worker $signal: exit 0" || { fail "worker $signal: exit $code, expected 0"; dump_logs "$name"; }
+}
+
+worker_no_system_actor() {
+  local name="$PREFIX-worker-nodb" code
+  # Nothing listens on 127.0.0.1:54321 in the worker's own network.
+  docker run -d --name "$name" "${SUPABASE_ENV[@]}" "$IMAGE" node dist/worker.js >/dev/null \
+    || { fail "worker no system actor: docker run"; return; }
+  wait_stopped "$name" || { fail "worker no system actor: still running"; return; }
+  code="$(exit_code "$name")"
+  [ "$code" = "1" ] && pass "worker no system actor: exit 1" || { fail "worker no system actor: exit $code, expected 1"; dump_logs "$name"; }
+  if docker logs "$name" 2>&1 | grep -q '"msg":"worker ready"'; then
+    fail "worker no system actor: logged a readiness line"
+  else
+    pass "worker no system actor: no readiness line"
+  fi
 }
 
 worker_invalid_env() {
@@ -185,9 +236,14 @@ image_user() {
 
 web_ungated
 web_gated
-worker_signal SIGTERM
-worker_signal SIGINT
+if start_stub; then
+  worker_signal SIGTERM
+  worker_signal SIGINT
+else
+  fail "worker: the Supabase stub did not start"
+fi
 worker_invalid_env
+worker_no_system_actor
 ffmpeg_version
 image_user
 

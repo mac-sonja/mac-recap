@@ -2,7 +2,8 @@
 title: 'Story 3.1: Background job queue and worker loop'
 type: 'feature'
 created: '2026-10-16'
-status: 'ready-for-dev'
+status: 'in-review'
+baseline_commit: '7264176036d3c4471fa51e3c6891a85c37fb77c4'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -58,17 +59,17 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/20261016120000_jobs_job.sql` -- `job` table per AC (+ `created_at`, `updated_at`, `finished_at`), partial unique index, RLS; `jobs_enqueue`, `jobs_claim(p_kinds)`, `jobs_renew`, `jobs_finish`, `jobs_fail(…, p_retry_after, p_retryable)`, `jobs_release`.
-- [ ] `src/shared/db.types.ts` -- table and RPCs.
-- [ ] `src/modules/jobs/domain/job.ts` + test -- `Job` schema, timing constants, `retryDelayMs`, `JobHandler { run(job, signal), caseIdOf? }`.
-- [ ] `src/modules/jobs/{ports/job-repository.ts,adapters/supabase/}` -- RPC wrappers, `listBySubject`.
-- [ ] `src/modules/jobs/application/{enqueue,get-jobs-for,run-loop}.ts` + tests -- injected repo, timers, handlers; every matrix row with fakes.
-- [ ] `src/modules/jobs/index.ts` -- `enqueue`, `getJobsFor`, `startJobLoop`, types.
-- [ ] `src/modules/access/{application/get-system-actor.ts,index.ts}` + test.
-- [ ] `src/worker/run.ts` + test -- env → system actor → loop (empty handler map) → drain on signal.
-- [ ] `test/db/jobs.db.test.ts` -- dedupe, two-connection claim race, expiry reclaim and last-attempt fail, fencing, retry delay, role denial.
-- [ ] `test/web-imports.test.ts` -- esbuild `metafile` over web entries (`src/app/**`, `src/proxy.ts`, `src/instrumentation*.ts`); fail on `@anthropic-ai/sdk`, `playwright*`, `sharp`, `child_process`; a fixture proves it fails.
-- [ ] `README.md`, `deferred-work.md` -- worker row; close the system-actor item.
+- [x] `supabase/migrations/20261016120000_jobs_job.sql` -- `job` table per AC (+ `created_at`, `updated_at`, `finished_at`), partial unique index, RLS; `jobs_enqueue`, `jobs_claim(p_kinds)`, `jobs_renew`, `jobs_finish`, `jobs_fail(…, p_retry_after, p_retryable)`, `jobs_release`.
+- [x] `src/shared/db.types.ts` -- table and RPCs.
+- [x] `src/modules/jobs/domain/job.ts` + test -- `Job` schema, timing constants, `retryDelayMs`, `JobHandler { run(job, signal), caseIdOf? }`.
+- [x] `src/modules/jobs/{ports/job-repository.ts,adapters/supabase/}` -- RPC wrappers, `listBySubject`.
+- [x] `src/modules/jobs/application/{enqueue,get-jobs-for,run-loop}.ts` + tests -- injected repo, timers, handlers; every matrix row with fakes.
+- [x] `src/modules/jobs/index.ts` -- `enqueue`, `getJobsFor`, `startJobLoop`, types.
+- [x] `src/modules/access/{application/get-system-actor.ts,index.ts}` + test.
+- [x] `src/worker/run.ts` + test -- env → system actor → loop (empty handler map) → drain on signal.
+- [x] `test/db/jobs.db.test.ts` -- dedupe, two-connection claim race, expiry reclaim and last-attempt fail, fencing, retry delay, role denial.
+- [x] `test/web-imports.test.ts` -- esbuild `metafile` over web entries (`src/app/**`, `src/proxy.ts`, `src/instrumentation*.ts`); fail on `@anthropic-ai/sdk`, `playwright*`, `sharp`, `child_process`; a fixture proves it fails.
+- [x] `README.md`, `deferred-work.md` -- worker row; close the system-actor item.
 
 **Acceptance Criteria:**
 - Given a fresh stack, when the migration runs, then `job`, its unique index and `jobs_claim()` exist and `anon`/`authenticated` can't touch them.
@@ -91,6 +92,42 @@ context:
 
 ## Implementation Notes
 
+- The jobs_* functions are `security definer` and the service role has only `select` on `job` (all other privileges revoked), so no server code can write a job row except through them. The other modules' functions are `security invoker`; this is deliberate.
+- All jobs_* functions except renew/finish/release return `setof job` (0 or 1 row) so a lost lease is an empty result, not a null composite. `jobs_fail.p_retry_after` is milliseconds.
+- `jobs_claim` fails expired last-attempt jobs only of `p_kinds`, so a worker without a handler for a kind never touches it (AC 4).
+- Shutdown: only the abort outcome (`err` with code `ABORTED`, or a throw after the abort) or no answer within 10 s releases the job; `ok` is finished and any other error goes through jobs_fail. After the grace, an outcome already being recorded gets at most 3 s more; a late outcome after the release writes nothing. Hosts need a stop timeout of at least 15 s (README).
+- Lease watchdog: a renewal that does not answer in 30 s counts as failed; with no successful renewal for 9 minutes (lease minus one interval) the handler is aborted and its outcome discarded.
+- A refused `authorize(system, "job work")` fails the job for good (`FORBIDDEN`) instead of releasing it. Handler errors are capped (code 1–64, message ≤ 1000 characters, same check in SQL); a non-Result outcome is `HANDLER_BAD_OUTCOME`; retry delays are capped at 1 hour; `getJobsFor` returns the newest 50.
+- `scripts/smoke-image.sh` worker rows now run against a tiny PostgREST stub (same image, shared network) because readiness needs the system profile; a new row checks exit 1 with no readiness line when Supabase is unreachable.
+- `test/system-actor.test.ts` enforces AC 2 (no `SYSTEM_ACTOR_ID` or its value in `src/` outside `access`); `test/jobs-migration.test.ts` keeps the migration's kinds, statuses, lease and attempt limit in sync with `jobs/domain/job.ts`.
+- `db.types.ts` was hand-edited; the CI drift check is the authority (commit its artifact if it fails).
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Source | Finding | Verdict | Route | Evidence |
+|---|--------|---------|---------|-------|----------|
+| 1 | blind, edge-case | Lease can lapse while renewals fail, so two workers run one job | medium | patch | `renew` never tracks time since the last success; only writes are fenced. |
+| 2 | blind, edge-case | `stop()` leaves the renewal interval and an in-flight settle | low | patch | Interval is cleared only in `runOne`'s `finally`; `current` may be null while settling. |
+| 3 | edge-case | A permanent failure during shutdown is released and rerun | low | patch | `settle` releases on any error while `stopping`. |
+| 4 | edge-case | Handler returning a non-Result throws in settle | low | patch | `outcome.ok` read without a guard. |
+| 5 | blind, verification-gap | Refused `job work` releases and reclaims every 2 s forever | low | patch | `jobs_release` gives the attempt back; policy always allows `system` today. |
+| 6 | verification-gap | `reportFailed` refusal path untested | low | patch | No test combines a refused authorize with a case-bound failure. |
+| 7 | blind, edge-case | Stored errors unbounded; empty code passes SQL but fails zod | low | patch | SQL checks only types; zod `code.min(1)`. |
+| 8 | edge-case | Retry delay overflows int4 when max_attempts > 17 | low | patch | `30 s × 2^(n−1)` in ms passed as `integer`. |
+| 9 | blind, edge-case | `getJobsFor` unbounded, no authorize note | low | patch | No limit on `listBySubject`. |
+| 10 | edge-case | Synchronous throw from `startJobLoop` is unhandled | low | patch | `void runWorker()` with no guard around the call. |
+| 11 | edge-case | 10 s grace equals Docker's default stop timeout | low | patch | Docs only: host stop timeout ≥ 15 s. |
+| 12 | blind | Migration sync test doesn't tie the lease to `JOB_LEASE_MS` | low | patch | Counts the literal only. |
+| 13 | blind, edge-case | Access-module exclusion matches by bare prefix | low | patch | `startsWith` without a separator. |
+| 14 | blind | Web import check misses worker_threads/execa/cross-spawn/puppeteer; `instrumentation-node.ts` can drop out | low | patch | Regex list and `existsSync` filter. |
+| 15 | blind, edge-case, verification-gap | `job_failed` lost if the worker dies or `recordEvent` fails after the job is final | medium | defer | Needs a durable "reported" marker; no case-bound handler exists until 3.7. |
+| 16 | blind | No retention for finished jobs | low | defer | Growth only; claims use partial indexes. |
+| 17 | edge-case | Claimed row failing `toJob` burns attempts | low | reject | Main cause (empty code) removed by #7. |
+| 18 | edge-case | `jobs_fail` RPC error on the last attempt reports LEASE_EXPIRED instead | low | reject | Needs a DB error at that exact step; the job still ends failed. |
+| 19 | edge-case | One bad row hides a subject's job list | low | reject | Rows are validated on write by #7. |
+| 20 | blind | System actor read once at boot | low | reject | The worker restarts on deploy; no path disables `system` today. |
+| 21 | blind | "worker ready" logged before the first claim | low | reject | A broken queue shows as repeated claim errors right after. |
+| 22 | blind | More DB edge tests (enqueue give-up, constraint rows); race on a shared DB | false | reject | CI uses a fresh database; constraints are exercised by the function tests. |
+| 23 | blind | Spec in review, tracker in progress | false | reject | Normal workflow states. |
