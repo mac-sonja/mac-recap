@@ -98,7 +98,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 - **About the client block.** The part of every case study that shows the client's logo, name, sector and description, always as they currently are on the client. A change to the client shows in all its case studies, drafts and approved ones alike.
 - **Case history code.** Client code, year and a number per client and year, e.g. LUM-2026-01. Fixed once the case study is created.
 - **Material.** Uploaded files: images, videos, text documents and PDFs. The details form is not material.
-- **Deliverable.** One uploaded file of material. Images and videos can be marked as favourite.
+- **Asset.** A single uploaded material file. Images and videos can be marked as favourite.
 - **Approved case study.** A case study the owner/designer has reviewed and approved. Only approved case studies can be exported or shared.
 - **Shareable link.** A link to a hosted version of an approved case study, such as a hosted presentation. Who can open it is open point 11.
 - **Configurator.** The editing screen where the owner/designer adjusts text, layout, media and typography before approving.
