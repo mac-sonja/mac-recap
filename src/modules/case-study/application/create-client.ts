@@ -1,18 +1,22 @@
 import type { Actor } from "@/modules/access";
-import { createClientInputSchema, type Client } from "@/modules/case-study/domain/case-study";
-import { parseInput } from "@/modules/case-study/domain/validation";
+import { createClientInputSchema, FIELD_TOO_LONG, type Client } from "@/modules/case-study/domain/case-study";
+import { parseClientInput } from "@/modules/case-study/domain/validation";
 import type { Result } from "@/shared/result";
 import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
 
 /**
- * Adds a client with an automatic code (assigned in SQL, AD-21). The caller has
+ * Adds a client with an automatic code (assigned in SQL, AD-21) and its optional
+ * sector and description (trimmed; blank → null). The logo is linked afterwards
+ * with `updateClient`, since its key needs the new client's id. The caller has
  * already authorized `manage clients`. `INVALID_INPUT` (name blank or over 120
- * characters after trimming), `CLIENT_NAME_TAKEN` and `CLIENT_CODE_EXHAUSTED` write nothing.
+ * characters after trimming), `CLIENT_FIELD_TOO_LONG` (sector over 60 or
+ * description over 400 characters), `CLIENT_NAME_TAKEN` and `CLIENT_CODE_EXHAUSTED` write nothing.
  */
 export function makeCreateClient(clients: ClientRepository) {
   return async function createClient(actor: Actor, input: unknown): Promise<Result<Client>> {
-    const parsed = parseInput(createClientInputSchema, input);
+    const parsed = parseClientInput(createClientInputSchema, input, FIELD_TOO_LONG);
     if (!parsed.ok) return parsed;
-    return clients.create(parsed.value.name, actor.id);
+    const { name, sector, description } = parsed.value;
+    return clients.create(name, { sector, description }, actor.id);
   };
 }

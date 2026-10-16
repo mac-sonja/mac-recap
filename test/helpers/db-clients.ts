@@ -35,6 +35,6 @@ export const nameWithLetters = (letters: string) => `${letters} ${randomInt(1_00
 /** Creates (and commits, unless `db` is inside a transaction) a client through `create_client`. */
 export async function createTestClient(db: pg.Pool | pg.ClientBase, actorId: string, name?: string): Promise<TestClient> {
   const clientName = name ?? nameWithLetters(await freshPrefix(db));
-  const { rows } = await db.query<TestClient>("select id, name, code from public.create_client($1, $2)", [clientName, actorId]);
+  const { rows } = await db.query<TestClient>("select id, name, code from public.create_client($1, null, null, $2)", [clientName, actorId]);
   return rows[0];
 }

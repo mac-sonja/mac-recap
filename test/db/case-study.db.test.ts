@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
+import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
 import { LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
@@ -59,10 +60,11 @@ async function inRolledBackTx(sql: string, params: unknown[] = [], role?: string
 }
 
 async function counts() {
-  const { rows } = await pool.query<{ cases: number; events: number; clients: number; counters: number; numbers: number }>(
+  const { rows } = await pool.query<{ cases: number; events: number; clients: number; logos: number; counters: number; numbers: number }>(
     `select (select count(*)::int from public.case_study) as cases,
             (select count(*)::int from public.case_event) as events,
             (select count(*)::int from public.client) as clients,
+            (select count(*)::int from public.client_logo) as logos,
             (select count(*)::int from public.case_number_counter) as counters,
             (select coalesce(sum(last_number), 0)::int from public.case_number_counter) as numbers`,
   );
@@ -73,6 +75,12 @@ async function counts() {
 const loadCaseStudy = () => import("@/modules/case-study");
 const loadAccess = () => import("@/modules/access");
 const loadActions = () => import("@/app/(tool)/case-studies/actions");
+const loadClientActions = () => import("@/app/(tool)/clients/actions");
+/** A service-role client, to inspect the storage bucket. */
+const createSupabaseAdmin = () =>
+  createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
 
 async function devActor() {
   const { getActor } = await loadAccess();
@@ -212,7 +220,6 @@ describe("forbidden", () => {
 });
 
 describe("clients page (Story 2.13)", () => {
-  const loadClientActions = () => import("@/app/(tool)/clients/actions");
 
   async function summaryOf(clientId: string) {
     const { listClientSummaries } = await loadCaseStudy();
@@ -246,11 +253,11 @@ describe("clients page (Story 2.13)", () => {
   });
 
   it("adds a client through the action, refuses a name-key duplicate, and renames without touching any code", async () => {
-    const { createClient, renameClient } = await loadClientActions();
+    const { createClient, updateClient } = await loadClientActions();
     const name = nameWithLetters(await freshPrefix(pool));
     const added = await createClient({ name: `  ${name} ` });
     if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
-    expect(added.value.name).toBe(name);
+    expect(added.value).toMatchObject({ name, sector: null, description: null, logoId: null });
     const created = await createCase({ name: "Rename keeps codes", clientId: added.value.id });
 
     const before = await counts();
@@ -258,36 +265,43 @@ describe("clients page (Story 2.13)", () => {
     expect(duplicate).toEqual({ ok: false, status: 409, error: { code: "CLIENT_NAME_TAKEN", message: expect.any(String) } });
     expect(await counts()).toEqual(before);
 
-    const renamed = await renameClient({ clientId: added.value.id, name: `${name} S.r.l.` });
-    expect(renamed).toEqual({ ok: true, value: { id: added.value.id, name: `${name} S.r.l.`, code: added.value.code } });
+    const edit = (over: Record<string, unknown>) => updateClient({ clientId: added.value.id, sector: null, description: null, logoId: null, ...over });
+    const renamed = await edit({ name: `${name} S.r.l.` });
+    expect(renamed).toEqual({
+      ok: true,
+      value: { id: added.value.id, name: `${name} S.r.l.`, code: added.value.code, sector: null, description: null, logoId: null },
+    });
     const { get } = await loadCaseStudy();
     const reread = await get(created.id);
     expect(reread.ok && reread.value).toMatchObject({ code: created.code, client: { name: `${name} S.r.l.`, code: added.value.code } });
 
     // Its own name, and a case/space variant of it, are not "taken": saved as typed, code unchanged.
     for (const own of [`${name} S.r.l.`, `${name.toLowerCase().replace(" ", "  ")} s.r.l.`]) {
-      const same = await renameClient({ clientId: added.value.id, name: own });
-      expect(same).toEqual({
-        ok: true,
-        value: { id: added.value.id, name: own.replace(/\s+/g, " "), code: added.value.code },
-      });
+      const same = await edit({ name: own });
+      expect(same).toMatchObject({ ok: true, value: { id: added.value.id, name: own.replace(/\s+/g, " "), code: added.value.code } });
     }
 
-    const unknown = await renameClient({ clientId: UNKNOWN_ID, name: "Nobody" });
+    const unknown = await updateClient({ clientId: UNKNOWN_ID, name: "Nobody", sector: null, description: null, logoId: null });
     expect(unknown).toMatchObject({ ok: false, status: 404, error: { code: "CLIENT_NOT_FOUND" } });
   });
 
-  it("returns 403 FORBIDDEN for a role that cannot manage clients, and writes nothing", async () => {
-    const { createClient, renameClient } = await loadClientActions();
-    await pool.query("update public.profile set role = 'account_sales_social' where id = $1", [DEV_ACTOR_ID]);
-    try {
-      const before = await counts();
-      const forbidden = { ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } };
-      expect(await createClient({ name: nameWithLetters(await freshPrefix(pool)) })).toEqual(forbidden);
-      expect(await renameClient({ clientId: acme.id, name: "Intruder" })).toEqual(forbidden);
-      expect(await counts()).toEqual(before);
-    } finally {
-      await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
+  it("returns 403 FORBIDDEN for a role that cannot manage clients on every client action, and writes nothing", async () => {
+    const { createClient, updateClient, requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
+    for (const role of ["account_sales_social", "admin"]) {
+      await pool.query("update public.profile set role = $2 where id = $1", [DEV_ACTOR_ID, role]);
+      try {
+        const before = await counts();
+        const forbidden = { ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } };
+        expect(await createClient({ name: nameWithLetters(await freshPrefix(pool)), sector: "Moda" })).toEqual(forbidden);
+        expect(await updateClient({ clientId: acme.id, name: "Intruder", sector: "Moda", description: null, logoId: null })).toEqual(forbidden);
+        expect(await requestClientLogoUpload({ clientId: acme.id, contentType: "image/png", sizeBytes: 10 })).toEqual(forbidden);
+        expect(await confirmClientLogoUpload({ clientId: acme.id, logoId: randomUUID(), contentType: "image/png" })).toEqual(forbidden);
+        expect(await counts()).toEqual(before);
+        const { rows } = await pool.query("select name, sector, description, logo_id from public.client where id = $1", [acme.id]);
+        expect(rows[0]).toMatchObject({ name: acme.name });
+      } finally {
+        await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
+      }
     }
   });
 });
@@ -528,7 +542,7 @@ describe("RLS lockout", () => {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
 
-  it.each(["case_study", "case_event", "client", "case_number_counter"])("the browser key is refused reading %s", async (table) => {
+  it.each(["case_study", "case_event", "client", "client_logo", "case_number_counter"])("the browser key is refused reading %s", async (table) => {
     const { data, error } = await browser().from(table).select("*");
     expect(data).toBeNull();
     expect(error?.code).toBe("42501");
@@ -547,17 +561,19 @@ describe("RLS lockout", () => {
     expect(["42501", "PGRST202"]).toContain(error?.code);
   });
 
-  type Table = "case_study" | "case_event" | "client" | "case_number_counter";
+  type Table = "case_study" | "case_event" | "client" | "client_logo" | "case_number_counter";
   const INSERTS: Record<Table, string> = {
     case_study: `insert into public.case_study (name, client_id, number, code, year, created_by) values ('I', '${UNKNOWN_ID}', 1, 'I', 2026, '${DEV_ACTOR_ID}')`,
     case_event: `insert into public.case_event (case_id, actor_id, type) values ('${UNKNOWN_ID}', '${DEV_ACTOR_ID}', 'x')`,
     client: `insert into public.client (name, name_key, code, created_by) values ('I', 'i', 'III', '${DEV_ACTOR_ID}')`,
+    client_logo: `insert into public.client_logo (client_id, path, mime_type, size_bytes, created_by) values ('${UNKNOWN_ID}', 'p', 'image/png', 1, '${DEV_ACTOR_ID}')`,
     case_number_counter: `insert into public.case_number_counter (client_id, year, last_number) values ('${UNKNOWN_ID}', 2026, 1)`,
   };
   const UPDATES: Record<Table, string> = {
     case_study: "name = 'x'",
     case_event: "type = 'x'",
     client: "name = 'x'",
+    client_logo: "path = 'x'",
     case_number_counter: "last_number = 1",
   };
   const statements = (table: Table) => ({
@@ -567,7 +583,7 @@ describe("RLS lockout", () => {
     delete: `delete from public.${table}`,
   });
   const cases = (["anon", "authenticated"] as const).flatMap((role) =>
-    (["case_study", "case_event", "client", "case_number_counter"] as const).flatMap((table) =>
+    (["case_study", "case_event", "client", "client_logo", "case_number_counter"] as const).flatMap((table) =>
       Object.entries(statements(table)).map(([verb, sql]) => [role, verb, table, sql] as const),
     ),
   );
@@ -578,8 +594,10 @@ describe("RLS lockout", () => {
 
   const FUNCTIONS = [
     `public.create_case_study('I', '${UNKNOWN_ID}'::uuid, 2026, 'it', '${DEV_ACTOR_ID}')`,
-    `public.create_client('Intruder', '${DEV_ACTOR_ID}')`,
-    `public.rename_client('${UNKNOWN_ID}', 'Intruder', '${DEV_ACTOR_ID}')`,
+    `public.create_client('Intruder', null, null, '${DEV_ACTOR_ID}')`,
+    `public.update_client('${UNKNOWN_ID}', 'Intruder', null, null, null, '${DEV_ACTOR_ID}')`,
+    "public.client_info_text(' x ')",
+    `public.delete_client_logo('${UNKNOWN_ID}')`,
     "public.client_code_letters('Intruder')",
     "public.client_name_key('Intruder')",
     "public.case_study_code('III', 2026, 1)",
@@ -590,6 +608,13 @@ describe("RLS lockout", () => {
       await expect(inRolledBackTx(`select ${call}`, [], role)).rejects.toMatchObject({ code: "42501" });
     },
   );
+
+  it("the old create_client and rename_client signatures are gone", async () => {
+    await expect(inRolledBackTx(`select public.create_client('I', '${DEV_ACTOR_ID}'::uuid)`)).rejects.toMatchObject({ code: "42883" });
+    await expect(
+      inRolledBackTx(`select public.rename_client('${UNKNOWN_ID}'::uuid, 'I', '${DEV_ACTOR_ID}'::uuid)`),
+    ).rejects.toMatchObject({ code: "42883" });
+  });
 
   it("the old free-text create_case_study signature is gone", async () => {
     await expect(
@@ -883,7 +908,7 @@ describe("clients and readable case history codes (AD-21)", () => {
   const backendPid = async (client: pg.Client) =>
     (await client.query<{ pid: number }>("select pg_catalog.pg_backend_pid() as pid")).rows[0].pid;
 
-  const createClientSql = "select id, name, code from public.create_client($1, $2)";
+  const createClientSql = "select id, name, code from public.create_client($1, null, null, $2)";
   const createCaseSql = "select number, code from public.create_case_study('Concurrent', $1, $2, 'it', $3)";
 
   describe("client codes", () => {
@@ -929,7 +954,7 @@ describe("clients and readable case history codes (AD-21)", () => {
       await rolledBack(async (client) => {
         const created = (await client.query<TestClient>(createClientSql, ["\t Lumen \n  Srl  ", DEV_ACTOR_ID])).rows[0];
         expect(created.name).toBe("Lumen Srl");
-        const { rows } = await client.query("select name, name_key from public.rename_client($1, $2, $3)", [
+        const { rows } = await client.query("select name, name_key from public.update_client($1, $2, null, null, null, $3)", [
           created.id,
           "  Lumen\t\tGroup \n",
           DEV_ACTOR_ID,
@@ -1048,7 +1073,11 @@ describe("clients and readable case history codes (AD-21)", () => {
       const client = await createTestClient(pool, DEV_ACTOR_ID);
       const created = await createCase({ clientId: client.id });
       const renamed = `${client.name} Group`;
-      const { rows } = await pool.query("select name, code from public.rename_client($1, $2, $3)", [client.id, renamed, DEV_ACTOR_ID]);
+      const { rows } = await pool.query("select name, code from public.update_client($1, $2, null, null, null, $3)", [
+        client.id,
+        renamed,
+        DEV_ACTOR_ID,
+      ]);
       expect(rows).toEqual([{ name: renamed, code: client.code }]);
       const { get } = await loadCaseStudy();
       const read = await get(created.id);
@@ -1102,13 +1131,12 @@ describe("clients and readable case history codes (AD-21)", () => {
       await expect(inRolledBackTx(sql, sql.includes("$1") ? [client.id] : [])).rejects.toMatchObject({ code: "P0001" });
     });
 
-    it("rename_client refuses an unknown client and a taken name", async () => {
-      await expect(inRolledBackTx("select public.rename_client($1, 'x', $2)", [UNKNOWN_ID, DEV_ACTOR_ID])).rejects.toMatchObject({
-        code: "P0001",
-        message: "CLIENT_NOT_FOUND",
-      });
+    it("update_client refuses an unknown client and a taken name", async () => {
       await expect(
-        inRolledBackTx("select public.rename_client($1, $2, $3)", [client.id, ` ${acme.name.toUpperCase()} `, DEV_ACTOR_ID]),
+        inRolledBackTx("select public.update_client($1, 'x', null, null, null, $2)", [UNKNOWN_ID, DEV_ACTOR_ID]),
+      ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
+      await expect(
+        inRolledBackTx("select public.update_client($1, $2, null, null, null, $3)", [client.id, ` ${acme.name.toUpperCase()} `, DEV_ACTOR_ID]),
       ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NAME_TAKEN" });
     });
   });
@@ -1135,6 +1163,302 @@ describe("clients and readable case history codes (AD-21)", () => {
       { column_name: "code", is_nullable: "NO" },
       { column_name: "number", is_nullable: "NO" },
     ]);
+  });
+});
+
+describe("client info (Story 2.14, AD-22)", () => {
+  const png = (width: number, height: number) =>
+    sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+
+  /** Inserts one `client_logo` row for `clientId` directly (as the confirm step would). */
+  async function insertLogo(clientId: string) {
+    const id = randomUUID();
+    await pool.query(
+      "insert into public.client_logo (id, client_id, path, mime_type, size_bytes, created_by) values ($1, $2, $3, 'image/png', 2048, $4)",
+      [id, clientId, `clients/${clientId}/logos/${id}.png`, DEV_ACTOR_ID],
+    );
+    return id;
+  }
+
+  it("adds nullable sector, description and logo_id; an existing client starts empty", async () => {
+    const { rows: columns } = await pool.query<{ column_name: string; is_nullable: string }>(
+      `select column_name, is_nullable from information_schema.columns
+        where table_schema = 'public' and table_name = 'client' and column_name in ('sector', 'description', 'logo_id')
+        order by column_name`,
+    );
+    expect(columns).toEqual([
+      { column_name: "description", is_nullable: "YES" },
+      { column_name: "logo_id", is_nullable: "YES" },
+      { column_name: "sector", is_nullable: "YES" },
+    ]);
+    const { rows } = await pool.query("select sector, description, logo_id from public.client where id = $1", [acme.id]);
+    expect(rows).toEqual([{ sector: null, description: null, logo_id: null }]);
+  });
+
+  it("creates client_logo with the AD-22 columns", async () => {
+    const { rows } = await pool.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'client_logo' order by column_name",
+    );
+    expect(rows.map((r) => r.column_name)).toEqual(["client_id", "created_at", "created_by", "id", "mime_type", "path", "size_bytes"]);
+  });
+
+  it.each([
+    ["description", 400],
+    ["sector", 60],
+  ])("accepts a %s of %i characters (emoji = 1) and refuses one more", async (column, max) => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const { rows } = await inRolledBackTx(`update public.client set ${column} = $2 where id = $1 returning char_length(${column}) as n`, [
+      client.id,
+      "😀".repeat(max),
+    ]);
+    expect(rows).toEqual([{ n: max }]);
+    await expect(
+      inRolledBackTx(`update public.client set ${column} = $2 where id = $1`, [client.id, "x".repeat(max + 1)]),
+    ).rejects.toMatchObject({ code: "23514" });
+    await expect(inRolledBackTx(`update public.client set ${column} = '   ' where id = $1`, [client.id])).rejects.toMatchObject({
+      code: "23514",
+    });
+  });
+
+  it("create_client and update_client store trimmed info and blank as null", async () => {
+    const name = nameWithLetters(await freshPrefix(pool));
+    const { rows } = await inRolledBackTx(
+      `with created as (select * from public.create_client($1, '  Moda ', E'\n\t ', $2))
+       select sector, description from created`,
+      [name, DEV_ACTOR_ID],
+    );
+    expect(rows).toEqual([{ sector: "Moda", description: null }]);
+  });
+
+  it("update_client trims padded non-blank sector and description and stores blank as null", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const { rows: padded } = await inRolledBackTx(
+      "select sector, description from public.update_client($1, $2, $3, $4, null, $5)",
+      [client.id, client.name, "  Moda \t", "\n Brand di moda.  ", DEV_ACTOR_ID],
+    );
+    expect(padded).toEqual([{ sector: "Moda", description: "Brand di moda." }]);
+    const { rows: blank } = await inRolledBackTx(
+      "select sector, description from public.update_client($1, $2, $3, $4, null, $5)",
+      [client.id, client.name, "   ", "\n\t", DEV_ACTOR_ID],
+    );
+    expect(blank).toEqual([{ sector: null, description: null }]);
+  });
+
+  it("through the action: saves the info, refuses 401 characters with CLIENT_FIELD_TOO_LONG and writes nothing", async () => {
+    const { createClient, updateClient } = await loadClientActions();
+    const before = await counts();
+    const tooLong = await createClient({ name: nameWithLetters(await freshPrefix(pool)), description: "x".repeat(401) });
+    expect(tooLong).toEqual({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_FIELD_TOO_LONG", message: expect.any(String), fields: ["description"] },
+    });
+    expect(await counts()).toEqual(before);
+
+    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)), sector: " Moda ", description: "😀".repeat(400) });
+    if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
+    expect(added.value).toMatchObject({ sector: "Moda", description: "😀".repeat(400), logoId: null });
+
+    const sectorTooLong = await updateClient({
+      clientId: added.value.id,
+      name: added.value.name,
+      sector: "s".repeat(61),
+      description: null,
+      logoId: null,
+    });
+    expect(sectorTooLong).toMatchObject({ ok: false, status: 400, error: { code: "CLIENT_FIELD_TOO_LONG", fields: ["sector"] } });
+    const { rows } = await pool.query("select sector from public.client where id = $1", [added.value.id]);
+    expect(rows).toEqual([{ sector: "Moda" }]);
+  });
+
+  it.each([
+    ["mime_type", "image/svg+xml", 2048],
+    ["mime_type", "image/gif", 2048],
+    ["size_bytes", "image/png", 0],
+    ["size_bytes", "image/png", 5 * 1024 * 1024 + 1],
+  ])("client_logo refuses a %s outside the limits (%s, %i B)", async (_label, mime, size) => {
+    await expect(
+      inRolledBackTx(
+        "insert into public.client_logo (client_id, path, mime_type, size_bytes, created_by) values ($1, $2, $3, $4, $5)",
+        [acme.id, `clients/${acme.id}/logos/${randomUUID()}.x`, mime, size, DEV_ACTOR_ID],
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("client_logo rows can now be updated and deleted directly (no append-only guard)", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const logoId = await insertLogo(client.id);
+    const { rows } = await inRolledBackTx("update public.client_logo set path = 'x' where id = $1 returning path", [logoId]);
+    expect(rows).toEqual([{ path: "x" }]);
+    const deleted = await inRolledBackTx("delete from public.client_logo where id = $1", [logoId]);
+    expect(deleted.rowCount).toBe(1);
+    const { rows: triggers } = await pool.query(
+      "select tgname from pg_catalog.pg_trigger where tgrelid = 'public.client_logo'::regclass and not tgisinternal",
+    );
+    expect(triggers).toEqual([]);
+  });
+
+  it("delete_client_logo deletes a logo no client shows, and refuses one in use with CLIENT_LOGO_IN_USE", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const first = await insertLogo(client.id);
+    const second = await insertLogo(client.id);
+    await pool.query("select public.update_client($1, $2, null, null, $3, $4)", [client.id, client.name, second, DEV_ACTOR_ID]);
+
+    await expect(pool.query("select public.delete_client_logo($1)", [second])).rejects.toMatchObject({
+      code: "P0001",
+      message: "CLIENT_LOGO_IN_USE",
+    });
+    expect((await pool.query("select count(*)::int as n from public.client_logo where id = $1", [second])).rows[0].n).toBe(1);
+
+    expect((await pool.query("select public.delete_client_logo($1) as deleted", [first])).rows).toEqual([{ deleted: true }]);
+    expect((await pool.query("select public.delete_client_logo($1) as deleted", [first])).rows).toEqual([{ deleted: false }]);
+    expect((await pool.query("select count(*)::int as n from public.client_logo where id = $1", [first])).rows[0].n).toBe(0);
+  });
+
+  it("through the action, replacing and removing a logo deletes the old row and object", async () => {
+    const { createClient, updateClient, requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
+    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)) });
+    if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
+    const clientId = added.value.id;
+    const upload = async () => {
+      const bytes = await png(800, 400);
+      const presigned = await requestClientLogoUpload({ clientId, contentType: "image/png", sizeBytes: bytes.byteLength });
+      if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+      const { logoId, url, method, headers } = presigned.value;
+      expect((await fetch(url, { method, headers, body: new Blob([new Uint8Array(bytes)]) })).status).toBe(200);
+      expect(await confirmClientLogoUpload({ clientId, logoId, contentType: "image/png" })).toEqual({ ok: true, value: { logoId } });
+      return logoId;
+    };
+    const link = (logoId: string | null) => updateClient({ clientId, name: added.value.name, sector: null, description: null, logoId });
+    const objects = async () => {
+      const { data } = await createSupabaseAdmin().storage.from("material").list(`clients/${clientId}/logos`);
+      return (data ?? []).map((o) => o.name).sort();
+    };
+    const rows = async () =>
+      (await pool.query("select id from public.client_logo where client_id = $1", [clientId])).rows.map((r) => r.id);
+
+    const first = await upload();
+    expect(await link(first)).toMatchObject({ ok: true, value: { logoId: first } });
+    const second = await upload();
+    expect(await link(second)).toMatchObject({ ok: true, value: { logoId: second } });
+    expect(await rows()).toEqual([second]);
+    expect(await objects()).toEqual([`${second}.png`]);
+
+    expect(await link(null)).toMatchObject({ ok: true, value: { logoId: null } });
+    expect(await rows()).toEqual([]);
+    expect(await objects()).toEqual([]);
+  });
+
+  it.each([
+    ["another client's logo", true],
+    ["an unknown logo", false],
+  ])("update_client refuses %s with CLIENT_LOGO_INVALID; nothing written", async (_label, foreign) => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const other = await createTestClient(pool, DEV_ACTOR_ID);
+    const logoId = foreign ? await insertLogo(other.id) : randomUUID();
+    await expect(
+      pool.query("select public.update_client($1, 'Renamed too', 'Moda', null, $2, $3)", [client.id, logoId, DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_LOGO_INVALID" });
+    const { rows } = await pool.query("select name, sector, logo_id from public.client where id = $1", [client.id]);
+    expect(rows).toEqual([{ name: client.name, sector: null, logo_id: null }]);
+  });
+
+  it("getClientInfoForCase returns the client's current values; a deleted or unknown case is NOT_FOUND", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const logoId = await insertLogo(client.id);
+    await pool.query("select public.update_client($1, $2, 'Moda', 'Brand.', $3, $4)", [client.id, client.name, logoId, DEV_ACTOR_ID]);
+    const created = await createCase({ clientId: client.id });
+    const { getClientInfoForCase } = await loadCaseStudy();
+    expect(await getClientInfoForCase(created.id)).toEqual({
+      ok: true,
+      value: { clientId: client.id, name: client.name, sector: "Moda", description: "Brand.", logoId },
+    });
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
+    expect(await getClientInfoForCase(created.id)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect(await getClientInfoForCase(UNKNOWN_ID)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+  });
+
+  it("round trip: presign → PUT under clients/{clientId}/logos/ → confirm → link → signed GET on the client page", async () => {
+    const { createClient, updateClient, requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
+    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)) });
+    if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
+    const clientId = added.value.id;
+    const bytes = await png(800, 400);
+
+    const presigned = await requestClientLogoUpload({ clientId, contentType: "image/png", sizeBytes: bytes.byteLength });
+    if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+    const { logoId, url, method, headers } = presigned.value;
+    expect(new URL(url).pathname).toContain(`/object/upload/sign/material/clients/${clientId}/logos/${logoId}.png`);
+    expect((await fetch(url, { method, headers, body: new Blob([new Uint8Array(bytes)]) })).status).toBe(200);
+
+    const confirmed = await confirmClientLogoUpload({ clientId, logoId, contentType: "image/png" });
+    expect(confirmed).toEqual({ ok: true, value: { logoId } });
+    const { rows } = await pool.query("select client_id, path, mime_type, size_bytes::int as size from public.client_logo where id = $1", [logoId]);
+    expect(rows).toEqual([{ client_id: clientId, path: `clients/${clientId}/logos/${logoId}.png`, mime_type: "image/png", size: bytes.byteLength }]);
+
+    const linked = await updateClient({ clientId, name: added.value.name, sector: null, description: null, logoId });
+    expect(linked).toMatchObject({ ok: true, value: { logoId } });
+    const { getClient } = await loadCaseStudy();
+    const read = await getClient(clientId);
+    if (!read.ok || read.value.logoUrl === null) throw new Error("no logo url");
+    const fetched = await fetch(read.value.logoUrl);
+    expect(fetched.status).toBe(200);
+    expect(fetched.headers.get("content-type")).toBe("image/png");
+    const jwt = new URL(read.value.logoUrl).searchParams.get("token") as string;
+    const claims = JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString("utf8")) as { iat: number; exp: number };
+    expect(claims.exp - claims.iat).toBeLessThanOrEqual(900);
+  });
+
+  it.each([
+    ["a 300 px PNG", () => png(300, 900), "image/png"],
+    ["bytes that are not the declared type", async () => Buffer.from("GIF89a not really"), "image/png"],
+  ])("confirm refuses %s with CLIENT_LOGO_INVALID and writes no row", async (_label, make, contentType) => {
+    const { requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
+    const bytes = await make();
+    const presigned = await requestClientLogoUpload({ clientId: acme.id, contentType, sizeBytes: bytes.byteLength });
+    if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+    const { logoId, url, method, headers } = presigned.value;
+    expect((await fetch(url, { method, headers, body: new Blob([new Uint8Array(bytes)]) })).status).toBe(200);
+    const before = await counts();
+    expect(await confirmClientLogoUpload({ clientId: acme.id, logoId, contentType })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_LOGO_INVALID" },
+    });
+    expect(await counts()).toEqual(before);
+  });
+
+  it("confirming the same logo id twice is CLIENT_LOGO_INVALID; the first row stands", async () => {
+    const { requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
+    const bytes = await png(800, 400);
+    const presigned = await requestClientLogoUpload({ clientId: acme.id, contentType: "image/png", sizeBytes: bytes.byteLength });
+    if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+    const { logoId, url, method, headers } = presigned.value;
+    expect((await fetch(url, { method, headers, body: new Blob([new Uint8Array(bytes)]) })).status).toBe(200);
+    expect(await confirmClientLogoUpload({ clientId: acme.id, logoId, contentType: "image/png" })).toEqual({ ok: true, value: { logoId } });
+    const before = await counts();
+    expect(await confirmClientLogoUpload({ clientId: acme.id, logoId, contentType: "image/png" })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_LOGO_INVALID" },
+    });
+    expect(await counts()).toEqual(before);
+  });
+
+  it("presign refuses SVG, GIF, PDF and a file over 5 MB with CLIENT_LOGO_INVALID", async () => {
+    const { requestClientLogoUpload } = await loadClientActions();
+    for (const declared of [
+      { contentType: "image/svg+xml", sizeBytes: 10 },
+      { contentType: "image/gif", sizeBytes: 10 },
+      { contentType: "application/pdf", sizeBytes: 10 },
+      { contentType: "image/png", sizeBytes: 5 * 1024 * 1024 + 1 },
+    ]) {
+      expect(await requestClientLogoUpload({ clientId: acme.id, ...declared })).toMatchObject({
+        ok: false,
+        status: 400,
+        error: { code: "CLIENT_LOGO_INVALID" },
+      });
+    }
   });
 });
 

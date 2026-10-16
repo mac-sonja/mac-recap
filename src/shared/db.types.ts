@@ -123,18 +123,50 @@ isOneToOne: false
                   ]
                 },"client": {
                   Row: {
-                    "code": string,"created_at": string,"created_by": string,"id": string,"name": string,"name_key": string,"updated_at": string
+                    "code": string,"created_at": string,"created_by": string,"description": string | null,"id": string,"logo_id": string | null,"name": string,"name_key": string,"sector": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "code": string,"created_at"?: string,"created_by": string,"id"?: string,"name": string,"name_key": string,"updated_at"?: string
+                    "code": string,"created_at"?: string,"created_by": string,"description"?: string | null,"id"?: string,"logo_id"?: string | null,"name": string,"name_key": string,"sector"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "code"?: string,"created_at"?: string,"created_by"?: string,"id"?: string,"name"?: string,"name_key"?: string,"updated_at"?: string
+                    "code"?: string,"created_at"?: string,"created_by"?: string,"description"?: string | null,"id"?: string,"logo_id"?: string | null,"name"?: string,"name_key"?: string,"sector"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
       foreignKeyName: "client_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_logo_id_fkey"
+      columns: ["logo_id"]
+isOneToOne: false
+      referencedRelation: "client_logo"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"client_logo": {
+                  Row: {
+                    "client_id": string,"created_at": string,"created_by": string,"id": string,"mime_type": string,"path": string,"size_bytes": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"created_at"?: string,"created_by": string,"id"?: string,"mime_type": string,"path": string,"size_bytes": number
+                  }
+                  Update: {
+                    "client_id"?: string,"created_at"?: string,"created_by"?: string,"id"?: string,"mime_type"?: string,"path"?: string,"size_bytes"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_logo_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "client"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_logo_created_by_fkey"
       columns: ["created_by"]
 isOneToOne: false
       referencedRelation: "profile"
@@ -207,6 +239,9 @@ isOneToOne: false
 "client_code_letters":
 { Args: { "p_name": string }; Returns: string
                            },
+"client_info_text":
+{ Args: { "p_text": string }; Returns: string
+                           },
 "client_name_key":
 { Args: { "p_name": string }; Returns: string
                            },
@@ -256,13 +291,16 @@ isOneToOne: false
         isSetofReturn: false
       } },
 "create_client":
-{ Args: { "p_actor_id": string,"p_name": string }; Returns: {
+{ Args: { "p_actor_id": string,"p_description": string,"p_name": string,"p_sector": string }; Returns: {
               "code": string,
 "created_at": string,
 "created_by": string,
+"description": string | null,
 "id": string,
+"logo_id": string | null,
 "name": string,
 "name_key": string,
+"sector": string | null,
 "updated_at": string
             }
                           SetofOptions: {
@@ -271,6 +309,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"delete_client_logo":
+{ Args: { "p_logo_id": string }; Returns: boolean
+                           },
 "has_material":
 { Args: { "p_case_id": string }; Returns: boolean
                            },
@@ -349,22 +390,6 @@ isOneToOne: false
 "jobs_renew":
 { Args: { "p_attempts": number,"p_id": string }; Returns: boolean
                            },
-"rename_client":
-{ Args: { "p_actor_id": string,"p_client_id": string,"p_name": string }; Returns: {
-              "code": string,
-"created_at": string,
-"created_by": string,
-"id": string,
-"name": string,
-"name_key": string,
-"updated_at": string
-            }
-                          SetofOptions: {
-        from: "*"
-        to: "client"
-        isOneToOne: true
-        isSetofReturn: false
-      } },
 "restore_asset":
 { Args: { "p_asset_id": string,"p_case_id": string }; Returns: boolean
                            },
@@ -393,6 +418,25 @@ isOneToOne: false
                           SetofOptions: {
         from: "*"
         to: "case_study"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"update_client":
+{ Args: { "p_actor_id": string,"p_client_id": string,"p_description": string,"p_logo_id": string,"p_name": string,"p_sector": string }; Returns: {
+              "code": string,
+"created_at": string,
+"created_by": string,
+"description": string | null,
+"id": string,
+"logo_id": string | null,
+"name": string,
+"name_key": string,
+"sector": string | null,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "client"
         isOneToOne: true
         isSetofReturn: false
       } }

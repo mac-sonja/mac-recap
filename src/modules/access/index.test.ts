@@ -12,6 +12,8 @@ describe("respondToAppError", () => {
     ["CLIENT_NOT_FOUND", 404],
     ["CLIENT_NAME_TAKEN", 409],
     ["CLIENT_CODE_EXHAUSTED", 409],
+    ["CLIENT_FIELD_TOO_LONG", 400],
+    ["CLIENT_LOGO_INVALID", 400],
     ["FILE_TYPE_NOT_ALLOWED", 400],
     ["FILE_TOO_LARGE", 400],
     ["FILE_LIMIT_REACHED", 409],

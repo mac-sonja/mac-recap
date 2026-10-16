@@ -34,6 +34,9 @@
   --color-danger-foreground: #000000;
   --color-focus-ring: #cbff00;
 
+  /* Client logos sit on a small white tile, so dark logos with a transparent background stay visible (owner, 2026-10-16). */
+  --color-logo-tile: #ffffff;
+
   /* Lifecycle status hues: badge text and tint source, always paired with a text label. */
   --color-status-draft: #f2f2f2;
   --color-status-generating: #f2f2f2;

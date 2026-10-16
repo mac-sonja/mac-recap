@@ -21,3 +21,24 @@ export function parseInput<S extends z.ZodType>(schema: S, input: unknown): Resu
     details: { fields, issues },
   });
 }
+
+/** Sector and description: the fields whose length error is `CLIENT_FIELD_TOO_LONG`. */
+const INFO_FIELDS = new Set(["sector", "description"]);
+
+/**
+ * `parseInput` for the client add and edit inputs: when the only failures are a
+ * sector or description over its limit (`FIELD_TOO_LONG`), the error is
+ * `CLIENT_FIELD_TOO_LONG` naming those fields; any other failure stays `INVALID_INPUT`.
+ */
+export function parseClientInput<S extends z.ZodType>(schema: S, input: unknown, tooLongMessage: string): Result<z.infer<S>, AppError> {
+  const parsed = parseInput(schema, input);
+  if (parsed.ok) return parsed;
+  const { issues, fields } = parsed.error.details as { issues: FieldIssue[]; fields: string[] };
+  const tooLong = issues.every((issue) => INFO_FIELDS.has(issue.field) && issue.message === tooLongMessage);
+  if (!tooLong) return parsed;
+  return err({
+    code: "CLIENT_FIELD_TOO_LONG",
+    message: `Too long: ${fields.join(", ")}.`,
+    details: { fields },
+  });
+}
