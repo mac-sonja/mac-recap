@@ -1,18 +1,14 @@
 import { redirect } from "next/navigation";
-import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
 import { clientHref, clientWizardHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
-import { clientLimits } from "@/app/(tool)/clients/_lib/client-limits";
+import { clientLimits, clientMaterialLimits } from "@/app/(tool)/clients/_lib/client-limits";
 import { authorize } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import { it } from "@/shared/i18n/it";
-import { cn } from "@/shared/utils";
-import { WizardFooter, WizardFrame } from "../../_components/wizard-frame";
+import { WizardFrame } from "../../_components/wizard-frame";
 import { ClientDetailsStep } from "./_components/client-details-step";
+import { ClientMaterialStep } from "./_components/client-material-step";
 import { CLIENT_WIZARD_STEPS, clientStepHref } from "./_components/client-steps";
-
-/** The step 2 placeholder line; it is also the reason the inactive Crea introduzione gives. */
-const STEP_NOTE_ID = "client-wizard-step-note";
 
 export interface NewClientPageProps {
   searchParams: Promise<{ clientId?: string | string[]; step?: string | string[] }>;
@@ -25,8 +21,8 @@ export interface NewClientPageProps {
  * (**Modifica cliente**, or an unfinished client's row): an unknown, malformed or
  * repeated id goes back to `/clients`, any other lookup failure throws into the
  * error boundary, and the back arrow goes to the client's page. `step=2` opens
- * Materiale, a placeholder until Story 2.16, only once every required field is
- * filled; otherwise, and with no or an unknown `step`, step 1 opens. Step 3
+ * Materiale (Story 2.16, the client's current files) only once every required field
+ * is filled; otherwise, and with no or an unknown `step`, step 1 opens. Step 3
  * Introduzione stays hidden (Story 4.11). Below 1024 px the frame is read-only.
  */
 export default async function NewClientPage({ searchParams }: NewClientPageProps) {
@@ -63,6 +59,13 @@ export default async function NewClientPage({ searchParams }: NewClientPageProps
   const complete = caseStudy.isClientComplete(client, client.brief);
   if (step === "2" && !complete) redirect(clientWizardHref(client.id, 1));
   const current = step === "2" ? 2 : 1;
+  // Step 2 lists the client's files (with signed thumbnails); a failed read throws into the error boundary.
+  let assets: caseStudy.ListedClientAsset[] = [];
+  if (current === 2) {
+    const listed = await caseStudy.listClientMaterial({ clientId: client.id });
+    if (!listed.ok) throw new Error(`Client material could not be loaded: ${listed.error.code}`);
+    assets = listed.value;
+  }
 
   const header = (
     <>
@@ -89,27 +92,7 @@ export default async function NewClientPage({ searchParams }: NewClientPageProps
       {current === 1 ? (
         <ClientDetailsStep key={client.id} client={client} industries={caseStudy.CLIENT_INDUSTRIES} limits={limits} />
       ) : (
-        <>
-          <h2 className="font-heading text-xl font-medium text-foreground-strong">{it.clientWizard.material.heading}</h2>
-          <p id={STEP_NOTE_ID} className="mt-1.5 font-body text-sm text-foreground-muted">
-            {it.clientWizard.material.note}
-          </p>
-          {/* Step 2 uploads arrive with Story 2.16. */}
-          <WizardFooter
-            current={2}
-            steps={CLIENT_WIZARD_STEPS}
-            action={
-              <button
-                type="button"
-                aria-disabled="true"
-                aria-describedby={STEP_NOTE_ID}
-                className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, "cursor-not-allowed px-[18px] py-2.5")}
-              >
-                {it.clientWizard.material.createIntro}
-              </button>
-            }
-          />
-        </>
+        <ClientMaterialStep key={client.id} clientId={client.id} initialAssets={assets} limits={clientMaterialLimits()} />
       )}
     </WizardFrame>
   );

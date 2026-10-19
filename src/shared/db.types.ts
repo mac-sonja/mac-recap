@@ -147,6 +147,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"client_asset": {
+                  Row: {
+                    "client_id": string,"created_at": string,"created_by": string,"file_name": string,"height": number | null,"id": string,"mime_type": string,"path": string,"position": number,"size_bytes": number,"width": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"created_at"?: string,"created_by": string,"file_name": string,"height"?: number | null,"id"?: string,"mime_type": string,"path": string,"position": number,"size_bytes": number,"width"?: number | null
+                  }
+                  Update: {
+                    "client_id"?: string,"created_at"?: string,"created_by"?: string,"file_name"?: string,"height"?: number | null,"id"?: string,"mime_type"?: string,"path"?: string,"position"?: number,"size_bytes"?: number,"width"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_asset_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "client"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_asset_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"client_brief": {
                   Row: {
                     "client_id": string,"context": string,"results": string,"solution": string,"updated_at": string,"updated_by": string
@@ -335,12 +361,35 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"delete_client_asset":
+{ Args: { "p_asset_id": string }; Returns: boolean
+                           },
 "delete_client_logo":
 { Args: { "p_logo_id": string }; Returns: boolean
                            },
 "has_material":
 { Args: { "p_case_id": string }; Returns: boolean
                            },
+"insert_client_asset":
+{ Args: { "p_actor_id": string,"p_client_id": string,"p_file_name": string,"p_height": number,"p_id": string,"p_mime_type": string,"p_path": string,"p_size_bytes": number,"p_width": number }; Returns: {
+              "client_id": string,
+"created_at": string,
+"created_by": string,
+"file_name": string,
+"height": number | null,
+"id": string,
+"mime_type": string,
+"path": string,
+"position": number,
+"size_bytes": number,
+"width": number | null
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "client_asset"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "jobs_claim":
 { Args: { "p_kinds": (string)[] }; Returns: {
               "attempts": number,

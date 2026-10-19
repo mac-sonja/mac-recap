@@ -145,3 +145,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-15-client-wizard-and-details-step.md`
   summary: Confirmed client logos that never get linked (link refused, a different file picked, or the wizard abandoned) stay as orphan `client_logo` rows and storage objects.
   evidence: Story 2.15 review findings 8 (blind, edge-case); `use-client-logo.ts` replaces `confirmed` without deleting it, the same behaviour as the 2.14 dialog. Needs a decision on a cleanup (on replace, or a sweep).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-16-client-material-step.md`
+  summary: Clients table: the code column is headed "ID" and every row opens the client page (never the wizard); an unfinished client is completed through Modifica cliente (owner, 2026-10-19).
+  evidence: Split from Story 2.16 at the owner's request; shipped first as mac-sonja/mac-recap#55 (merged 2026-10-19).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-16-client-material-step.md`
+  summary: Client material uploads that are refused at confirm, hit the 3-file limit late, or are abandoned leave orphan objects under `clients/*/material/` with no `client_asset` row; a failed object delete on removal does the same.
+  evidence: Story 2.16 review finding 9 (blind, edge-case); same pattern as the client-logo orphans deferred from 2.15. Needs a decision on cleanup (best-effort remove on refusal, or a periodic sweep).

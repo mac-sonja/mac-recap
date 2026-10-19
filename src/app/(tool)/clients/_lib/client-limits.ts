@@ -27,3 +27,31 @@ export function clientLimits(): ClientLimits {
     logoMinShortSide: caseStudy.LOGO_MIN_SHORT_SIDE_PX,
   };
 }
+
+/** The limits the client material step checks before any request (Story 2.16). */
+export interface ClientMaterialLimits {
+  /** `CLIENT_MATERIAL_MAX_FILES`. */
+  maxFiles: number;
+  /** `CLIENT_MATERIAL_MAX_BYTES`. */
+  maxFileBytes: number;
+  /** `CLIENT_MATERIAL_CONTENT_TYPES`. */
+  contentTypes: readonly string[];
+  /** `CLIENT_MATERIAL_MIN_IMAGES`. */
+  minImages: number;
+  /** `CLIENT_IMAGE_MIN_SHORT_SIDE_PX`. */
+  minShortSide: number;
+  /** `CLIENT_IMAGE_MAX_SIDE_PX`. */
+  maxSide: number;
+}
+
+/** The client material step's limits, from the case-study module's single definitions (server side). */
+export function clientMaterialLimits(): ClientMaterialLimits {
+  return {
+    maxFiles: caseStudy.CLIENT_MATERIAL_MAX_FILES,
+    maxFileBytes: caseStudy.CLIENT_MATERIAL_MAX_BYTES,
+    contentTypes: caseStudy.CLIENT_MATERIAL_CONTENT_TYPES,
+    minImages: caseStudy.CLIENT_MATERIAL_MIN_IMAGES,
+    minShortSide: caseStudy.CLIENT_IMAGE_MIN_SHORT_SIDE_PX,
+    maxSide: caseStudy.CLIENT_IMAGE_MAX_SIDE_PX,
+  };
+}

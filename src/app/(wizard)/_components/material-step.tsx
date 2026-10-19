@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   confirmAssetUpload,
   listAssets,
@@ -10,27 +10,79 @@ import {
   setAssetFavourite,
 } from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
+import type { ActionResult } from "@/app/_lib/action-result";
 import { wizardHref } from "@/app/_lib/routes";
 import type { Asset, ListedAsset } from "@/modules/material";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { acceptFor, normalizeContentType, uploadFile, UploadError } from "../_lib/upload";
-import { AssetRow, type ListedRow, type MaterialRow, type PendingRow, type RowKind } from "./asset-row";
+import { AssetRow, type ListedRow, type MaterialRow, type PendingRow, type RowKind, type StepAsset } from "./asset-row";
 import { DropZone } from "./drop-zone";
+import type { WizardStep } from "./stepper";
 import { WizardFooter } from "./wizard-frame";
 
 const copy = it.wizard.material;
 
+/** A signed upload, as the presign action returns it. */
+export interface PresignedMaterialUpload {
+  assetId: string;
+  url: string;
+  method: "PUT";
+  headers: Record<string, string>;
+}
+
+/**
+ * The server calls the step makes, bound to whatever owns the files (a case by
+ * default, or a client). Error codes are the case material ones
+ * (`FILE_LIMIT_REACHED`, `FILE_TOO_LARGE`, `FILE_TYPE_NOT_ALLOWED`,
+ * `UPLOAD_REJECTED`, `STORAGE_NOT_CONFIGURED`, `NOT_FOUND` on remove).
+ */
+export interface MaterialActions {
+  presign(input: { contentType: string; sizeBytes: number }): Promise<ActionResult<PresignedMaterialUpload>>;
+  confirm(input: { assetId: string; contentType: string; fileName: string }): Promise<ActionResult<StepAsset>>;
+  list(): Promise<ActionResult<StepAsset[]>>;
+  remove(assetId: string): Promise<ActionResult<void>>;
+  /** Absent: the rows have no **Preferito** toggle. */
+  setFavourite?(assetId: string, isFavourite: boolean): Promise<ActionResult<void>>;
+}
+
+/** The step's footer action, active once `ready`. */
+export interface MaterialFooterAction {
+  label: string;
+  href: string;
+  /** Why it is inactive, linked through `aria-describedby`. */
+  reason: string;
+}
+
 export interface MaterialStepProps {
-  caseId: string;
-  /** The case's live files from `listAssets`, oldest first. */
-  initialAssets: ListedAsset[];
-  /** `MAX_ASSETS_PER_CASE`. */
+  /** The case the files belong to; with no `actions` the case actions are used (default). */
+  caseId?: string;
+  /** The live files, oldest first (or in position order). */
+  initialAssets: StepAsset[];
+  /** `MAX_ASSETS_PER_CASE`, or the client cap. */
   maxAssets: number;
   /** `MAX_FILE_BYTES`. */
   maxFileBytes: number;
   /** `ALLOWED_CONTENT_TYPES`. */
   allowedContentTypes: readonly string[];
+  /** The server calls (default: the case material actions for `caseId`). */
+  actions?: MaterialActions;
+  /** Copy overrides: the heading, a line above the drop zone, and the cap error (default: the case step's). */
+  copy?: { heading?: string; intro?: string; limit?: string };
+  /** More server codes that name what is wrong with a file, with the row message for each (shown, never retried). */
+  rejections?: Readonly<Record<string, string>>;
+  /** Whether the footer action is active (default: one stored file). */
+  ready?: (listed: readonly StepAsset[]) => boolean;
+  /** The footer action (default: **Avanti** to the case's step 2). */
+  footerAction?: MaterialFooterAction;
+  /** The stepper's labels for the footer dots, and this step (default: the case wizard's, step 1). */
+  steps?: readonly string[];
+  step?: WizardStep;
+  /**
+   * An extra browser check before a file is uploaded (e.g. image pixels); a message
+   * refuses that file on its row, null lets it upload.
+   */
+  checkFile?: (file: File, contentType: string) => Promise<string | null>;
 }
 
 interface UploadJob {
@@ -41,7 +93,7 @@ interface UploadJob {
 
 /** How one presign → POST → confirm attempt ended. */
 type Attempt =
-  | { kind: "done"; asset: ListedAsset }
+  | { kind: "done"; asset: StepAsset }
   | { kind: "storage" }
   | { kind: "rejected"; message: string }
   /** `unconfirmed`: confirm threw or answered 5xx, so this asset may have been stored anyway. */
@@ -73,7 +125,37 @@ function kindOf(contentType: string | null): RowKind {
 /** How many live-region lines stay mounted. */
 const ANNOUNCEMENTS_KEPT = 5;
 
-const listedRow = (asset: ListedAsset): ListedRow => ({ key: asset.id, state: "listed", asset });
+const listedRow = (asset: StepAsset): ListedRow => ({ key: asset.id, state: "listed", asset });
+
+/**
+ * Puts the listed rows that carry a `position` back in position order, in the slots
+ * listed rows already hold, so pending rows stay where they are. Rows without a
+ * position (case files) keep their order.
+ */
+function sortByPosition(rows: MaterialRow[]): MaterialRow[] {
+  const positionOf = (row: MaterialRow) => (row.state === "listed" ? row.asset.position : undefined);
+  const slots = rows.flatMap((row, i) => (positionOf(row) === undefined ? [] : [i]));
+  const sorted = slots.map((i) => rows[i]).sort((a, b) => (positionOf(a) as number) - (positionOf(b) as number));
+  const next = [...rows];
+  slots.forEach((slot, k) => {
+    next[slot] = sorted[k];
+  });
+  return next;
+}
+
+/** The case material actions for one case (the default). */
+function caseActions(caseId: string): MaterialActions {
+  return {
+    presign: ({ contentType, sizeBytes }) => presignAssetUpload({ caseId, contentType, sizeBytes }),
+    async confirm({ assetId, contentType, fileName }) {
+      const confirmed = await confirmAssetUpload({ caseId, assetId, contentType, fileName });
+      return confirmed.ok ? { ok: true, value: toListed(confirmed.value) } : confirmed;
+    },
+    list: () => listAssets({ caseId }),
+    remove: (assetId) => removeAsset({ caseId, assetId }),
+    setFavourite: (assetId, isFavourite) => setAssetFavourite({ caseId, assetId, isFavourite }),
+  };
+}
 
 /**
  * Step 1, Material (EXPERIENCE.md step 1, Story 2.7). Files go straight from the
@@ -85,8 +167,31 @@ const listedRow = (asset: ListedAsset): ListedRow => ({ key: asset.id, state: "l
  * and turns the drop zone off. Favourite and remove apply at once and roll back on
  * failure; remove has no undo. **Avanti** opens step 2 once one file is stored.
  * Progress and rejections are announced in a polite live region. Case status never changes.
+ * The client wizard reuses it (Story 2.16) with its own `actions`, copy, footer action,
+ * readiness rule and an image pixel check; the defaults keep the case step as it was.
  */
-export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, allowedContentTypes }: MaterialStepProps) {
+export function MaterialStep({
+  caseId,
+  initialAssets,
+  maxAssets,
+  maxFileBytes,
+  allowedContentTypes,
+  actions: givenActions,
+  copy: copyOverrides,
+  rejections: extraRejections = {},
+  ready: isReady = (listed) => listed.length > 0,
+  footerAction,
+  steps,
+  step = 1,
+  checkFile,
+}: MaterialStepProps) {
+  if (givenActions === undefined && caseId === undefined) throw new Error("MaterialStep needs a caseId or actions");
+  const actions = givenActions ?? caseActions(caseId as string);
+  const footer: MaterialFooterAction = footerAction ?? {
+    label: it.wizard.next,
+    href: wizardHref(caseId as string, 2),
+    reason: copy.nextReason,
+  };
   const reasonId = useId();
   const [rows, setRows] = useState<MaterialRow[]>(() => initialAssets.map(listedRow));
   const [storageOff, setStorageOff] = useState(false);
@@ -114,7 +219,7 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
   }, []);
 
   const tooLarge = fill(copy.errors.tooLarge, { size: Math.round(maxFileBytes / (1024 * 1024)) });
-  const limit = fill(copy.errors.limit, { max: maxAssets });
+  const limit = copyOverrides?.limit ?? fill(copy.errors.limit, { max: maxAssets });
   const rejections: Readonly<Record<(typeof REJECTION_CODES)[number], string>> = {
     FILE_LIMIT_REACHED: limit,
     FILE_TOO_LARGE: tooLarge,
@@ -124,6 +229,7 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
 
   function classify(code: string): Attempt {
     if (code === "STORAGE_NOT_CONFIGURED") return { kind: "storage" };
+    if (Object.hasOwn(extraRejections, code)) return { kind: "rejected", message: extraRejections[code] };
     return (REJECTION_CODES as readonly string[]).includes(code)
       ? { kind: "rejected", message: rejections[code as (typeof REJECTION_CODES)[number]] }
       : { kind: "retry" };
@@ -154,19 +260,19 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
   async function attempt({ key, file, contentType }: UploadJob, signal: AbortSignal): Promise<Attempt> {
     let confirming: string | undefined;
     try {
-      const presigned = await presignAssetUpload({ caseId, contentType, sizeBytes: file.size });
+      const presigned = await actions.presign({ contentType, sizeBytes: file.size });
       if (!presigned.ok) return classify(presigned.error.code);
       if (cancelled.current.has(key)) return { kind: "cancelled" };
       const { assetId, url, method, headers } = presigned.value;
       await uploadFile({ url, method, headers }, file, (progress) => patchPending(key, { progress }), { signal });
       if (cancelled.current.has(key) || unmounted.current) return { kind: "cancelled" };
       confirming = assetId;
-      const confirmed = await confirmAssetUpload({ caseId, assetId, contentType, fileName: file.name });
+      const confirmed = await actions.confirm({ assetId, contentType, fileName: file.name });
       if (!confirmed.ok) {
         const outcome = classify(confirmed.error.code);
         return outcome.kind === "retry" && confirmed.status >= 500 ? { kind: "retry", unconfirmed: assetId } : outcome;
       }
-      return { kind: "done", asset: toListed(confirmed.value) };
+      return { kind: "done", asset: confirmed.value };
     } catch (error) {
       if (error instanceof UploadError && error.aborted) return { kind: "cancelled" };
       return { kind: "retry", unconfirmed: confirming };
@@ -174,9 +280,9 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
   }
 
   /** After a confirm that threw or answered 5xx: the asset if it was stored after all, so it isn't uploaded twice. */
-  async function storedAfterAll(assetId: string): Promise<ListedAsset | null> {
+  async function storedAfterAll(assetId: string): Promise<StepAsset | null> {
     try {
-      const fresh = await listAssets({ caseId });
+      const fresh = await actions.list();
       return fresh.ok ? (fresh.value.find((asset) => asset.id === assetId) ?? null) : null;
     } catch {
       return null;
@@ -185,7 +291,7 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
 
   async function refreshThumbnails() {
     try {
-      const fresh = await listAssets({ caseId });
+      const fresh = await actions.list();
       if (!fresh.ok) return;
       const urls = new Map(fresh.value.map((asset) => [asset.id, asset.thumbnailUrl]));
       update((current) =>
@@ -204,6 +310,15 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
     const controller = new AbortController();
     controllers.current.set(job.key, controller);
     try {
+      if (checkFile !== undefined) {
+        const problem = await checkFile(job.file, job.contentType);
+        if (unmounted.current || cancelled.current.has(job.key)) return;
+        if (problem !== null) {
+          patchPending(job.key, { error: problem });
+          announce([fill(copy.announce.error, { name: job.file.name, message: problem })]);
+          return;
+        }
+      }
       for (let tries = 0; tries < 2; tries++) {
         if (tries > 0) patchPending(job.key, { progress: 0 });
         let outcome = await attempt(job, controller.signal);
@@ -220,7 +335,7 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
         }
         if (outcome.kind === "done") {
           const row = listedRow(outcome.asset);
-          update((current) => current.map((r) => (r.key === job.key ? row : r)));
+          update((current) => sortByPosition(current.map((r) => (r.key === job.key ? row : r))));
           announce([fill(copy.announce.done, { name: outcome.asset.originalFileName })]);
           if (outcome.asset.kind === "image" && outcome.asset.thumbnailUrl === null) void refreshThumbnails();
           return;
@@ -245,10 +360,10 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
   }
 
   /** A file stored although its row was removed: remove it again; if that fails, show it with the remove error. */
-  async function removeAfterCancel(asset: ListedAsset) {
+  async function removeAfterCancel(asset: StepAsset) {
     let removed: boolean;
     try {
-      const result = await removeAsset({ caseId, assetId: asset.id });
+      const result = await actions.remove(asset.id);
       removed = result.ok || result.error.code === "NOT_FOUND";
     } catch {
       removed = false;
@@ -291,14 +406,17 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
     for (const job of jobs) void upload(job);
   }
 
+  const saveFavourite = actions.setFavourite;
+
   async function toggleFavourite(row: ListedRow) {
+    if (saveFavourite === undefined) return;
     const { id, isFavourite } = row.asset;
     if (favouriteBusy.current.has(id)) return;
     favouriteBusy.current.add(id);
     const next = !isFavourite;
     patchListed(id, (r) => ({ ...r, asset: { ...r.asset, isFavourite: next }, message: undefined }));
     try {
-      const saved = await setAssetFavourite({ caseId, assetId: id, isFavourite: next });
+      const saved = await saveFavourite(id, next);
       if (!saved.ok) throw new Error(saved.error.code);
     } catch {
       patchListed(id, (r) => ({ ...r, asset: { ...r.asset, isFavourite }, message: copy.errors.favourite }));
@@ -326,7 +444,7 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
     dropRow(row.key);
     announce([fill(copy.announce.removed, { name: originalFileName })]);
     try {
-      const removed = await removeAsset({ caseId, assetId: id });
+      const removed = await actions.remove(id);
       // NOT_FOUND: it is already gone, which is what was asked.
       if (!removed.ok && removed.error.code !== "NOT_FOUND") throw new Error(removed.error.code);
     } catch {
@@ -341,11 +459,15 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
     }
   }
 
-  const ready = listed.length > 0;
+  const ready = isReady(listed.map((row) => row.asset));
+  const intro: ReactNode = copyOverrides?.intro;
 
   return (
     <div>
-      <h2 className="font-heading text-xl font-medium text-foreground-strong mb-6">{copy.heading}</h2>
+      <h2 className={cn("font-heading text-xl font-medium text-foreground-strong", intro === undefined ? "mb-6" : "mb-1.5")}>
+        {copyOverrides?.heading ?? copy.heading}
+      </h2>
+      {intro !== undefined && <p className="mb-6 font-body text-sm text-foreground-muted">{intro}</p>}
 
       {/* Always mounted, so screen readers announce the message when it appears. */}
       <div role="alert" className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 font-body text-sm text-foreground empty:hidden">
@@ -379,19 +501,25 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
           </div>
           <ul aria-labelledby={`${reasonId}-list`} className="overflow-hidden rounded-lg border">
             {rows.map((row) => (
-              <AssetRow key={row.key} row={row} onToggleFavourite={toggleFavourite} onRemove={remove} />
+              <AssetRow
+                key={row.key}
+                row={row}
+                onToggleFavourite={saveFavourite === undefined ? undefined : toggleFavourite}
+                onRemove={remove}
+              />
             ))}
           </ul>
         </section>
       )}
 
       <WizardFooter
-        current={1}
-        start={ready ? undefined : <span id={reasonId}>{copy.nextReason}</span>}
+        current={step}
+        steps={steps}
+        start={ready ? undefined : <span id={reasonId}>{footer.reason}</span>}
         action={
           ready ? (
-            <Link href={wizardHref(caseId, 2)} className={cn(PRIMARY_ACTION, "px-[18px] py-2.5")}>
-              {it.wizard.next}
+            <Link href={footer.href} className={cn(PRIMARY_ACTION, "px-[18px] py-2.5")}>
+              {footer.label}
             </Link>
           ) : (
             <button
@@ -400,7 +528,7 @@ export function MaterialStep({ caseId, initialAssets, maxAssets, maxFileBytes, a
               aria-describedby={reasonId}
               className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, "cursor-not-allowed px-[18px] py-2.5")}
             >
-              {it.wizard.next}
+              {footer.label}
             </button>
           )
         }

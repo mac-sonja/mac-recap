@@ -396,3 +396,104 @@ describe("createSupabaseClientRepository().findClientInfoByCaseId", () => {
     expect(await createSupabaseClientRepository(factory).findClientInfoByCaseId(CASE_ID)).toEqual({ ok: true, value: null });
   });
 });
+
+describe("createSupabaseClientRepository() client files", () => {
+  const ASSET_ID = "ffffffff-0000-4000-8000-000000000001";
+  const assetRow = (over: Record<string, unknown> = {}) => ({
+    id: ASSET_ID,
+    client_id: client().id,
+    position: 2,
+    file_name: "Foto cliente.jpg",
+    mime_type: "image/jpeg",
+    size_bytes: 2048,
+    width: 2400,
+    height: 1600,
+    created_at: "2026-10-19T10:00:00+00:00",
+    ...over,
+  });
+  const asset = {
+    id: ASSET_ID,
+    clientId: client().id,
+    position: 2,
+    fileName: "Foto cliente.jpg",
+    kind: "image",
+    contentType: "image/jpeg",
+    sizeBytes: 2048,
+    width: 2400,
+    height: 1600,
+    createdAt: "2026-10-19T10:00:00+00:00",
+  };
+  const newAsset = { id: ASSET_ID, clientId: client().id, fileName: "Foto cliente.jpg", contentType: "image/jpeg" as const, sizeBytes: 2048, width: 2400, height: 1600, createdBy: ACTOR_ID };
+
+  it("lists a client's files by position", async () => {
+    const { factory, from, eq, order } = stubClient({ data: [assetRow()], error: null });
+    expect(await createSupabaseClientRepository(factory).listAssets(client().id)).toEqual({ ok: true, value: [asset] });
+    expect(from).toHaveBeenCalledWith("client_asset");
+    expect(eq).toHaveBeenCalledWith("client_id", client().id);
+    expect(order).toHaveBeenCalledWith("position", { ascending: true });
+  });
+
+  it("refuses a row with an unknown type or position as CLIENT_INVALID, and a failed read as CLIENT_LOOKUP_FAILED", async () => {
+    for (const bad of [assetRow({ mime_type: "image/gif" }), assetRow({ position: 4 })]) {
+      const { factory } = stubClient({ data: [bad], error: null });
+      const result = await createSupabaseClientRepository(factory).listAssets(client().id);
+      expect(result.ok || result.error.code).toBe("CLIENT_INVALID");
+    }
+    const down = stubClient({ data: null, error: { code: "PGRST000", message: "down" } });
+    const { result } = await quietly(() => createSupabaseClientRepository(down.factory).listAssets(client().id));
+    expect(result.ok || result.error.code).toBe("CLIENT_LOOKUP_FAILED");
+  });
+
+  it("inserts through insert_client_asset with the path built by the adapter", async () => {
+    const { factory, rpc } = stubClient({ data: null, error: null }, { data: assetRow(), error: null });
+    expect(await createSupabaseClientRepository(factory).insertAsset(newAsset)).toEqual({ ok: true, value: asset });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("insert_client_asset", {
+      p_id: ASSET_ID,
+      p_client_id: client().id,
+      p_path: `clients/${client().id}/material/${ASSET_ID}.jpg`,
+      p_file_name: "Foto cliente.jpg",
+      p_mime_type: "image/jpeg",
+      p_size_bytes: 2048,
+      p_width: 2400,
+      p_height: 1600,
+      p_actor_id: ACTOR_ID,
+    });
+  });
+
+  it("passes null pixels for a non-image", async () => {
+    const { factory, rpc } = stubClient(
+      { data: null, error: null },
+      { data: assetRow({ mime_type: "application/pdf", width: null, height: null }), error: null },
+    );
+    const result = await createSupabaseClientRepository(factory).insertAsset({ ...newAsset, contentType: "application/pdf", width: null, height: null });
+    expect(result).toMatchObject({ ok: true, value: { kind: "document", width: null, height: null } });
+    expect(rpc.mock.calls[0]).toMatchObject(["insert_client_asset", { p_width: null, p_height: null, p_path: `clients/${client().id}/material/${ASSET_ID}.pdf` }]);
+  });
+
+  it.each(["CLIENT_MATERIAL_LIMIT", "CLIENT_NOT_FOUND", "ASSET_ALREADY_CONFIRMED"])("maps P0001 %s", async (code) => {
+    const { factory } = stubClient({ data: null, error: null }, { data: null, error: { code: "P0001", message: code } });
+    const result = await createSupabaseClientRepository(factory).insertAsset(newAsset);
+    expect(result.ok || result.error.code).toBe(code);
+  });
+
+  it("maps any other insert error to CLIENT_WRITE_FAILED", async () => {
+    const { factory } = stubClient({ data: null, error: null }, { data: null, error: { code: "23514", message: "client_asset_dimensions_check" } });
+    const { result } = await quietly(() => createSupabaseClientRepository(factory).insertAsset(newAsset));
+    expect(result.ok || result.error.code).toBe("CLIENT_WRITE_FAILED");
+  });
+
+  it("deletes a row through delete_client_asset", async () => {
+    const { factory, rpc } = stubClient({ data: null, error: null }, { data: true, error: null });
+    expect(await createSupabaseClientRepository(factory).deleteAsset(ASSET_ID, client().id)).toEqual({ ok: true, value: true });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("delete_client_asset", { p_asset_id: ASSET_ID });
+    const none = stubClient({ data: null, error: null }, { data: false, error: null });
+    expect(await createSupabaseClientRepository(none.factory).deleteAsset(ASSET_ID, client().id)).toEqual({ ok: true, value: false });
+  });
+
+  it("maps a failed delete to CLIENT_WRITE_FAILED and logs the client id", async () => {
+    const down = stubClient({ data: null, error: null }, { data: null, error: { code: "PGRST000", message: "down" } });
+    const { result, lines } = await quietly(() => createSupabaseClientRepository(down.factory).deleteAsset(ASSET_ID, client().id));
+    expect(result.ok || result.error.code).toBe("CLIENT_WRITE_FAILED");
+    expect(lines.join("")).toContain(client().id);
+  });
+});

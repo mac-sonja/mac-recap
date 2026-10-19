@@ -12,11 +12,14 @@ const copy = it.wizard.material;
 /** What a row's icon is drawn from; `other` is a file whose type isn't allowed. */
 export type RowKind = AssetKind | "other";
 
+/** A stored file; `position` is set when the owner orders its files (client files, 1–3). */
+export type StepAsset = ListedAsset & { position?: number };
+
 /** A file the server has stored, as listed (or just confirmed). */
 export interface ListedRow {
   key: string;
   state: "listed";
-  asset: ListedAsset;
+  asset: StepAsset;
   /** A failed favourite or remove, shown on the row. */
   message?: string;
 }
@@ -46,7 +49,8 @@ function TypeIcon({ kind }: { kind: RowKind }) {
  * One row of the Material list (EXPERIENCE.md step 1, DESIGN.md favourite toggle):
  * thumbnail or type icon, the file name, then the size in mono, the upload
  * progress bar, or the row's error line. Images and videos that are stored carry
- * the **Preferito** toggle (`aria-pressed`). Every row has a named ✕.
+ * the **Preferito** toggle (`aria-pressed`), unless there is no `onToggleFavourite`
+ * (client files have no favourites). Every row has a named ✕.
  */
 export function AssetRow({
   row,
@@ -54,7 +58,7 @@ export function AssetRow({
   onRemove,
 }: {
   row: MaterialRow;
-  onToggleFavourite: (row: ListedRow) => void;
+  onToggleFavourite?: (row: ListedRow) => void;
   onRemove: (row: MaterialRow) => void;
 }) {
   const name = row.state === "listed" ? row.asset.originalFileName : row.name;
@@ -101,7 +105,7 @@ export function AssetRow({
         {error !== undefined && <div className="font-label text-xs text-danger">{error}</div>}
       </div>
       {uploading && <span className="font-mono text-xs text-foreground-muted">{`${row.progress}%`}</span>}
-      {row.state === "listed" && FAVOURITABLE.includes(kind) && (
+      {row.state === "listed" && onToggleFavourite !== undefined && FAVOURITABLE.includes(kind) && (
         <button
           type="button"
           aria-pressed={row.asset.isFavourite}

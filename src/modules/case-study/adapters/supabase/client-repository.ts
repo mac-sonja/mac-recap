@@ -1,5 +1,12 @@
+import { clientMaterialKey } from "@/modules/case-study/adapters/client-material-key";
 import { logoKey } from "@/modules/case-study/adapters/logo-key";
 import type { ClientLogo, ClientRepository } from "@/modules/case-study/ports/client-repository";
+import {
+  CLIENT_MATERIAL_MAX_FILES,
+  clientMaterialKindFor,
+  isClientMaterialContentType,
+  type ClientAsset,
+} from "@/modules/case-study/domain/client-material";
 import {
   clientBriefSchema,
   clientRefSchema,
@@ -27,6 +34,7 @@ const BRIEF_COLUMNS = "context, solution, results";
  */
 const CLIENT_SUMMARY_COLUMNS = `${CLIENT_COLUMNS}, client_brief(${BRIEF_COLUMNS}), case_study(count)`;
 const LOGO_COLUMNS = "id, client_id, mime_type, size_bytes";
+const ASSET_COLUMNS = "id, client_id, position, file_name, mime_type, size_bytes, width, height, created_at";
 /** A case's client and its brief, embedded through `case_study.client_id` (the only FK from case_study to client). */
 const CASE_CLIENT_COLUMNS = `id, client(id, name, industries, description, logo_id, client_brief(${BRIEF_COLUMNS}))`;
 
@@ -50,6 +58,13 @@ const UPDATE_REFUSALS: Refusals = {
 /** `delete_client_logo` raises this as P0001; nothing is deleted then. */
 const DELETE_LOGO_REFUSALS: Refusals = {
   CLIENT_LOGO_IN_USE: { code: "CLIENT_LOGO_IN_USE", message: "A client still shows this logo." },
+};
+
+/** `insert_client_asset` raises these as P0001; nothing is written then. */
+const INSERT_ASSET_REFUSALS: Refusals = {
+  CLIENT_MATERIAL_LIMIT: { code: "CLIENT_MATERIAL_LIMIT", message: "This client already has 3 files." },
+  CLIENT_NOT_FOUND: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
+  ASSET_ALREADY_CONFIRMED: { code: "ASSET_ALREADY_CONFIRMED", message: "This file was already confirmed." },
 };
 
 /** Postgres check_violation; the description, brief and industries checks are the backstop. */
@@ -165,6 +180,38 @@ export function toClientLogo(row: { id: string; client_id: string; mime_type: st
     return err({ code: "CLIENT_INVALID", message: "A client logo row failed validation.", details: { id: row.id } });
   }
   return ok({ id: row.id, clientId: row.client_id, contentType: row.mime_type, sizeBytes: Number(row.size_bytes) });
+}
+
+interface AssetRow {
+  id: string;
+  client_id: string;
+  position: number;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+}
+
+/** Maps a `client_asset` row; an unknown mime type or a position outside 1–`CLIENT_MATERIAL_MAX_FILES` fails validation. */
+export function toClientAsset(row: AssetRow): Result<ClientAsset> {
+  const position = Number(row.position);
+  if (!isClientMaterialContentType(row.mime_type) || !Number.isInteger(position) || position < 1 || position > CLIENT_MATERIAL_MAX_FILES) {
+    return err({ code: "CLIENT_INVALID", message: "A client file row failed validation.", details: { id: row.id } });
+  }
+  return ok({
+    id: row.id,
+    clientId: row.client_id,
+    position,
+    fileName: row.file_name,
+    kind: clientMaterialKindFor(row.mime_type),
+    contentType: row.mime_type,
+    sizeBytes: Number(row.size_bytes),
+    width: row.width,
+    height: row.height,
+    createdAt: row.created_at,
+  });
 }
 
 export function createSupabaseClientRepository(
@@ -339,6 +386,60 @@ export function createSupabaseClientRepository(
         if (refused) return err(refused);
         log.error(`client logo delete failed: ${error.code}`);
         return err({ code: "CLIENT_WRITE_FAILED", message: "Could not delete the logo." });
+      }
+      return ok(data === true);
+    },
+
+    async listAssets(clientId) {
+      const { data, error } = await client()
+        .from("client_asset")
+        .select(ASSET_COLUMNS)
+        .eq("client_id", clientId)
+        .order("position", { ascending: true });
+      if (error) {
+        log.error(`client material list failed: ${error.code}`, { clientId });
+        return err({ code: "CLIENT_LOOKUP_FAILED", message: "Could not list the client's files.", details: { clientId } });
+      }
+      const assets: ClientAsset[] = [];
+      for (const row of data) {
+        const mapped = toClientAsset(row);
+        if (!mapped.ok) return mapped;
+        assets.push(mapped.value);
+      }
+      return ok(assets);
+    },
+
+    async insertAsset(asset) {
+      const { data, error } = await client().rpc("insert_client_asset", {
+        p_id: asset.id,
+        p_client_id: asset.clientId,
+        p_path: clientMaterialKey(asset.clientId, asset.id, asset.contentType),
+        p_file_name: asset.fileName,
+        p_mime_type: asset.contentType,
+        p_size_bytes: asset.sizeBytes,
+        // Null for every type but images (the dimensions check).
+        p_width: asset.width as number,
+        p_height: asset.height as number,
+        p_actor_id: asset.createdBy,
+      });
+      if (error) {
+        const refused = refusalOf(error, INSERT_ASSET_REFUSALS);
+        if (refused) return err({ ...refused, details: { clientId: asset.clientId } });
+        log.error(`client material insert failed: ${error.code}`, { actorId: asset.createdBy, clientId: asset.clientId });
+        return err({ code: "CLIENT_WRITE_FAILED", message: "Could not record the file.", details: { clientId: asset.clientId } });
+      }
+      if (data === null) {
+        log.error("client material insert failed: no row returned", { actorId: asset.createdBy, clientId: asset.clientId });
+        return err({ code: "CLIENT_WRITE_FAILED", message: "Could not record the file.", details: { clientId: asset.clientId } });
+      }
+      return toClientAsset(data);
+    },
+
+    async deleteAsset(id, clientId) {
+      const { data, error } = await client().rpc("delete_client_asset", { p_asset_id: id });
+      if (error) {
+        log.error(`client material delete failed: ${error.code}`, { clientId });
+        return err({ code: "CLIENT_WRITE_FAILED", message: "Could not delete the file." });
       }
       return ok(data === true);
     },

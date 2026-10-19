@@ -14,6 +14,13 @@ import { makeListClients } from "./list-clients";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import type { ClientLogo, ClientRepository } from "@/modules/case-study/ports/client-repository";
 import type { LogoImage, LogoStorage, StoredLogo } from "@/modules/case-study/ports/logo-storage";
+import type { ClientMaterialStorage } from "@/modules/case-study/ports/client-material-storage";
+import type { ClientAsset } from "@/modules/case-study/domain/client-material";
+import { clientMaterialKindFor } from "@/modules/case-study/domain/client-material";
+import { makeConfirmClientMaterialUpload } from "./confirm-client-material-upload";
+import { makeListClientMaterial } from "./list-client-material";
+import { makeRemoveClientMaterial } from "./remove-client-material";
+import { makeRequestClientMaterialUpload } from "./request-client-material-upload";
 import { makeConfirmClientLogoUpload } from "./confirm-client-logo-upload";
 import { makeGetClientInfoForCase } from "./get-client-info-for-case";
 import { makeRequestClientLogoUpload } from "./request-client-logo-upload";
@@ -216,6 +223,8 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
     rows.map((c) => [c.id, { industries: [], description: null, logoId: null, brief: { ...EMPTY_BRIEF }, ...c }]),
   );
   const logos = new Map<string, ClientLogo>();
+  /** client_asset rows by id. */
+  const assets = new Map<string, ClientAsset>();
   /** caseId → clientId for the non-deleted cases `findClientInfoByCaseId` knows. */
   const cases = new Map<string, string>();
   const nameKey = (name: string) =>
@@ -275,6 +284,32 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
       if ([...clients.values()].some((c) => c.logoId === id)) return err({ code: "CLIENT_LOGO_IN_USE", message: "in use" });
       return ok(logos.delete(id));
     }),
+    listAssets: vi.fn<ClientRepository["listAssets"]>(async (clientId) =>
+      ok([...assets.values()].filter((a) => a.clientId === clientId).sort((a, b) => a.position - b.position)),
+    ),
+    // Mirrors insert_client_asset: ASSET_ALREADY_CONFIRMED, CLIENT_NOT_FOUND, the lowest free position, CLIENT_MATERIAL_LIMIT.
+    insertAsset: vi.fn<ClientRepository["insertAsset"]>(async ({ id, clientId, fileName, contentType, sizeBytes, width, height }) => {
+      if (assets.has(id)) return err({ code: "ASSET_ALREADY_CONFIRMED", message: "already confirmed" });
+      if (!clients.has(clientId)) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
+      const taken = new Set([...assets.values()].filter((a) => a.clientId === clientId).map((a) => a.position));
+      const position = [1, 2, 3].find((p) => !taken.has(p));
+      if (position === undefined) return err({ code: "CLIENT_MATERIAL_LIMIT", message: "3 files" });
+      const asset: ClientAsset = {
+        id,
+        clientId,
+        position,
+        fileName,
+        kind: clientMaterialKindFor(contentType),
+        contentType,
+        sizeBytes,
+        width,
+        height,
+        createdAt: "2026-10-19T10:00:00+00:00",
+      };
+      assets.set(id, asset);
+      return ok(asset);
+    }),
+    deleteAsset: vi.fn<ClientRepository["deleteAsset"]>(async (id) => ok(assets.delete(id))),
     findClientInfoByCaseId: vi.fn<ClientRepository["findClientInfoByCaseId"]>(async (caseId) => {
       const client = clients.get(cases.get(caseId) ?? "");
       if (!client) return ok(null);
@@ -282,7 +317,7 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
       return ok({ clientId: id, name, industries, description, logoId, brief: { ...brief } });
     }),
   } satisfies ClientRepository;
-  return { repo, clients, logos, cases };
+  return { repo, clients, logos, cases, assets };
 }
 
 const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
@@ -315,6 +350,34 @@ function fakeLogoStorage() {
     objects.set(keyOf({ clientId, logoId }), {
       stored: { sizeBytes: over.sizeBytes ?? 2048, contentType: over.contentType === undefined ? "image/png" : over.contentType },
       image: { format: over.format === undefined ? "png" : over.format, width: over.width ?? 800, height: over.height ?? 400 },
+    });
+  return { storage, put, objects, keyOf };
+}
+
+/** In-memory ClientMaterialStorage: a stored object per key, as the browser's PUT left it. */
+function fakeMaterialStorage() {
+  const objects = new Map<string, { stored: StoredLogo; image: LogoImage }>();
+  const keyOf = (t: { clientId: string; assetId: string }) => `${t.clientId}/${t.assetId}`;
+  const storage = {
+    presignUpload: vi.fn<ClientMaterialStorage["presignUpload"]>(async (t) =>
+      ok({ url: `https://storage/${keyOf(t)}`, method: "PUT" as const, headers: { "content-type": t.contentType, "x-upsert": "false" } }),
+    ),
+    presignDownloads: vi.fn<ClientMaterialStorage["presignDownloads"]>(async (targets) => ok(targets.map((t) => `https://storage/${keyOf(t)}?sig`))),
+    head: vi.fn<ClientMaterialStorage["head"]>(async (t) => ok(objects.get(keyOf(t))?.stored ?? null)),
+    dimensions: vi.fn<ClientMaterialStorage["dimensions"]>(async (t) => ok(objects.get(keyOf(t))?.image ?? null)),
+    remove: vi.fn<ClientMaterialStorage["remove"]>(async (t) => {
+      objects.delete(keyOf(t));
+      return ok(undefined);
+    }),
+  } satisfies ClientMaterialStorage;
+  const put = (
+    clientId: string,
+    assetId: string,
+    over: { sizeBytes?: number; contentType?: string | null; format?: string | null; width?: number; height?: number } = {},
+  ) =>
+    objects.set(keyOf({ clientId, assetId }), {
+      stored: { sizeBytes: over.sizeBytes ?? 2048, contentType: over.contentType === undefined ? "image/jpeg" : over.contentType },
+      image: { format: over.format === undefined ? "jpeg" : over.format, width: over.width ?? 2400, height: over.height ?? 1600 },
     });
   return { storage, put, objects, keyOf };
 }
@@ -1050,5 +1113,278 @@ describe("transition", () => {
     const { repo, id } = await caseIn("draft");
     repo[method].mockResolvedValueOnce(failure);
     expect(await makeTransition(repo)(id, "generate", actor)).toEqual(failure);
+  });
+});
+
+const ASSET_ID = "ffffffff-0000-4000-8000-000000000001";
+const MB = 1024 * 1024;
+
+/** Seeds one stored client file row directly. */
+function seedAsset(assets: Map<string, ClientAsset>, n: number, over: Partial<ClientAsset> = {}): ClientAsset {
+  const asset: ClientAsset = {
+    id: `ffffffff-0000-4000-8000-0000000001${String(n).padStart(2, "0")}`,
+    clientId: LUMEN.id,
+    position: n,
+    fileName: `foto-${n}.jpg`,
+    kind: "image",
+    contentType: "image/jpeg",
+    sizeBytes: 2048,
+    width: 2400,
+    height: 1600,
+    createdAt: "2026-10-19T10:00:00+00:00",
+    ...over,
+  };
+  assets.set(asset.id, asset);
+  return asset;
+}
+
+describe("requestClientMaterialUpload", () => {
+  const deps = () => {
+    const clients = fakeClientRepository([LUMEN]);
+    const storage = fakeMaterialStorage();
+    return { ...clients, ...storage, run: makeRequestClientMaterialUpload({ clients: clients.repo, storage: storage.storage, newId: () => ASSET_ID }) };
+  };
+
+  it("issues a signed PUT for a new asset id without writing anything", async () => {
+    const { run, storage, assets } = deps();
+    const result = await run(actor, { clientId: LUMEN.id, contentType: "application/pdf", sizeBytes: 10 * MB });
+    expect(result).toEqual(
+      ok({ assetId: ASSET_ID, url: `https://storage/${LUMEN.id}/${ASSET_ID}`, method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" } }),
+    );
+    expect(storage.presignUpload).toHaveBeenCalledWith({ clientId: LUMEN.id, assetId: ASSET_ID, contentType: "application/pdf" });
+    expect(assets.size).toBe(0);
+  });
+
+  it.each([
+    ["a .zip", { contentType: "application/zip", sizeBytes: 10 }, "FILE_TYPE_NOT_ALLOWED"],
+    ["a GIF", { contentType: "image/gif", sizeBytes: 10 }, "FILE_TYPE_NOT_ALLOWED"],
+    ["60 MB", { contentType: "video/mp4", sizeBytes: 60 * MB }, "FILE_TOO_LARGE"],
+    ["an empty file", { contentType: "image/png", sizeBytes: 0 }, "FILE_TOO_LARGE"],
+  ] as const)("refuses %s before storage with %s", async (_label, declared, code) => {
+    const { run, storage } = deps();
+    const result = await run(actor, { clientId: LUMEN.id, ...declared });
+    expect(result.ok || result.error.code).toBe(code);
+    expect(storage.presignUpload).not.toHaveBeenCalled();
+  });
+
+  it("accepts exactly 50 MB", async () => {
+    const { run } = deps();
+    expect((await run(actor, { clientId: LUMEN.id, contentType: "video/quicktime", sizeBytes: 50 * MB })).ok).toBe(true);
+  });
+
+  it("refuses a 4th file with CLIENT_MATERIAL_LIMIT", async () => {
+    const { run, storage, assets } = deps();
+    for (const n of [1, 2, 3]) seedAsset(assets, n);
+    const result = await run(actor, { clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
+    expect(result.ok || result.error.code).toBe("CLIENT_MATERIAL_LIMIT");
+    expect(storage.presignUpload).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unknown client with CLIENT_NOT_FOUND", async () => {
+    const { run } = deps();
+    const result = await run(actor, { clientId: UNKNOWN_CLIENT_ID, contentType: "image/png", sizeBytes: 10 });
+    expect(result.ok || result.error.code).toBe("CLIENT_NOT_FOUND");
+  });
+});
+
+describe("confirmClientMaterialUpload", () => {
+  const deps = () => {
+    const clients = fakeClientRepository([LUMEN]);
+    const storage = fakeMaterialStorage();
+    return { ...clients, ...storage, run: makeConfirmClientMaterialUpload({ clients: clients.repo, storage: storage.storage, newId: () => ASSET_ID }) };
+  };
+  const input = { clientId: LUMEN.id, assetId: ASSET_ID, contentType: "image/jpeg", fileName: " Foto cliente.jpg " };
+
+  it("records an image with its pixels at the lowest free position", async () => {
+    const { run, put, assets } = deps();
+    seedAsset(assets, 1);
+    seedAsset(assets, 3);
+    put(LUMEN.id, ASSET_ID, { sizeBytes: 4096, width: 1600, height: 8000 });
+    const result = await run(actor, input);
+    expect(result).toEqual(
+      ok({
+        id: ASSET_ID,
+        clientId: LUMEN.id,
+        position: 2,
+        fileName: "Foto cliente.jpg",
+        kind: "image",
+        contentType: "image/jpeg",
+        sizeBytes: 4096,
+        width: 1600,
+        height: 8000,
+        createdAt: expect.any(String),
+        thumbnailUrl: null,
+      }),
+    );
+  });
+
+  it("records a PDF with type and size only, never reading its bytes", async () => {
+    const { run, put, assets, storage } = deps();
+    put(LUMEN.id, ASSET_ID, { contentType: "application/pdf" });
+    const result = await run(actor, { ...input, contentType: "application/pdf" });
+    expect(result).toMatchObject({ ok: true, value: { kind: "document", width: null, height: null, position: 1 } });
+    expect(storage.dimensions).not.toHaveBeenCalled();
+    expect(assets.size).toBe(1);
+  });
+
+  it.each([
+    ["an empty object", { sizeBytes: 0 }],
+    ["an object over 50 MB", { sizeBytes: 50 * MB + 1 }],
+    ["a stored type other than the declared one", { contentType: "image/png" }],
+    ["bytes of another format", { format: "png" }],
+    ["bytes that are not an image", { format: null }],
+  ] as const)("refuses %s with UPLOAD_REJECTED and writes no row", async (_label, over) => {
+    const { run, put, assets } = deps();
+    put(LUMEN.id, ASSET_ID, over);
+    const result = await run(actor, input);
+    expect(result.ok || result.error.code).toBe("UPLOAD_REJECTED");
+    expect(assets.size).toBe(0);
+  });
+
+  it.each([
+    ["a 1200 px short side", { width: 2400, height: 1200 }],
+    ["a 1599 px short side", { width: 1599, height: 3000 }],
+    ["a side over 8000 px", { width: 8001, height: 1600 }],
+  ] as const)("refuses %s with CLIENT_IMAGE_SIZE_INVALID and writes no row", async (_label, over) => {
+    const { run, put, assets } = deps();
+    put(LUMEN.id, ASSET_ID, over);
+    const result = await run(actor, input);
+    expect(result.ok || result.error.code).toBe("CLIENT_IMAGE_SIZE_INVALID");
+    expect(assets.size).toBe(0);
+  });
+
+  it.each([["a blank name", "  "], ["a name over 255 characters", "x".repeat(256)], ["a control character", "a\u0000.jpg"]])(
+    "refuses %s as INVALID_INPUT before storage",
+    async (_label, fileName) => {
+      const { run, storage } = deps();
+      const result = await run(actor, { ...input, fileName });
+      expect(result.ok || result.error.code).toBe("INVALID_INPUT");
+      expect(storage.head).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses a missing object with UPLOAD_NOT_FOUND", async () => {
+    const { run, assets } = deps();
+    const result = await run(actor, input);
+    expect(result.ok || result.error.code).toBe("UPLOAD_NOT_FOUND");
+    expect(assets.size).toBe(0);
+  });
+
+  it("refuses a 4th file with CLIENT_MATERIAL_LIMIT (the stale-count case); nothing written", async () => {
+    const { run, put, assets } = deps();
+    for (const n of [1, 2, 3]) seedAsset(assets, n);
+    put(LUMEN.id, ASSET_ID);
+    const result = await run(actor, input);
+    expect(result.ok || result.error.code).toBe("CLIENT_MATERIAL_LIMIT");
+    expect(assets.size).toBe(3);
+  });
+
+  it("refuses a disallowed type before reading storage", async () => {
+    const { run, storage } = deps();
+    const result = await run(actor, { ...input, contentType: "application/zip" });
+    expect(result.ok || result.error.code).toBe("FILE_TYPE_NOT_ALLOWED");
+    expect(storage.head).not.toHaveBeenCalled();
+  });
+
+  it("refuses an object uploaded under another client's id", async () => {
+    const { run, put, assets } = deps();
+    put(UNKNOWN_CLIENT_ID, ASSET_ID);
+    const result = await run(actor, input);
+    expect(result.ok || result.error.code).toBe("UPLOAD_NOT_FOUND");
+    expect(assets.size).toBe(0);
+  });
+
+  it("refuses the same asset id confirmed twice; the first row stands", async () => {
+    const { run, put, assets } = deps();
+    put(LUMEN.id, ASSET_ID);
+    expect((await run(actor, input)).ok).toBe(true);
+    const again = await run(actor, input);
+    expect(again.ok || again.error.code).toBe("ASSET_ALREADY_CONFIRMED");
+    expect(assets.size).toBe(1);
+  });
+});
+
+describe("listClientMaterial", () => {
+  it("lists in position order, signing images only for at most 15 minutes", async () => {
+    const { repo, assets } = fakeClientRepository([LUMEN]);
+    const pdf = seedAsset(assets, 2, { kind: "document", contentType: "application/pdf", width: null, height: null });
+    const image = seedAsset(assets, 1);
+    const { storage } = fakeMaterialStorage();
+    const result = await makeListClientMaterial(repo, storage)({ clientId: LUMEN.id });
+    expect(result).toEqual(
+      ok([
+        { ...image, thumbnailUrl: `https://storage/${LUMEN.id}/${image.id}?sig` },
+        { ...pdf, thumbnailUrl: null },
+      ]),
+    );
+    const [targets, ttl] = storage.presignDownloads.mock.calls[0];
+    expect(targets).toEqual([{ clientId: LUMEN.id, assetId: image.id, contentType: "image/jpeg" }]);
+    expect(ttl).toBeLessThanOrEqual(15 * 60);
+  });
+
+  it("lists without thumbnails when signing fails", async () => {
+    const { repo, assets } = fakeClientRepository([LUMEN]);
+    const image = seedAsset(assets, 1);
+    const { storage } = fakeMaterialStorage();
+    storage.presignDownloads.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "down" }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      expect(await makeListClientMaterial(repo, storage)({ clientId: LUMEN.id })).toEqual(ok([{ ...image, thumbnailUrl: null }]));
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("returns CLIENT_NOT_FOUND for an unknown client", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    const result = await makeListClientMaterial(repo, fakeMaterialStorage().storage)({ clientId: UNKNOWN_CLIENT_ID });
+    expect(result.ok || result.error.code).toBe("CLIENT_NOT_FOUND");
+  });
+});
+
+describe("removeClientMaterial", () => {
+  const deps = () => {
+    const clients = fakeClientRepository([LUMEN]);
+    const storage = fakeMaterialStorage();
+    return { ...clients, ...storage, run: makeRemoveClientMaterial({ clients: clients.repo, storage: storage.storage }) };
+  };
+
+  it("deletes the row and the object at once", async () => {
+    const { run, assets, put, objects, storage } = deps();
+    const asset = seedAsset(assets, 1);
+    put(LUMEN.id, asset.id);
+    expect(await run(actor, { clientId: LUMEN.id, assetId: asset.id })).toEqual(ok(undefined));
+    expect(assets.size).toBe(0);
+    expect(objects.size).toBe(0);
+    expect(storage.remove).toHaveBeenCalledWith({ clientId: LUMEN.id, assetId: asset.id, contentType: "image/jpeg" });
+  });
+
+  it("still succeeds when the object delete fails, and logs it with the client id only", async () => {
+    const { run, assets, storage } = deps();
+    const asset = seedAsset(assets, 1);
+    storage.remove.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "down" }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      expect(await run(actor, { clientId: LUMEN.id, assetId: asset.id })).toEqual(ok(undefined));
+      expect(assets.size).toBe(0);
+      const entry = JSON.parse(String(write.mock.calls[0][0]));
+      expect(entry).toMatchObject({ clientId: LUMEN.id });
+      expect(JSON.stringify(entry)).not.toContain(asset.id);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it.each([
+    ["an unknown file", () => ASSET_ID],
+    ["another client's file", (assets: Map<string, ClientAsset>) => seedAsset(assets, 1, { clientId: UNKNOWN_CLIENT_ID }).id],
+  ])("returns NOT_FOUND for %s and deletes nothing", async (_label, pick) => {
+    const { run, assets, storage } = deps();
+    const assetId = pick(assets);
+    const before = assets.size;
+    const result = await run(actor, { clientId: LUMEN.id, assetId });
+    expect(result.ok || result.error.code).toBe("NOT_FOUND");
+    expect(assets.size).toBe(before);
+    expect(storage.remove).not.toHaveBeenCalled();
   });
 });

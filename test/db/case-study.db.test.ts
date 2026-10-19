@@ -74,6 +74,7 @@ async function counts() {
     clients: number;
     logos: number;
     briefs: number;
+    assets: number;
     counters: number;
     numbers: number;
   }>(
@@ -82,6 +83,7 @@ async function counts() {
             (select count(*)::int from public.client) as clients,
             (select count(*)::int from public.client_logo) as logos,
             (select count(*)::int from public.client_brief) as briefs,
+            (select count(*)::int from public.client_asset) as assets,
             (select count(*)::int from public.case_number_counter) as counters,
             (select coalesce(sum(last_number), 0)::int from public.case_number_counter) as numbers`,
   );
@@ -305,7 +307,17 @@ describe("clients page (Story 2.13)", () => {
   });
 
   it("returns 403 FORBIDDEN for a role that cannot manage clients on every client action, and writes nothing", async () => {
-    const { createClient, updateClient, saveClientBriefField, requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
+    const {
+      createClient,
+      updateClient,
+      saveClientBriefField,
+      requestClientLogoUpload,
+      confirmClientLogoUpload,
+      requestClientMaterialUpload,
+      confirmClientMaterialUpload,
+      listClientMaterial,
+      removeClientMaterial,
+    } = await loadClientActions();
     for (const role of ["account_sales_social", "admin"]) {
       await pool.query("update public.profile set role = $2 where id = $1", [DEV_ACTOR_ID, role]);
       try {
@@ -320,6 +332,12 @@ describe("clients page (Story 2.13)", () => {
         expect(await saveClientBriefField({ clientId: acme.id, field: "context", text: "Intruder" })).toEqual(forbidden);
         expect(await requestClientLogoUpload({ clientId: acme.id, contentType: "image/png", sizeBytes: 10 })).toEqual(forbidden);
         expect(await confirmClientLogoUpload({ clientId: acme.id, logoId: randomUUID(), contentType: "image/png" })).toEqual(forbidden);
+        expect(await requestClientMaterialUpload({ clientId: acme.id, contentType: "image/jpeg", sizeBytes: 10 })).toEqual(forbidden);
+        expect(await confirmClientMaterialUpload({ clientId: acme.id, assetId: randomUUID(), contentType: "image/jpeg", fileName: "a.jpg" })).toEqual(
+          forbidden,
+        );
+        expect(await listClientMaterial({ clientId: acme.id })).toEqual(forbidden);
+        expect(await removeClientMaterial({ clientId: acme.id, assetId: randomUUID() })).toEqual(forbidden);
         expect(await counts()).toEqual(before);
         const { rows } = await pool.query("select name, industries, description, logo_id from public.client where id = $1", [acme.id]);
         expect(rows[0]).toMatchObject({ name: acme.name });
@@ -566,7 +584,7 @@ describe("RLS lockout", () => {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
 
-  it.each(["case_study", "case_event", "client", "client_logo", "client_brief", "case_number_counter"])("the browser key is refused reading %s", async (table) => {
+  it.each(["case_study", "case_event", "client", "client_logo", "client_brief", "client_asset", "case_number_counter"])("the browser key is refused reading %s", async (table) => {
     const { data, error } = await browser().from(table).select("*");
     expect(data).toBeNull();
     expect(error?.code).toBe("42501");
@@ -585,13 +603,14 @@ describe("RLS lockout", () => {
     expect(["42501", "PGRST202"]).toContain(error?.code);
   });
 
-  type Table = "case_study" | "case_event" | "client" | "client_logo" | "client_brief" | "case_number_counter";
+  type Table = "case_study" | "case_event" | "client" | "client_logo" | "client_brief" | "client_asset" | "case_number_counter";
   const INSERTS: Record<Table, string> = {
     case_study: `insert into public.case_study (name, client_id, number, code, year, created_by) values ('I', '${UNKNOWN_ID}', 1, 'I', 2026, '${DEV_ACTOR_ID}')`,
     case_event: `insert into public.case_event (case_id, actor_id, type) values ('${UNKNOWN_ID}', '${DEV_ACTOR_ID}', 'x')`,
     client: `insert into public.client (name, name_key, code, created_by) values ('I', 'i', 'III', '${DEV_ACTOR_ID}')`,
     client_logo: `insert into public.client_logo (client_id, path, mime_type, size_bytes, created_by) values ('${UNKNOWN_ID}', 'p', 'image/png', 1, '${DEV_ACTOR_ID}')`,
     client_brief: `insert into public.client_brief (client_id, updated_by) values ('${UNKNOWN_ID}', '${DEV_ACTOR_ID}')`,
+    client_asset: `insert into public.client_asset (client_id, position, path, file_name, mime_type, size_bytes, created_by) values ('${UNKNOWN_ID}', 1, 'p', 'f', 'application/pdf', 1, '${DEV_ACTOR_ID}')`,
     case_number_counter: `insert into public.case_number_counter (client_id, year, last_number) values ('${UNKNOWN_ID}', 2026, 1)`,
   };
   const UPDATES: Record<Table, string> = {
@@ -600,6 +619,7 @@ describe("RLS lockout", () => {
     client: "name = 'x'",
     client_logo: "path = 'x'",
     client_brief: "context = 'x'",
+    client_asset: "path = 'x'",
     case_number_counter: "last_number = 1",
   };
   const statements = (table: Table) => ({
@@ -609,7 +629,7 @@ describe("RLS lockout", () => {
     delete: `delete from public.${table}`,
   });
   const cases = (["anon", "authenticated"] as const).flatMap((role) =>
-    (["case_study", "case_event", "client", "client_logo", "client_brief", "case_number_counter"] as const).flatMap((table) =>
+    (["case_study", "case_event", "client", "client_logo", "client_brief", "client_asset", "case_number_counter"] as const).flatMap((table) =>
       Object.entries(statements(table)).map(([verb, sql]) => [role, verb, table, sql] as const),
     ),
   );
@@ -625,6 +645,8 @@ describe("RLS lockout", () => {
     `public.save_client_brief_field('${UNKNOWN_ID}', 'context', 'x', '${DEV_ACTOR_ID}')`,
     "public.client_info_text(' x ')",
     `public.delete_client_logo('${UNKNOWN_ID}')`,
+    `public.insert_client_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'p', 'f', 'application/pdf', 1, null, null, '${DEV_ACTOR_ID}')`,
+    `public.delete_client_asset('${UNKNOWN_ID}')`,
     "public.client_code_letters('Intruder')",
     "public.client_name_key('Intruder')",
     "public.case_study_code('III', 2026, 1)",
@@ -1689,6 +1711,232 @@ describe("client wizard (Story 2.15)", () => {
     expect(await summary()).toMatchObject({ complete: true });
     const read = await getClient(clientId);
     expect(read.ok && read.value.brief).toEqual({ context: "context.", solution: "solution.", results: "results." });
+  });
+});
+
+describe("client material (Story 2.16)", () => {
+  const jpeg = (width: number, height: number) =>
+    sharp({ create: { width, height, channels: 3, background: { r: 10, g: 20, b: 30 } } }).jpeg().toBuffer();
+  const insert = (clientId: string, over: { id?: string; mime?: string; width?: number | null; height?: number | null } = {}, db: pg.Pool | pg.PoolClient = pool) => {
+    const id = over.id ?? randomUUID();
+    const mime = over.mime ?? "image/jpeg";
+    const image = mime.startsWith("image/");
+    return db.query<{ id: string; position: number }>(
+      "select id, position from public.insert_client_asset($1, $2, $3, ' foto.jpg ', $4, 2048, $5, $6, $7)",
+      [id, clientId, `clients/${clientId}/material/${id}.x`, mime, over.width === undefined ? (image ? 2400 : null) : over.width, over.height === undefined ? (image ? 1600 : null) : over.height, DEV_ACTOR_ID],
+    );
+  };
+  const positions = async (clientId: string) =>
+    (await pool.query<{ position: number }>("select position from public.client_asset where client_id = $1 order by position", [clientId])).rows.map(
+      (r) => r.position,
+    );
+
+  it("creates client_asset with the 2.16 columns, RLS on and an index on client_id", async () => {
+    const { rows } = await pool.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'client_asset' order by column_name",
+    );
+    expect(rows.map((r) => r.column_name)).toEqual([
+      "client_id",
+      "created_at",
+      "created_by",
+      "file_name",
+      "height",
+      "id",
+      "mime_type",
+      "path",
+      "position",
+      "size_bytes",
+      "width",
+    ]);
+    const rls = await pool.query("select relrowsecurity from pg_class where oid = 'public.client_asset'::regclass");
+    expect(rls.rows).toEqual([{ relrowsecurity: true }]);
+    const index = await pool.query("select 1 from pg_indexes where schemaname = 'public' and indexname = 'client_asset_client_id_idx'");
+    expect(index.rows).toHaveLength(1);
+  });
+
+  it.each([
+    ["position 0", "position = 0"],
+    ["position 4", "position = 4"],
+    ["a GIF", "mime_type = 'image/gif'"],
+    ["0 bytes", "size_bytes = 0"],
+    ["50 MB + 1", "size_bytes = 52428801"],
+    ["a blank path", "path = '  '"],
+    ["a blank file name", "file_name = ''"],
+    ["an untrimmed file name", "file_name = ' a.jpg'"],
+    ["a file name over 255 characters", "file_name = repeat('x', 256)"],
+    ["a side over 8000 px", "width = 8001"],
+    ["an image without pixels", "width = null, height = null"],
+    ["one side only", "height = null"],
+  ])("checks refuse %s", async (_label, set) => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const { rows } = await insert(client.id);
+    await expect(inRolledBackTx(`update public.client_asset set ${set} where id = $1`, [rows[0].id])).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("checks refuse pixels on a non-image and accept every case material type", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    await expect(insert(client.id, { mime: "application/pdf", width: 10, height: 10 })).rejects.toMatchObject({ code: "23514" });
+    for (const mime of ["video/mp4", "video/quicktime", "application/pdf", "text/plain", "text/markdown", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]) {
+      const other = await createTestClient(pool, DEV_ACTOR_ID);
+      expect((await insert(other.id, { mime })).rows[0].position).toBe(1);
+    }
+  });
+
+  it("insert_client_asset takes the lowest free position and refuses a 4th with CLIENT_MATERIAL_LIMIT; nothing written", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const first = (await insert(client.id)).rows[0];
+    expect(first.position).toBe(1);
+    // The name is stored trimmed.
+    expect((await pool.query("select file_name from public.client_asset where id = $1", [first.id])).rows).toEqual([{ file_name: "foto.jpg" }]);
+    expect((await insert(client.id, { mime: "application/pdf" })).rows[0].position).toBe(2);
+    expect((await insert(client.id)).rows[0].position).toBe(3);
+    const before = await counts();
+    await expect(insert(client.id)).rejects.toMatchObject({ code: "P0001", message: "CLIENT_MATERIAL_LIMIT" });
+    expect(await counts()).toEqual(before);
+    // A freed position is taken again.
+    expect((await pool.query("select public.delete_client_asset($1) as deleted", [first.id])).rows).toEqual([{ deleted: true }]);
+    expect(await positions(client.id)).toEqual([2, 3]);
+    expect((await insert(client.id)).rows[0].position).toBe(1);
+  });
+
+  it("insert_client_asset refuses an unknown client and an id confirmed twice", async () => {
+    await expect(insert(UNKNOWN_ID)).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const id = randomUUID();
+    await insert(client.id, { id });
+    await expect(insert(client.id, { id })).rejects.toMatchObject({ code: "P0001", message: "ASSET_ALREADY_CONFIRMED" });
+    expect(await positions(client.id)).toEqual([1]);
+  });
+
+  it("keeps (client_id, position) unique", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    await insert(client.id);
+    await expect(
+      inRolledBackTx(
+        "insert into public.client_asset (client_id, position, path, file_name, mime_type, size_bytes, created_by) values ($1, 1, 'dup', 'f', 'application/pdf', 1, $2)",
+        [client.id, DEV_ACTOR_ID],
+      ),
+    ).rejects.toMatchObject({ code: "23505" });
+  });
+
+  it("gives four parallel confirms positions 1–3 and refuses exactly one", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const parallel = new pg.Pool({ connectionString: env.SUPABASE_DB_URL, max: 4 });
+    try {
+      const results = await Promise.allSettled([0, 1, 2, 3].map(() => insert(client.id, {}, parallel)));
+      expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+      expect(await positions(client.id)).toEqual([1, 2, 3]);
+    } finally {
+      await parallel.end();
+    }
+  });
+
+  it("delete_client_asset answers false for an unknown id", async () => {
+    expect((await pool.query("select public.delete_client_asset($1) as deleted", [UNKNOWN_ID])).rows).toEqual([{ deleted: false }]);
+  });
+
+  it("grants the functions to service_role only", async () => {
+    for (const fn of ["public.insert_client_asset(uuid, uuid, text, text, text, bigint, integer, integer, uuid)", "public.delete_client_asset(uuid)"]) {
+      const { rows } = await pool.query(
+        `select has_function_privilege('service_role', $1, 'execute') as service,
+                has_function_privilege('anon', $1, 'execute') as anon,
+                has_function_privilege('authenticated', $1, 'execute') as authenticated`,
+        [fn],
+      );
+      expect(rows).toEqual([{ service: true, anon: false, authenticated: false }]);
+    }
+  });
+
+  it("round trip through the actions: two images and a PDF, the button rule, a 4th file, removal and the listing", async () => {
+    const { requestClientMaterialUpload, confirmClientMaterialUpload, listClientMaterial, removeClientMaterial } = await loadClientActions();
+    const { getClient } = await loadCaseStudy();
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const clientId = client.id;
+    const upload = async (bytes: Buffer, contentType: string, fileName = "foto.jpg") => {
+      const presigned = await requestClientMaterialUpload({ clientId, contentType, sizeBytes: bytes.byteLength });
+      if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+      const { assetId, url, method, headers } = presigned.value;
+      expect(new URL(url).pathname).toContain(`/object/upload/sign/material/clients/${clientId}/material/${assetId}.`);
+      expect((await fetch(url, { method, headers, body: new Blob([new Uint8Array(bytes)]) })).status).toBe(200);
+      return { assetId, confirmed: await confirmClientMaterialUpload({ clientId, assetId, contentType, fileName }) };
+    };
+    const objects = async () => {
+      const { data } = await createSupabaseAdmin().storage.from("material").list(`clients/${clientId}/material`);
+      return (data ?? []).map((o) => o.name).sort();
+    };
+
+    const a = await upload(await jpeg(2400, 1600), "image/jpeg", " Vetrina.jpg ");
+    expect(a.confirmed).toMatchObject({ ok: true, value: { id: a.assetId, position: 1, fileName: "Vetrina.jpg", kind: "image", width: 2400, height: 1600 } });
+    const doc = await upload(Buffer.from("%PDF-1.7\n"), "application/pdf", "brief.pdf");
+    expect(doc.confirmed).toMatchObject({ ok: true, value: { position: 2, kind: "document", width: null, height: null } });
+    const b = await upload(await jpeg(1600, 3000), "image/jpeg");
+    expect(b.confirmed).toMatchObject({ ok: true, value: { position: 3 } });
+
+    // The client page's read carries no files; the wizard lists them.
+    const read = await getClient(clientId);
+    expect(read.ok && "assets" in read.value).toBe(false);
+    const files = await listClientMaterial({ clientId });
+    if (!files.ok) throw new Error("listClientMaterial failed");
+    expect(files.value.map((x) => [x.position, x.kind, x.fileName])).toEqual([
+      [1, "image", "Vetrina.jpg"],
+      [2, "document", "brief.pdf"],
+      [3, "image", "foto.jpg"],
+    ]);
+    const thumbnail = files.value[0].thumbnailUrl as string;
+    expect((await fetch(thumbnail)).status).toBe(200);
+    const jwt = new URL(thumbnail).searchParams.get("token") as string;
+    const claims = JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString("utf8")) as { iat: number; exp: number };
+    expect(claims.exp - claims.iat).toBeLessThanOrEqual(900);
+    expect(files.value[1].thumbnailUrl).toBeNull();
+
+    const before = await counts();
+    expect(await requestClientMaterialUpload({ clientId, contentType: "image/jpeg", sizeBytes: 10 })).toMatchObject({
+      ok: false,
+      status: 409,
+      error: { code: "CLIENT_MATERIAL_LIMIT" },
+    });
+    expect(await counts()).toEqual(before);
+
+    expect(await removeClientMaterial({ clientId, assetId: b.assetId })).toEqual({ ok: true, value: undefined });
+    expect(await positions(clientId)).toEqual([1, 2]);
+    expect(await objects()).toEqual([`${a.assetId}.jpg`, `${doc.assetId}.pdf`].sort());
+    expect(await removeClientMaterial({ clientId, assetId: b.assetId })).toMatchObject({ ok: false, status: 404, error: { code: "NOT_FOUND" } });
+    const listed = await listClientMaterial({ clientId });
+    expect(listed.ok && listed.value.map((x) => x.id)).toEqual([a.assetId, doc.assetId]);
+  });
+
+  it.each([
+    ["a 1200 px short side", () => jpeg(2400, 1200), "image/jpeg", "CLIENT_IMAGE_SIZE_INVALID"],
+    ["a stored type that is not the declared one", () => jpeg(2400, 1600), "image/png", "UPLOAD_REJECTED"],
+  ])("confirm refuses %s with %s and writes no row", async (_label, make, contentType, code) => {
+    const { requestClientMaterialUpload, confirmClientMaterialUpload } = await loadClientActions();
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const bytes = await make();
+    const presigned = await requestClientMaterialUpload({ clientId: client.id, contentType, sizeBytes: bytes.byteLength });
+    if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+    const { assetId, url, method, headers } = presigned.value;
+    expect((await fetch(url, { method, headers, body: new Blob([new Uint8Array(bytes)]) })).status).toBe(200);
+    const before = await counts();
+    expect(await confirmClientMaterialUpload({ clientId: client.id, assetId, contentType, fileName: "foto.jpg" })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code },
+    });
+    expect(await counts()).toEqual(before);
+  });
+
+  it("presign refuses a .zip and a 60 MB file", async () => {
+    const { requestClientMaterialUpload } = await loadClientActions();
+    expect(await requestClientMaterialUpload({ clientId: acme.id, contentType: "application/zip", sizeBytes: 10 })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "FILE_TYPE_NOT_ALLOWED" },
+    });
+    expect(await requestClientMaterialUpload({ clientId: acme.id, contentType: "video/mp4", sizeBytes: 60 * 1024 * 1024 })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "FILE_TOO_LARGE" },
+    });
   });
 });
 
