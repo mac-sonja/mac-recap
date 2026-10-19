@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 describe("ClientsPage", () => {
-  it("guards on list clients and shows Codice (mono), Nome and the case count; the uuid only in hrefs", async () => {
+  it("guards on list clients and shows ID (mono), Nome and the case count; the uuid only in hrefs", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([ACME, LUMEN]));
     const html = await renderPage();
@@ -60,11 +60,12 @@ describe("ClientsPage", () => {
     expect(link).toContain("hidden lg:inline-flex");
   });
 
-  it("links an unfinished client's name to its wizard at step 1, and a finished one's to its page", async () => {
+  it("links every client's name to its page, finished or not", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([ACME, LUMEN]));
     const html = await renderPage();
-    expect(html).toContain(`href="/clients/new?clientId=${ACME.id}&amp;step=1"`);
+    expect(html).not.toContain("/clients/new?clientId=");
+    expect(html).toContain(`href="/clients/${ACME.id}"`);
     expect(html).toContain(`href="/clients/${LUMEN.id}"`);
   });
 

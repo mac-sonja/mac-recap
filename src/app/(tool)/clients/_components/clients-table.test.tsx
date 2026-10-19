@@ -52,7 +52,7 @@ describe("ClientsTable", () => {
     expect(names()).toEqual(["Acme", "Lumen Srl", "Città di Torino"]);
     fireEvent.click(within(header("Case history")).getByRole("button"));
     expect(names()).toEqual(["Città di Torino", "Lumen Srl", "Acme"]);
-    fireEvent.click(within(header("Codice")).getByRole("button"));
+    fireEvent.click(within(header("ID")).getByRole("button"));
     expect(names()).toEqual(["Acme", "Città di Torino", "Lumen Srl"]);
   });
 
@@ -87,12 +87,12 @@ describe("ClientsTable", () => {
     expect(push).toHaveBeenCalledWith(`/clients/${LUMEN.id}`);
   });
 
-  it("opens an unfinished client's wizard at step 1 from its row and its name", () => {
+  it("opens an unfinished client's page too, never the wizard, from its row and its name", () => {
     render(<ClientsTable rows={rows} canManage />);
-    const wizard = `/clients/new?clientId=${ACME.id}&step=1`;
-    expect(screen.getByRole("link", { name: "Acme" }).getAttribute("href")).toBe(wizard);
+    const page = `/clients/${ACME.id}`;
+    expect(screen.getByRole("link", { name: "Acme" }).getAttribute("href")).toBe(page);
     fireEvent.click(within(screen.getAllByRole("row")[1]).getAllByRole("cell")[2]);
-    expect(push).toHaveBeenCalledWith(wizard);
+    expect(push).toHaveBeenCalledWith(page);
   });
 
   it("links Aggiungi cliente to the client wizard, hides it below 1024 px and omits it without manage clients; search still works", () => {
