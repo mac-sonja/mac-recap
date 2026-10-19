@@ -14,6 +14,8 @@ context:
 
 > **Amended 2026-10-16 (client intro and collections)** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-16-client-intro-and-collections.md), built before the demo (owner amendment the same day): Add client asks for 2–3 images and starts the intro; Modifica cliente opens the client overview (Stories 2.15, 4.12).
 
+> **Amended 2026-10-19 (client wizard)** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-19.md): the sector becomes `industries` (multiselect from a fixed list: Interior design, Energia, Risorse umane, Lusso); name, industries, description and logo are all required, plus a new `client_brief` (Contesto, Soluzione, Risultati); the dialog is replaced by the client wizard (Stories 2.15, 2.16). The description limit (400), the logo rules, live client info (AD-22) and `getClientInfoForCase` stay; `getClientInfoForCase` now returns `{ clientId, name, industries, description, logoId, brief }`. The Never item "sector as … fixed list" is overridden for "fixed list"; the rework is built in Story 2.15.
+
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
 ## Intent

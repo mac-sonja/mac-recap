@@ -2,7 +2,7 @@
 title: "MAC Recap – MVP PRD (v2)"
 status: final
 created: 2026-10-07
-updated: 2026-10-16
+updated: 2026-10-19
 version: 2
 supersedes: "docs/sources/MAC Recap-PRD-EN v1.pdf"
 ---
@@ -18,6 +18,8 @@ Updated Oct 15, 2026: case studies belong to client records managed on a Clients
 Updated Oct 16, 2026: clients have a description, sector and logo, shown in every case study as an About the client block and used by the AI; client info is live, so every case study, approved ones included, always shows the client's current info ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md), with its owner amendment of the same day).
 
 Updated Oct 16, 2026 (second): before the October 30 demo (owner amendment the same day: "Tutto. dovremmo farcela"), a client gets AI-drafted intro pages from its data and 2–3 images; editing a client opens an overview of its intro and case histories; users can download a client's intro and approved case histories in one file, or build named collections of approved case histories ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md)).
+
+Updated Oct 19, 2026: Add client is a three-step wizard (Dettagli, Materiale, Introduzione). Client fields: name, industries (fixed list, multiselect), description, logo, context, solution, results, all required. Client material: up to 3 files, any type, at least 2 images ([Sprint Change Proposal 2026-10-19](../../sprint-change-proposal-2026-10-19.md)).
 
 This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR, epic, story and open-point numbers are unchanged from v1. Retired items are marked, not renumbered, and new items are added at the end.
 
@@ -94,8 +96,8 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 ### 2.1 Terms
 
 - **Case study.** The output for one project: graphic layouts plus text structured as challenge, approach and result. Each has a unique ID and a readable case history code, and belongs to one client. In the Italian UI a case study is called a *case history* (PR #38); "case study" stays the internal term in these documents, story keys, tables (`case_study`) and code.
-- **Client.** A company MAC worked for. Each has an automatic short code (e.g. LUM). Clients are managed on the Clients page. Each can have a short description, a sector and a logo.
-- **About the client block.** The part of every case study that shows the client's logo, name, sector and description, always as they currently are on the client. A change to the client shows in all its case studies, drafts and approved ones alike.
+- **Client.** A company MAC worked for. Each has an automatic short code (e.g. LUM). Clients are managed on the Clients page. Each has industries, a description, a logo, a brief (context, solution, results) and up to 3 files of material (SCP 2026-10-19).
+- **About the client block.** The part of every case study that shows the client's logo, name, industries and description, always as they currently are on the client. A change to the client shows in all its case studies, drafts and approved ones alike.
 - **Case history code.** Client code, year and a number per client and year, e.g. LUM-2026-01. Fixed once the case study is created.
 - **Material.** Uploaded files: images, videos, text documents and PDFs. The details form is not material.
 - **Asset.** A single uploaded material file. Images and videos can be marked as favourite.
@@ -103,7 +105,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 - **Shareable link.** A link to a hosted version of an approved case study, such as a hosted presentation. Who can open it is open point 11.
 - **Configurator.** The editing screen where the owner/designer adjusts text, layout, media and typography before approving.
 - **Review dashboard.** The list of case studies and their statuses, including those waiting for review.
-- **Client intro.** Pages that introduce a client, drafted by the AI from the client's data and 2–3 images and approved like a case study. They show the client's current info.
+- **Client intro.** Pages that introduce a client, drafted by the AI from the client's data, its brief and its material, laid out with its 2–3 images, and approved like a case study. They show the client's current info.
 - **Client overview.** The configurator view of a client's intro and all its case studies as one file.
 - **Client pack.** One file with a client's approved intro and approved case studies.
 - **Collection.** A named, saved set of approved case studies in a chosen order, with its own text edits and hidden pages.
@@ -117,7 +119,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 **FR2** – The owner/designer uploads material (images, videos, text documents and PDFs), can mark any number of images and videos as favourite, and fills in a short details form on context, solution and results. The details form is the only place for typed project text.
 - Upload is limited to 20 files of at most 50 MB each. (50 MB is the hosted Supabase plan's upload cap; it returns to 100 MB when the plan is upgraded. Owner decision 2026-10-14.)
 
-**FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material, the form answers and the client's description and sector. Every case study shows the client's info in an About the client block.
+**FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material, the form answers and the client's description, industries and brief. Every case study shows the client's info in an About the client block.
 - If no material is uploaded, generation is not available (NFR6).
 
 **FR4** – Templates adapt their layout to the number of available media items.
@@ -144,7 +146,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 Added by the [Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md). By the owner's amendment of the same day, these are built before the October 30 demo, in Sprints 2 and 3, and nothing else is cut.
 
-**FR11** – Creating a client asks for 2–3 images. The system drafts the client's intro pages from the client's name, sector, description and images, and the owner/designer edits, checks and approves them in the configurator.
+**FR11** – Creating a client is a wizard: details (all required), then up to 3 files with at least 2 images, then the intro in the configurator (SCP 2026-10-19). The system drafts the client's intro pages from the client's name, industries, description, brief and material, and the owner/designer edits, checks and approves them in the configurator.
 
 **FR12** – Editing a client opens the client overview: the intro and every case study of the client in one preview. Editing a case study there edits that case study.
 
@@ -165,7 +167,7 @@ Guardrails are non-negotiable constraints. Any requirement that contradicts them
 
 **NFR5** – Texts follow the defined narrative structure (challenge, approach, result) and the quality checklist, which is defined in the Sprint 2 non-dev deliverable "narrative structure and quality criteria". They cover both the technical and the graphic side of the project.
 
-**NFR6** – If no material is uploaded, nothing is generated. A filled-in details form without material is not enough. For a client intro, the same rule: no images, no intro.
+**NFR6** – If no material is uploaded, nothing is generated. A filled-in details form without material is not enough. For a client intro, the same rule: fewer than 2 client images, no intro.
 
 **NFR7** – No case study is exported or published as a shareable link without human review and approval by an owner/designer. This includes client intros, client packs and collections. A collection contains only approved content and text written by an owner/designer (decided by the owner on 2026-10-16).
 
@@ -184,7 +186,7 @@ The order follows the development plan. Non-dev activities are prerequisites for
 | Sprint | Due | Development | Non-dev activities |
 |---|---|---|---|
 | Sprint 1 | October 14 | Epic 2 – Asset upload | Team setup: Claude Code with the BMAD method (formerly Epic 1); tool design definition; template wireframes; data processing logic |
-| Sprint 2 | October 21 | Epic 3 – Graphic case study generation (with client images and the client intro draft); Epic 4 – Review and approval (with client intro review and the client overview); Epic 5 – Download and publishing (continues into Sprint 3) | Configurator visual design (Bento); account/sales/social user journey; final case study templates (with page names and intro pages); client intro template (by October 20); narrative structure and quality criteria; first guardrail check |
+| Sprint 2 | October 21 | Epic 3 – Graphic case study generation (with the client intro draft); Epic 4 – Review and approval (with client intro review and the client overview); Epic 5 – Download and publishing (continues into Sprint 3) | Configurator visual design (Bento); account/sales/social user journey; final case study templates (with page names and intro pages); client intro template (by October 20); narrative structure and quality criteria; first guardrail check |
 | Sprint 3 | October 28 | Epic 5 – Download and publishing (with client packs and collections), then Epic 6 – Login, users and permissions | Mockups and assets for case studies; final guardrail check; demo preparation; demo (October 30) |
 | After MAC Productive is ready (no date) | — | Epic 7 – MAC Productive integration; Epic 8 – Text-based case study generation | — |
 | Post-MVP (no date) | — | — | Mockup and asset guidelines |
@@ -229,15 +231,15 @@ Prerequisites: tool design definition, template wireframes (asset dimensions, fo
 - I can add a client and edit its name
 - The client code is automatic and never changes
 - I can open a client to see only its case studies
-- I can add a short description, a sector and a logo to a client
-- A change to a client's info (name, logo, sector, description) shows in all its case studies, approved ones included
+- I add a client's industries, a description, a logo, a brief (context, solution, results) and up to 3 files of material, all required
+- A change to a client's info (name, logo, industries, description, brief, material) shows in all its case studies, approved ones included
 - Replacing or removing a logo deletes the old one
-- Creating a client asks for 2–3 images
+- Creating a client is a wizard like a case study: details, then material, then the intro
 - Editing a client opens the client overview
 
-**Story 2.6** – As an owner/designer, I want to add 2–3 images to each client.
-- Adding a client asks for 2–3 images (required), PNG, JPEG or WebP, at least 1600 px on the short side
-- Replacing or removing an image deletes the old one; a client keeps at least 2
+**Story 2.6** – As an owner/designer, I want to add material to each client.
+- Adding a client asks for up to 3 files of any material type, at least 2 of them images (PNG, JPEG or WebP, at least 1600 px on the short side)
+- Replacing or removing a file deletes the old one; a client keeps at least 2 images
 
 ### Epic 3 – Graphic case study generation (Sprint 2)
 
@@ -247,7 +249,7 @@ Prerequisites: graphic template layouts, final case study templates (each with a
 - The case study is generated from the graphic templates
 - Graphic assets and template design remain unchanged
 - Texts follow the challenge, approach, result structure and use only the uploaded material, form answers and the client's info
-- The case study shows an About the client block
+- The case study shows an About the client block (logo, name, industries, description)
 - Layouts are generated for the MVP export formats (open point 1)
 - If no material is uploaded, generation is not available
 
@@ -255,8 +257,8 @@ Prerequisites: graphic template layouts, final case study templates (each with a
 - The adaptation rules defined in the final template are applied
 
 **Story 3.3** – As an owner/designer, I want the AI to draft a client's intro pages.
-- The draft is made from the client's name, sector and description (a headline and one short paragraph) and laid out with its 2–3 images
-- Without images, no intro is generated
+- The draft is made from the client's name, industries, description and brief, plus its material as open point 2 allows (a headline and one short paragraph), and laid out with its 2–3 images
+- With fewer than 2 images, no intro is generated
 
 ### Epic 4 – Review and approval (Sprint 2)
 
@@ -277,6 +279,7 @@ Prerequisite: configurator visual design (Bento).
 - An owner/designer can still edit an approved case study. Saved changes update the case study and its shareable links, and it stays approved.
 
 **Story 4.4** – As an owner/designer, I want to review, edit and approve a client intro like a case study.
+- The intro opens in the configurator as the last step of the Add client wizard (designed with the owner first)
 - Every block is checked before approval; only an approved intro appears in downloads
 
 **Story 4.5** – As an owner/designer, I want editing a client to open the client overview.

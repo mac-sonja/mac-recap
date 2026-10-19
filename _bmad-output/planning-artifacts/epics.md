@@ -28,13 +28,13 @@ Scope: the standalone MVP, Epics 2–6, keeping PRD v2 numbering (Epic 1 is team
 
 FR1: The owner/designer creates a case study by hand, and the system gives it a unique, permanent ID (a database-generated uuid that is never changed or reused) and a readable **case history code** (client code, year, number, e.g. `LUM-2026-01`), fixed at creation. The code is what people see; the uuid is the only identifier exposed to other systems and used in URLs, and is ready for the later project-order link. Every case belongs to one client record, picked from the client list. There is no trigger at project close. (CAP-1, Stories 2.2 and 2.5)
 FR2: The owner/designer uploads material (images, videos, text documents, PDFs) to a case study. The limit is 20 files of at most 50 MB each, of an allowlisted type. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others. Any number of images and videos can be marked as favourite; the mark is optional. The owner/designer also fills in an optional details form (context, solution, results), which is the only place for typed project text, is saved, can be cited as a claim source, and never counts as material. (CAP-2, CAP-3, Stories 2.3–2.4)
-FR3: The system generates a graphic case study in the background by applying MAC templates to the uploaded material. The case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The narrative follows challenge, approach and result (always present, can't be removed or reordered), covers the technical and the graphic side, and uses only the uploaded material, the form answers and the client's info (description and sector). Every case study shows an About the client block with the client's logo, name, sector and description, as entered on the client and always current: drafts and approved case studies alike show the client's info as it is now. Template design and assets stay unchanged. Generation is refused when there is no material, even with the form filled in. Layouts are produced for every MVP export format. (CAP-4, CAP-5, Story 3.1)
+FR3: The system generates a graphic case study in the background by applying MAC templates to the uploaded material. The case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The narrative follows challenge, approach and result (always present, can't be removed or reordered), covers the technical and the graphic side, and uses only the uploaded material, the form answers and the client's info (description, industries and brief; SCP 2026-10-19). Every case study shows an About the client block with the client's logo, name, industries and description, as entered on the client and always current: drafts and approved case studies alike show the client's info as it is now. Template design and assets stay unchanged. Generation is refused when there is no material, even with the form filled in. Layouts are produced for every MVP export format. (CAP-4, CAP-5, Story 3.1)
 FR4: Templates adapt their layout to the number of available media items, using the template's own media-count rules (slot mapping per count). (CAP-4, Story 3.2)
 FR5: The owner/designer reviews and edits case studies through the review dashboard (every case with its status, a To review queue oldest first, delete only in Bozza) and the configurator (generated text in place, layout variant, shuffle, spacing, media replace / reorder / remove, font pairing and text scale per format). Layout, spacing and typography accept only template-defined values; media come only from this case's material; the preview matches the exported files exactly; there is no canvas-ratio control. (CAP-6, CAP-7, Stories 4.1–4.2)
 FR6: Any owner/designer approves a case study after manually checking every text block against the material and form answers. Approve stays disabled until every block has a current manual check, no block overflows in any format, and no referenced material is deleted. There is no bulk check or bulk approve. Approval makes the case available for export and sharing. Editing an approved case keeps it approved. (CAP-8, Story 4.3)
 FR7: Owner/designer and account/sales/social users export an approved case study in each MVP format (at least a 16:9 deck as PDF, a social carousel and an A4 PDF), and publish it as a shareable link to a hosted presentation. Each link shows one format of the current approved version, never a working copy, and offers no file download. The share dialog says who can open the link. A link can be turned off; a turned-off or expired link shows "no longer available". Account/sales/social users see approved case studies only; unapproved content has no view, export or share entry point. The tool does not post to social channels or the website. (CAP-9, CAP-10, Stories 5.1–5.2)
 FR8: Users sign in with one of three fixed roles (owner/designer, account/sales/social, admin). The admin adds and removes users and assigns their role, and nothing else: no case content, no permission settings, no guardrail settings. The last admin can't drop their own admin role. Every action follows the AD-11 permission matrix. Delivered in Sprint 3. (CAP-11, Stories 6.1–6.2)
-FR11 (MVP, before the demo; owner amendment 2026-10-16): Creating a client asks for 2–3 images. The system drafts the client's intro pages from the client's name, sector, description and images, and the owner/designer edits, checks and approves them in the configurator. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
+FR11 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-19): Creating a client is a wizard: details (name, industries, description, logo, context, solution and results, all required), then up to 3 files of client material with at least 2 images, then the intro in the configurator. The system drafts the client's intro pages from the client's name, industries, description, brief and material, and the owner/designer edits, checks and approves them in the configurator. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md))
 FR12 (MVP, before the demo; owner amendment 2026-10-16): Editing a client opens the client overview: the intro and every case study of the client in one preview. Editing a case study there edits that case study.
 FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro and approved case studies), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Text edits (owner/designers only) and hidden pages in a collection apply only to that collection.
 CAP-12 (SPEC; no PRD FR number): every transition, upload, save, block check, claim edit, approval, export and link change is an append-only, timestamped event with its actor, and the generated draft is kept next to the approved version. The tool does not record hands-on time. Built by each epic as it goes, not as an epic of its own.
@@ -48,7 +48,7 @@ NFR2 (guardrail): A person checks every generated claim against the uploaded mat
 NFR3 (guardrail): No role can view or change the guardrails, admin included. There is no setting anywhere that disables or changes NFR1–NFR7.
 NFR4: Owner/designer hands-on time from upload to approval is at most 20 minutes, target 15. If the claim check needs more time, NFR2 wins. Waiting for generation doesn't count; generation time has no limit. Counter-metric: time must not fall by shortening the review.
 NFR5: The narrative follows challenge, approach and result, meets the Sprint 2 quality checklist, and covers both the technical and the graphic side.
-NFR6 (guardrail): With no material, nothing is generated. The details form alone is not enough. For a client intro, the same rule: no images, no intro.
+NFR6 (guardrail): With no material, nothing is generated. The details form alone is not enough. For a client intro, the same rule: fewer than 2 client images, no intro (SCP 2026-10-19).
 NFR7 (guardrail): Nothing is exported or shared before review and approval by an owner/designer. This includes client intros, client packs and collections; a collection contains only approved content and text written by an owner/designer (OP 15, resolved 2026-10-16).
 NFR8 (constraint): Data lives in Supabase and files in a private Supabase Storage bucket, both in the EU. Standalone from MAC Productive.
 NFR9 (constraint): Until login ships in Sprint 3, every deployed environment, shareable links included, is gated (AD-12), because real client material is in use.
@@ -67,9 +67,9 @@ From the architecture spine (AD-1 to AD-21 are binding):
 - AR3 (AD-3): `case_study.status` changes only through `case-study.transition`. Revisions have `working | approved | superseded`. `head_revision_id` and `approved_revision_id` pointers; `getLiveRevision` and `getEditableRevision` reads. Generation only from `draft`; delete only in `draft`, soft (`deleted_at`). A client intro (AD-23) has the same states and pointers on `client_intro` and changes only through `case-study.transitionIntro`. A revision belongs to exactly one subject, a case or a client intro.
 - AR4 (AD-4): `CaseStudyDocument` (zod, jsonb) stored twice per revision, `generated_doc` (immutable) and `doc` (editable). Shared part (template@version, blocks with stable `blockId`, claims and check state, media set) and per-format part (variant, slot assignments, spacing, text scale, font pairing). No canvas ratio. Schema rejects a missing challenge/approach/result. The document stores no client values; the About block is filled at render time from the client's current info (AD-22). `rendering.relayout` is the only slot-assignment code. `schemaVersion` + `upgrade(doc)` on read. `FORMAT_NOT_IN_REVISION`. The document has `kind` ∈ `case_history | client_intro`; the challenge/approach/result rule applies only to `case_history`. Every page a template defines has a stable `pageKey` and a `role` ∈ `intro | body`.
 - AR5 (AD-5): Guardrails are code (`generation/domain/guardrails.ts`, `access/domain/policy.ts`, `case-study` preconditions), never DB/env/UI. Each guardrail is enforced in a use case and covered by an automated test, so the end-of-Sprint-2 guardrail check runs on the pre-login build.
-- AR6 (AD-6): `generate` fails with `NO_MATERIAL` before any LLM call unless there's at least one non-deleted asset; the same check backs the Generate button and the worker's claim. Claims tagged `aspect: technical | graphic`; a draft missing one is `MISSING_ASPECT`. The LLM also receives the client's current name, sector and description, read when the job runs (AD-22).
+- AR6 (AD-6): `generate` fails with `NO_MATERIAL` before any LLM call unless there's at least one non-deleted asset; the same check backs the Generate button and the worker's claim. Claims tagged `aspect: technical | graphic`; a draft missing one is `MISSING_ASPECT`. The LLM also receives the client's current name, industries, description and brief (context, solution, results), read when the job runs (AD-22; SCP 2026-10-19).
 - AR7 (AD-7): One `NarrativeGenerator` port, worker only. Adapter uses `client.beta.messages.parse` with the zod schema, model `claude-opus-5-5` from one constant, adaptive thinking, `effort: "high"`, server-side refusal fallbacks; `refusal` → `LLM_REFUSAL`. Versioned prompt files. Each revision records `response.model`, `fellBack`, `promptVersion`, `schemaVersion`.
-- AR8 (AD-8): Private Supabase Storage bucket `material` in the project's EU region, created by migration, with `file_size_limit` 50 MB and `allowed_mime_types` set to the allowlist; no public access, service role is the only reader and writer. Browser uploads to a signed upload URL issued after `authorize`; size and type limits enforced by the bucket and re-checked from the object's metadata at confirm. Asset row only after that check. 20-file cap checked on issue and confirm. Signed GET ≤ 15 min. No versioning, so the app never deletes material objects; the one exception is a replaced or removed client logo, whose object is deleted (AD-22). Fixed key layout. No AWS S3. The client intro and collections change (SCP 2026-10-16) adds `clients/{clientId}/images/{imageId}.{ext}` (owned by `case-study`; replacing or removing an image deletes the old object, as for logos), and exports live at `exports/{contentHash}/{format}.{ext}` (owned by `rendering`).
+- AR8 (AD-8): Private Supabase Storage bucket `material` in the project's EU region, created by migration, with `file_size_limit` 50 MB and `allowed_mime_types` set to the allowlist; no public access, service role is the only reader and writer. Browser uploads to a signed upload URL issued after `authorize`; size and type limits enforced by the bucket and re-checked from the object's metadata at confirm. Asset row only after that check. 20-file cap checked on issue and confirm. Signed GET ≤ 15 min. No versioning, so the app never deletes material objects; the one exception is a replaced or removed client logo, whose object is deleted (AD-22). Fixed key layout. No AWS S3. The client intro and collections change (SCP 2026-10-16) adds the client material key, owned by `case-study`: since SCP 2026-10-19 it is `clients/{clientId}/material/{assetId}.{ext}` (`clients/{clientId}/images/**` is never created), and removing a client file deletes its object, as for logos, and exports live at `exports/{contentHash}/{format}.{ext}` (owned by `rendering`).
 - AR9 (AD-9): A format registry (`rendering/domain/formats.ts`) and one React renderer per format, used by the configurator, case study view, `/s/{token}` and exports. Exports: `renderToStaticMarkup` + Playwright `page.setContent`, no print route. Deck and A4 → PDF; image formats → ZIP of PNGs; Export all → one ZIP. Video shows its poster frame in static formats. An export renders an ordered list of parts (one part for a single case history). `export` is unique and immutable on `content_hash`, a hash of the parts, their revision ids, each part's client info, any collection edits and hidden pages, and the format. `ensureExport` reuses an export only when the hash matches, so after a client edit the next export renders again (AD-22).
 - AR10 (AD-10): Postgres job table (`generate`, `export`, `rendition`), idempotent enqueue via partial unique index, `jobs_claim()` with `FOR UPDATE SKIP LOCKED`, 10-min lease renewed every minute, max 3 attempts then `failed` + `job_failed`. Web requests never call the LLM, Chromium or ffmpeg.
 - AR11 (AD-11): Every action and route calls `access.getActor()` + `access.authorize()`. Permission matrix lives only in `policy.ts`. Role read from `profile` on every request. A `system` actor for the worker. Server-only data access with the service-role key; RLS denies `anon` and `authenticated`. A seeded dev `owner_designer` until Epic 6, disabled at cutover and never reassigned. The client intro and collections change (SCP 2026-10-16) adds `download client pack`, `manage collections` and `edit collection text` (owner/designer only), plus intro generation, editing and approval under `generate`, `edit` and `approve` with resource `client_intro`; `list clients` opens to account/sales/social for clients with an approved case history, read-only.
@@ -79,14 +79,14 @@ From the architecture spine (AD-1 to AD-21 are binding):
 - AR15 (AD-15): Templates are versioned code folders `rendering/templates/{templateId}/v{n}/` (variants, slots, media-count rules, allowed values, one renderer per format); a published version is never edited. `rendering.listVariants(templateId, format, mediaCount)` is the only variant source.
 - AR16 (AD-16): No MVP code calls MAC Productive.
 - AR17 (AD-17): Compare-and-set on `revision.version` (`STALE_REVISION`) and `case_study.head_version` (`STALE_HEAD`); no edits while `generating`; only `working` revisions writable (`REVISION_NOT_WRITABLE`); explicit idempotent `forkHead`; generate results create a new revision, discarded on head mismatch.
-- AR18 (AD-18): `MaterialRef { asset | form_field, id }` resolved only via `material.resolveRefs`. Generate jobs carry a material manifest (refs + hashes) stored on the revision. Referenced material is soft-deleted only; `approve` fails with `MATERIAL_MISSING`. Upload and favourite never change case status. Anthropic limits (32 MB request, 600-page PDF, no DOCX, no video); Files API not used. `MaterialRef.kind` gains `client_field` (`description` or `sector`), resolved from the client's current values; a valid claim source that never counts as material.
+- AR18 (AD-18): `MaterialRef { asset | form_field, id }` resolved only via `material.resolveRefs`. Generate jobs carry a material manifest (refs + hashes) stored on the revision. Referenced material is soft-deleted only; `approve` fails with `MATERIAL_MISSING`. Upload and favourite never change case status. Anthropic limits (32 MB request, 600-page PDF, no DOCX, no video); Files API not used. `MaterialRef.kind` gains `client_field` (`description`, `industry`, `context`, `solution` or `results`; SCP 2026-10-19), resolved from the client's current values; a valid claim source that never counts as material.
 - AR19 (AD-19): Per-block `check: { by, at, textHash } | null`, set only by a person, no bulk check. A check counts only while `textHash` matches. `approve(caseId, revisionId, expectedRevisionVersion, expectedHeadVersion)` checks every block on the server and requires an overflow-free result per format from the client. Claims carry `provenance` and optional validated `sourceRefs`, never shown as "verified".
 - AR20 (AD-20): `case_event` append-only rows (`case_id`, `revision_id`, `actor_id`, `type`, `at`, `data`) on every transition, upload confirmation, save, block check/uncheck, claim edit, approval, export, link create and turn-off.
 - AR21 (conventions): snake_case singular tables; uuid ids; `timestamptz` UTC, displayed Europe/Rome; zod in `domain/` as single definition; generated DB types; `Result<T, AppError>` with SCREAMING_SNAKE codes; structured JSON logs with no material or prompts; env read only in `src/shared/env.ts`; `case_study.locale` it|en default it.
 - AR22 (deployment): One Docker image on the Playwright base, two processes (`node server.js`, `node dist/worker.js`). Environments `local`, `staging` (demo, gated), `prod` (from Epic 6), each with its own Supabase project and storage bucket. EU container host chosen by end of Sprint 1.
 - AR23 (AD-21): `client` (uuid id, unique `name_key`, unique immutable `code`) owned by `case-study`; every case has `client_id`. Case code `{clientCode}-{year}-{nn}` is assigned inside `create_case_study` from `case_number_counter`, fixed once created, never reused.
-- AR24 (AD-22): `client` gains optional `description` (≤400), `sector` (≤60) and `logo_id`, which points to the client's current `client_logo` row under `clients/{clientId}/logos/`. Replacing or removing a logo deletes the old row and its object; there is no logo history. Client info is live: nothing about the client is snapshotted into a job, revision or document. Renderers fill the About block at render time from the client's current info, so a client edit shows at once in every case history of that client, drafts and approved ones alike, in every format, the case study view, new exports and shared links (SCP 2026-10-16, amendment).
-- AR25 (AD-23): A client has one client intro: a document of kind `client_intro` with the case lifecycle, generated from the client's name, sector and description and laid out with the 2–3 client images. It is checked and approved like a case history. Client info and images are read live at render time. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
+- AR24 (AD-22): `client` gains `description` (≤400), `industries` (text array from a fixed list, at least one; it replaces the free-text `sector`, SCP 2026-10-19) and `logo_id`, which points to the client's current `client_logo` row under `clients/{clientId}/logos/`. A `client_brief` row holds the client's context, solution and results (≤5000 each). Name, industries, description, logo and brief are all required by the app (SCP 2026-10-19). Replacing or removing a logo deletes the old row and its object; there is no logo history. Client info is live: nothing about the client is snapshotted into a job, revision or document. Renderers fill the About block at render time from the client's current info, so a client edit shows at once in every case history of that client, drafts and approved ones alike, in every format, the case study view, new exports and shared links (SCP 2026-10-16, amendment).
+- AR25 (AD-23): A client has one client intro: a document of kind `client_intro` with the case lifecycle, generated from the client's name, industries, description and brief, plus its material as OP 2 allows, and laid out with 2–3 of its images (image rows in `client_asset`; SCP 2026-10-19). It is checked and approved like a case history. Client info and client material are read live at render time. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 - AR26 (AD-24): A collection is a named, ordered list of approved case histories owned by the `collection` module. It references live approved revisions and stores only its own text edits (per block) and hidden pages (per format and page key). It never writes a revision. Combined files come from `rendering.composeParts`.
 
 ### UX Design Requirements
@@ -125,9 +125,9 @@ UX-DR30: Responsive rules. Case studies / Users / Templates: sidebar collapses t
 UX-DR31: Design tokens (DESIGN.md). Implement the fixed token names (colours, typography roles incl. mono, rounded, components button-primary, status-badge, focus-indicator) as theme variables with placeholder values, so values can be filled later without code changes. Tool chrome tokens never style template output.
 UX-DR32: Templates surface (conditional on C4). Browse templates and their variants per format with sample content; turn variants on and off (at least one per format stays on); see usage counts.
 UX-DR33: `MISSING_ASPECT` warning shown in the configurator (spine AD-6; placement and blocking are conflict A3).
-UX-DR35: Clients (owner/designer). Table of clients (Code mono, Name, Case histories count), search over name and code, default sort Name A–Z; **Add client** dialog (name, sector, description, logo); **Edit client** dialog with the same fields, stating that the code stays the same and that changes apply to all the client's case histories, approved ones included. Client intro and collections (SCP 2026-10-16): **Add client** in two steps: the data (name, sector, description, logo), then 2–3 images (required); **Crea cliente** creates the client and starts the intro draft. **Modifica cliente** opens the client overview (UX-DR38), where **Dati cliente** holds the same fields and the images. Account/sales/social get a read-only Clients list of clients with an approved case history, with **Scarica** per row and no add or edit; row click opens the client page: logo, client name and code, sector, description, **Edit client**, and the Case history table limited to that client, with **New case history** preselecting the client. No delete. Below 1024 px read-only.
-UX-DR36: About the client block. Shown in every format of a case study: logo, client name, sector, description, always the client's current info (drafts and approved case studies alike). Read-only in the configurator, with the hint "Modifica i dati nella pagina del cliente. Le modifiche si vedono in tutte le sue case history." Not in the Check tab list. Parts without a value are hidden; the block is hidden when the client has no description, sector or logo.
-UX-DR37: Client images. 2–3 images per client in Add client (step 2) and in **Dati cliente**: drop zone, thumbnails in order, **Sostituisci**, **Rimuovi** (not below 2), drag or menu to reorder. PNG, JPEG or WebP, ≤20 MB, ≥1600 px on the short side. Copy: "Carica 2 o 3 immagini. Servono per le pagine di introduzione del cliente."
+UX-DR35: Clients (owner/designer). Table of clients (Code mono, Name, Case histories count), search over name and code, default sort Name A–Z. SCP 2026-10-19 (replacing the dialogs of SCP 2026-10-16): **Aggiungi cliente** opens the client wizard (full-page, like a case history): **Dettagli** (Nome, Settore pills multiselect, Descrizione, Logo, Contesto, Soluzione, Risultati; all required), **Materiale** (up to 3 files, at least 2 images; **Crea introduzione**), **Introduzione** (the configurator in client intro mode; designed with the owner, hidden until then). A client whose wizard isn't finished reopens at its first incomplete step. **Modifica cliente** opens the wizard at step 1 until Story 4.12, stating that the code stays the same and that changes apply to all the client's case histories, approved ones included; from Story 4.12 it opens the client overview (UX-DR38), where **Dati cliente** holds the same fields and the client material. Account/sales/social get a read-only Clients list of clients with an approved case history, with **Scarica** per row and no add or edit; row click opens the client page: logo, client name and code, industries as pills (SCP 2026-10-19), description, **Edit client**, and the Case history table limited to that client, with **New case history** preselecting the client. No delete. Below 1024 px read-only.
+UX-DR36: About the client block. Shown in every format of a case study: logo, client name, industries (SCP 2026-10-19), description, always the client's current info (drafts and approved case studies alike). Read-only in the configurator, with the hint "Modifica i dati nella pagina del cliente. Le modifiche si vedono in tutte le sue case history." Not in the Check tab list. Parts without a value are hidden; the block is hidden when the client has no description, industries or logo (since SCP 2026-10-19 all are required, so this only covers a client whose wizard isn't finished).
+UX-DR37: Client material (was Client images; SCP 2026-10-19). Up to 3 files per client, at least 2 images, in wizard step 2 **Materiale** and in **Dati cliente**: drop zone, file rows in order, **Rimuovi**; in **Dati cliente** also **Sostituisci** and drag or menu to reorder, and an image can't be removed when only 2 remain. Images PNG, JPEG or WebP ≥1600 px on the short side; other files as case material (Story 2.7 types, ≤50 MB). Copy: "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione."; a 4th file: "Massimo 3 file."
 UX-DR38: Client overview. Left pane: **Introduzione** (with its status badge), then every case history of the client that has a document, newest first, each with code, name and status badge. A Bozza case history is listed greyed with "Non ancora generata". Centre: one continuous preview of the selected format, every part in that order, with a divider per part. Clicking a part in the list scrolls to it. Editing a block edits that part (status and save state shown for that part). Right pane: Edit and Check for the selected part. The top bar has the format switch, **Dati cliente** and, for the selected part, its **Approve** or **Update approved version**.
 UX-DR39: Collections. Library cards get a checkbox. With one or more selected, a bar shows "{n} selezionate" and **Crea raccolta**, which asks for a name and opens the collection configurator. Left pane: the parts in order, a client's case histories grouped under its computed intro (shown locked). Reorder groups and case histories within a group by drag handle or by the menu "Sposta su / giù". Centre: continuous preview per format. Right pane: **Testo** (edit the selected block, owner/designers only, IR-COLL-EDIT), **Pagine** (hide or show the selected page). Edited blocks show "Modificato in questa raccolta". Hidden pages show as a collapsed strip with **Mostra**. Top bar: name (editable), save state, **Esporta** and **Esporta tutto** (Deck 16:9 and PDF A4). No layout, media or typography controls. A sidebar item **Raccolte** lists collections (name, parts, updated, created by) with open, rename and delete (with confirm).
 UX-DR40: Combined download copy. The client pack and collection exports show progress and then the browser download, like UX-DR21. When a client's intro isn't approved: "L'introduzione di {client} non è ancora approvata: le sue case history usano la propria introduzione."
@@ -178,7 +178,7 @@ These are the rules the stories are built against. None of them is a decision; e
 | NFR4 | Epics 3–4 | Async generation keeps waiting off the clock; no bulk shortcuts |
 | NFR5 | Epic 3 | Narrative structure and both aspects |
 | NFR7 | Epics 4–5 | Approval gate (Epic 4); export and share gates (Epic 5) |
-| FR11 | Epic 2, 3, 4 | Client images, client intro draft, editing and approval (before the demo) |
+| FR11 | Epic 2, 3, 4 | Client wizard and client material (Stories 2.15, 2.16; SCP 2026-10-19), client intro draft, editing and approval (before the demo) |
 | FR12 | Epic 4 | Client overview configurator (before the demo) |
 | FR13 | Epic 5, 6 | Client pack download, collections, combined export, permissions (before the demo) |
 | FR9, FR10 | — | Post-MVP (Epics 7–8), not in this breakdown |
@@ -189,7 +189,7 @@ Epic numbering follows PRD v2 (Epic 1 is team setup, not product scope). Epics r
 
 ### Epic 2: Create a case study and collect its material (Sprint 1, due 2026-10-14)
 The owner/designer creates a case study by hand, gets its permanent ID, uploads files, marks favourite images and videos and fills in the details form, all saved in Supabase (database and storage) inside a gated environment. Also lays the foundation later epics build on: starter scaffold, module skeleton, actor and policy seam with a dev actor, basic-auth gate, event log, app shell, design tokens and a basic Case studies table.
-**FRs covered:** FR1, FR2, CAP-12 (also FR11, client images)
+**FRs covered:** FR1, FR2, CAP-12 (also FR11, client wizard and client material, Stories 2.15 and 2.16; SCP 2026-10-19)
 
 ### Epic 3: Generate a graphic case study from the material (Sprint 2, due 2026-10-21)
 The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
@@ -213,7 +213,7 @@ Each user signs in with one of three fixed roles; the admin manages users and ro
 - Every story that adds a server action or route calls `access.getActor()` and `access.authorize()` first (AR11), returns `Result<T, AppError>` (AR21), uses Italian copy from the dictionary (UX-DR29), and emits the `case_event` rows its mutations require (AR20). These are not repeated in each story's criteria.
 - NFR10 (sequential epics, sprint dates) is met by the epic order itself: stories within an epic depend only on earlier stories and earlier epics, never later ones.
 - Tables and storage prefixes are created by the first story that needs them, through a forward-only migration (AR12).
-- **Client intro and collections stories** (2.15, 3.9, 4.11, 4.12, 5.9, 5.10, 5.11, 6.5; [Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md)) are MVP and built before the October 30 demo (owner amendment 2026-10-16: "Tutto. dovremmo farcela"). Epics stay in order (NFR10); inside each epic a new story comes after the stories it depends on and after that epic's demo-path stories. Sprint 2: 2.15 → 3.2–3.8 → 3.9 → 4.1–4.8 → 4.11 → 4.9 → 4.12. Sprint 3: 5.1–5.8 → 5.9 → 5.10 → 5.11 → 6.1–6.4 → 6.5. If dates slip, the owner decides at each checkpoint; the proposed slip order is 5.11, 5.10, 4.12, 5.9, then the client intro (3.9, 4.11, 2.15), and the demo path (3.2–3.8, 4.1–4.8, 5.1–5.4) never slips.
+- **Client intro and collections stories** (2.15, 2.16 (SCP 2026-10-19), 3.9, 4.11, 4.12, 5.9, 5.10, 5.11, 6.5; [Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md)) are MVP and built before the October 30 demo (owner amendment 2026-10-16: "Tutto. dovremmo farcela"). Epics stay in order (NFR10); inside each epic a new story comes after the stories it depends on and after that epic's demo-path stories. Sprint 2: 2.15 → 2.16 → 3.2–3.8 → 3.9 → 4.1–4.8 → 4.11 → 4.9 → 4.12 (client creation first, owner 2026-10-19). Sprint 3: 5.1–5.8 → 5.9 → 5.10 → 5.11 → 6.1–6.4 → 6.5. If dates slip, the owner decides at each checkpoint; the proposed slip order is 5.11, 5.10, 4.12, 5.9, then the client intro (3.9, 4.11, 2.16, 2.15), and the demo path (3.2–3.8, 4.1–4.8, 5.1–5.4) never slips.
 
 ## Epic 2: Create a case study and collect its material
 
@@ -725,20 +725,23 @@ Order: after 2.12, before Epic 3.
 **And** it has skeleton, empty ("Nessun cliente. Aggiungi il primo.") and no-results states
 
 **Given** **Aggiungi cliente**
-**When** I enter a name (1–120 characters after trimming) and optionally a sector, a description and a logo (amended 2026-10-16, delivered by Story 2.14), and confirm
-**Then** the client is created with its automatic code (AD-21) and appears in the list with that code
-**And** (delivered by Story 2.15; SCP 2026-10-16 client intro and collections) Add client becomes two steps: after the data, I add 2–3 images and press **Crea cliente**; the client is created and its intro draft starts (Story 3.9), with the name and code rules unchanged
-**And** a duplicate name shows "Esiste già un cliente con questo nome." and keeps the dialog open
+**When** I press it
+**Then** the client wizard opens full-page at step 1 (delivered by Stories 2.15 and 2.16; SCP 2026-10-19)
+**And** the name and code rules are unchanged: a name of 1–120 characters after trimming, and the client is created with its automatic code (AD-21) and appears in the list with that code
+**And** a duplicate name shows "Esiste già un cliente con questo nome." on step 1
 **And** there is no code field
 
-**Given** **Modifica cliente** (was **Modifica nome**; amended 2026-10-16, delivered by Story 2.14) on a client
-**When** I save a new name
-**Then** the name changes everywhere it is shown, including its case histories
-**And** the dialog says "Il codice {code} non cambia." and the code and every case code stay the same
-**And** a duplicate name is rejected as on add
+**Given** a client whose wizard isn't finished (a required step 1 field is empty, or fewer than 2 images are uploaded)
+**When** I click its row
+**Then** the wizard opens at the first incomplete step: Dettagli if a required field is empty, otherwise Materiale (SCP 2026-10-19)
+
+**Given** **Modifica cliente** (was **Modifica nome**; amended 2026-10-16 and by SCP 2026-10-19) on a client page
+**When** I press it
+**Then**, until Story 4.12 lands, the client wizard opens at step 1 with the client's data, saying "Il codice {code} non cambia. Le modifiche si vedono in tutte le sue case history." (SCP 2026-10-19)
+**And** the name rules are unchanged: a new name changes everywhere it is shown, including its case histories; the code and every case code stay the same; a duplicate name is rejected as on add
 **And** (delivered by Story 4.12; SCP 2026-10-16 client intro and collections) **Modifica cliente** opens the client overview, and the data is edited in its **Dati cliente** panel, with the same name rules
 
-**Given** a client row
+**Given** a client row (of a client whose wizard is finished; SCP 2026-10-19)
 **When** I click it
 **Then** `/clients/{clientId}` shows the client's name and code, **Modifica cliente**, and the Case history table limited to that client's non-deleted cases, with the same columns, search, sort and row click
 **And** with no cases it shows "Nessuna case history per questo cliente." and **Nuova case history**, which opens step 0 with the client preselected
@@ -764,19 +767,22 @@ So that every case history for that client introduces them without my retyping i
 Covers: FR3 (amended), AR24, AR8 (key layout), AR11 (`manage clients`), AR12, UX-DR35 (amended), UX-DR30 ([Sprint Change Proposal 2026-10-16](sprint-change-proposal-2026-10-16.md)). It delivers the amended ACs of Story 2.13.
 Order: first in Sprint 2. It has to land before Story 3.3.
 
+> *Amended by SCP 2026-10-19 ([Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md)):* the sector becomes `industries` (multiselect from a fixed list); name, industries, description and logo are all required; the dialog is replaced by the client wizard (Story 2.15). The description limit (400), the logo rules, "live, no snapshot" (AD-22) and `getClientInfoForCase` stay; `getClientInfoForCase` now returns `{ clientId, name, industries, description, logoId, brief }`. The struck-through criteria below are reworked in Story 2.15.
+
 **Acceptance Criteria:**
 
 **Given** the forward migration for this story
 **When** it runs
-**Then** `client` has nullable `description`, `sector` and `logo_id`, and every existing client has them empty
+**Then** `client` has nullable `description`, ~~`sector`~~ and `logo_id`, and every existing client has them empty (SCP 2026-10-19: `sector` is replaced by `industries`, see Story 2.15)
 **And** a `client_logo` table exists (uuid `id`, `client_id`, `path`, `mime_type`, `size_bytes`, `created_by`, `created_at`), with RLS denying `anon` and `authenticated`
-**And** the database rejects a `description` over 400 or a `sector` over 60 characters after trimming
+**And** the database rejects a `description` over 400 ~~or a `sector` over 60~~ characters after trimming (SCP 2026-10-19: see Story 2.15)
 **And** no applied migration is edited
 
-**Given** **Aggiungi cliente** or **Modifica cliente**
-**When** the dialog opens
-**Then** it shows Name (required), Settore (optional, up to 60 characters), Descrizione (optional textarea, up to 400 characters, with a live counter) and Logo (optional upload with preview and **Rimuovi**)
-**And** the edit dialog says "Il codice {code} non cambia. Le modifiche si vedono in tutte le sue case history."
+~~**Given** **Aggiungi cliente** or **Modifica cliente**~~
+~~**When** the dialog opens~~
+~~**Then** it shows Name (required), Settore (optional, up to 60 characters), Descrizione (optional textarea, up to 400 characters, with a live counter) and Logo (optional upload with preview and **Rimuovi**)~~
+~~**And** the edit dialog says "Il codice {code} non cambia. Le modifiche si vedono in tutte le sue case history."~~
+(SCP 2026-10-19: replaced by step 1 **Dettagli** of the client wizard, Story 2.15; every field is required there.)
 
 **Given** a logo file
 **When** I pick it
@@ -785,24 +791,24 @@ Order: first in Sprint 2. It has to land before Story 3.3.
 **And** the server re-checks type and size at confirm, as for project files (AD-8)
 
 **Given** a client with a logo
-**When** I upload a new one or press **Rimuovi** and save
-**Then** `logo_id` points to the new row or is cleared, and the old `client_logo` row and its storage object are deleted (no logo history)
+**When** I upload a new one ~~or press **Rimuovi**~~ and save
+**Then** `logo_id` points to the new row ~~or is cleared~~, and the old `client_logo` row and its storage object are deleted (no logo history) (SCP 2026-10-19: the logo is required, so it can be replaced but not cleared; see Story 2.15)
 
-**Given** a description of 401 characters or a sector of 61 after trimming
+**Given** a description of 401 characters ~~or a sector of 61~~ after trimming (SCP 2026-10-19: see Story 2.15)
 **When** I try to save
 **Then** the field shows an inline error, no server call is made, and a direct action call fails with `CLIENT_FIELD_TOO_LONG` and writes nothing
 
 **Given** a client page
 **When** it loads
-**Then** it shows the logo (signed URL), name, code, sector and description above the Case history table, and an empty field shows nothing (no placeholder)
+**Then** it shows the logo (signed URL), name, code, ~~sector~~ industries as pills (SCP 2026-10-19, Story 2.15) and description above the Case history table, and an empty field shows nothing (no placeholder)
 
 **Given** the Clients table
 **When** it loads
-**Then** it is unchanged (Code, Name, Case histories); sector isn't a column or a search field in this story
+**Then** it is unchanged (Code, Name, Case histories); ~~sector isn't~~ industries aren't a column or a search field in this story (SCP 2026-10-19)
 
 **Given** the `case-study` index
 **When** a renderer or `generation` asks for `getClientInfoForCase(caseId)`
-**Then** it returns `{ clientId, name, sector, description, logoId }` with the client's current values, read each time and never stored as a copy (AD-22)
+**Then** it returns ~~`{ clientId, name, sector, description, logoId }`~~ `{ clientId, name, industries, description, logoId, brief }` (SCP 2026-10-19, built in Story 2.15) with the client's current values, read each time and never stored as a copy (AD-22)
 
 **Given** account/sales/social or admin
 **When** they call any client update or logo action
@@ -816,46 +822,113 @@ Order: first in Sprint 2. It has to land before Story 3.3.
 **When** the `check`, `db` and `image` jobs run
 **Then** they pass, and `db.types.ts` matches the generated types
 
-### Story 2.15: Client images
+### Story 2.15: Client wizard and details step
 
 As an owner/designer,
-I want to add 2–3 images to each client,
-So that the client's intro pages have pictures from the start.
+I want to create a client in a wizard like a case history, starting with its details,
+So that every client has the data its intro and its case studies need.
 
-Covers: FR11, AR25, AR8 (images key), AR11 (`manage clients`), UX-DR35 (amended), UX-DR37 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
-Order: MVP, Sprint 2, first: after 2.14, before 3.2 and 3.9 (owner amendment 2026-10-16).
+Covers: FR11 (amended), AR24 (amended), AR11 (`manage clients`), UX-DR35 (amended) ([Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md)). It reworks the dialog of Stories 2.13 and 2.14, and replaces the earlier Story 2.15 "Client images" (SCP 2026-10-16 client intro and collections).
+Order: MVP, Sprint 2, first (owner, 2026-10-19).
 
 **Acceptance Criteria:**
 
 **Given** the forward migration for this story
 **When** it runs
 **Then**:
-- a `client_image` table exists (uuid `id`, `client_id`, `position` 1–3, `path`, `mime_type`, `size_bytes`, `width`, `height`, `created_by`, `created_at`), unique on (`client_id`, `position`), with RLS denying `anon` and `authenticated`
-- existing clients have no images, and no applied migration is edited
+- `client.industries` exists (text array; each value one of `interior_design`, `energia`, `risorse_umane`, `lusso`; at least one, checked by the database). It is filled from nothing, and `sector` is dropped (no prod data; dev clients lose their sector)
+- a `client_brief` table exists, one row per client, with `context`, `solution` and `results` (each ≤5000 characters after trimming) and RLS denying `anon` and `authenticated`
+- no applied migration is edited
 
 **Given** **Aggiungi cliente**
-**When** I have filled in the data and press **Avanti**
-**Then** step 2 asks for 2 or 3 images, and **Crea cliente** stays disabled until 2 have uploaded, with the reason linked via `aria-describedby`
-**And** a 4th image is refused with an inline message
+**When** the wizard opens
+**Then** step 1 **Dettagli** shows, in this order:
+- Nome
+- Settore as pills (multiselect; labels *Interior design, Energia, Risorse umane, Lusso*; the list lives in one constant)
+- Descrizione (≤400, live counter)
+- Logo (rules of Story 2.14)
+- Contesto, Soluzione and Risultati (textareas with one-line placeholder prompts, as in Story 2.10)
+**And** the stepper shows Dettagli, Materiale and Introduzione
 
-**Given** an image file
-**When** I pick it
-**Then**:
-- PNG, JPEG or WebP up to 20 MB and at least 1600 px on the short side (owner decision 2026-10-16; the design team confirms the minimum) uploads through a signed upload URL to `clients/{clientId}/images/{imageId}.{ext}`
-- the server re-checks type and size at confirm (AD-8)
-- any other file is rejected inline, and nothing is written
+**Given** step 1
+**When** any field is empty or no pill is selected
+**Then** **Avanti** is inactive, with the reason linked via `aria-describedby`
 
-**Given** a client with images
-**When** I replace one, reorder them or remove one, and at least 2 remain
-**Then** the change is saved, and a replaced or removed image's row and object are deleted (no image history, like logos)
-**And** removing an image when only 2 remain is refused ("Servono almeno 2 immagini.")
+**Given** step 1 with every field filled
+**When** I press **Avanti**
+**Then** the client is created with its automatic code (or updated, if it exists), the texts are saved, and step 2 opens
 
-**Given** an existing client with fewer than 2 images
-**When** I open its overview (Story 4.12) or try to generate its intro
-**Then** I'm asked to add images first, and the intro can't be generated
+**Given** a client that exists
+**When** I edit a field on step 1
+**Then** the three texts autosave as in Story 2.10, and the name, industries and description save on **Avanti** with the rules of Stories 2.13 and 2.14
+
+**Given** an industry value outside the list, an empty list, or a text over its limit
+**When** an action is called directly
+**Then** it fails (`CLIENT_FIELD_INVALID` or `CLIENT_FIELD_TOO_LONG`) and writes nothing
+
+**Given** a client page
+**When** it loads
+**Then** it shows the logo, name, code, industries as pills and the description
+**And** the three texts are not shown on the page
+
+**Given** `getClientInfoForCase(caseId)`
+**When** it is called
+**Then** it returns `{ clientId, name, industries, description, logoId, brief }` with the client's current values, read each time (AD-22)
 
 **Given** account/sales/social or admin
-**When** they call any image action
+**When** they call any client action
+**Then** it fails with `FORBIDDEN` and writes nothing
+
+**Given** a viewport narrower than 1024 px
+**When** I open the wizard
+**Then** it is read-only, as for case histories
+
+**Given** CI
+**When** the `check`, `db` and `image` jobs run
+**Then** they pass, and `db.types.ts` matches the generated types
+
+### Story 2.16: Client material step
+
+As an owner/designer,
+I want to upload 2–3 files for a client, at least 2 of them images,
+So that the client intro has pictures and the AI has material to write from.
+
+Covers: FR11 (amended), NFR6 (amended), AR8 (client key prefix), AR11, UX-DR37 (amended) ([Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md))
+Order: MVP, Sprint 2: after 2.15, before 3.2 (owner, 2026-10-19).
+
+**Acceptance Criteria:**
+
+**Given** the forward migration for this story
+**When** it runs
+**Then** a `client_asset` table exists (uuid `id`, `client_id`, `position` 1–3, `path`, `mime_type`, `size_bytes`, `width`, `height` (images only), `created_by`, `created_at`), unique on (`client_id`, `position`), with RLS denying `anon` and `authenticated`
+**And** no applied migration is edited
+
+**Given** step 2 **Materiale**
+**When** I drop or pick files
+**Then**:
+- it accepts the case history's material types and size (Story 2.7: images, videos, PDF, TXT, MD, DOCX, ≤50 MB)
+- images must also be ≥1600 px on the short side
+- files upload through signed URLs to `clients/{clientId}/material/{assetId}.{ext}`, and the server re-checks type and size at confirm (AD-8)
+- a 4th file is refused inline ("Massimo 3 file."), and other files aren't blocked
+
+**Given** step 2
+**When** fewer than 2 images are uploaded
+**Then** **Crea introduzione** is inactive, with the reason "Carica almeno 2 immagini." linked via `aria-describedby`
+**And** the copy above the drop zone reads "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione."
+
+**Given** rows of uploaded files
+**When** I remove one
+**Then** it is removed at once, with no undo, as in Story 2.7, and its row and object are deleted (no history, like logos)
+**And** replace and reorder come with Story 4.12
+
+**Given** 2–3 files with at least 2 images
+**When** I press **Crea introduzione**
+**Then** Story 3.9's intro draft starts
+**And** the wizard shows "Stiamo preparando l'introduzione di {client}." with **Torna ai clienti**
+**And** before Story 3.9 lands, it goes to the client page instead
+
+**Given** account/sales/social or admin
+**When** they call any client material action
 **Then** it fails with `FORBIDDEN` and writes nothing
 
 **Given** CI
@@ -866,7 +939,7 @@ Order: MVP, Sprint 2, first: after 2.14, before 3.2 and 3.9 (owner amendment 202
 
 The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
 
-Epic prerequisites (non-dev): graphic template layouts and final case study templates (Sprint 2, decided 2026-10-09), each with an About the client area in every format (logo, name, sector, description up to 400 characters, and what shows when any of them is missing; SCP 2026-10-16), every page of every format named (`pageKey`) with the pages that introduce the case history (for example the cover and About the client) marked as intro pages (SCP 2026-10-16 client intro and collections), a client intro template in every format for 2–3 images, a headline and one short paragraph (needed by 2026-10-20, before Story 3.9 closes; owner amendment 2026-10-16: before the demo), narrative structure and quality criteria (NFR5, Sprint 2), and data processing logic (OP 2, Sprint 1). Stories 3.4–3.7 can't close before their prerequisites land; when in Sprint 2 the templates arrive is the schedule risk.
+Epic prerequisites (non-dev): graphic template layouts and final case study templates (Sprint 2, decided 2026-10-09), each with an About the client area in every format (logo, name, industries (up to four labels; they replace the sector, SCP 2026-10-19) and a description up to 400 characters, all required, so no rules for a missing field; SCP 2026-10-16), every page of every format named (`pageKey`) with the pages that introduce the case history (for example the cover and About the client) marked as intro pages (SCP 2026-10-16 client intro and collections), a client intro template in every format for 2–3 images (the client's image files; SCP 2026-10-19), a headline and one short paragraph (needed by 2026-10-20, before Story 3.9 closes; owner amendment 2026-10-16: before the demo), narrative structure and quality criteria (NFR5, Sprint 2), and data processing logic (OP 2, Sprint 1). Stories 3.4–3.7 can't close before their prerequisites land; when in Sprint 2 the templates arrive is the schedule risk.
 
 ### Story 3.1: Background job queue and worker loop
 
@@ -962,7 +1035,7 @@ Covers: AR3 (revision model, live and editable reads), AR4, AR9 (format registry
 **When** a document is validated
 **Then** it has a `schemaVersion`, `templateId@version`, a shared part (text blocks with stable `blockId`, section, text, claims with `aspect` ∈ technical | graphic, `provenance` ∈ generated | human_edited | human_added, optional `sourceRefs: MaterialRef[]`, and `check: { by, at, textHash } | null`; the selected media set) and a per-format part keyed by format id (variant, slot → assetId, spacing, text scale, font pairing)
 **And** a document missing the challenge, approach or result block, or with them out of order, is rejected
-**And** the document stores no client values: the About block is not a text block, has no `check` and no claims, and renderers fill it at render time from the client's current info (AD-22, SCP 2026-10-16 amendment)
+**And** the document stores no client values: the About block is not a text block, has no `check` and no claims, and renderers fill it at render time from the client's current info: logo, name, industries and description (AD-22, SCP 2026-10-16 amendment; SCP 2026-10-19)
 **And** the document has `kind` ∈ `case_history | client_intro`; the challenge/approach/result rule is enforced only for `case_history`, and a `client_intro` has its own block set from its template (SCP 2026-10-16 client intro and collections)
 
 **Given** the `case-study` module
@@ -1022,8 +1095,8 @@ Covers: FR4, CAP-4 (slot mapping per media count), AR4 (`relayout`), AR15, NFR1 
 
 **Given** the design team's template specs
 **When** a template is coded
-**Then** every format has an About the client area with its rules for a missing logo, sector or description (AD-22)
-**And** its layout fits a 400-character description without overflow (a test renders the longest allowed description in every format)
+**Then** every format has an About the client area for the logo, name, industries and description (AD-22), with no rules for a missing field, because all of them are required (SCP 2026-10-19)
+**And** its layout fits up to four industry labels plus a 400-character description without overflow (a test renders all four labels and the longest allowed description in every format; SCP 2026-10-19)
 
 **Given** a template format
 **When** it is coded
@@ -1086,14 +1159,14 @@ Covers: FR3, CAP-5, AR6 (aspects, MISSING_ASPECT), AR7, AR18 (manifest, limits, 
 
 **Given** a material manifest
 **When** the adapter builds the request
-**Then** it includes only items in the manifest, the form answers, and the client's current name, sector and description, read when the job runs, as text (AD-22): form answers and client info as text, other types per the OP 2 rule (blocked until decided)
+**Then** it includes only items in the manifest, the form answers, and the client's current name, industries, description and brief (context, solution, results), read when the job runs, as text (AD-22; SCP 2026-10-19): form answers and client info as text, other types per the OP 2 rule (blocked until decided)
 **And** it respects the API limits (32 MB request, 600 PDF pages; DOCX and video are not API inputs) by extracting or splitting rather than failing, and never uploads to the Anthropic Files API
 
 **Given** the model's response
 **When** it is parsed
 **Then** the output contains only narrative text fields (blocks, claims with `aspect` and optional `sourceRefs`); no layout, template, asset or slot field exists in the output schema
 **And** every claim gets `provenance: generated` and `check: null`
-**And** any `sourceRef` not in the manifest fails validation and the attempt fails; `client_field` refs (`description`, `sector`) are allowed
+**And** any `sourceRef` not in the manifest fails validation and the attempt fails; `client_field` refs (`description`, `industry`, `context`, `solution` or `results`; SCP 2026-10-19) are allowed, and a `client_field` ref is never material
 **And** the output schema has no `about` field; the LLM never writes or rewrites the About block
 
 **Given** the claims
@@ -1139,7 +1212,7 @@ Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, f
 
 **Given** the worker claims the job
 **When** it runs
-**Then** it checks the NFR6 gate again, runs the narrative filter (Story 3.6) and then `rendering.relayout` (Story 3.4), and creates a **new** `working` revision with `generated_doc` and `doc` set to the same document and the manifest stored
+**Then** it checks the NFR6 gate again, runs the narrative filter (Story 3.6, with the client's current name, industries, description and brief: context, solution, results; SCP 2026-10-19) and then `rendering.relayout` (Story 3.4), and creates a **new** `working` revision with `generated_doc` and `doc` set to the same document and the manifest stored
 **And** it sets the head by compare-and-set against `baseHeadVersion`, transitions the case to `in_review`, and emits `job_ok`
 
 **Given** the head changed since the job was enqueued
@@ -1161,7 +1234,7 @@ Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, f
 **Given** the client is edited after the draft was generated or approved
 **When** the configurator, the case study view, a new export or a shared link renders the case
 **Then** the About block shows the client's current info, with no new generation and no new approval (AD-22)
-**And** the revision stores no client values, and the About block is hidden when the client has no description, sector or logo
+**And** the revision stores no client values (the rule hiding the About block when description, sector and logo are all empty is removed, because they can't be empty; SCP 2026-10-19)
 **And** client info never enables Generate (NFR6): a case with only client info and the form still has no material
 
 ### Story 3.8: Tell me when the draft is ready
@@ -1194,12 +1267,12 @@ Covers: UX-DR11, SPEC assumption (in-app toast)
 ### Story 3.9: Client intro template and draft
 
 As an owner/designer,
-I want the AI to draft the client's intro pages from the client's data and images,
+I want the AI to draft the client's intro pages from the client's data, brief and material,
 So that I only refine them instead of laying them out by hand.
 
-Covers: FR11, AR25 (AD-23), AR3, AR4, AR6 (gate), AR7, AR10, NFR1, NFR2, NFR6 (as amended) ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
-⛔ Blocked on: the client intro template from the design team; OP 2 for whether images go to the LLM
-Order: MVP, Sprint 2: after 2.15 and 3.3–3.8, before Epic 4 (owner amendment 2026-10-16). Until 4.11 lands, the intro-ready toast opens the client page, as 3.8 does for cases.
+Covers: FR11, AR25 (AD-23), AR3, AR4, AR6 (gate), AR7, AR10, NFR1, NFR2, NFR6 (as amended) ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md))
+⛔ Blocked on: the client intro template from the design team; OP 2 for whether client material (images, PDFs, videos) goes to the LLM
+Order: MVP, Sprint 2: after 2.15, 2.16 and 3.3–3.8, before Epic 4 (owner amendment 2026-10-16). Until 4.11 lands, the intro-ready toast opens the client page, as 3.8 does for cases.
 
 **Acceptance Criteria:**
 
@@ -1207,24 +1280,24 @@ Order: MVP, Sprint 2: after 2.15 and 3.3–3.8, before Epic 4 (owner amendment 2
 **When** it runs
 **Then** `client_intro` (one per client) and `client_event` (append-only) exist with RLS on, and `revision.client_intro_id` gets its FK
 
-**Given** a new client created with 2–3 images, or **Genera introduzione** on a client without an intro
+**Given** **Crea introduzione** on wizard step 2 (Story 2.16), or **Genera introduzione** on a client without an intro (SCP 2026-10-19)
 **When** it is triggered
-**Then** the server checks the client has at least 2 images (else `NO_CLIENT_IMAGES`, before any job or LLM call), creates or reuses the `client_intro`, enqueues one `generate` job for it and moves it to `generating`
-**And** the screen says "Stiamo preparando l'introduzione di {client}. Puoi lasciare questa pagina." and the intro opens in the configurator when it's ready (toast as Story 3.8)
+**Then** the server checks the client has at least 2 image rows in `client_asset` (else `NO_CLIENT_IMAGES`, before any job or LLM call), creates or reuses the `client_intro`, enqueues one `generate` job for it and moves it to `generating`
+**And** the screen stays on "Stiamo preparando l'introduzione di {client}." and opens the intro in the configurator by itself when it's ready (until Story 4.11 lands, the client page); if I leave, the toast of Story 3.8 still shows (SCP 2026-10-19)
 
 **Given** the worker runs the intro job
 **When** it calls the LLM
-**Then** the input is only the client's current name, sector and description (the intro is a headline and one short paragraph; owner decision 2026-10-16), plus the images if OP 2 allows images as input; the output schema has only intro text blocks (headline and short paragraph) with claims and `client_field` refs, and no layout, asset or `about` field
-**And** `rendering.relayout` places the 2–3 images in the intro template's slots for every format
+**Then** the input is the client's current name, industries, description and brief (the intro is a headline and one short paragraph; owner decision 2026-10-16), plus its material as OP 2 allows (until then, nothing but the text fields; SCP 2026-10-19); the output schema has only intro text blocks (headline and short paragraph) with claims and `client_field` refs, and no layout, asset or `about` field
+**And** `rendering.relayout` places 2–3 of the client's images (image rows in `client_asset`) in the intro template's slots for every format
 **And** a new `working` revision of kind `client_intro` is created and the intro moves to `in_review`
 
 **Given** the job fails after its attempts
 **When** it is marked failed
-**Then** the intro returns to `draft` with the client's data and images untouched, and **Riprova** runs it again
+**Then** the intro returns to `draft` with the client's data and material untouched, and **Riprova** runs it again
 
 **Given** the client is edited after the intro was generated or approved
 **When** the intro is rendered anywhere
-**Then** the name, sector, description, logo and images are the client's current ones (AD-22), and the AI text stays as written
+**Then** the name, industries, description, logo and client material are the client's current ones (AD-22; SCP 2026-10-19), and the AI text stays as written
 
 ## Epic 4: Review, edit and approve a case study
 
@@ -1612,10 +1685,15 @@ As an owner/designer,
 I want to edit, check and approve the client intro like a case history,
 So that the intro that reaches clients has been reviewed by a person.
 
-Covers: FR11, AR25, AR19, NFR2, NFR7, UX-DR12 (client intro mode) ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
+Covers: FR11, AR25, AR19, NFR2, NFR7, UX-DR12 (client intro mode), UX-DR35 (wizard step 3) ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md))
 Order: MVP, Sprint 2: after 3.9 and 4.8, before 4.9 (owner amendment 2026-10-16). Its approved-intro editing criterion closes with 4.9, which covers intros too.
+⛔ Blocked on: a design session with the owner for step 3 (owner, 2026-10-19). Until then, step 3 isn't shown and the wizard ends on step 2.
 
 **Acceptance Criteria:**
+
+**Given** the client wizard (Stories 2.15 and 2.16)
+**When** the intro draft is ready after step 2
+**Then** the configurator in client intro mode is step 3 **Introduzione** of the client wizard; the stepper stays visible (SCP 2026-10-19)
 
 **Given** an intro in Da approvare or Approvato
 **When** I open it (from the client page, the overview or the toast)
@@ -1623,7 +1701,7 @@ Order: MVP, Sprint 2: after 3.9 and 4.8, before 4.9 (owner amendment 2026-10-16)
 
 **Given** the Check tab
 **When** it opens
-**Then** it lists the intro's text blocks; the material drawer shows the client's data and images
+**Then** it lists the intro's text blocks; the material drawer shows the client's data, brief and client material (SCP 2026-10-19)
 **And** **Approve** follows Story 4.8 (every block checked, no overflow), and editing an approved intro follows Story 4.9 (working copy, **Update approved version**, **Discard changes**)
 
 **Given** an intro that isn't approved
@@ -1660,7 +1738,8 @@ Order: MVP, Sprint 2, last in Epic 4: after 4.9 and 4.11 (owner amendment 2026-1
 
 **Given** **Dati cliente** in the top bar
 **When** I open it
-**Then** a panel shows name, sector, description, logo and images with the Story 2.14 and 2.15 rules, and saving them updates the About blocks and the intro in the preview at once
+**Then** a panel shows the step 1 fields (name, industries, description, logo, context, solution, results) and the step 2 client material with the rules of Stories 2.15 and 2.16, plus **Sostituisci** and reorder, and saving them updates the About blocks and the intro in the preview at once (SCP 2026-10-19)
+**And** removing an image when only 2 remain is refused ("Servono almeno 2 immagini.")
 
 **Given** the overview
 **When** I look for reordering case histories, or approving several parts at once
