@@ -11,9 +11,9 @@ import { formatDateTime } from "@/shared/i18n/format";
 import { fill, it } from "@/shared/i18n/it";
 import { CaseStudiesTable } from "../../case-studies/_components/case-studies-table";
 import type { CaseStudyRow } from "../../case-studies/_components/filter-sort";
+import { IndustryPills } from "../_components/industry-pills";
 import { EditClientButton } from "../_components/edit-client-button";
 import { LogoTile } from "../_components/logo-tile";
-import { clientLimits } from "../_lib/client-limits";
 
 export interface ClientPageProps {
   params: Promise<{ clientId: string }>;
@@ -21,8 +21,9 @@ export interface ClientPageProps {
 
 /**
  * A client's page (Stories 2.13, 2.14), owner/designer only (`list clients`): the
- * logo (on a white tile), name, code, sector and description, **Modifica cliente**
- * (`manage clients`, hidden below 1024 px, where the info is read-only), **Nuova
+ * logo (on a white tile), name, code, industries as pills and description (never
+ * the brief), **Modifica cliente** (`manage clients`, opens the client wizard at
+ * step 1; hidden below 1024 px, where the info is read-only), **Nuova
  * case history** with the client preselected, and the Case history table limited
  * to this client. An empty field shows nothing; a logo that can't be signed is
  * left out. A malformed or unknown id goes back to `/clients`; any other failure
@@ -82,11 +83,8 @@ export default async function ClientPage({ params }: ClientPageProps) {
               <span className="sr-only">{it.clients.detail.code} </span>
               {client.code}
             </p>
-            {client.sector === null ? null : (
-              <p className="font-label text-sm text-foreground">
-                <span className="sr-only">{it.clients.detail.sector} </span>
-                {client.sector}
-              </p>
+            {client.industries.length === 0 ? null : (
+              <IndustryPills options={caseStudy.CLIENT_INDUSTRIES} selected={client.industries} label={it.clients.detail.industries} />
             )}
             {client.description === null ? null : (
               <p className="max-w-prose whitespace-pre-line font-body text-sm text-foreground-muted">{client.description}</p>
@@ -94,7 +92,7 @@ export default async function ClientPage({ params }: ClientPageProps) {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {can(actor, "manage clients") && <EditClientButton client={client} limits={clientLimits()} />}
+          {can(actor, "manage clients") && <EditClientButton clientId={client.id} />}
           {canCreate && (
             <Link href={newHref} className={PRIMARY_ACTION}>
               <Plus aria-hidden="true" className="size-4" />

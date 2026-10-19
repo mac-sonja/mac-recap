@@ -22,23 +22,35 @@ export function parseInput<S extends z.ZodType>(schema: S, input: unknown): Resu
   });
 }
 
-/** Sector and description: the fields whose length error is `CLIENT_FIELD_TOO_LONG`. */
-const INFO_FIELDS = new Set(["sector", "description"]);
+/**
+ * The client fields whose errors are `CLIENT_FIELD_TOO_LONG` (over the limit) or
+ * `CLIENT_FIELD_INVALID` (missing or outside the allowed values).
+ */
+const INFO_FIELDS = new Set(["industries", "description", "logoId", "text"]);
 
 /**
- * `parseInput` for the client add and edit inputs: when the only failures are a
- * sector or description over its limit (`FIELD_TOO_LONG`), the error is
- * `CLIENT_FIELD_TOO_LONG` naming those fields; any other failure stays `INVALID_INPUT`.
+ * `parseInput` for the client inputs (add, edit, brief save): when every failure is
+ * on an info field (industries, description, logo, brief text) with the
+ * `invalidMessage` or `tooLongMessage`, the error is `CLIENT_FIELD_INVALID` (if any
+ * field is missing or invalid) or `CLIENT_FIELD_TOO_LONG`, naming those fields by
+ * their top-level key. Any other failure (a blank name, a malformed id) stays `INVALID_INPUT`.
  */
-export function parseClientInput<S extends z.ZodType>(schema: S, input: unknown, tooLongMessage: string): Result<z.infer<S>, AppError> {
+export function parseClientInput<S extends z.ZodType>(
+  schema: S,
+  input: unknown,
+  messages: { tooLong: string; invalid: string },
+): Result<z.infer<S>, AppError> {
   const parsed = parseInput(schema, input);
   if (parsed.ok) return parsed;
-  const { issues, fields } = parsed.error.details as { issues: FieldIssue[]; fields: string[] };
-  const tooLong = issues.every((issue) => INFO_FIELDS.has(issue.field) && issue.message === tooLongMessage);
-  if (!tooLong) return parsed;
-  return err({
-    code: "CLIENT_FIELD_TOO_LONG",
-    message: `Too long: ${fields.join(", ")}.`,
-    details: { fields },
-  });
+  const { issues } = parsed.error.details as { issues: FieldIssue[]; fields: string[] };
+  const topField = (issue: FieldIssue) => issue.field.split(".")[0];
+  const onInfo = issues.every(
+    (issue) => INFO_FIELDS.has(topField(issue)) && (issue.message === messages.tooLong || issue.message === messages.invalid),
+  );
+  if (!onInfo) return parsed;
+  const fields = [...new Set(issues.map(topField))];
+  if (issues.some((issue) => issue.message === messages.invalid)) {
+    return err({ code: "CLIENT_FIELD_INVALID", message: `Missing or invalid: ${fields.join(", ")}.`, details: { fields } });
+  }
+  return err({ code: "CLIENT_FIELD_TOO_LONG", message: `Too long: ${fields.join(", ")}.`, details: { fields } });
 }

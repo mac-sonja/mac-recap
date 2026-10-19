@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState, type MouseEvent } from "react";
 import { PRIMARY_ACTION } from "@/app/_components/button-styles";
+import { clientHref, clientWizardHref } from "@/app/_lib/routes";
 import { SEARCH_DEBOUNCE_MS } from "@/app/(tool)/case-studies/_components/case-studies-table";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import { ClientDialog, type ClientLimits } from "./client-dialog";
 import {
   DEFAULT_CLIENT_SORT,
   filterClientRows,
@@ -24,8 +24,6 @@ export interface ClientsTableProps {
   rows: ClientRow[];
   /** Policy decision (`manage clients`): whether **Aggiungi cliente** exists. */
   canManage: boolean;
-  /** The add dialog's limits (`CLIENT_*_MAX`, `LOGO_*`). */
-  limits: ClientLimits;
 }
 
 const COLUMNS: ReadonlyArray<{ key: ClientSortKey; label: string; numeric?: boolean }> = [
@@ -44,30 +42,28 @@ function isTextField(el: Element | null): boolean {
   return (el as HTMLElement).isContentEditable === true;
 }
 
-/** How long after a save the refreshed list may still take focus back to **Aggiungi cliente**. */
-const REFOCUS_WINDOW_MS = 5000;
-
-export const clientHref = (id: string) => `/clients/${encodeURIComponent(id)}`;
+/**
+ * Where a row goes: a finished client's page, or an unfinished client's wizard at
+ * step 1 (a required field is empty). Story 2.16 adds the material check.
+ */
+export const rowHref = (row: Pick<ClientRow, "id" | "complete">) => (row.complete ? clientHref(row.id) : clientWizardHref(row.id, 1));
 
 /**
  * The Clients table: Codice (mono), Nome and Case history (non-deleted count).
  * Default sort Name A–Z; a header click sorts by it, again reverses. Search covers
  * name and code (case- and accent-insensitive, debounced); `/` focuses it unless focus
- * is already in a text field. A row opens the client's
- * page. **Aggiungi cliente** (only with `manage clients`) opens the add dialog; it
- * is hidden below 1024 px, where the page is read-only. After a save the page is
- * refreshed and focus goes back to **Aggiungi cliente**.
+ * is already in a text field. A row opens the client's page, or, for an unfinished
+ * client, its wizard at step 1 (`rowHref`). **Aggiungi cliente** (only with
+ * `manage clients`) opens the client wizard; it is hidden below 1024 px, where the
+ * page is read-only.
  */
-export function ClientsTable({ rows, canManage, limits }: ClientsTableProps) {
+export function ClientsTable({ rows, canManage }: ClientsTableProps) {
   const router = useRouter();
   const searchId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
-  const addRef = useRef<HTMLButtonElement>(null);
-  const refocusAdd = useRef(false);
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<ClientSortState>(DEFAULT_CLIENT_SORT);
-  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (input === query) return;
@@ -89,41 +85,13 @@ export function ClientsTable({ rows, canManage, limits }: ClientsTableProps) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // After an add, the refreshed rows may swap the empty state's button for the
-  // toolbar's: focus whichever **Aggiungi cliente** is now mounted.
-  useEffect(() => {
-    if (!refocusAdd.current) return;
-    refocusAdd.current = false;
-    addRef.current?.focus();
-  }, [rows]);
-
   const visible = useMemo(() => sortClientRows(filterClientRows(rows, query), sort), [rows, query, sort]);
 
   const addButton = canManage ? (
-    <button ref={addRef} type="button" onClick={() => setAdding(true)} className={cn(PRIMARY_ACTION, "hidden lg:inline-flex")}>
+    <Link href={clientWizardHref()} className={cn(PRIMARY_ACTION, "hidden lg:inline-flex")}>
       <Plus aria-hidden="true" className="size-4" />
       {it.clients.add}
-    </button>
-  ) : null;
-
-  const dialog = adding ? (
-    <ClientDialog
-      mode={{ kind: "add" }}
-      limits={limits}
-      onClose={() => {
-        refocusAdd.current = false;
-        setAdding(false);
-      }}
-      onSaved={() => {
-        refocusAdd.current = true;
-        // A refresh that brings no new rows never runs the refocus: don't let the flag linger.
-        setTimeout(() => {
-          refocusAdd.current = false;
-        }, REFOCUS_WINDOW_MS);
-        setAdding(false);
-        router.refresh();
-      }}
-    />
+    </Link>
   ) : null;
 
   if (rows.length === 0) {
@@ -141,7 +109,6 @@ export function ClientsTable({ rows, canManage, limits }: ClientsTableProps) {
           )}
         </p>
         {addButton}
-        {dialog}
       </div>
     );
   }
@@ -227,7 +194,7 @@ export function ClientsTable({ rows, canManage, limits }: ClientsTableProps) {
             </thead>
             <tbody>
               {visible.map((row) => {
-                const href = clientHref(row.id);
+                const href = rowHref(row);
                 return (
                   <tr
                     key={row.id}
@@ -249,7 +216,6 @@ export function ClientsTable({ rows, canManage, limits }: ClientsTableProps) {
           </table>
         </div>
       )}
-      {dialog}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { CASE_CREATED, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import type { CaseStatus } from "@/shared/case-status";
-import type { CaseStudy, Client, ClientRef, ClientSummary } from "@/modules/case-study/domain/case-study";
+import { isClientComplete, type CaseStudy, type Client, type ClientBrief, type ClientRef, type ClientSummary } from "@/modules/case-study/domain/case-study";
 import { err, ok } from "@/shared/result";
 import { makeCreateCaseStudy } from "./create-case-study";
 import { makeCreateClient } from "./create-client";
@@ -19,6 +19,7 @@ import { makeGetClientInfoForCase } from "./get-client-info-for-case";
 import { makeRequestClientLogoUpload } from "./request-client-logo-upload";
 import { makeUpdateClient } from "./update-client";
 import { makeRecordEvent } from "./record-event";
+import { makeSaveClientBriefField } from "./save-client-brief-field";
 import { makeTransition } from "./transition";
 
 const actor: Actor = {
@@ -198,29 +199,33 @@ describe("create", () => {
   });
 });
 
-type StoredClient = Client & { caseCount: number };
+type StoredClient = Client & { caseCount: number; brief: ClientBrief };
+type ClientSeed = ClientRef & { caseCount: number } & Partial<StoredClient>;
+
+const EMPTY_BRIEF: ClientBrief = { context: "", solution: "", results: "" };
+const FULL_BRIEF: ClientBrief = { context: "C", solution: "S", results: "R" };
 
 /**
- * In-memory ClientRepository: mirrors `create_client` / `update_client` refusals
- * (name key: trimmed, collapsed whitespace, lower-cased, accents stripped; a logo
- * of another client; a logo still shown can't be deleted). The real code comes
- * from SQL only; this fake hands out a fixed one.
+ * In-memory ClientRepository: mirrors `create_client` / `update_client` /
+ * `save_client_brief_field` refusals (name key: trimmed, collapsed whitespace,
+ * lower-cased, accents stripped; a logo of another client; a logo still shown can't
+ * be deleted). The real code comes from SQL only; this fake hands out a fixed one.
  */
-function fakeClientRepository(rows: (ClientSummary | StoredClient)[] = []) {
+function fakeClientRepository(rows: ClientSeed[] = []) {
   const clients = new Map<string, StoredClient>(
-    rows.map((c) => [c.id, { sector: null, description: null, logoId: null, ...c }]),
+    rows.map((c) => [c.id, { industries: [], description: null, logoId: null, brief: { ...EMPTY_BRIEF }, ...c }]),
   );
   const logos = new Map<string, ClientLogo>();
   /** caseId → clientId for the non-deleted cases `findClientInfoByCaseId` knows. */
   const cases = new Map<string, string>();
   const nameKey = (name: string) =>
     name.trim().replace(/\s+/g, " ").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-  const view = ({ id, name, code, sector, description, logoId }: StoredClient): Client => ({ id, name, code, sector, description, logoId });
+  const view = ({ id, name, code, industries, description, logoId }: StoredClient): Client => ({ id, name, code, industries, description, logoId });
   let n = 0;
   const repo = {
     list: vi.fn<ClientRepository["list"]>(async () => ok([...clients.values()].map(({ id, name, code }) => ({ id, name, code })))),
     listWithCaseCounts: vi.fn<ClientRepository["listWithCaseCounts"]>(async () =>
-      ok([...clients.values()].map(({ id, name, code, caseCount }) => ({ id, name, code, caseCount }))),
+      ok([...clients.values()].map((c) => ({ id: c.id, name: c.name, code: c.code, caseCount: c.caseCount, complete: isClientComplete(c, c.brief) }))),
     ),
     findById: vi.fn<ClientRepository["findById"]>(async (id) => {
       const found = clients.get(id);
@@ -237,19 +242,27 @@ function fakeClientRepository(rows: (ClientSummary | StoredClient)[] = []) {
         ...info,
         logoId: null,
       };
-      clients.set(client.id, { ...client, caseCount: 0 });
+      clients.set(client.id, { ...client, caseCount: 0, brief: { ...EMPTY_BRIEF } });
       return ok(client);
     }),
-    update: vi.fn<ClientRepository["update"]>(async ({ id, name, sector, description, logoId }) => {
+    update: vi.fn<ClientRepository["update"]>(async ({ id, name, industries, description, logoId }) => {
       const found = clients.get(id);
       if (!found) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
       if ([...clients.values()].some((c) => c.id !== id && nameKey(c.name) === nameKey(name))) {
         return err({ code: "CLIENT_NAME_TAKEN", message: "taken" });
       }
-      if (logoId !== null && logos.get(logoId)?.clientId !== id) return err({ code: "CLIENT_LOGO_INVALID", message: "foreign" });
-      const next = { ...found, name, sector, description, logoId };
+      if (logos.get(logoId)?.clientId !== id) return err({ code: "CLIENT_LOGO_INVALID", message: "foreign" });
+      const next = { ...found, name, industries, description, logoId };
       clients.set(id, next);
       return ok(view(next));
+    }),
+    findBrief: vi.fn<ClientRepository["findBrief"]>(async (clientId) => ok({ ...(clients.get(clientId)?.brief ?? EMPTY_BRIEF) })),
+    saveBriefField: vi.fn<ClientRepository["saveBriefField"]>(async (clientId, field, text) => {
+      const found = clients.get(clientId);
+      if (!found) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
+      const previous = found.brief[field];
+      found.brief = { ...found.brief, [field]: text };
+      return ok(previous);
     }),
     findLogo: vi.fn<ClientRepository["findLogo"]>(async (id) => ok(logos.get(id) ?? null)),
     insertLogo: vi.fn<ClientRepository["insertLogo"]>(async ({ id, clientId, contentType, sizeBytes }) => {
@@ -265,8 +278,8 @@ function fakeClientRepository(rows: (ClientSummary | StoredClient)[] = []) {
     findClientInfoByCaseId: vi.fn<ClientRepository["findClientInfoByCaseId"]>(async (caseId) => {
       const client = clients.get(cases.get(caseId) ?? "");
       if (!client) return ok(null);
-      const { id, name, sector, description, logoId } = client;
-      return ok({ clientId: id, name, sector, description, logoId });
+      const { id, name, industries, description, logoId, brief } = client;
+      return ok({ clientId: id, name, industries, description, logoId, brief: { ...brief } });
     }),
   } satisfies ClientRepository;
   return { repo, clients, logos, cases };
@@ -274,8 +287,9 @@ function fakeClientRepository(rows: (ClientSummary | StoredClient)[] = []) {
 
 const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
 const OTHER_LOGO_ID = "eeeeeeee-0000-4000-8000-000000000002";
-const LUMEN: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000010", name: "Lumen Srl", code: "LUM", caseCount: 2 };
-const LUMEN_CLIENT: Client = { id: LUMEN.id, name: LUMEN.name, code: LUMEN.code, sector: null, description: null, logoId: null };
+const LUMEN: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000010", name: "Lumen Srl", code: "LUM", caseCount: 2, complete: false };
+const LUMEN_CLIENT: Client = { id: LUMEN.id, name: LUMEN.name, code: LUMEN.code, industries: [], description: null, logoId: null };
+const INFO = { industries: ["lusso"], description: "Brand." };
 
 /** In-memory LogoStorage: a stored object per key, as the browser's PUT left it. */
 function fakeLogoStorage() {
@@ -306,47 +320,58 @@ function fakeLogoStorage() {
 }
 
 describe("createClient", () => {
-  it("adds the trimmed name and info with the actor and returns the client", async () => {
+  it("adds the trimmed name, the industries in list order and the description with the actor", async () => {
     const { repo } = fakeClientRepository();
-    const result = await makeCreateClient(repo)(actor, { name: "  Lumen Srl ", code: "ZZZ", sector: " Moda ", description: "  " });
-    expect(result.ok).toBe(true);
-    expect(repo.create).toHaveBeenCalledExactlyOnceWith("Lumen Srl", { sector: "Moda", description: null }, actor.id);
-  });
-
-  it("adds a client with no info as empty fields", async () => {
-    const { repo } = fakeClientRepository();
-    const result = await makeCreateClient(repo)(actor, { name: "Lumen Srl" });
-    expect(result.ok && result.value).toMatchObject({ sector: null, description: null, logoId: null });
+    const result = await makeCreateClient(repo)(actor, {
+      name: "  Lumen Srl ",
+      code: "ZZZ",
+      industries: ["lusso", "interior_design"],
+      description: " Brand. ",
+    });
+    expect(result.ok && result.value).toMatchObject({ industries: ["interior_design", "lusso"], description: "Brand.", logoId: null });
+    expect(repo.create).toHaveBeenCalledExactlyOnceWith(
+      "Lumen Srl",
+      { industries: ["interior_design", "lusso"], description: "Brand." },
+      actor.id,
+    );
   });
 
   it.each([["   "], ["x".repeat(121)], [undefined]])("rejects the name %j as INVALID_INPUT without writing", async (name) => {
     const { repo } = fakeClientRepository();
-    const result = await makeCreateClient(repo)(actor, { name });
+    const result = await makeCreateClient(repo)(actor, { name, ...INFO });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["name"] } });
     expect(repo.create).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["description", 401],
-    ["sector", 61],
-  ] as const)("refuses a %s of %i characters as CLIENT_FIELD_TOO_LONG without writing", async (field, length) => {
+    ["an unknown industry", { industries: ["moda"] }, "industries"],
+    ["no industry", { industries: [] }, "industries"],
+    ["a blank description", { description: "  " }, "description"],
+    ["no description", { description: undefined }, "description"],
+  ])("refuses %s as CLIENT_FIELD_INVALID without writing", async (_label, over, field) => {
     const { repo } = fakeClientRepository();
-    const result = await makeCreateClient(repo)(actor, { name: "Lumen", [field]: "é".repeat(length) });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: [field] } });
+    const result = await makeCreateClient(repo)(actor, { name: "Lumen", ...INFO, ...over });
+    expect(result.ok || result.error).toMatchObject({ code: "CLIENT_FIELD_INVALID", details: { fields: [field] } });
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses a 401-character description as CLIENT_FIELD_TOO_LONG without writing", async () => {
+    const { repo } = fakeClientRepository();
+    const result = await makeCreateClient(repo)(actor, { name: "Lumen", ...INFO, description: "é".repeat(401) });
+    expect(result.ok || result.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["description"] } });
     expect(repo.create).not.toHaveBeenCalled();
   });
 
   it("accepts 400 emoji as a 400-character description", async () => {
     const { repo } = fakeClientRepository();
-    const result = await makeCreateClient(repo)(actor, { name: "Lumen", description: "😀".repeat(400) });
+    const result = await makeCreateClient(repo)(actor, { name: "Lumen", ...INFO, description: "😀".repeat(400) });
     expect(result.ok).toBe(true);
   });
 
   it.each(["lumen  srl", "LUMEN SRL", "Lùmen Srl"])("passes CLIENT_NAME_TAKEN through for %j", async (name) => {
     const { repo, clients } = fakeClientRepository([LUMEN]);
-    const result = await makeCreateClient(repo)(actor, { name });
+    const result = await makeCreateClient(repo)(actor, { name, ...INFO });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("CLIENT_NAME_TAKEN");
     expect(clients.size).toBe(1);
@@ -357,37 +382,39 @@ describe("updateClient", () => {
   const input = (over: Record<string, unknown> = {}) => ({
     clientId: LUMEN.id,
     name: "Lumen Srl",
-    sector: null,
-    description: null,
-    logoId: null,
+    ...INFO,
+    logoId: LOGO_ID,
     ...over,
   });
+  /** Lumen with `logoId` as its current, confirmed logo. */
+  const withLogo = (logoId = LOGO_ID) => {
+    const fake = fakeClientRepository([{ ...LUMEN, logoId }]);
+    fake.logos.set(logoId, { id: logoId, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
+    return fake;
+  };
 
   it("saves every field with the actor; the code stays", async () => {
-    const { repo } = fakeClientRepository([LUMEN]);
-    const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ name: " Lumen S.r.l. ", sector: "Moda", description: " Brand. " }));
-    expect(result).toEqual(ok({ ...LUMEN_CLIENT, name: "Lumen S.r.l.", sector: "Moda", description: "Brand." }));
+    const { repo } = withLogo();
+    const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(
+      actor,
+      input({ name: " Lumen S.r.l. ", industries: ["energia"], description: " Brand. " }),
+    );
+    expect(result).toEqual(ok({ ...LUMEN_CLIENT, name: "Lumen S.r.l.", industries: ["energia"], description: "Brand.", logoId: LOGO_ID }));
     expect(repo.update).toHaveBeenCalledExactlyOnceWith(
-      { id: LUMEN.id, name: "Lumen S.r.l.", sector: "Moda", description: "Brand.", logoId: null },
+      { id: LUMEN.id, name: "Lumen S.r.l.", industries: ["energia"], description: "Brand.", logoId: LOGO_ID },
       actor.id,
     );
   });
 
   it.each(["Lumen Srl", "lumen srl"])("allows its own name or a variant (%j)", async (name) => {
-    const { repo } = fakeClientRepository([LUMEN]);
-    expect(await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ name }))).toEqual(ok({ ...LUMEN_CLIENT, name }));
-  });
-
-  it("stores blank fields as null", async () => {
-    const { repo } = fakeClientRepository([{ ...LUMEN_CLIENT, sector: "Moda", description: "Brand.", caseCount: 0 }]);
-    const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ sector: "   ", description: "" }));
-    expect(result.ok && result.value).toMatchObject({ sector: null, description: null });
+    const { repo } = withLogo();
+    const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ name }));
+    expect(result.ok && result.value.name).toBe(name);
   });
 
   it("replacing the logo deletes the old row and object once the client points at the new one", async () => {
-    const { repo, logos, clients } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: OTHER_LOGO_ID, caseCount: 0 }]);
+    const { repo, logos, clients } = withLogo(OTHER_LOGO_ID);
     const { storage, put, objects } = fakeLogoStorage();
-    logos.set(OTHER_LOGO_ID, { id: OTHER_LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
     logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
     put(LUMEN.id, OTHER_LOGO_ID);
     put(LUMEN.id, LOGO_ID);
@@ -402,23 +429,19 @@ describe("updateClient", () => {
     expect(repo.update.mock.invocationCallOrder[0]).toBeLessThan(repo.deleteLogo.mock.invocationCallOrder[0]);
   });
 
-  it("removing the logo clears logo_id and deletes the old row and object", async () => {
-    const { repo, logos } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
-    const { storage, put, objects } = fakeLogoStorage();
-    logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/webp", sizeBytes: 10 });
-    put(LUMEN.id, LOGO_ID);
-    const cleared = await makeUpdateClient(repo, storage)(actor, input({ logoId: null }));
-    expect(cleared.ok && cleared.value.logoId).toBeNull();
-    expect(logos.size).toBe(0);
-    expect(objects.size).toBe(0);
-    expect(storage.remove).toHaveBeenCalledWith({ clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/webp" });
+  it("refuses to clear the logo as CLIENT_FIELD_INVALID without writing", async () => {
+    const { repo, logos } = withLogo();
+    const { storage } = fakeLogoStorage();
+    const result = await makeUpdateClient(repo, storage)(actor, input({ logoId: null }));
+    expect(result.ok || result.error).toMatchObject({ code: "CLIENT_FIELD_INVALID", details: { fields: ["logoId"] } });
+    expect(repo.update).not.toHaveBeenCalled();
+    expect(logos.size).toBe(1);
   });
 
   it("keeping the same logo deletes nothing", async () => {
-    const { repo, logos } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
+    const { repo } = withLogo();
     const { storage } = fakeLogoStorage();
-    logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
-    expect((await makeUpdateClient(repo, storage)(actor, input({ logoId: LOGO_ID, sector: "Moda" }))).ok).toBe(true);
+    expect((await makeUpdateClient(repo, storage)(actor, input({ industries: ["energia"] }))).ok).toBe(true);
     expect(repo.deleteLogo).not.toHaveBeenCalled();
     expect(storage.remove).not.toHaveBeenCalled();
   });
@@ -427,15 +450,15 @@ describe("updateClient", () => {
     ["the file delete fails", "remove"],
     ["the row delete fails", "deleteLogo"],
   ] as const)("still saves when %s, and warns with the client id only", async (_label, failing) => {
-    const { repo, logos } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
-    const { storage } = fakeLogoStorage();
+    const { repo, logos } = withLogo(OTHER_LOGO_ID);
     logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
+    const { storage } = fakeLogoStorage();
     if (failing === "remove") storage.remove.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "down" }));
     else repo.deleteLogo.mockResolvedValueOnce(err({ code: "CLIENT_WRITE_FAILED", message: "down" }));
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     try {
-      const result = await makeUpdateClient(repo, storage)(actor, input({ logoId: null }));
-      expect(result).toEqual(ok({ ...LUMEN_CLIENT, logoId: null }));
+      const result = await makeUpdateClient(repo, storage)(actor, input({ logoId: LOGO_ID }));
+      expect(result.ok && result.value.logoId).toBe(LOGO_ID);
       const entry = JSON.parse(String(write.mock.calls[0][0]));
       expect(entry).toMatchObject({ level: "warn", clientId: LUMEN.id });
       expect(Object.keys(entry).sort()).toEqual(["clientId", "level", "msg", "time"]);
@@ -446,9 +469,8 @@ describe("updateClient", () => {
   });
 
   it("deletes nothing when the save is refused", async () => {
-    const { repo, logos } = fakeClientRepository([{ ...LUMEN_CLIENT, logoId: LOGO_ID, caseCount: 0 }]);
+    const { repo, logos } = withLogo();
     const { storage } = fakeLogoStorage();
-    logos.set(LOGO_ID, { id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 });
     const result = await makeUpdateClient(repo, storage)(actor, input({ logoId: "eeeeeeee-0000-4000-8000-00000000ffff" }));
     expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
     expect(logos.has(LOGO_ID)).toBe(true);
@@ -465,30 +487,76 @@ describe("updateClient", () => {
     expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
   });
 
-  it("rejects a malformed id, a blank name or missing sector, description or logo id as INVALID_INPUT without writing", async () => {
+  it("rejects a malformed id or a blank name as INVALID_INPUT without writing", async () => {
     const { repo } = fakeClientRepository([LUMEN]);
     const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, { clientId: "LUM", name: " " });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["clientId", "name", "sector", "description", "logoId"] } });
+      expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["industries", "description", "clientId", "name", "logoId"] } });
     }
     expect(repo.update).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["an unknown industry", { industries: ["moda"] }, "industries"],
+    ["no industry", { industries: [] }, "industries"],
+    ["a blank description", { description: "" }, "description"],
+  ])("refuses %s as CLIENT_FIELD_INVALID without writing", async (_label, over, field) => {
+    const { repo } = withLogo();
+    const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input(over));
+    expect(result.ok || result.error).toMatchObject({ code: "CLIENT_FIELD_INVALID", details: { fields: [field] } });
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
   it("refuses a 401-character description as CLIENT_FIELD_TOO_LONG without writing", async () => {
-    const { repo } = fakeClientRepository([LUMEN]);
+    const { repo } = withLogo();
     const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ description: "x".repeat(401) }));
     expect(result.ok || result.error.code).toBe("CLIENT_FIELD_TOO_LONG");
     expect(repo.update).not.toHaveBeenCalled();
   });
 
   it("passes CLIENT_NOT_FOUND and CLIENT_NAME_TAKEN through", async () => {
-    const other: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000011", name: "Acme", code: "ACM", caseCount: 0 };
-    const { repo } = fakeClientRepository([LUMEN, other]);
+    const other: ClientSeed = { id: "cccccccc-0000-4000-8000-000000000011", name: "Acme", code: "ACM", caseCount: 0, logoId: OTHER_LOGO_ID };
+    const { repo, logos } = fakeClientRepository([LUMEN, other]);
+    logos.set(OTHER_LOGO_ID, { id: OTHER_LOGO_ID, clientId: other.id, contentType: "image/png", sizeBytes: 10 });
     const unknown = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ clientId: UNKNOWN_CLIENT_ID, name: "X" }));
     expect(unknown.ok || unknown.error.code).toBe("CLIENT_NOT_FOUND");
-    const taken = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ clientId: other.id, name: "LUMEN SRL" }));
+    const taken = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, input({ clientId: other.id, name: "LUMEN SRL", logoId: OTHER_LOGO_ID }));
     expect(taken.ok || taken.error.code).toBe("CLIENT_NAME_TAKEN");
+  });
+});
+
+describe("saveClientBriefField", () => {
+  it("saves one field with the actor and returns it; the text is kept as given", async () => {
+    const { repo, clients } = fakeClientRepository([LUMEN]);
+    const result = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "solution", text: " Un nuovo marchio. " });
+    expect(result).toEqual(ok({ field: "solution", text: " Un nuovo marchio. " }));
+    expect(repo.saveBriefField).toHaveBeenCalledExactlyOnceWith(LUMEN.id, "solution", " Un nuovo marchio. ", actor.id);
+    expect(clients.get(LUMEN.id)?.brief).toEqual({ context: "", solution: " Un nuovo marchio. ", results: "" });
+  });
+
+  it("allows an empty text (a field cleared while editing)", async () => {
+    const { repo } = fakeClientRepository([{ ...LUMEN, brief: { ...FULL_BRIEF } }]);
+    expect((await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "context", text: "" })).ok).toBe(true);
+  });
+
+  it("refuses an unknown field as UNKNOWN_FIELD and a text over 5000 characters after trimming as CLIENT_FIELD_TOO_LONG naming it", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    const unknown = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "sector", text: "x" });
+    expect(unknown.ok || unknown.error.code).toBe("UNKNOWN_FIELD");
+    const atLimit = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "results", text: ` ${"😀".repeat(5000)} ` });
+    expect(atLimit.ok).toBe(true);
+    const over = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "results", text: "x".repeat(5001) });
+    expect(over.ok || over.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["results"] } });
+    expect(repo.saveBriefField).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a malformed client id as INVALID_INPUT and passes CLIENT_NOT_FOUND through", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    const malformed = await makeSaveClientBriefField(repo)(actor, { clientId: "LUM", field: "context", text: "x" });
+    expect(malformed.ok || malformed.error.code).toBe("INVALID_INPUT");
+    const unknown = await makeSaveClientBriefField(repo)(actor, { clientId: UNKNOWN_CLIENT_ID, field: "context", text: "x" });
+    expect(unknown.ok || unknown.error.code).toBe("CLIENT_NOT_FOUND");
   });
 });
 
@@ -590,10 +658,12 @@ describe("getClientInfoForCase", () => {
   const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 
   it("returns the client's current values for the case", async () => {
-    const { repo, cases } = fakeClientRepository([{ ...LUMEN_CLIENT, sector: "Moda", description: "Brand.", logoId: LOGO_ID, caseCount: 1 }]);
+    const { repo, cases } = fakeClientRepository([
+      { ...LUMEN, industries: ["energia", "lusso"], description: "Brand.", logoId: LOGO_ID, brief: { ...FULL_BRIEF } },
+    ]);
     cases.set(CASE_ID, LUMEN.id);
     expect(await makeGetClientInfoForCase(repo)(CASE_ID)).toEqual(
-      ok({ clientId: LUMEN.id, name: "Lumen Srl", sector: "Moda", description: "Brand.", logoId: LOGO_ID }),
+      ok({ clientId: LUMEN.id, name: "Lumen Srl", industries: ["energia", "lusso"], description: "Brand.", logoId: LOGO_ID, brief: FULL_BRIEF }),
     );
   });
 
@@ -608,9 +678,16 @@ describe("getClientInfoForCase", () => {
 });
 
 describe("getClient", () => {
-  it("returns a known client without a logo", async () => {
+  it("returns a known client with its brief and without a logo", async () => {
+    const { repo } = fakeClientRepository([{ ...LUMEN, brief: { ...FULL_BRIEF } }]);
+    expect(await makeGetClient(repo, fakeLogoStorage().storage)(LUMEN.id)).toEqual(ok({ ...LUMEN_CLIENT, brief: FULL_BRIEF, logoUrl: null }));
+  });
+
+  it("passes a failed brief read through", async () => {
+    const failure = err({ code: "CLIENT_LOOKUP_FAILED", message: "down" });
     const { repo } = fakeClientRepository([LUMEN]);
-    expect(await makeGetClient(repo, fakeLogoStorage().storage)(LUMEN.id)).toEqual(ok({ ...LUMEN_CLIENT, logoUrl: null }));
+    repo.findBrief.mockResolvedValueOnce(failure);
+    expect(await makeGetClient(repo, fakeLogoStorage().storage)(LUMEN.id)).toEqual(failure);
   });
 
   it("signs the current logo for at most 15 minutes", async () => {
@@ -633,7 +710,7 @@ describe("getClient", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     try {
       const result = await makeGetClient(repo, fakeLogoStorage().storage)(LUMEN.id);
-      expect(result).toEqual(ok({ ...LUMEN_CLIENT, logoId: LOGO_ID, logoUrl: null }));
+      expect(result).toEqual(ok({ ...LUMEN_CLIENT, logoId: LOGO_ID, brief: EMPTY_BRIEF, logoUrl: null }));
       expect(JSON.parse(String(write.mock.calls[0][0]))).toMatchObject({ level: "warn", clientId: LUMEN.id });
     } finally {
       write.mockRestore();
@@ -648,7 +725,7 @@ describe("getClient", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     try {
       const result = await makeGetClient(repo, storage)(LUMEN.id);
-      expect(result).toEqual(ok({ ...LUMEN_CLIENT, logoId: LOGO_ID, logoUrl: null }));
+      expect(result).toEqual(ok({ ...LUMEN_CLIENT, logoId: LOGO_ID, brief: EMPTY_BRIEF, logoUrl: null }));
       const entry = JSON.parse(String(write.mock.calls[0][0]));
       expect(entry).toMatchObject({ level: "warn", clientId: LUMEN.id });
       expect(Object.keys(entry).sort()).toEqual(["clientId", "level", "msg", "time"]);
@@ -676,7 +753,7 @@ describe("getClient", () => {
 
 describe("listClientSummaries", () => {
   it("returns every client with its case count, sorted by name, case- and accent-insensitive", async () => {
-    const rows: ClientSummary[] = [
+    const rows: ClientSeed[] = [
       { id: "cccccccc-0000-4000-8000-000000000001", name: "Zeta", code: "ZET", caseCount: 0 },
       { id: "cccccccc-0000-4000-8000-000000000002", name: "città di Torino", code: "CIT", caseCount: 4 },
       { id: "cccccccc-0000-4000-8000-000000000003", name: "Acme", code: "ACM", caseCount: 1 },

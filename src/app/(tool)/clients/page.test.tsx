@@ -17,18 +17,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
 vi.mock("@/modules/case-study", () => ({
   listClientSummaries: () => listClientSummaries(),
-  CLIENT_NAME_MAX: 120,
-  CLIENT_SECTOR_MAX: 60,
-  CLIENT_DESCRIPTION_MAX: 400,
-  LOGO_CONTENT_TYPES: ["image/png", "image/jpeg", "image/webp"],
-  LOGO_MAX_BYTES: 5 * 1024 * 1024,
-  LOGO_MIN_SHORT_SIDE_PX: 400,
-}));
-vi.mock("@/app/(tool)/clients/actions", () => ({
-  createClient: vi.fn(),
-  updateClient: vi.fn(),
-  requestClientLogoUpload: vi.fn(),
-  confirmClientLogoUpload: vi.fn(),
+  CLIENT_INDUSTRIES: ["interior_design", "energia", "risorse_umane", "lusso"],
 }));
 
 const { default: ClientsPage } = await import("./page");
@@ -39,8 +28,8 @@ const shell = (role: Role, landing = "/case-studies"): ShellActor => ({
   landing,
 });
 
-const LUMEN: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM", caseCount: 2 };
-const ACME: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000002", name: "Acme", code: "ACM", caseCount: 0 };
+const LUMEN: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM", caseCount: 2, complete: true };
+const ACME: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000002", name: "Acme", code: "ACM", caseCount: 0, complete: false };
 
 const renderPage = async () => renderToStaticMarkup(await ClientsPage());
 
@@ -63,11 +52,20 @@ describe("ClientsPage", () => {
     expect(html).not.toMatch(new RegExp(`>${LUMEN.id}<`));
   });
 
-  it("offers Aggiungi cliente, hidden below 1024 px", async () => {
+  it("offers Aggiungi cliente as a link to the client wizard, hidden below 1024 px", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([LUMEN]));
-    const button = (await renderPage()).match(/<button [^>]*>(?:(?!<\/button>).)*Aggiungi cliente<\/button>/)?.[0] ?? "";
-    expect(button).toContain("hidden lg:inline-flex");
+    const link = (await renderPage()).match(/<a [^>]*>(?:(?!<\/a>).)*Aggiungi cliente<\/a>/)?.[0] ?? "";
+    expect(link).toContain('href="/clients/new"');
+    expect(link).toContain("hidden lg:inline-flex");
+  });
+
+  it("links an unfinished client's name to its wizard at step 1, and a finished one's to its page", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    listClientSummaries.mockResolvedValue(ok([ACME, LUMEN]));
+    const html = await renderPage();
+    expect(html).toContain(`href="/clients/new?clientId=${ACME.id}&amp;step=1"`);
+    expect(html).toContain(`href="/clients/${LUMEN.id}"`);
   });
 
   it("has no delete control", async () => {

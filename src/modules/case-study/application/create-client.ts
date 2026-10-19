@@ -1,22 +1,25 @@
 import type { Actor } from "@/modules/access";
-import { createClientInputSchema, FIELD_TOO_LONG, type Client } from "@/modules/case-study/domain/case-study";
+import { createClientInputSchema, FIELD_INVALID, FIELD_TOO_LONG, type Client } from "@/modules/case-study/domain/case-study";
 import { parseClientInput } from "@/modules/case-study/domain/validation";
 import type { Result } from "@/shared/result";
 import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
 
 /**
- * Adds a client with an automatic code (assigned in SQL, AD-21) and its optional
- * sector and description (trimmed; blank → null). The logo is linked afterwards
- * with `updateClient`, since its key needs the new client's id. The caller has
- * already authorized `manage clients`. `INVALID_INPUT` (name blank or over 120
- * characters after trimming), `CLIENT_FIELD_TOO_LONG` (sector over 60 or
- * description over 400 characters), `CLIENT_NAME_TAKEN` and `CLIENT_CODE_EXHAUSTED` write nothing.
+ * Adds a client with an automatic code (assigned in SQL, AD-21), its industries
+ * (one or more from `CLIENT_INDUSTRIES`) and its description (trimmed, required).
+ * The logo is linked afterwards with `updateClient`, since its key needs the new
+ * client's id, and the brief is saved with `saveClientBriefField`; until then the
+ * client is unfinished. The caller has already authorized `manage clients`.
+ * `INVALID_INPUT` (name blank or over 120 characters after trimming),
+ * `CLIENT_FIELD_INVALID` (no industry, one outside the list, or a blank
+ * description), `CLIENT_FIELD_TOO_LONG` (description over 400 characters),
+ * `CLIENT_NAME_TAKEN` and `CLIENT_CODE_EXHAUSTED` write nothing.
  */
 export function makeCreateClient(clients: ClientRepository) {
   return async function createClient(actor: Actor, input: unknown): Promise<Result<Client>> {
-    const parsed = parseClientInput(createClientInputSchema, input, FIELD_TOO_LONG);
+    const parsed = parseClientInput(createClientInputSchema, input, { tooLong: FIELD_TOO_LONG, invalid: FIELD_INVALID });
     if (!parsed.ok) return parsed;
-    const { name, sector, description } = parsed.value;
-    return clients.create(name, { sector, description }, actor.id);
+    const { name, industries, description } = parsed.value;
+    return clients.create(name, { industries, description }, actor.id);
   };
 }

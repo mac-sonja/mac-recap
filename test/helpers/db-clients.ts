@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import type pg from "pg";
 
 /** A client row as `create_client` returns it (the fields tests use). */
@@ -32,9 +32,35 @@ export async function freshPrefix(db: pg.Pool | pg.ClientBase): Promise<string> 
  */
 export const nameWithLetters = (letters: string) => `${letters} ${randomInt(1_000_000_000)}`;
 
-/** Creates (and commits, unless `db` is inside a transaction) a client through `create_client`. */
+/** The industries and description every test client gets (both required since Story 2.15). */
+export const TEST_INDUSTRIES = ["lusso"];
+export const TEST_DESCRIPTION = "Cliente di prova.";
+
+/**
+ * Creates (and commits, unless `db` is inside a transaction) a client through
+ * `create_client`, with `TEST_INDUSTRIES` and `TEST_DESCRIPTION`. It has no logo
+ * and no brief: `addTestLogo` gives it a logo for `update_client`.
+ */
 export async function createTestClient(db: pg.Pool | pg.ClientBase, actorId: string, name?: string): Promise<TestClient> {
   const clientName = name ?? nameWithLetters(await freshPrefix(db));
-  const { rows } = await db.query<TestClient>("select id, name, code from public.create_client($1, null, null, $2)", [clientName, actorId]);
+  const { rows } = await db.query<TestClient>("select id, name, code from public.create_client($1, $2, $3, $4)", [
+    clientName,
+    TEST_INDUSTRIES,
+    TEST_DESCRIPTION,
+    actorId,
+  ]);
   return rows[0];
+}
+
+/**
+ * Inserts a `client_logo` row of `clientId` (no object is stored) and returns its id,
+ * for `update_client`, which needs a logo since Story 2.15. It is not linked.
+ */
+export async function addTestLogo(db: pg.Pool | pg.ClientBase, clientId: string, actorId: string): Promise<string> {
+  const id = randomUUID();
+  await db.query(
+    "insert into public.client_logo (id, client_id, path, mime_type, size_bytes, created_by) values ($1, $2, $3, 'image/png', 10, $4)",
+    [id, clientId, `clients/${clientId}/logos/${id}.png`, actorId],
+  );
+  return id;
 }

@@ -16,6 +16,10 @@ export interface StepperProps {
   caseId?: string;
   /** Whether the case has material: only then can Dettagli and Genera be opened. */
   reachable?: boolean;
+  /** The segment labels, in order (default: the case wizard's `WIZARD_STEPS`). */
+  steps?: readonly string[];
+  /** A step's link (default: the case wizard's, from `caseId`); without one no segment is a link. */
+  hrefFor?: (step: 1 | 2 | 3) => string;
 }
 
 /**
@@ -26,14 +30,15 @@ export interface StepperProps {
  * link to it when it is done, when it is Materiale, or when the case has material
  * (`reachable`); links read "vai a {step}" plus its state to screen readers.
  */
-export function Stepper({ current, caseId, reachable = false }: StepperProps) {
+export function Stepper({ current, caseId, reachable = false, steps = WIZARD_STEPS, hrefFor }: StepperProps) {
+  const linkTo = hrefFor ?? (caseId === undefined ? undefined : (step: 1 | 2 | 3) => wizardHref(caseId, step));
   return (
     <ol aria-label={it.wizard.stepper.label} className="flex gap-1 rounded-md bg-surface-control p-[3px]">
-      {WIZARD_STEPS.map((label, index) => {
+      {steps.map((label, index) => {
         const step = (index + 1) as 1 | 2 | 3;
         const isCurrent = step === current;
         const isDone = step < current;
-        const isLink = caseId !== undefined && !isCurrent && (isDone || step === 1 || reachable);
+        const isLink = linkTo !== undefined && !isCurrent && (isDone || step === 1 || reachable);
         const content = (
           <>
             {isDone ? (
@@ -61,7 +66,7 @@ export function Stepper({ current, caseId, reachable = false }: StepperProps) {
           >
             {isLink ? (
               <Link
-                href={wizardHref(caseId, step)}
+                href={linkTo(step)}
                 className="flex flex-1 items-center justify-center gap-2 rounded-sm py-2 hover:bg-surface-selected hover:text-foreground-strong"
               >
                 {content}
@@ -77,10 +82,10 @@ export function Stepper({ current, caseId, reachable = false }: StepperProps) {
 }
 
 /** The footer's step dots: decorative, they mirror the stepper (the current one is wide). */
-export function StepDots({ current }: { current: WizardStep }) {
+export function StepDots({ current, steps = WIZARD_STEPS }: { current: WizardStep; steps?: readonly string[] }) {
   return (
     <div aria-hidden="true" className="flex justify-center gap-1.5">
-      {WIZARD_STEPS.map((label, index) => (
+      {steps.map((label, index) => (
         <span
           key={label}
           data-dot={index + 1}

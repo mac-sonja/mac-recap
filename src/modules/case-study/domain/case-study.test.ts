@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLIENT_BRIEF_MAX,
   CLIENT_DESCRIPTION_MAX,
+  CLIENT_INDUSTRIES,
   CLIENT_NAME_MAX,
-  CLIENT_SECTOR_MAX,
+  FIELD_INVALID,
   FIELD_TOO_LONG,
+  isClientComplete,
+  saveClientBriefFieldInputSchema,
   LOGO_CONTENT_TYPES,
   LOGO_MAX_BYTES,
   caseStudySchema,
@@ -159,29 +163,48 @@ describe("recordEventInputSchema", () => {
   });
 });
 
-describe("createClientInputSchema", () => {
-  it("trims the name, drops any code the caller sends, and stores absent or blank info as null", () => {
-    expect(parseInput(createClientInputSchema, { name: "  Lumen Srl ", code: "ZZZ" })).toEqual({
-      ok: true,
-      value: { name: "Lumen Srl", sector: null, description: null },
-    });
-    expect(parseInput(createClientInputSchema, { name: "Lumen", sector: "   ", description: "\n  " })).toEqual({
-      ok: true,
-      value: { name: "Lumen", sector: null, description: null },
-    });
-  });
+const MESSAGES = { tooLong: FIELD_TOO_LONG, invalid: FIELD_INVALID };
+const info = { industries: ["lusso"], description: "Brand di moda." };
 
-  it("trims the sector and the description", () => {
-    expect(parseInput(createClientInputSchema, { name: "Lumen", sector: " Moda ", description: " Brand di moda. " })).toEqual({
+describe("CLIENT_INDUSTRIES", () => {
+  it("is the fixed list, in display order", () => {
+    expect(CLIENT_INDUSTRIES).toEqual(["interior_design", "energia", "risorse_umane", "lusso"]);
+  });
+});
+
+describe("createClientInputSchema", () => {
+  it("trims the name and description, drops any code the caller sends, and keeps the industries in list order without repeats", () => {
+    expect(
+      parseInput(createClientInputSchema, {
+        name: "  Lumen Srl ",
+        code: "ZZZ",
+        industries: ["lusso", "energia", "lusso"],
+        description: " Brand di moda. ",
+      }),
+    ).toEqual({
       ok: true,
-      value: { name: "Lumen", sector: "Moda", description: "Brand di moda." },
+      value: { name: "Lumen Srl", industries: ["energia", "lusso"], description: "Brand di moda." },
     });
   });
 
   it.each([["   "], ["x".repeat(CLIENT_NAME_MAX + 1)], [undefined]])("names the field for %j", (name) => {
-    const result = parseInput(createClientInputSchema, { name });
+    const result = parseInput(createClientInputSchema, { name, ...info });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.details).toMatchObject({ fields: ["name"] });
+  });
+
+  it.each([
+    ["an unknown industry", { industries: ["moda"] }, ["industries"]],
+    ["no industry", { industries: [] }, ["industries"]],
+    ["industries that are not a list", { industries: "lusso" }, ["industries"]],
+    ["a non-string industry", { industries: [1] }, ["industries"]],
+    ["missing industries", { industries: undefined }, ["industries"]],
+    ["a blank description", { description: "  \n " }, ["description"]],
+    ["a missing description", { description: undefined }, ["description"]],
+    ["a null description", { description: null }, ["description"]],
+  ])("refuses %s as CLIENT_FIELD_INVALID naming the field", (_label, over, fields) => {
+    const result = parseClientInput(createClientInputSchema, { name: "Lumen", ...info, ...over }, MESSAGES);
+    expect(result).toEqual({ ok: false, error: { code: "CLIENT_FIELD_INVALID", message: expect.any(String), details: { fields } } });
   });
 });
 
@@ -193,51 +216,93 @@ describe("client info limits (code points after trimming)", () => {
     expect(emoji.repeat(3).length).toBe(6);
   });
 
-  it.each([
-    ["description", CLIENT_DESCRIPTION_MAX],
-    ["sector", CLIENT_SECTOR_MAX],
-  ] as const)("accepts a %s at its limit (emoji = 1) and refuses one over it as CLIENT_FIELD_TOO_LONG", (field, max) => {
-    const atLimit = { name: "Lumen", [field]: `  ${emoji.repeat(max)}  ` };
-    const accepted = parseClientInput(createClientInputSchema, atLimit, FIELD_TOO_LONG);
+  it("accepts a description at its limit (emoji = 1) and refuses one over it as CLIENT_FIELD_TOO_LONG", () => {
+    const accepted = parseClientInput(
+      createClientInputSchema,
+      { name: "Lumen", ...info, description: `  ${emoji.repeat(CLIENT_DESCRIPTION_MAX)}  ` },
+      MESSAGES,
+    );
     expect(accepted.ok).toBe(true);
-    if (accepted.ok) expect(accepted.value[field]).toBe(emoji.repeat(max));
+    if (accepted.ok) expect(accepted.value.description).toBe(emoji.repeat(CLIENT_DESCRIPTION_MAX));
 
-    const over = parseClientInput(createClientInputSchema, { name: "Lumen", [field]: "x".repeat(max + 1) }, FIELD_TOO_LONG);
-    expect(over).toEqual({ ok: false, error: { code: "CLIENT_FIELD_TOO_LONG", message: expect.any(String), details: { fields: [field] } } });
+    const over = parseClientInput(createClientInputSchema, { name: "Lumen", ...info, description: "x".repeat(CLIENT_DESCRIPTION_MAX + 1) }, MESSAGES);
+    expect(over).toEqual({ ok: false, error: { code: "CLIENT_FIELD_TOO_LONG", message: expect.any(String), details: { fields: ["description"] } } });
   });
 
   it("keeps INVALID_INPUT when another field fails too", () => {
-    const result = parseClientInput(createClientInputSchema, { name: " ", sector: "x".repeat(61) }, FIELD_TOO_LONG);
+    const result = parseClientInput(createClientInputSchema, { name: " ", ...info, description: "x".repeat(401) }, MESSAGES);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["sector", "name"] } });
+    if (!result.ok) expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["description", "name"] } });
   });
 });
 
 describe("updateClientInputSchema", () => {
   const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
 
-  it("takes a client id, a trimmed name, the info and a logo id or null", () => {
+  it("takes a client id, a trimmed name, the info and a logo id", () => {
     expect(
-      parseInput(updateClientInputSchema, { clientId: CLIENT_ID, name: " Lumen S.r.l. ", sector: "Moda", description: null, logoId: LOGO_ID }),
+      parseInput(updateClientInputSchema, { clientId: CLIENT_ID, name: " Lumen S.r.l. ", ...info, logoId: LOGO_ID }),
     ).toEqual({
       ok: true,
-      value: { clientId: CLIENT_ID, name: "Lumen S.r.l.", sector: "Moda", description: null, logoId: LOGO_ID },
+      value: { clientId: CLIENT_ID, name: "Lumen S.r.l.", industries: ["lusso"], description: "Brand di moda.", logoId: LOGO_ID },
     });
-    expect(parseInput(updateClientInputSchema, { clientId: CLIENT_ID, name: "Lumen", sector: "", description: null, logoId: null }).ok).toBe(true);
   });
 
-  it("names a malformed client id, a blank name and missing sector, description and logo id (a missing key never erases data)", () => {
+  it("refuses a missing or null logo as CLIENT_FIELD_INVALID: a logo is replaced, never cleared", () => {
+    for (const logoId of [null, undefined]) {
+      const result = parseClientInput(updateClientInputSchema, { clientId: CLIENT_ID, name: "Lumen", ...info, logoId }, MESSAGES);
+      expect(result).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_INVALID", details: { fields: ["logoId"] } } });
+    }
+  });
+
+  it("names a malformed client id, a blank name and the missing info", () => {
     const result = parseInput(updateClientInputSchema, { clientId: "LUM", name: " " });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.details).toMatchObject({ fields: ["clientId", "name", "sector", "description", "logoId"] });
+    if (!result.ok) expect(result.error.details).toMatchObject({ fields: ["industries", "description", "clientId", "name", "logoId"] });
   });
 });
 
 describe("U+0000 in the client info", () => {
-  it.each(["sector", "description"] as const)("refuses a %s containing U+0000 as INVALID_INPUT naming the field", (field) => {
-    const result = parseClientInput(createClientInputSchema, { name: "Lumen", [field]: "Mo\u0000da" }, FIELD_TOO_LONG);
+  it("refuses a description containing U+0000 as INVALID_INPUT naming the field", () => {
+    const result = parseClientInput(createClientInputSchema, { name: "Lumen", ...info, description: "Mo\u0000da" }, MESSAGES);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: [field] } });
+    if (!result.ok) expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["description"] } });
+  });
+});
+
+describe("saveClientBriefFieldInputSchema", () => {
+  it("keeps the text as given, counts it after trimming, and allows an empty text", () => {
+    const at = parseClientInput(
+      saveClientBriefFieldInputSchema,
+      { clientId: CLIENT_ID, field: "context", text: ` ${"😀".repeat(CLIENT_BRIEF_MAX)} ` },
+      MESSAGES,
+    );
+    expect(at.ok && at.value.text).toBe(` ${"😀".repeat(CLIENT_BRIEF_MAX)} `);
+    expect(parseInput(saveClientBriefFieldInputSchema, { clientId: CLIENT_ID, field: "results", text: "" }).ok).toBe(true);
+  });
+
+  it("refuses a text over the limit as CLIENT_FIELD_TOO_LONG", () => {
+    const over = parseClientInput(
+      saveClientBriefFieldInputSchema,
+      { clientId: CLIENT_ID, field: "context", text: "x".repeat(CLIENT_BRIEF_MAX + 1) },
+      MESSAGES,
+    );
+    expect(over).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_TOO_LONG" } });
+  });
+});
+
+describe("isClientComplete", () => {
+  const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
+  const client = { name: "Lumen", industries: ["lusso" as const], description: "Brand.", logoId: LOGO_ID };
+  const brief = { context: "C", solution: "S", results: "R" };
+
+  it("is true only when every required field is filled", () => {
+    expect(isClientComplete(client, brief)).toBe(true);
+    expect(isClientComplete({ ...client, industries: [] }, brief)).toBe(false);
+    expect(isClientComplete({ ...client, description: null }, brief)).toBe(false);
+    expect(isClientComplete({ ...client, description: "  " }, brief)).toBe(false);
+    expect(isClientComplete({ ...client, logoId: null }, brief)).toBe(false);
+    expect(isClientComplete(client, { ...brief, results: " \n" })).toBe(false);
   });
 });
 

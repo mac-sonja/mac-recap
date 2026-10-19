@@ -14,10 +14,31 @@ export const YEAR_MAX = 2100;
 /** Accepted client name length after trimming (AD-21 rule 7; the DB only checks non-blank). */
 export const CLIENT_NAME_MAX = 120;
 
-/** Accepted client sector length, in characters (code points) after trimming (AD-22; the DB checks it too). */
-export const CLIENT_SECTOR_MAX = 60;
 /** Accepted client description length, in characters (code points) after trimming (AD-22; the DB checks it too). */
 export const CLIENT_DESCRIPTION_MAX = 400;
+
+/**
+ * The fixed industry list (SCP 2026-10-19), in display order. The
+ * `client_industries_check` lists exactly these; the Italian labels live in
+ * `it.clients.industries`. A client has at least one.
+ */
+export const CLIENT_INDUSTRIES = ["interior_design", "energia", "risorse_umane", "lusso"] as const;
+export type ClientIndustry = (typeof CLIENT_INDUSTRIES)[number];
+
+export function isClientIndustry(value: unknown): value is ClientIndustry {
+  return typeof value === "string" && (CLIENT_INDUSTRIES as readonly string[]).includes(value);
+}
+
+/** The client brief's fields, in display order (the `client_brief` columns and `save_client_brief_field` match). */
+export const CLIENT_BRIEF_FIELDS = ["context", "solution", "results"] as const;
+export type ClientBriefField = (typeof CLIENT_BRIEF_FIELDS)[number];
+
+export function isClientBriefField(value: unknown): value is ClientBriefField {
+  return typeof value === "string" && (CLIENT_BRIEF_FIELDS as readonly string[]).includes(value);
+}
+
+/** Each brief text's upper bound, in characters (code points) after trimming (the `client_brief_*_check` match). */
+export const CLIENT_BRIEF_MAX = 5000;
 
 /** Logo files (AD-8, AD-22): content type → stored extension. SVG is never accepted. The `client_logo.mime_type` check lists exactly these. */
 export const LOGO_FILE_TYPES = {
@@ -66,36 +87,43 @@ export function charCount(text: string): number {
 }
 
 /**
- * The message of a too-long sector or description issue: `parseClientInput`
+ * The message of a too-long description or brief text issue: `parseClientInput`
  * turns those into `CLIENT_FIELD_TOO_LONG`.
  */
 export const FIELD_TOO_LONG = "Too long.";
+/**
+ * The message of a missing or invalid required client field (industries outside the
+ * list or none, a blank description, no logo): `parseClientInput` turns those into
+ * `CLIENT_FIELD_INVALID`.
+ */
+export const FIELD_INVALID = "Invalid.";
 
 /** Postgres text can't hold U+0000: refused as a field error, never a generic write failure. */
 const NO_NUL = (value: string) => !value.includes("\u0000");
 export const INVALID_CHARACTER = "Invalid character.";
 
-const trimToNull = (value: string | null | undefined) => {
-  const trimmed = (value ?? "").trim();
-  return trimmed === "" ? null : trimmed;
-};
+/** A required plain-text client field: trimmed, not blank, at most `max` characters, no U+0000. */
+const requiredClientText = (max: number) =>
+  z
+    .string({ error: FIELD_INVALID })
+    .refine(NO_NUL, { message: INVALID_CHARACTER })
+    .transform((value) => value.trim())
+    .refine((value) => value !== "", { message: FIELD_INVALID })
+    .refine((value) => charCount(value) <= max, { message: FIELD_TOO_LONG });
 
 /**
- * An optional plain-text client field: trimmed, blank → null, at most `max`
- * characters, no U+0000. `required` (edit): the key must be present (a string or
- * null), so a missing key never erases stored text; otherwise (add) it may be absent.
+ * The client's industries: one or more values of `CLIENT_INDUSTRIES`, deduplicated
+ * and put in list order. Anything else (an unknown value, none, not a list) is `FIELD_INVALID`.
  */
-const clientText = (max: number, { required }: { required: boolean }) => {
-  const text = z.string().refine(NO_NUL, { message: INVALID_CHARACTER });
-  return (required ? text.nullable() : text.nullish())
-    .transform(trimToNull)
-    .refine((value) => value === null || charCount(value) <= max, { message: FIELD_TOO_LONG });
-};
+export const industriesSchema = z
+  .array(z.string({ error: FIELD_INVALID }), { error: FIELD_INVALID })
+  .refine((values) => values.length > 0 && values.every(isClientIndustry), { message: FIELD_INVALID })
+  .transform((values) => CLIENT_INDUSTRIES.filter((industry) => values.includes(industry)));
 
-/** The client's own words: sector (≤60) and description (≤400), both optional. */
+/** The client's own words: industries (≥1 from the list) and description (≤400), both required. */
 export const clientInfoSchema = z.object({
-  sector: clientText(CLIENT_SECTOR_MAX, { required: false }),
-  description: clientText(CLIENT_DESCRIPTION_MAX, { required: false }),
+  industries: industriesSchema,
+  description: requiredClientText(CLIENT_DESCRIPTION_MAX),
 });
 export type ClientInfo = z.infer<typeof clientInfoSchema>;
 
@@ -110,16 +138,49 @@ export const clientRefSchema = z.object({
 });
 export type ClientRef = z.infer<typeof clientRefSchema>;
 
-/** A client with its info (AD-22). `logoId` is the current `client_logo` row, or null. */
+/** The client brief; a field never saved (or a client with no row) is `""`. */
+export const clientBriefSchema = z.object({
+  context: z.string(),
+  solution: z.string(),
+  results: z.string(),
+});
+export type ClientBrief = z.infer<typeof clientBriefSchema>;
+
+export const emptyClientBrief = (): ClientBrief => ({ context: "", solution: "", results: "" });
+
+/**
+ * A client with its info (AD-22). `industries` is empty and `description` and
+ * `logoId` are null only for a client made before every field was required
+ * (Story 2.14): such a client is unfinished. `logoId` is the current `client_logo` row.
+ */
 export const clientSchema = clientRefSchema.extend({
-  sector: z.string().nullable(),
+  industries: z.array(z.enum(CLIENT_INDUSTRIES)),
   description: z.string().nullable(),
   logoId: z.uuid().nullable(),
 });
 export type Client = z.infer<typeof clientSchema>;
 
-/** A client on its page: with a signed URL for its logo, or null (no logo, or it could not be signed). */
-export type ClientDetail = Client & { logoUrl: string | null };
+/**
+ * A client on its page or in its wizard: with its brief and a signed URL for its
+ * logo, or null (no logo, or it could not be signed).
+ */
+export type ClientDetail = Client & { brief: ClientBrief; logoUrl: string | null };
+
+/**
+ * Whether every required client field is filled: name, at least one industry,
+ * description, logo, and the three brief texts (each non-blank after trimming).
+ * A client missing any of them is unfinished: its wizard reopens at step 1.
+ */
+export function isClientComplete(client: Pick<Client, "name" | "industries" | "description" | "logoId">, brief: ClientBrief): boolean {
+  const filled = (text: string | null) => text !== null && text.trim() !== "";
+  return (
+    filled(client.name) &&
+    client.industries.length > 0 &&
+    filled(client.description) &&
+    client.logoId !== null &&
+    CLIENT_BRIEF_FIELDS.every((field) => filled(brief[field]))
+  );
+}
 
 /**
  * A case's client info, always the client's current values: client info is live
@@ -129,9 +190,10 @@ export type ClientDetail = Client & { logoUrl: string | null };
 export const caseClientInfoSchema = z.object({
   clientId: z.uuid(),
   name: z.string(),
-  sector: z.string().nullable(),
+  industries: z.array(z.enum(CLIENT_INDUSTRIES)),
   description: z.string().nullable(),
   logoId: z.uuid().nullable(),
+  brief: clientBriefSchema,
 });
 export type CaseClientInfo = z.infer<typeof caseClientInfoSchema>;
 
@@ -139,28 +201,42 @@ export type CaseClientInfo = z.infer<typeof caseClientInfoSchema>;
 export const clientNameSchema = z.string().trim().min(1, "Required.").max(CLIENT_NAME_MAX);
 
 /**
- * What a person supplies to add a client: the name and, optionally, sector and
- * description; the code is assigned in SQL and the logo is linked afterwards
- * through `updateClient`. Any other key is dropped.
+ * What a person supplies to add a client (wizard step 1): name, industries and
+ * description, all required; the code is assigned in SQL, the logo is linked
+ * afterwards through `updateClient` and the brief saved through
+ * `saveClientBriefField`. Any other key is dropped.
  */
 export const createClientInputSchema = clientInfoSchema.extend({ name: clientNameSchema });
 export type CreateClientInput = z.infer<typeof createClientInputSchema>;
 
 /**
  * What a person supplies to edit a client: every field, as it should be after the
- * save. `sector`, `description` and `logoId` are required but nullable, so a
- * missing key never erases stored data; `logoId` is a confirmed logo of this
- * client (a `client_logo` row) or null to show none.
- * The code never changes.
+ * save. All are required: `logoId` is a confirmed logo of this client (a
+ * `client_logo` row); it can be replaced but not cleared. The code never changes.
  */
-export const updateClientInputSchema = z.object({
+export const updateClientInputSchema = clientInfoSchema.extend({
   clientId: z.uuid("Required."),
   name: clientNameSchema,
-  sector: clientText(CLIENT_SECTOR_MAX, { required: true }),
-  description: clientText(CLIENT_DESCRIPTION_MAX, { required: true }),
-  logoId: z.uuid().nullable(),
+  logoId: z.uuid({ error: FIELD_INVALID }),
 });
 export type UpdateClientInput = z.infer<typeof updateClientInputSchema>;
+
+/**
+ * Saves one brief text (`""` clears it while editing; the wizard needs all three
+ * filled to finish). The text is stored as given; at most 5000 characters after
+ * trimming. `field` is any string here: a key other than `CLIENT_BRIEF_FIELDS` is
+ * `UNKNOWN_FIELD` (checked by the use case).
+ */
+export const saveClientBriefFieldInputSchema = z.object({
+  clientId: z.uuid("Required."),
+  field: z.string().max(64),
+  text: z
+    .string()
+    .refine(NO_NUL, { message: INVALID_CHARACTER })
+    .refine((text) => text.isWellFormed(), { message: INVALID_CHARACTER })
+    .refine((text) => charCount(text.trim()) <= CLIENT_BRIEF_MAX, { message: FIELD_TOO_LONG }),
+});
+export type SaveClientBriefFieldInput = z.infer<typeof saveClientBriefFieldInputSchema>;
 
 /** A signed upload request for a logo: the declared type and size are checked first. */
 export const requestClientLogoUploadInputSchema = z.object({
@@ -178,8 +254,12 @@ export const confirmClientLogoUploadInputSchema = z.object({
 });
 export type ConfirmClientLogoUploadInput = z.infer<typeof confirmClientLogoUploadInputSchema>;
 
-/** A client with the number of its non-deleted case studies (the Clients page). */
-export type ClientSummary = ClientRef & { caseCount: number };
+/**
+ * A client with the number of its non-deleted case studies (the Clients page) and
+ * whether every required field is filled (`isClientComplete`): an unfinished
+ * client's row opens its wizard.
+ */
+export type ClientSummary = ClientRef & { caseCount: number; complete: boolean };
 
 /**
  * A `case_study` row with its client, as the case-study module sees it.

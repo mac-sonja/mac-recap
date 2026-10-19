@@ -54,13 +54,32 @@ describe("clients copy", () => {
     expect(t("clients.edit")).toBe("Modifica cliente");
     expect(t("clients.empty")).toBe("Nessun cliente. Aggiungi il primo.");
     expect(t("clients.errors.nameTaken")).toBe("Esiste già un cliente con questo nome.");
-    expect(fill(t("clients.dialog.editDescription"), { code: "LUM" })).toBe(
+    expect(Object.values(it.clients.industries)).toEqual(["Interior design", "Energia", "Risorse umane", "Lusso"]);
+    expect(Object.keys(it.clients.industries)).toEqual(["interior_design", "energia", "risorse_umane", "lusso"]);
+    expect(t("clients.detail.industries")).toBe("Settore");
+    expect(t("clients.detail.noCases")).toBe("Nessuna case history per questo cliente.");
+  });
+});
+
+describe("client wizard copy", () => {
+  test("has the approved strings", () => {
+    expect(t("clientWizard.eyebrow")).toBe("Nuovo cliente");
+    expect(Object.values(it.clientWizard.steps)).toEqual(["Dettagli", "Materiale", "Introduzione"]);
+    expect(fill(t("clientWizard.editNote"), { code: "LUM" })).toBe(
       "Il codice LUM non cambia. Le modifiche si vedono in tutte le sue case history.",
     );
-    expect(t("clients.dialog.sectorLabel")).toBe("Settore");
-    expect(t("clients.dialog.descriptionLabel")).toBe("Descrizione");
-    expect(t("clients.dialog.logoRemove")).toBe("Rimuovi");
-    expect(t("clients.detail.noCases")).toBe("Nessuna case history per questo cliente.");
+    expect(Object.values(it.clientWizard.details.labels)).toEqual([
+      "Nome",
+      "Settore",
+      "Descrizione",
+      "Logo",
+      "Contesto",
+      "Soluzione",
+      "Risultati",
+    ]);
+    expect(Object.values(it.clientWizard.details.placeholders).every((line) => line.length > 0 && !line.includes("\n"))).toBe(true);
+    expect(t("clientWizard.material.createIntro")).toBe("Crea introduzione");
+    expect(fill(t("clientWizard.details.nextReason"), { fields: "Settore, Logo" })).toBe("Per continuare compila: Settore, Logo.");
   });
 });
 
