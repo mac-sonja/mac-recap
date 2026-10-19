@@ -9,6 +9,8 @@ export interface ClientRow {
   name: string;
   /** Non-deleted case studies of this client. */
   caseCount: number;
+  /** Every required field is filled; an unfinished client's row opens its wizard. */
+  complete: boolean;
 }
 
 export const CLIENT_SORT_KEYS = ["code", "name", "caseCount"] as const;

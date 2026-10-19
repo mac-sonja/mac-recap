@@ -141,3 +141,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-14-client-info-description-sector-logo.md`
   summary: Clean up logos that were confirmed but never linked (a failed link the user then abandons).
   evidence: Such `client_logo` rows and objects stay forever; replace/remove now deletes linked old logos only.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-15-client-wizard-and-details-step.md`
+  summary: Confirmed client logos that never get linked (link refused, a different file picked, or the wizard abandoned) stay as orphan `client_logo` rows and storage objects.
+  evidence: Story 2.15 review findings 8 (blind, edge-case); `use-client-logo.ts` replaces `confirmed` without deleting it, the same behaviour as the 2.14 dialog. Needs a decision on a cleanup (on replace, or a sweep).

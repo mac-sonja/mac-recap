@@ -4,7 +4,6 @@ import { authorize, can } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import { it } from "@/shared/i18n/it";
 import { ClientsTable } from "./_components/clients-table";
-import { clientLimits } from "./_lib/client-limits";
 import type { ClientRow } from "./_components/filter-sort";
 
 /**
@@ -22,12 +21,12 @@ export default async function ClientsPage() {
   const listed = await caseStudy.listClientSummaries();
   if (!listed.ok) throw new Error(`Clients could not be listed: ${listed.error.code}`);
 
-  const rows: ClientRow[] = listed.value.map(({ id, code, name, caseCount }) => ({ id, code, name, caseCount }));
+  const rows: ClientRow[] = listed.value.map(({ id, code, name, caseCount, complete }) => ({ id, code, name, caseCount, complete }));
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-heading text-2xl font-medium text-foreground">{it.clients.heading}</h1>
-      <ClientsTable rows={rows} canManage={can(actor, "manage clients")} limits={clientLimits()} />
+      <ClientsTable rows={rows} canManage={can(actor, "manage clients")} />
     </div>
   );
 }

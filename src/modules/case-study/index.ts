@@ -1,5 +1,5 @@
 // Public surface of the case-study module. Code outside this module imports only this file.
-// The module owns `case_study`, `client`, `client_logo`, `case_number_counter` and
+// The module owns `case_study`, `client`, `client_logo`, `client_brief`, `case_number_counter` and
 // `case_event`, and the `material` bucket's `clients/{clientId}/logos/**` (AD-1, AD-22):
 // nobody else writes them.
 import { randomUUID } from "node:crypto";
@@ -17,6 +17,10 @@ import { makeListCaseStudies } from "@/modules/case-study/application/list-case-
 import { makeListClientSummaries } from "@/modules/case-study/application/list-client-summaries";
 import { makeListClients } from "@/modules/case-study/application/list-clients";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
+import {
+  makeSaveClientBriefField,
+  type ClientBriefFieldSaved,
+} from "@/modules/case-study/application/save-client-brief-field";
 import type { LogoDeps } from "@/modules/case-study/application/logo-deps";
 import {
   makeRequestClientLogoUpload,
@@ -40,9 +44,12 @@ import type { Result } from "@/shared/result";
 export { CASE_CREATED, TRANSITION } from "@/modules/case-study/domain/case-event";
 export type { CaseEvent, RecordEventInput } from "@/modules/case-study/domain/case-event";
 export {
+  CLIENT_BRIEF_FIELDS,
+  CLIENT_BRIEF_MAX,
   CLIENT_DESCRIPTION_MAX,
+  CLIENT_INDUSTRIES,
   CLIENT_NAME_MAX,
-  CLIENT_SECTOR_MAX,
+  isClientComplete,
   LOCALES,
   LOGO_CONTENT_TYPES,
   LOGO_MAX_BYTES,
@@ -53,7 +60,10 @@ export {
 export type {
   CaseStudy,
   Client,
+  ClientBrief,
+  ClientBriefField,
   ClientDetail,
+  ClientIndustry,
   ClientRef,
   CaseClientInfo,
   ClientSummary,
@@ -65,6 +75,7 @@ export type {
   UpdateClientInput,
 } from "@/modules/case-study/domain/case-study";
 export type { PresignedClientLogoUpload } from "@/modules/case-study/application/request-client-logo-upload";
+export type { ClientBriefFieldSaved } from "@/modules/case-study/application/save-client-brief-field";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
 export type { TransitionEvent } from "@/modules/case-study/domain/transition";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
@@ -106,8 +117,8 @@ export function listClients(): Promise<Result<ClientRef[]>> {
 }
 
 /**
- * Every client with its count of non-deleted case studies (`{ id, name, code,
- * caseCount }`), sorted by name. Call only after `authorize(actor, 'list clients')`.
+ * Every client with its count of non-deleted case studies and whether every
+ * required field is filled (`{ id, name, code, caseCount, complete }`), sorted by name. Call only after `authorize(actor, 'list clients')`.
  */
 export function listClientSummaries(): Promise<Result<ClientSummary[]>> {
   return makeListClientSummaries(createSupabaseClientRepository())();
@@ -126,7 +137,8 @@ function logoDeps(): LogoDeps {
 }
 
 /**
- * One client by id with its info and `logoUrl` (a signed GET valid at most 15
+ * One client by id with its info, its brief (for the wizard; never shown on the
+ * client page) and `logoUrl` (a signed GET valid at most 15
  * minutes, or null when it has no logo or the link could not be made). Unknown or
  * malformed ids are `CLIENT_NOT_FOUND`. Call only after `authorize(actor, 'list clients')`.
  */
@@ -135,28 +147,41 @@ export function getClient(id: unknown): Promise<Result<ClientDetail>> {
 }
 
 /**
- * Adds a client: input `{ name, sector?, description? }` (name 1–120, sector ≤60,
- * description ≤400 characters after trimming; blank → null); the code is assigned
- * automatically (AD-21). The logo is linked afterwards with `updateClient`. Call only
- * after `authorize(actor, 'manage clients')`. `INVALID_INPUT`, `CLIENT_FIELD_TOO_LONG`,
- * `CLIENT_NAME_TAKEN`, `CLIENT_CODE_EXHAUSTED`; nothing is written on any error.
+ * Adds a client: input `{ name, industries, description }` (name 1–120, one or more
+ * industries from `CLIENT_INDUSTRIES`, description 1–400 characters after trimming);
+ * the code is assigned automatically (AD-21). The logo is linked afterwards with
+ * `updateClient` and the brief saved with `saveClientBriefField`. Call only after
+ * `authorize(actor, 'manage clients')`. `INVALID_INPUT`, `CLIENT_FIELD_INVALID`,
+ * `CLIENT_FIELD_TOO_LONG`, `CLIENT_NAME_TAKEN`, `CLIENT_CODE_EXHAUSTED`; nothing is
+ * written on any error.
  */
 export function createClient(actor: Actor, input: unknown): Promise<Result<Client>> {
   return makeCreateClient(createSupabaseClientRepository())(actor, input);
 }
 
 /**
- * Edits a client: input `{ clientId, name, sector, description, logoId }` (sector, description and logoId required, each may be null), every
- * field as it should be after the save (`logoId` null clears the logo). The client
+ * Edits a client: input `{ clientId, name, industries, description, logoId }`, every
+ * field required and as it should be after the save (a logo is replaced, never cleared). The client
  * code and every case history code stay the same. Client info is live: every case
  * history shows the new values. A replaced or removed logo is deleted (row and
  * object); a failed delete never fails the save. Call only
- * after `authorize(actor, 'manage clients')`. `INVALID_INPUT`, `CLIENT_FIELD_TOO_LONG`,
- * `CLIENT_NOT_FOUND`, `CLIENT_NAME_TAKEN`, `CLIENT_LOGO_INVALID` (unknown logo, or
+ * after `authorize(actor, 'manage clients')`. `INVALID_INPUT`, `CLIENT_FIELD_INVALID`,
+ * `CLIENT_FIELD_TOO_LONG`, `CLIENT_NOT_FOUND`, `CLIENT_NAME_TAKEN`, `CLIENT_LOGO_INVALID` (unknown logo, or
  * another client's); nothing is written on any error. Clients are never deleted.
  */
 export function updateClient(actor: Actor, input: unknown): Promise<Result<Client>> {
   return makeUpdateClient(createSupabaseClientRepository(), logoStorage())(actor, input);
+}
+
+/**
+ * Saves one brief text of a client: input `{ clientId, field, text }` (`field` one of
+ * context, solution, results; `text` at most 5000 characters after trimming, `""`
+ * clears it). Saving the stored text again writes nothing. Call only after
+ * `authorize(actor, 'manage clients')`. `INVALID_INPUT`, `UNKNOWN_FIELD`,
+ * `CLIENT_FIELD_TOO_LONG`, `CLIENT_NOT_FOUND`; nothing is written on any error.
+ */
+export function saveClientBriefField(actor: Actor, input: unknown): Promise<Result<ClientBriefFieldSaved>> {
+  return makeSaveClientBriefField(createSupabaseClientRepository())(actor, input);
 }
 
 /**
@@ -181,8 +206,8 @@ export function confirmClientLogoUpload(actor: Actor, input: unknown): Promise<R
 }
 
 /**
- * The current client info for a case: `{ clientId, name, sector, description,
- * logoId }`, always the client's current values (client info is live, owner
+ * The current client info for a case: `{ clientId, name, industries, description,
+ * logoId, brief }`, always the client's current values (client info is live, owner
  * 2026-10-16). Epic 3 reads it at render time, not at enqueue. Unknown, malformed
  * or soft-deleted case ids are `NOT_FOUND`.
  */

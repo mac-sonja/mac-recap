@@ -11,8 +11,9 @@ export const LOGO_URL_TTL_SECONDS = 10 * 60;
 const notFound = (id: unknown) => err({ code: "CLIENT_NOT_FOUND", message: "No client with this id.", details: { id } });
 
 /**
- * Reads one client with a signed URL for its current logo. Unknown or malformed
- * ids are `CLIENT_NOT_FOUND`. A logo that can't be read or signed never fails the
+ * Reads one client with its brief and a signed URL for its current logo. The brief
+ * is for the wizard only: the client page never shows it. Unknown or malformed
+ * ids are `CLIENT_NOT_FOUND`; a failed brief read fails the read. A logo that can't be read or signed never fails the
  * read: `logoUrl` is null and the failure is logged with the client id only. The
  * caller has already authorized `list clients`.
  */
@@ -22,8 +23,10 @@ export function makeGetClient(clients: ClientRepository, storage: LogoStorage) {
     if (!parsed.success) return notFound(id);
     const found = await clients.findById(parsed.data);
     if (!found.ok) return found;
-    const client = found.value;
-    if (client === null) return notFound(parsed.data);
+    if (found.value === null) return notFound(parsed.data);
+    const brief = await clients.findBrief(found.value.id);
+    if (!brief.ok) return brief;
+    const client = { ...found.value, brief: brief.value };
     if (client.logoId === null) return ok({ ...client, logoUrl: null });
 
     const logo = await clients.findLogo(client.logoId);

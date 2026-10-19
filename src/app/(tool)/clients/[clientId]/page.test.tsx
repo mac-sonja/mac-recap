@@ -19,18 +19,7 @@ vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requi
 vi.mock("@/modules/case-study", () => ({
   getClient: (id: unknown) => getClient(id),
   list: (scope: ListScope) => list(scope),
-  CLIENT_NAME_MAX: 120,
-  CLIENT_SECTOR_MAX: 60,
-  CLIENT_DESCRIPTION_MAX: 400,
-  LOGO_CONTENT_TYPES: ["image/png", "image/jpeg", "image/webp"],
-  LOGO_MAX_BYTES: 5 * 1024 * 1024,
-  LOGO_MIN_SHORT_SIDE_PX: 400,
-}));
-vi.mock("@/app/(tool)/clients/actions", () => ({
-  createClient: vi.fn(),
-  updateClient: vi.fn(),
-  requestClientLogoUpload: vi.fn(),
-  confirmClientLogoUpload: vi.fn(),
+  CLIENT_INDUSTRIES: ["interior_design", "energia", "risorse_umane", "lusso"],
 }));
 
 const { default: ClientPage } = await import("./page");
@@ -45,9 +34,10 @@ const LUMEN: ClientDetail = {
   id: "cccccccc-0000-4000-8000-000000000001",
   name: "Lumen Srl",
   code: "LUM",
-  sector: null,
+  industries: [],
   description: null,
   logoId: null,
+  brief: { context: "Contesto segreto", solution: "Soluzione segreta", results: "Risultati segreti" },
   logoUrl: null,
 };
 const LOGO_URL = "https://project.supabase.co/storage/v1/object/sign/material/clients/x/logos/y.png?token=g";
@@ -94,7 +84,8 @@ describe("ClientPage", () => {
     expect(list).toHaveBeenCalledExactlyOnceWith({ clientId: LUMEN.id });
     expect(html).toMatch(/<h1[^>]*>Lumen Srl<\/h1>/);
     expect(html).toMatch(/font-mono[^>]*>.*LUM<\/p>/);
-    const edit = html.match(/<button [^>]*>(?:(?!<\/button>).)*Modifica cliente<\/button>/)?.[0] ?? "";
+    const edit = html.match(/<a [^>]*>(?:(?!<\/a>).)*Modifica cliente<\/a>/)?.[0] ?? "";
+    expect(edit).toContain(`href="/clients/new?clientId=${LUMEN.id}&amp;step=1"`);
     expect(edit).toContain("hidden");
     expect(edit).toContain("lg:inline-flex");
     expect(html).toContain(`href="${NEW_HREF}"`);
@@ -109,12 +100,22 @@ describe("ClientPage", () => {
     expect(html).not.toContain("bg-logo-tile");
   });
 
-  it("shows the logo on a white tile, the sector and the description above the cases", async () => {
-    getClient.mockResolvedValue(ok({ ...LUMEN, sector: "Moda", description: "Brand di moda\ndal 1990.", logoId: "eeeeeeee-0000-4000-8000-000000000001", logoUrl: LOGO_URL }));
+  it("shows the logo on a white tile, the industries as pills and the description above the cases, never the brief", async () => {
+    getClient.mockResolvedValue(
+      ok({
+        ...LUMEN,
+        industries: ["energia", "lusso"],
+        description: "Brand di moda\ndal 1990.",
+        logoId: "eeeeeeee-0000-4000-8000-000000000001",
+        logoUrl: LOGO_URL,
+      }),
+    );
     const html = await renderPage();
     expect(html).toMatch(/<div class="[^"]*bg-logo-tile[^"]*"><img src="[^"]+" alt="Logo Lumen Srl"/);
     expect(html).toContain(`src="${LOGO_URL.replace(/&/g, "&amp;")}"`);
-    expect(html).toMatch(/<span class="sr-only">Settore <\/span>Moda/);
+    expect(html).toMatch(/<ul aria-label="Settore"[^>]*><li class="[^"]*rounded-full[^"]*">Energia<\/li><li [^>]*>Lusso<\/li><\/ul>/);
+    expect(html).not.toContain("Interior design");
+    expect(html).not.toMatch(/segret[oai]/);
     expect(html).toContain("Brand di moda\ndal 1990.");
     expect(html.indexOf("Brand di moda")).toBeLessThan(html.indexOf("client-cases-heading"));
   });

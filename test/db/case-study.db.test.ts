@@ -11,9 +11,17 @@ import pg from "pg";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
-import { LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
+import { CLIENT_INDUSTRIES, LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
 import { CASE_STATUSES, type CaseStatus } from "@/shared/case-status";
-import { createTestClient, freshPrefix, nameWithLetters, type TestClient } from "../helpers/db-clients";
+import {
+  TEST_DESCRIPTION,
+  TEST_INDUSTRIES,
+  addTestLogo,
+  createTestClient,
+  freshPrefix,
+  nameWithLetters,
+  type TestClient,
+} from "../helpers/db-clients";
 
 const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -60,11 +68,20 @@ async function inRolledBackTx(sql: string, params: unknown[] = [], role?: string
 }
 
 async function counts() {
-  const { rows } = await pool.query<{ cases: number; events: number; clients: number; logos: number; counters: number; numbers: number }>(
+  const { rows } = await pool.query<{
+    cases: number;
+    events: number;
+    clients: number;
+    logos: number;
+    briefs: number;
+    counters: number;
+    numbers: number;
+  }>(
     `select (select count(*)::int from public.case_study) as cases,
             (select count(*)::int from public.case_event) as events,
             (select count(*)::int from public.client) as clients,
             (select count(*)::int from public.client_logo) as logos,
+            (select count(*)::int from public.client_brief) as briefs,
             (select count(*)::int from public.case_number_counter) as counters,
             (select coalesce(sum(last_number), 0)::int from public.case_number_counter) as numbers`,
   );
@@ -237,8 +254,8 @@ describe("clients page (Story 2.13)", () => {
     const deletedOnly = await createCase({ name: "Count deleted only", clientId: onlyDeleted.id });
     await pool.query("update public.case_study set deleted_at = now() where id = any($1::uuid[])", [[deleted.id, deletedOnly.id]]);
 
-    expect(await summaryOf(client.id)).toEqual({ ...client, caseCount: 2 });
-    expect(await summaryOf(onlyDeleted.id)).toEqual({ ...onlyDeleted, caseCount: 0 });
+    expect(await summaryOf(client.id)).toEqual({ ...client, caseCount: 2, complete: false });
+    expect(await summaryOf(onlyDeleted.id)).toEqual({ ...onlyDeleted, caseCount: 0, complete: false });
   });
 
   it("lists one client's non-deleted cases when the scope names it", async () => {
@@ -255,21 +272,23 @@ describe("clients page (Story 2.13)", () => {
   it("adds a client through the action, refuses a name-key duplicate, and renames without touching any code", async () => {
     const { createClient, updateClient } = await loadClientActions();
     const name = nameWithLetters(await freshPrefix(pool));
-    const added = await createClient({ name: `  ${name} ` });
+    const added = await createClient({ name: `  ${name} `, industries: ["lusso"], description: "Brand." });
     if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
-    expect(added.value).toMatchObject({ name, sector: null, description: null, logoId: null });
+    expect(added.value).toMatchObject({ name, industries: ["lusso"], description: "Brand.", logoId: null });
     const created = await createCase({ name: "Rename keeps codes", clientId: added.value.id });
+    const logoId = await addTestLogo(pool, added.value.id, DEV_ACTOR_ID);
 
     const before = await counts();
-    const duplicate = await createClient({ name: name.toUpperCase().replace(" ", "  ") });
+    const duplicate = await createClient({ name: name.toUpperCase().replace(" ", "  "), industries: ["lusso"], description: "Brand." });
     expect(duplicate).toEqual({ ok: false, status: 409, error: { code: "CLIENT_NAME_TAKEN", message: expect.any(String) } });
     expect(await counts()).toEqual(before);
 
-    const edit = (over: Record<string, unknown>) => updateClient({ clientId: added.value.id, sector: null, description: null, logoId: null, ...over });
+    const edit = (over: Record<string, unknown>) =>
+      updateClient({ clientId: added.value.id, industries: ["lusso"], description: "Brand.", logoId, ...over });
     const renamed = await edit({ name: `${name} S.r.l.` });
     expect(renamed).toEqual({
       ok: true,
-      value: { id: added.value.id, name: `${name} S.r.l.`, code: added.value.code, sector: null, description: null, logoId: null },
+      value: { id: added.value.id, name: `${name} S.r.l.`, code: added.value.code, industries: ["lusso"], description: "Brand.", logoId },
     });
     const { get } = await loadCaseStudy();
     const reread = await get(created.id);
@@ -281,23 +300,28 @@ describe("clients page (Story 2.13)", () => {
       expect(same).toMatchObject({ ok: true, value: { id: added.value.id, name: own.replace(/\s+/g, " "), code: added.value.code } });
     }
 
-    const unknown = await updateClient({ clientId: UNKNOWN_ID, name: "Nobody", sector: null, description: null, logoId: null });
+    const unknown = await updateClient({ clientId: UNKNOWN_ID, name: "Nobody", industries: ["lusso"], description: "Brand.", logoId });
     expect(unknown).toMatchObject({ ok: false, status: 404, error: { code: "CLIENT_NOT_FOUND" } });
   });
 
   it("returns 403 FORBIDDEN for a role that cannot manage clients on every client action, and writes nothing", async () => {
-    const { createClient, updateClient, requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
+    const { createClient, updateClient, saveClientBriefField, requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
     for (const role of ["account_sales_social", "admin"]) {
       await pool.query("update public.profile set role = $2 where id = $1", [DEV_ACTOR_ID, role]);
       try {
         const before = await counts();
         const forbidden = { ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } };
-        expect(await createClient({ name: nameWithLetters(await freshPrefix(pool)), sector: "Moda" })).toEqual(forbidden);
-        expect(await updateClient({ clientId: acme.id, name: "Intruder", sector: "Moda", description: null, logoId: null })).toEqual(forbidden);
+        expect(await createClient({ name: nameWithLetters(await freshPrefix(pool)), industries: ["lusso"], description: "Brand." })).toEqual(
+          forbidden,
+        );
+        expect(
+          await updateClient({ clientId: acme.id, name: "Intruder", industries: ["lusso"], description: "Brand.", logoId: randomUUID() }),
+        ).toEqual(forbidden);
+        expect(await saveClientBriefField({ clientId: acme.id, field: "context", text: "Intruder" })).toEqual(forbidden);
         expect(await requestClientLogoUpload({ clientId: acme.id, contentType: "image/png", sizeBytes: 10 })).toEqual(forbidden);
         expect(await confirmClientLogoUpload({ clientId: acme.id, logoId: randomUUID(), contentType: "image/png" })).toEqual(forbidden);
         expect(await counts()).toEqual(before);
-        const { rows } = await pool.query("select name, sector, description, logo_id from public.client where id = $1", [acme.id]);
+        const { rows } = await pool.query("select name, industries, description, logo_id from public.client where id = $1", [acme.id]);
         expect(rows[0]).toMatchObject({ name: acme.name });
       } finally {
         await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
@@ -495,7 +519,7 @@ describe("direct writes are rejected", () => {
 });
 
 describe("schema guards", () => {
-  it.each(["case_study", "case_event", "client", "case_number_counter"])("enables RLS with no policies on %s", async (table) => {
+  it.each(["case_study", "case_event", "client", "client_brief", "case_number_counter"])("enables RLS with no policies on %s", async (table) => {
     const { rows } = await pool.query<{ rls: boolean; policies: number }>(
       `select c.relrowsecurity as rls,
               (select count(*)::int from pg_catalog.pg_policy p where p.polrelid = c.oid) as policies
@@ -542,7 +566,7 @@ describe("RLS lockout", () => {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
 
-  it.each(["case_study", "case_event", "client", "client_logo", "case_number_counter"])("the browser key is refused reading %s", async (table) => {
+  it.each(["case_study", "case_event", "client", "client_logo", "client_brief", "case_number_counter"])("the browser key is refused reading %s", async (table) => {
     const { data, error } = await browser().from(table).select("*");
     expect(data).toBeNull();
     expect(error?.code).toBe("42501");
@@ -561,12 +585,13 @@ describe("RLS lockout", () => {
     expect(["42501", "PGRST202"]).toContain(error?.code);
   });
 
-  type Table = "case_study" | "case_event" | "client" | "client_logo" | "case_number_counter";
+  type Table = "case_study" | "case_event" | "client" | "client_logo" | "client_brief" | "case_number_counter";
   const INSERTS: Record<Table, string> = {
     case_study: `insert into public.case_study (name, client_id, number, code, year, created_by) values ('I', '${UNKNOWN_ID}', 1, 'I', 2026, '${DEV_ACTOR_ID}')`,
     case_event: `insert into public.case_event (case_id, actor_id, type) values ('${UNKNOWN_ID}', '${DEV_ACTOR_ID}', 'x')`,
     client: `insert into public.client (name, name_key, code, created_by) values ('I', 'i', 'III', '${DEV_ACTOR_ID}')`,
     client_logo: `insert into public.client_logo (client_id, path, mime_type, size_bytes, created_by) values ('${UNKNOWN_ID}', 'p', 'image/png', 1, '${DEV_ACTOR_ID}')`,
+    client_brief: `insert into public.client_brief (client_id, updated_by) values ('${UNKNOWN_ID}', '${DEV_ACTOR_ID}')`,
     case_number_counter: `insert into public.case_number_counter (client_id, year, last_number) values ('${UNKNOWN_ID}', 2026, 1)`,
   };
   const UPDATES: Record<Table, string> = {
@@ -574,6 +599,7 @@ describe("RLS lockout", () => {
     case_event: "type = 'x'",
     client: "name = 'x'",
     client_logo: "path = 'x'",
+    client_brief: "context = 'x'",
     case_number_counter: "last_number = 1",
   };
   const statements = (table: Table) => ({
@@ -583,7 +609,7 @@ describe("RLS lockout", () => {
     delete: `delete from public.${table}`,
   });
   const cases = (["anon", "authenticated"] as const).flatMap((role) =>
-    (["case_study", "case_event", "client", "client_logo", "case_number_counter"] as const).flatMap((table) =>
+    (["case_study", "case_event", "client", "client_logo", "client_brief", "case_number_counter"] as const).flatMap((table) =>
       Object.entries(statements(table)).map(([verb, sql]) => [role, verb, table, sql] as const),
     ),
   );
@@ -596,6 +622,7 @@ describe("RLS lockout", () => {
     `public.create_case_study('I', '${UNKNOWN_ID}'::uuid, 2026, 'it', '${DEV_ACTOR_ID}')`,
     `public.create_client('Intruder', null, null, '${DEV_ACTOR_ID}')`,
     `public.update_client('${UNKNOWN_ID}', 'Intruder', null, null, null, '${DEV_ACTOR_ID}')`,
+    `public.save_client_brief_field('${UNKNOWN_ID}', 'context', 'x', '${DEV_ACTOR_ID}')`,
     "public.client_info_text(' x ')",
     `public.delete_client_logo('${UNKNOWN_ID}')`,
     "public.client_code_letters('Intruder')",
@@ -609,8 +636,14 @@ describe("RLS lockout", () => {
     },
   );
 
-  it("the old create_client and rename_client signatures are gone", async () => {
+  it("the old create_client, update_client and rename_client signatures are gone", async () => {
     await expect(inRolledBackTx(`select public.create_client('I', '${DEV_ACTOR_ID}'::uuid)`)).rejects.toMatchObject({ code: "42883" });
+    await expect(
+      inRolledBackTx(`select public.create_client('I', 'Moda'::text, 'D'::text, '${DEV_ACTOR_ID}'::uuid)`),
+    ).rejects.toMatchObject({ code: "42883" });
+    await expect(
+      inRolledBackTx(`select public.update_client('${UNKNOWN_ID}'::uuid, 'I', 'Moda'::text, 'D'::text, null::uuid, '${DEV_ACTOR_ID}'::uuid)`),
+    ).rejects.toMatchObject({ code: "42883" });
     await expect(
       inRolledBackTx(`select public.rename_client('${UNKNOWN_ID}'::uuid, 'I', '${DEV_ACTOR_ID}'::uuid)`),
     ).rejects.toMatchObject({ code: "42883" });
@@ -908,7 +941,7 @@ describe("clients and readable case history codes (AD-21)", () => {
   const backendPid = async (client: pg.Client) =>
     (await client.query<{ pid: number }>("select pg_catalog.pg_backend_pid() as pid")).rows[0].pid;
 
-  const createClientSql = "select id, name, code from public.create_client($1, null, null, $2)";
+  const createClientSql = "select id, name, code from public.create_client($1, array['lusso'], 'Cliente di prova.', $2)";
   const createCaseSql = "select number, code from public.create_case_study('Concurrent', $1, $2, 'it', $3)";
 
   describe("client codes", () => {
@@ -954,9 +987,13 @@ describe("clients and readable case history codes (AD-21)", () => {
       await rolledBack(async (client) => {
         const created = (await client.query<TestClient>(createClientSql, ["\t Lumen \n  Srl  ", DEV_ACTOR_ID])).rows[0];
         expect(created.name).toBe("Lumen Srl");
-        const { rows } = await client.query("select name, name_key from public.update_client($1, $2, null, null, null, $3)", [
+        const logoId = await addTestLogo(client, created.id, DEV_ACTOR_ID);
+        const { rows } = await client.query("select name, name_key from public.update_client($1, $2, $3, $4, $5, $6)", [
           created.id,
           "  Lumen\t\tGroup \n",
+          TEST_INDUSTRIES,
+          TEST_DESCRIPTION,
+          logoId,
           DEV_ACTOR_ID,
         ]);
         expect(rows).toEqual([{ name: "Lumen Group", name_key: "lumen group" }]);
@@ -1073,9 +1110,13 @@ describe("clients and readable case history codes (AD-21)", () => {
       const client = await createTestClient(pool, DEV_ACTOR_ID);
       const created = await createCase({ clientId: client.id });
       const renamed = `${client.name} Group`;
-      const { rows } = await pool.query("select name, code from public.update_client($1, $2, null, null, null, $3)", [
+      const logoId = await addTestLogo(pool, client.id, DEV_ACTOR_ID);
+      const { rows } = await pool.query("select name, code from public.update_client($1, $2, $3, $4, $5, $6)", [
         client.id,
         renamed,
+        TEST_INDUSTRIES,
+        TEST_DESCRIPTION,
+        logoId,
         DEV_ACTOR_ID,
       ]);
       expect(rows).toEqual([{ name: renamed, code: client.code }]);
@@ -1180,19 +1221,18 @@ describe("client info (Story 2.14, AD-22)", () => {
     return id;
   }
 
-  it("adds nullable sector, description and logo_id; an existing client starts empty", async () => {
+  it("keeps description and logo_id nullable (legacy dev clients); a new client starts without a logo", async () => {
     const { rows: columns } = await pool.query<{ column_name: string; is_nullable: string }>(
       `select column_name, is_nullable from information_schema.columns
-        where table_schema = 'public' and table_name = 'client' and column_name in ('sector', 'description', 'logo_id')
+        where table_schema = 'public' and table_name = 'client' and column_name in ('description', 'logo_id')
         order by column_name`,
     );
     expect(columns).toEqual([
       { column_name: "description", is_nullable: "YES" },
       { column_name: "logo_id", is_nullable: "YES" },
-      { column_name: "sector", is_nullable: "YES" },
     ]);
-    const { rows } = await pool.query("select sector, description, logo_id from public.client where id = $1", [acme.id]);
-    expect(rows).toEqual([{ sector: null, description: null, logo_id: null }]);
+    const { rows } = await pool.query("select description, logo_id from public.client where id = $1", [acme.id]);
+    expect(rows).toEqual([{ description: TEST_DESCRIPTION, logo_id: null }]);
   });
 
   it("creates client_logo with the AD-22 columns", async () => {
@@ -1202,10 +1242,7 @@ describe("client info (Story 2.14, AD-22)", () => {
     expect(rows.map((r) => r.column_name)).toEqual(["client_id", "created_at", "created_by", "id", "mime_type", "path", "size_bytes"]);
   });
 
-  it.each([
-    ["description", 400],
-    ["sector", 60],
-  ])("accepts a %s of %i characters (emoji = 1) and refuses one more", async (column, max) => {
+  it.each([["description", 400]])("accepts a %s of %i characters (emoji = 1) and refuses one more", async (column, max) => {
     const client = await createTestClient(pool, DEV_ACTOR_ID);
     const { rows } = await inRolledBackTx(`update public.client set ${column} = $2 where id = $1 returning char_length(${column}) as n`, [
       client.id,
@@ -1220,34 +1257,20 @@ describe("client info (Story 2.14, AD-22)", () => {
     });
   });
 
-  it("create_client and update_client store trimmed info and blank as null", async () => {
-    const name = nameWithLetters(await freshPrefix(pool));
-    const { rows } = await inRolledBackTx(
-      `with created as (select * from public.create_client($1, '  Moda ', E'\n\t ', $2))
-       select sector, description from created`,
-      [name, DEV_ACTOR_ID],
-    );
-    expect(rows).toEqual([{ sector: "Moda", description: null }]);
-  });
-
-  it("update_client trims padded non-blank sector and description and stores blank as null", async () => {
+  it("create_client and update_client store trimmed info", async () => {
     const client = await createTestClient(pool, DEV_ACTOR_ID);
-    const { rows: padded } = await inRolledBackTx(
-      "select sector, description from public.update_client($1, $2, $3, $4, null, $5)",
-      [client.id, client.name, "  Moda \t", "\n Brand di moda.  ", DEV_ACTOR_ID],
+    const logoId = await insertLogo(client.id);
+    const { rows } = await inRolledBackTx(
+      "select industries, description from public.update_client($1, $2, $3, $4, $5, $6)",
+      [client.id, client.name, ["energia", "lusso"], "\n Brand di moda.  ", logoId, DEV_ACTOR_ID],
     );
-    expect(padded).toEqual([{ sector: "Moda", description: "Brand di moda." }]);
-    const { rows: blank } = await inRolledBackTx(
-      "select sector, description from public.update_client($1, $2, $3, $4, null, $5)",
-      [client.id, client.name, "   ", "\n\t", DEV_ACTOR_ID],
-    );
-    expect(blank).toEqual([{ sector: null, description: null }]);
+    expect(rows).toEqual([{ industries: ["energia", "lusso"], description: "Brand di moda." }]);
   });
 
   it("through the action: saves the info, refuses 401 characters with CLIENT_FIELD_TOO_LONG and writes nothing", async () => {
     const { createClient, updateClient } = await loadClientActions();
     const before = await counts();
-    const tooLong = await createClient({ name: nameWithLetters(await freshPrefix(pool)), description: "x".repeat(401) });
+    const tooLong = await createClient({ name: nameWithLetters(await freshPrefix(pool)), industries: ["lusso"], description: "x".repeat(401) });
     expect(tooLong).toEqual({
       ok: false,
       status: 400,
@@ -1255,20 +1278,21 @@ describe("client info (Story 2.14, AD-22)", () => {
     });
     expect(await counts()).toEqual(before);
 
-    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)), sector: " Moda ", description: "😀".repeat(400) });
+    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)), industries: ["lusso"], description: "😀".repeat(400) });
     if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
-    expect(added.value).toMatchObject({ sector: "Moda", description: "😀".repeat(400), logoId: null });
+    expect(added.value).toMatchObject({ industries: ["lusso"], description: "😀".repeat(400), logoId: null });
 
-    const sectorTooLong = await updateClient({
+    const logoId = await insertLogo(added.value.id);
+    const descriptionTooLong = await updateClient({
       clientId: added.value.id,
       name: added.value.name,
-      sector: "s".repeat(61),
-      description: null,
-      logoId: null,
+      industries: ["lusso"],
+      description: "d".repeat(401),
+      logoId,
     });
-    expect(sectorTooLong).toMatchObject({ ok: false, status: 400, error: { code: "CLIENT_FIELD_TOO_LONG", fields: ["sector"] } });
-    const { rows } = await pool.query("select sector from public.client where id = $1", [added.value.id]);
-    expect(rows).toEqual([{ sector: "Moda" }]);
+    expect(descriptionTooLong).toMatchObject({ ok: false, status: 400, error: { code: "CLIENT_FIELD_TOO_LONG", fields: ["description"] } });
+    const { rows } = await pool.query("select description, logo_id from public.client where id = $1", [added.value.id]);
+    expect(rows).toEqual([{ description: "😀".repeat(400), logo_id: null }]);
   });
 
   it.each([
@@ -1302,7 +1326,14 @@ describe("client info (Story 2.14, AD-22)", () => {
     const client = await createTestClient(pool, DEV_ACTOR_ID);
     const first = await insertLogo(client.id);
     const second = await insertLogo(client.id);
-    await pool.query("select public.update_client($1, $2, null, null, $3, $4)", [client.id, client.name, second, DEV_ACTOR_ID]);
+    await pool.query("select public.update_client($1, $2, $3, $4, $5, $6)", [
+      client.id,
+      client.name,
+      TEST_INDUSTRIES,
+      TEST_DESCRIPTION,
+      second,
+      DEV_ACTOR_ID,
+    ]);
 
     await expect(pool.query("select public.delete_client_logo($1)", [second])).rejects.toMatchObject({
       code: "P0001",
@@ -1315,9 +1346,9 @@ describe("client info (Story 2.14, AD-22)", () => {
     expect((await pool.query("select count(*)::int as n from public.client_logo where id = $1", [first])).rows[0].n).toBe(0);
   });
 
-  it("through the action, replacing and removing a logo deletes the old row and object", async () => {
+  it("through the action, replacing a logo deletes the old row and object; it can't be cleared", async () => {
     const { createClient, updateClient, requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
-    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)) });
+    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)), industries: ["lusso"], description: "Brand." });
     if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
     const clientId = added.value.id;
     const upload = async () => {
@@ -1329,7 +1360,8 @@ describe("client info (Story 2.14, AD-22)", () => {
       expect(await confirmClientLogoUpload({ clientId, logoId, contentType: "image/png" })).toEqual({ ok: true, value: { logoId } });
       return logoId;
     };
-    const link = (logoId: string | null) => updateClient({ clientId, name: added.value.name, sector: null, description: null, logoId });
+    const link = (logoId: string | null) =>
+      updateClient({ clientId, name: added.value.name, industries: ["lusso"], description: "Brand.", logoId });
     const objects = async () => {
       const { data } = await createSupabaseAdmin().storage.from("material").list(`clients/${clientId}/logos`);
       return (data ?? []).map((o) => o.name).sort();
@@ -1344,9 +1376,9 @@ describe("client info (Story 2.14, AD-22)", () => {
     expect(await rows()).toEqual([second]);
     expect(await objects()).toEqual([`${second}.png`]);
 
-    expect(await link(null)).toMatchObject({ ok: true, value: { logoId: null } });
-    expect(await rows()).toEqual([]);
-    expect(await objects()).toEqual([]);
+    expect(await link(null)).toMatchObject({ ok: false, status: 400, error: { code: "CLIENT_FIELD_INVALID", fields: ["logoId"] } });
+    expect(await rows()).toEqual([second]);
+    expect(await objects()).toEqual([`${second}.png`]);
   });
 
   it.each([
@@ -1357,21 +1389,32 @@ describe("client info (Story 2.14, AD-22)", () => {
     const other = await createTestClient(pool, DEV_ACTOR_ID);
     const logoId = foreign ? await insertLogo(other.id) : randomUUID();
     await expect(
-      pool.query("select public.update_client($1, 'Renamed too', 'Moda', null, $2, $3)", [client.id, logoId, DEV_ACTOR_ID]),
+      pool.query("select public.update_client($1, 'Renamed too', $2, 'Brand.', $3, $4)", [client.id, ["energia"], logoId, DEV_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_LOGO_INVALID" });
-    const { rows } = await pool.query("select name, sector, logo_id from public.client where id = $1", [client.id]);
-    expect(rows).toEqual([{ name: client.name, sector: null, logo_id: null }]);
+    const { rows } = await pool.query("select name, industries, logo_id from public.client where id = $1", [client.id]);
+    expect(rows).toEqual([{ name: client.name, industries: TEST_INDUSTRIES, logo_id: null }]);
   });
 
-  it("getClientInfoForCase returns the client's current values; a deleted or unknown case is NOT_FOUND", async () => {
+  it("getClientInfoForCase returns the client's current values and brief; a deleted or unknown case is NOT_FOUND", async () => {
     const client = await createTestClient(pool, DEV_ACTOR_ID);
     const logoId = await insertLogo(client.id);
-    await pool.query("select public.update_client($1, $2, 'Moda', 'Brand.', $3, $4)", [client.id, client.name, logoId, DEV_ACTOR_ID]);
     const created = await createCase({ clientId: client.id });
     const { getClientInfoForCase } = await loadCaseStudy();
+    // No brief row yet: the empty brief.
+    expect(await getClientInfoForCase(created.id)).toMatchObject({ ok: true, value: { brief: { context: "", solution: "", results: "" } } });
+    await pool.query("select public.update_client($1, $2, $3, 'Brand.', $4, $5)", [client.id, client.name, ["energia", "lusso"], logoId, DEV_ACTOR_ID]);
+    await pool.query("select public.save_client_brief_field($1, 'results', 'Più clienti.', $2)", [client.id, DEV_ACTOR_ID]);
+    // Read live: the edit shows at once.
     expect(await getClientInfoForCase(created.id)).toEqual({
       ok: true,
-      value: { clientId: client.id, name: client.name, sector: "Moda", description: "Brand.", logoId },
+      value: {
+        clientId: client.id,
+        name: client.name,
+        industries: ["energia", "lusso"],
+        description: "Brand.",
+        logoId,
+        brief: { context: "", solution: "", results: "Più clienti." },
+      },
     });
     await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
     expect(await getClientInfoForCase(created.id)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
@@ -1380,7 +1423,7 @@ describe("client info (Story 2.14, AD-22)", () => {
 
   it("round trip: presign → PUT under clients/{clientId}/logos/ → confirm → link → signed GET on the client page", async () => {
     const { createClient, updateClient, requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
-    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)) });
+    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)), industries: ["lusso"], description: "Brand." });
     if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
     const clientId = added.value.id;
     const bytes = await png(800, 400);
@@ -1396,7 +1439,7 @@ describe("client info (Story 2.14, AD-22)", () => {
     const { rows } = await pool.query("select client_id, path, mime_type, size_bytes::int as size from public.client_logo where id = $1", [logoId]);
     expect(rows).toEqual([{ client_id: clientId, path: `clients/${clientId}/logos/${logoId}.png`, mime_type: "image/png", size: bytes.byteLength }]);
 
-    const linked = await updateClient({ clientId, name: added.value.name, sector: null, description: null, logoId });
+    const linked = await updateClient({ clientId, name: added.value.name, industries: ["lusso"], description: "Brand.", logoId });
     expect(linked).toMatchObject({ ok: true, value: { logoId } });
     const { getClient } = await loadCaseStudy();
     const read = await getClient(clientId);
@@ -1459,6 +1502,193 @@ describe("client info (Story 2.14, AD-22)", () => {
         error: { code: "CLIENT_LOGO_INVALID" },
       });
     }
+  });
+});
+
+describe("client wizard (Story 2.15)", () => {
+  const save = (clientId: string, field: string, text: string, db: pg.Pool | pg.PoolClient = pool) =>
+    db.query<{ previous: string }>("select public.save_client_brief_field($1, $2, $3, $4) as previous", [clientId, field, text, DEV_ACTOR_ID]);
+
+  it("replaces sector with industries (text array, not null, default empty)", async () => {
+    const { rows } = await pool.query<{ column_name: string; data_type: string; is_nullable: string; column_default: string | null }>(
+      `select column_name, data_type, is_nullable, column_default from information_schema.columns
+        where table_schema = 'public' and table_name = 'client' and column_name in ('sector', 'industries')`,
+    );
+    expect(rows).toEqual([{ column_name: "industries", data_type: "ARRAY", is_nullable: "NO", column_default: "'{}'::text[]" }]);
+  });
+
+  it("checks industries against exactly CLIENT_INDUSTRIES, with at least one", async () => {
+    const { rows } = await pool.query<{ def: string }>(
+      `select pg_catalog.pg_get_constraintdef(oid) as def from pg_catalog.pg_constraint
+        where conrelid = 'public.client'::regclass and conname = 'client_industries_check'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect([...rows[0].def.matchAll(/'([^']+)'/g)].map((m) => m[1]).filter((v) => v !== "{}")).toEqual([...CLIENT_INDUSTRIES]);
+    expect(rows[0].def).toContain("NOT VALID");
+  });
+
+  it.each([
+    ["an unknown industry", ["moda"]],
+    ["no industry", []],
+    ["a null element", [null]],
+  ])("create_client refuses %s with the industries check; nothing written", async (_label, industries) => {
+    const before = await counts();
+    await expect(
+      pool.query("select public.create_client($1, $2, 'Brand.', $3)", [nameWithLetters(await freshPrefix(pool)), industries, DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "23514", message: expect.stringContaining("client_industries_check") });
+    expect(await counts()).toEqual(before);
+  });
+
+  it("create_client refuses a blank description with P0001 CLIENT_FIELD_INVALID naming it", async () => {
+    await expect(
+      pool.query("select public.create_client($1, $2, '  ', $3)", [nameWithLetters(await freshPrefix(pool)), ["lusso"], DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_FIELD_INVALID", detail: "description" });
+  });
+
+  it("update_client refuses an unknown industry, a blank description and a null logo; nothing written", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const logoId = await addTestLogo(pool, client.id, DEV_ACTOR_ID);
+    const sql = "select public.update_client($1, $2, $3, $4, $5, $6)";
+    await expect(pool.query(sql, [client.id, client.name, ["moda"], "Brand.", logoId, DEV_ACTOR_ID])).rejects.toMatchObject({
+      code: "23514",
+    });
+    await expect(pool.query(sql, [client.id, client.name, ["lusso"], "", logoId, DEV_ACTOR_ID])).rejects.toMatchObject({
+      code: "P0001",
+      message: "CLIENT_FIELD_INVALID",
+      detail: "description",
+    });
+    await expect(pool.query(sql, [client.id, client.name, ["lusso"], "Brand.", null, DEV_ACTOR_ID])).rejects.toMatchObject({
+      code: "P0001",
+      message: "CLIENT_FIELD_INVALID",
+      detail: "logoId",
+    });
+    const { rows } = await pool.query("select industries, description, logo_id from public.client where id = $1", [client.id]);
+    expect(rows).toEqual([{ industries: TEST_INDUSTRIES, description: TEST_DESCRIPTION, logo_id: null }]);
+  });
+
+  it("keeps a legacy client with no industries readable, and the wizard's save then fills them", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const logoId = await addTestLogo(pool, client.id, DEV_ACTOR_ID);
+    const db = await pool.connect();
+    try {
+      await db.query("begin");
+      // A 2.14 dev client: no industries, no description. Recreating the check NOT VALID
+      // around the write mirrors the migration, which left such rows in place.
+      const { rows: [{ def }] } = await db.query<{ def: string }>(
+        "select pg_catalog.pg_get_constraintdef(oid) as def from pg_catalog.pg_constraint where conname = 'client_industries_check'",
+      );
+      await db.query("alter table public.client drop constraint client_industries_check");
+      await db.query("update public.client set industries = '{}', description = null where id = $1", [client.id]);
+      await db.query(`alter table public.client add constraint client_industries_check ${def.replace(/ NOT VALID$/, "")} not valid`);
+      const legacy = await db.query("select industries, description from public.client where id = $1", [client.id]);
+      expect(legacy.rows).toEqual([{ industries: [], description: null }]);
+      // Any other write to the row is checked.
+      await db.query("savepoint touch");
+      await expect(db.query("update public.client set name = name where id = $1", [client.id])).rejects.toMatchObject({ code: "23514" });
+      await db.query("rollback to savepoint touch");
+      const saved = await db.query("select industries from public.update_client($1, $2, $3, 'Brand.', $4, $5)", [
+        client.id,
+        client.name,
+        ["risorse_umane"],
+        logoId,
+        DEV_ACTOR_ID,
+      ]);
+      expect(saved.rows).toEqual([{ industries: ["risorse_umane"] }]);
+    } finally {
+      await db.query("rollback").catch(() => undefined);
+      db.release();
+    }
+  });
+
+  it("creates client_brief with one row per client, RLS on and the 5000-character checks", async () => {
+    const { rows } = await pool.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'client_brief' order by column_name",
+    );
+    expect(rows.map((r) => r.column_name)).toEqual(["client_id", "context", "results", "solution", "updated_at", "updated_by"]);
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    for (const field of ["context", "solution", "results"]) {
+      const at = await inRolledBackTx(
+        `insert into public.client_brief (client_id, ${field}, updated_by) values ($1, $2, $3) returning char_length(${field}) as n`,
+        [client.id, ` ${"😀".repeat(5000)} `, DEV_ACTOR_ID],
+      );
+      expect(at.rows).toEqual([{ n: 5002 }]);
+      await expect(
+        inRolledBackTx(`insert into public.client_brief (client_id, ${field}, updated_by) values ($1, $2, $3)`, [
+          client.id,
+          "x".repeat(5001),
+          DEV_ACTOR_ID,
+        ]),
+      ).rejects.toMatchObject({ code: "23514", message: expect.stringContaining(`client_brief_${field}_check`) });
+    }
+  });
+
+  it("save_client_brief_field creates the row on the first change, updates one field, and returns the previous text", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    expect((await save(client.id, "context", "")).rows).toEqual([{ previous: "" }]);
+    expect((await pool.query("select count(*)::int as n from public.client_brief where client_id = $1", [client.id])).rows[0].n).toBe(0);
+    expect((await save(client.id, "context", "Primo.")).rows).toEqual([{ previous: "" }]);
+    expect((await save(client.id, "results", "Esiti.")).rows).toEqual([{ previous: "" }]);
+    const { rows: [first] } = await pool.query("select updated_at from public.client_brief where client_id = $1", [client.id]);
+    // Saving the stored text again writes nothing.
+    expect((await save(client.id, "context", "Primo.")).rows).toEqual([{ previous: "Primo." }]);
+    const { rows } = await pool.query("select context, solution, results, updated_by, updated_at from public.client_brief where client_id = $1", [
+      client.id,
+    ]);
+    expect(rows).toEqual([{ context: "Primo.", solution: "", results: "Esiti.", updated_by: DEV_ACTOR_ID, updated_at: first.updated_at }]);
+  });
+
+  it("save_client_brief_field refuses an unknown client, an unknown field and an over-long text; nothing written", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const before = await counts();
+    await expect(save(UNKNOWN_ID, "context", "x")).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
+    await expect(save(client.id, "sector", "x")).rejects.toMatchObject({ code: "P0001", message: "UNKNOWN_FIELD" });
+    await expect(save(client.id, "solution", "x".repeat(5001))).rejects.toMatchObject({ code: "23514" });
+    expect(await counts()).toEqual(before);
+  });
+
+  it("through the actions: CLIENT_FIELD_INVALID and CLIENT_FIELD_TOO_LONG write nothing; a full client lists as complete", async () => {
+    const { createClient, updateClient, saveClientBriefField } = await loadClientActions();
+    const { listClientSummaries, getClient } = await loadCaseStudy();
+    const before = await counts();
+    expect(await createClient({ name: nameWithLetters(await freshPrefix(pool)), industries: ["moda"], description: "Brand." })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_FIELD_INVALID", fields: ["industries"] },
+    });
+    expect(await createClient({ name: nameWithLetters(await freshPrefix(pool)), industries: [], description: "Brand." })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_FIELD_INVALID" },
+    });
+    expect(await counts()).toEqual(before);
+
+    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)), industries: ["lusso", "energia"], description: "Brand." });
+    if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
+    expect(added.value.industries).toEqual(["energia", "lusso"]);
+    const clientId = added.value.id;
+    const summary = async () => {
+      const listed = await listClientSummaries();
+      if (!listed.ok) throw new Error("listClientSummaries failed");
+      return listed.value.find((c) => c.id === clientId);
+    };
+    expect(await summary()).toMatchObject({ complete: false });
+
+    expect(await saveClientBriefField({ clientId, field: "context", text: "x".repeat(5001) })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_FIELD_TOO_LONG", fields: ["context"] },
+    });
+    for (const field of ["context", "solution", "results"]) {
+      expect(await saveClientBriefField({ clientId, field, text: `${field}.` })).toEqual({ ok: true, value: { field, text: `${field}.` } });
+    }
+    expect(await summary()).toMatchObject({ complete: false });
+    const logoId = await addTestLogo(pool, clientId, DEV_ACTOR_ID);
+    expect(await updateClient({ clientId, name: added.value.name, industries: ["energia", "lusso"], description: "Brand.", logoId })).toMatchObject({
+      ok: true,
+    });
+    expect(await summary()).toMatchObject({ complete: true });
+    const read = await getClient(clientId);
+    expect(read.ok && read.value.brief).toEqual({ context: "context.", solution: "solution.", results: "results." });
   });
 });
 

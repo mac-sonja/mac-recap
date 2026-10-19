@@ -53,6 +53,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   // Client info (Story 2.14, AD-22).
   CLIENT_FIELD_TOO_LONG: 400,
   CLIENT_LOGO_INVALID: 400,
+  // Client wizard (Story 2.15): a required field missing or outside the industry list.
+  CLIENT_FIELD_INVALID: 400,
   // Material uploads (Story 2.7).
   FILE_TYPE_NOT_ALLOWED: 400,
   FILE_TOO_LARGE: 400,

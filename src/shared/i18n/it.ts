@@ -202,39 +202,18 @@ export const it = {
     loading: "Caricamento…",
     add: "Aggiungi cliente",
     edit: "Modifica cliente",
-    dialog: {
-      addTitle: "Aggiungi cliente",
-      addDescription: "Il codice viene assegnato automaticamente.",
-      editTitle: "Modifica cliente",
-      /** `{code}` is the client code, which an edit never changes. */
-      editDescription:
-        "Il codice {code} non cambia. Le modifiche si vedono in tutte le sue case history.",
-      nameLabel: "Nome del cliente",
-      sectorLabel: "Settore",
-      descriptionLabel: "Descrizione",
-      logoLabel: "Logo",
-      /** After an optional field's label. */
-      optional: "(facoltativo)",
-      /** `{max}` is the field limit in characters. */
-      sectorHint: "Fino a {max} caratteri.",
-      /** The description's live counter: `{n}` characters of `{max}`. */
-      counter: "{n}/{max}",
-      /** `{size}` MB and `{px}` pixels on the short side. */
-      logoHint: "PNG, JPEG o WebP, fino a {size} MB, almeno {px} px sul lato corto.",
-      logoChoose: "Scegli il logo",
-      logoReplace: "Sostituisci il logo",
-      logoRemove: "Rimuovi",
-      /** The logo preview's alt text; `{name}` is the client name. */
-      logoAlt: "Logo {name}",
-      cancel: "Annulla",
-      submitAdd: "Aggiungi",
-      submitEdit: "Salva",
+    /** Industry pill labels, keyed by `CLIENT_INDUSTRIES` (the fixed list, SCP 2026-10-19). */
+    industries: {
+      interior_design: "Interior design",
+      energia: "Energia",
+      risorse_umane: "Risorse umane",
+      lusso: "Lusso",
     },
     errors: {
       nameRequired: "Inserisci il nome del cliente.",
       /** `{max}` is the field limit in characters. */
       nameTooLong: "Massimo {max} caratteri.",
-      /** `{max}` is the field limit in characters (sector, description). */
+      /** `{max}` is the field limit in characters (description, brief texts). */
       fieldTooLong: "Massimo {max} caratteri.",
       nameTaken: "Esiste già un cliente con questo nome.",
       codeExhausted: "Non è stato possibile assegnare un codice a questo nome. Usa un nome diverso.",
@@ -245,20 +224,84 @@ export const it = {
       /** `{px}` is the minimum short side in pixels. */
       logoTooSmall: "Il logo deve misurare almeno {px} px sul lato corto.",
       logoUnreadable: "Non è stato possibile leggere l'immagine. Scegli un altro file.",
-      logoFailed: "Non è stato possibile caricare il logo. Gli altri dati sono salvati: premi Salva per riprovare.",
+      logoFailed: "Non è stato possibile caricare il logo. Gli altri dati sono salvati: premi Avanti per riprovare.",
       generic: "Non è stato possibile salvare. Riprova.",
     },
     /** A client's page. */
     detail: {
       /** Read by screen readers before the client code. */
       code: "Codice",
-      /** Read by screen readers before the sector. */
-      sector: "Settore",
+      /** The industries' pill list name. */
+      industries: "Settore",
       /** The logo's alt text; `{name}` is the client name. */
       logoAlt: "Logo {name}",
       casesHeading: "Case history",
       noCases: "Nessuna case history per questo cliente.",
       back: "Tutti i clienti",
+    },
+  },
+  /** The client wizard (Story 2.15): frame, stepper, step 1 Dettagli and the step 2 placeholder. */
+  clientWizard: {
+    eyebrow: "Nuovo cliente",
+    /** The eyebrow on an existing client. */
+    editEyebrow: "Modifica cliente",
+    /** Accessible names of the top bar's back arrow: adding, and editing a client. */
+    backToClients: "Torna ai clienti",
+    backToClient: "Torna al cliente",
+    /** Read by screen readers before the client code in the top bar. */
+    code: "Codice",
+    /** Step 3 stays hidden until it is designed with the owner (Story 4.11). */
+    steps: {
+      details: "Dettagli",
+      material: "Materiale",
+      intro: "Introduzione",
+    },
+    /** Step 1 on an existing client; `{code}` is the client code, which never changes. */
+    editNote: "Il codice {code} non cambia. Le modifiche si vedono in tutte le sue case history.",
+    details: {
+      heading: "I dati del cliente",
+      labels: {
+        name: "Nome",
+        industries: "Settore",
+        description: "Descrizione",
+        logo: "Logo",
+        context: "Contesto",
+        solution: "Soluzione",
+        results: "Risultati",
+      },
+      /** One-line prompts in the brief textareas, as in the case Details step. */
+      placeholders: {
+        context: "Chi è il cliente, e in che situazione si trovava?",
+        solution: "Cosa avete fatto per il cliente, e come?",
+        results: "Cosa è cambiato per il cliente? Indica i numeri dove li hai.",
+      },
+      industriesHint: "Scegli uno o più settori.",
+      /** The description's live counter: `{n}` characters of `{max}`. */
+      counter: "{n}/{max}",
+      /** `{size}` MB and `{px}` pixels on the short side. */
+      logoHint: "PNG, JPEG o WebP, fino a {size} MB, almeno {px} px sul lato corto.",
+      logoChoose: "Scegli il logo",
+      logoReplace: "Sostituisci il logo",
+      /** The logo preview's alt text; `{name}` is the client name. */
+      logoAlt: "Logo {name}",
+      /** Why Avanti is inactive; `{fields}` lists the empty fields' labels. */
+      nextReason: "Per continuare compila: {fields}.",
+      /** Joins the `{fields}` of `nextReason`. */
+      listSeparator: ", ",
+      errors: {
+        /** A field the server found empty or outside the list. */
+        required: "Compila questo campo.",
+        /** A brief text that could not be saved (also the autosave error). */
+        saveFailed: "Non salvato. Riprova modificando il testo.",
+      },
+      /** Polite live-region line when a save fails; `{field}` is the field label, `{message}` its error. */
+      announceError: "{field}: {message}",
+    },
+    /** Step 2 until Story 2.16. */
+    material: {
+      heading: "Materiale",
+      note: "Il caricamento del materiale del cliente arriva con il prossimo aggiornamento.",
+      createIntro: "Crea introduzione",
     },
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
