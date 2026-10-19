@@ -4,7 +4,7 @@ import { normalizeForSearch } from "@/app/(tool)/case-studies/_components/filter
 export interface ClientRow {
   /** The uuid: keys and hrefs only, never shown. */
   id: string;
-  /** The automatic client code (e.g. `LUM`), shown in the Codice column. */
+  /** The automatic client code (e.g. `LUM`), shown in the ID column. */
   code: string;
   name: string;
   /** Non-deleted case studies of this client. */

@@ -49,7 +49,7 @@ describe("clients copy", () => {
   test("has the approved strings", () => {
     expect(t("shell.nav.clients")).toBe("Clienti");
     expect(t("clients.heading")).toBe("Clienti");
-    expect(Object.values(it.clients.table.columns)).toEqual(["Codice", "Nome", "Case history"]);
+    expect(Object.values(it.clients.table.columns)).toEqual(["ID", "Nome", "Case history"]);
     expect(t("clients.add")).toBe("Aggiungi cliente");
     expect(t("clients.edit")).toBe("Modifica cliente");
     expect(t("clients.empty")).toBe("Nessun cliente. Aggiungi il primo.");

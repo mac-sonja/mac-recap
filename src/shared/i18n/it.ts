@@ -183,7 +183,7 @@ export const it = {
       /** Read by screen readers only. */
       caption: "Elenco dei clienti",
       columns: {
-        code: "Codice",
+        code: "ID",
         name: "Nome",
         caseCount: "Case history",
       },
