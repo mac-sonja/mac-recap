@@ -15,6 +15,8 @@ context:
 
 > **Amended 2026-10-16 (client intro and collections)** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-16-client-intro-and-collections.md), built before the demo (owner amendment the same day): Add client asks for 2–3 images and starts the intro; Modifica cliente opens the client overview (Stories 2.15, 4.12).
 
+> **Amended 2026-10-19 (client wizard)** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-19.md): **Aggiungi cliente** opens the full-page client wizard (Dettagli, Materiale, Introduzione) instead of a dialog; a client whose wizard isn't finished reopens at its first incomplete step; until Story 4.12, Modifica cliente opens the wizard at step 1. Name and code rules are unchanged (Stories 2.15, 2.16).
+
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
 ## Intent

@@ -2,7 +2,7 @@
 name: MAC Recap
 status: final
 created: 2026-10-08
-updated: 2026-10-16
+updated: 2026-10-19
 sources:
   - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/prd.md
   - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/addendum.md
@@ -52,7 +52,8 @@ The A3 entry steps inside MAC Productive (slides 15 and 22) are out of the MVP. 
 | Configurator | Click a row in *To review* or *Approved* (owner/designer) | Owner/designer | Review, edit, check claims, approve. Three panes: formats · canvas · edit and check (A3 1.6). |
 | Case study view | Click a card (account/sales/social) or **View** (owner/designer) | Owner/designer, account/sales/social | Read-only preview of an approved case study in every MVP format; export and share (A3 2.2). |
 | Clients | Sidebar | Owner/designer; account/sales/social read-only | Client list with automatic codes; add and edit; open a client to see its case studies. Account/sales/social see clients with an approved case study and **Scarica** (client pack). |
-| Client overview | **Modifica cliente** | Owner/designer | The client's intro and every case study as one preview; edit any part in place; **Dati cliente**. |
+| Client wizard | **Aggiungi cliente**; the row of a client whose wizard isn't finished; **Modifica cliente** until Story 4.12 | Owner/designer | Three steps, like the case history wizard: 1 Dettagli, 2 Materiale, 3 Introduzione (the configurator in client intro mode; hidden until it is designed with the owner). (SCP 2026-10-19) |
+| Client overview | **Modifica cliente** (from Story 4.12) | Owner/designer | The client's intro and every case study as one preview; edit any part in place; **Dati cliente**. |
 | Collections | Sidebar **Raccolte** | Owner/designer, account/sales/social | Saved, named collections: open, rename, delete. |
 | Collection configurator | **Crea raccolta** in the library, or a collection row | Owner/designer, account/sales/social | Reorder, hide pages, edit text (owner/designer only), export. |
 | Templates | Sidebar | Owner/designer | Maintain templates. See *Templates* below for the MVP meaning. |
@@ -195,7 +196,7 @@ Three panes, as in A3 1.6, with the changes noted. The canvas is a Bento-style t
 - Plain text with line breaks only. No font, colour or size control inside a text block; those belong to typography.
 - Overflow: if text no longer fits its slot, the block shows an overflow marker and the Check tab lists it. The tool does not shrink text silently below the template's minimum size.
 - Every edited block is marked "edited" and needs its claim check again (see Check below).
-- **About the client block** (decided 2026-10-16, amended the same day): logo, name, sector and description, always the client's current info. Read-only, with the hint "Modifica i dati nella pagina del cliente. Le modifiche si vedono in tutte le sue case history." It isn't in the Check tab; claims the AI based on the client's description are checked like any other.
+- **About the client block** (decided 2026-10-16, amended the same day): logo, name, industries and description, always the client's current info (industries since SCP 2026-10-19). Read-only, with the hint "Modifica i dati nella pagina del cliente. Le modifiche si vedono in tutte le sue case history." It isn't in the Check tab; claims the AI based on the client's description are checked like any other.
 
 **Layout**
 - **Layout variant:** pick one of the template's designed variants for this format (thumbnail grid; the A3 sketch shows "10 varianti").
@@ -260,7 +261,7 @@ Read-only. Available only for Approved case studies (NFR7); a non-approved case 
 | Share | Opens the Share dialog (below). |
 | Owner/designer | Also sees **Edit**, which opens the configurator. |
 
-The About the client block shows in every format, with the client's current info. A change to the client shows here at once, approved case studies included.
+The About the client block shows in every format, with the client's current info: logo, name, industries and description (SCP 2026-10-19). A change to the client shows here at once, approved case studies included.
 
 The A3 "Asset e Risorse" tab and the "Pacchetto PNG HD" source-material pack are out of MVP unless [OPEN 1] adds them.
 
@@ -306,13 +307,13 @@ Owner/designer only. Decided 2026-10-15 ([Sprint Change Proposal 2026-10-15](../
 |---|---|
 | List | Table of clients: Code (mono), Name, Case histories (count). Default sort Name A–Z; header sort. |
 | Search | Over name and code, with the Case studies table's rules. |
-| Add client | **Add client** dialog: name, sector (optional, up to 60 characters), description (optional, up to 400 characters, live counter) and logo (optional upload with preview; PNG, JPEG or WebP). The code is assigned automatically; there is no code field. |
-| Edit client | **Edit client** dialog with the same fields. It states that the code stays the same and that changes apply to all the client's case studies, approved ones included ("Il codice {code} non cambia. Le modifiche si vedono in tutte le sue case history."). Replacing or removing the logo deletes the old one. A new name shows everywhere, including the client's case studies. |
-| Client page | Row click opens the client page: logo, client name and code, sector, description, **Edit client**, and the Case studies table limited to that client, with **New case history** preselecting the client. |
+| Add client | **Aggiungi cliente** opens the client wizard, full-page like the case history wizard, at step 1 (SCP 2026-10-19). The stepper shows **Dettagli**, **Materiale** and **Introduzione**. **Dettagli**, in this order: Nome; Settore as pills (multiselect, at least one, from a fixed list: *Interior design, Energia, Risorse umane, Lusso*); Descrizione (up to 400 characters, live counter); Logo (upload with preview; PNG, JPEG or WebP); Contesto, Soluzione and Risultati (textareas with one-line placeholder prompts, up to 5000 characters each, as in the case history Details step). Every field is required: **Avanti** stays inactive until they are filled, with the reason linked via `aria-describedby`. **Avanti** creates the client (or saves it, if it exists) and opens step 2. The code is assigned automatically; there is no code field. A duplicate name shows "Esiste già un cliente con questo nome." on step 1. |
+| Edit client | Until Story 4.12, **Modifica cliente** opens the client wizard at step 1 with the client's data (SCP 2026-10-19; it replaces the **Edit client** dialog). It states that the code stays the same and that changes apply to all the client's case studies, approved ones included ("Il codice {code} non cambia. Le modifiche si vedono in tutte le sue case history."). Contesto, Soluzione and Risultati autosave as in the case history Details step; name, industries and description save on **Avanti**. Replacing or removing the logo deletes the old one. A new name shows everywhere, including the client's case studies. From Story 4.12, **Modifica cliente** opens the client overview (below). |
+| Client page | Row click opens the client page: logo, client name and code, industries as pills, description, **Edit client**, and the Case studies table limited to that client, with **New case history** preselecting the client. Contesto, Soluzione and Risultati aren't shown on the page. A client whose wizard isn't finished (no intro yet) stays in the list, and its row reopens the wizard at the first incomplete step: **Dettagli** if a required field is empty, otherwise **Materiale** (SCP 2026-10-19). |
 | Absent | No delete. |
 | Below 1024 px | Read-only list. |
-| Add client: images and intro | Two steps: the data, then 2–3 images (required; PNG, JPEG or WebP, ≤20 MB, ≥1600 px on the short side; "Carica 2 o 3 immagini. Servono per le pagine di introduzione del cliente."). **Crea cliente** creates the client and starts its intro draft ("Stiamo preparando l'introduzione di {client}. Puoi lasciare questa pagina."); the intro opens in the configurator when ready. |
-| Edit client: client overview | **Modifica cliente** opens the client overview (Configurator modes). The data and images are edited in **Dati cliente**: **Sostituisci**, **Rimuovi** (not below 2), reorder by drag or menu. |
+| Add client: material and intro | Step 2 **Materiale** (SCP 2026-10-19): up to 3 files of the case history's material types (images, videos, PDF, TXT, MD, DOCX; up to 50 MB; images also at least 1600 px on the short side), at least 2 of them images. Copy above the drop zone: "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione." A 4th file is refused inline ("Massimo 3 file.") without blocking the others. Removing a file is immediate, with no undo. **Crea introduzione** stays inactive until at least 2 images are uploaded ("Carica almeno 2 immagini.", linked via `aria-describedby`). It starts the intro draft and shows "Stiamo preparando l'introduzione di {client}." with **Torna ai clienti**. The screen waits and opens the intro by itself when it is ready: the client page until Story 4.11, then the configurator. Before the intro draft exists (Story 3.9), it goes to the client page at once. If the user leaves, the ready toast still shows. Step 3 **Introduzione** is the configurator in client intro mode, with the stepper still visible; it is designed with the owner first and isn't shown until then, so the wizard ends on step 2. |
+| Edit client: client overview | From Story 4.12, **Modifica cliente** opens the client overview (Configurator modes). The step 1 fields and the step 2 material are edited in **Dati cliente** with the wizard's rules (SCP 2026-10-19): **Sostituisci**, **Rimuovi** (an image can't be removed when only 2 remain: "Servono almeno 2 immagini."), reorder by drag or menu. |
 | Client page: intro | Also shows the intro's status and **Apri introduzione**. |
 | Account/sales/social | A read-only list of clients with at least one approved case study, with **Scarica** per row and on the client page: one file (Deck 16:9 or PDF A4) with the approved intro and the approved case studies, newest first. With 2+ case studies the client intro replaces their own intro pages; otherwise, or when the intro isn't approved, each keeps its own ("L'introduzione di {client} non è ancora approvata: le sue case history usano la propria introduzione."). |
 
@@ -463,7 +464,7 @@ Failure: generation fails → the case study is back in Draft with "Generation d
 ### Flow 2: A case study for tomorrow's pitch (Daniele, account/sales/social)
 
 1. Daniele has a pitch with a utility company tomorrow. He signs in and lands on the library.
-2. He types "energy" and filters by sector; three cards remain. He opens the first.
+2. He types "energy" and filters by industry (an industry filter stays out of the MVP library; SCP 2026-10-19); three cards remain. He opens the first.
 3. The case study view shows the 16:9 deck; he pages through it, then switches to the carousel.
 4. He presses **Export**, deck selected, and gets the PDF for his slides.
 5. He presses **Share**, keeps "16:9 deck", and the link is copied. The dialog says "Anyone with the link can view."
@@ -505,12 +506,14 @@ Failure: nothing matches → "Nothing matches 'energy'." He clears filters and b
 - **C10. Client as a record. Resolved 2026-10-15 by the owner:** every case study belongs to one client record; free-text clients were migrated to records with codes.
 - **C11. Clients page. Resolved 2026-10-15 by the owner:** owner/designers list, add and rename clients and open a client's case studies; codes never change and clients can't be deleted.
 - **C12. Picking the client. Resolved 2026-10-15 by the owner:** step 0 offers only existing clients; clients are added only on the Clients page.
-- **C13. Client info. Resolved 2026-10-16 by the owner** ([Sprint Change Proposal](../../sprint-change-proposal-2026-10-16.md)): clients have a description, sector and logo; every case study shows them in an About the client block and the AI uses them. Amended the same day by the owner: client info is live, so every case study, drafts and approved ones alike, always shows the client's current info, and a replaced or removed logo is deleted.
-- **C14. Client intro. Resolved 2026-10-16 by the owner** ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md); before the demo, owner amendment the same day): adding a client asks for 2–3 images; the AI drafts the client's intro pages, which the owner/designer refines, checks and approves like a case study.
+- **C13. Client info. Resolved 2026-10-16 by the owner** ([Sprint Change Proposal](../../sprint-change-proposal-2026-10-16.md)): clients have a description, sector and logo; every case study shows them in an About the client block and the AI uses them. Amended the same day by the owner: client info is live, so every case study, drafts and approved ones alike, always shows the client's current info, and a replaced or removed logo is deleted. Amended 2026-10-19 by the owner (C20): the sector became industries, and every client field is required.
+- **C14. Client intro. Resolved 2026-10-16 by the owner** ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md); before the demo, owner amendment the same day): adding a client asks for 2–3 images; the AI drafts the client's intro pages, which the owner/designer refines, checks and approves like a case study. Amended 2026-10-19 by the owner (C19): adding a client is a wizard, and its material step takes up to 3 files, at least 2 of them images.
 - **C15. Client page.** Confirmed 2026-10-16: the client page lists its case studies and creates new ones (already built).
-- **C16. Client overview. Resolved 2026-10-16 by the owner** (before the demo): **Modifica cliente** opens the intro and every case study as one preview; editing there edits the case study itself.
+- **C16. Client overview. Resolved 2026-10-16 by the owner** (before the demo): **Modifica cliente** opens the intro and every case study as one preview; editing there edits the case study itself. Until Story 4.12, **Modifica cliente** opens the client wizard (C19).
 - **C17. Downloads. Resolved 2026-10-16 by the owner** (before the demo): approved case studies download from the library; account/sales/social also download a client pack (approved intro plus approved case studies) from a read-only Clients list.
 - **C18. Collections. Resolved 2026-10-16 by the owner** (before the demo): named, saved collections of approved case studies, reorderable, with hidden pages and text edits that apply only to the collection; a client with 2+ case studies gets its intro in front, grouped. Open point 15 resolved: only owner/designers edit collection text (IR-COLL-EDIT). Assumption: "PM" means an owner/designer.
+- **C19. Add client wizard. Resolved 2026-10-19 by the owner** ([Sprint Change Proposal 2026-10-19](../../sprint-change-proposal-2026-10-19.md)): **Aggiungi cliente** opens a full-page wizard like a case history: **Dettagli**, **Materiale** (up to 3 files of any material type, at least 2 images), then **Introduzione**, the intro in the configurator to preview and edit. Step 3 is designed with the owner first and stays hidden until then.
+- **C20. Client fields. Resolved 2026-10-19 by the owner:** Nome, Settore (pills, multiselect, at least one, from a fixed list: *Interior design, Energia, Risorse umane, Lusso*, replacing the free-text sector), Descrizione (up to 400 characters), Logo, and Contesto, Soluzione and Risultati (up to 5000 characters each). All are required.
 - **C5. Brief vs PRD:** the brief limits export to account/sales/social and puts the hallucination target on "caught in review". The PRD (both roles export; zero reaching approved) wins; noted only.
 
 **PRD open points with options above:** [OPEN 1] export formats · [OPEN 8] status lifecycle · [OPEN 11] link access · [OPEN 12] what counts as altering. **[OPEN 14]** what a favourite means for generation. [OPEN 3] taxonomy resolved 2026-10-14: dropped.

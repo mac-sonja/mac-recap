@@ -7,7 +7,7 @@ paradigm: 'modular monolith with ports at vendor seams; generation as a pipes-an
 scope: 'MAC Recap standalone MVP (Epics 2-6): case creation, upload and favourites, generation, review and approval, export and shareable links, auth. Plus the seam for the later MAC Productive (MCP) integration'
 status: final
 created: '2026-10-08'
-updated: '2026-10-16'
+updated: '2026-10-19'
 binds: [FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, FR11, FR12, FR13, NFR1, NFR2, NFR3, NFR4, NFR5, NFR6, NFR7, FR9-seam]
 sources:
   - '_bmad-output/planning-artifacts/prds/prd-MAC Recap-2026-10-08/prd.md (PRD v2, final)'
@@ -69,7 +69,7 @@ flowchart LR
 
 | Owner | Tables | Storage prefixes |
 | --- | --- | --- |
-| `case-study` | `case_study`, `client`, `client_logo`, `client_image`, `client_intro`, `client_event`, `case_number_counter`, `revision`, `case_event` | `clients/{clientId}/logos/**`, `clients/{clientId}/images/**` |
+| `case-study` | `case_study`, `client`, `client_logo`, `client_brief`, `client_asset`, `client_intro`, `client_event`, `case_number_counter`, `revision`, `case_event` | `clients/{clientId}/logos/**`, `clients/{clientId}/material/**` (`images/**` is never created; SCP 2026-10-19) |
 | `material` | `asset` (including `is_favourite`), `context_form` | `cases/{caseId}/assets/**` (originals and renditions) |
 | `generation` | — (writes revisions only via `case-study`) | — |
 | `rendering` | `export`, `template_variant_state` (only if AD-15's conditional applies) | `exports/{contentHash}/**` |
@@ -153,8 +153,8 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Rule:**
   - `generate` fails with `NO_MATERIAL` before any LLM call unless the case has at least one non-deleted asset of any allowed type (image, video, text document, PDF). Typed text lives only in the details form, which never counts (NFR6). The wizard's Generate button and the worker (again, when it claims the job) use the same check through `material.index`.
   - The template's media-count rule (AD-15) then picks the layout. What a template renders with zero images or videos is a template rule the design team supplies (see Deferred).
-  - The LLM receives only the case's material snapshot, form answers and the client's current name, sector and description, read when the job runs (AD-18, AD-22). Client info never counts as material. It gets no web or other server tools.
-  - A client intro is generated only when the client has at least 2 images (`NO_CLIENT_IMAGES`). Its LLM input is only the client's current name, sector and description, plus images if OP 2 allows (AD-23).
+  - The LLM receives only the case's material snapshot, form answers and the client's current name, industries, description and brief (context, solution, results), read when the job runs (AD-18, AD-22; SCP 2026-10-19). Client info never counts as material. It gets no web or other server tools.
+  - A client intro is generated only when the client has at least 2 image rows in `client_asset` (`NO_CLIENT_IMAGES`). Its LLM input is only the client's current name, industries, description and brief, plus its material as OP 2 allows; until OP 2 is decided, only the text fields (AD-23; SCP 2026-10-19).
   - The structured output tags each claim with `aspect`, `technical` or `graphic`. A draft without both aspects is marked `MISSING_ASPECT` and the warning is shown in the configurator. It does not block approval. `[CONFLICT A3]`
 
 ### AD-7 — One LLM port, one model setting, recorded per revision
@@ -179,13 +179,13 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - An asset row is created only after the server re-checks the upload's size and type from the object's metadata at confirm. A case holds at most 20 non-deleted files, checked on the server when the signed upload URL is issued and again at confirmation (FR2).
   - Reads use signed GET URLs, valid for 15 minutes at most.
   - The service role is the only reader and writer. There is no public access and no policy for `anon` or `authenticated`.
-  - The bucket has no versioning, so the app never deletes material objects. Removing a file is a soft delete of its row (AR18), and the object stays. The one exception is client logos: replacing or removing a logo deletes the old object (AD-22).
+  - The bucket has no versioning, so the app never deletes material objects. Removing a file is a soft delete of its row (AR18), and the object stays. The exceptions are client logos and client material: replacing or removing a logo, or removing a client file, deletes the old object (AD-22, AD-23; SCP 2026-10-19).
   - Key layout, built only by the owning module's adapters:
     - `cases/{caseId}/assets/{assetId}/original.{ext}`
     - `cases/{caseId}/assets/{assetId}/renditions/{specHash}.{ext}`, owned by `material` and reached only through `material.getRendition(assetId, spec)`
     - `exports/{contentHash}/{format}.{ext}`, owned by `rendering` (replaces `cases/{caseId}/revisions/{revisionId}/exports/…`, AD-9)
     - `clients/{clientId}/logos/{logoId}.{ext}`, owned by `case-study` (AD-22). Logos are PNG, JPEG or WebP, at most 5 MB and at least 400 px on the short side, checked when the signed upload URL is issued and again at confirm. Replacing or removing a logo deletes the old object.
-    - `clients/{clientId}/images/{imageId}.{ext}`, owned by `case-study` (AD-23). Client images are PNG, JPEG or WebP, at most 20 MB and at least 1600 px on the short side, 2–3 per client. Replacing or removing an image deletes the old object.
+    - `clients/{clientId}/material/{assetId}.{ext}`, owned by `case-study` (AD-23; SCP 2026-10-19). Client material (`client_asset`) follows the case material types and the 50 MB limit (`material/domain/files.ts`); images must also be at least 1600 px on the short side. A client has at most 3 files, checked when the signed upload URL is issued and again at confirm; an intro needs at least 2 of them to be images (AD-23). Removing a file deletes its row and its object. `clients/{clientId}/images/**` is never created.
   - The per-file limit is 50 MB because the hosted Supabase plan caps uploads at 50 MB (verified 2026-10-14). Moving to 100 MB needs the Pro plan, a raised project upload limit, a bucket migration and `MAX_FILE_BYTES`.
 
 ### AD-9 — One layout implementation; renders never pass through a public route
@@ -232,7 +232,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 | list cases | all statuses | approved only | — | — |
 | create case, upload, mark favourites, fill details, generate, edit | any case | — | — | — |
 | list clients | ✓ | clients with an approved case, read-only (SCP 2026-10-16 client intro and collections) | — | — |
-| manage clients (add, edit, images) | ✓ | — | — | — |
+| manage clients (add, edit, material; SCP 2026-10-19) | ✓ | — | — | — |
 | generate, edit, approve a client intro | ✓ | — | — | — |
 | download client pack | approved content | approved content | — | — |
 | manage collections: create, rename, reorder, add/remove, hide pages, delete, export | ✓ | ✓ | — | — |
@@ -317,7 +317,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Binds:** FR2, FR3, NFR2, NFR6, `material`, `generation`, OP 2
 - **Prevents:** generation inventing ids for form fields, uploads arriving mid-job being included at random, and deleting an asset breaking approved revisions or the material drawer a reviewer uses
 - **Rule:**
-  - Material is referred to only as `MaterialRef { kind: 'asset' | 'form_field', id }`, where form fields have stable keys. Refs are resolved only through `material.resolveRefs(caseId, refs)`. A `form_field` ref is a valid source for a claim (NFR2) but never counts as material (AD-6). A `client_field` ref (`description` or `sector`, AD-22) resolves from the client's current values and follows the same rule.
+  - Material is referred to only as `MaterialRef { kind: 'asset' | 'form_field', id }`, where form fields have stable keys. Refs are resolved only through `material.resolveRefs(caseId, refs)`. A `form_field` ref is a valid source for a claim (NFR2) but never counts as material (AD-6). A `client_field` ref (`description`, `industry`, `context`, `solution` or `results`, AD-22; SCP 2026-10-19) resolves from the client's current values and follows the same rule.
   - A `generate` job's payload carries a material manifest (refs plus content hashes) taken when it is enqueued. The revision stores that manifest.
   - How each material type is turned into LLM input is a `generation` adapter concern decided with OP 2; it does not change the ref or manifest shape. Known limits: a request is capped at 32 MB and PDFs at 600 pages, DOCX is not an API input, and video is not an API input. A file over those limits goes in as extracted text or split. The Anthropic Files API is not used, because it stores client material at Anthropic.
   - Material that any revision or any queued or running job references can only be soft-deleted (`deleted_at`). `approve` fails with `MATERIAL_MISSING` if anything the revision references is deleted. The UI offers no restore.
@@ -366,26 +366,26 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 
 ### AD-22 — Client info is read live from the client
 
-- **Binds:** FR3 (amended), PRD Story 2.5, `case-study`, `generation`, `rendering` ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md), as amended by the owner the same day)
+- **Binds:** FR3 (amended), PRD Story 2.5, `case-study`, `generation`, `rendering` ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md), as amended by the owner the same day; [Sprint Change Proposal 2026-10-19](../../sprint-change-proposal-2026-10-19.md))
 - **Prevents:** a case history showing an outdated client name, logo or text, an About block that differs between formats, the LLM rewriting the client's own words, and old logo files piling up
 - **Rule:**
-  1. `client.description` (≤400) and `client.sector` (≤60) are optional plain text. `client.logo_id` points to the client's current `client_logo` row. Replacing or removing a logo deletes the old row and its storage object; there is no logo history.
-  2. There is no client snapshot. Nothing about the client is copied into a `generate` job, a revision's manifest or the document. `case-study.getClientInfoForCase(caseId)` (`{ clientId, name, sector, description, logoId }`) is a read of the client's current values, called each time they are needed.
-  3. The About block is filled at render time from the client's current info, passed to the renderer next to the document. The LLM never writes it. It is hidden when the client has no description, sector or logo.
+  1. `client.industries` (text array; each value one of `interior_design`, `energia`, `risorse_umane` and `lusso`; at least one, checked by the database), `client.description` (≤400, plain text) and `client.logo_id` are all required by the app (SCP 2026-10-19; `sector` is dropped). `client_brief` holds the client's `context`, `solution` and `results` (each ≤5000 after trimming), one row per client. `client.logo_id` points to the client's current `client_logo` row. Replacing or removing a logo deletes the old row and its storage object; there is no logo history.
+  2. There is no client snapshot. Nothing about the client is copied into a `generate` job, a revision's manifest or the document. `case-study.getClientInfoForCase(caseId)` (`{ clientId, name, industries, description, logoId, brief }`, SCP 2026-10-19) is a read of the client's current values, called each time they are needed.
+  3. The About block is filled at render time from the client's current info, passed to the renderer next to the document. The LLM never writes it. It shows the logo, name, industries (joined) and description. It has no rules for empty fields, because all of them are required (SCP 2026-10-19).
   4. Editing the client changes the About block of every case history of that client at once, drafts and approved ones alike, with no new generation or approval. Only owner/designers can edit clients (`manage clients`).
-  5. The `generate` job reads the client's current name, sector and description when it runs, for the LLM input only (AD-6). Text the LLM wrote stays as written; a later client edit doesn't rewrite it. `client_field` refs resolve against the client's current values (AD-18).
+  5. The `generate` job reads the client's current name, industries, description and brief when it runs, for the LLM input only (AD-6). Text the LLM wrote stays as written; a later client edit doesn't rewrite it. `client_field` refs resolve against the client's current values (AD-18).
   6. A downloaded export can't change after it is made. A stored export is reused only if it was rendered with the client's current info (AD-9); after a client edit, the next export renders again.
-  7. Every template fits the maximum description length in every format, so the About block can never cause an overflow that blocks approval.
+  7. Every template fits up to four industry labels and the maximum description length in every format (SCP 2026-10-19), so the About block can never cause an overflow that blocks approval.
   8. The About block appears in every format, export and shared link, like the rest of the document. AD-21 rule 8 (no case code there) is unchanged.
 
 ### AD-23 — A client has one intro, a document reviewed like a case history
 
-- **Binds:** FR11, FR12, `case-study`, `generation`, `rendering` ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
+- **Binds:** FR11, FR12, `case-study`, `generation`, `rendering` ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](../../sprint-change-proposal-2026-10-19.md))
 - **Prevents:** unreviewed AI text reaching clients through an intro, a second editing model for intros, intros with stale client data
 - **Rule:**
   1. One `client_intro` per client, with the case lifecycle (AD-3) and revisions of kind `client_intro`. Its events go to the append-only `client_event`.
-  2. Generated only with 2+ client images. The LLM writes text blocks only (a headline and one short paragraph, from the client's name, sector and description); layout is `relayout` over the images (AD-5, AD-15).
-  3. Client info and images are read live at render time (AD-22); AI text stays as written.
+  2. Generated only with 2+ image rows in `client_asset` (`NO_CLIENT_IMAGES`). The LLM writes text blocks only (a headline and one short paragraph, from the client's name, industries, description and brief, plus its material as OP 2 allows); layout is `relayout` over the client's images (AD-5, AD-15; SCP 2026-10-19).
+  3. Client info and client material are read live at render time (AD-22); AI text stays as written.
   4. Checked and approved as in AD-19. Only an approved intro appears in a client pack or a collection; otherwise case histories keep their own intro pages.
 
 ### AD-24 — A collection is an overlay on live approved revisions
@@ -450,7 +450,10 @@ erDiagram
   CASE_STUDY ||--o{ CASE_EVENT : logs
   CASE_STUDY ||--o{ SHARE_LINK : shared_as
   REVISION ||--o{ EXPORT : renders
-  CLIENT ||--o{ CLIENT_IMAGE : has
+  CLIENT ||--|| CLIENT_BRIEF : has
+  %% CLIENT_BRIEF: context, solution, results (AD-22, SCP 2026-10-19)
+  CLIENT ||--o{ CLIENT_ASSET : has
+  %% CLIENT_ASSET: up to 3 files, any material type; 2+ images for an intro (AD-23, SCP 2026-10-19)
   CLIENT ||--o| CLIENT_INTRO : introduced_by
   CLIENT_INTRO ||--o{ REVISION : versions
   COLLECTION ||--o{ COLLECTION_ITEM : lists
@@ -494,7 +497,7 @@ supabase/migrations/        # forward-only SQL, incl. jobs_claim()
 | --- | --- | --- |
 | FR1 unique ID, readable code, client | `case-study` | AD-2, AD-21 |
 | FR2 upload (20 × 50 MB), favourites, details form | `material` | AD-8, AD-14, AD-18 |
-| FR3 generate from templates, only from material, form answers and client info; About the client block | `generation`, `jobs`, `case-study` | AD-4, AD-5, AD-6, AD-7, AD-10, AD-17, AD-22 |
+| FR3 generate from templates, only from material, form answers and client info (name, industries, description, brief); About the client block | `generation`, `jobs`, `case-study` | AD-4, AD-5, AD-6, AD-7, AD-10, AD-17, AD-18, AD-22 |
 | FR4 adapt to media count | `rendering/templates` | AD-15 |
 | FR5 review dashboard and configurator, text editing | `app/(tool)`, `case-study` | AD-3, AD-4, AD-17, AD-19 |
 | FR6 approval by any owner/designer | `case-study` | AD-3, AD-19 |
@@ -506,7 +509,7 @@ supabase/migrations/        # forward-only SQL, incl. jobs_claim()
 | NFR5 narrative structure, both sides | `generation` | AD-4, AD-6, AD-7 |
 | NFR6 no material, no generation | `generation` gate + wizard | AD-6 |
 | NFR7 approval before export or share | `case-study`, `rendering`, `sharing` | AD-3, AD-13, AD-19 |
-| FR11 client intro | `case-study`, `generation`, `rendering` | AD-23 |
+| FR11 client wizard (details, material) and client intro (SCP 2026-10-19) | `app/(tool)`, `case-study`, `generation`, `rendering` | AD-8, AD-22, AD-23 |
 | FR12 client overview | `app/(tool)`, `case-study` | AD-3, AD-17 |
 | FR13 client packs and collections | `collection`, `rendering`, `jobs` | AD-9, AD-24 |
 | FR9 MAC Productive seam | `integration` (Epic 7) | AD-2, AD-16 |

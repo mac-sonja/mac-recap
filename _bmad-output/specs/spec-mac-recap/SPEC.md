@@ -24,7 +24,7 @@ The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects clos
 ## Capabilities
 
 - **CAP-1**
-  - **intent:** The owner/designer creates a case study by hand, and it gets a unique, permanent ID that a project order can later be linked to, and a readable code, under a client from the client list. Clients carry a description, sector and logo (SCP 2026-10-16).
+  - **intent:** The owner/designer creates a case study by hand, and it gets a unique, permanent ID that a project order can later be linked to, and a readable code, under a client from the client list. Clients carry industries (from a fixed list), a description, a logo and a brief (context, solution, results), all required, and are created in a wizard like a case study (SCP 2026-10-16, SCP 2026-10-19).
   - **success:** Every new case study has an ID that never changes, is never reused, and is the only identifier other systems see (AD-2).
 - **CAP-2**
   - **intent:** The owner/designer uploads material (images, videos, text documents and PDFs) to a case study and can mark any number of images and videos as favourite.
@@ -59,8 +59,8 @@ The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects clos
 - **CAP-12**
   - **intent:** The team can reconstruct each case's lifecycle and editing effort for the 8-week validation.
   - **success:** Every transition, upload, save, block check, claim edit, approval, export and link change is an append-only, timestamped event with its actor, and the generated draft is kept next to the approved version. The tool does not record hands-on time; how the measures are recorded is OP 13.
-- **CAP-13** (before the demo; [Sprint Change Proposal 2026-10-16, client intro and collections](../../planning-artifacts/sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
-  - **intent:** A client gets AI-drafted intro pages from its data and 2–3 images; editing a client shows its intro and case studies as one file; users download a client pack or build named collections of approved case studies.
+- **CAP-13** (before the demo; [Sprint Change Proposal 2026-10-16, client intro and collections](../../planning-artifacts/sprint-change-proposal-2026-10-16-client-intro-and-collections.md); amended by [Sprint Change Proposal 2026-10-19](../../planning-artifacts/sprint-change-proposal-2026-10-19.md))
+  - **intent:** A client gets AI-drafted intro pages from its data, its brief and up to 3 files of material, at least 2 of them images, laid out with its 2–3 images (SCP 2026-10-19); editing a client shows its intro and case studies as one file; users download a client pack or build named collections of approved case studies.
   - **success:** The intro is checked and approved like a case study. A client with 2+ case studies in a combined file gets its intro in front of them. Collection text edits (owner/designers only) and hidden pages never change the original case studies, and no combined file contains unapproved content.
 
 ## Constraints
