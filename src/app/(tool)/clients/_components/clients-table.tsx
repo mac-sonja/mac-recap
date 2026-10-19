@@ -46,14 +46,14 @@ function isTextField(el: Element | null): boolean {
  * Where a row goes: a finished client's page, or an unfinished client's wizard at
  * step 1 (a required field is empty). Story 2.16 adds the material check.
  */
-export const rowHref = (row: Pick<ClientRow, "id" | "complete">) => (row.complete ? clientHref(row.id) : clientWizardHref(row.id, 1));
+export const rowHref = (row: Pick<ClientRow, "id">) => clientHref(row.id);
 
 /**
- * The Clients table: Codice (mono), Nome and Case history (non-deleted count).
+ * The Clients table: ID (the client code, mono), Nome and Case history (non-deleted count).
  * Default sort Name A–Z; a header click sorts by it, again reverses. Search covers
  * name and code (case- and accent-insensitive, debounced); `/` focuses it unless focus
- * is already in a text field. A row opens the client's page, or, for an unfinished
- * client, its wizard at step 1 (`rowHref`). **Aggiungi cliente** (only with
+ * is already in a text field. Every row opens the client's page (`rowHref`; owner,
+ * 2026-10-19), where **Modifica cliente** reopens the wizard. **Aggiungi cliente** (only with
  * `manage clients`) opens the client wizard; it is hidden below 1024 px, where the
  * page is read-only.
  */
