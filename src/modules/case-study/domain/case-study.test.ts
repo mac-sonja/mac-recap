@@ -9,6 +9,7 @@ import {
   isClientComplete,
   saveClientBriefFieldInputSchema,
   LOGO_CONTENT_TYPES,
+  LOGO_SVG_TYPE,
   LOGO_MAX_BYTES,
   caseStudySchema,
   charCount,
@@ -16,6 +17,8 @@ import {
   createCaseStudyInputSchema,
   createClientInputSchema,
   isLogoContentType,
+  isSvgLogoType,
+  logoExtensionFor,
   isLogoLargeEnough,
   isLogoSizeAllowed,
   isLogoWithinMaxSide,
@@ -307,9 +310,16 @@ describe("isClientComplete", () => {
 });
 
 describe("logo limits", () => {
-  it("allows PNG, JPEG and WebP only", () => {
-    expect(LOGO_CONTENT_TYPES).toEqual(["image/png", "image/jpeg", "image/webp"]);
-    for (const type of ["image/svg+xml", "image/gif", "application/pdf", "", undefined]) expect(isLogoContentType(type)).toBe(false);
+  it("allows PNG, JPEG, WebP and SVG only", () => {
+    expect(LOGO_CONTENT_TYPES).toEqual(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
+    expect(isLogoContentType("image/svg+xml")).toBe(true);
+    for (const type of ["image/gif", "application/pdf", "image/svg", "", undefined]) expect(isLogoContentType(type)).toBe(false);
+  });
+
+  it("stores an SVG as .svg and treats only it as the vector type (no pixel rules)", () => {
+    expect(logoExtensionFor("image/svg+xml")).toBe("svg");
+    expect(LOGO_SVG_TYPE).toBe("image/svg+xml");
+    expect(LOGO_CONTENT_TYPES.filter(isSvgLogoType)).toEqual(["image/svg+xml"]);
   });
 
   it("allows 1 B–5 MB", () => {

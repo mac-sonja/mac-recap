@@ -83,11 +83,33 @@ describe("createSupabaseLogoStorage", () => {
     expect(stub.bucket.download).toHaveBeenCalledWith(KEY);
   });
 
-  it("answers no format for bytes that are not a PNG, JPEG or WebP, and null for a missing object", async () => {
+  it("answers no format for bytes that are not a PNG, JPEG or WebP (an SVG has no pixel size), and null for a missing object", async () => {
     const junk = stubClient(async () => ({ data: new Blob(["<svg xmlns='http://www.w3.org/2000/svg'/>"]), error: null }));
     expect(await createSupabaseLogoStorage(junk.factory).dimensions(target)).toEqual({ ok: true, value: { format: null, width: 0, height: 0 } });
     const missing = stubClient(async () => ({ data: null, error: new StorageApiError("Object not found", 404, "404") }));
     expect(await createSupabaseLogoStorage(missing.factory).dimensions(target)).toEqual({ ok: true, value: null });
+  });
+
+  it("reads an SVG object's bytes as stored, and null for a missing object", async () => {
+    const svg = "<svg xmlns='http://www.w3.org/2000/svg'/>";
+    const svgTarget = { ...target, contentType: "image/svg+xml" as const };
+    const stub = stubClient(async () => ({ data: new Blob([svg]), error: null }));
+    const read = await createSupabaseLogoStorage(stub.factory).read(svgTarget);
+    expect(read.ok && new TextDecoder().decode(read.value!)).toBe(svg);
+    expect(stub.bucket.download).toHaveBeenCalledWith(`clients/${CLIENT_ID}/logos/${LOGO_ID}.svg`);
+    const missing = stubClient(async () => ({ data: null, error: new StorageApiError("Object not found", 404, "404") }));
+    expect(await createSupabaseLogoStorage(missing.factory).read(svgTarget)).toEqual({ ok: true, value: null });
+  });
+
+  it("never reads an object over 5 MB (empty bytes) and logs a failed read with the client id only", async () => {
+    const big = stubClient(async () => ({ data: new Blob([new Uint8Array(5 * 1024 * 1024 + 1)]), error: null }));
+    const read = await createSupabaseLogoStorage(big.factory).read(target);
+    expect(read.ok && read.value?.byteLength).toBe(0);
+    const failing = stubClient(async () => ({ data: null, error: new StorageApiError("boom", 500, "500") }));
+    const { result, lines } = await quietly(() => createSupabaseLogoStorage(failing.factory).read(target));
+    expect(result).toMatchObject({ ok: false, error: { code: "STORAGE_FAILED" } });
+    expect(lines.join("")).toContain(CLIENT_ID);
+    expect(lines.join("")).not.toContain(KEY);
   });
 
   it("deletes the logo object by its key", async () => {

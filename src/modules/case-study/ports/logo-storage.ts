@@ -40,7 +40,12 @@ export interface LogoStorage {
   presignDownload(target: LogoTarget, ttlSeconds: number): Promise<Result<string>>;
   /** The object's stored metadata; `ok(null)` when it does not exist. */
   head(target: LogoTarget): Promise<Result<StoredLogo | null>>;
-  /** The stored image's real format and pixel size; `ok(null)` when the object is missing. */
+  /**
+   * The stored object's bytes, for the SVG safety scan; `ok(null)` when it is missing.
+   * An object over `LOGO_MAX_BYTES` is not read: its bytes come back empty.
+   */
+  read(target: LogoTarget): Promise<Result<Uint8Array | null>>;
+  /** The stored image's real format and pixel size (PNG, JPEG or WebP); `ok(null)` when the object is missing. */
   dimensions(target: LogoTarget): Promise<Result<LogoImage | null>>;
   /** Deletes the object; a missing object is fine. `err` only on failure. */
   remove(target: LogoTarget): Promise<Result<void>>;

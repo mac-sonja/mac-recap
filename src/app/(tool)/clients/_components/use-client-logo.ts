@@ -6,6 +6,7 @@ import type { ActionResult } from "@/app/_lib/action-result";
 import { confirmClientLogoUpload, requestClientLogoUpload } from "@/app/(tool)/clients/actions";
 import { normalizeContentType, uploadFile } from "@/app/(wizard)/_lib/upload";
 import { fill, it } from "@/shared/i18n/it";
+import { scanSvgBytes, type SvgScan } from "@/shared/svg-safety";
 import type { ClientLimits } from "../_lib/client-limits";
 
 /** The logo field's value: the client's current logo, a picked file not linked yet, or none (a client made before logos were required). */
@@ -15,11 +16,12 @@ export type ClientLogoValue =
   | { kind: "new"; file: File; contentType: string; previewUrl: string };
 
 /**
- * How a logo step failed: `invalid` (the server refused the image), `retry` (network
+ * How a logo step failed: `invalid` (the server refused the image), `unsafe` (the server
+ * refused an SVG that failed its safety scan), `retry` (network
  * or server error: Avanti may retry it), `fatal` (any other refusal, e.g. the client is
  * gone or the role lost its rights: retrying can't help).
  */
-export type LogoFailure = "invalid" | "retry" | "fatal";
+export type LogoFailure = "invalid" | "unsafe" | "retry" | "fatal";
 
 /** Thrown by `upload` (or by the caller's link) when the logo step fails; the other fields are already saved then. */
 export class LogoStepFailed extends Error {
@@ -29,7 +31,13 @@ export class LogoStepFailed extends Error {
 }
 
 export const logoFailureOf = (result: Extract<ActionResult<unknown>, { ok: false }>): LogoFailure =>
-  result.error.code === "CLIENT_LOGO_INVALID" ? "invalid" : result.status >= 500 ? "retry" : "fatal";
+  result.error.code === "CLIENT_LOGO_INVALID"
+    ? result.error.reason === "unsafe_svg"
+      ? "unsafe"
+      : "invalid"
+    : result.status >= 500
+      ? "retry"
+      : "fatal";
 
 /**
  * Width and height of an image file, decoded in the browser; null when the size is
@@ -45,6 +53,21 @@ export async function imageSize(file: File): Promise<{ width: number; height: nu
     return size;
   } catch {
     return null;
+  }
+}
+
+/** The SVG logo type: checked by the shared safety scan instead of the pixel rules. */
+const SVG_TYPE = "image/svg+xml";
+
+/**
+ * The shared SVG scan's verdict on a file (`scanSvg`, the same one the server runs at
+ * confirm): read as bytes so invalid UTF-8 is `invalid` too, as is a file that can't be read.
+ */
+export async function scanSvgFile(file: File): Promise<SvgScan> {
+  try {
+    return scanSvgBytes(new Uint8Array(await file.arrayBuffer()));
+  } catch {
+    return "invalid";
   }
 }
 
@@ -73,7 +96,8 @@ export interface ClientLogo {
 
 /**
  * The client logo field's logic, moved from the 2.14 dialog: pick (type, 1 B–5 MB,
- * short side ≥ `logoMinShortSide` px when the browser can measure it), preview, and
+ * short side ≥ `logoMinShortSide` px when the browser can measure it; an SVG must pass
+ * the SVG safety scan instead), preview, and
  * upload. `pickSeq` makes a slower, older measurement lose to a newer pick, and a
  * confirmed file is remembered so a failed link is retried without a new upload.
  * A logo can be replaced but not removed. `isBusy` blocks picks while a save runs.
@@ -127,11 +151,19 @@ export function useClientLogo(
     if (file.size > limits.logoMaxBytes) {
       return showError(fill(it.clients.errors.logoTooLarge, { size: limits.logoMaxBytes / (1024 * 1024) }));
     }
-    const size = await imageSize(file);
-    // A newer pick or a save started meanwhile: this result is stale.
-    if (seq !== pickSeq.current || isBusy()) return;
-    if (size !== null && Math.min(size.width, size.height) < limits.logoMinShortSide) {
-      return showError(fill(it.clients.errors.logoTooSmall, { px: limits.logoMinShortSide }));
+    if (contentType === SVG_TYPE) {
+      // An SVG has no pixel rule: it is accepted only as is, when the safety scan passes.
+      const scan = await scanSvgFile(file);
+      if (seq !== pickSeq.current || isBusy()) return;
+      if (scan === "invalid") return showError(it.clients.errors.logoUnreadable);
+      if (scan === "unsafe") return showError(it.clients.errors.logoUnsafe);
+    } else {
+      const size = await imageSize(file);
+      // A newer pick or a save started meanwhile: this result is stale.
+      if (seq !== pickSeq.current || isBusy()) return;
+      if (size !== null && Math.min(size.width, size.height) < limits.logoMinShortSide) {
+        return showError(fill(it.clients.errors.logoTooSmall, { px: limits.logoMinShortSide }));
+      }
     }
     const previewUrl = URL.createObjectURL(file);
     replacePreview(previewUrl);

@@ -26,7 +26,7 @@ vi.mock("@/modules/case-study", () => ({
   CLIENT_NAME_MAX: 120,
   CLIENT_DESCRIPTION_MAX: 400,
   CLIENT_BRIEF_MAX: 5000,
-  LOGO_CONTENT_TYPES: ["image/png", "image/jpeg", "image/webp"],
+  LOGO_CONTENT_TYPES: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"],
   LOGO_MAX_BYTES: 5 * 1024 * 1024,
   LOGO_MIN_SHORT_SIDE_PX: 400,
   CLIENT_MATERIAL_MAX_FILES: 3,

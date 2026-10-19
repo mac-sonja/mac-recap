@@ -227,7 +227,7 @@ export function saveClientBriefField(actor: Actor, input: unknown): Promise<Resu
 
 /**
  * A signed upload for a new logo: input `{ clientId, contentType, sizeBytes }`;
- * returns `{ logoId, url, method: "PUT", headers }`. PNG, JPEG or WebP, 1 B–5 MB,
+ * returns `{ logoId, url, method: "PUT", headers }`. PNG, JPEG, WebP or SVG, 1 B–5 MB,
  * else `CLIENT_LOGO_INVALID`. Call only after `authorize(actor, 'manage clients')`.
  * Errors: `INVALID_INPUT`, `CLIENT_LOGO_INVALID`, `CLIENT_NOT_FOUND`, `STORAGE_FAILED`.
  */
@@ -237,7 +237,7 @@ export function requestClientLogoUpload(actor: Actor, input: unknown): Promise<R
 
 /**
  * Records an uploaded logo after re-checking the stored object (size, type and real
- * pixels, short side ≥400 px): input `{ clientId, logoId, contentType }`; returns
+ * pixels, short side ≥400 px; an SVG passes the SVG safety scan instead): input `{ clientId, logoId, contentType }`; returns
  * `{ logoId }`, which `updateClient` then links. Call only after
  * `authorize(actor, 'manage clients')`. Errors: `INVALID_INPUT`, `CLIENT_LOGO_INVALID`
  * (no row written), `CLIENT_NOT_FOUND`, `STORAGE_FAILED`, `CLIENT_WRITE_FAILED`.

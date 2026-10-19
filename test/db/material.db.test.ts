@@ -1029,14 +1029,16 @@ describe("material storage bucket", () => {
   /** A tiny PNG body (the bucket checks only the declared type, not the bytes). */
   const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
 
-  it("exists, is private, and has the MAX_FILE_BYTES (50 MB) limit and exactly the allowlist", async () => {
+  it("exists, is private, and has the MAX_FILE_BYTES (50 MB) limit and exactly the allowlist plus SVG (client logos only)", async () => {
     const { rows } = await pool.query<{ id: string; public: boolean; limit: string; types: string[] }>(
       "select id, public, file_size_limit::text as limit, allowed_mime_types as types from storage.buckets where id = $1",
       [MATERIAL_BUCKET],
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: "material", public: false, limit: String(MAX_FILE_BYTES) });
-    expect([...rows[0].types].sort()).toEqual([...ALLOWED_CONTENT_TYPES].sort());
+    // `image/svg+xml` is there for client logos only (20261019160000); project files still refuse it at presign.
+    expect([...rows[0].types].sort()).toEqual([...ALLOWED_CONTENT_TYPES, "image/svg+xml"].sort());
+    expect(ALLOWED_CONTENT_TYPES).not.toContain("image/svg+xml");
   });
 
   it("has no storage.objects policy that could reach it (only the service role does)", async () => {
