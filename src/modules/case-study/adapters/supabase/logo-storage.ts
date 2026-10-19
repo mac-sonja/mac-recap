@@ -21,13 +21,13 @@ type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 const keyOf = (target: LogoTarget) => logoKey(target.clientId, target.logoId, target.contentType);
 
 /** The HTTP status of a storage API error, else the error's name (`StorageUnknownError` for a network error). */
-function errorLabel(error: unknown): string {
+export function errorLabel(error: unknown): string {
   if (error instanceof StorageApiError) return String(error.status);
   return (error as Error | null)?.name ?? "unknown";
 }
 
 /** A missing object: 404, or 400 with a "not found" message or a `statusCode` of "404" on older storage versions. */
-function isNotFound(error: unknown): boolean {
+export function isNotFound(error: unknown): boolean {
   if (!(error instanceof StorageApiError)) return false;
   if (error.status === 404) return true;
   return error.status === 400 && (error.statusCode === "404" || /not.?found/i.test(error.message));

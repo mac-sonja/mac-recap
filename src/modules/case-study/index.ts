@@ -1,12 +1,22 @@
 // Public surface of the case-study module. Code outside this module imports only this file.
-// The module owns `case_study`, `client`, `client_logo`, `client_brief`, `case_number_counter` and
-// `case_event`, and the `material` bucket's `clients/{clientId}/logos/**` (AD-1, AD-22):
+// The module owns `case_study`, `client`, `client_logo`, `client_brief`, `client_asset`,
+// `case_number_counter` and `case_event`, and the `material` bucket's
+// `clients/{clientId}/logos/**` and `clients/{clientId}/material/**` (AD-1, AD-22):
 // nobody else writes them.
 import { randomUUID } from "node:crypto";
 import type { Actor } from "@/modules/access";
 import { createSupabaseCaseStudyRepository } from "@/modules/case-study/adapters/supabase/case-study-repository";
 import { createSupabaseClientRepository } from "@/modules/case-study/adapters/supabase/client-repository";
+import { createSupabaseClientMaterialStorage } from "@/modules/case-study/adapters/supabase/client-material-storage";
 import { createSupabaseLogoStorage } from "@/modules/case-study/adapters/supabase/logo-storage";
+import type { ClientMaterialDeps } from "@/modules/case-study/application/client-material-deps";
+import { makeConfirmClientMaterialUpload } from "@/modules/case-study/application/confirm-client-material-upload";
+import { makeListClientMaterial } from "@/modules/case-study/application/list-client-material";
+import { makeRemoveClientMaterial } from "@/modules/case-study/application/remove-client-material";
+import {
+  makeRequestClientMaterialUpload,
+  type PresignedClientMaterial,
+} from "@/modules/case-study/application/request-client-material-upload";
 import { makeConfirmClientLogoUpload } from "@/modules/case-study/application/confirm-client-logo-upload";
 import { makeCreateCaseStudy } from "@/modules/case-study/application/create-case-study";
 import { makeCreateClient } from "@/modules/case-study/application/create-client";
@@ -38,6 +48,8 @@ import type {
   ClientSummary,
   ListScope,
 } from "@/modules/case-study/domain/case-study";
+import type { ListedClientAsset } from "@/modules/case-study/domain/client-material";
+import type { ClientMaterialStorage } from "@/modules/case-study/ports/client-material-storage";
 import type { LogoStorage } from "@/modules/case-study/ports/logo-storage";
 import type { Result } from "@/shared/result";
 
@@ -74,6 +86,22 @@ export type {
   LogoContentType,
   UpdateClientInput,
 } from "@/modules/case-study/domain/case-study";
+export {
+  CLIENT_IMAGE_MAX_SIDE_PX,
+  CLIENT_IMAGE_MIN_SHORT_SIDE_PX,
+  CLIENT_MATERIAL_CONTENT_TYPES,
+  CLIENT_MATERIAL_MAX_BYTES,
+  CLIENT_MATERIAL_MAX_FILES,
+  CLIENT_MATERIAL_MIN_IMAGES,
+  clientImageCount,
+} from "@/modules/case-study/domain/client-material";
+export type {
+  ClientAsset,
+  ClientAssetKind,
+  ClientMaterialContentType,
+  ListedClientAsset,
+} from "@/modules/case-study/domain/client-material";
+export type { PresignedClientMaterial } from "@/modules/case-study/application/request-client-material-upload";
 export type { PresignedClientLogoUpload } from "@/modules/case-study/application/request-client-logo-upload";
 export type { ClientBriefFieldSaved } from "@/modules/case-study/application/save-client-brief-field";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
@@ -136,11 +164,24 @@ function logoDeps(): LogoDeps {
   return { clients: createSupabaseClientRepository(), storage: logoStorage(), newId: randomUUID };
 }
 
+/** One client material storage adapter, built on first use and reused across requests. */
+let clientMaterialStorageMemo: ClientMaterialStorage | undefined;
+
+function clientMaterialStorage(): ClientMaterialStorage {
+  clientMaterialStorageMemo ??= createSupabaseClientMaterialStorage();
+  return clientMaterialStorageMemo;
+}
+
+function clientMaterialDeps(): ClientMaterialDeps {
+  return { clients: createSupabaseClientRepository(), storage: clientMaterialStorage(), newId: randomUUID };
+}
+
 /**
  * One client by id with its info, its brief (for the wizard; never shown on the
  * client page) and `logoUrl` (a signed GET valid at most 15
  * minutes, or null when it has no logo or the link could not be made). Unknown or
  * malformed ids are `CLIENT_NOT_FOUND`. Call only after `authorize(actor, 'list clients')`.
+ * Its files come from `listClientMaterial`.
  */
 export function getClient(id: unknown): Promise<Result<ClientDetail>> {
   return makeGetClient(createSupabaseClientRepository(), logoStorage())(id);
@@ -203,6 +244,49 @@ export function requestClientLogoUpload(actor: Actor, input: unknown): Promise<R
  */
 export function confirmClientLogoUpload(actor: Actor, input: unknown): Promise<Result<{ logoId: string }>> {
   return makeConfirmClientLogoUpload(logoDeps())(actor, input);
+}
+
+/**
+ * A signed upload for one new client file: input `{ clientId, contentType, sizeBytes }`;
+ * returns `{ assetId, url, method: "PUT", headers }`. The case material types
+ * (`FILE_TYPE_NOT_ALLOWED`), 1 B–50 MB (`FILE_TOO_LARGE`), at most 3 files per client
+ * (`CLIENT_MATERIAL_LIMIT`). Call only after `authorize(actor, 'manage clients')`.
+ * Errors also: `INVALID_INPUT`, `CLIENT_NOT_FOUND`, `STORAGE_FAILED`. Nothing is written.
+ */
+export function requestClientMaterialUpload(actor: Actor, input: unknown): Promise<Result<PresignedClientMaterial>> {
+  return makeRequestClientMaterialUpload(clientMaterialDeps())(actor, input);
+}
+
+/**
+ * Records an uploaded client file after re-checking the stored object (size, type,
+ * and for images the real pixels: short side ≥1600 px, no side over 8000 px): input
+ * `{ clientId, assetId, contentType }`; returns the listed file with the position
+ * the database chose. Call only after `authorize(actor, 'manage clients')`. Errors:
+ * `INVALID_INPUT`, `FILE_TYPE_NOT_ALLOWED`, `UPLOAD_NOT_FOUND`, `UPLOAD_REJECTED`,
+ * `CLIENT_MATERIAL_LIMIT`, `ASSET_ALREADY_CONFIRMED`, `CLIENT_NOT_FOUND`,
+ * `STORAGE_FAILED`, `CLIENT_WRITE_FAILED`; no row is written on any of them.
+ */
+export function confirmClientMaterialUpload(actor: Actor, input: unknown): Promise<Result<ListedClientAsset>> {
+  return makeConfirmClientMaterialUpload(clientMaterialDeps())(actor, input);
+}
+
+/**
+ * A client's files (`{ clientId }`), in position order, images with a signed
+ * thumbnail URL (≤15 minutes) or null. Call only after `authorize(actor, 'manage clients')`.
+ * Errors: `INVALID_INPUT`, `CLIENT_NOT_FOUND`, `CLIENT_LOOKUP_FAILED`.
+ */
+export function listClientMaterial(input: unknown): Promise<Result<ListedClientAsset[]>> {
+  return makeListClientMaterial(createSupabaseClientRepository(), clientMaterialStorage())(input);
+}
+
+/**
+ * Removes one client file at once, with no undo: input `{ clientId, assetId }`. Its
+ * row and object are deleted; a failed object delete is logged and never fails the
+ * removal. Call only after `authorize(actor, 'manage clients')`. Errors:
+ * `INVALID_INPUT`, `NOT_FOUND` (unknown file, or another client's), `CLIENT_WRITE_FAILED`.
+ */
+export function removeClientMaterial(actor: Actor, input: unknown): Promise<Result<void>> {
+  return makeRemoveClientMaterial(clientMaterialDeps())(actor, input);
 }
 
 /**

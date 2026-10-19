@@ -36,7 +36,7 @@ export const logoFailureOf = (result: Extract<ActionResult<unknown>, { ok: false
  * unknown (no `createImageBitmap`, or a browser that can't decode an allowed type,
  * e.g. WebP on older Safari): the server re-checks the real pixels at confirm.
  */
-async function imageSize(file: File): Promise<{ width: number; height: number } | null> {
+export async function imageSize(file: File): Promise<{ width: number; height: number } | null> {
   if (typeof globalThis.createImageBitmap !== "function") return null;
   try {
     const bitmap = await globalThis.createImageBitmap(file);

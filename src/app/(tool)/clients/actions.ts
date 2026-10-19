@@ -3,7 +3,13 @@
 import { failure, type ActionResult } from "@/app/_lib/action-result";
 import { authorize, getActor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
-import type { Client, ClientBriefFieldSaved, PresignedClientLogoUpload } from "@/modules/case-study";
+import type {
+  Client,
+  ClientBriefFieldSaved,
+  ListedClientAsset,
+  PresignedClientLogoUpload,
+  PresignedClientMaterial,
+} from "@/modules/case-study";
 
 // Clients are added and edited, never deleted (AD-21): there is no delete action.
 // Every action resolves the actor and authorizes `manage clients` before the use case runs.
@@ -80,4 +86,63 @@ export async function confirmClientLogoUpload(input: unknown): Promise<ActionRes
   if (!decision.ok) return failure(decision.error);
   const confirmed = await caseStudy.confirmClientLogoUpload(actor.value, input);
   return confirmed.ok ? confirmed : failure(confirmed.error);
+}
+
+/**
+ * A signed upload for one client file: input `{ clientId, contentType, sizeBytes }`.
+ * 403 `FORBIDDEN` unless the role may `manage clients`; 400 `FILE_TYPE_NOT_ALLOWED` /
+ * `FILE_TOO_LARGE`; 404 `CLIENT_NOT_FOUND`; 409 `CLIENT_MATERIAL_LIMIT` (3 files
+ * already). Nothing is written.
+ */
+export async function requestClientMaterialUpload(input: unknown): Promise<ActionResult<PresignedClientMaterial>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage clients");
+  if (!decision.ok) return failure(decision.error);
+  const presigned = await caseStudy.requestClientMaterialUpload(actor.value, input);
+  return presigned.ok ? presigned : failure(presigned.error);
+}
+
+/**
+ * Records an uploaded client file after the server re-checks it (type, size, and an
+ * image's pixels): input `{ clientId, assetId, contentType }`. 403 `FORBIDDEN` unless
+ * the role may `manage clients`; 400 `UPLOAD_REJECTED` / `FILE_TYPE_NOT_ALLOWED`;
+ * 404 `CLIENT_NOT_FOUND` / `UPLOAD_NOT_FOUND`; 409 `CLIENT_MATERIAL_LIMIT`. No row is
+ * written on any error.
+ */
+export async function confirmClientMaterialUpload(input: unknown): Promise<ActionResult<ListedClientAsset>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage clients");
+  if (!decision.ok) return failure(decision.error);
+  const confirmed = await caseStudy.confirmClientMaterialUpload(actor.value, input);
+  return confirmed.ok ? confirmed : failure(confirmed.error);
+}
+
+/**
+ * A client's files, in position order, images with a thumbnail URL: input
+ * `{ clientId }`. 403 `FORBIDDEN` unless the role may `manage clients`; 404
+ * `CLIENT_NOT_FOUND`. Reads only.
+ */
+export async function listClientMaterial(input: unknown): Promise<ActionResult<ListedClientAsset[]>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage clients");
+  if (!decision.ok) return failure(decision.error);
+  const listed = await caseStudy.listClientMaterial(input);
+  return listed.ok ? listed : failure(listed.error);
+}
+
+/**
+ * Removes one client file at once, row and object, with no undo: input
+ * `{ clientId, assetId }`. 403 `FORBIDDEN` unless the role may `manage clients`; 404
+ * `NOT_FOUND` (unknown file, or another client's). A failed object delete is only logged.
+ */
+export async function removeClientMaterial(input: unknown): Promise<ActionResult<void>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage clients");
+  if (!decision.ok) return failure(decision.error);
+  const removed = await caseStudy.removeClientMaterial(actor.value, input);
+  return removed.ok ? removed : failure(removed.error);
 }

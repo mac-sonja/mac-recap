@@ -55,6 +55,10 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   CLIENT_LOGO_INVALID: 400,
   // Client wizard (Story 2.15): a required field missing or outside the industry list.
   CLIENT_FIELD_INVALID: 400,
+  // Client material (Story 2.16): a 4th file.
+  CLIENT_MATERIAL_LIMIT: 409,
+  // An image under 1600 px on the short side or over 8000 px on a side.
+  CLIENT_IMAGE_SIZE_INVALID: 400,
   // Material uploads (Story 2.7).
   FILE_TYPE_NOT_ALLOWED: 400,
   FILE_TOO_LARGE: 400,

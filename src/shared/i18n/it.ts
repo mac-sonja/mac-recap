@@ -297,11 +297,20 @@ export const it = {
       /** Polite live-region line when a save fails; `{field}` is the field label, `{message}` its error. */
       announceError: "{field}: {message}",
     },
-    /** Step 2 until Story 2.16. */
+    /** Step 2 Materiale (Story 2.16): 2–3 files for the intro pages. */
     material: {
       heading: "Materiale",
-      note: "Il caricamento del materiale del cliente arriva con il prossimo aggiornamento.",
+      /** Above the drop zone. */
+      intro: "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione.",
       createIntro: "Crea introduzione",
+      /** Why Crea introduzione is inactive with fewer than 2 images. */
+      createIntroReason: "Carica almeno 2 immagini.",
+      errors: {
+        /** A 4th file. */
+        limit: "Massimo 3 file.",
+        /** An image under `{min}` px on the short side or over `{max}` px on a side. */
+        pixels: "Immagine troppo piccola o troppo grande: serve almeno {min} px sul lato corto e al massimo {max} px per lato.",
+      },
     },
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */

@@ -2,11 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
-import type { ClientBrief, ClientDetail } from "@/modules/case-study";
+import type { ClientBrief, ClientDetail, ListedClientAsset } from "@/modules/case-study";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const getClient = vi.fn<(id: unknown) => Promise<Result<ClientDetail>>>();
+const listClientMaterial = vi.fn<(input: unknown) => Promise<Result<ListedClientAsset[]>>>();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -17,6 +18,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
 vi.mock("@/modules/case-study", () => ({
   getClient: (id: unknown) => getClient(id),
+  listClientMaterial: (input: unknown) => listClientMaterial(input),
   // A stand-in for the module's rule (its own tests cover the rule itself).
   isClientComplete: (client: ClientDetail, brief: ClientBrief) =>
     client.industries.length > 0 && client.description !== null && client.logoId !== null && Object.values(brief).every((t) => t.trim() !== ""),
@@ -27,6 +29,12 @@ vi.mock("@/modules/case-study", () => ({
   LOGO_CONTENT_TYPES: ["image/png", "image/jpeg", "image/webp"],
   LOGO_MAX_BYTES: 5 * 1024 * 1024,
   LOGO_MIN_SHORT_SIDE_PX: 400,
+  CLIENT_MATERIAL_MAX_FILES: 3,
+  CLIENT_MATERIAL_MAX_BYTES: 50 * 1024 * 1024,
+  CLIENT_MATERIAL_CONTENT_TYPES: ["image/jpeg", "image/png", "application/pdf"],
+  CLIENT_MATERIAL_MIN_IMAGES: 2,
+  CLIENT_IMAGE_MIN_SHORT_SIDE_PX: 1600,
+  CLIENT_IMAGE_MAX_SIDE_PX: 8000,
 }));
 vi.mock("@/app/(tool)/clients/actions", () => ({
   createClient: vi.fn(),
@@ -34,6 +42,17 @@ vi.mock("@/app/(tool)/clients/actions", () => ({
   saveClientBriefField: vi.fn(),
   requestClientLogoUpload: vi.fn(),
   confirmClientLogoUpload: vi.fn(),
+  requestClientMaterialUpload: vi.fn(),
+  confirmClientMaterialUpload: vi.fn(),
+  listClientMaterial: vi.fn(),
+  removeClientMaterial: vi.fn(),
+}));
+vi.mock("@/app/(tool)/case-studies/actions", () => ({
+  presignAssetUpload: vi.fn(),
+  confirmAssetUpload: vi.fn(),
+  listAssets: vi.fn(),
+  removeAsset: vi.fn(),
+  setAssetFavourite: vi.fn(),
 }));
 
 const { default: NewClientPage } = await import("./page");
@@ -54,6 +73,20 @@ const COMPLETE: ClientDetail = {
   logoUrl: null,
   brief: BRIEF,
 };
+const asset = (position: number, over: Partial<ListedClientAsset> = {}): ListedClientAsset => ({
+  id: `ffffffff-0000-4000-8000-00000000000${position}`,
+  clientId: ID,
+  position,
+  fileName: `foto-${position}.jpg`,
+  kind: "image",
+  contentType: "image/jpeg",
+  sizeBytes: 2048,
+  width: 2400,
+  height: 1600,
+  createdAt: "2026-10-19T10:00:00+00:00",
+  thumbnailUrl: `https://storage.test/sign/${position}.jpg?token=t`,
+  ...over,
+});
 const LEGACY: ClientDetail = { ...COMPLETE, industries: [], logoId: null, brief: { context: "", solution: "", results: "" } };
 
 const renderPage = async (params: { clientId?: string | string[]; step?: string }) =>
@@ -77,6 +110,8 @@ const segments = (html: string) =>
 beforeEach(() => {
   requireSurface.mockReset();
   getClient.mockReset();
+  listClientMaterial.mockReset();
+  listClientMaterial.mockResolvedValue(ok([]));
   requireSurface.mockResolvedValue(shell("owner_designer"));
   getClient.mockResolvedValue(ok(COMPLETE));
 });
@@ -111,17 +146,47 @@ describe("NewClientPage", () => {
     expect(segments(html)[1]).toMatchObject({ href: `/clients/new?clientId=${ID}&step=2` });
   });
 
-  it("shows step 2 as a placeholder with an inactive Crea introduzione and the note as its reason", async () => {
+  it("shows step 2 Materiale with the copy above the drop zone and an inactive Crea introduzione with its reason", async () => {
     const html = await renderPage({ clientId: ID, step: "2" });
     expect(segments(html)).toEqual([
       { step: 1, current: false, href: `/clients/new?clientId=${ID}&step=1`, text: "vai a Dettagli, completato" },
       { step: 2, current: true, href: null, text: "2Materiale" },
     ]);
+    expect(html).toContain("Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione.");
+    expect(html).toContain("Fino a 3 file, 50 MB ciascuno.");
     const button = html.match(/<button [^>]*>Crea introduzione<\/button>/)?.[0] ?? "";
     expect(button).toContain('aria-disabled="true"');
-    expect(button).toContain('aria-describedby="client-wizard-step-note"');
-    expect(html).toMatch(/<p id="client-wizard-step-note"[^>]*>Il caricamento del materiale del cliente arriva con il prossimo aggiornamento\.<\/p>/);
+    const reasonId = button.match(/aria-describedby="([^"]+)"/)?.[1];
+    expect(html).toContain(`<span id="${reasonId}">Carica almeno 2 immagini.</span>`);
     expect(html).not.toContain("I dati del cliente");
+    expect(html).not.toContain("Preferito");
+  });
+
+  it("lists the client's files in position order with thumbnails, and links Crea introduzione to the client page with 2 images", async () => {
+    listClientMaterial.mockResolvedValue(
+      ok([
+        asset(1),
+        asset(2, { thumbnailUrl: null }),
+        asset(3, { fileName: "brief.pdf", kind: "document", contentType: "application/pdf", width: null, height: null, thumbnailUrl: null }),
+      ]),
+    );
+    const html = await renderPage({ clientId: ID, step: "2" });
+    expect(listClientMaterial).toHaveBeenCalledWith({ clientId: ID });
+    const names = [...html.matchAll(/<div id="[^"]*" class="truncate[^"]*">([^<]*)<\/div>/g)].map((m) => m[1]);
+    expect(names).toEqual(["foto-1.jpg", "foto-2.jpg", "brief.pdf"]);
+    expect(html).toContain('src="https://storage.test/sign/1.jpg?token=t"');
+    expect(html).toContain("3 / 3 file");
+    expect(html).toMatch(new RegExp(`<a [^>]*href="/clients/${ID}"[^>]*>Crea introduzione</a>`));
+    expect(html).not.toContain("Carica almeno 2 immagini.");
+  });
+
+  it("keeps Crea introduzione inactive with one image and a PDF", async () => {
+    listClientMaterial.mockResolvedValue(
+      ok([asset(1), asset(2, { fileName: "brief.pdf", kind: "document", contentType: "application/pdf", width: null, height: null, thumbnailUrl: null })]),
+    );
+    const html = await renderPage({ clientId: ID, step: "2" });
+    expect(html).toMatch(/<button [^>]*aria-disabled="true"[^>]*>Crea introduzione<\/button>/);
+    expect(html).toContain("Carica almeno 2 immagini.");
   });
 
   it("sends an unfinished client asking for step 2 back to step 1, and links no Materiale", async () => {
@@ -138,6 +203,13 @@ describe("NewClientPage", () => {
     getClient.mockResolvedValue(err({ code: "CLIENT_NOT_FOUND", message: "m" }));
     await expect(renderPage({ clientId })).rejects.toThrow("REDIRECT /clients");
     if (Array.isArray(clientId)) expect(getClient).toHaveBeenCalledWith(null);
+  });
+
+  it("reads the files only on step 2, and throws into the error boundary when that read fails", async () => {
+    await renderPage({ clientId: ID, step: "1" });
+    expect(listClientMaterial).not.toHaveBeenCalled();
+    listClientMaterial.mockResolvedValue(err({ code: "CLIENT_LOOKUP_FAILED", message: "down" }));
+    await expect(renderPage({ clientId: ID, step: "2" })).rejects.toThrow(/CLIENT_LOOKUP_FAILED/);
   });
 
   it("throws into the error boundary when the lookup fails", async () => {

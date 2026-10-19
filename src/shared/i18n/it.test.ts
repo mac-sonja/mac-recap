@@ -79,6 +79,12 @@ describe("client wizard copy", () => {
     ]);
     expect(Object.values(it.clientWizard.details.placeholders).every((line) => line.length > 0 && !line.includes("\n"))).toBe(true);
     expect(t("clientWizard.material.createIntro")).toBe("Crea introduzione");
+    expect(t("clientWizard.material.intro")).toBe(
+      "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione.",
+    );
+    expect(t("clientWizard.material.createIntroReason")).toBe("Carica almeno 2 immagini.");
+    expect(t("clientWizard.material.errors.limit")).toBe("Massimo 3 file.");
+    expect(fill(t("clientWizard.material.errors.pixels"), { min: 1600, max: 8000 })).toContain("1600 px sul lato corto");
     expect(fill(t("clientWizard.details.nextReason"), { fields: "Settore, Logo" })).toBe("Per continuare compila: Settore, Logo.");
   });
 });

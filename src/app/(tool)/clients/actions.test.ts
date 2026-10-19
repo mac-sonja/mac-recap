@@ -2,13 +2,28 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { err, ok } from "@/shared/result";
 
-const { getActor, createClientUseCase, updateClientUseCase, saveBriefUseCase, requestLogoUseCase, confirmLogoUseCase } = vi.hoisted(() => ({
+const {
+  getActor,
+  createClientUseCase,
+  updateClientUseCase,
+  saveBriefUseCase,
+  requestLogoUseCase,
+  confirmLogoUseCase,
+  requestMaterialUseCase,
+  confirmMaterialUseCase,
+  listMaterialUseCase,
+  removeMaterialUseCase,
+} = vi.hoisted(() => ({
   getActor: vi.fn(),
   createClientUseCase: vi.fn(),
   updateClientUseCase: vi.fn(),
   saveBriefUseCase: vi.fn(),
   requestLogoUseCase: vi.fn(),
   confirmLogoUseCase: vi.fn(),
+  requestMaterialUseCase: vi.fn(),
+  confirmMaterialUseCase: vi.fn(),
+  listMaterialUseCase: vi.fn(),
+  removeMaterialUseCase: vi.fn(),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -22,10 +37,24 @@ vi.mock("@/modules/case-study", () => ({
   saveClientBriefField: saveBriefUseCase,
   requestClientLogoUpload: requestLogoUseCase,
   confirmClientLogoUpload: confirmLogoUseCase,
+  requestClientMaterialUpload: requestMaterialUseCase,
+  confirmClientMaterialUpload: confirmMaterialUseCase,
+  listClientMaterial: listMaterialUseCase,
+  removeClientMaterial: removeMaterialUseCase,
 }));
 
 const actions = await import("./actions");
-const { createClient, updateClient, saveClientBriefField, requestClientLogoUpload, confirmClientLogoUpload } = actions;
+const {
+  createClient,
+  updateClient,
+  saveClientBriefField,
+  requestClientLogoUpload,
+  confirmClientLogoUpload,
+  requestClientMaterialUpload,
+  confirmClientMaterialUpload,
+  listClientMaterial,
+  removeClientMaterial,
+} = actions;
 
 const actor = (role: Actor["role"]): Actor => ({
   id: "00000000-0000-4000-8000-000000000002",
@@ -35,6 +64,7 @@ const actor = (role: Actor["role"]): Actor => ({
 });
 
 const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
+const ASSET_ID = "ffffffff-0000-4000-8000-000000000001";
 const LUMEN = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM", industries: ["lusso"], description: "Brand.", logoId: LOGO_ID };
 const EDIT = { clientId: LUMEN.id, name: "Lumen S.r.l.", industries: ["lusso"], description: "Brand.", logoId: LOGO_ID };
 
@@ -44,21 +74,61 @@ const cases = [
   ["saveClientBriefField", saveClientBriefField, saveBriefUseCase, { clientId: LUMEN.id, field: "context", text: "Un marchio." }],
   ["requestClientLogoUpload", requestClientLogoUpload, requestLogoUseCase, { clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 }],
   ["confirmClientLogoUpload", confirmClientLogoUpload, confirmLogoUseCase, { clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/png" }],
+  [
+    "requestClientMaterialUpload",
+    requestClientMaterialUpload,
+    requestMaterialUseCase,
+    { clientId: LUMEN.id, contentType: "image/jpeg", sizeBytes: 10 },
+  ],
+  [
+    "confirmClientMaterialUpload",
+    confirmClientMaterialUpload,
+    confirmMaterialUseCase,
+    { clientId: LUMEN.id, assetId: ASSET_ID, contentType: "image/jpeg" },
+  ],
+  ["removeClientMaterial", removeClientMaterial, removeMaterialUseCase, { clientId: LUMEN.id, assetId: ASSET_ID }],
 ] as const;
 
+/** Every action, the read-only listing included (its use case takes no actor). */
+const allCases = [...cases, ["listClientMaterial", listClientMaterial, listMaterialUseCase, { clientId: LUMEN.id }] as const];
+
 beforeEach(() => {
-  for (const fn of [getActor, createClientUseCase, updateClientUseCase, saveBriefUseCase, requestLogoUseCase, confirmLogoUseCase]) fn.mockReset();
+  for (const fn of [
+    getActor,
+    createClientUseCase,
+    updateClientUseCase,
+    saveBriefUseCase,
+    requestLogoUseCase,
+    confirmLogoUseCase,
+    requestMaterialUseCase,
+    confirmMaterialUseCase,
+    listMaterialUseCase,
+    removeMaterialUseCase,
+  ])
+    fn.mockReset();
 });
 
 describe("client actions", () => {
-  it("exports only add, edit, the brief save and the two logo steps: no delete", () => {
+  it("exports only add, edit, the brief save, the two logo steps and the client material actions: no client delete", () => {
     expect(Object.keys(actions).sort()).toEqual([
       "confirmClientLogoUpload",
+      "confirmClientMaterialUpload",
       "createClient",
+      "listClientMaterial",
+      "removeClientMaterial",
       "requestClientLogoUpload",
+      "requestClientMaterialUpload",
       "saveClientBriefField",
       "updateClient",
     ]);
+  });
+
+  it("listClientMaterial passes its input unchanged for an owner/designer", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    listMaterialUseCase.mockResolvedValue(ok([]));
+    const input = { clientId: LUMEN.id };
+    expect(await listClientMaterial(input)).toEqual({ ok: true, value: [] });
+    expect(listMaterialUseCase).toHaveBeenCalledExactlyOnceWith(input);
   });
 
   it.each(cases)("%s passes the actor and its input unchanged for an owner/designer", async (_name, action, useCase, input) => {
@@ -69,7 +139,7 @@ describe("client actions", () => {
     expect(useCase.mock.calls[0][1]).toBe(input);
   });
 
-  it.each(cases.flatMap((c) => (["account_sales_social", "admin", "system"] as const).map((role) => [c[0], role, c[1], c[2], c[3]] as const)))(
+  it.each(allCases.flatMap((c) => (["account_sales_social", "admin", "system"] as const).map((role) => [c[0], role, c[1], c[2], c[3]] as const)))(
     "%s returns 403 FORBIDDEN for %s and never calls the use case",
     async (_name, role, action, useCase, input) => {
       getActor.mockResolvedValue(ok(actor(role)));
@@ -78,7 +148,7 @@ describe("client actions", () => {
     },
   );
 
-  it.each(cases)("%s returns 401 when no actor resolves", async (_name, action, useCase, input) => {
+  it.each(allCases)("%s returns 401 when no actor resolves", async (_name, action, useCase, input) => {
     getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "No profile." }));
     expect(await action(input)).toMatchObject({ ok: false, status: 401 });
     expect(useCase).not.toHaveBeenCalled();
@@ -125,6 +195,21 @@ describe("client actions", () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     useCase.mockResolvedValue(err({ code: "CLIENT_LOGO_INVALID", message: "m", details: { clientId: LUMEN.id } }));
     expect(await action({})).toEqual({ ok: false, status: 400, error: { code: "CLIENT_LOGO_INVALID", message: "m" } });
+  });
+
+  it.each([
+    ["requestClientMaterialUpload", requestClientMaterialUpload, requestMaterialUseCase, "FILE_TYPE_NOT_ALLOWED", 400],
+    ["requestClientMaterialUpload", requestClientMaterialUpload, requestMaterialUseCase, "FILE_TOO_LARGE", 400],
+    ["requestClientMaterialUpload", requestClientMaterialUpload, requestMaterialUseCase, "CLIENT_MATERIAL_LIMIT", 409],
+    ["confirmClientMaterialUpload", confirmClientMaterialUpload, confirmMaterialUseCase, "UPLOAD_REJECTED", 400],
+    ["confirmClientMaterialUpload", confirmClientMaterialUpload, confirmMaterialUseCase, "CLIENT_MATERIAL_LIMIT", 409],
+    ["confirmClientMaterialUpload", confirmClientMaterialUpload, confirmMaterialUseCase, "UPLOAD_NOT_FOUND", 404],
+    ["removeClientMaterial", removeClientMaterial, removeMaterialUseCase, "NOT_FOUND", 404],
+    ["listClientMaterial", listClientMaterial, listMaterialUseCase, "CLIENT_NOT_FOUND", 404],
+  ] as const)("%s maps %s to %i and keeps details server-side", async (_name, action, useCase, code, status) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    useCase.mockResolvedValue(err({ code, message: "m", details: { clientId: LUMEN.id } }));
+    expect(await action({})).toEqual({ ok: false, status, error: { code, message: "m" } });
   });
 
   it.each([

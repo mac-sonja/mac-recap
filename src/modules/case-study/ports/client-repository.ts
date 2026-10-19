@@ -8,6 +8,7 @@ import type {
   ClientSummary,
   LogoContentType,
 } from "@/modules/case-study/domain/case-study";
+import type { ClientAsset, ClientMaterialContentType } from "@/modules/case-study/domain/client-material";
 import type { Result } from "@/shared/result";
 
 /** A `client_logo` row as the module sees it. A replaced or removed logo's row is deleted. */
@@ -27,6 +28,20 @@ export interface NewClientLogo {
   createdBy: string;
 }
 
+/** A confirmed client file to record: its object is already stored and checked. The position is chosen in SQL. */
+export interface NewClientAsset {
+  id: string;
+  clientId: string;
+  /** Trimmed, 1–255 characters. */
+  fileName: string;
+  contentType: ClientMaterialContentType;
+  sizeBytes: number;
+  /** Set for images only. */
+  width: number | null;
+  height: number | null;
+  createdBy: string;
+}
+
 /** Every field of a client after an edit (the code never changes). The logo is required. */
 export interface ClientUpdate extends ClientInfo {
   id: string;
@@ -35,7 +50,7 @@ export interface ClientUpdate extends ClientInfo {
 }
 
 /**
- * Reads and writes `client`, `client_logo` and `client_brief`. Implemented by
+ * Reads and writes `client`, `client_logo`, `client_brief` and `client_asset`. Implemented by
  * `adapters/supabase/client-repository.ts`. There is no delete (AD-21, AD-22).
  */
 export interface ClientRepository {
@@ -81,6 +96,17 @@ export interface ClientRepository {
   deleteLogo(id: string): Promise<Result<boolean>>;
   /** Inserts one `client_logo` row (the path is built by the adapter). `err` when the write fails. */
   insertLogo(logo: NewClientLogo): Promise<Result<ClientLogo>>;
+  /** The client's files, in position order; `err` only when the read fails or a row fails validation. */
+  listAssets(clientId: string): Promise<Result<ClientAsset[]>>;
+  /**
+   * Records one client file through `insert_client_asset`, which takes the lowest
+   * free position (1–3). `err CLIENT_MATERIAL_LIMIT` (3 files already) /
+   * `CLIENT_NOT_FOUND` / `ASSET_ALREADY_CONFIRMED`, otherwise `err` only when the
+   * write fails. Nothing is written on any `err`.
+   */
+  insertAsset(asset: NewClientAsset): Promise<Result<ClientAsset>>;
+  /** Deletes one `client_asset` row (of `clientId`, for the log) through `delete_client_asset`; `ok(false)` when no row has this id. */
+  deleteAsset(id: string, clientId: string): Promise<Result<boolean>>;
   /**
    * The client's current info for a non-deleted case (live: AD-22 as amended
    * 2026-10-16). `ok(null)` when no
