@@ -50,7 +50,7 @@ development_status:
   2-12-clients-and-readable-case-history-codes: done  # SCP 2026-10-15; #40; migration applied to mac-recap-dev 2026-10-15 (not staging/prod; ship with 2.13)
   2-13-clients-page: done  # SCP 2026-10-15; #43; no migration; ship to prod together with 2.12; dialogs extended by 2.14 (SCP 2026-10-16); Add/Edit client flows extended before the demo by 2.15 and 4.12; dialog replaced by the client wizard (SCP 2026-10-19, 2.15 and 2.16)
   2-14-client-info-description-sector-logo: done  # SCP 2026-10-16; first in Sprint 2, before 3.3; #48; client info live (owner 2026-10-16); both migrations applied to mac-recap-dev (not staging/prod); Add/Edit client flows extended before the demo by 2.15 and 4.12; sector becomes industries and all fields required, rework built in 2.15 (SCP 2026-10-19)
-  2-15-client-wizard-and-details-step: review  # MVP, before the demo; rewritten from Client images (SCP 2026-10-19); Sprint 2, first: after 2.14, before 2.16
+  2-15-client-wizard-and-details-step: done  # #53; migration applied to mac-recap-dev 2026-10-19 (not staging/prod); MVP, before the demo; rewritten from Client images (SCP 2026-10-19); Sprint 2, first: after 2.14, before 2.16
   2-16-client-material-step: review  # MVP, before the demo (SCP 2026-10-19); Sprint 2: after 2.15, before 3.2
   epic-2-retrospective: optional
 
