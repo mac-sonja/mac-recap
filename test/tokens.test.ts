@@ -51,6 +51,20 @@ describe("theme tokens", () => {
     expect(css).toMatch(/:focus-visible\s*\{[^}]*var\(--color-focus-ring\)/);
   });
 
+  it("form fields show focus as a thin border in the focus-ring colour, not the outline", () => {
+    const rule = css.match(/:is\(\s*input:not\(([^)]*)\),\s*textarea,\s*select\s*\):focus-visible\s*\{([^}]*)\}/);
+    expect(rule).not.toBeNull();
+    const [, excluded, body] = rule!;
+    // Buttons and choice controls keep the outline ring.
+    for (const type of ["checkbox", "radio", "file", "button", "submit"]) expect(excluded).toContain(`[type="${type}"]`);
+    expect(body).toMatch(/outline:\s*1px solid transparent;/);
+    expect(body).toMatch(/outline-offset:\s*0;/);
+    expect(body).toMatch(/border-color:\s*var\(--color-focus-ring\);/);
+    // Unlayered, so field utilities such as `border-transparent` can't hide it.
+    expect(css.indexOf(rule![0])).toBeGreaterThan(css.lastIndexOf("@layer base"));
+    expect(css.slice(css.indexOf("@layer base"), css.indexOf(rule![0]))).toMatch(/\n\}\n/);
+  });
+
   it("respects prefers-reduced-motion", () => {
     expect(css).toContain("prefers-reduced-motion: reduce");
   });

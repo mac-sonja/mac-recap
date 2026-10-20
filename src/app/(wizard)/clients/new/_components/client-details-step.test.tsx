@@ -135,6 +135,25 @@ describe("ClientDetailsStep fields", () => {
     expect(describedText(field("Descrizione"))).toContain("0/400");
   });
 
+  it("marks every field required with the * after its label, with no legend (owner, 2026-10-20)", () => {
+    renderStep();
+    const marks = [...document.querySelectorAll("[data-required-mark]")];
+    expect(marks.map((mark) => mark.previousElementSibling?.textContent ?? mark.parentElement?.firstChild?.textContent)).toEqual([
+      "Nome",
+      "Settore",
+      "Descrizione",
+      "Logo",
+      "Contesto",
+      "Soluzione",
+      "Risultati",
+    ]);
+    expect(marks.every((mark) => mark.textContent === "*" && mark.getAttribute("aria-hidden") === "true")).toBe(true);
+    // The marker stays out of the names.
+    expect(screen.getByRole("group", { name: "Logo" })).toBeTruthy();
+    expect(field("Nome").getAttribute("aria-required")).toBe("true");
+    expect(document.body.textContent).not.toContain("obbligatorio");
+  });
+
   it("keeps Avanti inactive with the reason naming the empty fields, linked by aria-describedby", async () => {
     const user = setup();
     renderStep();

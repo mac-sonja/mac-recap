@@ -13,6 +13,7 @@ import { LogoStepFailed, logoFailureOf, useClientLogo, type LogoFailure } from "
 import type { ClientLimits } from "@/app/(tool)/clients/_lib/client-limits";
 import { acceptFor } from "@/app/(wizard)/_lib/upload";
 import { useAutosaveFields } from "@/app/(wizard)/_components/use-autosave-fields";
+import { RequiredLabel, RequiredMark } from "@/app/(wizard)/_components/required-label";
 import { WizardFooter } from "@/app/(wizard)/_components/wizard-frame";
 import type { Client, ClientBrief, ClientBriefField, ClientDetail, ClientIndustry } from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
@@ -331,9 +332,11 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
 
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={ids.name} className={LABEL}>
-            {copy.labels.name}
-          </label>
+          <RequiredLabel>
+            <label htmlFor={ids.name} className={LABEL}>
+              {copy.labels.name}
+            </label>
+          </RequiredLabel>
           <input
             id={ids.name}
             name="name"
@@ -358,9 +361,11 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span id={ids.industriesLabel} className={LABEL}>
-            {copy.labels.industries}
-          </span>
+          <RequiredLabel>
+            <span id={ids.industriesLabel} className={LABEL}>
+              {copy.labels.industries}
+            </span>
+          </RequiredLabel>
           <div ref={firstPill}>
             <IndustryPills
               options={options}
@@ -382,9 +387,11 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
 
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between gap-2">
-            <label htmlFor={ids.description} className={LABEL}>
-              {copy.labels.description}
-            </label>
+            <RequiredLabel>
+              <label htmlFor={ids.description} className={LABEL}>
+                {copy.labels.description}
+              </label>
+            </RequiredLabel>
             <p
               id={ids.counter}
               aria-live="polite"
@@ -419,7 +426,10 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
         </div>
 
         <fieldset className="flex flex-col gap-1.5">
-          <legend className={cn(LABEL, "mb-1.5")}>{copy.labels.logo}</legend>
+          <legend className={cn(LABEL, "mb-1.5 flex items-baseline gap-0.5")}>
+            {copy.labels.logo}
+            <RequiredMark />
+          </legend>
           <div className="flex items-center gap-3">
             {logo.previewUrl === null ? null : (
               <LogoTile src={logo.previewUrl} alt={fill(copy.logoAlt, { name: altName })} className="size-20" />
@@ -469,9 +479,11 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
           const message = over ? fill(it.clients.errors.fieldTooLong, { max: limits.briefMax }) : saveFailed ? copy.errors.saveFailed : null;
           return (
             <div key={field} className="flex flex-col gap-1.5">
-              <label htmlFor={id} className={LABEL}>
-                {copy.labels[field]}
-              </label>
+              <RequiredLabel>
+                <label htmlFor={id} className={LABEL}>
+                  {copy.labels[field]}
+                </label>
+              </RequiredLabel>
               <textarea
                 id={id}
                 ref={(element) => {

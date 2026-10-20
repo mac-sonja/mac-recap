@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BusinessLine } from "@/modules/case-study";
 import { BusinessLinePills } from "./business-line-pills";
 
-const OPTIONS: BusinessLine[] = ["branding", "social_media", "video", "web_design", "advertising", "eventi"];
+const OPTIONS: BusinessLine[] = ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"];
 
 function Harness({ initial = null, onSelect }: { initial?: BusinessLine | null; onSelect?: (value: BusinessLine) => void }) {
   const [selected, setSelected] = useState<BusinessLine | null>(initial);
@@ -32,12 +32,20 @@ const checked = () => radios().filter((r) => r.getAttribute("aria-checked") === 
 afterEach(cleanup);
 
 describe("BusinessLinePills", () => {
-  it("is a named radiogroup of the six business lines, none checked, the first in the tab order", () => {
+  it("uses the larger shared pill (Story 2.18): 40px tall, 14px text, about 8px apart", () => {
+    render(<Harness />);
+    for (const radio of radios()) {
+      expect(radio.className.split(" ")).toEqual(expect.arrayContaining(["min-h-10", "px-4", "py-2", "text-sm"]));
+    }
+    expect(screen.getByRole("radiogroup").className).toBe("flex flex-wrap gap-2");
+  });
+
+  it("is a named radiogroup of the seven business lines, none checked, the first in the tab order", () => {
     render(<Harness />);
     expect(screen.getByRole("radiogroup", { name: "Business line" })).toBeTruthy();
-    expect(radios().map((r) => r.textContent)).toEqual(["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi"]);
+    expect(radios().map((r) => r.textContent)).toEqual(["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi", "Sviluppo"]);
     expect(checked()).toEqual([]);
-    expect(radios().map((r) => r.tabIndex)).toEqual([0, -1, -1, -1, -1, -1]);
+    expect(radios().map((r) => r.tabIndex)).toEqual([0, -1, -1, -1, -1, -1, -1]);
     // The client industry pill look, with the checked state.
     expect(radios()[0].className).toContain("rounded-full");
     expect(radios()[0].className).toContain("aria-checked:bg-accent/10");
@@ -49,7 +57,7 @@ describe("BusinessLinePills", () => {
     await user.click(screen.getByRole("radio", { name: "Video" }));
     await user.click(screen.getByRole("radio", { name: "Eventi" }));
     expect(checked()).toEqual(["Eventi"]);
-    expect(radios().map((r) => r.tabIndex)).toEqual([-1, -1, -1, -1, -1, 0]);
+    expect(radios().map((r) => r.tabIndex)).toEqual([-1, -1, -1, -1, -1, 0, -1]);
   });
 
   it("moves and picks with the arrow keys, wrapping, and with Home and End", async () => {
@@ -60,11 +68,11 @@ describe("BusinessLinePills", () => {
     expect(checked()).toEqual(["Social media"]);
     expect(document.activeElement).toBe(radios()[1]);
     await user.keyboard("{ArrowUp}{ArrowUp}");
-    expect(checked()).toEqual(["Eventi"]);
+    expect(checked()).toEqual(["Sviluppo"]);
     await user.keyboard("{ArrowDown}");
     expect(checked()).toEqual(["Branding"]);
     await user.keyboard("{End}");
-    expect(checked()).toEqual(["Eventi"]);
+    expect(checked()).toEqual(["Sviluppo"]);
     await user.keyboard("{Home}");
     expect(checked()).toEqual(["Branding"]);
   });

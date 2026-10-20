@@ -22,12 +22,14 @@ vi.mock("@/app/(tool)/case-studies/actions", () => ({
 
 const { CaseDetailsStep } = await import("./case-details-step");
 const { DEBOUNCE_MS } = await import("./use-autosave-fields");
+const { WizardFrame } = await import("./wizard-frame");
+const { TITLE_DEBOUNCE_MS } = await import("./case-details-step");
 
 const ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const LUMEN: ClientRef = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" };
 const TORINO: ClientRef = { id: "cccccccc-0000-4000-8000-000000000002", name: "Città di Torino", code: "CIT" };
 const CLIENTS: ClientRef[] = [TORINO, LUMEN];
-const BUSINESS_LINES: BusinessLine[] = ["branding", "social_media", "video", "web_design", "advertising", "eventi"];
+const BUSINESS_LINES: BusinessLine[] = ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"];
 const EMPTY: DetailsForm = { context: "", solution: "", results: "" };
 const STEP_1 = `/case-studies/new?caseId=${ID}&step=1`;
 const STEP_2 = `/case-studies/new?caseId=${ID}&step=2`;
@@ -109,9 +111,16 @@ const flush = () => act(async () => {});
 const wait = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
 const describedText = (el: Element) => document.getElementById(el.getAttribute("aria-describedby") ?? "")?.textContent;
 
+/** Searches the client combobox and picks the first match with Enter. */
+async function pickClient(user: ReturnType<typeof userEvent.setup>, query = "lum") {
+  await user.click(field("Cliente"));
+  await user.type(field("Cliente"), query);
+  await user.keyboard("{Enter}");
+}
+
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.type(field("Nome della case history"), "  Rebrand  ");
-  await user.selectOptions(field("Cliente"), LUMEN.id);
+  await pickClient(user);
   await user.click(pill("Social media"));
 }
 
@@ -186,20 +195,27 @@ afterEach(() => {
 });
 
 describe("CaseDetailsStep, a new case", () => {
-  it("shows the fields in order: name, client, year (prefilled), language (Italiano), business line, then the three texts", () => {
+  it("shows the fields in order: name, client (a search box), year (prefilled, marked required), business line, then the three texts; no language", () => {
     renderNew();
     expect(field("Nome della case history")).toHaveProperty("required", true);
-    expect(field("Cliente").tagName).toBe("SELECT");
+    expect(field("Cliente").getAttribute("role")).toBe("combobox");
     expect(field("Anno")).toHaveProperty("value", "2026");
-    const locale = field("Lingua del testo") as unknown as HTMLSelectElement;
-    expect(locale.value).toBe("it");
-    expect([...locale.options].map((o) => o.textContent)).toEqual(["Italiano", "English"]);
+    expect(field("Anno")).toHaveProperty("required", true);
+    expect(field("Anno").getAttribute("aria-required")).toBe("true");
+    const marks = [...document.querySelectorAll("[data-required-mark]")];
+    expect(marks.map((mark) => mark.previousElementSibling?.textContent)).toEqual(["Nome della case history", "Cliente", "Anno", "Business line"]);
+    expect(marks.every((mark) => mark.textContent === "*" && mark.getAttribute("aria-hidden") === "true")).toBe(true);
+    // The markers only: no "* obbligatorio" legend (owner, 2026-10-20).
+    expect(document.body.textContent).not.toContain("obbligatorio");
+    expect(screen.getByRole("radiogroup", { name: "Business line" }).getAttribute("aria-required")).toBe("true");
+    expect(screen.queryByLabelText("Lingua del testo")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Lingua|Italiano|English/);
     const group = screen.getByRole("radiogroup", { name: "Business line" });
     expect(screen.getAllByRole("radio").map((r) => [r.textContent, r.getAttribute("aria-checked")])).toEqual(
-      ["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi"].map((label) => [label, "false"]),
+      ["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi", "Sviluppo"].map((label) => [label, "false"]),
     );
     expect(screen.getAllByRole("textbox").map((t) => t.getAttribute("name"))).toEqual(["name", "context", "solution", "results"]);
-    const order = [field("Nome della case history"), field("Cliente"), field("Anno"), locale, group, textarea("Contesto")];
+    const order = [field("Nome della case history"), field("Cliente"), field("Anno"), group, textarea("Contesto")];
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
@@ -212,10 +228,13 @@ describe("CaseDetailsStep, a new case", () => {
     expect(avanti().getAttribute("aria-disabled")).toBe("true");
     expect(describedText(avanti())).toBe("Per continuare compila: Nome della case history, Cliente, Business line.");
     await user.type(field("Nome della case history"), "Rebrand");
-    await user.selectOptions(field("Cliente"), LUMEN.id);
+    await pickClient(user);
     expect(describedText(avanti())).toBe("Per continuare compila: Business line.");
     await user.clear(field("Anno"));
     expect(describedText(avanti())).toBe("Per continuare compila: Anno, Business line.");
+    await user.type(field("Anno"), "1800");
+    expect(describedText(avanti())).toBe("Per continuare compila: Anno, Business line.");
+    await user.clear(field("Anno"));
     await user.type(field("Anno"), "2025");
     await user.click(pill("Video"));
     expect(avanti().getAttribute("aria-disabled")).toBe("false");
@@ -227,7 +246,6 @@ describe("CaseDetailsStep, a new case", () => {
     const user = userEvent.setup();
     renderNew();
     await fillRequired(user);
-    await user.selectOptions(field("Lingua del testo"), "en");
     fireEvent.change(textarea("Contesto"), { target: { value: "Tre marchi" } });
     // No case yet: nothing autosaves.
     fireEvent.blur(textarea("Contesto"));
@@ -237,7 +255,7 @@ describe("CaseDetailsStep, a new case", () => {
       name: "Rebrand",
       clientId: LUMEN.id,
       year: 2026,
-      locale: "en",
+      locale: "it",
       businessLine: "social_media",
     });
     expect(replaceState).toHaveBeenCalledWith(null, "", STEP_1);
@@ -264,7 +282,7 @@ describe("CaseDetailsStep, a new case", () => {
     const user = userEvent.setup();
     renderNew();
     await user.type(field("Nome della case history"), "Rebrand");
-    await user.selectOptions(field("Cliente"), LUMEN.id);
+    await pickClient(user);
     await user.click(avanti());
     expect(createCaseStudy).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(pill("Branding"));
@@ -273,20 +291,69 @@ describe("CaseDetailsStep, a new case", () => {
     expect(screen.queryByText("Scegli la business line.")).toBeNull();
   });
 
-  it("lists the clients as given after a placeholder; a known initialClientId starts selected", () => {
+  it("a known initialClientId shows that client in the search box, and creating sends it", async () => {
+    createCaseStudy.mockResolvedValue({ ok: true, value: created() });
+    const user = userEvent.setup();
     renderNew({ initialClientId: LUMEN.id });
-    const select = field("Cliente") as unknown as HTMLSelectElement;
-    expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([
-      ["", "Scegli un cliente"],
-      [TORINO.id, "Città di Torino (CIT)"],
-      [LUMEN.id, "Lumen Srl (LUM)"],
-    ]);
-    expect(select.value).toBe(LUMEN.id);
+    expect(field("Cliente").value).toBe("Lumen Srl (LUM)");
+    await user.type(field("Nome della case history"), "Rebrand");
+    await user.click(pill("Video"));
+    await user.click(avanti());
+    expect(createCaseStudy).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ clientId: LUMEN.id }));
   });
 
   it("ignores an initialClientId that is not in the list", () => {
     renderNew({ initialClientId: "cccccccc-0000-4000-8000-00000000ffff" });
-    expect((field("Cliente") as unknown as HTMLSelectElement).value).toBe("");
+    expect(field("Cliente").value).toBe("");
+    expect(field("Cliente").placeholder).toBe("Scegli un cliente");
+  });
+
+  it("searching the clients: 'lum' lists Lumen Srl (LUM) and Enter picks it", async () => {
+    const user = userEvent.setup();
+    renderNew();
+    await user.type(field("Nome della case history"), "Rebrand");
+    await user.type(field("Cliente"), "lum");
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Lumen Srl (LUM)"]);
+    await user.keyboard("{Enter}");
+    expect(field("Cliente").value).toBe("Lumen Srl (LUM)");
+    expect(field("Cliente").getAttribute("aria-expanded")).toBe("false");
+    expect(describedText(avanti())).toBe("Per continuare compila: Business line.");
+  });
+
+  it("a search with no match says so with a link to Clienti, and leaves the client unpicked", async () => {
+    const user = userEvent.setup();
+    renderNew();
+    await user.type(field("Cliente"), "zzz");
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+    expect(screen.getByText(/Nessun cliente trovato/).textContent).toBe("Nessun cliente trovato. Aggiungilo nella pagina Clienti.");
+    expect(screen.getByRole("link", { name: "pagina Clienti" }).getAttribute("href")).toBe("/clients");
+    expect(describedText(avanti())).toBe("Per continuare compila: Nome della case history, Cliente, Business line.");
+  });
+
+  it("Enter in the client search with no match does not submit the step", async () => {
+    const user = userEvent.setup();
+    renderNew();
+    await user.type(field("Nome della case history"), "Rebrand");
+    await user.click(pill("Video"));
+    await user.type(field("Cliente"), "zzz{Enter}");
+    expect(createCaseStudy).not.toHaveBeenCalled();
+    expect(screen.queryByText("Scegli il cliente.")).toBeNull();
+    expect(document.activeElement).toBe(field("Cliente"));
+  });
+
+  it("editing a picked client's text clears the pick until another is chosen", async () => {
+    const user = userEvent.setup();
+    renderNew({ initialClientId: LUMEN.id });
+    await user.type(field("Nome della case history"), "Rebrand");
+    await user.click(pill("Video"));
+    expect(avanti().getAttribute("aria-disabled")).toBe("false");
+    await user.clear(field("Cliente"));
+    await user.type(field("Cliente"), "citta");
+    expect(avanti().getAttribute("aria-disabled")).toBe("true");
+    expect(describedText(avanti())).toBe("Per continuare compila: Cliente.");
+    await user.keyboard("{Enter}");
+    expect(field("Cliente").value).toBe("Città di Torino (CIT)");
+    expect(avanti().getAttribute("aria-disabled")).toBe("false");
   });
 
   it("with no clients shows the note instead of the field and keeps Avanti inactive, described by the note", async () => {
@@ -329,7 +396,6 @@ describe("CaseDetailsStep, a new case", () => {
 
   it.each([
     ["year", "Anno", "Inserisci un anno tra 1900 e 2100."],
-    ["locale", "Lingua del testo", "Scegli la lingua del testo."],
     ["clientId", "Cliente", "Scegli il cliente."],
   ])("maps a server INVALID_INPUT on %s to its message", async (name, label, message) => {
     createCaseStudy.mockResolvedValue({ ok: false, status: 400, error: { code: "INVALID_INPUT", message: "x", fields: [name] } });
@@ -494,6 +560,8 @@ describe("CaseDetailsStep, leaving a new case before Avanti", () => {
 describe("CaseDetailsStep, an existing draft", () => {
   it("prefills every field; the client is read-only with the reason it is fixed", () => {
     renderExisting({ name: "Rebrand Lumen", year: 2025, locale: "en", businessLine: "eventi" }, { context: "C", solution: "", results: "" });
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByLabelText("Lingua del testo")).toBeNull();
     expect(field("Nome della case history").value).toBe("Rebrand Lumen");
     const client = field("Cliente");
     expect(client.tagName).toBe("INPUT");
@@ -501,7 +569,6 @@ describe("CaseDetailsStep, an existing draft", () => {
     expect(client.value).toBe("Lumen Srl (LUM)");
     expect(describedText(client)).toBe("Il cliente non cambia dopo la creazione: il codice dipende da lui.");
     expect(field("Anno").value).toBe("2025");
-    expect((field("Lingua del testo") as unknown as HTMLSelectElement).value).toBe("en");
     expect(pill("Eventi").getAttribute("aria-checked")).toBe("true");
     expect(pill("Eventi").tabIndex).toBe(0);
     expect(pill("Branding").tabIndex).toBe(-1);
@@ -518,15 +585,14 @@ describe("CaseDetailsStep, an existing draft", () => {
     expect(push).toHaveBeenCalledExactlyOnceWith(STEP_2);
   });
 
-  it("Avanti saves changed name, year, language and business line (never the client), then goes to step 2", async () => {
+  it("Avanti saves changed name, year and business line with the stored language unchanged (never the client), then goes to step 2", async () => {
     updateCaseStudyDetails.mockResolvedValue({ ok: true, value: created() });
     const user = userEvent.setup();
-    renderExisting();
+    renderExisting({ locale: "en" });
     await user.clear(field("Nome della case history"));
     await user.type(field("Nome della case history"), " Rebrand 2 ");
     await user.clear(field("Anno"));
     await user.type(field("Anno"), "2024");
-    await user.selectOptions(field("Lingua del testo"), "en");
     await user.click(pill("Web design"));
     await user.click(avanti());
     expect(updateCaseStudyDetails).toHaveBeenCalledExactlyOnceWith({
@@ -853,5 +919,83 @@ describe("CaseDetailsStep, an existing draft", () => {
       await flush();
       expect(saveDetailsField).toHaveBeenLastCalledWith({ caseId: ID, field: "results", text: "r" });
     });
+  });
+});
+
+describe("CaseDetailsStep, the live title (Story 2.18)", () => {
+  const heading = () => screen.getByRole("heading", { level: 1 }).textContent;
+  const inFrame = (step: ReactNode, caseStudy: { id: string; code: string; name: string; status: "draft" } | null = null) =>
+    render(
+      <WizardFrame caseStudy={caseStudy} current={1}>
+        {step}
+      </WizardFrame>,
+    );
+  let originalTitle: string;
+  beforeEach(() => {
+    originalTitle = document.title;
+    document.title = "MAC Recap";
+  });
+  afterEach(() => {
+    document.title = originalTitle;
+  });
+
+  it("a new case: the title follows the name on blur, and an empty name brings back Nuova case history", async () => {
+    const user = userEvent.setup();
+    inFrame(newStep());
+    expect(heading()).toBe("Nuova case history");
+    expect(document.title).toBe("Nuova case history · MAC Recap");
+    await user.type(field("Nome della case history"), "  Rebranding Lumen ");
+    await user.tab();
+    expect(heading()).toBe("Rebranding Lumen");
+    expect(document.title).toBe("Rebranding Lumen · MAC Recap");
+    await user.clear(field("Nome della case history"));
+    await user.tab();
+    expect(heading()).toBe("Nuova case history");
+    expect(document.title).toBe("Nuova case history · MAC Recap");
+    expect(avanti().getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("follows the name once typing pauses, not on every key", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    inFrame(newStep());
+    fireEvent.change(field("Nome della case history"), { target: { value: "Rebranding" } });
+    await wait(TITLE_DEBOUNCE_MS - 50);
+    expect(heading()).toBe("Nuova case history");
+    fireEvent.change(field("Nome della case history"), { target: { value: "Rebranding Lumen" } });
+    await wait(TITLE_DEBOUNCE_MS - 50);
+    expect(heading()).toBe("Nuova case history");
+    await wait(60);
+    expect(heading()).toBe("Rebranding Lumen");
+  });
+
+  it("an existing draft: the title shows its name and updates on blur, before Avanti", async () => {
+    const user = userEvent.setup();
+    inFrame(existingStep(), { id: ID, code: "LUM-2026-01", name: "Rebrand", status: "draft" });
+    expect(heading()).toBe("Rebrand");
+    expect(document.title).toBe("Rebrand · MAC Recap");
+    await user.clear(field("Nome della case history"));
+    await user.type(field("Nome della case history"), "Rebrand 2");
+    await user.tab();
+    expect(heading()).toBe("Rebrand 2");
+    // The top bar's case name follows too.
+    expect(screen.getByRole("banner").textContent).toContain("Rebrand 2");
+    expect(updateCaseStudyDetails).not.toHaveBeenCalled();
+  });
+
+  it("gives the tab title back when the step goes away", () => {
+    const { unmount } = inFrame(newStep());
+    expect(document.title).toBe("Nuova case history · MAC Recap");
+    unmount();
+    expect(document.title).toBe("MAC Recap");
+  });
+
+  it("outside the case wizard's Dettagli step the frame keeps the page's title", () => {
+    render(
+      <WizardFrame caseStudy={null} current={1} eyebrow="Nuovo cliente" title="Lumen">
+        <p>step</p>
+      </WizardFrame>,
+    );
+    expect(heading()).toBe("Lumen");
+    expect(document.title).toBe("MAC Recap");
   });
 });

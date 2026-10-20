@@ -13,8 +13,11 @@ import type { DetailsForm, FormField } from "@/modules/material";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { BusinessLinePills } from "./business-line-pills";
+import { ClientCombobox, clientLabel } from "./client-combobox";
+import { RequiredLabel } from "./required-label";
 import { useAutosaveFields } from "./use-autosave-fields";
 import { WizardFooter } from "./wizard-frame";
+import { useLiveWizardTitle } from "./wizard-title";
 
 const copy = it.wizard.details;
 
@@ -22,14 +25,18 @@ const copy = it.wizard.details;
 const TEXT_FIELDS = ["context", "solution", "results"] as const satisfies readonly FormField[];
 
 /** The fields saved on **Avanti**, named as the server's `INVALID_INPUT` names them. */
-type Field = "name" | "clientId" | "year" | "locale" | "businessLine";
+type Field = "name" | "clientId" | "year" | "businessLine";
 type FieldErrors = Partial<Record<Field, string>>;
-const FIELDS: readonly Field[] = ["name", "clientId", "year", "locale", "businessLine"];
+const FIELDS: readonly Field[] = ["name", "clientId", "year", "businessLine"];
 
-const LOCALE_OPTIONS: ReadonlyArray<{ value: Locale; label: string }> = [
-  { value: "it", label: it.wizard.locales.it },
-  { value: "en", label: it.wizard.locales.en },
-];
+/**
+ * A new case's narrative language. The Lingua field is gone (Story 2.18): multilingual
+ * will create a case in both languages at once (owner, 2026-10-20).
+ */
+const NEW_CASE_LOCALE: Locale = "it";
+
+/** How long typing in Nome pauses before the large title follows it. */
+export const TITLE_DEBOUNCE_MS = 300;
 
 /** How many live-region lines stay mounted. */
 const ANNOUNCEMENTS_KEPT = 5;
@@ -101,9 +108,13 @@ function noClientsNote() {
 
 /**
  * Case wizard step 1, Dettagli (Story 2.17; it replaces step 0 and the old step 2):
- * Nome, Cliente (a native select of the existing clients; fixed once the case
- * exists, since its code depends on it), Anno, Lingua, Business line (single-select
- * pills) and the optional Contesto, Soluzione and Risultati. **Avanti** is inactive
+ * Nome, Cliente (a search box over the existing clients, `ClientCombobox`; fixed once
+ * the case exists, since its code depends on it), Anno, Business
+ * line (single-select pills) and the optional Contesto, Soluzione and Risultati; the four
+ * required ones carry a "*" marker, explained by a legend at the top. There
+ * is no Lingua field (Story 2.18): a new case is created in Italian and a draft keeps
+ * its stored language. The large title and the browser tab follow Nome, on blur or
+ * after a 300 ms pause (`useLiveWizardTitle`). **Avanti** is inactive
  * until Nome, Cliente, Anno and Business line are set, with the reason linked by
  * `aria-describedby`; pressing it then names each missing field and sends nothing.
  *
@@ -111,8 +122,8 @@ function noClientsNote() {
  * request ends), then the URL names the case (`replaceState`), then the three texts
  * are saved, then step 2 opens. If a text save fails, the case stays, the field shows
  * its error, and **Avanti** retries only the texts. On an existing draft the texts
- * autosave (`useAutosaveFields`, 800 ms and on blur), and name, year, language and
- * business line save on **Avanti** (`updateCaseStudyDetails`, only when changed; a
+ * autosave (`useAutosaveFields`, 800 ms and on blur), and name, year and business
+ * line save on **Avanti** (the stored language is sent back unchanged) (`updateCaseStudyDetails`, only when changed; a
  * year change renumbers the draft, and the next page load shows its new code); a
  * link clicked with unsaved changes saves them first and stays when a save fails.
  * When those changes can't be saved (a required field is missing), the link asks
@@ -138,7 +149,6 @@ export function CaseDetailsStep({
     name: `${baseId}-name`,
     clientId: `${baseId}-client`,
     year: `${baseId}-year`,
-    locale: `${baseId}-locale`,
     businessLine: `${baseId}-business-line`,
     clientFixed: `${baseId}-client-fixed`,
     noClients: `${baseId}-no-clients`,
@@ -169,8 +179,16 @@ export function CaseDetailsStep({
       (initialClientId !== undefined && clients.some((client) => client.id === initialClientId) ? initialClientId : ""),
   );
   const [year, setYear] = useState(String(caseStudy?.year ?? defaultYear));
-  const [locale, setLocale] = useState<Locale>(caseStudy?.locale ?? "it");
+  // Not editable (Story 2.18): sent back as stored, so a save never changes it.
+  const locale: Locale = caseStudy?.locale ?? NEW_CASE_LOCALE;
   const [businessLine, setBusinessLine] = useState<BusinessLine | null>(caseStudy?.businessLine ?? null);
+  /** The name the large title shows: follows Nome on blur, or once typing pauses. */
+  const [titleName, setTitleName] = useState(name.trim());
+  useLiveWizardTitle(titleName);
+  useEffect(() => {
+    const timer = setTimeout(() => setTitleName(name.trim()), TITLE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [name]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failed, setFailed] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -206,7 +224,6 @@ export function CaseDetailsStep({
       businessLine !== null ||
       clientId !== initialClient.current ||
       year !== String(defaultYear) ||
-      locale !== "it" ||
       TEXT_FIELDS.some((field) => texts.current()[field] !== ""));
   const unsavedNewCaseRef = useRef(hasUnsavedNewCase);
   useEffect(() => {
@@ -250,7 +267,7 @@ export function CaseDetailsStep({
     tooLong,
     active: () => caseRef.current !== null,
     onSaveFailed: (field) => announce(fill(copy.announceError, { field: copy.labels[field], message: copy.errors.saveFailed })),
-    // Name, year, language or business line not saved yet also hold a link back.
+    // Name, year or business line not saved yet also hold a link back.
     hasOtherUnsaved: () => !sameInfo(savedInfo.current, currentInfo()),
     onUnsavedLink: (href) => void saveAndGo(href, { requireReady: false }),
   });
@@ -259,7 +276,6 @@ export function CaseDetailsStep({
     name: it.wizard.errors.name,
     clientId: it.wizard.errors.client,
     year: fill(it.wizard.errors.year, { min: yearMin, max: yearMax }),
-    locale: it.wizard.errors.locale,
     businessLine: it.wizard.errors.businessLine,
   };
 
@@ -414,7 +430,8 @@ export function CaseDetailsStep({
   const missingLabels = [
     ...(name.trim() === "" ? [it.wizard.fields.name] : []),
     ...(clientId === "" ? [it.wizard.fields.client] : []),
-    ...(year.trim() === "" ? [it.wizard.fields.year] : []),
+    // Empty or outside the accepted years: pressing Avanti then names the range on the field.
+    ...(!yearValid(parsedYear()) ? [it.wizard.fields.year] : []),
     ...(businessLine === null ? [it.wizard.fields.businessLine] : []),
   ];
   const ready = missingLabels.length === 0 && hasClients;
@@ -439,9 +456,11 @@ export function CaseDetailsStep({
     <form noValidate onSubmit={onSubmit} aria-busy={pending || undefined}>
       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
         <div className="col-span-2 flex flex-col gap-1.5">
-          <label htmlFor={ids.name} className={LABEL}>
-            {it.wizard.fields.name}
-          </label>
+          <RequiredLabel>
+            <label htmlFor={ids.name} className={LABEL}>
+              {it.wizard.fields.name}
+            </label>
+          </RequiredLabel>
           <input
             id={ids.name}
             name="name"
@@ -456,6 +475,7 @@ export function CaseDetailsStep({
               setName(event.target.value);
               clearError("name");
             }}
+            onBlur={() => setTitleName(name.trim())}
             className={INPUT}
           />
           {fieldError("name")}
@@ -464,9 +484,11 @@ export function CaseDetailsStep({
         <div className="col-span-2 flex flex-col gap-1.5">
           {caseId !== null ? (
             <>
-              <label htmlFor={ids.clientId} className={LABEL}>
-                {it.wizard.fields.client}
-              </label>
+              <RequiredLabel>
+                <label htmlFor={ids.clientId} className={LABEL}>
+                  {it.wizard.fields.client}
+                </label>
+              </RequiredLabel>
               <input
                 id={ids.clientId}
                 name="client"
@@ -475,7 +497,7 @@ export function CaseDetailsStep({
                 aria-describedby={ids.clientFixed}
                 value={(() => {
                   const client = fixedClient ?? clients.find((option) => option.id === clientId);
-                  return client === undefined ? "" : fill(it.wizard.clientOption, { name: client.name, code: client.code });
+                  return client === undefined ? "" : clientLabel(client);
                 })()}
                 className={cn(INPUT, "text-foreground-muted")}
               />
@@ -485,35 +507,30 @@ export function CaseDetailsStep({
             </>
           ) : hasClients ? (
             <>
-              <label htmlFor={ids.clientId} className={LABEL}>
-                {it.wizard.fields.client}
-              </label>
-              <select
+              <RequiredLabel>
+                <label htmlFor={ids.clientId} className={LABEL}>
+                  {it.wizard.fields.client}
+                </label>
+              </RequiredLabel>
+              <ClientCombobox
                 id={ids.clientId}
-                name="clientId"
-                required
-                aria-required="true"
-                aria-invalid={errors.clientId !== undefined || undefined}
-                aria-describedby={describedBy(errorOf("clientId"))}
+                clients={clients}
                 value={clientId}
-                onChange={(event) => {
-                  setClientId(event.target.value);
+                onChange={(picked) => {
+                  setClientId(picked);
                   clearError("clientId");
                 }}
+                invalid={errors.clientId !== undefined}
+                describedBy={describedBy(errorOf("clientId"))}
                 className={INPUT}
-              >
-                <option value="">{it.wizard.clientPlaceholder}</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {fill(it.wizard.clientOption, { name: client.name, code: client.code })}
-                  </option>
-                ))}
-              </select>
+              />
               {fieldError("clientId")}
             </>
           ) : (
             <>
-              <span className={LABEL}>{it.wizard.fields.client}</span>
+              <RequiredLabel>
+                <span className={LABEL}>{it.wizard.fields.client}</span>
+              </RequiredLabel>
               <p id={ids.noClients} className="font-body text-sm text-foreground">
                 {noClientsNote()}
               </p>
@@ -522,9 +539,11 @@ export function CaseDetailsStep({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={ids.year} className={LABEL}>
-            {it.wizard.fields.year}
-          </label>
+          <RequiredLabel>
+            <label htmlFor={ids.year} className={LABEL}>
+              {it.wizard.fields.year}
+            </label>
+          </RequiredLabel>
           <input
             id={ids.year}
             name="year"
@@ -547,35 +566,12 @@ export function CaseDetailsStep({
           {fieldError("year")}
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={ids.locale} className={LABEL}>
-            {it.wizard.fields.locale}
-          </label>
-          <select
-            id={ids.locale}
-            name="locale"
-            aria-invalid={errors.locale !== undefined || undefined}
-            aria-describedby={describedBy(errorOf("locale"))}
-            value={locale}
-            onChange={(event) => {
-              setLocale(event.target.value as Locale);
-              clearError("locale");
-            }}
-            className={INPUT}
-          >
-            {LOCALE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {fieldError("locale")}
-        </div>
-
         <div className="col-span-2 flex flex-col gap-1.5">
-          <span id={ids.businessLine} className={LABEL}>
-            {it.wizard.fields.businessLine}
-          </span>
+          <RequiredLabel>
+            <span id={ids.businessLine} className={LABEL}>
+              {it.wizard.fields.businessLine}
+            </span>
+          </RequiredLabel>
           <div ref={pillsRef}>
             <BusinessLinePills
               options={businessLines}

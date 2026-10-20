@@ -31,11 +31,11 @@ export function isClientIndustry(value: unknown): value is ClientIndustry {
 }
 
 /**
- * The fixed business line list (owner, 2026-10-20), in display order. The
+ * The fixed business line list (owner, 2026-10-20; Sviluppo added at the 2.18 review), in display order. The
  * `case_study_business_line_check` lists exactly these; the Italian labels live in
  * `it.businessLines`. Every new case has one; cases created before Story 2.17 have none.
  */
-export const BUSINESS_LINES = ["branding", "social_media", "video", "web_design", "advertising", "eventi"] as const;
+export const BUSINESS_LINES = ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"] as const;
 export type BusinessLine = (typeof BUSINESS_LINES)[number];
 export const businessLineSchema = z.enum(BUSINESS_LINES);
 
