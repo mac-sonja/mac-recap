@@ -1319,9 +1319,26 @@ describe("client info (Story 2.14, AD-22)", () => {
     expect(rows).toEqual([{ description: "😀".repeat(400), logo_id: null }]);
   });
 
+  it("client_logo accepts image/svg+xml (20261019160000) alongside PNG, JPEG and WebP", async () => {
+    for (const mime of ["image/png", "image/jpeg", "image/webp", "image/svg+xml"]) {
+      const { rowCount } = await inRolledBackTx(
+        "insert into public.client_logo (client_id, path, mime_type, size_bytes, created_by) values ($1, $2, $3, 2048, $4)",
+        [acme.id, `clients/${acme.id}/logos/${randomUUID()}.x`, mime, DEV_ACTOR_ID],
+      );
+      expect(rowCount, mime).toBe(1);
+    }
+  });
+
+  it("the material bucket allows image/svg+xml for the signed logo PUT", async () => {
+    const { rows } = await pool.query<{ types: string[] }>("select allowed_mime_types as types from storage.buckets where id = 'material'");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].types).toContain("image/svg+xml");
+    expect(rows[0].types.filter((t) => t === "image/svg+xml")).toHaveLength(1);
+  });
+
   it.each([
-    ["mime_type", "image/svg+xml", 2048],
     ["mime_type", "image/gif", 2048],
+    ["mime_type", "image/svg", 2048],
     ["size_bytes", "image/png", 0],
     ["size_bytes", "image/png", 5 * 1024 * 1024 + 1],
   ])("client_logo refuses a %s outside the limits (%s, %i B)", async (_label, mime, size) => {
@@ -1476,7 +1493,23 @@ describe("client info (Story 2.14, AD-22)", () => {
     expect(claims.exp - claims.iat).toBeLessThanOrEqual(900);
   });
 
+  it("round trip: a clean 10 px SVG is presigned, PUT as .svg, confirmed with no pixel rule and served as image/svg+xml", async () => {
+    const { requestClientLogoUpload, confirmClientLogoUpload } = await loadClientActions();
+    const bytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" viewBox="0 0 10 10"><path d="M0 0h10v10z"/></svg>');
+    const presigned = await requestClientLogoUpload({ clientId: acme.id, contentType: "image/svg+xml", sizeBytes: bytes.byteLength });
+    if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
+    const { logoId, url, method, headers } = presigned.value;
+    expect(new URL(url).pathname).toContain(`/object/upload/sign/material/clients/${acme.id}/logos/${logoId}.svg`);
+    expect((await fetch(url, { method, headers, body: new Blob([new Uint8Array(bytes)]) })).status).toBe(200);
+    expect(await confirmClientLogoUpload({ clientId: acme.id, logoId, contentType: "image/svg+xml" })).toEqual({ ok: true, value: { logoId } });
+    const { rows } = await pool.query("select mime_type, size_bytes::int as size from public.client_logo where id = $1", [logoId]);
+    expect(rows).toEqual([{ mime_type: "image/svg+xml", size: bytes.byteLength }]);
+  });
+
   it.each([
+    ["an SVG with a script", async () => Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), "image/svg+xml"],
+    ["an SVG with an external link", async () => Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><image href="https://evil.example/x.png"/></svg>'), "image/svg+xml"],
+    ["PNG bytes declared as SVG", () => png(800, 400), "image/svg+xml"],
     ["a 300 px PNG", () => png(300, 900), "image/png"],
     ["bytes that are not the declared type", async () => Buffer.from("GIF89a not really"), "image/png"],
   ])("confirm refuses %s with CLIENT_LOGO_INVALID and writes no row", async (_label, make, contentType) => {
@@ -1512,10 +1545,10 @@ describe("client info (Story 2.14, AD-22)", () => {
     expect(await counts()).toEqual(before);
   });
 
-  it("presign refuses SVG, GIF, PDF and a file over 5 MB with CLIENT_LOGO_INVALID", async () => {
+  it("presign refuses GIF, PDF, a file over 5 MB and a 6 MB SVG with CLIENT_LOGO_INVALID", async () => {
     const { requestClientLogoUpload } = await loadClientActions();
     for (const declared of [
-      { contentType: "image/svg+xml", sizeBytes: 10 },
+      { contentType: "image/svg+xml", sizeBytes: 6 * 1024 * 1024 },
       { contentType: "image/gif", sizeBytes: 10 },
       { contentType: "application/pdf", sizeBytes: 10 },
       { contentType: "image/png", sizeBytes: 5 * 1024 * 1024 + 1 },

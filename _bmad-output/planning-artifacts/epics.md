@@ -788,6 +788,8 @@ Order: first in Sprint 2. It has to land before Story 3.3.
 **And** any other type, size or a smaller image is rejected with an inline message, and nothing is written
 **And** the server re-checks type and size at confirm, as for project files (AD-8)
 
+(Amended 2026-10-19, owner: SVG logos are accepted too ([spec](../implementation-artifacts/spec-svg-client-logo.md)). An SVG (`.svg`, up to 5 MB) is accepted as is only when a dependency-free safety scan passes, in the browser at pick and again at confirm: no scripts, event handlers, foreignObject, external references or entities; a standard SVG DOCTYPE without internal subset and embedded PNG/JPEG/WebP images are allowed (owner, 2026-10-19). An unsafe SVG shows "Il file SVG non è sicuro: contiene script o collegamenti esterni." and fails confirm with `CLIENT_LOGO_INVALID`, with nothing written; a file that isn't an SVG at all gets the unreadable-image message. It is always shown through `<img>`. The 400 px and 8000 px rules apply to PNG, JPEG and WebP only.)
+
 **Given** a client with a logo
 **When** I upload a new one ~~or press **Rimuovi**~~ and save
 **Then** `logo_id` points to the new row ~~or is cleared~~, and the old `client_logo` row and its storage object are deleted (no logo history) (SCP 2026-10-19: the logo is required, so it can be replaced but not cleared; see Story 2.15)
@@ -1109,6 +1111,8 @@ So that the preview I approve is exactly what gets exported and shared.
 Covers: AR9 (one renderer per format), FR3 (layouts per format), CAP-7 (preview matches export), NFR1
 ⚑ Interim: IR-OP1, IR-OP12 (media placed whole, fit, never stretched or cropped)
 ⛔ Blocked on: final templates (Sprint 2 non-dev prerequisite)
+
+Note (2026-10-19, owner): a client logo may be an SVG ([spec](../implementation-artifacts/spec-svg-client-logo.md)). Renderers draw the logo through `<img>`, and any raster output rasterises an SVG logo at render time; the stored SVG is never rewritten. Rasterising an SVG logo must run with external DTD/entity loading and network access off.
 
 **Acceptance Criteria:**
 
@@ -1835,6 +1839,8 @@ So that I can attach it or drop it into my own slides.
 
 Covers: FR7 (export), CAP-9, NFR7, AR5 (guardrail test), AR8 (exports prefix, signed GET), AR9 (export pipeline, file types, `ensureExport`), AR10, AR20, UX-DR21 (Export, progress, failure), UX-DR4 (Export row action), PRD Story 5.1
 ⚑ Interim: IR-OP1 (deck → PDF, carousel → ZIP of PNGs, A4 → PDF)
+
+Note (2026-10-19, owner): a client logo may be an SVG ([spec](../implementation-artifacts/spec-svg-client-logo.md)). The export renderer rasterises an SVG logo at render time (PNG pages, and PDF pages wherever the logo is not embedded as vector), from the stored file as is, with external DTD/entity loading and network access off.
 
 **Acceptance Criteria:**
 

@@ -34,7 +34,7 @@ const LIMITS = {
   nameMax: 120,
   descriptionMax: 400,
   briefMax: 5000,
-  logoTypes: ["image/png", "image/jpeg", "image/webp"],
+  logoTypes: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"],
   logoMaxBytes: 5 * 1024 * 1024,
   logoMinShortSide: 400,
 };
@@ -387,7 +387,7 @@ const click = (link: HTMLElement) => {
 
 describe("ClientDetailsStep logo pick", () => {
   it.each([
-    ["an unsupported type", () => file("logo.gif", 2048, "image/gif"), "Formato non supportato. Usa un file PNG, JPEG o WebP."],
+    ["an unsupported type", () => file("logo.gif", 2048, "image/gif"), "Formato non supportato. Usa un file PNG, JPEG, WebP o SVG."],
     ["an empty file", () => file("logo.png", 0, "image/png"), "Il file è vuoto."],
     ["a file over 5 MB", () => file("logo.png", 5 * 1024 * 1024 + 1, "image/png"), "Il logo supera 5 MB."],
   ])("refuses %s with its message and uploads nothing", async (_label, make, message) => {
@@ -441,6 +441,110 @@ describe("ClientDetailsStep logo pick", () => {
     await user.upload(logoInput(), file("other.png", 2048, "image/png"));
     await act(async () => {});
     expect(vi.mocked(URL.createObjectURL).mock.calls.length).toBe(picks);
+  });
+});
+
+const CLEAN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="10" viewBox="0 0 10 10"><use href="#a"/><path id="a" d="M0 0h10v10z"/></svg>';
+const svg = (text: string, name = "logo.svg") => new File([text], name, { type: "image/svg+xml" });
+
+describe("ClientDetailsStep SVG logo", () => {
+  it("previews a clean SVG without measuring pixels, then uploads and links it as image/svg+xml", async () => {
+    const user = setup();
+    const bitmap = vi.fn(async () => ({ width: 10, height: 10, close: () => undefined }));
+    vi.stubGlobal("createImageBitmap", bitmap);
+    renderStep();
+    fireEvent.change(field("Nome"), { target: { value: "Lumen Srl" } });
+    await user.click(pill("Lusso"));
+    fireEvent.change(field("Descrizione"), { target: { value: "Brand." } });
+    await user.upload(logoInput(), svg(CLEAN_SVG));
+    await waitFor(() => expect(screen.getByRole("img").getAttribute("src")).toBe("blob:preview"));
+    expect(bitmap).not.toHaveBeenCalled();
+    fireEvent.change(field("Contesto"), { target: { value: "C" } });
+    fireEvent.change(field("Soluzione"), { target: { value: "S" } });
+    fireEvent.change(field("Risultati"), { target: { value: "R" } });
+    await user.click(next());
+    await waitFor(() => expect(push).toHaveBeenCalledWith(STEP_2));
+    const size = new TextEncoder().encode(CLEAN_SVG).byteLength;
+    expect(requestClientLogoUpload).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, contentType: "image/svg+xml", sizeBytes: size });
+    expect(confirmClientLogoUpload).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, logoId: NEW_LOGO, contentType: "image/svg+xml" });
+    expect(updateClient).toHaveBeenCalledWith(expect.objectContaining({ logoId: NEW_LOGO }));
+  });
+
+  it("accepts a .svg file the browser types as empty, by its extension", async () => {
+    const user = setup();
+    renderStep(LEGACY);
+    await user.upload(logoInput(), new File([CLEAN_SVG], "logo.svg", { type: "" }));
+    await waitFor(() => expect(screen.getByRole("img")).toBeTruthy());
+  });
+
+  it.each([
+    ["a script", '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'],
+    ["an event handler", '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"></svg>'],
+    ["an external link", '<svg xmlns="http://www.w3.org/2000/svg"><image href="https://evil.example/x.png"/></svg>'],
+  ])("refuses an SVG with %s with the unsafe message, no preview and no presign", async (_label, text) => {
+    const user = setup();
+    renderStep(LEGACY);
+    await user.upload(logoInput(), svg(text));
+    await waitFor(() => expect(describedText(chooseButton())).toContain("Il file SVG non è sicuro: contiene script o collegamenti esterni."));
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(requestClientLogoUpload).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["PNG bytes (not UTF-8)", () => new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "logo.svg", { type: "image/svg+xml" })],
+    ["HTML", () => svg("<html><body>x</body></html>")],
+    ["an SVG with no closing tag", () => svg('<svg xmlns="http://www.w3.org/2000/svg"><rect/>')],
+  ])("refuses a .svg file holding %s with the unreadable message, not the unsafe one", async (_label, make) => {
+    const user = setup();
+    renderStep(LEGACY);
+    await user.upload(logoInput(), make());
+    await waitFor(() => expect(describedText(chooseButton())).toContain("Non è stato possibile leggere l'immagine. Scegli un altro file."));
+    expect(describedText(chooseButton())).not.toContain("non è sicuro");
+    expect(requestClientLogoUpload).not.toHaveBeenCalled();
+  });
+
+  it("keeps the newer pick when an older SVG scan finishes after it, with no error", async () => {
+    const user = setup();
+    const held = deferred<ArrayBuffer>();
+    const older = svg('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', "old.svg");
+    const bytes = await older.arrayBuffer();
+    older.arrayBuffer = () => held.promise;
+    URL.createObjectURL = vi.fn((blob: Blob) => `blob:${(blob as File).name}`);
+    renderStep(LEGACY);
+    await user.upload(logoInput(), older);
+    await user.upload(logoInput(), svg(CLEAN_SVG, "new.svg"));
+    await waitFor(() => expect(screen.getByRole("img").getAttribute("src")).toBe("blob:new.svg"));
+    await act(async () => held.resolve(bytes));
+    expect(screen.getByRole("img").getAttribute("src")).toBe("blob:new.svg");
+    expect(describedText(chooseButton())).not.toContain("non è sicuro");
+    expect(vi.mocked(URL.createObjectURL).mock.calls.map(([f]) => (f as File).name)).toEqual(["new.svg"]);
+  });
+
+  it.each([
+    ["the unsafe message for reason unsafe_svg", { reason: "unsafe_svg" as const }, "Il file SVG non è sicuro: contiene script o collegamenti esterni."],
+    ["the unreadable message for any other refusal", {}, "Non è stato possibile leggere l'immagine. Scegli un altro file."],
+  ])("shows %s when confirm refuses an SVG", async (_label, extra, message) => {
+    const user = setup();
+    confirmClientLogoUpload.mockResolvedValue({ ok: false, status: 400, error: { code: "CLIENT_LOGO_INVALID", message: "m", ...extra } });
+    renderStep(LEGACY);
+    await user.upload(logoInput(), svg(CLEAN_SVG));
+    await waitFor(() => expect(screen.getByRole("img")).toBeTruthy());
+    fireEvent.change(field("Contesto"), { target: { value: "C" } });
+    fireEvent.change(field("Soluzione"), { target: { value: "S" } });
+    fireEvent.change(field("Risultati"), { target: { value: "R" } });
+    await user.click(pill("Lusso"));
+    await user.click(next());
+    await waitFor(() => expect(describedText(chooseButton())).toContain(message));
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("still refuses a PNG under 400 px on the short side (raster rules unchanged)", async () => {
+    const user = setup();
+    vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 1200, height: 399, close: () => undefined })));
+    renderStep(LEGACY);
+    await user.upload(logoInput(), png());
+    await waitFor(() => expect(describedText(chooseButton())).toContain("Il logo deve misurare almeno 400 px sul lato corto."));
+    expect(screen.queryByRole("img")).toBeNull();
   });
 });
 

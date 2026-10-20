@@ -41,11 +41,16 @@ export function isClientBriefField(value: unknown): value is ClientBriefField {
 /** Each brief text's upper bound, in characters (code points) after trimming (the `client_brief_*_check` match). */
 export const CLIENT_BRIEF_MAX = 5000;
 
-/** Logo files (AD-8, AD-22): content type → stored extension. SVG is never accepted. The `client_logo.mime_type` check lists exactly these. */
+/**
+ * Logo files (AD-8, AD-22): content type → stored extension. The `client_logo.mime_type`
+ * check lists exactly these. An SVG is accepted only when `isSafeSvg` (`@/shared/svg-safety`)
+ * passes, in the browser at pick and again at confirm; it is always shown through `<img>`.
+ */
 export const LOGO_FILE_TYPES = {
   "image/png": { ext: "png" },
   "image/jpeg": { ext: "jpg" },
   "image/webp": { ext: "webp" },
+  "image/svg+xml": { ext: "svg" },
 } as const;
 export type LogoContentType = keyof typeof LOGO_FILE_TYPES;
 export const LOGO_CONTENT_TYPES = Object.keys(LOGO_FILE_TYPES) as LogoContentType[];
@@ -53,23 +58,31 @@ export const LOGO_CONTENT_TYPES = Object.keys(LOGO_FILE_TYPES) as LogoContentTyp
 export const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 /** Lower size bound of a logo, in bytes. */
 export const LOGO_MIN_BYTES = 1;
-/** A logo's shorter side is at least this many pixels. */
+/** A PNG, JPEG or WebP logo's shorter side is at least this many pixels (not checked for SVG). */
 export const LOGO_MIN_SHORT_SIDE_PX = 400;
 
 export function isLogoContentType(value: unknown): value is LogoContentType {
   return typeof value === "string" && Object.hasOwn(LOGO_FILE_TYPES, value);
 }
 
+/** The vector logo type: checked by the SVG safety scan, never by the pixel rules. */
+export const LOGO_SVG_TYPE = "image/svg+xml" satisfies LogoContentType;
+
+/** Whether a logo type is SVG (scanned, no pixel rules) rather than PNG, JPEG or WebP. */
+export function isSvgLogoType(contentType: LogoContentType): contentType is typeof LOGO_SVG_TYPE {
+  return contentType === LOGO_SVG_TYPE;
+}
+
 export function logoExtensionFor(contentType: LogoContentType): string {
   return LOGO_FILE_TYPES[contentType].ext;
 }
 
-/** Whether a logo of `width` × `height` pixels is large enough (short side ≥ `LOGO_MIN_SHORT_SIDE_PX`). */
+/** Whether a PNG, JPEG or WebP logo of `width` × `height` pixels is large enough (short side ≥ `LOGO_MIN_SHORT_SIDE_PX`). */
 export function isLogoLargeEnough(width: number, height: number): boolean {
   return Math.min(width, height) >= LOGO_MIN_SHORT_SIDE_PX;
 }
 
-/** No side of a logo is longer than this: a tiny file claiming a huge size is refused. */
+/** No side of a PNG, JPEG or WebP logo is longer than this: a tiny file claiming a huge size is refused (not checked for SVG). */
 export const LOGO_MAX_SIDE_PX = 8000;
 
 /** Whether no side of a logo exceeds `LOGO_MAX_SIDE_PX`. */

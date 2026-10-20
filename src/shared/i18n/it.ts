@@ -217,12 +217,13 @@ export const it = {
       fieldTooLong: "Massimo {max} caratteri.",
       nameTaken: "Esiste già un cliente con questo nome.",
       codeExhausted: "Non è stato possibile assegnare un codice a questo nome. Usa un nome diverso.",
-      logoType: "Formato non supportato. Usa un file PNG, JPEG o WebP.",
+      logoType: "Formato non supportato. Usa un file PNG, JPEG, WebP o SVG.",
       /** `{size}` is the logo limit in MB. */
       logoTooLarge: "Il logo supera {size} MB.",
       logoEmpty: "Il file è vuoto.",
       /** `{px}` is the minimum short side in pixels. */
       logoTooSmall: "Il logo deve misurare almeno {px} px sul lato corto.",
+      logoUnsafe: "Il file SVG non è sicuro: contiene script o collegamenti esterni.",
       logoUnreadable: "Non è stato possibile leggere l'immagine. Scegli un altro file.",
       logoFailed: "Non è stato possibile caricare il logo. Gli altri dati sono salvati: premi Avanti per riprovare.",
       generic: "Non è stato possibile salvare. Riprova.",
@@ -278,8 +279,8 @@ export const it = {
       industriesHint: "Scegli uno o più settori.",
       /** The description's live counter: `{n}` characters of `{max}`. */
       counter: "{n}/{max}",
-      /** `{size}` MB and `{px}` pixels on the short side. */
-      logoHint: "PNG, JPEG o WebP, fino a {size} MB, almeno {px} px sul lato corto.",
+      /** `{size}` MB and `{px}` pixels on the short side (PNG, JPEG and WebP only). */
+      logoHint: "PNG, JPEG, WebP o SVG, fino a {size} MB. PNG, JPEG e WebP almeno {px} px sul lato corto.",
       logoChoose: "Scegli il logo",
       logoReplace: "Sostituisci il logo",
       /** The logo preview's alt text; `{name}` is the client name. */
