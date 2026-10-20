@@ -629,7 +629,10 @@ describe("direct writes are rejected", () => {
   });
 
   it("truncating asset", async () => {
-    await expect(inRolledBackTx("truncate public.asset")).rejects.toThrow(/never deleted/);
+    // rendition references asset (Story 3.2), so a lone truncate fails on the foreign key
+    // first; truncating both reaches asset's own guard.
+    await expect(inRolledBackTx("truncate public.asset")).rejects.toThrow(/never deleted|cannot truncate a table referenced/);
+    await expect(inRolledBackTx("truncate public.asset, public.rendition")).rejects.toThrow(/never deleted/);
   });
 
   it.each([
