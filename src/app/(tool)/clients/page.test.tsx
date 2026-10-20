@@ -69,7 +69,7 @@ describe("ClientsPage", () => {
     expect(html).toContain(`href="/clients/${LUMEN.id}"`);
   });
 
-  it("has no delete control", async () => {
+  it("has no delete control on the list page (delete lives in the client wizard)", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([LUMEN]));
     expect(await renderPage()).not.toMatch(/elimina|rimuovi|cancella cliente/i);

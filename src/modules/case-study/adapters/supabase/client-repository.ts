@@ -55,9 +55,24 @@ const UPDATE_REFUSALS: Refusals = {
   CLIENT_LOGO_INVALID: { code: "CLIENT_LOGO_INVALID", message: "This logo does not belong to the client." },
 };
 
-/** `delete_client_logo` raises this as P0001; nothing is deleted then. */
+/** `delete_client_logo` raises these as P0001; nothing is deleted then. */
 const DELETE_LOGO_REFUSALS: Refusals = {
   CLIENT_LOGO_IN_USE: { code: "CLIENT_LOGO_IN_USE", message: "A client still shows this logo." },
+  CLIENT_NOT_FOUND: BRIEF_REFUSALS.CLIENT_NOT_FOUND,
+};
+
+/** `delete_client_asset` raises this as P0001 (a deleted client's file); nothing is deleted then. */
+const DELETE_ASSET_REFUSALS: Refusals = {
+  CLIENT_NOT_FOUND: BRIEF_REFUSALS.CLIENT_NOT_FOUND,
+};
+
+/** `delete_client` raises these as P0001; nothing is written then. */
+const DELETE_CLIENT_REFUSALS: Refusals = {
+  CLIENT_NOT_FOUND: BRIEF_REFUSALS.CLIENT_NOT_FOUND,
+  CLIENT_DELETE_NAME_MISMATCH: {
+    code: "CLIENT_DELETE_NAME_MISMATCH",
+    message: "The typed name does not match the client's name.",
+  },
 };
 
 /** `insert_client_asset` raises these as P0001; nothing is written then. */
@@ -223,6 +238,7 @@ export function createSupabaseClientRepository(
       const { data, error } = await client()
         .from("client")
         .select(CLIENT_REF_COLUMNS)
+        .is("deleted_at", null)
         .order("name", { ascending: true })
         .order("id", { ascending: true });
       if (error) {
@@ -242,6 +258,7 @@ export function createSupabaseClientRepository(
       const { data, error } = await client()
         .from("client")
         .select(CLIENT_SUMMARY_COLUMNS)
+        .is("deleted_at", null)
         .is("case_study.deleted_at", null)
         .order("name", { ascending: true })
         .order("id", { ascending: true });
@@ -259,7 +276,12 @@ export function createSupabaseClientRepository(
     },
 
     async findById(id) {
-      const { data, error } = await client().from("client").select(CLIENT_COLUMNS).eq("id", id).maybeSingle();
+      const { data, error } = await client()
+        .from("client")
+        .select(CLIENT_COLUMNS)
+        .eq("id", id)
+        .is("deleted_at", null)
+        .maybeSingle();
       if (error) {
         log.error(`client lookup failed: ${error.code}`, { clientId: id });
         return err({ code: "CLIENT_LOOKUP_FAILED", message: "Could not read the client.", details: { id } });
@@ -309,6 +331,25 @@ export function createSupabaseClientRepository(
         return err({ code: "CLIENT_WRITE_FAILED", message: "Could not save the client.", details: { clientId: input.id } });
       }
       return toClient(data);
+    },
+
+    async deleteClient(clientId, confirmName, actorId) {
+      const { data, error } = await client().rpc("delete_client", {
+        p_client_id: clientId,
+        p_confirm_name: confirmName,
+        p_actor_id: actorId,
+      });
+      if (error) {
+        const refused = refusalOf(error, DELETE_CLIENT_REFUSALS);
+        if (refused) return err({ ...refused, details: { clientId } });
+        log.error(`client delete failed: ${error.code}`, { actorId, clientId });
+        return err({ code: "CLIENT_WRITE_FAILED", message: "Could not delete the client.", details: { clientId } });
+      }
+      if (typeof data !== "number" || !Number.isInteger(data) || data < 0) {
+        log.error("client delete failed: no count returned", { actorId, clientId });
+        return err({ code: "CLIENT_WRITE_FAILED", message: "Could not delete the client.", details: { clientId } });
+      }
+      return ok(data);
     },
 
     async findBrief(clientId) {
@@ -438,6 +479,8 @@ export function createSupabaseClientRepository(
     async deleteAsset(id, clientId) {
       const { data, error } = await client().rpc("delete_client_asset", { p_asset_id: id });
       if (error) {
+        const refused = refusalOf(error, DELETE_ASSET_REFUSALS);
+        if (refused) return err({ ...refused, details: { clientId } });
         log.error(`client material delete failed: ${error.code}`, { clientId });
         return err({ code: "CLIENT_WRITE_FAILED", message: "Could not delete the file." });
       }

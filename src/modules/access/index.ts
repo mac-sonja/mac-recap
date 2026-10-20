@@ -57,6 +57,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   CLIENT_FIELD_INVALID: 400,
   // Client material (Story 2.16): a 4th file.
   CLIENT_MATERIAL_LIMIT: 409,
+  // Client delete (owner, 2026-10-19): the typed name does not match the client's.
+  CLIENT_DELETE_NAME_MISMATCH: 400,
   // An image under 1600 px on the short side or over 8000 px on a side.
   CLIENT_IMAGE_SIZE_INVALID: 400,
   // Material uploads (Story 2.7).

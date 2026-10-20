@@ -3,6 +3,13 @@ import { z } from "zod";
 /** The event written with every new case, in the same transaction. */
 export const CASE_CREATED = "case_created";
 
+/**
+ * The event written for every case of a deleted client (owner, 2026-10-19), in the
+ * same transaction as the soft delete; `data` is `{ reason: "client_deleted", clientId,
+ * clientCode, code, status }`.
+ */
+export const CASE_DELETED = "case_deleted";
+
 /** The event written with every status change, in the same transaction; `data` is `{ event, from, to }`. */
 export const TRANSITION = "transition";
 

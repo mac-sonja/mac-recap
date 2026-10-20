@@ -11,6 +11,7 @@ import pg from "pg";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
+import { CASE_DELETED } from "@/modules/case-study/domain/case-event";
 import { CLIENT_INDUSTRIES, LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
 import { CASE_STATUSES, type CaseStatus } from "@/shared/case-status";
 import {
@@ -89,6 +90,30 @@ async function counts() {
   );
   return rows[0];
 }
+
+/** A dedicated connection (outside the pool) for the concurrency tests. */
+async function connection() {
+  const client = new pg.Client({ connectionString: env.SUPABASE_DB_URL });
+  await client.connect();
+  return client;
+}
+
+/** Polls until backend `pid` waits on a lock (pg_stat_activity), so the overlap is real; fails after `timeoutMs`. */
+async function waitUntilBlocked(pid: number, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const { rows } = await pool.query<{ wait_event_type: string | null }>(
+      "select wait_event_type from pg_catalog.pg_stat_activity where pid = $1",
+      [pid],
+    );
+    if (rows[0]?.wait_event_type === "Lock") return;
+    if (Date.now() > deadline) throw new Error(`backend ${pid} never waited on a lock`);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+const backendPid = async (client: pg.Client) =>
+  (await client.query<{ pid: number }>("select pg_catalog.pg_backend_pid() as pid")).rows[0].pid;
 
 // Imported lazily so getEnv() (cached on first use) sees the exported env.
 const loadCaseStudy = () => import("@/modules/case-study");
@@ -647,6 +672,7 @@ describe("RLS lockout", () => {
     `public.delete_client_logo('${UNKNOWN_ID}')`,
     `public.insert_client_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'p', 'f', 'application/pdf', 1, null, null, '${DEV_ACTOR_ID}')`,
     `public.delete_client_asset('${UNKNOWN_ID}')`,
+    `public.delete_client('${UNKNOWN_ID}', 'x', '${DEV_ACTOR_ID}')`,
     "public.client_code_letters('Intruder')",
     "public.client_name_key('Intruder')",
     "public.case_study_code('III', 2026, 1)",
@@ -938,30 +964,6 @@ describe("clients and readable case history codes (AD-21)", () => {
       client.release();
     }
   }
-
-  /** A dedicated connection (outside the pool) for the concurrency tests. */
-  async function connection() {
-    const client = new pg.Client({ connectionString: env.SUPABASE_DB_URL });
-    await client.connect();
-    return client;
-  }
-
-  /** Polls until backend `pid` waits on a lock (pg_stat_activity), so the overlap is real; fails after `timeoutMs`. */
-  async function waitUntilBlocked(pid: number, timeoutMs = 5000) {
-    const deadline = Date.now() + timeoutMs;
-    for (;;) {
-      const { rows } = await pool.query<{ wait_event_type: string | null }>(
-        "select wait_event_type from pg_catalog.pg_stat_activity where pid = $1",
-        [pid],
-      );
-      if (rows[0]?.wait_event_type === "Lock") return;
-      if (Date.now() > deadline) throw new Error(`backend ${pid} never waited on a lock`);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-  }
-
-  const backendPid = async (client: pg.Client) =>
-    (await client.query<{ pid: number }>("select pg_catalog.pg_backend_pid() as pid")).rows[0].pid;
 
   const createClientSql = "select id, name, code from public.create_client($1, array['lusso'], 'Cliente di prova.', $2)";
   const createCaseSql = "select number, code from public.create_case_study('Concurrent', $1, $2, 'it', $3)";
@@ -1937,6 +1939,303 @@ describe("client material (Story 2.16)", () => {
       status: 400,
       error: { code: "FILE_TOO_LARGE" },
     });
+  });
+});
+
+describe("client delete (owner, 2026-10-19)", () => {
+  const remove = (clientId: string, confirmName: string, db: pg.Pool | pg.PoolClient = pool) =>
+    db.query<{ deleted: number }>("select public.delete_client($1, $2, $3) as deleted", [clientId, confirmName, DEV_ACTOR_ID]);
+
+  /** Moves a case to `approved` the way only `transition_case_study` may (the status flag). */
+  async function approve(caseId: string) {
+    const db = await pool.connect();
+    try {
+      await db.query("begin");
+      await db.query("select pg_catalog.set_config('mac_recap.status_transition', 'on', true)");
+      await db.query("update public.case_study set status = 'approved' where id = $1", [caseId]);
+      await db.query("commit");
+    } finally {
+      db.release();
+    }
+  }
+
+  const clientRow = async (id: string) =>
+    (await pool.query<{ deleted_at: Date | null; deleted_by: string | null }>("select deleted_at, deleted_by from public.client where id = $1", [id]))
+      .rows[0];
+  const caseRows = async (clientId: string) =>
+    (
+      await pool.query<{ id: string; deleted_at: Date | null; status: string }>(
+        "select id, deleted_at, status from public.case_study where client_id = $1 order by created_at, id",
+        [clientId],
+      )
+    ).rows;
+  const deletedEvents = async (caseIds: string[]) =>
+    (
+      await pool.query<{ case_id: string; type: string; actor_id: string; data: Record<string, unknown> }>(
+        "select case_id, type, actor_id, data from public.case_event where type = $2 and case_id = any($1::uuid[]) order by case_id",
+        [caseIds, CASE_DELETED],
+      )
+    ).rows;
+
+  it("writes the case_deleted type (CASE_DELETED) and no other event type per deleted case", async () => {
+    expect(CASE_DELETED).toBe("case_deleted");
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const created = await createCase({ name: "Event type", clientId: client.id });
+    await remove(client.id, client.name);
+    const { rows } = await pool.query<{ type: string }>("select type from public.case_event where case_id = $1 order by at, id", [created.id]);
+    expect(rows.map((r) => r.type)).toEqual(["case_created", CASE_DELETED]);
+  });
+
+  it("adds client.deleted_at and replaces the name key constraint with a partial unique index; the code key stays", async () => {
+    const { rows } = await pool.query(
+      "select data_type, is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'client' and column_name = 'deleted_at'",
+    );
+    expect(rows).toEqual([{ data_type: "timestamp with time zone", is_nullable: "YES" }]);
+    const index = await pool.query<{ indexdef: string }>("select indexdef from pg_indexes where schemaname = 'public' and indexname = 'client_name_key_key'");
+    expect(index.rows[0].indexdef).toMatch(/UNIQUE INDEX .* \(name_key\) WHERE \(deleted_at IS NULL\)/);
+    const constraints = await pool.query<{ conname: string }>(
+      "select conname from pg_constraint where conrelid = 'public.client'::regclass and contype = 'u' order by conname",
+    );
+    expect(constraints.rows.map((r) => r.conname)).toEqual(["client_code_key"]);
+  });
+
+  it("deletes a client with 2 cases (1 approved): both cases and the client get deleted_at, with one deleted event each", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const draft = await createCase({ name: "Delete draft", clientId: client.id });
+    const approved = await createCase({ name: "Delete approved", clientId: client.id });
+    await approve(approved.id);
+    // An already soft-deleted case is left as it is, with no new event.
+    const earlier = await createCase({ name: "Delete earlier", clientId: client.id });
+    await pool.query("update public.case_study set deleted_at = '2026-01-01' where id = $1", [earlier.id]);
+
+    expect((await remove(client.id, client.name)).rows).toEqual([{ deleted: 2 }]);
+
+    expect(await clientRow(client.id)).toEqual({ deleted_at: expect.any(Date), deleted_by: DEV_ACTOR_ID });
+    const rows = await caseRows(client.id);
+    expect(rows.map((r) => r.deleted_at)).toEqual([expect.any(Date), expect.any(Date), new Date("2026-01-01T00:00:00Z")]);
+    expect(rows.find((r) => r.id === approved.id)?.status).toBe("approved");
+    const events = await deletedEvents([draft.id, approved.id, earlier.id]);
+    expect(events.map((e) => e.case_id).sort()).toEqual([draft.id, approved.id].sort());
+    for (const event of events) {
+      expect(event).toMatchObject({ type: CASE_DELETED, actor_id: DEV_ACTOR_ID, data: { reason: "client_deleted", clientId: client.id, clientCode: client.code } });
+    }
+  });
+
+  it("deletes a client with no cases and returns 0", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    expect((await remove(client.id, client.name)).rows).toEqual([{ deleted: 0 }]);
+    expect((await clientRow(client.id)).deleted_at).toBeInstanceOf(Date);
+  });
+
+  it("refuses a wrong name with CLIENT_DELETE_NAME_MISMATCH; nothing written", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID, `${nameWithLetters(await freshPrefix(pool))} S.r.l.`);
+    await createCase({ name: "Mismatch", clientId: client.id });
+    const before = await counts();
+    await expect(remove(client.id, client.name.split(" ")[0])).rejects.toMatchObject({ code: "P0001", message: "CLIENT_DELETE_NAME_MISMATCH" });
+    await expect(remove(client.id, client.name.toLowerCase())).rejects.toMatchObject({ code: "P0001", message: "CLIENT_DELETE_NAME_MISMATCH" });
+    expect(await counts()).toEqual(before);
+    expect(await clientRow(client.id)).toEqual({ deleted_at: null, deleted_by: null });
+    expect((await caseRows(client.id)).every((r) => r.deleted_at === null)).toBe(true);
+  });
+
+  it("accepts the name with extra ASCII whitespace, trimmed and collapsed", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const spaced = ` \t${client.name.replace(" ", " \n  ")}\r `;
+    expect((await remove(client.id, spaced)).rows).toEqual([{ deleted: 0 }]);
+  });
+
+  it("does not count a no-break space as a space (the browser rule, normalizeClientConfirmName)", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    await expect(remove(client.id, client.name.replace(" ", "\u00a0"))).rejects.toMatchObject({
+      code: "P0001",
+      message: "CLIENT_DELETE_NAME_MISMATCH",
+    });
+  });
+
+  it("waits for a case being created for the client, then deletes it too", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    await createCase({ name: "Before", clientId: client.id });
+    const creator = await connection();
+    const deleter = await connection();
+    try {
+      await creator.query("begin");
+      const { rows: [created] } = await creator.query<{ id: string }>(
+        "select id from public.create_case_study('During', $1, 2026, 'it', $2)",
+        [client.id, DEV_ACTOR_ID],
+      );
+      const deleterPid = await backendPid(deleter);
+      const pending = deleter.query<{ deleted: number }>("select public.delete_client($1, $2, $3) as deleted", [client.id, client.name, DEV_ACTOR_ID]);
+      await waitUntilBlocked(deleterPid);
+      await creator.query("commit");
+      expect((await pending).rows).toEqual([{ deleted: 2 }]);
+      const rows = await caseRows(client.id);
+      expect(rows.find((r) => r.id === created.id)?.deleted_at).toBeInstanceOf(Date);
+      expect((await deletedEvents([created.id])).map((e) => e.type)).toEqual([CASE_DELETED]);
+    } finally {
+      await creator.query("rollback").catch(() => undefined);
+      await creator.end();
+      await deleter.end();
+    }
+  });
+
+  it("refuses an unknown or already deleted client with CLIENT_NOT_FOUND; nothing changes", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    await createCase({ name: "Twice", clientId: client.id });
+    await remove(client.id, client.name);
+    const deletedAt = (await clientRow(client.id)).deleted_at;
+    const before = await counts();
+    await expect(remove(client.id, client.name)).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
+    await expect(remove(UNKNOWN_ID, "x")).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
+    expect(await counts()).toEqual(before);
+    expect((await clientRow(client.id)).deleted_at).toEqual(deletedAt);
+  });
+
+  it("lets a new client take a deleted client's name, with a new code; the code is never reused", async () => {
+    const prefix = await freshPrefix(pool);
+    const name = nameWithLetters(prefix);
+    const first = await createTestClient(pool, DEV_ACTOR_ID, name);
+    await expect(createTestClient(pool, DEV_ACTOR_ID, name)).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NAME_TAKEN" });
+    await remove(first.id, first.name);
+    const second = await createTestClient(pool, DEV_ACTOR_ID, name);
+    expect(second.id).not.toBe(first.id);
+    expect(second.name).toBe(first.name);
+    expect(second.code).not.toBe(first.code);
+    expect(second.code.startsWith(prefix)).toBe(true);
+    // Renaming another client to the name is refused again while `second` holds it.
+    const other = await createTestClient(pool, DEV_ACTOR_ID);
+    const logoId = await addTestLogo(pool, other.id, DEV_ACTOR_ID);
+    await expect(
+      pool.query("select public.update_client($1, $2, $3, $4, $5, $6)", [other.id, name, TEST_INDUSTRIES, TEST_DESCRIPTION, logoId, DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NAME_TAKEN" });
+  });
+
+  it("hides a deleted client from list, listWithCaseCounts, findById (getClient) and the case wizard's picker", async () => {
+    const { listClients, listClientSummaries, getClient } = await loadCaseStudy();
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    expect((await getClient(client.id)).ok).toBe(true);
+    await remove(client.id, client.name);
+    const listed = await listClients();
+    expect(listed.ok && listed.value.some((c) => c.id === client.id)).toBe(false);
+    const summaries = await listClientSummaries();
+    expect(summaries.ok && summaries.value.some((c) => c.id === client.id)).toBe(false);
+    expect(await getClient(client.id)).toMatchObject({ ok: false, error: { code: "CLIENT_NOT_FOUND" } });
+  });
+
+  it("hides a deleted client's cases from the table, get and getClientInfoForCase", async () => {
+    const { list, get, getClientInfoForCase } = await loadCaseStudy();
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const created = await createCase({ name: "Hidden", clientId: client.id });
+    await approve(created.id);
+    await remove(client.id, client.name);
+    const all = await list({});
+    expect(all.ok && all.value.some((c) => c.id === created.id)).toBe(false);
+    const own = await list({ clientId: client.id });
+    expect(own).toEqual({ ok: true, value: [] });
+    expect(await get(created.id)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect(await getClientInfoForCase(created.id)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+  });
+
+  it("refuses every client write on a deleted client with CLIENT_NOT_FOUND; nothing written", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const logoId = await addTestLogo(pool, client.id, DEV_ACTOR_ID);
+    const assetId = randomUUID();
+    await pool.query("select public.insert_client_asset($1, $2, $3, 'a.pdf', 'application/pdf', 10, null, null, $4)", [
+      assetId,
+      client.id,
+      `clients/${client.id}/material/${assetId}.pdf`,
+      DEV_ACTOR_ID,
+    ]);
+    await remove(client.id, client.name);
+    const before = await counts();
+    const notFound = { code: "P0001", message: "CLIENT_NOT_FOUND" };
+    await expect(
+      pool.query("select public.update_client($1, $2, $3, $4, $5, $6)", [client.id, client.name, TEST_INDUSTRIES, TEST_DESCRIPTION, logoId, DEV_ACTOR_ID]),
+    ).rejects.toMatchObject(notFound);
+    await expect(
+      pool.query("select public.save_client_brief_field($1, 'context', 'x', $2)", [client.id, DEV_ACTOR_ID]),
+    ).rejects.toMatchObject(notFound);
+    const newAsset = randomUUID();
+    await expect(
+      pool.query("select public.insert_client_asset($1, $2, $3, 'b.pdf', 'application/pdf', 10, null, null, $4)", [
+        newAsset,
+        client.id,
+        `clients/${client.id}/material/${newAsset}.pdf`,
+        DEV_ACTOR_ID,
+      ]),
+    ).rejects.toMatchObject(notFound);
+    await expect(pool.query("select public.delete_client_asset($1)", [assetId])).rejects.toMatchObject(notFound);
+    await expect(pool.query("select public.delete_client_logo($1)", [logoId])).rejects.toMatchObject(notFound);
+    await expect(
+      pool.query("select public.create_case_study('Late', $1, 2026, 'it', $2)", [client.id, DEV_ACTOR_ID]),
+    ).rejects.toMatchObject(notFound);
+    expect(await counts()).toEqual(before);
+  });
+
+  it("refuses every client action on a deleted client (a stale wizard tab) with CLIENT_NOT_FOUND", async () => {
+    const actions = await loadClientActions();
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const logoId = await addTestLogo(pool, client.id, DEV_ACTOR_ID);
+    await remove(client.id, client.name);
+    const clientId = client.id;
+    const results = [
+      await actions.updateClient({ clientId, name: client.name, industries: TEST_INDUSTRIES, description: TEST_DESCRIPTION, logoId }),
+      await actions.saveClientBriefField({ clientId, field: "context", text: "x" }),
+      await actions.requestClientLogoUpload({ clientId, contentType: "image/png", sizeBytes: 10 }),
+      await actions.confirmClientLogoUpload({ clientId, logoId: randomUUID(), contentType: "image/png" }),
+      await actions.requestClientMaterialUpload({ clientId, contentType: "application/pdf", sizeBytes: 10 }),
+      await actions.confirmClientMaterialUpload({ clientId, assetId: randomUUID(), contentType: "application/pdf" }),
+      await actions.removeClientMaterial({ clientId, assetId: randomUUID() }),
+      await actions.listClientMaterial({ clientId }),
+      await actions.deleteClient({ clientId, confirmName: client.name }),
+    ];
+    for (const result of results) expect(result).toMatchObject({ ok: false, status: 404, error: { code: "CLIENT_NOT_FOUND" } });
+  });
+
+  it("deletes through the action and reports the count", async () => {
+    const { deleteClient } = await loadClientActions();
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    await createCase({ name: "Via action", clientId: client.id });
+    expect(await deleteClient({ clientId: client.id, confirmName: "nope" })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_DELETE_NAME_MISMATCH" },
+    });
+    expect(await deleteClient({ clientId: client.id, confirmName: ` ${client.name} ` })).toEqual({ ok: true, value: { deletedCases: 1 } });
+  });
+
+  it("returns 403 FORBIDDEN to any other role and writes nothing", async () => {
+    const { deleteClient } = await loadClientActions();
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    for (const role of ["account_sales_social", "admin"]) {
+      await pool.query("update public.profile set role = $2 where id = $1", [DEV_ACTOR_ID, role]);
+      try {
+        const before = await counts();
+        expect(await deleteClient({ clientId: client.id, confirmName: client.name })).toMatchObject({
+          ok: false,
+          status: 403,
+          error: { code: "FORBIDDEN" },
+        });
+        expect(await counts()).toEqual(before);
+      } finally {
+        await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
+      }
+    }
+    expect((await clientRow(client.id)).deleted_at).toBeNull();
+  });
+
+  it("grants delete_client to service_role only", async () => {
+    const { rows } = await pool.query(
+      `select has_function_privilege('service_role', $1, 'execute') as service,
+              has_function_privilege('anon', $1, 'execute') as anon,
+              has_function_privilege('authenticated', $1, 'execute') as authenticated`,
+      ["public.delete_client(uuid, text, uuid)"],
+    );
+    expect(rows).toEqual([{ service: true, anon: false, authenticated: false }]);
+  });
+
+  it("keeps the client delete and truncate triggers: a hard delete is still refused", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    await expect(inRolledBackTx("delete from public.client where id = $1", [client.id])).rejects.toThrow(/never deleted/);
   });
 });
 

@@ -53,7 +53,7 @@ const MATRIX: Readonly<Record<Action, Readonly<Partial<Record<Role, Rule>>>>> = 
   "create case": { owner_designer: true },
   // AD-21: the step 0 client picker (Sprint Change Proposal 2026-10-15).
   "list clients": { owner_designer: true },
-  // AD-21: add and rename only; clients are never deleted (Story 2.13).
+  // AD-21: add, edit and delete (owner, 2026-10-19: clients can be deleted (soft), with their cases).
   "manage clients": { owner_designer: true },
   upload: { owner_designer: true },
   "fill details": { owner_designer: true },

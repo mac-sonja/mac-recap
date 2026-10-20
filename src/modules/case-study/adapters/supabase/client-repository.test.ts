@@ -61,11 +61,12 @@ async function quietly<T>(run: () => Promise<T>): Promise<{ result: T; lines: st
 }
 
 describe("createSupabaseClientRepository().list", () => {
-  it("reads id, name and code of every client, by name with an id tie-break", async () => {
-    const { factory, from, select, order } = stubClient({ data: [client()], error: null });
+  it("reads id, name and code of every non-deleted client, by name with an id tie-break", async () => {
+    const { factory, from, select, is, order } = stubClient({ data: [client()], error: null });
     expect(await createSupabaseClientRepository(factory).list()).toEqual({ ok: true, value: [client()] });
     expect(from).toHaveBeenCalledWith("client");
     expect(select).toHaveBeenCalledWith("id, name, code");
+    expect(is).toHaveBeenCalledExactlyOnceWith("deleted_at", null);
     expect(order.mock.calls).toEqual([
       ["name", { ascending: true }],
       ["id", { ascending: true }],
@@ -94,7 +95,7 @@ describe("createSupabaseClientRepository().list", () => {
 });
 
 describe("createSupabaseClientRepository().listWithCaseCounts", () => {
-  it("counts only non-deleted cases and says whether every required field is filled, by name with an id tie-break", async () => {
+  it("lists non-deleted clients, counts only non-deleted cases and says whether every required field is filled, by name with an id tie-break", async () => {
     const rows = [
       { ...infoRow(), client_brief: BRIEF, case_study: [{ count: 3 }] },
       { ...infoRow({ id: "cccccccc-0000-4000-8000-000000000002", industries: [], description: null, logo_id: null }), client_brief: null, case_study: [{ count: 0 }] },
@@ -111,7 +112,10 @@ describe("createSupabaseClientRepository().listWithCaseCounts", () => {
     expect(select).toHaveBeenCalledWith(
       "id, name, code, industries, description, logo_id, client_brief(context, solution, results), case_study(count)",
     );
-    expect(is).toHaveBeenCalledExactlyOnceWith("case_study.deleted_at", null);
+    expect(is.mock.calls).toEqual([
+      ["deleted_at", null],
+      ["case_study.deleted_at", null],
+    ]);
     expect(order.mock.calls).toEqual([
       ["name", { ascending: true }],
       ["id", { ascending: true }],
@@ -141,11 +145,12 @@ describe("createSupabaseClientRepository().listWithCaseCounts", () => {
 });
 
 describe("createSupabaseClientRepository().findById", () => {
-  it("returns the client with its info, or null when unknown", async () => {
+  it("returns the non-deleted client with its info, or null when unknown or deleted", async () => {
     const found = stubClient({ data: infoRow(), error: null });
     expect(await createSupabaseClientRepository(found.factory).findById(client().id)).toEqual({ ok: true, value: detail() });
     expect(found.select).toHaveBeenCalledWith("id, name, code, industries, description, logo_id");
     expect(found.eq).toHaveBeenCalledWith("id", client().id);
+    expect(found.is).toHaveBeenCalledExactlyOnceWith("deleted_at", null);
     const missing = stubClient({ data: null, error: null });
     expect(await createSupabaseClientRepository(missing.factory).findById(client().id)).toEqual({ ok: true, value: null });
   });
@@ -155,6 +160,33 @@ describe("createSupabaseClientRepository().findById", () => {
     const { result } = await quietly(() => createSupabaseClientRepository(factory).findById(client().id));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("CLIENT_LOOKUP_FAILED");
+  });
+});
+
+describe("createSupabaseClientRepository().deleteClient", () => {
+  it("calls delete_client and returns the number of cases deleted", async () => {
+    const { factory, rpc } = stubClient({ data: null, error: null }, { data: 2, error: null });
+    expect(await createSupabaseClientRepository(factory).deleteClient(client().id, "  Lumen   Srl ", ACTOR_ID)).toEqual({ ok: true, value: 2 });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("delete_client", {
+      p_client_id: client().id,
+      p_confirm_name: "  Lumen   Srl ",
+      p_actor_id: ACTOR_ID,
+    });
+  });
+
+  it.each(["CLIENT_NOT_FOUND", "CLIENT_DELETE_NAME_MISMATCH"])("maps the P0001 %s refusal", async (code) => {
+    const { factory } = stubClient({ data: null, error: null }, { data: null, error: { code: "P0001", message: code } });
+    const result = await createSupabaseClientRepository(factory).deleteClient(client().id, "Lumen", ACTOR_ID);
+    expect(result).toEqual({ ok: false, error: { code, message: expect.any(String), details: { clientId: client().id } } });
+  });
+
+  it("maps any other failure, or no count, to CLIENT_WRITE_FAILED", async () => {
+    const down = stubClient({ data: null, error: null }, { data: null, error: { code: "PGRST000", message: "down" } });
+    const { result } = await quietly(() => createSupabaseClientRepository(down.factory).deleteClient(client().id, "Lumen Srl", ACTOR_ID));
+    expect(result.ok || result.error.code).toBe("CLIENT_WRITE_FAILED");
+    const empty = stubClient({ data: null, error: null }, { data: null, error: null });
+    const { result: none } = await quietly(() => createSupabaseClientRepository(empty.factory).deleteClient(client().id, "Lumen Srl", ACTOR_ID));
+    expect(none.ok || none.error.code).toBe("CLIENT_WRITE_FAILED");
   });
 });
 
@@ -488,6 +520,12 @@ describe("createSupabaseClientRepository() client files", () => {
     expect(rpc).toHaveBeenCalledExactlyOnceWith("delete_client_asset", { p_asset_id: ASSET_ID });
     const none = stubClient({ data: null, error: null }, { data: false, error: null });
     expect(await createSupabaseClientRepository(none.factory).deleteAsset(ASSET_ID, client().id)).toEqual({ ok: true, value: false });
+  });
+
+  it("maps CLIENT_NOT_FOUND (a deleted client's file) and keeps the row", async () => {
+    const gone = stubClient({ data: null, error: null }, { data: null, error: { code: "P0001", message: "CLIENT_NOT_FOUND" } });
+    const result = await createSupabaseClientRepository(gone.factory).deleteAsset(ASSET_ID, client().id);
+    expect(result.ok || result.error.code).toBe("CLIENT_NOT_FOUND");
   });
 
   it("maps a failed delete to CLIENT_WRITE_FAILED and logs the client id", async () => {

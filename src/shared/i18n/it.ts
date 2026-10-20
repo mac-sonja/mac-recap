@@ -297,6 +297,25 @@ export const it = {
       /** Polite live-region line when a save fails; `{field}` is the field label, `{message}` its error. */
       announceError: "{field}: {message}",
     },
+    /** Elimina cliente on step 1 of an existing client (owner, 2026-10-19). */
+    delete: {
+      button: "Elimina cliente",
+      /** `{name}` is the client name. */
+      title: "Eliminare {name}?",
+      /** `{n}` is the client's non-deleted case history count (1 or more). */
+      withCases: "Verranno eliminate anche le sue {n} case history, comprese quelle approvate. L'operazione non si può annullare.",
+      /** With no case histories. */
+      noCases: "Il cliente non ha case history. L'operazione non si può annullare.",
+      confirmLabel: "Scrivi il nome del cliente per confermare",
+      cancel: "Annulla",
+      confirm: "Elimina",
+      /** Why Elimina is inactive. */
+      confirmReason: "Scrivi il nome del cliente per attivare Elimina.",
+      /** The name changed elsewhere since the page loaded (CLIENT_DELETE_NAME_MISMATCH). */
+      nameChanged: "Il nome del cliente è cambiato. Ricarica la pagina e riprova.",
+      /** Any other failure, a dropped connection included. */
+      failed: "Non è stato possibile eliminare il cliente. Riprova.",
+    },
     /** Step 2 Materiale (Story 2.16): 2–3 files for the intro pages. */
     material: {
       heading: "Materiale",

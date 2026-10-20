@@ -2,12 +2,13 @@ import { redirect } from "next/navigation";
 import { clientHref, clientWizardHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
 import { clientLimits, clientMaterialLimits } from "@/app/(tool)/clients/_lib/client-limits";
-import { authorize } from "@/modules/access";
+import { authorize, can } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import { it } from "@/shared/i18n/it";
 import { WizardFrame } from "../../_components/wizard-frame";
 import { ClientDetailsStep } from "./_components/client-details-step";
 import { ClientMaterialStep } from "./_components/client-material-step";
+import { DeleteClientButton } from "./_components/delete-client-button";
 import { CLIENT_WIZARD_STEPS, clientStepHref } from "./_components/client-steps";
 
 export interface NewClientPageProps {
@@ -23,7 +24,10 @@ export interface NewClientPageProps {
  * error boundary, and the back arrow goes to the client's page. `step=2` opens
  * Materiale (Story 2.16, the client's current files) only once every required field
  * is filled; otherwise, and with no or an unknown `step`, step 1 opens. Step 3
- * Introduzione stays hidden (Story 4.11). Below 1024 px the frame is read-only.
+ * Introduzione stays hidden (Story 4.11). Step 1 of an existing client ends with
+ * **Elimina cliente** (owner, 2026-10-19), which needs the client's non-deleted case
+ * history count; a failed count throws into the error boundary. Below 1024 px the
+ * frame is read-only, so the button is hidden there too.
  */
 export default async function NewClientPage({ searchParams }: NewClientPageProps) {
   const shell = await requireSurface("manage clients");
@@ -66,6 +70,13 @@ export default async function NewClientPage({ searchParams }: NewClientPageProps
     if (!listed.ok) throw new Error(`Client material could not be loaded: ${listed.error.code}`);
     assets = listed.value;
   }
+  // Step 1's delete dialog names the number of case histories deleted with the client.
+  let caseCount: number | null = null;
+  if (current === 1 && can(shell.actor, "manage clients") && can(shell.actor, "list cases", {})) {
+    const cases = await caseStudy.list({ clientId: client.id });
+    if (!cases.ok) throw new Error(`Case studies could not be listed: ${cases.error.code}`);
+    caseCount = cases.value.length;
+  }
 
   const header = (
     <>
@@ -90,7 +101,10 @@ export default async function NewClientPage({ searchParams }: NewClientPageProps
       hrefFor={clientStepHref(client.id)}
     >
       {current === 1 ? (
-        <ClientDetailsStep key={client.id} client={client} industries={caseStudy.CLIENT_INDUSTRIES} limits={limits} />
+        <>
+          <ClientDetailsStep key={client.id} client={client} industries={caseStudy.CLIENT_INDUSTRIES} limits={limits} />
+          {caseCount !== null && <DeleteClientButton clientId={client.id} name={client.name} caseCount={caseCount} />}
+        </>
       ) : (
         <ClientMaterialStep key={client.id} clientId={client.id} initialAssets={assets} limits={clientMaterialLimits()} />
       )}
