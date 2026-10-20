@@ -53,6 +53,7 @@ development_status:
   2-15-client-wizard-and-details-step: done  # #53; migration applied to mac-recap-dev 2026-10-19 (not staging/prod); MVP, before the demo; rewritten from Client images (SCP 2026-10-19); Sprint 2, first: after 2.14, before 2.16
   2-16-client-material-step: done  # #56; migration applied to mac-recap-dev 2026-10-19 (not staging/prod); MVP, before the demo (SCP 2026-10-19); Sprint 2: after 2.15, before 3.2
   2-17-case-wizard-details-first-and-table-filters: done  # #63; migration applied to mac-recap-dev 2026-10-20 (not staging/prod); owner 2026-10-20: wizard details first with business line, table status filter and Business line column; new migration 20261020140000 not yet applied anywhere
+  2-18-case-wizard-polish: review  # owner 2026-10-20: live title, client search, no Lingua (new cases it; multilingual later creates both languages at once), required year, bigger pills, sticky footer; UI only, no migration
   epic-2-retrospective: optional
 
   epic-3: in-progress

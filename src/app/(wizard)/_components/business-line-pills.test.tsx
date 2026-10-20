@@ -32,6 +32,14 @@ const checked = () => radios().filter((r) => r.getAttribute("aria-checked") === 
 afterEach(cleanup);
 
 describe("BusinessLinePills", () => {
+  it("uses the larger shared pill (Story 2.18): 40px tall, 14px text, about 8px apart", () => {
+    render(<Harness />);
+    for (const radio of radios()) {
+      expect(radio.className.split(" ")).toEqual(expect.arrayContaining(["min-h-10", "px-4", "py-2", "text-sm"]));
+    }
+    expect(screen.getByRole("radiogroup").className).toBe("flex flex-wrap gap-2");
+  });
+
   it("is a named radiogroup of the six business lines, none checked, the first in the tab order", () => {
     render(<Harness />);
     expect(screen.getByRole("radiogroup", { name: "Business line" })).toBeTruthy();

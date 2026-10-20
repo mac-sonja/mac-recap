@@ -97,11 +97,15 @@ describe("wizard copy", () => {
     expect(t("wizard.eyebrow")).toBe("Nuova case history");
     expect(t("wizard.back")).toBe("Torna alle case history");
     expect(Object.values(it.wizard.steps)).toEqual(["Dettagli", "Materiale", "Genera"]);
-    expect(Object.values(it.wizard.fields)).toEqual(["Nome della case history", "Cliente", "Anno", "Lingua del testo", "Business line"]);
+    expect(Object.values(it.wizard.fields)).toEqual(["Nome della case history", "Cliente", "Anno", "Business line"]);
     expect(t("wizard.errors.businessLine")).toBe("Scegli la business line.");
     expect(t("wizard.unsavedConfirm")).toBe("Le informazioni inserite non sono ancora salvate. Uscire comunque?");
     expect(fill(t("wizard.nextReason"), { fields: "Nome, Business line" })).toBe("Per continuare compila: Nome, Business line.");
-    expect(it.wizard.locales).toEqual({ it: "Italiano", en: "English" });
+    expect("locales" in it.wizard).toBe(false);
+    expect("locale" in it.wizard.errors).toBe(false);
+    expect(t("wizard.requiredMark")).toBe("*");
+    expect(fill(t("wizard.tabTitle"), { title: "Rebranding Lumen", app: "MAC Recap" })).toBe("Rebranding Lumen · MAC Recap");
+    expect(fill(t("wizard.noClientMatch"), { link: t("wizard.noClientsLink") })).toBe("Nessun cliente trovato. Aggiungilo nella pagina Clienti.");
     expect(t("wizard.next")).toBe("Avanti");
     expect(t("wizard.errors.name")).toBe("Inserisci il nome della case history.");
     expect(t("wizard.errors.client")).toBe("Scegli il cliente.");

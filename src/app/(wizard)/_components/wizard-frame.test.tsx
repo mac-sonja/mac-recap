@@ -29,6 +29,8 @@ describe("WizardFrame", () => {
     expect(html).toContain('<div class="flex h-dvh flex-col');
     expect(html).toContain('<header class="flex h-15 shrink-0');
     expect(html).toContain('<main class="flex flex-1 overflow-auto');
+    // Scroll padding keeps a focused field clear of the sticky footer.
+    expect(html).toMatch(/<main class="[^"]*\bscroll-pb-36\b/);
     expect(html).toContain('<div class="m-auto w-full max-w-[820px]">');
   });
 
@@ -84,10 +86,28 @@ describe("WizardFrame", () => {
 describe("WizardFooter", () => {
   it("puts the dots in the centre under a divider and the action on the right", () => {
     const html = renderToStaticMarkup(<WizardFooter current={1} action={<button type="button">go</button>} />);
-    expect(html).toContain('class="mt-8 grid grid-cols-[1fr_auto_1fr] items-center border-t pt-5"');
+    expect(html).toMatch(/<div data-wizard-footer="" class="[^"]*\bgrid grid-cols-\[1fr_auto_1fr\] items-center border-t\b[^"]*"/);
     expect(html).toContain('<div aria-hidden="true" class="flex justify-center gap-1.5">');
     expect(html).toContain('<div class="justify-self-end"><button type="button">go</button></div>');
     expect(html.match(/data-active=""/g)).toHaveLength(1);
     expect(html).toMatch(/data-dot="1" data-active=""/);
+  });
+
+  it("stays at the bottom of the scrolling column with a solid background and a top border (Story 2.18)", () => {
+    const html = renderToStaticMarkup(<WizardFooter current={2} action={<button type="button">go</button>} />);
+    const classes = html.match(/<div data-wizard-footer="" class="([^"]*)"/)?.[1].split(" ") ?? [];
+    expect(classes).toEqual(expect.arrayContaining(["sticky", "bottom-0", "z-10", "bg-surface", "border-t", "pt-5", "pb-6"]));
+    expect(classes).not.toContain("fixed");
+    // Start, dots, action: the DOM order (and so the focus order) is unchanged.
+    expect(html).toMatch(/^<div data-wizard-footer=""[^>]*><div class="font-label[^"]*"><\/div><div aria-hidden="true"[^>]*>.*<\/div><div class="justify-self-end"><button/);
+  });
+
+  it("sits inside the wizard column, so it lines up with it and is hidden below 1024px with the content", () => {
+    const html = renderToStaticMarkup(
+      <WizardFrame caseStudy={null} current={1}>
+        <WizardFooter current={1} action={<button type="button">go</button>} />
+      </WizardFrame>,
+    );
+    expect(html).toMatch(/<div class="m-auto w-full max-w-\[820px\]">.*<div class="hidden lg:block">.*<div data-wizard-footer=""/);
   });
 });

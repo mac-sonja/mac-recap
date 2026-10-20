@@ -91,9 +91,12 @@ export const it = {
       name: "Nome della case history",
       client: "Cliente",
       year: "Anno",
-      locale: "Lingua del testo",
       businessLine: "Business line",
     },
+    /** After a required field's label (Anno); hidden from screen readers, which read `aria-required`. */
+    requiredMark: "*",
+    /** The browser tab while the case wizard's Dettagli step is open; `{title}` is the live title. */
+    tabTitle: "{title} · {app}",
     /** Under the client of an existing case: it is fixed once the case exists. */
     clientFixed: "Il cliente non cambia dopo la creazione: il codice dipende da lui.",
     /** Asked before leaving step 1 with entries that can't be kept (a new case, or required fields missing). */
@@ -102,16 +105,22 @@ export const it = {
     nextReason: "Per continuare compila: {fields}.",
     /** Joins the `{fields}` of `nextReason`. */
     listSeparator: ", ",
-    locales: {
-      it: "Italiano",
-      en: "English",
-    },
-    /** The step 0 client select's first option (value ""), shown until a client is picked. */
+    /** The step 1 client search's placeholder, shown until something is typed or a client is picked. */
     clientPlaceholder: "Scegli un cliente",
-    /** A step 0 client option: `{name}` and its `{code}`. */
+    /** A step 1 client option (and the search's text once picked): `{name}` and its `{code}`. */
     clientOption: "{name} ({code})",
-    /** Step 0 with no clients: replaces the client field; Avanti stays inactive. `{link}` is `noClientsLink`, a link to /clients. */
+    /** Step 1 with no clients: replaces the client field; Avanti stays inactive. `{link}` is `noClientsLink`, a link to /clients. */
     noClients: "Nessun cliente. Aggiungilo nella {link}.",
+    /** Announced to screen readers after typing in the client search pauses: the number of matches. */
+    clientCount: "{n} clienti",
+    clientCountOne: "1 cliente",
+    clientCountNone: "Nessun cliente trovato",
+    /** Above step 1's fields: what the marker after a label means. */
+    requiredLegend: "* obbligatorio",
+    /** Accessible name of the client search's list of options. */
+    clientList: "Clienti",
+    /** Under the client search when the typed text matches no client. `{link}` is `noClientsLink`. */
+    noClientMatch: "Nessun cliente trovato. Aggiungilo nella {link}.",
     noClientsLink: "pagina Clienti",
     errors: {
       name: "Inserisci il nome della case history.",
@@ -120,7 +129,6 @@ export const it = {
       clientNotFound: "Questo cliente non è più disponibile. Ricarica la pagina e scegli di nuovo.",
       /** `{min}` and `{max}` are filled with the accepted years. */
       year: "Inserisci un anno tra {min} e {max}.",
-      locale: "Scegli la lingua del testo.",
       businessLine: "Scegli la business line.",
       generic: "Non è stato possibile creare la case history. I dati inseriti sono ancora qui: riprova.",
       /** An existing case's details could not be saved. */

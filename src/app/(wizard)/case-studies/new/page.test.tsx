@@ -98,6 +98,8 @@ const asset: ListedAsset = {
 
 const render = async (params: { caseId?: string | string[]; step?: string | string[]; clientId?: string | string[] } = {}) =>
   renderToStaticMarkup(await NewCaseStudyPage({ searchParams: Promise.resolve(params) }));
+/** The client search box (`ClientCombobox`'s input), or "". */
+const combobox = (html: string) => html.match(/<input [^>]*role="combobox"[^>]*>/)?.[0] ?? "";
 
 beforeEach(() => {
   requireSurface.mockReset();
@@ -150,34 +152,31 @@ describe("NewCaseStudyPage", () => {
     expect(html).not.toContain("<nav");
   });
 
-  it("a new case lists every client in a select, as given (sorted by name), with a placeholder first option", async () => {
+  it("a new case offers every client in a search box, as given (sorted by name), with a placeholder", async () => {
     const html = await render();
     expect(listClients).toHaveBeenCalledOnce();
-    const select = html.match(/<select [^>]*name="clientId"[^>]*>.*?<\/select>/)?.[0] ?? "";
-    expect([...select.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].map((m) => [m[1], m[2]])).toEqual([
-      ["", "Scegli un cliente"],
-      [clients[0].id, "Lumen Srl (LUM)"],
-      [clients[1].id, "Città di Torino (CIT)"],
-    ]);
-    expect(html).not.toMatch(/<input [^>]*name="client/);
+    expect(combobox(html)).toMatch(/placeholder="Scegli un cliente"/);
+    expect(combobox(html)).toMatch(/aria-expanded="false"/);
+    const list = html.match(/<ul [^>]*role="listbox"[^>]*>.*?<\/ul>/)?.[0] ?? "";
+    expect([...list.matchAll(/<li [^>]*role="option"[^>]*>([^<]*)<\/li>/g)].map((m) => m[1])).toEqual(["Lumen Srl (LUM)", "Città di Torino (CIT)"]);
+    expect(html).not.toContain("<select");
+    expect(html).not.toContain("Lingua del testo");
   });
 
   it("a new case with no clients shows the note instead of the select", async () => {
     listClients.mockResolvedValue(ok([]));
     const html = await render();
     expect(html.replace(/<[^>]+>/g, "")).toContain("Nessun cliente. Aggiungilo nella pagina Clienti.");
-    expect(html).not.toContain("<select name=\"clientId\"");
+    expect(html).not.toContain('role="combobox"');
     expect(html).toMatch(/<a [^>]*href="\/clients"[^>]*>pagina Clienti<\/a>/);
   });
 
-  const selected = (html: string) =>
-    [...(html.match(/<select [^>]*name="clientId"[^>]*>.*?<\/select>/)?.[0] ?? "").matchAll(/<option value="([^"]*)"[^>]*selected=""/g)].map(
-      (m) => m[1],
-    );
+  /** The client search box's text. */
+  const selected = (html: string) => combobox(html).match(/ value="([^"]*)"/)?.[1];
 
   it("a client page's Nuova case history (?clientId=) opens step 1 with that client preselected", async () => {
     const html = await render({ clientId: clients[1].id });
-    expect(selected(html)).toEqual([clients[1].id]);
+    expect(selected(html)).toBe("Città di Torino (CIT)");
     expect(html).toMatch(/<li data-step="1" aria-current="step"/);
   });
 
@@ -187,7 +186,7 @@ describe("NewCaseStudyPage", () => {
     ["repeated", [clients[0].id, clients[1].id]],
   ])("a new case ignores a %s ?clientId= without an error", async (_label, clientId) => {
     const html = await render({ clientId });
-    expect(selected(html)).toEqual([""]);
+    expect(selected(html)).toBe("");
     expect(html).toContain("Nome della case history");
   });
 
