@@ -31,9 +31,16 @@ export function sourceFiles(dir: string): string[] {
     .sort();
 }
 
-/** The forbidden imports reachable from `entryPoints`, sorted by importer. */
-export async function forbiddenImports(root: string, entryPoints: string[]): Promise<ForbiddenImport[]> {
-  const result = await build({
+/** Our own source files reachable from `entryPoints` (relative to the root), sorted. */
+export async function reachedSources(root: string, entryPoints: string[]): Promise<string[]> {
+  const result = await bundle(root, entryPoints);
+  return Object.keys(result.metafile.inputs)
+    .map((file) => relative(root, join(root, file)))
+    .sort();
+}
+
+function bundle(root: string, entryPoints: string[]) {
+  return build({
     absWorkingDir: root,
     entryPoints,
     bundle: true,
@@ -47,6 +54,11 @@ export async function forbiddenImports(root: string, entryPoints: string[]): Pro
     // Stylesheets and assets carry no code.
     loader: { ".css": "empty", ".svg": "empty", ".png": "empty", ".ico": "empty" },
   });
+}
+
+/** The forbidden imports reachable from `entryPoints`, sorted by importer. */
+export async function forbiddenImports(root: string, entryPoints: string[]): Promise<ForbiddenImport[]> {
+  const result = await bundle(root, entryPoints);
   const found: ForbiddenImport[] = [];
   for (const [file, input] of Object.entries(result.metafile.inputs)) {
     for (const imp of input.imports) {

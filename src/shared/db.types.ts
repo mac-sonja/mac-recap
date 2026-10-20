@@ -285,6 +285,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"rendition": {
+                  Row: {
+                    "asset_id": string,"content_type": string,"created_at": string,"height": number,"path": string,"size_bytes": number,"spec_hash": string,"width": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "asset_id": string,"content_type": string,"created_at"?: string,"height": number,"path": string,"size_bytes": number,"spec_hash": string,"width": number
+                  }
+                  Update: {
+                    "asset_id"?: string,"content_type"?: string,"created_at"?: string,"height"?: number,"path"?: string,"size_bytes"?: number,"spec_hash"?: string,"width"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "rendition_asset_id_fkey"
+      columns: ["asset_id"]
+isOneToOne: false
+      referencedRelation: "asset"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
@@ -528,6 +548,23 @@ isOneToOne: false
                           SetofOptions: {
         from: "*"
         to: "client"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"upsert_rendition":
+{ Args: { "p_asset_id": string,"p_content_type": string,"p_height": number,"p_path": string,"p_size_bytes": number,"p_spec_hash": string,"p_width": number }; Returns: {
+              "asset_id": string,
+"content_type": string,
+"created_at": string,
+"height": number,
+"path": string,
+"size_bytes": number,
+"spec_hash": string,
+"width": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "rendition"
         isOneToOne: true
         isSetofReturn: false
       } }

@@ -77,9 +77,13 @@ export const THUMBNAIL_URL_TTL_SECONDS = 15 * 60;
 
 /**
  * One row of a case's file list: the asset (with its favourite flag) without
- * its author or deletion stamp, plus a signed GET for images (`null` for other kinds, or when storage
- * isn't available).
+ * its author or deletion stamp, plus a signed GET of its thumbnail: the
+ * thumbnail rendition when it exists, else an image's original (`null` for a
+ * video without its poster, other kinds, or when storage isn't available).
+ * `thumbnailPending` is true while an image's or video's thumbnail rendition
+ * is not made yet (Story 3.2).
  */
 export type ListedAsset = Pick<Asset, "id" | "kind" | "originalFileName" | "contentType" | "sizeBytes" | "createdAt" | "isFavourite"> & {
   thumbnailUrl: string | null;
+  thumbnailPending: boolean;
 };

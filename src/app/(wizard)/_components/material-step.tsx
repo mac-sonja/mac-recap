@@ -103,6 +103,7 @@ type Attempt =
 /** Server codes that name what is wrong with the file: shown on the row, never retried. */
 const REJECTION_CODES = ["FILE_LIMIT_REACHED", "FILE_TOO_LARGE", "FILE_TYPE_NOT_ALLOWED", "UPLOAD_REJECTED"] as const;
 
+/** A just-confirmed case file: no thumbnail yet; an image or video waits for its thumbnail rendition. */
 const toListed = ({ id, kind, originalFileName, contentType, sizeBytes, createdAt, isFavourite }: Asset): ListedAsset => ({
   id,
   kind,
@@ -112,7 +113,15 @@ const toListed = ({ id, kind, originalFileName, contentType, sizeBytes, createdA
   createdAt,
   isFavourite,
   thumbnailUrl: null,
+  thumbnailPending: kind === "image" || kind === "video",
 });
+
+/** The step re-lists this often while a listed image or video still waits for its thumbnail rendition (Story 3.2). */
+export const THUMBNAIL_POLL_MS = 5_000;
+/** It stops re-listing this long after the step opened or the last such file was added. */
+export const THUMBNAIL_POLL_MAX_MS = 2 * 60_000;
+
+const waitsForThumbnail = (row: MaterialRow) => row.state === "listed" && row.asset.thumbnailPending === true;
 
 function kindOf(contentType: string | null): RowKind {
   if (contentType === null) return "other";
@@ -169,6 +178,10 @@ function caseActions(caseId: string): MaterialActions {
  * Progress and rejections are announced in a polite live region. Case status never changes.
  * The client wizard reuses it (Story 2.16) with its own `actions`, copy, footer action,
  * readiness rule and an image pixel check; the defaults keep the case step as it was.
+ * Case images and videos show their thumbnail rendition once the worker has made it
+ * (Story 3.2): while a listed one still waits for it, the step re-lists every 5 s for
+ * up to 2 minutes (an image shows its original meanwhile, a video its type icon).
+ * Client files never wait, so the client step only re-lists once after an image upload, as before.
  */
 export function MaterialStep({
   caseId,
@@ -207,6 +220,14 @@ export function MaterialStep({
   const favouriteBusy = useRef(new Set<string>());
   const removeBusy = useRef(new Set<string>());
   const unmounted = useRef(false);
+  // The latest server calls, for the thumbnail polling effect.
+  const actionsRef = useRef(actions);
+  // Bumped when a file that waits for its thumbnail is added: the polling window starts again.
+  const [pollWindow, setPollWindow] = useState(0);
+
+  useEffect(() => {
+    actionsRef.current = actions;
+  });
 
   // Leaving the step aborts every upload still running; confirmed files stay.
   useEffect(() => {
@@ -290,21 +311,60 @@ export function MaterialStep({
   }
 
   async function refreshThumbnails() {
+    await refreshThumbnailsWith(actions);
+  }
+
+  /**
+   * Re-lists and takes each listed row's new thumbnail: a row without a URL takes
+   * the listed one, and a row waiting for its rendition takes the rendition once
+   * it is ready. Nothing else on the row changes.
+   */
+  async function refreshThumbnailsWith(calls: MaterialActions) {
     try {
-      const fresh = await actions.list();
-      if (!fresh.ok) return;
-      const urls = new Map(fresh.value.map((asset) => [asset.id, asset.thumbnailUrl]));
+      const fresh = await calls.list();
+      if (!fresh.ok || unmounted.current) return;
+      const byId = new Map(fresh.value.map((asset) => [asset.id, asset]));
       update((current) =>
-        current.map((row) =>
-          row.state === "listed" && row.asset.thumbnailUrl === null && urls.get(row.asset.id)
-            ? { ...row, asset: { ...row.asset, thumbnailUrl: urls.get(row.asset.id) ?? null } }
-            : row,
-        ),
+        current.map((row) => {
+          if (row.state !== "listed") return row;
+          const next = byId.get(row.asset.id);
+          if (next === undefined) return row;
+          const waiting = row.asset.thumbnailPending === true;
+          if (waiting && next.thumbnailPending !== true) {
+            return { ...row, asset: { ...row.asset, thumbnailUrl: next.thumbnailUrl ?? row.asset.thumbnailUrl, thumbnailPending: false } };
+          }
+          if (row.asset.thumbnailUrl === null && next.thumbnailUrl) {
+            return { ...row, asset: { ...row.asset, thumbnailUrl: next.thumbnailUrl } };
+          }
+          return row;
+        }),
       );
     } catch {
       // The row keeps its type icon.
     }
   }
+
+  // While a listed image or video waits for its thumbnail rendition, re-list every
+  // THUMBNAIL_POLL_MS, for at most THUMBNAIL_POLL_MAX_MS (client files never wait).
+  const waiting = rows.some(waitsForThumbnail);
+  useEffect(() => {
+    if (!waiting) return;
+    let stopped = false;
+    let handle: ReturnType<typeof setTimeout> | undefined;
+    const deadline = Date.now() + THUMBNAIL_POLL_MAX_MS;
+    const tick = async () => {
+      await refreshThumbnailsWith(actionsRef.current);
+      if (stopped || Date.now() + THUMBNAIL_POLL_MS > deadline) return;
+      handle = setTimeout(() => void tick(), THUMBNAIL_POLL_MS);
+    };
+    handle = setTimeout(() => void tick(), THUMBNAIL_POLL_MS);
+    return () => {
+      stopped = true;
+      clearTimeout(handle);
+    };
+    // refreshThumbnailsWith only reads refs and the state setter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, pollWindow]);
 
   async function upload(job: UploadJob) {
     const controller = new AbortController();
@@ -338,6 +398,7 @@ export function MaterialStep({
           update((current) => sortByPosition(current.map((r) => (r.key === job.key ? row : r))));
           announce([fill(copy.announce.done, { name: outcome.asset.originalFileName })]);
           if (outcome.asset.kind === "image" && outcome.asset.thumbnailUrl === null) void refreshThumbnails();
+          if (outcome.asset.thumbnailPending === true) setPollWindow((n) => n + 1);
           return;
         }
         if (outcome.kind === "storage") {

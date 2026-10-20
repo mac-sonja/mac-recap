@@ -14,6 +14,7 @@ import { assetKey } from "@/modules/material/adapters/asset-key";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
 import { createSupabaseObjectStorage, MATERIAL_BUCKET } from "@/modules/material/adapters/supabase/object-storage";
+import { createSupabaseRenditionRepository } from "@/modules/material/adapters/supabase/rendition-repository";
 import { FAVOURITABLE_KINDS } from "@/modules/material/domain/asset";
 import { ALLOWED_CONTENT_TYPES, ASSET_KINDS, MAX_ASSETS_PER_CASE, MAX_FILE_BYTES, type AllowedContentType } from "@/modules/material/domain/files";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
@@ -351,6 +352,8 @@ describe("listing assets", () => {
     const [id] = await seedAssets(created.id, 1);
     const list = makeListAssets({
       assets: createSupabaseAssetRepository(),
+      renditions: createSupabaseRenditionRepository(),
+      jobs: await import("@/modules/jobs"),
       storage: null,
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
     });
@@ -367,6 +370,8 @@ describe("listing assets", () => {
           createdAt: expect.any(String),
           isFavourite: false,
           thumbnailUrl: null,
+          // Seeded straight through create_asset: no rendition job, so not pending.
+          thumbnailPending: false,
         },
       ],
     });
@@ -390,9 +395,14 @@ describe("use cases against the real DB and case-study module (storage stubbed)"
       presignDownload: async (target) => ({ ok: true, value: `https://storage.test/${target.assetId}` }),
       presignDownloads: async (targets) => ({ ok: true, value: targets.map((target) => `https://storage.test/${target.assetId}`) }),
       head: async (target) => ({ ok: true, value: objects.get(target.assetId) ?? null }),
+      presignKeys: async (keys) => ({ ok: true, value: keys.map((key) => `https://storage.test/${key}`) }),
+      download: async () => ({ ok: true, value: null }),
+      upload: async () => ({ ok: true, value: undefined }),
     };
     return {
       assets: createSupabaseAssetRepository(),
+      renditions: createSupabaseRenditionRepository(),
+      jobs: await import("@/modules/jobs"),
       form: createSupabaseDetailsFormRepository(),
       storage,
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
@@ -415,6 +425,9 @@ describe("use cases against the real DB and case-study module (storage stubbed)"
       fileName: "hero.webp",
     });
     expect(confirmed.ok).toBe(true);
+    // Story 3.2: the confirmed image got one queued rendition job, mapped to its case.
+    const { rows: jobRows } = await pool.query("select kind, status, payload from public.job where subject_id = $1", [assetId]);
+    expect(jobRows).toEqual([{ kind: "rendition", status: "queued", payload: { caseId: created.id } }]);
     expect(await makeRemoveAsset(deps)(actor, { caseId: created.id, assetId })).toEqual({ ok: true, value: undefined });
 
     const { rows } = await pool.query(
@@ -523,7 +536,9 @@ describe("favourites", () => {
     const created = await createCase();
     const [a, b] = await seedAssets(created.id, 2);
     await pool.query("update public.asset set is_favourite = true where id = $1", [b]);
-    const listed = await makeListAssets({ ...(await realDeps()), storage: null })({ caseId: created.id });
+    const listed = await makeListAssets({ ...(await realDeps()), renditions: createSupabaseRenditionRepository(), jobs: await import("@/modules/jobs"), storage: null })({
+      caseId: created.id,
+    });
     expect(listed.ok).toBe(true);
     if (listed.ok) expect(listed.value.map((x) => [x.id, x.isFavourite])).toEqual([
       [a, false],
@@ -1076,8 +1091,11 @@ describe("material storage bucket", () => {
 
     expect(await storage().head(target)).toEqual({ ok: true, value: { sizeBytes: PNG_BYTES.byteLength, contentType: "image/png" } });
 
+    const jobs = await import("@/modules/jobs");
     const deps = {
       assets: createSupabaseAssetRepository(),
+      renditions: createSupabaseRenditionRepository(),
+      jobs,
       storage: storage(),
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
     };
@@ -1096,6 +1114,8 @@ describe("material storage bucket", () => {
     if (!listed.ok) throw new Error(`list failed: ${listed.error.code}`);
     const thumbnail = listed.value[0].thumbnailUrl;
     expect(thumbnail).toEqual(expect.any(String));
+    // The confirm queued its rendition job, so the image waits for its thumb (original meanwhile).
+    expect(listed.value[0].thumbnailPending).toBe(true);
     const fetched = await fetch(thumbnail as string);
     expect(fetched.status).toBe(200);
     expect(fetched.headers.get("content-type")).toBe("image/png");
@@ -1143,6 +1163,8 @@ describe("material storage bucket", () => {
 
     const confirmed = await makeConfirmUpload({
       assets: createSupabaseAssetRepository(),
+      renditions: createSupabaseRenditionRepository(),
+      jobs: await import("@/modules/jobs"),
       form: createSupabaseDetailsFormRepository(),
       storage: storage(),
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },

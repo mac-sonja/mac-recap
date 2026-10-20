@@ -317,4 +317,35 @@ describe("ClientMaterialStep", () => {
     await act(async () => finish());
     expect(screen.queryByText("foto-2.jpg")).toBeNull();
   });
+
+  describe("thumbnails behave as before Story 3.2 (no renditions for client files)", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("an image upload re-lists once; a video upload never re-lists and keeps its type icon; no polling", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const { user, input } = setup();
+      await user.upload(input, makeFile("spot.mp4", "video/mp4"));
+      await waitFor(() => expect(document.querySelectorAll('[data-row-state="listed"]')).toHaveLength(1));
+      await act(() => vi.advanceTimersByTimeAsync(3 * 60_000));
+      expect(listClientMaterial).not.toHaveBeenCalled();
+      expect(rowOf("spot.mp4").querySelector("img")).toBeNull();
+
+      await user.upload(input, makeFile("a.jpg", "image/jpeg"));
+      await waitFor(() => expect(document.querySelectorAll('[data-row-state="listed"]')).toHaveLength(2));
+      await waitFor(() => expect(listClientMaterial).toHaveBeenCalledOnce());
+      await act(() => vi.advanceTimersByTimeAsync(3 * 60_000));
+      expect(listClientMaterial).toHaveBeenCalledOnce();
+    });
+
+    it("a stored client video with no URL shows the type icon and is never re-listed", async () => {
+      vi.useFakeTimers();
+      setup([stored(1, { fileName: "spot.mp4", kind: "video", contentType: "video/mp4", width: null, height: null })]);
+      expect(rowOf("spot.mp4").querySelector("img")).toBeNull();
+      expect(rowOf("spot.mp4").querySelector("svg.lucide-film")).not.toBeNull();
+      await act(() => vi.advanceTimersByTimeAsync(3 * 60_000));
+      expect(listClientMaterial).not.toHaveBeenCalled();
+    });
+  });
 });

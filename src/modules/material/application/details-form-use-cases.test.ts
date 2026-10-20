@@ -65,6 +65,8 @@ function world() {
 
   const deps: MaterialDeps = {
     assets: unused<AssetRepository>("assets"),
+    renditions: unused<MaterialDeps["renditions"]>("renditions"),
+    jobs: unused<MaterialDeps["jobs"]>("jobs"),
     form,
     storage: null,
     cases,

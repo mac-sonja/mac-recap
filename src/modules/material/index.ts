@@ -1,15 +1,19 @@
 // Public surface of the material module. Code outside this module imports only this file.
-// The module owns `asset` (including its favourite flag), `context_form` and the
+// The module owns `asset` (including its favourite flag), `context_form`, `rendition` and the
 // `material` storage bucket's `cases/{caseId}/assets/**` (AD-11): nobody else writes them.
+// The worker-only rendition handler lives in `./worker.ts`, which this file never imports.
 import { randomUUID } from "node:crypto";
 import type { Actor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
+import * as jobs from "@/modules/jobs";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
 import { createSupabaseObjectStorage } from "@/modules/material/adapters/supabase/object-storage";
+import { createSupabaseRenditionRepository } from "@/modules/material/adapters/supabase/rendition-repository";
 import { makeConfirmUpload } from "@/modules/material/application/confirm-upload";
 import type { MaterialDeps } from "@/modules/material/application/deps";
 import { makeGetDetailsForm } from "@/modules/material/application/get-details-form";
+import { makeGetRendition } from "@/modules/material/application/get-rendition";
 import { makeHasMaterial } from "@/modules/material/application/has-material";
 import { makeListAssets } from "@/modules/material/application/list-assets";
 import { makePresignUpload, type PresignedAssetUpload } from "@/modules/material/application/presign-upload";
@@ -19,6 +23,7 @@ import { makeSaveDetailsField } from "@/modules/material/application/save-detail
 import { makeSetFavourite } from "@/modules/material/application/set-favourite";
 import type { Asset, ListedAsset } from "@/modules/material/domain/asset";
 import type { DetailsFieldSaved, DetailsForm, ResolvedRef } from "@/modules/material/domain/details-form";
+import type { RenditionLink } from "@/modules/material/domain/rendition";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
 import type { Result } from "@/shared/result";
 
@@ -40,6 +45,8 @@ export {
   MAX_FILE_BYTES,
 } from "@/modules/material/domain/files";
 export type { AllowedContentType, AssetKind } from "@/modules/material/domain/files";
+export { RENDITION_NOT_READY, RENDITION_SPEC_NAMES } from "@/modules/material/domain/rendition";
+export type { RenditionLink, RenditionSpecName } from "@/modules/material/domain/rendition";
 export type { PresignedAssetUpload } from "@/modules/material/application/presign-upload";
 
 /** One Supabase Storage adapter, built on first use and reused across requests. */
@@ -54,9 +61,11 @@ function configuredStorage(): ObjectStorage {
 function deps({ withStorage = true }: { withStorage?: boolean } = {}): MaterialDeps {
   return {
     assets: createSupabaseAssetRepository(),
+    renditions: createSupabaseRenditionRepository(),
     form: createSupabaseDetailsFormRepository(),
     storage: withStorage ? configuredStorage() : null,
     cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
+    jobs: { enqueue: jobs.enqueue, liveSubjects: jobs.liveSubjects },
     newId: randomUUID,
   };
 }
@@ -78,7 +87,8 @@ export function presignUpload(actor: Actor, input: unknown): Promise<Result<Pres
 /**
  * Creates the asset after checking the uploaded object's stored metadata, and records
  * `asset_uploaded`. Input `{ caseId, assetId, contentType, fileName }`. Call only
- * after `authorize(actor, 'upload')`. Errors: `UPLOAD_NOT_FOUND`, `UPLOAD_REJECTED`,
+ * after `authorize(actor, 'upload')`. An image or video also gets a `rendition`
+ * job (a failed enqueue is only logged). Errors: `UPLOAD_NOT_FOUND`, `UPLOAD_REJECTED`,
  * `FILE_LIMIT_REACHED`, `ASSET_ALREADY_CONFIRMED`, `NOT_FOUND`, `STORAGE_NOT_CONFIGURED`.
  */
 export function confirmUpload(actor: Actor, input: unknown): Promise<Result<Asset>> {
@@ -86,8 +96,11 @@ export function confirmUpload(actor: Actor, input: unknown): Promise<Result<Asse
 }
 
 /**
- * The non-deleted assets of a case (`{ caseId }`), oldest first. Images carry a
- * `thumbnailUrl` (signed GET, 15 minutes); other kinds carry `null`. Authorize `upload` first. Errors:
+ * The non-deleted assets of a case (`{ caseId }`), oldest first. `thumbnailUrl`
+ * (signed GET, 15 minutes) is the thumbnail rendition when it exists (image
+ * thumb, video poster), else an image's original; `null` for a video without
+ * its poster and other kinds. `thumbnailPending` is true while an image's or
+ * video's thumbnail is not made yet. Authorize `upload` first. Errors:
  * `INVALID_INPUT`, `NOT_FOUND`, `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`, `STORAGE_FAILED`.
  */
 export function listAssets(input: unknown): Promise<Result<ListedAsset[]>> {
@@ -152,4 +165,17 @@ export function getDetailsForm(input: unknown): Promise<Result<DetailsForm>> {
  */
 export function resolveRefs(caseId: unknown, refs: unknown): Promise<Result<ResolvedRef[]>> {
   return makeResolveRefs(storagelessDeps())(caseId, refs);
+}
+
+/**
+ * A signed GET (valid 15 minutes) for one display rendition of a case asset:
+ * `{ url, width, height, contentType }`. `specName` is `image.thumb`,
+ * `image.display`, `video.poster` or `video.display`. The only way other
+ * modules read renditions; call only after authorizing access to the asset's
+ * case. Errors: `INVALID_INPUT`, `NOT_FOUND` (unknown or soft-deleted asset,
+ * or a spec of another kind), `RENDITION_NOT_READY`, `STORAGE_NOT_CONFIGURED`,
+ * `ASSET_LOOKUP_FAILED`, `RENDITION_LOOKUP_FAILED`, `STORAGE_FAILED`.
+ */
+export function getRendition(assetId: unknown, specName: unknown): Promise<Result<RenditionLink>> {
+  return makeGetRendition(deps())(assetId, specName);
 }

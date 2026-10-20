@@ -22,4 +22,6 @@ export interface JobRepository {
   release(lease: Lease): Promise<Result<boolean>>;
   /** The subject's newest 50 jobs, newest first, without payloads. */
   listBySubject(subjectId: string): Promise<Result<JobSummary[]>>;
+  /** Which of `subjectIds` have a `kind` job that is queued or running, in one read. */
+  liveSubjects(kind: JobKind, subjectIds: readonly string[]): Promise<Result<string[]>>;
 }

@@ -5,11 +5,15 @@ import { MAX_FILE_BYTES } from "@/modules/material/domain/files";
 import type { AssetRepository, NewAsset } from "@/modules/material/ports/asset-repository";
 import type { DetailsFormRepository } from "@/modules/material/ports/details-form-repository";
 import type { ObjectStorage, StoredObject } from "@/modules/material/ports/object-storage";
+import type { RenditionRepository } from "@/modules/material/ports/rendition-repository";
+import type { Rendition } from "@/modules/material/domain/rendition";
 import { err, ok } from "@/shared/result";
 import { makeConfirmUpload } from "./confirm-upload";
+import { makeGetRendition } from "./get-rendition";
 import { makeHasMaterial } from "./has-material";
 import { makeListAssets } from "./list-assets";
-import type { CaseStudies, MaterialDeps } from "./deps";
+import type { CaseStudies, Jobs, MaterialDeps } from "./deps";
+import { renditionInputHash, specHashOf } from "./spec-hash";
 import { makePresignUpload } from "./presign-upload";
 import { makeRemoveAsset } from "./remove-asset";
 import { makeSetFavourite } from "./set-favourite";
@@ -73,6 +77,8 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
       const row = assets.get(assetId);
       return ok(row && row.caseId === caseId && row.deletedAt === null ? row : null);
     }),
+    getById: vi.fn<AssetRepository["getById"]>(async (assetId) => ok(assets.get(assetId) ?? null)),
+    listLiveMediaPage: vi.fn<AssetRepository["listLiveMediaPage"]>(async () => ok([])),
     setFavourite: vi.fn<AssetRepository["setFavourite"]>(async (caseId, assetId, value) => {
       const row = assets.get(assetId);
       // Compare-and-set, like the adapter: only a live row currently holding !value.
@@ -110,7 +116,50 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
       ok(targets.map((target) => `https://storage.example/${target.assetId}?ttl=${ttl}`)),
     ),
     head: vi.fn<ObjectStorage["head"]>(async (target) => ok(objects.get(target.assetId) ?? null)),
+    presignKeys: vi.fn<ObjectStorage["presignKeys"]>(async (keys, ttl) => ok(keys.map((key) => `https://storage.example/${key}?ttl=${ttl}`))),
+    download: vi.fn<ObjectStorage["download"]>(async () => ok(null)),
+    upload: vi.fn<ObjectStorage["upload"]>(async () => ok(undefined)),
   } satisfies ObjectStorage;
+
+  /** Rendition rows by `${assetId}/${specHash}`. */
+  const renditionRows = new Map<string, Rendition>();
+  const renditions = {
+    listForAsset: vi.fn<RenditionRepository["listForAsset"]>(async (assetId) =>
+      ok([...renditionRows.values()].filter((r) => r.assetId === assetId)),
+    ),
+    listFor: vi.fn<RenditionRepository["listFor"]>(async (assetIds, hashes) =>
+      ok([...renditionRows.values()].filter((r) => assetIds.includes(r.assetId) && hashes.includes(r.specHash))),
+    ),
+    get: vi.fn<RenditionRepository["get"]>(async (assetId, hash) => ok(renditionRows.get(`${assetId}/${hash}`) ?? null)),
+    upsert: vi.fn<RenditionRepository["upsert"]>(async (r) => {
+      const saved = { ...r, createdAt: "2026-10-20T10:00:00Z" };
+      renditionRows.set(`${r.assetId}/${r.specHash}`, saved);
+      return ok(saved);
+    }),
+  } satisfies RenditionRepository;
+  /** Adds the rendition row of `specName` for an asset (its path is opaque to use cases). */
+  const addRendition = (assetId: string, specName: Parameters<typeof specHashOf>[0], over: Partial<Rendition> = {}) => {
+    const specHash = specHashOf(specName);
+    const video = specName === "video.display";
+    renditionRows.set(`${assetId}/${specHash}`, {
+      assetId,
+      specHash,
+      path: `cases/${CASE_ID}/assets/${assetId}/renditions/${specHash}.${video ? "mp4" : "webp"}`,
+      contentType: video ? "video/mp4" : "image/webp",
+      width: 480,
+      height: 320,
+      sizeBytes: 100,
+      createdAt: "2026-10-20T10:00:00Z",
+      ...over,
+    });
+  };
+
+  /** Assets with a queued or running rendition job. */
+  const liveJobs = new Set<string>();
+  const jobs = {
+    enqueue: vi.fn<Jobs["enqueue"]>(async (input) => ok({ id: "job", ...input })),
+    liveSubjects: vi.fn<Jobs["liveSubjects"]>(async ({ subjectIds }) => ok(subjectIds.filter((id) => liveJobs.has(id)))),
+  } satisfies Jobs;
 
   const cases = {
     get: vi.fn<CaseStudies["get"]>(async (id) =>
@@ -122,8 +171,8 @@ function world({ live = 0, removed = 0 }: { live?: number; removed?: number } = 
     }),
   } satisfies CaseStudies;
 
-  const deps: MaterialDeps = { assets: repo, form: unusedForm, storage, cases, newId: () => NEW_ASSET_ID };
-  return { deps, repo, storage, cases, assets, objects, events, seed };
+  const deps: MaterialDeps = { assets: repo, renditions, jobs, form: unusedForm, storage, cases, newId: () => NEW_ASSET_ID };
+  return { deps, repo, storage, cases, assets, objects, events, seed, renditions, renditionRows, addRendition, jobs, liveJobs };
 }
 
 /** Asset use cases never touch the details form. */
@@ -656,6 +705,7 @@ describe("listAssets", () => {
       createdAt: "2026-10-13T10:00:00Z",
       isFavourite: false,
       thumbnailUrl: null,
+      thumbnailPending: false,
     });
     expect(w.storage.presignDownloads).toHaveBeenCalledExactlyOnceWith([{ caseId: CASE_ID, assetId: IMG, contentType: PNG }], 900);
     expect(w.storage.presignDownload).not.toHaveBeenCalled();
@@ -771,5 +821,305 @@ describe("listAssets", () => {
     } finally {
       write.mockRestore();
     }
+  });
+});
+
+describe("confirmUpload enqueues renditions (Story 3.2)", () => {
+  const confirmInput = (contentType: string) => ({ caseId: CASE_ID, assetId: NEW_ASSET_ID, contentType, fileName: "file" });
+  const stored = (w: ReturnType<typeof world>, contentType: string) => w.objects.set(NEW_ASSET_ID, { sizeBytes: 10, contentType });
+
+  it.each([
+    ["image/jpeg", "image"],
+    ["image/png", "image"],
+    ["video/mp4", "video"],
+    ["video/quicktime", "video"],
+  ] as const)("%s → one rendition job for the asset, after asset_uploaded", async (contentType, kind) => {
+    const w = world();
+    stored(w, contentType);
+    w.jobs.enqueue.mockImplementationOnce(async (input) => {
+      // The event is already recorded when the job is enqueued.
+      expect(w.events.map((e) => e.type)).toEqual(["asset_uploaded"]);
+      return ok({ id: "job", ...input });
+    });
+    expect((await makeConfirmUpload(w.deps)(actor, confirmInput(contentType))).ok).toBe(true);
+    expect(w.jobs.enqueue).toHaveBeenCalledExactlyOnceWith({
+      kind: "rendition",
+      subjectId: NEW_ASSET_ID,
+      inputHash: renditionInputHash(NEW_ASSET_ID, kind),
+      payload: { caseId: CASE_ID },
+    });
+  });
+
+  it.each(["application/pdf", "text/plain", "text/markdown", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"])(
+    "%s → no job",
+    async (contentType) => {
+      const w = world();
+      stored(w, contentType);
+      expect((await makeConfirmUpload(w.deps)(actor, confirmInput(contentType))).ok).toBe(true);
+      expect(w.jobs.enqueue).not.toHaveBeenCalled();
+    },
+  );
+
+  it("the same asset enqueued twice uses the same input hash (idempotent enqueue)", async () => {
+    expect(renditionInputHash(NEW_ASSET_ID, "image")).toBe(renditionInputHash(NEW_ASSET_ID, "image"));
+  });
+
+  it.each([
+    ["answers an error", (w: ReturnType<typeof world>) => w.jobs.enqueue.mockResolvedValueOnce(err({ code: "JOB_ENQUEUE_FAILED", message: "down" }))],
+    ["throws", (w: ReturnType<typeof world>) => w.jobs.enqueue.mockRejectedValueOnce(new Error("network"))],
+  ])("an enqueue that %s is logged and never fails the confirm", async (_label, breakIt) => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const w = world();
+      stored(w, PNG);
+      breakIt(w);
+      const result = await makeConfirmUpload(w.deps)(actor, confirmInput(PNG));
+      expect(result).toEqual(ok(expect.objectContaining({ id: NEW_ASSET_ID, deletedAt: null })));
+      expect(w.events).toHaveLength(1);
+      expect(w.assets.get(NEW_ASSET_ID)?.deletedAt).toBeNull();
+      const lines = write.mock.calls.map(([chunk]) => JSON.parse(String(chunk)) as Record<string, unknown>);
+      expect(lines).toEqual([expect.objectContaining({ level: "error", caseId: CASE_ID, msg: expect.stringContaining("rendition job not enqueued") })]);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("a failed confirm enqueues nothing", async () => {
+    const w = world();
+    stored(w, PNG);
+    w.cases.recordEvent.mockResolvedValueOnce(err({ code: "CASE_EVENT_WRITE_FAILED", message: "down" }));
+    expect((await makeConfirmUpload(w.deps)(actor, confirmInput(PNG))).ok).toBe(false);
+    expect(w.jobs.enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe("getRendition (Story 3.2)", () => {
+  const IMG = "eeeeeeee-0000-4000-8000-000000000001";
+  const VID = "eeeeeeee-0000-4000-8000-000000000002";
+  const DOC = "eeeeeeee-0000-4000-8000-000000000003";
+
+  function media() {
+    const w = world();
+    const base = { caseId: CASE_ID, originalFileName: "f", sizeBytes: 10, createdBy: actor.id, createdAt: "2026-10-20T10:00:00Z", deletedAt: null, isFavourite: false };
+    w.assets.set(IMG, { ...base, id: IMG, kind: "image", contentType: "image/jpeg" });
+    w.assets.set(VID, { ...base, id: VID, kind: "video", contentType: "video/mp4" });
+    w.assets.set(DOC, { ...base, id: DOC, kind: "document", contentType: "application/pdf" });
+    return w;
+  }
+
+  it("returns a 15-minute signed URL with the rendition's size and type", async () => {
+    const w = media();
+    w.addRendition(IMG, "image.display", { width: 2048, height: 1365 });
+    const result = await makeGetRendition(w.deps)(IMG, "image.display");
+    const path = `cases/${CASE_ID}/assets/${IMG}/renditions/${specHashOf("image.display")}.webp`;
+    expect(result).toEqual(ok({ url: `https://storage.example/${path}?ttl=900`, width: 2048, height: 1365, contentType: "image/webp" }));
+    expect(w.storage.presignKeys).toHaveBeenCalledExactlyOnceWith([path], 900);
+  });
+
+  it("a video display copy is video/mp4", async () => {
+    const w = media();
+    w.addRendition(VID, "video.display", { width: 1920, height: 1080 });
+    expect(await makeGetRendition(w.deps)(VID, "video.display")).toEqual(
+      ok(expect.objectContaining({ width: 1920, height: 1080, contentType: "video/mp4" })),
+    );
+  });
+
+  it("before the job ends → RENDITION_NOT_READY, nothing signed", async () => {
+    const w = media();
+    w.addRendition(IMG, "image.thumb");
+    expect(codeOf(await makeGetRendition(w.deps)(IMG, "image.display"))).toBe("RENDITION_NOT_READY");
+    expect(w.storage.presignKeys).not.toHaveBeenCalled();
+  });
+
+  it("a soft-deleted asset → NOT_FOUND even with renditions", async () => {
+    const w = media();
+    w.addRendition(IMG, "image.thumb");
+    w.assets.set(IMG, { ...w.assets.get(IMG)!, deletedAt: "2026-10-20T11:00:00Z" });
+    expect(codeOf(await makeGetRendition(w.deps)(IMG, "image.thumb"))).toBe("NOT_FOUND");
+    expect(w.renditions.get).not.toHaveBeenCalled();
+    expect(w.storage.presignKeys).not.toHaveBeenCalled();
+  });
+
+  it("an asset of a soft-deleted case → NOT_FOUND, nothing signed", async () => {
+    const w = media();
+    w.addRendition(IMG, "image.thumb");
+    w.cases.get.mockResolvedValueOnce(err({ code: "NOT_FOUND", message: "No case study with this id." }));
+    expect(codeOf(await makeGetRendition(w.deps)(IMG, "image.thumb"))).toBe("NOT_FOUND");
+    expect(w.cases.get).toHaveBeenCalledWith(CASE_ID);
+    expect(w.storage.presignKeys).not.toHaveBeenCalled();
+  });
+
+  it("a failed case lookup passes through", async () => {
+    const w = media();
+    w.addRendition(IMG, "image.thumb");
+    w.cases.get.mockResolvedValueOnce(err({ code: "CASE_LOOKUP_FAILED", message: "down" }));
+    expect(codeOf(await makeGetRendition(w.deps)(IMG, "image.thumb"))).toBe("CASE_LOOKUP_FAILED");
+  });
+
+  it.each([
+    ["an unknown asset", "eeeeeeee-0000-4000-8000-000000000009", "image.thumb"],
+    ["a document", DOC, "image.thumb"],
+    ["a video spec of an image", IMG, "video.poster"],
+    ["an image spec of a video", VID, "image.thumb"],
+  ])("%s → NOT_FOUND", async (_label, id, spec) => {
+    expect(codeOf(await makeGetRendition(media().deps)(id, spec))).toBe("NOT_FOUND");
+  });
+
+  it.each([
+    ["a malformed id", "x", "image.thumb"],
+    ["an unknown spec", IMG, "image.crop"],
+    ["no spec", IMG, undefined],
+  ])("%s → INVALID_INPUT without a lookup", async (_label, id, spec) => {
+    const w = media();
+    expect(codeOf(await makeGetRendition(w.deps)(id, spec))).toBe("INVALID_INPUT");
+    expect(w.repo.getById).not.toHaveBeenCalled();
+  });
+
+  it("passes lookup and signing failures through", async () => {
+    const w = media();
+    w.addRendition(IMG, "image.thumb");
+    w.renditions.get.mockResolvedValueOnce(err({ code: "RENDITION_LOOKUP_FAILED", message: "down" }));
+    expect(codeOf(await makeGetRendition(w.deps)(IMG, "image.thumb"))).toBe("RENDITION_LOOKUP_FAILED");
+    w.storage.presignKeys.mockResolvedValueOnce(ok([null]));
+    expect(codeOf(await makeGetRendition(w.deps)(IMG, "image.thumb"))).toBe("STORAGE_FAILED");
+  });
+
+  it("STORAGE_NOT_CONFIGURED without storage", async () => {
+    expect(codeOf(await makeGetRendition({ ...media().deps, storage: null })(IMG, "image.thumb"))).toBe("STORAGE_NOT_CONFIGURED");
+  });
+});
+
+describe("listAssets thumbnails from renditions (Story 3.2)", () => {
+  const IMG = "ffffffff-0000-4000-8000-000000000001";
+  const IMG2 = "ffffffff-0000-4000-8000-000000000002";
+  const VID = "ffffffff-0000-4000-8000-000000000003";
+  const VID2 = "ffffffff-0000-4000-8000-000000000004";
+  const DOC = "ffffffff-0000-4000-8000-000000000005";
+
+  function media() {
+    const w = world();
+    const base = { caseId: CASE_ID, originalFileName: "f", sizeBytes: 10, createdBy: actor.id, createdAt: "2026-10-20T10:00:00Z", deletedAt: null, isFavourite: false };
+    w.assets.set(IMG, { ...base, id: IMG, kind: "image", contentType: "image/jpeg" });
+    w.assets.set(IMG2, { ...base, id: IMG2, kind: "image", contentType: "image/png" });
+    w.assets.set(VID, { ...base, id: VID, kind: "video", contentType: "video/mp4" });
+    w.assets.set(VID2, { ...base, id: VID2, kind: "video", contentType: "video/mp4" });
+    w.assets.set(DOC, { ...base, id: DOC, kind: "document", contentType: "application/pdf" });
+    return w;
+  }
+  const rendition = (id: string, hashName: Parameters<typeof specHashOf>[0]) =>
+    `https://storage.example/cases/${CASE_ID}/assets/${id}/renditions/${specHashOf(hashName)}.webp?ttl=900`;
+
+  it("uses image.thumb / video.poster when they exist; else the image original, the video nothing", async () => {
+    const w = media();
+    w.liveJobs.add(IMG2);
+    w.liveJobs.add(VID2);
+    w.addRendition(IMG, "image.thumb");
+    w.addRendition(IMG, "image.display");
+    w.addRendition(VID, "video.poster");
+    w.addRendition(VID2, "video.display");
+    const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.map((a) => [a.id, a.thumbnailUrl, a.thumbnailPending])).toEqual([
+      [IMG, rendition(IMG, "image.thumb"), false],
+      [IMG2, `https://storage.example/${IMG2}?ttl=900`, true],
+      [VID, rendition(VID, "video.poster"), false],
+      [VID2, null, true],
+      [DOC, null, false],
+    ]);
+    expect(w.renditions.listFor).toHaveBeenCalledExactlyOnceWith([IMG, IMG2, VID, VID2], [specHashOf("image.thumb"), specHashOf("video.poster")]);
+    expect(w.jobs.liveSubjects).toHaveBeenCalledExactlyOnceWith({ kind: "rendition", subjectIds: [IMG2, VID2] });
+    expect(w.storage.presignKeys).toHaveBeenCalledOnce();
+    expect(w.storage.presignDownloads).toHaveBeenCalledExactlyOnceWith([{ caseId: CASE_ID, assetId: IMG2, contentType: "image/png" }], 900);
+  });
+
+  it("a video's poster is never taken for an image (spec of the other kind ignored)", async () => {
+    const w = media();
+    w.liveJobs.add(IMG);
+    w.addRendition(IMG, "video.poster");
+    const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+    if (result.ok) expect(result.value[0]).toMatchObject({ thumbnailUrl: `https://storage.example/${IMG}?ttl=900`, thumbnailPending: true });
+  });
+
+  it("a failed rendition read falls back to the originals (pending only with a live job), with a warning", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const w = media();
+      w.liveJobs.add(IMG);
+      w.addRendition(IMG, "image.thumb");
+      w.renditions.listFor.mockResolvedValueOnce(err({ code: "RENDITION_LOOKUP_FAILED", message: "down" }));
+      const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value[0]).toMatchObject({ thumbnailUrl: `https://storage.example/${IMG}?ttl=900`, thumbnailPending: true });
+      }
+      expect(w.storage.presignKeys).not.toHaveBeenCalled();
+      expect(JSON.parse(String(write.mock.calls[0][0]))).toMatchObject({ level: "warn", caseId: CASE_ID });
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("without a live rendition job (failed job, failed enqueue, file from before renditions) nothing is pending", async () => {
+    const w = media();
+    const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.map((a) => [a.id, a.thumbnailUrl, a.thumbnailPending])).toEqual([
+      [IMG, `https://storage.example/${IMG}?ttl=900`, false],
+      [IMG2, `https://storage.example/${IMG2}?ttl=900`, false],
+      [VID, null, false],
+      [VID2, null, false],
+      [DOC, null, false],
+    ]);
+  });
+
+  it("a failed job read lists nothing as pending, with a warning", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const w = media();
+      w.liveJobs.add(VID);
+      w.jobs.liveSubjects.mockResolvedValueOnce(err({ code: "JOB_LOOKUP_FAILED", message: "down" }));
+      const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+      if (result.ok) expect(result.value.every((a) => !a.thumbnailPending)).toBe(true);
+      expect(JSON.parse(String(write.mock.calls[0][0]))).toMatchObject({ level: "warn", caseId: CASE_ID });
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("does not read jobs when every image and video has its thumbnail", async () => {
+    const w = media();
+    for (const id of [IMG, IMG2]) w.addRendition(id, "image.thumb");
+    for (const id of [VID, VID2]) w.addRendition(id, "video.poster");
+    expect((await makeListAssets(w.deps)({ caseId: CASE_ID })).ok).toBe(true);
+    expect(w.jobs.liveSubjects).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["the signing call fails", (w: ReturnType<typeof world>) => w.storage.presignKeys.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "down" }))],
+    ["the key comes back unsigned", (w: ReturnType<typeof world>) => w.storage.presignKeys.mockResolvedValueOnce(ok([null, null]))],
+  ])("an image whose thumb exists but %s falls back to its original; a video to the icon", async (_label, breakIt) => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const w = media();
+      w.addRendition(IMG, "image.thumb");
+      w.addRendition(VID, "video.poster");
+      breakIt(w);
+      const result = await makeListAssets(w.deps)({ caseId: CASE_ID });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value[0]).toMatchObject({ id: IMG, thumbnailUrl: `https://storage.example/${IMG}?ttl=900`, thumbnailPending: false });
+      expect(result.value[2]).toMatchObject({ id: VID, thumbnailUrl: null, thumbnailPending: false });
+      expect(w.storage.presignDownloads.mock.calls[0][0].map((t) => t.assetId)).toEqual([IMG, IMG2]);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("does not read renditions when there is no image or video", async () => {
+    const w = world();
+    expect(await makeListAssets(w.deps)({ caseId: CASE_ID })).toEqual(ok([]));
+    expect(w.renditions.listFor).not.toHaveBeenCalled();
   });
 });

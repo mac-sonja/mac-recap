@@ -66,7 +66,8 @@ unauthenticated path. Credentials are compared in constant time.
 | --- | --- |
 | `npm run dev` | Next.js dev server |
 | `npm run build` | Production build: `next build` (`.next/standalone`), then `build:dist` |
-| `npm run build:dist` | esbuild bundles `dist/worker.js` and `dist/preflight.js` (Node 24, CJS, deps inlined) |
+| `npm run build:dist` | esbuild bundles `dist/worker.js` and `dist/preflight.js` (Node 24, CJS, deps inlined except the native `sharp`, resolved from `node_modules`) |
+| `npm run dev:renditions-backfill` | Dev only: enqueues `rendition` jobs for every live case image/video missing a current rendition (refuses the production project; runs on mac-recap-dev or local, reads `.env.local`) |
 | `npm run lint` | ESLint, including the module-boundary rules |
 | `npm run typecheck` | Generates Next route types, then `tsc --noEmit` |
 | `npm test` | Vitest unit tests and lint-boundary fixtures (no Docker; skips `test/db/**`) |
@@ -199,15 +200,30 @@ only; the service role can read `job` but not write it directly):
   non-retryable error) the job is `failed` and `job_failed` is written on its case.
 - The UI reads outcomes only through `getJobsFor(subjectId)`.
 
+Handlers so far: `rendition` (Story 3.2). Confirming a case image or video
+enqueues it; the worker (`src/modules/material/worker.ts`, imported only by
+`src/worker`) makes WebP `image.thumb` (≤ 480 px) and `image.display` (≤ 2048
+px), or a `video.poster` WebP frame and a `video.display` H.264/AAC MP4 (≤ 1920
+px) with sharp and ffmpeg, stores them at
+`cases/{caseId}/assets/{assetId}/renditions/{specHash}.{ext}` and records each in
+`rendition`. Copies are whole-image downscales only (never enlarged, cropped or
+filtered); originals are only read. Other modules get a 15-minute signed URL
+through `material.getRendition(assetId, specName)`. The Material step polls only
+while an asset's `rendition` job is queued or running. ffprobe gets 30 s and
+ffmpeg max(60 s, 6 × the duration); the display MP4 is capped at 4 Mbit/s. The video test needs ffmpeg
+and ffprobe on the PATH and is skipped without them (CI installs them).
+
 Web code never loads the worker-only packages: `test/web-imports.test.ts`
 bundles `src/app/**`, `src/proxy.ts` and `src/instrumentation*.ts` with esbuild
-and fails if they reach `@anthropic-ai/sdk`, Playwright, `sharp` or `child_process`.
+and fails if they reach `@anthropic-ai/sdk`, Playwright, `sharp` or `child_process`,
+or any `src/modules/*/worker.ts`.
 
 ## Deploy
 
 One Docker image runs both processes. It is built on
 `mcr.microsoft.com/playwright:v1.63.0-noble` (Node 24, npm, the Playwright
-browsers, user `pwuser`) with ffmpeg pinned to Ubuntu noble's `7:6.1.1-3ubuntu5`.
+browsers, user `pwuser`) with ffmpeg pinned to Ubuntu noble's `7:6.1.1-3ubuntu5`
+and `tini` (`0.19.0-1`) as PID 1 for both processes (`ENTRYPOINT`).
 The image carries no host-specific configuration; every setting comes from the
 environment at run time.
 
@@ -236,7 +252,7 @@ the basic-auth pair):
 | Process | Command | Notes |
 | --- | --- | --- |
 | Web | default `CMD`: `node --require ./dist/preflight.js server.js` | Listens on 3000. The preflight checks the environment and the basic-auth gate first, so a missing or invalid variable exits 1 before the port opens. |
-| Worker | `node dist/worker.js` | Resolves the `system` profile, then logs one JSON readiness line (`"msg":"worker ready"` with its `actorId`) and polls the `job` queue every 2 s, one job at a time (no job handlers are registered yet, so it claims nothing). On SIGTERM or SIGINT it stops claiming, gives a running job up to 10 s, releases it if unfinished, and exits 0. Exits 1 without a readiness line on an invalid environment or when the `system` profile can't be read (Supabase unreachable, missing or disabled). |
+| Worker | `node dist/worker.js` | Resolves the `system` profile, then logs one JSON readiness line (`"msg":"worker ready"` with its `actorId`) and polls the `job` queue every 2 s, one job at a time (it claims only `rendition` jobs so far). On SIGTERM or SIGINT it stops claiming, gives a running job up to 10 s, releases it if unfinished, and exits 0. Exits 1 without a readiness line on an invalid environment or when the `system` profile can't be read (Supabase unreachable, missing or disabled). |
 
 ```sh
 docker run --env-file staging.env -p 3000:3000 mac-recap:<version>

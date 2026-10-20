@@ -1,5 +1,6 @@
 import { getSystemActor, type Actor } from "@/modules/access";
-import { startJobLoop, type JobLoop, type JobLoopOptions } from "@/modules/jobs";
+import { startJobLoop, type JobHandlers, type JobLoop, type JobLoopOptions } from "@/modules/jobs";
+import * as materialWorker from "@/modules/material/worker";
 import { getEnv } from "@/shared/env";
 import { log } from "@/shared/log";
 import type { Result } from "@/shared/result";
@@ -19,9 +20,14 @@ export interface WorkerDeps {
   loadEnv: () => unknown;
   getSystemActor: () => Promise<Result<Actor>>;
   startJobLoop: (options: JobLoopOptions) => JobLoop;
+  /** The job handlers, one per kind; built after the environment is valid. */
+  handlers: () => JobHandlers;
 }
 
-const defaultDeps: WorkerDeps = { loadEnv: getEnv, getSystemActor, startJobLoop };
+/** Every handler the worker runs: `rendition` (Story 3.2). Kinds without one are never claimed. */
+export const workerHandlers = (): JobHandlers => ({ rendition: materialWorker.renditionHandler() });
+
+const defaultDeps: WorkerDeps = { loadEnv: getEnv, getSystemActor, startJobLoop, handlers: workerHandlers };
 
 /**
  * Starts the worker: validates the environment, resolves the `system` actor
@@ -29,7 +35,7 @@ const defaultDeps: WorkerDeps = { loadEnv: getEnv, getSystemActor, startJobLoop 
  * logs one readiness line with the actor id (exit 1 without it when the loop
  * fails to start). On SIGTERM or SIGINT it stops the
  * loop (the running job is released after at most 10 s) and exits 0, once.
- * No handlers are registered yet, so the loop claims nothing.
+ * The loop claims only kinds with a handler: `rendition` so far.
  */
 export async function runWorker(host: WorkerHost, overrides: Partial<WorkerDeps> = {}): Promise<void> {
   const deps = { ...defaultDeps, ...overrides };
@@ -78,7 +84,7 @@ export async function runWorker(host: WorkerHost, overrides: Partial<WorkerDeps>
   }
 
   try {
-    loop = deps.startJobLoop({ actor: actor.value, handlers: {} });
+    loop = deps.startJobLoop({ actor: actor.value, handlers: deps.handlers() });
   } catch {
     log.error("job loop failed to start", { actorId: actor.value.id });
     exit(1);

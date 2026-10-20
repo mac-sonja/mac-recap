@@ -36,6 +36,16 @@ const MODULE_INTERNALS = {
   regex: "^@/modules/[^/]+/.+",
   message: "Import a module only through its public index: `@/modules/<module>` (AD-1).",
 };
+// The worker entry may also import a module's worker-only entry, `@/modules/<module>/worker`
+// (sharp, ffmpeg; Story 3.2). Nothing else may: web code must never reach it (AD-10).
+const MODULE_INTERNALS_BUT_WORKER = {
+  regex: "^@/modules/[^/]+/(?!worker$).+",
+  message: "Import a module only through its public index `@/modules/<module>`, or its worker entry `@/modules/<module>/worker` (AD-1).",
+};
+const WORKER_ENTRY = {
+  regex: "^(@/modules/[^/]+/|\\./)worker$",
+  message: "A module's worker entry (`worker.ts`) is imported only by src/worker (AD-10).",
+};
 const RELATIVE_INTO_MODULES = {
   regex: "^(\\.\\.?/)+(.*/)?modules(/|$)",
   message: "Import modules through the `@/modules/<module>` alias, never by relative path (AD-1).",
@@ -140,6 +150,14 @@ const OUTSIDE_MODULES = [
   RELATIVE_INTO_MODULES,
   ALIAS_DOTDOT,
 ];
+const WORKER = [
+  VENDOR_SDK,
+  RESERVED_INTEGRATION,
+  DB_TYPES,
+  MODULE_INTERNALS_BUT_WORKER,
+  RELATIVE_INTO_MODULES,
+  ALIAS_DOTDOT,
+];
 const SHARED = [
   VENDOR_SDK,
   RESERVED_INTEGRATION,
@@ -149,8 +167,8 @@ const SHARED = [
   SHARED_TO_APP,
   ALIAS_DOTDOT,
 ];
-const application = (internals) => [VENDOR_SDK, RESERVED_INTEGRATION, DB_TYPES, internals, DOTDOT_SEGMENT];
-const adapters = (internals) => [RESERVED_INTEGRATION, internals, DOTDOT_SEGMENT];
+const application = (internals) => [VENDOR_SDK, RESERVED_INTEGRATION, DB_TYPES, internals, WORKER_ENTRY, DOTDOT_SEGMENT];
+const adapters = (internals) => [RESERVED_INTEGRATION, internals, WORKER_ENTRY, DOTDOT_SEGMENT];
 const domain = (m, opts) => [domainImports(m, opts), DB_TYPES, DOTDOT_SEGMENT];
 const DOMAIN_TEST = "*.test.{ts,tsx,mts,cts}";
 
@@ -179,8 +197,11 @@ export default defineConfig(
   // Catch-all for any other file under src/ (e.g. src/lib): treated like the UI layer.
   layer([`src/${SOURCE}`], OUTSIDE_MODULES),
 
-  // UI and worker entry: modules only through index.ts, no vendor SDKs.
-  layer([`src/app/${SOURCE}`, `src/worker/${SOURCE}`, `src/*.{ts,tsx}`], OUTSIDE_MODULES),
+  // UI: modules only through index.ts, no vendor SDKs.
+  layer([`src/app/${SOURCE}`, `src/*.{ts,tsx}`], OUTSIDE_MODULES),
+
+  // Worker entry: the same, plus each module's worker-only entry (`@/modules/<module>/worker`).
+  layer([`src/worker/${SOURCE}`], WORKER),
 
   // UI components (not their tests): same boundaries, plus no hard-coded UI strings.
   layer([`src/app/**/*.tsx`], OUTSIDE_MODULES, { ignores: [`src/app/**/*.test.tsx`], extraSyntax: UI_STRINGS }),

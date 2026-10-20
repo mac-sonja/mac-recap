@@ -45,4 +45,21 @@ export interface ObjectStorage {
   presignDownloads(targets: readonly UploadTarget[], ttlSeconds: number): Promise<Result<(string | null)[]>>;
   /** The uploaded object's stored metadata; `ok(null)` when it does not exist. */
   head(target: UploadTarget): Promise<Result<StoredObject | null>>;
+  /**
+   * Signed GETs for objects by stored key (rendition paths), valid `ttlSeconds`,
+   * in the order of `keys`; `null` for a key that could not be signed. `err`
+   * only when the whole call fails. Never builds a key itself.
+   */
+  presignKeys(keys: readonly string[], ttlSeconds: number): Promise<Result<(string | null)[]>>;
+  /**
+   * Worker only: the object's bytes. `ok(null)` when it does not exist; `err
+   * STORAGE_FAILED` on any other failure. Reads only.
+   */
+  download(key: string): Promise<Result<Uint8Array | null>>;
+  /**
+   * Worker only: stores `bytes` at `key` with `contentType`, replacing an
+   * object already there (a retried rendition). Used only for rendition keys;
+   * an original is never written through it. `err STORAGE_FAILED` on failure.
+   */
+  upload(key: string, bytes: Uint8Array, contentType: string): Promise<Result<void>>;
 }
