@@ -2216,12 +2216,15 @@ describe("client delete (owner, 2026-10-19)", () => {
       await actions.requestClientLogoUpload({ clientId, contentType: "image/png", sizeBytes: 10 }),
       await actions.confirmClientLogoUpload({ clientId, logoId: randomUUID(), contentType: "image/png" }),
       await actions.requestClientMaterialUpload({ clientId, contentType: "application/pdf", sizeBytes: 10 }),
-      await actions.confirmClientMaterialUpload({ clientId, assetId: randomUUID(), contentType: "application/pdf" }),
+      await actions.confirmClientMaterialUpload({ clientId, assetId: randomUUID(), contentType: "application/pdf", fileName: "brief.pdf" }),
       await actions.removeClientMaterial({ clientId, assetId: randomUUID() }),
       await actions.listClientMaterial({ clientId }),
       await actions.deleteClient({ clientId, confirmName: client.name }),
     ];
-    for (const result of results) expect(result).toMatchObject({ ok: false, status: 404, error: { code: "CLIENT_NOT_FOUND" } });
+    // One line per action, so a failure names every action that answered differently.
+    expect(results.map((result) => (result.ok ? "ok" : `${result.status} ${result.error.code}`))).toEqual(
+      results.map(() => "404 CLIENT_NOT_FOUND"),
+    );
   });
 
   it("deletes through the action and reports the count", async () => {
