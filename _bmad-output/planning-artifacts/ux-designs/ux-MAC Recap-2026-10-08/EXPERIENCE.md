@@ -96,11 +96,11 @@ Behavioural. Visual specs live in `DESIGN.md.Components`.
 
 | Element | Behaviour |
 |---|---|
-| Columns | ID (the case history code, e.g. `LUM-2026-01`, FR1, monospace, `{typography.mono}`), Name, Client, Year, Status, Updated, Links (count, Approved only). |
-| Search | One field, placeholder "Search name, client or ID" (*Cerca progetto o cliente…*). Matches as you type (debounce ~250 ms), case- and accent-insensitive, over name, client name, client code and case code. |
-| Status filter | Segmented control: All · Draft · Generating · To review · Approved (names follow whichever [OPEN 8] option is chosen). Each segment shows its count. Combines with search (AND). |
+| Columns | ID (the case history code, e.g. `LUM-2026-01`, FR1, monospace, `{typography.mono}`), Name, Client, Year, Status, Business line, Updated, Links (count, Approved only). Business line (owner, 2026-10-20, Story 2.17) is sortable and empty for cases created before 2.17. |
+| Search | One field, placeholder *Cerca progetto o cliente…*. Matches as you type (debounce ~250 ms), case- and accent-insensitive, over name, client name, client code, case code and business line label (owner, 2026-10-20, Story 2.17). It sits in a toolbar at the top right of the table, next to the status filter. |
+| Status filter | Segmented control in the top-right toolbar: *Tutti* · *Bozza* · *In elaborazione* · *Da approvare* · *Approvato*, single choice, default *Tutti*, a pill track with the selected segment filled. Combines with search (AND). No counts on the segments until Story 4.1. When search and filter leave no rows, the message names both (*Nessun risultato per “{query}” tra {status}.*). (owner, 2026-10-20, Story 2.17: ships here; was planned with counts for Story 4.1.) |
 | Sort | Default: Updated, newest first. Column headers sort on click. |
-| Row click | Draft → reopens the wizard at the first incomplete step. Generating → no-op with tooltip "Still generating". To review → configurator. Approved → configurator (edit) with a **View** action to the case study view. |
+| Row click | Draft → reopens the wizard at the first incomplete step (owner, 2026-10-20, Story 2.17: Dettagli without a business line, else Materiale without a file, else Genera). Generating → no-op with tooltip "Still generating". To review → configurator. Approved → configurator (edit) with a **View** action to the case study view. |
 | Row actions | Overflow menu: View (Approved), Export (Approved), Share (Approved), Delete (Draft only, with confirm). `[ASSUMPTION]` Deleting non-draft case studies is out of MVP. |
 | Live status | Rows in *Generating* update without a page reload when generation finishes. |
 | Empty | No case studies yet: "No case studies yet. Start with the material from a closed project." + **New case study**. |
@@ -134,31 +134,35 @@ A three-step stepper: **1 Material · 2 Details · 3 Generate**, horizontal, abo
 
 - A slim top bar: back arrow, case study name and its code (mono) on the left, status badge on the right.
 - One content column (about 820px), centred horizontally and **vertically** in the space under the top bar. When the content is taller than the viewport, the column starts at the top and scrolls; the top bar stays.
-- In the column, top to bottom: eyebrow *Nuovo case study*, the case study name as a large title, the stepper, the step heading and a one-line intro, the step's content, then a footer under a divider with step dots in the centre and **Avanti** on the right (inactive until the step's condition is met). The case study is created, and its unique ID assigned (FR1), when the wizard opens with a name entered. It is saved as a Draft from that moment, so leaving and returning loses nothing.
+- In the column, top to bottom: eyebrow *Nuovo case study*, the case study name as a large title, the stepper, the step heading and a one-line intro, the step's content, then a footer under a divider with step dots in the centre and **Avanti** on the right (inactive until the step's condition is met). The case study is created, and its unique ID and code assigned (FR1), when **Avanti** is pressed on step 1 **Dettagli**. It is saved as a Draft from that moment, so leaving and returning loses nothing; before that, leaving with something entered asks *Le informazioni inserite non sono ancora salvate. Uscire comunque?*.
 
-**Step 0: Name.** A short header form: case study name (required) and client (required), picked from a list of existing clients showing name and code. Clients are added only on the Clients page; with none, the field says so and links there. `[ASSUMPTION]` Year defaults to the current year and is editable.
+> *owner, 2026-10-20, Story 2.17:* the wizard is now **1 Dettagli · 2 Materiale · 3 Genera**. Step 0 and the old Details step are merged into step 1, which adds the business line; Material moves to step 2.
 
-**Step 1: Material** (FR2, NFR6). Files only: text-document files are uploaded here like any file, but there's no pasted-text entry in this step; text is entered in step 2 (C7, resolved).
+**Step 1: Dettagli** (FR1, FR2). One form, in this order: **Nome** (required); **Cliente** (required), picked from a list of existing clients showing name and code (clients are added only on the Clients page; with none, the field says so and links there; a client page's **Nuova case history** preselects it); **Anno** (defaults to the current year, editable); **Lingua** (*Italiano* default); **Business line** (required; single-select pills *Branding*, *Social media*, *Video*, *Web design*, *Advertising*, *Eventi*, a radiogroup with arrow keys); then **Contesto**, **Soluzione**, **Risultati** (optional textareas whose one-line prompt is the placeholder, e.g. *Di cosa aveva bisogno il cliente, e perché?*). These three fields are the only place for project text in the wizard (C7, resolved), and they never enable generation (NFR6). **Avanti** is inactive until name, client, year and business line are set, with the missing fields named in the footer and linked via `aria-describedby`; once ready the footer shows "{n} di 3 compilati".
+
+- **New case:** **Avanti** creates the case (code assigned), saves the texts and opens Materiale. If a text fails to save, the case stays and step 1 shows the error; **Avanti** retries only the texts.
+- **Existing draft:** the texts autosave (after a pause and on blur); name, year, language and business line save on **Avanti**, or when a link is followed. The client is fixed once the case exists. Changing the year renumbers the draft in the new year (e.g. `LUM-2026-03` → `LUM-2025-02`; AD-21 owner note). If edits can't be saved because a required field is missing (a draft from before the business line existed), following a link asks *Le informazioni inserite non sono ancora salvate. Uscire comunque?* and leaving drops those edits (the texts still save).
+- A Bozza row opens Dettagli when the business line is missing, else Materiale when there is no file, else Genera.
+
+**Step 2: Material** (FR2, NFR6). Reached once the business line is set. Files only: text-document files are uploaded here like any file, but there's no pasted-text entry; text is entered in step 1 (C7, resolved).
 
 → Visual reference: [`mockups/material-step.html`](mockups/material-step.html). This spine wins on conflict.
 
 | Element | Behaviour |
 |---|---|
-| Dropzone | Drag and drop or **browse**. Accepts images, videos, text documents, PDFs; the accepted types show as small chips inside the empty dropzone. Copy: "Up to 20 files, 50 MB each." Once files are in, the dropzone compacts above the rows. |
+| Dropzone | Drag and drop or **browse**. Accepts images, videos, text documents, PDFs; the accepted types show as small chips inside the empty dropzone. Copy: *Fino a 20 file, 50 MB ciascuno.* Once files are in, the dropzone compacts above the rows. |
 | Limits | A 21st file or a file over 50 MB is rejected inline on that file ("Over 50 MB. Not uploaded.") without blocking the others. A wrong file type gets "This file type isn't supported. Use images, videos, texts or PDFs." |
 | Upload progress | Per-file progress bar; files upload in parallel; the user can mark a file as favourite as soon as it has uploaded. |
 | Deliverable rows | Each uploaded file is a deliverable row: thumbnail, file name, size (mono), remove. No tags, properties or flags (decided 2026-10-13, C6, resolved). |
 | Favourite | Image and video rows carry a **Preferito** toggle (star); PDFs and documents don't. Any number of files can be favourites; it's optional and never blocks **Avanti**. Saves at once; a toggle button with `aria-pressed`. What a favourite means for generation is open ([OPEN 14]). |
 | Remove | Each row has a remove action (✕). The file is removed at once: no confirm and no Undo toast (decided 2026-10-14, C8, resolved). |
-| Continue | **Avanti** is enabled as soon as one file has finished uploading. With 0 files, step 2 (and so step 3) can't be reached by any route: **Avanti** is inactive and the *Dettagli* and *Genera* stepper segments aren't clickable (decided 2026-10-14). |
+| Continue | **Avanti** is enabled as soon as one file has finished uploading and opens step 3 *Genera*. With 0 files, step 3 can't be reached by any route: **Avanti** is inactive and the *Genera* stepper segment isn't clickable (decided 2026-10-14; renumbered by the owner, 2026-10-20). *Dettagli* stays clickable. |
 
-**Step 2: Details** (FR2). A short form in three sections that mirror the PRD: **Context**, **Solution**, **Results** (*Contesto*, *Soluzione*, *Risultati*). Each is a textarea whose one-line prompt is its placeholder (for example "What did the client need, and why?"), decided 2026-10-14. These three fields are the only place for project text in the wizard: there is no extra free field and no pasted-text block (C7, resolved). A counter in the footer's left slot shows how many are filled ("2 di 3 compilati"); **Avanti** is active from the start. Each field autosaves. `[ASSUMPTION]` Visited steps are clickable in the stepper, so Materiale can be reopened; Dettagli and Genera are clickable only while step 1 has at least one file.
-
-→ Visual reference: [`mockups/details-step.html`](mockups/details-step.html). This spine wins on conflict. The fields are optional (decided 2026-10-08); the form alone never enables generation (NFR6). The A3 sketch's "0 di 4" counter and its four-field "Contesto & background" section are replaced by the PRD's three topics.
+→ Visual reference for the three texts: [`mockups/details-step.html`](mockups/details-step.html), now part of step 1 (owner, 2026-10-20). This spine wins on conflict. The A3 sketch's "0 di 4" counter and its four-field "Contesto & background" section are replaced by the PRD's three topics.
 
 **Step 3: Generate** (FR3, NFR6).
 
-→ Visual reference: [`mockups/generate-step.html`](mockups/generate-step.html) (ready, generating, failed; the blocked state below can't be reached from the UI, because step 1 gates the wizard, and stays as a server-side safety). This spine wins on conflict. The summary panel lists Materiale and Dettagli with a **Modifica** link back to each step; **Genera** is the main call to action. While generating, the stepper and footer give way to the processing message and an indeterminate bar (no percentage).
+→ Visual reference: [`mockups/generate-step.html`](mockups/generate-step.html) (ready, generating, failed; the blocked state below can't be reached from the UI, because step 2 Materiale gates the wizard (owner, 2026-10-20: was step 1), and stays as a server-side safety). This spine wins on conflict. The summary panel lists Materiale and Dettagli with a **Modifica** link back to each step; **Genera** is the main call to action. While generating, the stepper and footer give way to the processing message and an indeterminate bar (no percentage).
 
 | Element | Behaviour |
 |---|---|
@@ -394,7 +398,7 @@ Never describe generated text as verified until the owner/designer has checked i
 | Queue empty | To review | "Nothing to review." |
 | No results | Case studies | "Nothing matches '{query}'." + **Clear search and filters**. |
 | No material | Wizard step 3 | **Generate** disabled with reason (see wizard). |
-| Upload rejected | Wizard step 1 | Inline on the file row; others continue. |
+| Upload rejected | Wizard step 2 (Materiale) | Inline on the file row; others continue. |
 | Generating | Wizard step 3, table row | Processing message; row badge *Generating*; no ETA. |
 | Generation failed | Wizard, table row | Back to Draft, banner with **Try again**. |
 | Unchecked claims | Configurator | **Approve** disabled with count of blocks left. |

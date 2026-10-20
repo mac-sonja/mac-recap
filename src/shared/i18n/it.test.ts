@@ -34,9 +34,12 @@ describe("fill", () => {
 
 describe("case studies table copy", () => {
   test("has the approved strings", () => {
-    expect(Object.values(it.caseStudies.table.columns)).toEqual(["ID", "Nome", "Cliente", "Anno", "Stato", "Aggiornato", "Link"]);
-    expect(t("caseStudies.search.label")).toBe("Cerca nome, cliente o codice");
-    expect(t("caseStudies.search.placeholder")).toBe("Cerca nome, cliente o codice");
+    expect(Object.values(it.caseStudies.table.columns)).toEqual(["ID", "Nome", "Cliente", "Anno", "Stato", "Business line", "Aggiornato", "Link"]);
+    expect(t("caseStudies.search.label")).toBe("Cerca progetto o cliente");
+    expect(t("caseStudies.search.placeholder")).toBe("Cerca progetto o cliente…");
+    expect(t("caseStudies.filter.all")).toBe("Tutti");
+    expect(fill(t("caseStudies.noResultsStatus"), { status: "Da approvare" })).toBe("Nessuna case history in stato Da approvare.");
+    expect(fill(t("caseStudies.noResultsQueryStatus"), { query: "lum", status: "Da approvare" })).toBe("Nessun risultato per “lum” tra Da approvare.");
     expect(t("caseStudies.clearSearch")).toBe("Cancella ricerca e filtri");
     expect(t("caseStudies.empty")).toBe("Ancora nessuna case history. Inizia dal materiale di un progetto chiuso.");
     expect(t("caseStudies.narrowScreen")).toBe("Questa pagina richiede uno schermo più grande.");
@@ -93,8 +96,11 @@ describe("wizard copy", () => {
   test("has the approved strings", () => {
     expect(t("wizard.eyebrow")).toBe("Nuova case history");
     expect(t("wizard.back")).toBe("Torna alle case history");
-    expect(Object.values(it.wizard.steps)).toEqual(["Materiale", "Dettagli", "Genera"]);
-    expect(Object.values(it.wizard.fields)).toEqual(["Nome della case history", "Cliente", "Anno", "Lingua del testo"]);
+    expect(Object.values(it.wizard.steps)).toEqual(["Dettagli", "Materiale", "Genera"]);
+    expect(Object.values(it.wizard.fields)).toEqual(["Nome della case history", "Cliente", "Anno", "Lingua del testo", "Business line"]);
+    expect(t("wizard.errors.businessLine")).toBe("Scegli la business line.");
+    expect(t("wizard.unsavedConfirm")).toBe("Le informazioni inserite non sono ancora salvate. Uscire comunque?");
+    expect(fill(t("wizard.nextReason"), { fields: "Nome, Business line" })).toBe("Per continuare compila: Nome, Business line.");
     expect(it.wizard.locales).toEqual({ it: "Italiano", en: "English" });
     expect(t("wizard.next")).toBe("Avanti");
     expect(t("wizard.errors.name")).toBe("Inserisci il nome della case history.");
@@ -113,6 +119,13 @@ describe("wizard copy", () => {
   test("names each missing required field", () => {
     expect(t("wizard.errors.name")).toContain("nome");
     expect(t("wizard.errors.client")).toContain("cliente");
+  });
+});
+
+describe("business line copy", () => {
+  test("has the owner's labels in display order", () => {
+    expect(Object.keys(it.businessLines)).toEqual(["branding", "social_media", "video", "web_design", "advertising", "eventi"]);
+    expect(Object.values(it.businessLines)).toEqual(["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi"]);
   });
 });
 

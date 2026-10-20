@@ -97,14 +97,14 @@ isOneToOne: false
                   ]
                 },"case_study": {
                   Row: {
-                    "approved_revision_id": string | null,"client_id": string,"code": string,"created_at": string,"created_by": string,"deleted_at": string | null,"head_revision_id": string | null,"head_version": number,"id": string,"locale": string,"name": string,"number": number,"project_order_ref": string | null,"status": string,"updated_at": string,"year": number
+                    "approved_revision_id": string | null,"business_line": string | null,"client_id": string,"code": string,"created_at": string,"created_by": string,"deleted_at": string | null,"head_revision_id": string | null,"head_version": number,"id": string,"locale": string,"name": string,"number": number,"project_order_ref": string | null,"status": string,"updated_at": string,"year": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "approved_revision_id"?: string | null,"client_id": string,"code": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"head_revision_id"?: string | null,"head_version"?: number,"id"?: string,"locale"?: string,"name": string,"number": number,"project_order_ref"?: string | null,"status"?: string,"updated_at"?: string,"year": number
+                    "approved_revision_id"?: string | null,"business_line"?: string | null,"client_id": string,"code": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"head_revision_id"?: string | null,"head_version"?: number,"id"?: string,"locale"?: string,"name": string,"number": number,"project_order_ref"?: string | null,"status"?: string,"updated_at"?: string,"year": number
                   }
                   Update: {
-                    "approved_revision_id"?: string | null,"client_id"?: string,"code"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"head_revision_id"?: string | null,"head_version"?: number,"id"?: string,"locale"?: string,"name"?: string,"number"?: number,"project_order_ref"?: string | null,"status"?: string,"updated_at"?: string,"year"?: number
+                    "approved_revision_id"?: string | null,"business_line"?: string | null,"client_id"?: string,"code"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"head_revision_id"?: string | null,"head_version"?: number,"id"?: string,"locale"?: string,"name"?: string,"number"?: number,"project_order_ref"?: string | null,"status"?: string,"updated_at"?: string,"year"?: number
                   }
                   Relationships: [
                     {
@@ -344,8 +344,9 @@ isOneToOne: false
         isSetofReturn: false
       } },
 "create_case_study":
-{ Args: { "p_actor_id": string,"p_client_id": string,"p_locale": string,"p_name": string,"p_year": number }; Returns: {
+{ Args: { "p_actor_id": string,"p_business_line": string,"p_client_id": string,"p_locale": string,"p_name": string,"p_year": number }; Returns: {
               "approved_revision_id": string | null,
+"business_line": string | null,
 "client_id": string,
 "code": string,
 "created_at": string,
@@ -508,6 +509,33 @@ isOneToOne: false
 "transition_case_study":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {
               "approved_revision_id": string | null,
+"business_line": string | null,
+"client_id": string,
+"code": string,
+"created_at": string,
+"created_by": string,
+"deleted_at": string | null,
+"head_revision_id": string | null,
+"head_version": number,
+"id": string,
+"locale": string,
+"name": string,
+"number": number,
+"project_order_ref": string | null,
+"status": string,
+"updated_at": string,
+"year": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "case_study"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"update_case_study_details":
+{ Args: { "p_actor_id": string,"p_business_line": string,"p_case_id": string,"p_locale": string,"p_name": string,"p_year": number }; Returns: {
+              "approved_revision_id": string | null,
+"business_line": string | null,
 "client_id": string,
 "code": string,
 "created_at": string,

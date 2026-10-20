@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BUSINESS_LINES,
   CLIENT_BRIEF_MAX,
   CLIENT_DESCRIPTION_MAX,
   CLIENT_INDUSTRIES,
@@ -23,19 +24,21 @@ import {
   isLogoSizeAllowed,
   isLogoWithinMaxSide,
   listScopeSchema,
+  isBusinessLine,
+  updateCaseStudyDetailsInputSchema,
   updateClientInputSchema,
 } from "./case-study";
 import { recordEventInputSchema } from "./case-event";
 import { parseClientInput, parseInput } from "./validation";
 
 const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
-const valid = { name: "Rebrand", clientId: CLIENT_ID, year: 2026 };
+const valid = { name: "Rebrand", clientId: CLIENT_ID, year: 2026, businessLine: "branding" };
 
 describe("createCaseStudyInputSchema", () => {
   it("trims text and defaults locale to it", () => {
-    expect(parseInput(createCaseStudyInputSchema, { name: "  Rebrand ", clientId: CLIENT_ID, year: 2026 })).toEqual({
+    expect(parseInput(createCaseStudyInputSchema, { name: "  Rebrand ", clientId: CLIENT_ID, year: 2026, businessLine: "video" })).toEqual({
       ok: true,
-      value: { name: "Rebrand", clientId: CLIENT_ID, year: 2026, locale: "it" },
+      value: { name: "Rebrand", clientId: CLIENT_ID, year: 2026, locale: "it", businessLine: "video" },
     });
   });
 
@@ -56,15 +59,15 @@ describe("createCaseStudyInputSchema", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("INVALID_INPUT");
-      expect((result.error.details as { fields: string[] }).fields).toEqual(["name", "clientId"]);
-      expect(result.error.message).toContain("name, clientId");
+      expect((result.error.details as { fields: string[] }).fields).toEqual(["name", "clientId", "businessLine"]);
+      expect(result.error.message).toContain("name, clientId, businessLine");
     }
   });
 
   it.each([
-    ["a free-text client name", { name: "R", clientId: "Acme", year: 2026 }],
-    ["an empty client id", { name: "R", clientId: "", year: 2026 }],
-    ["a numeric client id", { name: "R", clientId: 7, year: 2026 }],
+    ["a free-text client name", { ...valid, clientId: "Acme" }],
+    ["an empty client id", { ...valid, clientId: "" }],
+    ["a numeric client id", { ...valid, clientId: 7 }],
   ])("rejects %s as clientId", (_label, input) => {
     const result = parseInput(createCaseStudyInputSchema, input);
     expect(result.ok).toBe(false);
@@ -79,6 +82,10 @@ describe("createCaseStudyInputSchema", () => {
     ["NaN", { ...valid, year: Number.NaN }, "year"],
     ["an unknown locale", { ...valid, locale: "fr" }, "locale"],
     ["a null locale", { ...valid, locale: null }, "locale"],
+    ["no business line", { ...valid, businessLine: undefined }, "businessLine"],
+    ["a null business line", { ...valid, businessLine: null }, "businessLine"],
+    ["an unknown business line", { ...valid, businessLine: "moda" }, "businessLine"],
+    ["a business line label", { ...valid, businessLine: "Social media" }, "businessLine"],
   ])("rejects %s", (_label, input, field) => {
     const result = parseInput(createCaseStudyInputSchema, input);
     expect(result.ok).toBe(false);
@@ -93,6 +100,44 @@ describe("createCaseStudyInputSchema", () => {
     const result = parseInput(createCaseStudyInputSchema, undefined);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
+  });
+});
+
+describe("BUSINESS_LINES", () => {
+  it("lists the business lines in display order", () => {
+    expect(BUSINESS_LINES).toEqual(["branding", "social_media", "video", "web_design", "advertising", "eventi"]);
+  });
+
+  it.each([
+    ["social_media", true],
+    ["eventi", true],
+    ["moda", false],
+    ["Branding", false],
+    [null, false],
+  ])("isBusinessLine(%j) is %s", (value, expected) => {
+    expect(isBusinessLine(value)).toBe(expected);
+  });
+});
+
+describe("updateCaseStudyDetailsInputSchema", () => {
+  const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+  const details = { caseId: CASE_ID, name: " Rebrand ", year: 2026, locale: "en", businessLine: "eventi" };
+
+  it("trims the name and drops a client or code", () => {
+    expect(parseInput(updateCaseStudyDetailsInputSchema, { ...details, clientId: CLIENT_ID, code: "X-2026-01" })).toEqual({
+      ok: true,
+      value: { caseId: CASE_ID, name: "Rebrand", year: 2026, locale: "en", businessLine: "eventi" },
+    });
+  });
+
+  it.each([
+    ["no case id", { ...details, caseId: undefined }, ["caseId"]],
+    ["no locale", { ...details, locale: undefined }, ["locale"]],
+    ["no business line", { ...details, businessLine: undefined }, ["businessLine"]],
+    ["an unknown business line", { ...details, businessLine: "moda" }, ["businessLine"]],
+  ])("rejects %s", (_label, input, fields) => {
+    const result = parseInput(updateCaseStudyDetailsInputSchema, input);
+    expect(result.ok ? null : (result.error.details as { fields: string[] }).fields).toEqual(fields);
   });
 });
 
@@ -120,6 +165,7 @@ describe("caseStudySchema", () => {
     client: { id: CLIENT_ID, name: "Lumen Srl", code: "LUM" },
     year: 2026,
     locale: "it",
+    businessLine: "web_design",
     status: "draft",
     projectOrderRef: null,
     headRevisionId: null,
@@ -140,8 +186,13 @@ describe("caseStudySchema", () => {
     ["a missing client", { ...row, client: null }],
     ["a missing code", { ...row, code: undefined }],
     ["a zero number", { ...row, number: 0 }],
+    ["an unknown business line", { ...row, businessLine: "moda" }],
   ])("rejects %s", (_label, input) => {
     expect(caseStudySchema.safeParse(input).success).toBe(false);
+  });
+
+  it("accepts a legacy case without a business line", () => {
+    expect(caseStudySchema.parse({ ...row, businessLine: null }).businessLine).toBeNull();
   });
 });
 

@@ -4,18 +4,25 @@ import { wizardHref } from "@/app/_lib/routes";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
-/** The wizard's steps, in order: 1 Materiale, 2 Dettagli, 3 Genera. Step 0 (name) has no segment. */
-export const WIZARD_STEPS = [it.wizard.steps.material, it.wizard.steps.details, it.wizard.steps.generate] as const;
+/** The wizard's steps, in order: 1 Dettagli, 2 Materiale, 3 Genera (Story 2.17). */
+export const WIZARD_STEPS = [it.wizard.steps.details, it.wizard.steps.material, it.wizard.steps.generate] as const;
 
-/** A wizard step number: 0 is the name form (no segment active), 1–3 the stepper segments. */
-export type WizardStep = 0 | 1 | 2 | 3;
+/** A wizard step number: the stepper segments 1–3. */
+export type WizardStep = 1 | 2 | 3;
+
+/**
+ * Which steps after the first may be opened: one answer for every step (the client
+ * wizard: once every required field is filled), or one per step (the case wizard:
+ * Materiale once the details are complete, Genera once there is material too).
+ */
+export type Reachable = boolean | ((step: 1 | 2 | 3) => boolean);
 
 export interface StepperProps {
   current: WizardStep;
-  /** The case the wizard is on; without it (step 0) no segment is a link. */
+  /** The case the wizard is on; without it (a new case) no segment is a link. */
   caseId?: string;
-  /** Whether the case has material: only then can Dettagli and Genera be opened. */
-  reachable?: boolean;
+  /** Which later steps can be opened (see `Reachable`); step 1 always can. */
+  reachable?: Reachable;
   /** The segment labels, in order (default: the case wizard's `WIZARD_STEPS`). */
   steps?: readonly string[];
   /** A step's link (default: the case wizard's, from `caseId`); without one no segment is a link. */
@@ -25,10 +32,10 @@ export interface StepperProps {
 /**
  * The segmented stepper (DESIGN.md segmented control): a grey track with a 3px
  * inset; the current step is `surface-selected` with `aria-current="step"`; steps
- * before it are done, marked ✓ in `foreground`; the rest are muted. At step 0 no
- * segment is active. Once a case exists, a step other than the current one is a
- * link to it when it is done, when it is Materiale, or when the case has material
- * (`reachable`); links read "vai a {step}" plus its state to screen readers.
+ * before it are done, marked ✓ in `foreground`; the rest are muted. Once a case
+ * exists, a step other than the current one is a link to it when it is done, when
+ * it is step 1, or when `reachable` allows it; links read "vai a {step}" plus its
+ * state to screen readers.
  */
 export function Stepper({ current, caseId, reachable = false, steps = WIZARD_STEPS, hrefFor }: StepperProps) {
   const linkTo = hrefFor ?? (caseId === undefined ? undefined : (step: 1 | 2 | 3) => wizardHref(caseId, step));
@@ -38,7 +45,8 @@ export function Stepper({ current, caseId, reachable = false, steps = WIZARD_STE
         const step = (index + 1) as 1 | 2 | 3;
         const isCurrent = step === current;
         const isDone = step < current;
-        const isLink = linkTo !== undefined && !isCurrent && (isDone || step === 1 || reachable);
+        const canReach = typeof reachable === "function" ? reachable(step) : reachable;
+        const isLink = linkTo !== undefined && !isCurrent && (isDone || step === 1 || canReach);
         const content = (
           <>
             {isDone ? (

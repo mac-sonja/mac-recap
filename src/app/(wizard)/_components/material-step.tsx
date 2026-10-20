@@ -73,9 +73,9 @@ export interface MaterialStepProps {
   rejections?: Readonly<Record<string, string>>;
   /** Whether the footer action is active (default: one stored file). */
   ready?: (listed: readonly StepAsset[]) => boolean;
-  /** The footer action (default: **Avanti** to the case's step 2). */
+  /** The footer action (default: **Avanti** to the case's step 3 Genera). */
   footerAction?: MaterialFooterAction;
-  /** The stepper's labels for the footer dots, and this step (default: the case wizard's, step 1). */
+  /** The stepper's labels for the footer dots, and this step (default: the case wizard's, step 2). */
   steps?: readonly string[];
   step?: WizardStep;
   /**
@@ -167,14 +167,14 @@ function caseActions(caseId: string): MaterialActions {
 }
 
 /**
- * Step 1, Material (EXPERIENCE.md step 1, Story 2.7). Files go straight from the
+ * Step 2, Material (EXPERIENCE.md, Story 2.7; step 2 since Story 2.17). Files go straight from the
  * browser to storage, in parallel: presign, a PUT with progress, then confirm. Each
  * file is checked first (type from the allowlist, ≤ `maxFileBytes`, a free slot of 20
  * counting in-flight uploads); only that file is rejected, on its row. An upload or
  * confirm that fails for any other reason presigns again and retries once (a
  * confirmed `assetId` can't be reused). `STORAGE_NOT_CONFIGURED` shows one message
  * and turns the drop zone off. Favourite and remove apply at once and roll back on
- * failure; remove has no undo. **Avanti** opens step 2 once one file is stored.
+ * failure; remove has no undo. **Avanti** opens step 3 Genera once one file is stored.
  * Progress and rejections are announced in a polite live region. Case status never changes.
  * The client wizard reuses it (Story 2.16) with its own `actions`, copy, footer action,
  * readiness rule and an image pixel check; the defaults keep the case step as it was.
@@ -195,14 +195,14 @@ export function MaterialStep({
   ready: isReady = (listed) => listed.length > 0,
   footerAction,
   steps,
-  step = 1,
+  step = 2,
   checkFile,
 }: MaterialStepProps) {
   if (givenActions === undefined && caseId === undefined) throw new Error("MaterialStep needs a caseId or actions");
   const actions = givenActions ?? caseActions(caseId as string);
   const footer: MaterialFooterAction = footerAction ?? {
     label: it.wizard.next,
-    href: wizardHref(caseId as string, 2),
+    href: wizardHref(caseId as string, 3),
     reason: copy.nextReason,
   };
   const reasonId = useId();

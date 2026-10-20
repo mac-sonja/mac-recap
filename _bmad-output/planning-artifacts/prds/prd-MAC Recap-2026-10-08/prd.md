@@ -114,9 +114,9 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 ### MVP (by October 30, 2026)
 
-**FR1** – The system creates every case study with a unique ID, ready to be linked to the project order later, and a readable case history code. The owner/designer picks the case study's client from the client list. The owner/designer creates the case study manually. There is no trigger at project close.
+**FR1** – The system creates every case study with a unique ID, ready to be linked to the project order later, and a readable case history code. The owner/designer picks the case study's client from the client list. The owner/designer creates the case study manually. There is no trigger at project close. Amended (owner, 2026-10-20, Story 2.17): every case study also has a business line from a fixed list (Branding, Social media, Video, Web design, Advertising, Eventi), chosen when it is created, together with its name, client, year and language.
 
-**FR2** – The owner/designer uploads material (images, videos, text documents and PDFs), can mark any number of images and videos as favourite, and fills in a short details form on context, solution and results. The details form is the only place for typed project text.
+**FR2** – The owner/designer uploads material (images, videos, text documents and PDFs), can mark any number of images and videos as favourite, and fills in a short details form on context, solution and results. The details form is the only place for typed project text. Amended (owner, 2026-10-20, Story 2.17): the details form is filled in first, together with the case's name, client, year, language and business line, and the material is uploaded after it.
 - Upload is limited to 20 files of at most 50 MB each. (50 MB is the hosted Supabase plan's upload cap; it returns to 100 MB when the plan is upgraded. Owner decision 2026-10-14.)
 
 **FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material, the form answers and the client's description, industries and brief. Every case study shows the client's info in an About the client block.

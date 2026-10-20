@@ -6,6 +6,8 @@ import { cn } from "@/shared/utils";
 export const PILL =
   "inline-flex items-center rounded-full border border-border-strong px-2.5 py-1 font-label text-xs text-foreground-muted";
 const PILL_PRESSED = "aria-pressed:border-accent/40 aria-pressed:bg-accent/10 aria-pressed:text-info";
+/** The same selected look for a single-select pill (`role="radio"`, `aria-checked`): the case business line. */
+export const PILL_CHECKED = "aria-checked:border-accent/40 aria-checked:bg-accent/10 aria-checked:text-info";
 
 export interface IndustryPillsProps {
   /** `CLIENT_INDUSTRIES`, in display order (the module's index is server-only). */

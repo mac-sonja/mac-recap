@@ -9,7 +9,7 @@ import type { Asset, DetailsFieldSaved, DetailsForm, ListedAsset, PresignedAsset
 
 /**
  * Creates a case study (status `draft`, permanent id, readable code such as
- * `LUM-2026-01`) with its `case_created` event. Input: `{ name, clientId, year, locale? }`.
+ * `LUM-2026-01`) with its `case_created` event. Input: `{ name, clientId, year, locale?, businessLine }`.
  * 403 `FORBIDDEN` when the actor's role may not `create case`; 400 `INVALID_INPUT`
  * names each field; 404 `CLIENT_NOT_FOUND` for an unknown client. Nothing is
  * written on any error.
@@ -21,6 +21,22 @@ export async function createCaseStudy(input: unknown): Promise<ActionResult<Case
   if (!decision.ok) return failure(decision.error);
   const created = await caseStudy.create(actor.value, input);
   return created.ok ? created : failure(created.error);
+}
+
+/**
+ * Saves a draft's name, year, locale and business line (wizard step 1, Story 2.17).
+ * Input: `{ caseId, name, year, locale, businessLine }`; the client never changes.
+ * 403 `FORBIDDEN` when the actor's role may not `create case`; 400 `INVALID_INPUT`
+ * names each field; 404 `NOT_FOUND`; 409 `STALE_STATUS` once the case is no longer a
+ * draft. Nothing is written on any error.
+ */
+export async function updateCaseStudyDetails(input: unknown): Promise<ActionResult<CaseStudy>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "create case");
+  if (!decision.ok) return failure(decision.error);
+  const updated = await caseStudy.updateDetails(actor.value, input);
+  return updated.ok ? updated : failure(updated.error);
 }
 
 /**

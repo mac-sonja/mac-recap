@@ -32,23 +32,42 @@ export const it = {
         client: "Cliente",
         year: "Anno",
         status: "Stato",
+        businessLine: "Business line",
         updated: "Aggiornato",
         links: "Link",
       },
     },
     search: {
-      label: "Cerca nome, cliente o codice",
-      placeholder: "Cerca nome, cliente o codice",
+      label: "Cerca progetto o cliente",
+      placeholder: "Cerca progetto o cliente…",
+    },
+    /** The status filter (Story 2.17): one segment per status after *Tutti*. */
+    filter: {
+      label: "Filtra per stato",
+      all: "Tutti",
     },
     /** `{query}` is filled with the search text. */
     noResults: "Nessun risultato per '{query}'.",
+    /** No row has the filtered status (and no search text); `{status}` is its label. */
+    noResultsStatus: "Nessuna case history in stato {status}.",
+    /** The search and a status filter leave no rows; `{query}` is the search text, `{status}` the status label. */
+    noResultsQueryStatus: "Nessun risultato per “{query}” tra {status}.",
     clearSearch: "Cancella ricerca e filtri",
     empty: "Ancora nessuna case history. Inizia dal materiale di un progetto chiuso.",
     narrowScreen: "Questa pagina richiede uno schermo più grande.",
     /** Read by screen readers while the table loads. */
     loading: "Caricamento…",
   },
-  /** The new-case-study wizard (Story 2.5): frame, stepper and step 0. */
+  /** The fixed business lines (Story 2.17), keyed by `BusinessLine`, in display order. */
+  businessLines: {
+    branding: "Branding",
+    social_media: "Social media",
+    video: "Video",
+    web_design: "Web design",
+    advertising: "Advertising",
+    eventi: "Eventi",
+  },
+  /** The new-case-study wizard (Story 2.5): frame, stepper and step 1 Dettagli (Story 2.17). */
   wizard: {
     eyebrow: "Nuova case history",
     /** Accessible name of the top bar's back arrow. */
@@ -62,9 +81,10 @@ export const it = {
       /** Read by screen readers before the name of a step that is a link. */
       goTo: "vai a",
     },
+    /** In stepper order: 1 Dettagli, 2 Materiale, 3 Genera (Story 2.17). */
     steps: {
-      material: "Materiale",
       details: "Dettagli",
+      material: "Materiale",
       generate: "Genera",
     },
     fields: {
@@ -72,7 +92,16 @@ export const it = {
       client: "Cliente",
       year: "Anno",
       locale: "Lingua del testo",
+      businessLine: "Business line",
     },
+    /** Under the client of an existing case: it is fixed once the case exists. */
+    clientFixed: "Il cliente non cambia dopo la creazione: il codice dipende da lui.",
+    /** Asked before leaving step 1 with entries that can't be kept (a new case, or required fields missing). */
+    unsavedConfirm: "Le informazioni inserite non sono ancora salvate. Uscire comunque?",
+    /** Why Avanti is inactive on step 1; `{fields}` names the missing ones. */
+    nextReason: "Per continuare compila: {fields}.",
+    /** Joins the `{fields}` of `nextReason`. */
+    listSeparator: ", ",
     locales: {
       it: "Italiano",
       en: "English",
@@ -92,7 +121,12 @@ export const it = {
       /** `{min}` and `{max}` are filled with the accepted years. */
       year: "Inserisci un anno tra {min} e {max}.",
       locale: "Scegli la lingua del testo.",
+      businessLine: "Scegli la business line.",
       generic: "Non è stato possibile creare la case history. I dati inseriti sono ancora qui: riprova.",
+      /** An existing case's details could not be saved. */
+      saveFailed: "Non è stato possibile salvare i dettagli. I dati inseriti sono ancora qui: riprova.",
+      /** `NOT_FOUND` or `STALE_STATUS`: the case was deleted or is no longer a draft. */
+      notDraft: "Questa case history non è più una bozza. Torna alle case history.",
     },
     next: "Avanti",
     /** The wizard's error boundary: the case could not be loaded. */

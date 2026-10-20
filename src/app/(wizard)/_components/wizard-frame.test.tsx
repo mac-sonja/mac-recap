@@ -7,7 +7,7 @@ const ID = "aaaaaaaa-0000-4000-8000-000000000001";
 describe("WizardFrame", () => {
   it("has a top bar with a named back arrow to Case studies, and no sidebar", () => {
     const html = renderToStaticMarkup(
-      <WizardFrame caseStudy={null} current={0}>
+      <WizardFrame caseStudy={null} current={1}>
         <p>step</p>
       </WizardFrame>,
     );
@@ -22,7 +22,7 @@ describe("WizardFrame", () => {
 
   it("centres an 820px column both ways and lets it scroll under the fixed top bar", () => {
     const html = renderToStaticMarkup(
-      <WizardFrame caseStudy={null} current={0}>
+      <WizardFrame caseStudy={null} current={1}>
         <p>step</p>
       </WizardFrame>,
     );
@@ -56,9 +56,23 @@ describe("WizardFrame", () => {
     expect(frame(false)).not.toContain("step=2");
   });
 
+  it("forwards a per-step reachable to the stepper", () => {
+    const html = renderToStaticMarkup(
+      <WizardFrame
+        caseStudy={{ id: ID, code: "LUM-2026-01", name: "Rebrand Lumen 2026", status: "draft" }}
+        current={1}
+        reachable={(step) => step === 2}
+      >
+        <p>step</p>
+      </WizardFrame>,
+    );
+    expect(html).toContain(`href="/case-studies/new?caseId=${ID}&amp;step=2"`);
+    expect(html).not.toContain("step=3");
+  });
+
   it("shows the step content only from lg and the larger-screen message below it", () => {
     const html = renderToStaticMarkup(
-      <WizardFrame caseStudy={null} current={0}>
+      <WizardFrame caseStudy={null} current={1}>
         <p>step</p>
       </WizardFrame>,
     );
