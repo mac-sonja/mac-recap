@@ -42,7 +42,7 @@ export default async function CaseStudiesPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={it.caseStudies.heading} lead={it.caseStudies.lead} />
-      <CaseStudiesTable rows={rows} canCreate={can(actor, "create case")} />
+      <CaseStudiesTable rows={rows} canCreate={can(actor, "create case")} showCreate={can(actor, "create case")} />
     </div>
   );
 }

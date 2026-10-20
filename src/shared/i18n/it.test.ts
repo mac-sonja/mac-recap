@@ -185,6 +185,7 @@ describe("voice", () => {
   const actions = [
     it.shell.nav.newCaseStudy,
     it.caseStudies.emptyAction,
+    it.caseStudies.add,
     it.clients.add,
     it.clients.edit,
     it.clients.detail.newCase,

@@ -157,11 +157,12 @@ export function ClientsTable({ rows, canManage }: ClientsTableProps) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
+        {addButton ?? <span />}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
           <label htmlFor={searchId} className="sr-only">
             {it.clients.search.label}
           </label>
-          <div className="relative w-80 max-w-full">
+          <div className="relative w-72">
             <Search aria-hidden="true" className={SEARCH_ICON} />
             <input
               ref={searchRef}
@@ -193,7 +194,6 @@ export function ClientsTable({ rows, canManage }: ClientsTableProps) {
             <ChevronDown aria-hidden="true" className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-foreground-muted" />
           </div>
         </div>
-        {addButton}
       </div>
 
       {/* Always mounted, so screen readers announce the no-results message when it appears. */}

@@ -34,6 +34,11 @@ export interface CaseStudiesTableProps {
   newHref?: string;
   /** The empty state's call to action label. */
   emptyAction?: string;
+  /**
+   * Shows **Crea una case** at the left of the toolbar (the Case page, with `create case`).
+   * A client's page leaves it out: its header already has its own call to action.
+   */
+  showCreate?: boolean;
 }
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -141,6 +146,7 @@ export function CaseStudiesTable({
   emptyMessage = it.caseStudies.empty,
   newHref = "/case-studies/new",
   emptyAction = it.caseStudies.emptyAction,
+  showCreate = false,
 }: CaseStudiesTableProps) {
   const router = useRouter();
   const searchId = useId();
@@ -218,23 +224,32 @@ export function CaseStudiesTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <StatusSegments value={status} onChange={setStatus} counts={counts} />
-        <label htmlFor={searchId} className="sr-only">
-          {it.caseStudies.search.label}
-        </label>
-        <div className="relative w-full max-w-xs">
-          <Search aria-hidden="true" className={SEARCH_ICON} />
-          <input
-          ref={searchRef}
-          id={searchId}
-          type="search"
-          autoComplete="off"
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder={it.caseStudies.search.placeholder}
-          className={SEARCH_FIELD}
-        />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {showCreate ? (
+          <Link href={newHref} className={cn(PRIMARY_ACTION, "hidden lg:inline-flex")}>
+            {it.caseStudies.add}
+          </Link>
+        ) : (
+          <span />
+        )}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+          <label htmlFor={searchId} className="sr-only">
+            {it.caseStudies.search.label}
+          </label>
+          <div className="relative w-72">
+            <Search aria-hidden="true" className={SEARCH_ICON} />
+            <input
+              ref={searchRef}
+              id={searchId}
+              type="search"
+              autoComplete="off"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder={it.caseStudies.search.placeholder}
+              className={SEARCH_FIELD}
+            />
+          </div>
+          <StatusSegments value={status} onChange={setStatus} counts={counts} />
         </div>
       </div>
 

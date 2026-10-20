@@ -104,6 +104,8 @@ export const it = {
     clearSearch: "Azzera i filtri",
     empty: "Qui raccoglierai le storie dei vostri progetti. Parti dal materiale di un lavoro appena chiuso.",
     emptyAction: "Crea la prima",
+    /** The Case page's toolbar action (the sidebar already says *Nuova case*). */
+    add: "Crea una case",
     narrowScreen: "Questa pagina dà il meglio su uno schermo più grande.",
     /** Read by screen readers while the table loads. */
     loading: "Un attimo…",
