@@ -53,6 +53,6 @@ describe("can", () => {
 
 describe("landingFor", () => {
   it("is exported from the module index", () => {
-    expect(landingFor("owner_designer")).toBe("/case-studies");
+    expect(landingFor("owner_designer")).toBe("/home");
   });
 });

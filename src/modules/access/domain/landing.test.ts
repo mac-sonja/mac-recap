@@ -4,7 +4,7 @@ import { landingFor } from "./landing";
 
 describe("landingFor", () => {
   it.each([
-    ["owner_designer", "/case-studies"],
+    ["owner_designer", "/home"],
     ["account_sales_social", "/library"],
     ["admin", "/users"],
     ["system", null],

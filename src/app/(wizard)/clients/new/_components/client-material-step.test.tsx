@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ClientMaterialLimits } from "@/app/(tool)/clients/_lib/client-limits";
 import type { ListedClientAsset, PresignedClientMaterial } from "@/modules/case-study";
+import { it as dict, fill } from "@/shared/i18n/it";
 
 const requestClientMaterialUpload = vi.fn<(input: unknown) => Promise<ActionResult<PresignedClientMaterial>>>();
 const confirmClientMaterialUpload = vi.fn<(input: unknown) => Promise<ActionResult<ListedClientAsset>>>();
@@ -57,7 +58,7 @@ const LIMITS: ClientMaterialLimits = {
   minShortSide: 1600,
   maxSide: 8000,
 };
-const PIXELS = "Immagine troppo piccola o troppo grande: serve almeno 1600 px sul lato corto e al massimo 8000 px per lato.";
+const PIXELS = fill(dict.clientWizard.material.errors.pixels, { min: 1600, max: 8000 });
 
 function makeFile(name: string, type: string, size = 1024): File {
   const file = new File(["x"], name, { type });
@@ -140,7 +141,7 @@ function setup(initialAssets: ListedClientAsset[] = []) {
   return { user, input, ...view };
 }
 
-const createIntro = () => screen.getByText("Crea introduzione");
+const createIntro = () => screen.getByText("Crea la presentazione");
 const rowOf = (name: string) => {
   const row = screen.getByText(name).closest("li");
   if (row === null) throw new Error(`no row for ${name}`);
@@ -148,24 +149,24 @@ const rowOf = (name: string) => {
 };
 const reasonOf = (element: HTMLElement) => document.getElementById(element.getAttribute("aria-describedby") ?? "")?.textContent;
 
-/** Crea introduzione is the inactive button with its linked reason. */
+/** Crea la presentazione is the inactive button with its linked reason. */
 function expectInactive() {
   const button = createIntro();
   expect(button.tagName).toBe("BUTTON");
   expect(button.getAttribute("aria-disabled")).toBe("true");
-  expect(reasonOf(button)).toBe("Carica almeno 2 immagini.");
+  expect(reasonOf(button)).toBe("Servono almeno 2 immagini.");
 }
 
 describe("ClientMaterialStep", () => {
-  it("shows the heading, the copy above the drop zone, a 3-file hint and an inactive Crea introduzione", () => {
+  it("shows the heading, the copy above the drop zone, a 3-file hint and an inactive Crea la presentazione", () => {
     setup();
     expect(screen.getByRole("heading", { level: 2, name: "Materiale" })).toBeTruthy();
-    expect(screen.getByText("Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione.")).toBeTruthy();
-    expect(screen.getByText("Fino a 3 file, 50 MB ciascuno.")).toBeTruthy();
+    expect(screen.getByText("Carica fino a 3 file, di cui almeno 2 immagini: ci servono per le pagine di presentazione.")).toBeTruthy();
+    expect(screen.getByText(fill(dict.wizard.material.drop.hint, { max: 3, size: 50 }))).toBeTruthy();
     expectInactive();
   });
 
-  it("two images: uploads through the client actions, lists them and links Crea introduzione to the client page", async () => {
+  it("two images: uploads through the client actions, lists them and links Crea la presentazione to the client page", async () => {
     const { user, input } = setup();
     await user.upload(input, [makeFile("a.jpg", "image/jpeg", 3 * MB), makeFile("b.png", "image/png")]);
     await waitFor(() => expect(document.querySelectorAll('[data-row-state="listed"]')).toHaveLength(2));
@@ -180,12 +181,12 @@ describe("ClientMaterialStep", () => {
     const link = createIntro();
     expect(link.tagName).toBe("A");
     expect(link.getAttribute("href")).toBe(`/clients/${CLIENT_ID}`);
-    expect(screen.queryByText("Carica almeno 2 immagini.")).toBeNull();
+    expect(screen.queryByText("Servono almeno 2 immagini.")).toBeNull();
     // Client files have no favourites.
     expect(screen.queryByText("Preferito")).toBeNull();
   });
 
-  it("image + PDF: both listed, Crea introduzione stays inactive with its reason", async () => {
+  it("image + PDF: both listed, Crea la presentazione stays inactive with its reason", async () => {
     const { user, input } = setup();
     await user.upload(input, [makeFile("a.jpg", "image/jpeg"), makeFile("brief.pdf", "application/pdf")]);
     await waitFor(() => expect(document.querySelectorAll('[data-row-state="listed"]')).toHaveLength(2));
@@ -202,10 +203,10 @@ describe("ClientMaterialStep", () => {
     expect(createIntro().tagName).toBe("A");
   });
 
-  it("4th file: refused inline with Massimo 3 file. on that file only; nothing requested", async () => {
+  it("4th file: refused inline with Al massimo 3 file. on that file only; nothing requested", async () => {
     const { user, input } = setup([stored(1), stored(2), pdf(3)]);
     await user.upload(input, [makeFile("fourth.jpg", "image/jpeg")]);
-    expect(rowOf("fourth.jpg").textContent).toContain("Massimo 3 file.");
+    expect(rowOf("fourth.jpg").textContent).toContain("Al massimo 3 file.");
     expect(requestClientMaterialUpload).not.toHaveBeenCalled();
   });
 
@@ -217,16 +218,16 @@ describe("ClientMaterialStep", () => {
       makeFile("3.pdf", "application/pdf"),
       makeFile("4.jpg", "image/jpeg"),
     ]);
-    expect(rowOf("4.jpg").textContent).toContain("Massimo 3 file.");
+    expect(rowOf("4.jpg").textContent).toContain("Al massimo 3 file.");
     await waitFor(() => expect(document.querySelectorAll('[data-row-state="listed"]')).toHaveLength(3));
     expect(requestClientMaterialUpload).toHaveBeenCalledTimes(3);
   });
 
-  it("a server CLIENT_MATERIAL_LIMIT (stale count) shows Massimo 3 file. on the row", async () => {
+  it("a server CLIENT_MATERIAL_LIMIT (stale count) shows Al massimo 3 file. on the row", async () => {
     confirmClientMaterialUpload.mockResolvedValueOnce(fail("CLIENT_MATERIAL_LIMIT", 409));
     const { user, input } = setup();
     await user.upload(input, [makeFile("late.jpg", "image/jpeg")]);
-    await waitFor(() => expect(rowOf("late.jpg").textContent).toContain("Massimo 3 file."));
+    await waitFor(() => expect(rowOf("late.jpg").textContent).toContain("Al massimo 3 file."));
   });
 
   it("small image: a 1200 px short side is refused inline before any upload", async () => {
@@ -266,11 +267,11 @@ describe("ClientMaterialStep", () => {
     expect(requestClientMaterialUpload).toHaveBeenCalledTimes(1);
   });
 
-  it("a presign CLIENT_MATERIAL_LIMIT shows Massimo 3 file. on that row, with no retry and no upload", async () => {
+  it("a presign CLIENT_MATERIAL_LIMIT shows Al massimo 3 file. on that row, with no retry and no upload", async () => {
     requestClientMaterialUpload.mockResolvedValueOnce(fail("CLIENT_MATERIAL_LIMIT", 409));
     const { user, input } = setup();
     await user.upload(input, [makeFile("late.pdf", "application/pdf")]);
-    await waitFor(() => expect(rowOf("late.pdf").textContent).toContain("Massimo 3 file."));
+    await waitFor(() => expect(rowOf("late.pdf").textContent).toContain("Al massimo 3 file."));
     expect(requestClientMaterialUpload).toHaveBeenCalledTimes(1);
     expect(uploadFile).not.toHaveBeenCalled();
   });
@@ -286,8 +287,8 @@ describe("ClientMaterialStep", () => {
   it("wrong type or too big: refused inline, nothing requested", async () => {
     const { user, input } = setup();
     await user.upload(input, [makeFile("pack.zip", "application/zip"), makeFile("huge.mp4", "video/mp4", 60 * MB)]);
-    expect(rowOf("pack.zip").textContent).toContain("Questo tipo di file non è supportato.");
-    expect(rowOf("huge.mp4").textContent).toContain("Oltre 50 MB. Non caricato.");
+    expect(rowOf("pack.zip").textContent).toContain(dict.wizard.material.errors.type);
+    expect(rowOf("huge.mp4").textContent).toContain(fill(dict.wizard.material.errors.tooLarge, { size: 50 }));
     expect(requestClientMaterialUpload).not.toHaveBeenCalled();
   });
 
@@ -295,11 +296,11 @@ describe("ClientMaterialStep", () => {
     confirmClientMaterialUpload.mockResolvedValueOnce(fail("UPLOAD_REJECTED", 400));
     const { user, input } = setup();
     await user.upload(input, [makeFile("fake.png", "image/png")]);
-    await waitFor(() => expect(rowOf("fake.png").textContent).toContain("Il file caricato non corrisponde a quello scelto."));
+    await waitFor(() => expect(rowOf("fake.png").textContent).toContain(dict.wizard.material.errors.rejected));
     expect(document.querySelector('[data-row-state="listed"]')).toBeNull();
   });
 
-  it("remove 1 of 2 images: the row goes at once and Crea introduzione turns inactive again", async () => {
+  it("remove 1 of 2 images: the row goes at once and Crea la presentazione turns inactive again", async () => {
     let finish: () => void = () => undefined;
     removeClientMaterial.mockImplementationOnce(
       () =>

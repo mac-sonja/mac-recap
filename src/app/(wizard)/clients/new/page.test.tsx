@@ -127,7 +127,7 @@ describe("NewClientPage", () => {
     expect(requireSurface).toHaveBeenCalledWith("manage clients");
     expect(getClient).not.toHaveBeenCalled();
     expect(backLink(html)).toEqual({ href: "/clients", label: "Torna ai clienti" });
-    expect(html).toContain('<p class="mb-2 font-label text-xs text-foreground-muted">Nuovo cliente</p>');
+    expect(html).toContain('<p class="mb-2 font-label text-[13px] font-medium text-foreground-muted">Nuovo cliente</p>');
     expect(html).toMatch(/<h1 [^>]*>Nuovo cliente<\/h1>/);
     expect(html).not.toContain("data-status");
     expect(segments(html)).toEqual([
@@ -135,8 +135,8 @@ describe("NewClientPage", () => {
       { step: 2, current: false, href: null, text: "2Materiale" },
     ]);
     expect(html).not.toContain("Introduzione");
-    expect(html).toContain("I dati del cliente");
-    expect(html).toContain('lg:hidden">Questa pagina richiede uno schermo più grande.</p>');
+    expect(html).toContain("Presentaci il cliente");
+    expect(html).toContain('lg:hidden">Questa pagina dà il meglio su uno schermo più grande.</p>');
   });
 
   it("edits a client at step 1 with its name and code in the top bar, the code note, and back to its page", async () => {
@@ -145,29 +145,29 @@ describe("NewClientPage", () => {
     expect(backLink(html)).toEqual({ href: `/clients/${ID}`, label: "Torna al cliente" });
     expect(html).toContain('<span class="sr-only">Codice </span>LUM</span>');
     expect(html).toMatch(/<h1 [^>]*>Lumen Srl<\/h1>/);
-    expect(html).toContain("Il codice LUM non cambia. Le modifiche si vedono in tutte le sue case history.");
+    expect(html).toContain("Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case.");
     expect(html).toContain('value="Lumen Srl"');
     // A finished client may jump to Materiale from the stepper.
     expect(segments(html)[1]).toMatchObject({ href: `/clients/new?clientId=${ID}&step=2` });
   });
 
-  it("shows step 2 Materiale with the copy above the drop zone and an inactive Crea introduzione with its reason", async () => {
+  it("shows step 2 Materiale with the copy above the drop zone and an inactive Crea la presentazione with its reason", async () => {
     const html = await renderPage({ clientId: ID, step: "2" });
     expect(segments(html)).toEqual([
       { step: 1, current: false, href: `/clients/new?clientId=${ID}&step=1`, text: "vai a Dettagli, completato" },
       { step: 2, current: true, href: null, text: "2Materiale" },
     ]);
-    expect(html).toContain("Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione.");
-    expect(html).toContain("Fino a 3 file, 50 MB ciascuno.");
-    const button = html.match(/<button [^>]*>Crea introduzione<\/button>/)?.[0] ?? "";
+    expect(html).toContain("Carica fino a 3 file, di cui almeno 2 immagini: ci servono per le pagine di presentazione.");
+    expect(html).toContain("Fino a 3 file, massimo 50 MB l’uno.");
+    const button = html.match(/<button [^>]*>Crea la presentazione<\/button>/)?.[0] ?? "";
     expect(button).toContain('aria-disabled="true"');
     const reasonId = button.match(/aria-describedby="([^"]+)"/)?.[1];
-    expect(html).toContain(`<span id="${reasonId}">Carica almeno 2 immagini.</span>`);
-    expect(html).not.toContain("I dati del cliente");
+    expect(html).toContain(`<span id="${reasonId}">Servono almeno 2 immagini.</span>`);
+    expect(html).not.toContain("Presentaci il cliente");
     expect(html).not.toContain("Preferito");
   });
 
-  it("lists the client's files in position order with thumbnails, and links Crea introduzione to the client page with 2 images", async () => {
+  it("lists the client's files in position order with thumbnails, and links Crea la presentazione to the client page with 2 images", async () => {
     listClientMaterial.mockResolvedValue(
       ok([
         asset(1),
@@ -181,17 +181,17 @@ describe("NewClientPage", () => {
     expect(names).toEqual(["foto-1.jpg", "foto-2.jpg", "brief.pdf"]);
     expect(html).toContain('src="https://storage.test/sign/1.jpg?token=t"');
     expect(html).toContain("3 / 3 file");
-    expect(html).toMatch(new RegExp(`<a [^>]*href="/clients/${ID}"[^>]*>Crea introduzione</a>`));
-    expect(html).not.toContain("Carica almeno 2 immagini.");
+    expect(html).toMatch(new RegExp(`<a [^>]*href="/clients/${ID}"[^>]*>Crea la presentazione</a>`));
+    expect(html).not.toContain("Servono almeno 2 immagini.");
   });
 
-  it("keeps Crea introduzione inactive with one image and a PDF", async () => {
+  it("keeps Crea la presentazione inactive with one image and a PDF", async () => {
     listClientMaterial.mockResolvedValue(
       ok([asset(1), asset(2, { fileName: "brief.pdf", kind: "document", contentType: "application/pdf", width: null, height: null, thumbnailUrl: null })]),
     );
     const html = await renderPage({ clientId: ID, step: "2" });
-    expect(html).toMatch(/<button [^>]*aria-disabled="true"[^>]*>Crea introduzione<\/button>/);
-    expect(html).toContain("Carica almeno 2 immagini.");
+    expect(html).toMatch(/<button [^>]*aria-disabled="true"[^>]*>Crea la presentazione<\/button>/);
+    expect(html).toContain("Servono almeno 2 immagini.");
   });
 
   it("sends an unfinished client asking for step 2 back to step 1, and links no Materiale", async () => {
@@ -226,9 +226,9 @@ describe("NewClientPage", () => {
     const html = await renderPage({ clientId: ID, step: "1" });
     expect(listCases).toHaveBeenCalledExactlyOnceWith({ clientId: ID });
     expect(html).toMatch(/<button [^>]*class="[^"]*bg-danger[^"]*"[^>]*>Elimina cliente<\/button>/);
-    expect(html).toContain("Verranno eliminate anche le sue 2 case history");
+    expect(html).toContain("Con lui spariscono anche le sue 2 case");
     // Below the form, within the frame's `hidden lg:block` area.
-    expect(html.indexOf("Elimina cliente")).toBeGreaterThan(html.indexOf("I dati del cliente"));
+    expect(html.indexOf("Elimina cliente")).toBeGreaterThan(html.indexOf("Presentaci il cliente"));
     expect(html.indexOf("Elimina cliente")).toBeGreaterThan(html.indexOf('class="hidden lg:block"'));
   });
 

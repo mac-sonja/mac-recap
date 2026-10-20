@@ -1,56 +1,93 @@
 "use client";
 
-import { Building2, FolderOpen, Plus, type LucideIcon } from "lucide-react";
+import { Building2, Folder, House, Plus, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { it } from "@/shared/i18n/it";
+import { PRESSABLE } from "@/app/_components/button-styles";
+import type { ThemeChoice } from "@/app/_lib/theme";
+import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { MacWordmark } from "@/app/_components/mac-wordmark";
+import { ThemeSwitch } from "./theme-switch";
 import { UserMenu } from "./user-menu";
 
 export interface SidebarProps {
   /** Policy decisions made by the layout through `access.can`; absent items are not rendered. */
   showNewCaseStudy: boolean;
   showCaseStudies: boolean;
-  /** `list clients`: the Clienti item, right after Case history. */
+  /** `list clients`: the Clienti item, right after Case. */
   showClients: boolean;
   displayName: string;
   roleLabel: string;
+  /** Cases waiting for a review, shown after Case; nothing when 0 or unknown. */
+  toReviewCount?: number | null;
+  /** Clients, shown after Clienti; nothing when unknown. */
+  clientCount?: number | null;
+  /** The appearance choice from the theme cookie. */
+  theme?: ThemeChoice;
 }
 
 /** Full labels at ≥1280 px; icons only at 1024–1279 px, labels kept for screen readers. */
 const LABEL = "sr-only xl:not-sr-only";
 
-function NavLink({ href, icon: Icon, label, active }: { href: string; icon: LucideIcon; label: string; active: boolean }) {
+function NavLink({
+  href,
+  icon: Icon,
+  label,
+  active,
+  meta,
+}: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  active: boolean;
+  /** A short note after the label (a count), hidden when the sidebar is collapsed. */
+  meta?: string | null;
+}) {
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
       title={label}
       className={cn(
-        "flex items-center justify-center gap-3 rounded-md px-3 py-2 font-label text-sm text-foreground-muted hover:bg-surface-control hover:text-foreground xl:justify-start",
-        active && "bg-surface-selected text-foreground",
+        "flex h-9 items-center justify-center gap-2.5 rounded-md px-2.5 font-label text-sm text-foreground-muted transition-colors duration-150 hover:bg-surface-hover hover:text-foreground xl:justify-start",
+        active && "bg-surface-selected font-medium text-foreground hover:bg-surface-selected",
       )}
     >
-      <Icon aria-hidden="true" className="size-5 shrink-0" />
+      <Icon aria-hidden="true" className="size-[18px] shrink-0" strokeWidth={1.75} />
       <span className={LABEL}>{label}</span>
+      {meta ? (
+        <span className="ml-auto hidden font-label text-xs font-normal text-foreground-muted tabular-nums xl:inline">
+          {meta}
+        </span>
+      ) : null}
     </Link>
   );
 }
 
-export function Sidebar({ showNewCaseStudy, showCaseStudies, showClients, displayName, roleLabel }: SidebarProps) {
+export function Sidebar({
+  showNewCaseStudy,
+  showCaseStudies,
+  showClients,
+  displayName,
+  roleLabel,
+  toReviewCount = null,
+  clientCount = null,
+  theme = "system",
+}: SidebarProps) {
   const pathname = usePathname();
+  const isHome = pathname === "/home";
   const isCaseStudies = pathname === "/case-studies";
   // The list and every client's page.
   const isClients = pathname === "/clients" || pathname.startsWith("/clients/");
 
   return (
-    <aside className="flex w-16 shrink-0 flex-col border-r bg-surface-raised xl:w-60">
-      <nav aria-label={it.shell.nav.label} className="flex flex-1 flex-col gap-1 p-2 xl:p-3">
-        <p className="mb-3 hidden items-end gap-2 px-3 pt-3 text-foreground xl:flex">
-          <MacWordmark label={it.app.name} className="h-6 w-auto" />
+    <aside className="sticky top-0 flex h-dvh w-16 shrink-0 flex-col border-r bg-surface-sidebar xl:w-64">
+      <nav aria-label={it.shell.nav.label} className="flex flex-1 flex-col gap-0.5 p-2 xl:p-4">
+        <p className="mb-5 hidden items-end gap-2 px-2 pt-2 text-foreground-strong xl:flex">
+          <MacWordmark label={it.app.name} className="h-[22px] w-auto" />
           {/* The wordmark's label already reads "MAC Recap". */}
-          <span aria-hidden="true" className="font-label text-sm leading-none font-medium tracking-wide">
+          <span aria-hidden="true" className="font-label text-[11px] leading-none font-semibold tracking-[0.18em]">
             {it.app.wordmarkSuffix}
           </span>
         </p>
@@ -58,18 +95,37 @@ export function Sidebar({ showNewCaseStudy, showCaseStudies, showClients, displa
           <Link
             href="/case-studies/new"
             title={it.shell.nav.newCaseStudy}
-            className="mb-2 flex items-center justify-center gap-3 rounded-md bg-primary px-3 py-2 font-label text-sm text-primary-foreground hover:opacity-90 xl:justify-start"
+            className={cn(
+              "mb-4 flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-3 font-label text-sm font-semibold text-primary-foreground shadow-primary hover:bg-primary-hover xl:justify-start",
+              PRESSABLE,
+            )}
           >
-            <Plus aria-hidden="true" className="size-5 shrink-0" />
+            <Plus aria-hidden="true" className="size-[18px] shrink-0" strokeWidth={2.25} />
             <span className={LABEL}>{it.shell.nav.newCaseStudy}</span>
           </Link>
         )}
+        {showCaseStudies && <NavLink href="/home" icon={House} label={it.shell.nav.home} active={isHome} />}
         {showCaseStudies && (
-          <NavLink href="/case-studies" icon={FolderOpen} label={it.shell.nav.caseStudies} active={isCaseStudies} />
+          <NavLink
+            href="/case-studies"
+            icon={Folder}
+            label={it.shell.nav.caseStudies}
+            active={isCaseStudies}
+            meta={toReviewCount ? fill(it.shell.nav.toReview, { n: toReviewCount }) : null}
+          />
         )}
-        {showClients && <NavLink href="/clients" icon={Building2} label={it.shell.nav.clients} active={isClients} />}
+        {showClients && (
+          <NavLink
+            href="/clients"
+            icon={Building2}
+            label={it.shell.nav.clients}
+            active={isClients}
+            meta={clientCount === null ? null : String(clientCount)}
+          />
+        )}
       </nav>
-      <div className="border-t p-2 xl:p-3">
+      <div className="flex flex-col gap-4 p-2 pb-4 xl:p-4">
+        <ThemeSwitch initial={theme} />
         <UserMenu displayName={displayName} roleLabel={roleLabel} />
       </div>
     </aside>

@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import { DANGER_ACTION } from "@/app/_components/button-styles";
+import { DANGER_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
+import { FIELD, FIELD_LABEL } from "@/app/_components/field-styles";
+import { cn } from "@/shared/utils";
 import { Dialog } from "@/app/_components/dialog";
 import { deleteClient } from "@/app/(tool)/clients/actions";
 import { normalizeClientConfirmName } from "@/shared/client-name";
@@ -86,7 +88,7 @@ export function DeleteClientButton({ clientId, name, caseCount }: DeleteClientBu
               type="button"
               data-autofocus
               onClick={close}
-              className="inline-flex items-center rounded-md bg-surface-control px-3 py-2 font-label text-sm text-foreground hover:bg-surface-selected"
+              className={SECONDARY_ACTION}
             >
               {copy.cancel}
             </button>
@@ -102,7 +104,7 @@ export function DeleteClientButton({ clientId, name, caseCount }: DeleteClientBu
           </>
         }
       >
-        <label htmlFor={inputId} className="block font-label text-sm text-foreground">
+        <label htmlFor={inputId} className={cn(FIELD_LABEL, "block")}>
           {copy.confirmLabel}
         </label>
         <input
@@ -118,7 +120,7 @@ export function DeleteClientButton({ clientId, name, caseCount }: DeleteClientBu
               void confirm();
             }
           }}
-          className="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2 font-body text-sm text-foreground"
+          className={cn(FIELD, "mt-2")}
         />
         {!matches && (
           <p id={reasonId} className="mt-2 font-body text-xs text-foreground-muted">

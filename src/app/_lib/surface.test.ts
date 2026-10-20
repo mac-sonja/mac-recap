@@ -29,7 +29,7 @@ beforeEach(() => getActor.mockReset());
 describe("resolveShellActor", () => {
   it("returns the actor with its landing", async () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
-    expect(await resolveShellActor()).toEqual({ actor: actor("owner_designer"), landing: "/case-studies" });
+    expect(await resolveShellActor()).toEqual({ actor: actor("owner_designer"), landing: "/home" });
   });
 
   it.each([
@@ -49,12 +49,12 @@ describe("resolveShellActor", () => {
 describe("requireSurface", () => {
   it("lets an allowed actor through", async () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
-    expect(await requireSurface("list cases")).toMatchObject({ landing: "/case-studies" });
+    expect(await requireSurface("list cases")).toMatchObject({ landing: "/home" });
   });
 
   it("redirects to the landing when the policy denies the surface", async () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
-    await expect(requireSurface("manage users")).rejects.toThrow("REDIRECT /case-studies");
+    await expect(requireSurface("manage users")).rejects.toThrow("REDIRECT /home");
   });
 
   it("redirects an account/sales/social actor away from the case list", async () => {

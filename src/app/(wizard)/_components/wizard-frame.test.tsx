@@ -11,13 +11,13 @@ describe("WizardFrame", () => {
         <p>step</p>
       </WizardFrame>,
     );
-    expect(html).toMatch(/<a [^>]*href="\/case-studies"[^>]*aria-label="Torna alle case history"|<a [^>]*aria-label="Torna alle case history"[^>]*href="\/case-studies"/);
+    expect(html).toMatch(/<a [^>]*href="\/case-studies"[^>]*aria-label="Torna alle case"|<a [^>]*aria-label="Torna alle case"[^>]*href="\/case-studies"/);
     expect(html).toMatch(/<svg [^>]*aria-hidden="true"/);
     expect(html).not.toContain("<aside");
     expect(html).not.toContain("<nav");
-    // No case yet: no ID, no badge; eyebrow and title both read Nuova case history.
+    // No case yet: no ID, no badge; eyebrow and title both read Nuova case.
     expect(html).not.toContain("data-status");
-    expect(html.match(/Nuova case history/g)).toHaveLength(2);
+    expect(html.match(/Nuova case/g)).toHaveLength(2);
   });
 
   it("centres an 820px column both ways and lets it scroll under the fixed top bar", () => {
@@ -44,11 +44,11 @@ describe("WizardFrame", () => {
         <p>step</p>
       </WizardFrame>,
     );
-    expect(html).toContain(`<span class="shrink-0 font-mono text-xs text-foreground-muted"><span class="sr-only">ID </span>LUM-2026-01</span>`);
+    expect(html).toContain(`<span class="shrink-0 font-mono text-xs text-foreground-muted"><span class="sr-only">Codice </span>LUM-2026-01</span>`);
     expect(html).not.toContain(`>${ID}<`);
     expect(html).toMatch(/<span data-status="draft" class="[^"]*\bml-auto\b[^"]*">Bozza<\/span>/);
     expect(html).toMatch(/<h1 [^>]*>Rebrand Lumen 2026<\/h1>/);
-    expect(html).toContain('<p class="mb-2 font-label text-xs text-foreground-muted">Nuova case history</p>');
+    expect(html).toContain('<p class="mb-2 font-label text-[13px] font-medium text-foreground-muted">Nuova case</p>');
   });
 
   it("forwards the case id and reachable to the stepper links", () => {
@@ -82,7 +82,7 @@ describe("WizardFrame", () => {
         <p>step</p>
       </WizardFrame>,
     );
-    expect(html).toContain('lg:hidden">Questa pagina richiede uno schermo più grande.</p>');
+    expect(html).toContain('lg:hidden">Questa pagina dà il meglio su uno schermo più grande.</p>');
     expect(html).toMatch(/<div class="hidden lg:block"><div class="mb-10"><ol aria-label="Passaggi".*<p>step<\/p><\/div>/);
   });
 });
@@ -97,10 +97,10 @@ describe("WizardFooter", () => {
     expect(html).toMatch(/data-dot="1" data-active=""/);
   });
 
-  it("stays at the bottom of the scrolling column with a solid background and a top border (Story 2.18)", () => {
+  it("stays at the bottom of the scrolling column with a translucent background and a top border (Story 2.18)", () => {
     const html = renderToStaticMarkup(<WizardFooter current={2} action={<button type="button">go</button>} />);
     const classes = html.match(/<div data-wizard-footer="" class="([^"]*)"/)?.[1].split(" ") ?? [];
-    expect(classes).toEqual(expect.arrayContaining(["sticky", "bottom-0", "z-10", "bg-surface", "border-t", "pt-5", "pb-6"]));
+    expect(classes).toEqual(expect.arrayContaining(["sticky", "bottom-0", "z-10", "bg-surface/85", "backdrop-blur-xl", "border-t", "pt-5", "pb-6"]));
     expect(classes).not.toContain("fixed");
     // Flush on the viewport's bottom edge: no filler shadow below it (owner, 2026-10-20).
     expect(classes.some((c) => c.startsWith("shadow"))).toBe(false);

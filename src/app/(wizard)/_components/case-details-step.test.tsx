@@ -119,14 +119,14 @@ async function pickClient(user: ReturnType<typeof userEvent.setup>, query = "lum
 }
 
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(field("Nome della case history"), "  Rebrand  ");
+  await user.type(field("Titolo della case"), "  Rebrand  ");
   await pickClient(user);
   await user.click(pill("Social media"));
 }
 
 let replaceState: ReturnType<typeof vi.spyOn>;
 
-const CONFIRM = "Le informazioni inserite non sono ancora salvate. Uscire comunque?";
+const CONFIRM = "Quello che hai scritto non è ancora salvato. Vuoi uscire lo stesso?";
 const confirm = vi.fn<(message?: string) => boolean>();
 const originalConfirm = window.confirm;
 
@@ -197,43 +197,43 @@ afterEach(() => {
 describe("CaseDetailsStep, a new case", () => {
   it("shows the fields in order: name, client (a search box), year (prefilled, marked required), business line, then the three texts; no language", () => {
     renderNew();
-    expect(field("Nome della case history")).toHaveProperty("required", true);
+    expect(field("Titolo della case")).toHaveProperty("required", true);
     expect(field("Cliente").getAttribute("role")).toBe("combobox");
     expect(field("Anno")).toHaveProperty("value", "2026");
     expect(field("Anno")).toHaveProperty("required", true);
     expect(field("Anno").getAttribute("aria-required")).toBe("true");
     const marks = [...document.querySelectorAll("[data-required-mark]")];
-    expect(marks.map((mark) => mark.previousElementSibling?.textContent)).toEqual(["Nome della case history", "Cliente", "Anno", "Business line"]);
+    expect(marks.map((mark) => mark.previousElementSibling?.textContent)).toEqual(["Titolo della case", "Cliente", "Anno", "Area"]);
     expect(marks.every((mark) => mark.textContent === "*" && mark.getAttribute("aria-hidden") === "true")).toBe(true);
     // The markers only: no "* obbligatorio" legend (owner, 2026-10-20).
     expect(document.body.textContent).not.toContain("obbligatorio");
-    expect(screen.getByRole("radiogroup", { name: "Business line" }).getAttribute("aria-required")).toBe("true");
+    expect(screen.getByRole("radiogroup", { name: "Area" }).getAttribute("aria-required")).toBe("true");
     expect(screen.queryByLabelText("Lingua del testo")).toBeNull();
     expect(document.body.textContent).not.toMatch(/Lingua|Italiano|English/);
-    const group = screen.getByRole("radiogroup", { name: "Business line" });
+    const group = screen.getByRole("radiogroup", { name: "Area" });
     expect(screen.getAllByRole("radio").map((r) => [r.textContent, r.getAttribute("aria-checked")])).toEqual(
       ["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi", "Sviluppo"].map((label) => [label, "false"]),
     );
     expect(screen.getAllByRole("textbox").map((t) => t.getAttribute("name"))).toEqual(["name", "context", "solution", "results"]);
-    const order = [field("Nome della case history"), field("Cliente"), field("Anno"), group, textarea("Contesto")];
+    const order = [field("Titolo della case"), field("Cliente"), field("Anno"), group, textarea("Contesto")];
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
-    expect(textarea("Contesto").placeholder).toBe("Di cosa aveva bisogno il cliente, e perché?");
+    expect(textarea("Contesto").placeholder).toBe("Da dove siete partiti? Cosa serviva al cliente, e perché?");
   });
 
   it("keeps Avanti inactive until name, client, year and business line are set, with the reason linked", async () => {
     const user = userEvent.setup();
     renderNew();
     expect(avanti().getAttribute("aria-disabled")).toBe("true");
-    expect(describedText(avanti())).toBe("Per continuare compila: Nome della case history, Cliente, Business line.");
-    await user.type(field("Nome della case history"), "Rebrand");
+    expect(describedText(avanti())).toBe("Per andare avanti manca: Titolo della case, Cliente, Area.");
+    await user.type(field("Titolo della case"), "Rebrand");
     await pickClient(user);
-    expect(describedText(avanti())).toBe("Per continuare compila: Business line.");
+    expect(describedText(avanti())).toBe("Per andare avanti manca: Area.");
     await user.clear(field("Anno"));
-    expect(describedText(avanti())).toBe("Per continuare compila: Anno, Business line.");
+    expect(describedText(avanti())).toBe("Per andare avanti manca: Anno, Area.");
     await user.type(field("Anno"), "1800");
-    expect(describedText(avanti())).toBe("Per continuare compila: Anno, Business line.");
+    expect(describedText(avanti())).toBe("Per andare avanti manca: Anno, Area.");
     await user.clear(field("Anno"));
     await user.type(field("Anno"), "2025");
     await user.click(pill("Video"));
@@ -271,24 +271,24 @@ describe("CaseDetailsStep, a new case", () => {
     renderNew();
     await user.click(avanti());
     expect(createCaseStudy).not.toHaveBeenCalled();
-    expect(screen.getByText("Inserisci il nome della case history.")).toBeTruthy();
-    expect(screen.getByText("Scegli il cliente.")).toBeTruthy();
-    expect(screen.getByText("Scegli la business line.")).toBeTruthy();
-    expect(document.activeElement).toBe(field("Nome della case history"));
+    expect(screen.getByText("Dai un titolo alla case.")).toBeTruthy();
+    expect(screen.getByText("Scegli per quale cliente è.")).toBeTruthy();
+    expect(screen.getByText("Scegli l’area del progetto.")).toBeTruthy();
+    expect(document.activeElement).toBe(field("Titolo della case"));
     expect(screen.getByRole("radiogroup").getAttribute("aria-invalid")).toBe("true");
   });
 
   it("with only the business line missing, sends nothing and focuses the first pill", async () => {
     const user = userEvent.setup();
     renderNew();
-    await user.type(field("Nome della case history"), "Rebrand");
+    await user.type(field("Titolo della case"), "Rebrand");
     await pickClient(user);
     await user.click(avanti());
     expect(createCaseStudy).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(pill("Branding"));
-    expect(describedText(screen.getByRole("radiogroup"))).toBe("Scegli la business line.");
+    expect(describedText(screen.getByRole("radiogroup"))).toBe("Scegli l’area del progetto.");
     await user.click(pill("Eventi"));
-    expect(screen.queryByText("Scegli la business line.")).toBeNull();
+    expect(screen.queryByText("Scegli l’area del progetto.")).toBeNull();
   });
 
   it("a known initialClientId shows that client in the search box, and creating sends it", async () => {
@@ -296,7 +296,7 @@ describe("CaseDetailsStep, a new case", () => {
     const user = userEvent.setup();
     renderNew({ initialClientId: LUMEN.id });
     expect(field("Cliente").value).toBe("Lumen Srl (LUM)");
-    await user.type(field("Nome della case history"), "Rebrand");
+    await user.type(field("Titolo della case"), "Rebrand");
     await user.click(pill("Video"));
     await user.click(avanti());
     expect(createCaseStudy).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ clientId: LUMEN.id }));
@@ -305,19 +305,19 @@ describe("CaseDetailsStep, a new case", () => {
   it("ignores an initialClientId that is not in the list", () => {
     renderNew({ initialClientId: "cccccccc-0000-4000-8000-00000000ffff" });
     expect(field("Cliente").value).toBe("");
-    expect(field("Cliente").placeholder).toBe("Scegli un cliente");
+    expect(field("Cliente").placeholder).toBe("Cerca o scegli un cliente");
   });
 
   it("searching the clients: 'lum' lists Lumen Srl (LUM) and Enter picks it", async () => {
     const user = userEvent.setup();
     renderNew();
-    await user.type(field("Nome della case history"), "Rebrand");
+    await user.type(field("Titolo della case"), "Rebrand");
     await user.type(field("Cliente"), "lum");
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Lumen Srl (LUM)"]);
     await user.keyboard("{Enter}");
     expect(field("Cliente").value).toBe("Lumen Srl (LUM)");
     expect(field("Cliente").getAttribute("aria-expanded")).toBe("false");
-    expect(describedText(avanti())).toBe("Per continuare compila: Business line.");
+    expect(describedText(avanti())).toBe("Per andare avanti manca: Area.");
   });
 
   it("a search with no match says so with a link to Clienti, and leaves the client unpicked", async () => {
@@ -325,32 +325,32 @@ describe("CaseDetailsStep, a new case", () => {
     renderNew();
     await user.type(field("Cliente"), "zzz");
     expect(screen.queryAllByRole("option")).toHaveLength(0);
-    expect(screen.getByText(/Nessun cliente trovato/).textContent).toBe("Nessun cliente trovato. Aggiungilo nella pagina Clienti.");
+    expect(screen.getByText(/Nessun cliente con questo nome/).textContent).toBe("Nessun cliente con questo nome. Aggiungilo dalla pagina Clienti.");
     expect(screen.getByRole("link", { name: "pagina Clienti" }).getAttribute("href")).toBe("/clients");
-    expect(describedText(avanti())).toBe("Per continuare compila: Nome della case history, Cliente, Business line.");
+    expect(describedText(avanti())).toBe("Per andare avanti manca: Titolo della case, Cliente, Area.");
   });
 
   it("Enter in the client search with no match does not submit the step", async () => {
     const user = userEvent.setup();
     renderNew();
-    await user.type(field("Nome della case history"), "Rebrand");
+    await user.type(field("Titolo della case"), "Rebrand");
     await user.click(pill("Video"));
     await user.type(field("Cliente"), "zzz{Enter}");
     expect(createCaseStudy).not.toHaveBeenCalled();
-    expect(screen.queryByText("Scegli il cliente.")).toBeNull();
+    expect(screen.queryByText("Scegli per quale cliente è.")).toBeNull();
     expect(document.activeElement).toBe(field("Cliente"));
   });
 
   it("editing a picked client's text clears the pick until another is chosen", async () => {
     const user = userEvent.setup();
     renderNew({ initialClientId: LUMEN.id });
-    await user.type(field("Nome della case history"), "Rebrand");
+    await user.type(field("Titolo della case"), "Rebrand");
     await user.click(pill("Video"));
     expect(avanti().getAttribute("aria-disabled")).toBe("false");
     await user.clear(field("Cliente"));
     await user.type(field("Cliente"), "citta");
     expect(avanti().getAttribute("aria-disabled")).toBe("true");
-    expect(describedText(avanti())).toBe("Per continuare compila: Cliente.");
+    expect(describedText(avanti())).toBe("Per andare avanti manca: Cliente.");
     await user.keyboard("{Enter}");
     expect(field("Cliente").value).toBe("Città di Torino (CIT)");
     expect(avanti().getAttribute("aria-disabled")).toBe("false");
@@ -361,10 +361,10 @@ describe("CaseDetailsStep, a new case", () => {
     renderNew({ clients: [] });
     expect(screen.queryByRole("combobox", { name: "Cliente" })).toBeNull();
     expect(screen.getByRole("link", { name: "pagina Clienti" }).getAttribute("href")).toBe("/clients");
-    await user.type(field("Nome della case history"), "Rebrand");
+    await user.type(field("Titolo della case"), "Rebrand");
     await user.click(pill("Video"));
     expect(avanti().getAttribute("aria-disabled")).toBe("true");
-    expect(describedText(avanti())).toBe("Nessun cliente. Aggiungilo nella pagina Clienti.");
+    expect(describedText(avanti())).toBe("Non c’è ancora nessun cliente. Aggiungilo dalla pagina Clienti.");
     await user.click(avanti());
     expect(createCaseStudy).not.toHaveBeenCalled();
   });
@@ -378,7 +378,7 @@ describe("CaseDetailsStep, a new case", () => {
     await user.click(avanti());
     expect(createCaseStudy).not.toHaveBeenCalled();
     expect(field("Anno").getAttribute("aria-invalid")).toBe("true");
-    expect(screen.getByText("Inserisci un anno tra 1900 e 2100.")).toBeTruthy();
+    expect(screen.getByText("Scrivi un anno tra il 1900 e il 2100.")).toBeTruthy();
   });
 
   it("shows CLIENT_NOT_FOUND on the client select, not the generic line", async () => {
@@ -387,7 +387,7 @@ describe("CaseDetailsStep, a new case", () => {
     renderNew();
     await fillRequired(user);
     await user.click(avanti());
-    expect(describedText(field("Cliente"))).toBe("Questo cliente non è più disponibile. Ricarica la pagina e scegli di nuovo.");
+    expect(describedText(field("Cliente"))).toBe("Questo cliente non c’è più. Ricarica la pagina e sceglilo di nuovo.");
     expect(document.activeElement).toBe(field("Cliente"));
     expect(screen.getByRole("alert").textContent).toBe("");
     expect(push).not.toHaveBeenCalled();
@@ -395,8 +395,8 @@ describe("CaseDetailsStep, a new case", () => {
   });
 
   it.each([
-    ["year", "Anno", "Inserisci un anno tra 1900 e 2100."],
-    ["clientId", "Cliente", "Scegli il cliente."],
+    ["year", "Anno", "Scrivi un anno tra il 1900 e il 2100."],
+    ["clientId", "Cliente", "Scegli per quale cliente è."],
   ])("maps a server INVALID_INPUT on %s to its message", async (name, label, message) => {
     createCaseStudy.mockResolvedValue({ ok: false, status: 400, error: { code: "INVALID_INPUT", message: "x", fields: [name] } });
     const user = userEvent.setup();
@@ -414,7 +414,7 @@ describe("CaseDetailsStep, a new case", () => {
     renderNew();
     await fillRequired(user);
     await user.click(avanti());
-    expect(describedText(screen.getByRole("radiogroup"))).toBe("Scegli la business line.");
+    expect(describedText(screen.getByRole("radiogroup"))).toBe("Scegli l’area del progetto.");
     expect(document.activeElement).toBe(pill("Social media"));
   });
 
@@ -428,9 +428,9 @@ describe("CaseDetailsStep, a new case", () => {
     renderNew();
     await fillRequired(user);
     await user.click(avanti());
-    expect(screen.getByRole("alert").textContent).toBe("Non è stato possibile creare la case history. I dati inseriti sono ancora qui: riprova.");
+    expect(screen.getByRole("alert").textContent).toBe("Non siamo riusciti a creare la case. Quello che hai scritto è ancora qui: riprova.");
     expect(document.body.textContent).not.toMatch(/Not allowed|db down/);
-    expect(field("Nome della case history")).toHaveProperty("value", "  Rebrand  ");
+    expect(field("Titolo della case")).toHaveProperty("value", "  Rebrand  ");
     expect(pill("Social media").getAttribute("aria-checked")).toBe("true");
     expect(avanti().getAttribute("aria-disabled")).toBe("false");
     expect(replaceState).not.toHaveBeenCalled();
@@ -442,7 +442,7 @@ describe("CaseDetailsStep, a new case", () => {
     renderNew();
     await fillRequired(user);
     await user.click(avanti());
-    expect(screen.getByRole("alert").textContent).toContain("Non è stato possibile creare la case history.");
+    expect(screen.getByRole("alert").textContent).toContain("Non siamo riusciti a creare la case.");
   });
 
   it("sends one request when Avanti is pressed twice: busy while pending", async () => {
@@ -472,7 +472,7 @@ describe("CaseDetailsStep, a new case", () => {
     expect(createCaseStudy).toHaveBeenCalledOnce();
     expect(replaceState).toHaveBeenCalledWith(null, "", STEP_1);
     expect(push).not.toHaveBeenCalled();
-    expect(describedText(textarea("Risultati"))).toBe("Non salvato. Riprova modificando il testo.");
+    expect(describedText(textarea("Risultati"))).toBe("Non salvato. Modifica il testo per riprovare.");
     expect(document.activeElement).toBe(textarea("Risultati"));
     // The client is now fixed.
     expect(field("Cliente").tagName).toBe("INPUT");
@@ -503,7 +503,7 @@ describe("CaseDetailsStep, leaving a new case before Avanti", () => {
   });
 
   it.each([
-    ["a name", () => fireEvent.change(field("Nome della case history"), { target: { value: "R" } })],
+    ["a name", () => fireEvent.change(field("Titolo della case"), { target: { value: "R" } })],
     ["a business line", () => fireEvent.click(pill("Video"))],
     ["a text", () => fireEvent.change(textarea("Contesto"), { target: { value: "c" } })],
   ])("with %s entered, a link asks first and stays when declined", (_label, enter) => {
@@ -523,7 +523,7 @@ describe("CaseDetailsStep, leaving a new case before Avanti", () => {
   it("follows the link when the confirm is accepted", () => {
     confirm.mockReturnValue(true);
     renderWithLink(newStep());
-    fireEvent.change(field("Nome della case history"), { target: { value: "R" } });
+    fireEvent.change(field("Titolo della case"), { target: { value: "R" } });
     let reached = false;
     screen.getByRole("link", { name: "Indietro" }).addEventListener("click", (event) => {
       reached = true;
@@ -562,12 +562,12 @@ describe("CaseDetailsStep, an existing draft", () => {
     renderExisting({ name: "Rebrand Lumen", year: 2025, locale: "en", businessLine: "eventi" }, { context: "C", solution: "", results: "" });
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByLabelText("Lingua del testo")).toBeNull();
-    expect(field("Nome della case history").value).toBe("Rebrand Lumen");
+    expect(field("Titolo della case").value).toBe("Rebrand Lumen");
     const client = field("Cliente");
     expect(client.tagName).toBe("INPUT");
     expect(client.readOnly).toBe(true);
     expect(client.value).toBe("Lumen Srl (LUM)");
-    expect(describedText(client)).toBe("Il cliente non cambia dopo la creazione: il codice dipende da lui.");
+    expect(describedText(client)).toBe("Il cliente resta questo: il codice della case nasce da lui.");
     expect(field("Anno").value).toBe("2025");
     expect(pill("Eventi").getAttribute("aria-checked")).toBe("true");
     expect(pill("Eventi").tabIndex).toBe(0);
@@ -589,8 +589,8 @@ describe("CaseDetailsStep, an existing draft", () => {
     updateCaseStudyDetails.mockResolvedValue({ ok: true, value: created() });
     const user = userEvent.setup();
     renderExisting({ locale: "en" });
-    await user.clear(field("Nome della case history"));
-    await user.type(field("Nome della case history"), " Rebrand 2 ");
+    await user.clear(field("Titolo della case"));
+    await user.type(field("Titolo della case"), " Rebrand 2 ");
     await user.clear(field("Anno"));
     await user.type(field("Anno"), "2024");
     await user.click(pill("Web design"));
@@ -612,7 +612,7 @@ describe("CaseDetailsStep, an existing draft", () => {
     renderExisting({ businessLine: null });
     expect(screen.getAllByRole("radio").every((r) => r.getAttribute("aria-checked") === "false")).toBe(true);
     expect(avanti().getAttribute("aria-disabled")).toBe("true");
-    expect(describedText(avanti())).toBe("Per continuare compila: Business line.");
+    expect(describedText(avanti())).toBe("Per andare avanti manca: Area.");
     await user.click(avanti());
     expect(updateCaseStudyDetails).not.toHaveBeenCalled();
     await user.click(pill("Branding"));
@@ -622,9 +622,9 @@ describe("CaseDetailsStep, an existing draft", () => {
   });
 
   it.each([
-    ["STALE_STATUS", 409, "Questa case history non è più una bozza. Torna alle case history."],
-    ["NOT_FOUND", 404, "Questa case history non è più una bozza. Torna alle case history."],
-    ["CASE_STUDY_WRITE_FAILED", 500, "Non è stato possibile salvare i dettagli. I dati inseriti sono ancora qui: riprova."],
+    ["STALE_STATUS", 409, "Questa case non è più una bozza. Torna all’elenco per vederla."],
+    ["NOT_FOUND", 404, "Questa case non è più una bozza. Torna all’elenco per vederla."],
+    ["CASE_STUDY_WRITE_FAILED", 500, "Non siamo riusciti a salvare. Quello che hai scritto è ancora qui: riprova."],
   ])("on %s stays on the step with its line", async (code, status, line) => {
     updateCaseStudyDetails.mockResolvedValue({ ok: false, status, error: { code, message: "m" } });
     const user = userEvent.setup();
@@ -669,8 +669,8 @@ describe("CaseDetailsStep, an existing draft", () => {
   });
 
   it.each([
-    ["STALE_STATUS", 409, "Questa case history non è più una bozza. Torna alle case history."],
-    ["CASE_STUDY_WRITE_FAILED", 500, "Non è stato possibile salvare i dettagli. I dati inseriti sono ancora qui: riprova."],
+    ["STALE_STATUS", 409, "Questa case non è più una bozza. Torna all’elenco per vederla."],
+    ["CASE_STUDY_WRITE_FAILED", 500, "Non siamo riusciti a salvare. Quello che hai scritto è ancora qui: riprova."],
   ])("a link whose details save fails with %s stays, without navigating, and shows the alert", async (code, status, line) => {
     updateCaseStudyDetails.mockResolvedValue({ ok: false, status, error: { code, message: "m" } });
     renderWithLink(existingStep());
@@ -685,7 +685,7 @@ describe("CaseDetailsStep, an existing draft", () => {
   describe("a link with info edits that can't be saved (legacy draft without a business line)", () => {
     it("asks, and stays without saving when declined", async () => {
       renderWithLink(existingStep({ businessLine: null }));
-      fireEvent.change(field("Nome della case history"), { target: { value: "Nuovo nome" } });
+      fireEvent.change(field("Titolo della case"), { target: { value: "Nuovo nome" } });
       expect(clickLink("Indietro")).toBe(false);
       await flush();
       expect(confirm).toHaveBeenCalledExactlyOnceWith(CONFIRM);
@@ -696,7 +696,7 @@ describe("CaseDetailsStep, an existing draft", () => {
     it("when confirmed, leaves without the info edits but still flushes the texts", async () => {
       confirm.mockReturnValue(true);
       renderWithLink(existingStep({ businessLine: null }));
-      fireEvent.change(field("Nome della case history"), { target: { value: "Nuovo nome" } });
+      fireEvent.change(field("Titolo della case"), { target: { value: "Nuovo nome" } });
       fireEvent.change(textarea("Contesto"), { target: { value: "c" } });
       expect(clickLink("Indietro")).toBe(false);
       await flush();
@@ -807,21 +807,21 @@ describe("CaseDetailsStep, an existing draft", () => {
       fireEvent.blur(textarea("Risultati"));
       await flush();
       expect(textarea("Risultati").value).toBe("+30% vendite");
-      expect(describedText(textarea("Risultati"))).toBe("Non salvato. Riprova modificando il testo.");
+      expect(describedText(textarea("Risultati"))).toBe("Non salvato. Modifica il testo per riprovare.");
       expect(textarea("Risultati").getAttribute("aria-invalid")).toBe("true");
       const status = screen.getByRole("status");
       expect(status.getAttribute("aria-live")).toBe("polite");
-      expect(status.textContent).toBe("Risultati: Non salvato. Riprova modificando il testo.");
+      expect(status.textContent).toBe("Risultati: Non salvato. Modifica il testo per riprovare.");
       type("Risultati", "+30% vendite in un anno");
       await wait(DEBOUNCE_MS);
       expect(saveDetailsField).toHaveBeenCalledTimes(2);
-      expect(screen.queryByText("Non salvato. Riprova modificando il testo.")).toBeNull();
+      expect(screen.queryByText("Non salvato. Modifica il testo per riprovare.")).toBeNull();
     });
 
     it("counts the limit in code points: at the limit it saves; over it nothing is sent and Avanti focuses the field", async () => {
       renderExisting({}, EMPTY, 5);
       type("Contesto", "😀".repeat(5));
-      expect(screen.getByText("Massimo 5 caratteri.")).toBeTruthy();
+      expect(screen.getByText("Al massimo 5 caratteri.")).toBeTruthy();
       fireEvent.blur(textarea("Contesto"));
       await flush();
       expect(saveDetailsField).toHaveBeenCalledTimes(1);
@@ -939,31 +939,31 @@ describe("CaseDetailsStep, the live title (Story 2.18)", () => {
     document.title = originalTitle;
   });
 
-  it("a new case: the title follows the name on blur, and an empty name brings back Nuova case history", async () => {
+  it("a new case: the title follows the name on blur, and an empty name brings back Nuova case", async () => {
     const user = userEvent.setup();
     inFrame(newStep());
-    expect(heading()).toBe("Nuova case history");
-    expect(document.title).toBe("Nuova case history · MAC Recap");
-    await user.type(field("Nome della case history"), "  Rebranding Lumen ");
+    expect(heading()).toBe("Nuova case");
+    expect(document.title).toBe("Nuova case · MAC Recap");
+    await user.type(field("Titolo della case"), "  Rebranding Lumen ");
     await user.tab();
     expect(heading()).toBe("Rebranding Lumen");
     expect(document.title).toBe("Rebranding Lumen · MAC Recap");
-    await user.clear(field("Nome della case history"));
+    await user.clear(field("Titolo della case"));
     await user.tab();
-    expect(heading()).toBe("Nuova case history");
-    expect(document.title).toBe("Nuova case history · MAC Recap");
+    expect(heading()).toBe("Nuova case");
+    expect(document.title).toBe("Nuova case · MAC Recap");
     expect(avanti().getAttribute("aria-disabled")).toBe("true");
   });
 
   it("follows the name once typing pauses, not on every key", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     inFrame(newStep());
-    fireEvent.change(field("Nome della case history"), { target: { value: "Rebranding" } });
+    fireEvent.change(field("Titolo della case"), { target: { value: "Rebranding" } });
     await wait(TITLE_DEBOUNCE_MS - 50);
-    expect(heading()).toBe("Nuova case history");
-    fireEvent.change(field("Nome della case history"), { target: { value: "Rebranding Lumen" } });
+    expect(heading()).toBe("Nuova case");
+    fireEvent.change(field("Titolo della case"), { target: { value: "Rebranding Lumen" } });
     await wait(TITLE_DEBOUNCE_MS - 50);
-    expect(heading()).toBe("Nuova case history");
+    expect(heading()).toBe("Nuova case");
     await wait(60);
     expect(heading()).toBe("Rebranding Lumen");
   });
@@ -973,8 +973,8 @@ describe("CaseDetailsStep, the live title (Story 2.18)", () => {
     inFrame(existingStep(), { id: ID, code: "LUM-2026-01", name: "Rebrand", status: "draft" });
     expect(heading()).toBe("Rebrand");
     expect(document.title).toBe("Rebrand · MAC Recap");
-    await user.clear(field("Nome della case history"));
-    await user.type(field("Nome della case history"), "Rebrand 2");
+    await user.clear(field("Titolo della case"));
+    await user.type(field("Titolo della case"), "Rebrand 2");
     await user.tab();
     expect(heading()).toBe("Rebrand 2");
     // The top bar's case name follows too.
@@ -984,7 +984,7 @@ describe("CaseDetailsStep, the live title (Story 2.18)", () => {
 
   it("gives the tab title back when the step goes away", () => {
     const { unmount } = inFrame(newStep());
-    expect(document.title).toBe("Nuova case history · MAC Recap");
+    expect(document.title).toBe("Nuova case · MAC Recap");
     unmount();
     expect(document.title).toBe("MAC Recap");
   });

@@ -119,7 +119,7 @@ afterEach(() => {
 describe("ClientDetailsStep fields", () => {
   it("shows Nome, Settore pills, Descrizione, Logo and the three texts in order, all empty, with no code field", () => {
     renderStep();
-    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("I dati del cliente");
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Presentaci il cliente");
     const group = screen.getByRole("group", { name: "Settore" });
     expect(within(group).getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual([
       ["Interior design", "false"],
@@ -129,7 +129,7 @@ describe("ClientDetailsStep fields", () => {
     ]);
     expect(screen.getAllByRole("textbox").map((t) => t.getAttribute("name"))).toEqual(["name", "description", "context", "solution", "results"]);
     expect(field("Contesto").getAttribute("placeholder")).not.toBe("");
-    expect(screen.getByRole("button", { name: "Scegli il logo" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Carica il logo" })).toBeTruthy();
     expect(screen.queryByLabelText(/codice/i)).toBeNull();
     expect(screen.queryByText(/Il codice/)).toBeNull();
     expect(describedText(field("Descrizione"))).toContain("0/400");
@@ -158,7 +158,7 @@ describe("ClientDetailsStep fields", () => {
     const user = setup();
     renderStep();
     expect(next().getAttribute("aria-disabled")).toBe("true");
-    expect(describedText(next())).toBe("Per continuare compila: Nome, Settore, Descrizione, Logo, Contesto, Soluzione, Risultati.");
+    expect(describedText(next())).toBe("Per andare avanti manca: Nome, Settore, Descrizione, Logo, Contesto, Soluzione, Risultati.");
     await user.click(next());
     expect(createClient).not.toHaveBeenCalled();
     await fillAll(user);
@@ -167,7 +167,7 @@ describe("ClientDetailsStep fields", () => {
     // Unselecting the only pills empties Settore again.
     await user.click(pill("Lusso"));
     await user.click(pill("Energia"));
-    expect(describedText(next())).toBe("Per continuare compila: Settore.");
+    expect(describedText(next())).toBe("Per andare avanti manca: Settore.");
   });
 
   it("toggles pills as a multiselect", async () => {
@@ -189,7 +189,7 @@ describe("ClientDetailsStep fields", () => {
     await user.click(next());
     expect(createClient).not.toHaveBeenCalled();
     expect(field("Descrizione").getAttribute("aria-invalid")).toBe("true");
-    expect(describedText(field("Descrizione"))).toContain("Massimo 400 caratteri.");
+    expect(describedText(field("Descrizione"))).toContain("Al massimo 400 caratteri.");
     expect(document.activeElement).toBe(field("Descrizione"));
   });
 
@@ -198,7 +198,7 @@ describe("ClientDetailsStep fields", () => {
     renderStep();
     await fillAll(user);
     fireEvent.change(field("Risultati"), { target: { value: "x".repeat(5001) } });
-    expect(describedText(field("Risultati"))).toBe("Massimo 5000 caratteri.");
+    expect(describedText(field("Risultati"))).toBe("Al massimo 5000 caratteri.");
     await user.click(next());
     expect(createClient).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(field("Risultati"));
@@ -241,7 +241,7 @@ describe("ClientDetailsStep on a new client", () => {
     await fillAll(user);
     await user.click(next());
     await waitFor(() => expect(field("Nome").getAttribute("aria-invalid")).toBe("true"));
-    expect(describedText(field("Nome"))).toBe("Esiste già un cliente con questo nome.");
+    expect(describedText(field("Nome"))).toBe("C’è già un cliente con questo nome.");
     expect(requestClientLogoUpload).not.toHaveBeenCalled();
     expect(saveClientBriefField).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
@@ -253,11 +253,11 @@ describe("ClientDetailsStep on a new client", () => {
     renderStep();
     await fillAll(user);
     await user.click(next());
-    await waitFor(() => expect(screen.getByText(/Non è stato possibile caricare il logo/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Il logo non è stato caricato/)).toBeTruthy());
     expect(push).not.toHaveBeenCalled();
     expect(saveClientBriefField).not.toHaveBeenCalled();
     // The client exists now: the code note shows and the URL names it.
-    expect(screen.getByText(/Il codice LUM non cambia/)).toBeTruthy();
+    expect(screen.getByText(/Il codice LUM resta lo stesso/)).toBeTruthy();
     await user.click(next());
     await waitFor(() => expect(push).toHaveBeenCalledWith(STEP_2));
     expect(createClient).toHaveBeenCalledOnce();
@@ -270,7 +270,7 @@ describe("ClientDetailsStep on a new client", () => {
     renderStep();
     await fillAll(user);
     await user.click(next());
-    await waitFor(() => expect(screen.getByText(/Non è stato possibile caricare il logo/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Il logo non è stato caricato/)).toBeTruthy());
     await user.click(next());
     await waitFor(() => expect(push).toHaveBeenCalledWith(STEP_2));
     expect(requestClientLogoUpload).toHaveBeenCalledOnce();
@@ -288,7 +288,7 @@ describe("ClientDetailsStep on a new client", () => {
     await fillAll(user);
     await user.click(next());
     await waitFor(() => expect(document.activeElement).toBe(field("Soluzione")));
-    expect(describedText(field("Soluzione"))).toBe("Non salvato. Riprova modificando il testo.");
+    expect(describedText(field("Soluzione"))).toBe("Non salvato. Modifica il testo per riprovare.");
     expect(push).not.toHaveBeenCalled();
     expect(createClient).toHaveBeenCalledOnce();
   });
@@ -299,7 +299,7 @@ describe("ClientDetailsStep on a new client", () => {
     renderStep();
     await fillAll(user);
     await user.click(next());
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Non è stato possibile salvare. Riprova."));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Non siamo riusciti a salvare. Riprova."));
   });
 });
 
@@ -307,13 +307,13 @@ describe("ClientDetailsStep on an existing client", () => {
   it("prefills every field, states the code stays, and goes to step 2 without saving when nothing changed", async () => {
     const user = setup();
     renderStep(EXISTING);
-    expect(screen.getByText("Il codice LUM non cambia. Le modifiche si vedono in tutte le sue case history.")).toBeTruthy();
+    expect(screen.getByText("Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case.")).toBeTruthy();
     expect(field("Nome").value).toBe("Lumen Srl");
     expect(pill("Energia").getAttribute("aria-pressed")).toBe("true");
     expect(pill("Interior design").getAttribute("aria-pressed")).toBe("false");
     expect(field("Contesto").value).toBe("Contesto.");
     expect(screen.getByRole("img").getAttribute("src")).toBe("https://x/old.png?sig");
-    expect(screen.getByRole("button", { name: "Sostituisci il logo" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cambia logo" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Rimuovi" })).toBeNull();
     await user.click(next());
     await waitFor(() => expect(push).toHaveBeenCalledWith(STEP_2));
@@ -353,7 +353,7 @@ describe("ClientDetailsStep on an existing client", () => {
     const user = setup();
     renderStep(LEGACY);
     expect(field("Descrizione").value).toBe("Brand.");
-    expect(describedText(next())).toBe("Per continuare compila: Settore, Logo, Contesto, Soluzione, Risultati.");
+    expect(describedText(next())).toBe("Per andare avanti manca: Settore, Logo, Contesto, Soluzione, Risultati.");
     await user.click(pill("Interior design"));
     await user.upload(logoInput(), png());
     await waitFor(() => expect(screen.getByRole("img")).toBeTruthy());
@@ -380,7 +380,7 @@ describe("ClientDetailsStep on an existing client", () => {
     );
     renderStep(LEGACY);
     await user.upload(logoInput(), png());
-    await waitFor(() => expect(screen.getByText("Il logo deve misurare almeno 400 px sul lato corto.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Il logo è troppo piccolo: serve almeno 400 px sul lato corto.")).toBeTruthy());
     expect(requestClientLogoUpload).not.toHaveBeenCalled();
     expect(describedText(next())).toContain("Logo");
   });
@@ -395,7 +395,7 @@ function deferred<T>() {
 }
 
 const file = (name: string, size: number, type: string) => new File([new Uint8Array(size)], name, { type });
-const chooseButton = () => screen.getByRole("button", { name: /il logo$/ });
+const chooseButton = () => screen.getByRole("button", { name: /^(Carica il logo|Cambia logo)$/ });
 const click = (link: HTMLElement) => {
   const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
   act(() => {
@@ -406,9 +406,9 @@ const click = (link: HTMLElement) => {
 
 describe("ClientDetailsStep logo pick", () => {
   it.each([
-    ["an unsupported type", () => file("logo.gif", 2048, "image/gif"), "Formato non supportato. Usa un file PNG, JPEG, WebP o SVG."],
+    ["an unsupported type", () => file("logo.gif", 2048, "image/gif"), "Questo formato non va. Usa PNG, JPEG, WebP o SVG."],
     ["an empty file", () => file("logo.png", 0, "image/png"), "Il file è vuoto."],
-    ["a file over 5 MB", () => file("logo.png", 5 * 1024 * 1024 + 1, "image/png"), "Il logo supera 5 MB."],
+    ["a file over 5 MB", () => file("logo.png", 5 * 1024 * 1024 + 1, "image/png"), "Il logo supera i 5 MB."],
   ])("refuses %s with its message and uploads nothing", async (_label, make, message) => {
     const user = setup();
     renderStep(LEGACY);
@@ -504,7 +504,7 @@ describe("ClientDetailsStep SVG logo", () => {
     const user = setup();
     renderStep(LEGACY);
     await user.upload(logoInput(), svg(text));
-    await waitFor(() => expect(describedText(chooseButton())).toContain("Il file SVG non è sicuro: contiene script o collegamenti esterni."));
+    await waitFor(() => expect(describedText(chooseButton())).toContain("Questo SVG contiene script o collegamenti esterni, quindi non possiamo usarlo."));
     expect(screen.queryByRole("img")).toBeNull();
     expect(requestClientLogoUpload).not.toHaveBeenCalled();
   });
@@ -517,7 +517,7 @@ describe("ClientDetailsStep SVG logo", () => {
     const user = setup();
     renderStep(LEGACY);
     await user.upload(logoInput(), make());
-    await waitFor(() => expect(describedText(chooseButton())).toContain("Non è stato possibile leggere l'immagine. Scegli un altro file."));
+    await waitFor(() => expect(describedText(chooseButton())).toContain("Non riusciamo a leggere l’immagine. Prova con un altro file."));
     expect(describedText(chooseButton())).not.toContain("non è sicuro");
     expect(requestClientLogoUpload).not.toHaveBeenCalled();
   });
@@ -540,8 +540,8 @@ describe("ClientDetailsStep SVG logo", () => {
   });
 
   it.each([
-    ["the unsafe message for reason unsafe_svg", { reason: "unsafe_svg" as const }, "Il file SVG non è sicuro: contiene script o collegamenti esterni."],
-    ["the unreadable message for any other refusal", {}, "Non è stato possibile leggere l'immagine. Scegli un altro file."],
+    ["the unsafe message for reason unsafe_svg", { reason: "unsafe_svg" as const }, "Questo SVG contiene script o collegamenti esterni, quindi non possiamo usarlo."],
+    ["the unreadable message for any other refusal", {}, "Non riusciamo a leggere l’immagine. Prova con un altro file."],
   ])("shows %s when confirm refuses an SVG", async (_label, extra, message) => {
     const user = setup();
     confirmClientLogoUpload.mockResolvedValue({ ok: false, status: 400, error: { code: "CLIENT_LOGO_INVALID", message: "m", ...extra } });
@@ -562,7 +562,7 @@ describe("ClientDetailsStep SVG logo", () => {
     vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 1200, height: 399, close: () => undefined })));
     renderStep(LEGACY);
     await user.upload(logoInput(), png());
-    await waitFor(() => expect(describedText(chooseButton())).toContain("Il logo deve misurare almeno 400 px sul lato corto."));
+    await waitFor(() => expect(describedText(chooseButton())).toContain("Il logo è troppo piccolo: serve almeno 400 px sul lato corto."));
     expect(screen.queryByRole("img")).toBeNull();
   });
 });
@@ -586,7 +586,7 @@ describe("ClientDetailsStep Avanti guard and logo failures", () => {
     renderStep();
     await fillAll(user);
     await user.click(next());
-    await waitFor(() => expect(describedText(chooseButton())).toContain("Non è stato possibile leggere l'immagine. Scegli un altro file."));
+    await waitFor(() => expect(describedText(chooseButton())).toContain("Non riusciamo a leggere l’immagine. Prova con un altro file."));
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -596,7 +596,7 @@ describe("ClientDetailsStep Avanti guard and logo failures", () => {
     renderStep();
     await fillAll(user);
     await user.click(next());
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Non è stato possibile salvare. Riprova."));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Non siamo riusciti a salvare. Riprova."));
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -606,7 +606,7 @@ describe("ClientDetailsStep Avanti guard and logo failures", () => {
     renderStep();
     await fillAll(user);
     await user.click(next());
-    await waitFor(() => expect(describedText(chooseButton())).toContain("Non è stato possibile leggere l'immagine. Scegli un altro file."));
+    await waitFor(() => expect(describedText(chooseButton())).toContain("Non riusciamo a leggere l’immagine. Prova con un altro file."));
     expect(push).not.toHaveBeenCalled();
   });
 });
@@ -677,7 +677,7 @@ describe("ClientDetailsStep autosave gate and links", () => {
     await user.upload(logoInput(), png());
     await waitFor(() => expect(screen.getByRole("img").getAttribute("src")).toBe("blob:preview"));
     expect(click(screen.getByRole("link", { name: "Indietro" })).defaultPrevented).toBe(true);
-    await waitFor(() => expect(describedText(field("Nome"))).toBe("Esiste già un cliente con questo nome."));
+    await waitFor(() => expect(describedText(field("Nome"))).toBe("C’è già un cliente con questo nome."));
     expect(requestClientLogoUpload).toHaveBeenCalledOnce();
     expect(push).not.toHaveBeenCalled();
   });

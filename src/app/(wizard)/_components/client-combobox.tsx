@@ -216,7 +216,7 @@ export function ClientCombobox({ id, clients, value, onChange, invalid, describe
         hidden={!expanded}
         // A press on the list (its scrollbar too) keeps focus on the input, so the list stays open.
         onMouseDown={(event) => event.preventDefault()}
-        className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-md border border-border-strong bg-surface-raised py-1 shadow-lg"
+        className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-64 origin-top overflow-auto rounded-lg bg-surface-raised p-1 shadow-popover motion-safe:animate-[popover-in_160ms_var(--ease-out)]"
       >
         {options.map((client, index) => (
           <li
@@ -230,8 +230,8 @@ export function ClientCombobox({ id, clients, value, onChange, invalid, describe
             onClick={() => pick(client)}
             onMouseMove={() => index !== active && setActive(index)}
             className={cn(
-              "cursor-pointer px-3 py-2 font-body text-sm text-foreground",
-              "aria-selected:text-info data-active:bg-accent/20 data-active:text-foreground-strong",
+              "cursor-pointer rounded-md px-3 py-2 font-body text-sm text-foreground",
+              "aria-selected:font-medium aria-selected:text-info data-active:bg-surface-hover data-active:text-foreground-strong",
             )}
           >
             {clientLabel(client)}

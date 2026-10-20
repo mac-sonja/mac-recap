@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { StatusBadge } from "@/app/_components/status-badge";
@@ -64,14 +64,18 @@ export function WizardFrame({
   return (
     <WizardTitleProvider>
       <div className="flex h-dvh flex-col bg-surface text-foreground">
-        <header className="flex h-15 shrink-0 items-center gap-4 border-b px-8">
-          <Link href={back.href} aria-label={back.label} className="-m-1 rounded-sm p-1 text-foreground hover:text-foreground-strong">
-            <ArrowLeft aria-hidden="true" className="size-[18px]" />
+        <header className="flex h-15 shrink-0 items-center gap-3 border-b border-border bg-surface-sidebar px-6">
+          <Link
+            href={back.href}
+            aria-label={back.label}
+            className="grid size-8 place-items-center rounded-full text-foreground transition-[background-color,transform] duration-150 hover:bg-surface-hover active:scale-[0.94]"
+          >
+            <ChevronLeft aria-hidden="true" className="size-[18px]" />
           </Link>
           {header}
           {header === undefined && caseStudy !== null && (
             <>
-              <span className="min-w-0 truncate font-body text-sm text-foreground">
+              <span className="min-w-0 truncate font-label text-sm font-medium text-foreground">
                 <WizardTitleText title={caseStudy.name} fallback={eyebrow} />
               </span>
               <span className="shrink-0 font-mono text-xs text-foreground-muted">
@@ -91,8 +95,8 @@ export function WizardFrame({
         */}
         <main className="relative flex flex-1 overflow-auto scroll-pb-28 px-6 pt-10 pb-10 lg:pb-0">
           <div className="m-auto w-full max-w-[820px]">
-            <p className="mb-2 font-label text-xs text-foreground-muted">{eyebrow}</p>
-            <h1 className="mb-8 break-words font-display text-[2.5rem] leading-tight font-medium tracking-tight text-foreground-strong">
+            <p className="mb-2 font-label text-[13px] font-medium text-foreground-muted">{eyebrow}</p>
+            <h1 className="mb-8 break-words font-display text-[2.5rem] leading-[1.1] font-semibold tracking-[-0.03em] text-foreground-strong">
               <WizardTitleText title={title ?? caseStudy?.name ?? eyebrow} fallback={eyebrow} />
             </h1>
             <p className="max-w-prose font-body text-base text-foreground lg:hidden">{it.caseStudies.narrowScreen}</p>
@@ -115,7 +119,7 @@ export function WizardFrame({
  * the viewport's bottom edge: nothing shows below the footer, and no filler is needed.
  */
 export const WIZARD_FOOTER =
-  "sticky bottom-0 z-10 mt-8 grid grid-cols-[1fr_auto_1fr] items-center border-t bg-surface pt-5 pb-6";
+  "sticky bottom-0 z-10 mt-8 grid grid-cols-[1fr_auto_1fr] items-center border-t border-border bg-surface/85 pt-5 pb-6 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/75";
 
 /**
  * The wizard footer under a divider: an optional left slot, the step dots in the

@@ -85,22 +85,22 @@ export function DropZone({ accept, maxFiles, maxFileMegabytes, compact, disabled
         }}
         onDrop={onDrop}
         className={cn(
-          "cursor-pointer rounded-lg border border-dashed border-border-strong bg-surface-raised text-center font-body text-sm text-foreground",
+          "cursor-pointer rounded-xl border-[1.5px] border-dashed border-border-strong bg-surface-raised text-center font-body text-[15px] text-foreground transition-[border-color,background-color] duration-200 ease-out hover:border-foreground-muted/60",
           compact ? "p-6" : "px-6 py-12",
-          over && "border-accent",
+          over && "border-accent bg-accent/5",
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
         {!compact && (
           <div
             aria-hidden="true"
-            className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-surface-control text-foreground"
+            className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-primary text-primary-foreground"
           >
             <ArrowUp className="size-5" />
           </div>
         )}
         <p>
-          {copy.lead} <span className="text-primary underline underline-offset-[3px]">{copy.browse}</span>
+          {copy.lead} <span className="font-medium text-foreground-strong underline decoration-primary decoration-2 underline-offset-[4px]">{copy.browse}</span>
         </p>
         <div id={hintId}>
           <p className="mt-1.5 font-label text-xs text-foreground-muted">
@@ -111,7 +111,7 @@ export function DropZone({ accept, maxFiles, maxFileMegabytes, compact, disabled
               {TYPES.map((type) => (
                 <li
                   key={type}
-                  className="rounded-sm border border-border-strong px-2.5 py-1 font-mono text-[11px] text-foreground-muted"
+                  className="rounded-full bg-surface-control px-2.5 py-1 font-mono text-[11px] text-foreground-muted"
                 >
                   {type}
                 </li>

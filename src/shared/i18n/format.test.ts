@@ -3,10 +3,14 @@ import { currentYear, formatBytes, formatDateTime } from "./format";
 
 describe("formatDateTime", () => {
   it.each([
-    ["summer time (UTC+2)", "2026-10-13T07:05:00.123456+00:00", "13/10/2026, 09:05"],
-    ["winter time, crossing midnight (UTC+1)", "2026-01-13T23:30:00+00:00", "14/01/2026, 00:30"],
+    ["summer time (UTC+2)", "2026-10-13T07:05:00.123456+00:00", "13 ott, 09:05"],
+    ["winter time, crossing midnight (UTC+1)", "2026-01-13T23:30:00+00:00", "14 gen, 00:30"],
   ])("shows %s in Europe/Rome", (_label, iso, expected) => {
-    expect(formatDateTime(iso)).toBe(expected);
+    expect(formatDateTime(iso, new Date("2026-10-20T10:00:00Z"))).toBe(expected);
+  });
+
+  it("adds the year outside the current one", () => {
+    expect(formatDateTime("2025-10-02T14:20:00Z", new Date("2026-10-20T10:00:00Z"))).toBe("2 ott 2025, 16:20");
   });
 });
 

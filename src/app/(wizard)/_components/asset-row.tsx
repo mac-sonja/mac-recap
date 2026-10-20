@@ -81,7 +81,7 @@ export function AssetRow({
   return (
     <li
       data-row-state={row.state === "listed" ? "listed" : uploading ? "uploading" : "rejected"}
-      className="flex items-center gap-3.5 border-b bg-surface-raised px-4 py-3 last:border-b-0"
+      className="flex items-center gap-3.5 border-b border-border bg-surface-raised px-4 py-3 last:border-b-0"
     >
       <div className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-sm bg-surface-control text-foreground-muted">
         {thumbnail !== null ? (
@@ -119,7 +119,7 @@ export function AssetRow({
           aria-describedby={nameId}
           onClick={() => onToggleFavourite(row)}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border border-border-strong px-2.5 py-1 font-label text-xs text-foreground-muted",
+            "inline-flex items-center gap-1.5 rounded-full border border-border-strong px-2.5 py-1 font-label text-xs text-foreground-muted transition-colors duration-150 hover:text-foreground active:scale-[0.97]",
             "aria-pressed:border-accent/40 aria-pressed:bg-accent/10 aria-pressed:text-info",
           )}
         >
@@ -134,7 +134,7 @@ export function AssetRow({
         type="button"
         aria-label={fill(copy.list.remove, { name })}
         onClick={() => onRemove(row)}
-        className="grid size-7 shrink-0 place-items-center rounded-sm text-foreground-muted hover:text-foreground"
+        className="grid size-8 shrink-0 place-items-center rounded-full text-foreground-muted transition-colors duration-150 hover:bg-surface-hover hover:text-danger"
       >
         <Trash2 aria-hidden="true" className="size-4" />
       </button>

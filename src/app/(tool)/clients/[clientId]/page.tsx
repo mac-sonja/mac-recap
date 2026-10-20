@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PRIMARY_ACTION } from "@/app/_components/button-styles";
@@ -65,22 +65,24 @@ export default async function ClientPage({ params }: ClientPageProps) {
   const newHref = newCaseForClientHref(client.id);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <Link
         href="/clients"
-        className="inline-flex w-fit items-center gap-1 font-label text-sm text-foreground-muted hover:text-foreground"
+        className="-ml-1 inline-flex w-fit items-center gap-0.5 rounded-sm font-label text-sm text-foreground-muted transition-colors hover:text-foreground"
       >
-        <ArrowLeft aria-hidden="true" className="size-4" />
+        <ChevronLeft aria-hidden="true" className="size-4" />
         {it.clients.detail.back}
       </Link>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-6">
+        <div className="flex min-w-0 items-start gap-5">
           {client.logoUrl === null ? null : (
-            <LogoTile src={client.logoUrl} alt={fill(it.clients.detail.logoAlt, { name: client.name })} className="size-24" />
+            <LogoTile src={client.logoUrl} alt={fill(it.clients.detail.logoAlt, { name: client.name })} className="size-20" />
           )}
-          <div className="flex min-w-0 flex-col gap-1">
-            <h1 className="font-heading text-2xl font-medium text-foreground">{client.name}</h1>
-            <p className="font-mono text-sm text-foreground-muted">
+          <div className="flex min-w-0 flex-col gap-2">
+            <h1 className="font-heading text-[1.75rem] leading-tight font-semibold tracking-[-0.02em] text-foreground-strong">
+              {client.name}
+            </h1>
+            <p className="font-mono text-xs text-foreground-muted">
               <span className="sr-only">{it.clients.detail.code} </span>
               {client.code}
             </p>
@@ -88,25 +90,30 @@ export default async function ClientPage({ params }: ClientPageProps) {
               <IndustryPills options={caseStudy.CLIENT_INDUSTRIES} selected={client.industries} label={it.clients.detail.industries} />
             )}
             {client.description === null ? null : (
-              <p className="max-w-prose whitespace-pre-line font-body text-sm text-foreground-muted">{client.description}</p>
+              <p className="max-w-prose whitespace-pre-line font-body text-[15px] leading-relaxed text-foreground-muted">{client.description}</p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {can(actor, "manage clients") && <EditClientButton clientId={client.id} />}
           {canCreate && (
             <Link href={newHref} className={PRIMARY_ACTION}>
-              <Plus aria-hidden="true" className="size-4" />
-              {it.shell.nav.newCaseStudy}
+              {it.clients.detail.newCase}
             </Link>
           )}
         </div>
       </div>
       <section className="flex flex-col gap-4" aria-labelledby="client-cases-heading">
-        <h2 id="client-cases-heading" className="font-heading text-lg font-medium text-foreground">
+        <h2 id="client-cases-heading" className="font-heading text-lg font-semibold tracking-[-0.01em] text-foreground-strong">
           {it.clients.detail.casesHeading}
         </h2>
-        <CaseStudiesTable rows={rows} canCreate={canCreate} emptyMessage={it.clients.detail.noCases} newHref={newHref} />
+        <CaseStudiesTable
+          rows={rows}
+          canCreate={canCreate}
+          emptyMessage={it.clients.detail.noCases}
+          emptyAction={it.clients.detail.newCase}
+          newHref={newHref}
+        />
       </section>
     </div>
   );

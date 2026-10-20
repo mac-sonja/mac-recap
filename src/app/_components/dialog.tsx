@@ -103,13 +103,13 @@ export function Dialog({ open, onClose, title, description, children, actions }:
       tabIndex={-1}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      className="m-auto w-full max-w-md rounded-lg border border-border bg-surface-raised p-6 text-foreground backdrop:bg-surface/70"
+      className="m-auto w-full max-w-md rounded-xl bg-surface-raised p-6 text-foreground shadow-popover backdrop:bg-scrim/40 backdrop:backdrop-blur-[2px] open:motion-safe:animate-dialog-in"
     >
-      <h2 id={titleId} className="font-heading text-lg text-foreground">
+      <h2 id={titleId} className="font-heading text-lg font-semibold tracking-[-0.01em] text-foreground-strong">
         {title}
       </h2>
       {description ? (
-        <p id={descriptionId} className="mt-2 font-body text-sm text-foreground-muted">
+        <p id={descriptionId} className="mt-2 font-body text-sm leading-relaxed text-foreground-muted">
           {description}
         </p>
       ) : null}

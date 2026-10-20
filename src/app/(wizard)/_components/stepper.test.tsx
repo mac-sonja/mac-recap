@@ -19,7 +19,8 @@ describe("Stepper", () => {
     ]);
     expect(items.some(isLink)).toBe(false);
     expect(items[0][2]).toBe(' aria-current="step"');
-    expect(items[0][3]).toContain("bg-surface-selected");
+    expect(items[0][3]).toContain("bg-surface-raised");
+    expect(items[0][3]).toContain("shadow-control");
   });
 
   it("marks the current step selected and earlier steps done with a check", () => {
@@ -30,7 +31,8 @@ describe("Stepper", () => {
     expect(first[4]).toContain("<svg");
     expect(first[4]).toContain('<span class="sr-only">, completato</span>');
     expect(second[2]).toBe(' aria-current="step"');
-    expect(second[3]).toContain("bg-surface-selected");
+    expect(second[3]).toContain("bg-surface-raised");
+    expect(second[3]).toContain("shadow-control");
     expect(second[4]).toContain('<span aria-hidden="true" class="font-mono text-xs">2</span>');
     expect(third[3]).toContain("text-foreground-muted");
     expect(third[3]).not.toMatch(/\btext-foreground\b(?!-)/);

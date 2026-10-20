@@ -6,31 +6,22 @@ import { StatusBadge } from "./status-badge";
 describe("StatusBadge", () => {
   it.each([
     ["draft", "Bozza", "status-draft"],
-    ["generating", "In elaborazione", "status-generating"],
-    ["in_review", "Da approvare", "status-review"],
-    ["approved", "Approvato", "status-approved"],
-  ] as const)("%s shows %s tinted from the %s token", (status, label, token) => {
+    ["generating", "In creazione", "status-generating"],
+    ["in_review", "Da rivedere", "status-review"],
+    ["approved", "Approvata", "status-approved"],
+  ] as const)("%s shows %s tinted from the %s tokens", (status, label, token) => {
     const html = renderToStaticMarkup(<StatusBadge status={status} />);
     expect(html).toContain(`>${label}</span>`);
-    expect(html).toMatch(new RegExp(`bg-${token}/\\d+`));
-    expect(html).toMatch(new RegExp(`border-${token}/\\d+`));
+    expect(html).toContain(`bg-${token}-tint`);
+    expect(html).toContain(`text-${token}-foreground`);
+    expect(html).toContain(`before:bg-${token}`);
   });
 
-  it("uses info text for Da approvare and the status hue otherwise", () => {
-    expect(renderToStaticMarkup(<StatusBadge status="in_review" />)).toContain("text-info");
-    expect(renderToStaticMarkup(<StatusBadge status="approved" />)).toContain("text-status-approved");
+  it("keeps the badge text size next to the status colour", () => {
+    expect(renderToStaticMarkup(<StatusBadge status="draft" />)).toContain("text-badge");
   });
 
-  it.each([
-    ["draft", "bg-status-draft/6 border-status-draft/22 text-status-draft"],
-    ["generating", "bg-status-generating/6 border-status-generating/22 text-status-generating"],
-    ["in_review", "bg-status-review/16 border-status-review/40 text-info"],
-    ["approved", "bg-status-approved/10 border-status-approved/28 text-status-approved"],
-  ] as const)("%s uses the DESIGN.md tint %s", (status, tone) => {
-    expect(renderToStaticMarkup(<StatusBadge status={status} />)).toContain(tone);
-  });
-
-  it("is a single pill with its label and no leading dot", () => {
+  it("is a single pill with its label; the dot is a pseudo-element", () => {
     expect(renderToStaticMarkup(<StatusBadge status="draft" />)).toMatch(/^<span [^>]*>Bozza<\/span>$/);
   });
 

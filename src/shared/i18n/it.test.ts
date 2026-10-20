@@ -3,8 +3,8 @@ import { fill, it, t } from "./it";
 
 describe("Italian dictionary", () => {
   test("resolves dot-path keys", () => {
-    expect(t("shell.nav.caseStudies")).toBe("Case history");
-    expect(t("status.in_review")).toBe("Da approvare");
+    expect(t("shell.nav.caseStudies")).toBe("Case");
+    expect(t("status.in_review")).toBe("Da rivedere");
   });
 
   test("throws on a path that is not a string", () => {
@@ -19,7 +19,7 @@ describe("Italian dictionary", () => {
 
 describe("fill", () => {
   test("inserts params into a dictionary template", () => {
-    expect(fill(t("caseStudies.noResults"), { query: "Città" })).toBe("Nessun risultato per 'Città'.");
+    expect(fill(t("caseStudies.noResults"), { query: "Città" })).toBe("Nessuna case per “Città”.");
   });
 
   test("inserts values verbatim, including replacement patterns and braces", () => {
@@ -34,17 +34,21 @@ describe("fill", () => {
 
 describe("case studies table copy", () => {
   test("has the approved strings", () => {
-    expect(Object.values(it.caseStudies.table.columns)).toEqual(["ID", "Nome", "Cliente", "Anno", "Stato", "Business line", "Aggiornato", "Link"]);
-    expect(t("caseStudies.search.label")).toBe("Cerca progetto o cliente");
-    expect(t("caseStudies.search.placeholder")).toBe("Cerca progetto o cliente…");
-    expect(t("caseStudies.filter.all")).toBe("Tutti");
-    expect(fill(t("caseStudies.noResultsStatus"), { status: "Da approvare" })).toBe("Nessuna case history in stato Da approvare.");
-    expect(fill(t("caseStudies.noResultsQueryStatus"), { query: "lum", status: "Da approvare" })).toBe("Nessun risultato per “lum” tra Da approvare.");
-    expect(t("caseStudies.clearSearch")).toBe("Cancella ricerca e filtri");
-    expect(t("caseStudies.empty")).toBe("Ancora nessuna case history. Inizia dal materiale di un progetto chiuso.");
-    expect(t("caseStudies.narrowScreen")).toBe("Questa pagina richiede uno schermo più grande.");
-    expect(t("caseStudies.table.caption")).toBe("Elenco delle case history");
-    expect(t("caseStudies.loading")).toBe("Caricamento…");
+    expect(Object.values(it.caseStudies.table.columns)).toEqual(["Codice", "Case", "Cliente", "Anno", "Stato", "Area", "Aggiornata", "Link"]);
+    expect(t("caseStudies.search.label")).toBe("Cerca per nome, cliente o codice");
+    expect(t("caseStudies.search.placeholder")).toBe("Nome, cliente o codice");
+    expect(t("caseStudies.filter.all")).toBe("Tutte");
+    expect(Object.values(it.caseStudies.filter.statuses)).toEqual(["Bozze", "In creazione", "Da rivedere", "Approvate"]);
+    expect(fill(t("caseStudies.noResultsStatus"), { status: "Da rivedere" })).toBe("Nessuna case in “Da rivedere”.");
+    expect(fill(t("caseStudies.noResultsQueryStatus"), { query: "lum", status: "Da rivedere" })).toBe("Nessuna case per “lum” in “Da rivedere”.");
+    expect(t("caseStudies.clearSearch")).toBe("Azzera i filtri");
+    expect(t("caseStudies.empty")).toBe(
+      "Qui raccoglierai le storie dei vostri progetti. Parti dal materiale di un lavoro appena chiuso.",
+    );
+    expect(t("caseStudies.emptyAction")).toBe("Crea la prima");
+    expect(t("caseStudies.narrowScreen")).toBe("Questa pagina dà il meglio su uno schermo più grande.");
+    expect(t("caseStudies.table.caption")).toBe("Elenco delle case");
+    expect(t("caseStudies.loading")).toBe("Un attimo…");
   });
 });
 
@@ -52,15 +56,15 @@ describe("clients copy", () => {
   test("has the approved strings", () => {
     expect(t("shell.nav.clients")).toBe("Clienti");
     expect(t("clients.heading")).toBe("Clienti");
-    expect(Object.values(it.clients.table.columns)).toEqual(["ID", "Nome", "Case history"]);
+    expect(Object.values(it.clients.table.columns)).toEqual(["Codice", "Cliente", "Case"]);
     expect(t("clients.add")).toBe("Aggiungi cliente");
-    expect(t("clients.edit")).toBe("Modifica cliente");
-    expect(t("clients.empty")).toBe("Nessun cliente. Aggiungi il primo.");
-    expect(t("clients.errors.nameTaken")).toBe("Esiste già un cliente con questo nome.");
+    expect(t("clients.edit")).toBe("Modifica");
+    expect(t("clients.empty")).toBe("Ancora nessun cliente. Aggiungi il primo e partiamo.");
+    expect(t("clients.errors.nameTaken")).toBe("C’è già un cliente con questo nome.");
     expect(Object.values(it.clients.industries)).toEqual(["Interior design", "Energia", "Risorse umane", "Lusso"]);
     expect(Object.keys(it.clients.industries)).toEqual(["interior_design", "energia", "risorse_umane", "lusso"]);
     expect(t("clients.detail.industries")).toBe("Settore");
-    expect(t("clients.detail.noCases")).toBe("Nessuna case history per questo cliente.");
+    expect(t("clients.detail.noCases")).toBe("Nessuna case per questo cliente, per ora.");
   });
 });
 
@@ -69,7 +73,7 @@ describe("client wizard copy", () => {
     expect(t("clientWizard.eyebrow")).toBe("Nuovo cliente");
     expect(Object.values(it.clientWizard.steps)).toEqual(["Dettagli", "Materiale", "Introduzione"]);
     expect(fill(t("clientWizard.editNote"), { code: "LUM" })).toBe(
-      "Il codice LUM non cambia. Le modifiche si vedono in tutte le sue case history.",
+      "Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case.",
     );
     expect(Object.values(it.clientWizard.details.labels)).toEqual([
       "Nome",
@@ -81,47 +85,47 @@ describe("client wizard copy", () => {
       "Risultati",
     ]);
     expect(Object.values(it.clientWizard.details.placeholders).every((line) => line.length > 0 && !line.includes("\n"))).toBe(true);
-    expect(t("clientWizard.material.createIntro")).toBe("Crea introduzione");
+    expect(t("clientWizard.material.createIntro")).toBe("Crea la presentazione");
     expect(t("clientWizard.material.intro")).toBe(
-      "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione.",
+      "Carica fino a 3 file, di cui almeno 2 immagini: ci servono per le pagine di presentazione.",
     );
-    expect(t("clientWizard.material.createIntroReason")).toBe("Carica almeno 2 immagini.");
-    expect(t("clientWizard.material.errors.limit")).toBe("Massimo 3 file.");
+    expect(t("clientWizard.material.createIntroReason")).toBe("Servono almeno 2 immagini.");
+    expect(t("clientWizard.material.errors.limit")).toBe("Al massimo 3 file.");
     expect(fill(t("clientWizard.material.errors.pixels"), { min: 1600, max: 8000 })).toContain("1600 px sul lato corto");
-    expect(fill(t("clientWizard.details.nextReason"), { fields: "Settore, Logo" })).toBe("Per continuare compila: Settore, Logo.");
+    expect(fill(t("clientWizard.details.nextReason"), { fields: "Settore, Logo" })).toBe("Per andare avanti manca: Settore, Logo.");
   });
 });
 
 describe("wizard copy", () => {
   test("has the approved strings", () => {
-    expect(t("wizard.eyebrow")).toBe("Nuova case history");
-    expect(t("wizard.back")).toBe("Torna alle case history");
+    expect(t("wizard.eyebrow")).toBe("Nuova case");
+    expect(t("wizard.back")).toBe("Torna alle case");
     expect(Object.values(it.wizard.steps)).toEqual(["Dettagli", "Materiale", "Genera"]);
-    expect(Object.values(it.wizard.fields)).toEqual(["Nome della case history", "Cliente", "Anno", "Business line"]);
-    expect(t("wizard.errors.businessLine")).toBe("Scegli la business line.");
-    expect(t("wizard.unsavedConfirm")).toBe("Le informazioni inserite non sono ancora salvate. Uscire comunque?");
-    expect(fill(t("wizard.nextReason"), { fields: "Nome, Business line" })).toBe("Per continuare compila: Nome, Business line.");
+    expect(Object.values(it.wizard.fields)).toEqual(["Titolo della case", "Cliente", "Anno", "Area"]);
+    expect(t("wizard.errors.businessLine")).toBe("Scegli l’area del progetto.");
+    expect(t("wizard.unsavedConfirm")).toBe("Quello che hai scritto non è ancora salvato. Vuoi uscire lo stesso?");
+    expect(fill(t("wizard.nextReason"), { fields: "Titolo della case, Area" })).toBe("Per andare avanti manca: Titolo della case, Area.");
     expect("locales" in it.wizard).toBe(false);
     expect("locale" in it.wizard.errors).toBe(false);
     expect(t("wizard.requiredMark")).toBe("*");
     expect(fill(t("wizard.tabTitle"), { title: "Rebranding Lumen", app: "MAC Recap" })).toBe("Rebranding Lumen · MAC Recap");
-    expect(fill(t("wizard.noClientMatch"), { link: t("wizard.noClientsLink") })).toBe("Nessun cliente trovato. Aggiungilo nella pagina Clienti.");
+    expect(fill(t("wizard.noClientMatch"), { link: t("wizard.noClientsLink") })).toBe("Nessun cliente con questo nome. Aggiungilo dalla pagina Clienti.");
     expect(t("wizard.next")).toBe("Avanti");
-    expect(t("wizard.errors.name")).toBe("Inserisci il nome della case history.");
-    expect(t("wizard.errors.client")).toBe("Scegli il cliente.");
+    expect(t("wizard.errors.name")).toBe("Dai un titolo alla case.");
+    expect(t("wizard.errors.client")).toBe("Scegli per quale cliente è.");
     expect(fill(t("wizard.clientOption"), { name: "Lumen Srl", code: "LUM" })).toBe("Lumen Srl (LUM)");
-    expect(fill(t("wizard.noClients"), { link: t("wizard.noClientsLink") })).toBe("Nessun cliente. Aggiungilo nella pagina Clienti.");
-    expect(t("wizard.clientPlaceholder")).toBe("Scegli un cliente");
-    expect(t("wizard.errors.clientNotFound")).toMatch(/^Questo cliente non è più disponibile\. Ricarica la pagina/);
-    expect(fill(t("wizard.errors.year"), { min: 1900, max: 2100 })).toBe("Inserisci un anno tra 1900 e 2100.");
-    expect(t("wizard.errors.generic")).toMatch(/^Non è stato possibile creare la case history\./);
-    expect(t("wizard.generatePlaceholder")).toBe("La generazione non è ancora disponibile in questa versione.");
+    expect(fill(t("wizard.noClients"), { link: t("wizard.noClientsLink") })).toBe("Non c’è ancora nessun cliente. Aggiungilo dalla pagina Clienti.");
+    expect(t("wizard.clientPlaceholder")).toBe("Cerca o scegli un cliente");
+    expect(t("wizard.errors.clientNotFound")).toMatch(/^Questo cliente non c’è più\. Ricarica la pagina/);
+    expect(fill(t("wizard.errors.year"), { min: 1900, max: 2100 })).toBe("Scrivi un anno tra il 1900 e il 2100.");
+    expect(t("wizard.errors.generic")).toMatch(/^Non siamo riusciti a creare la case\./);
+    expect(t("wizard.generatePlaceholder")).toBe("La generazione arriva nella prossima versione. Ci stiamo lavorando.");
     expect(t("wizard.stepper.goTo")).toBe("vai a");
-    expect(t("wizard.loadFailed")).toBe("Non è stato possibile aprire la case history. Riprova tra poco.");
+    expect(t("wizard.loadFailed")).toBe("Non riusciamo ad aprire questa case. Riprova tra qualche istante.");
   });
 
   test("names each missing required field", () => {
-    expect(t("wizard.errors.name")).toContain("nome");
+    expect(t("wizard.errors.name")).toContain("titolo");
     expect(t("wizard.errors.client")).toContain("cliente");
   });
 });
@@ -137,24 +141,24 @@ describe("material step copy", () => {
   const m = it.wizard.material;
 
   test("has the mockup strings", () => {
-    expect(t("wizard.material.heading")).toBe("Aggiungi il materiale del progetto");
-    expect(t("wizard.material.drop.lead")).toBe("Trascina qui i file o");
-    expect(t("wizard.material.drop.browse")).toBe("sfoglia");
-    expect(fill(t("wizard.material.drop.hint"), { max: 20, size: 50 })).toBe("Fino a 20 file, 50 MB ciascuno.");
+    expect(t("wizard.material.heading")).toBe("Porta qui il materiale del progetto");
+    expect(t("wizard.material.drop.lead")).toBe("Trascina qui i file oppure");
+    expect(t("wizard.material.drop.browse")).toBe("sceglili dal computer");
+    expect(fill(t("wizard.material.drop.hint"), { max: 20, size: 50 })).toBe("Fino a 20 file, massimo 50 MB l’uno.");
     expect(Object.values(m.drop.types)).toEqual(["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]);
     expect(t("wizard.material.list.label")).toBe("Materiale");
     expect(fill(t("wizard.material.list.count"), { n: 4, max: 20 })).toBe("4 / 20 file");
     expect(t("wizard.material.list.favourite")).toBe("Preferito");
     expect(fill(t("wizard.material.list.remove"), { name: "a.pdf" })).toBe("Rimuovi a.pdf");
-    expect(t("wizard.material.nextReason")).toBe("Aggiungi almeno un file per continuare.");
+    expect(t("wizard.material.nextReason")).toBe("Aggiungi almeno un file per andare avanti.");
   });
 
   test("has the rejection and failure lines", () => {
-    expect(fill(t("wizard.material.errors.tooLarge"), { size: 50 })).toBe("Oltre 50 MB. Non caricato.");
+    expect(fill(t("wizard.material.errors.tooLarge"), { size: 50 })).toBe("Supera i 50 MB, non l’abbiamo caricato.");
     expect(t("wizard.material.errors.type")).toBe(
-      "Questo tipo di file non è supportato. Usa immagini, video, testi o PDF.",
+      "Questo formato non lo leggiamo. Usa immagini, video, testi o PDF.",
     );
-    expect(fill(t("wizard.material.errors.limit"), { max: 20 })).toBe("Limite di 20 file raggiunto. Non caricato.");
+    expect(fill(t("wizard.material.errors.limit"), { max: 20 })).toBe("Hai raggiunto i 20 file. Questo non è stato caricato.");
     expect(t("wizard.material.errors.failed")).toBe("Caricamento non riuscito.");
     expect(t("wizard.material.errors.storage")).not.toBe("");
     expect(t("wizard.material.errors.rejected")).not.toBe("");
@@ -163,15 +167,48 @@ describe("material step copy", () => {
 
 describe("wizard details copy", () => {
   test("has the approved strings", () => {
-    expect(t("wizard.details.heading")).toBe("Racconta il progetto");
+    expect(t("wizard.details.heading")).toBe("Raccontaci il progetto");
     expect(it.wizard.details.labels).toEqual({ context: "Contesto", solution: "Soluzione", results: "Risultati" });
     expect(it.wizard.details.placeholders).toEqual({
-      context: "Di cosa aveva bisogno il cliente, e perché?",
-      solution: "Cosa avete fatto, e come?",
-      results: "Cosa è cambiato? Indica i numeri dove li hai.",
+      context: "Da dove siete partiti? Cosa serviva al cliente, e perché?",
+      solution: "Cosa avete fatto, e con quale idea?",
+      results: "Cosa è cambiato dopo? I numeri, se li hai, fanno la differenza.",
     });
     expect(fill(t("wizard.details.counter"), { n: 2 })).toBe("2 di 3 compilati");
-    expect(t("wizard.details.errors.saveFailed")).toBe("Non salvato. Riprova modificando il testo.");
-    expect(fill(t("wizard.details.errors.tooLong"), { max: 5000 })).toBe("Massimo 5000 caratteri.");
+    expect(t("wizard.details.errors.saveFailed")).toBe("Non salvato. Modifica il testo per riprovare.");
+    expect(fill(t("wizard.details.errors.tooLong"), { max: 5000 })).toBe("Al massimo 5000 caratteri.");
+  });
+});
+
+describe("voice", () => {
+  /** Every call to action people press: short, and no two the same on the shell. */
+  const actions = [
+    it.shell.nav.newCaseStudy,
+    it.caseStudies.emptyAction,
+    it.caseStudies.add,
+    it.clients.add,
+    it.clients.edit,
+    it.clients.detail.newCase,
+    it.home.start.action,
+    it.home.seeAll,
+    it.wizard.next,
+    it.clientWizard.material.createIntro,
+    it.clientWizard.delete.button,
+  ];
+
+  test("calls to action are at most three words", () => {
+    for (const label of actions) expect(label.split(/\s+/).length, label).toBeLessThanOrEqual(3);
+  });
+
+  test("calls to action never repeat", () => {
+    expect(new Set(actions).size).toBe(actions.length);
+  });
+
+  test("the Home greets by name", () => {
+    expect(fill(t("home.greeting"), { name: "Sonja" })).toBe("Ciao, Sonja");
+  });
+
+  test("names the appearance choices", () => {
+    expect([it.shell.theme.system, it.shell.theme.light, it.shell.theme.dark]).toEqual(["Automatico", "Chiaro", "Scuro"]);
   });
 });
