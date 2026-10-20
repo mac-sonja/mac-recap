@@ -63,7 +63,7 @@ export async function saveClientBriefField(input: unknown): Promise<ActionResult
 /**
  * A signed upload for a new logo: input `{ clientId, contentType, sizeBytes }`.
  * 403 `FORBIDDEN` unless the role may `manage clients`; 400 `CLIENT_LOGO_INVALID`
- * (not PNG, JPEG or WebP, or not 1 B–5 MB); 404 `CLIENT_NOT_FOUND`. Nothing is written.
+ * (not PNG, JPEG, WebP or SVG, or not 1 B–5 MB); 404 `CLIENT_NOT_FOUND`. Nothing is written.
  */
 export async function requestClientLogoUpload(input: unknown): Promise<ActionResult<PresignedClientLogoUpload>> {
   const actor = await getActor();

@@ -16,6 +16,8 @@ context:
 
 > **Amended 2026-10-19 (client wizard)** by the [Sprint Change Proposal](../planning-artifacts/sprint-change-proposal-2026-10-19.md): the sector becomes `industries` (multiselect from a fixed list: Interior design, Energia, Risorse umane, Lusso); name, industries, description and logo are all required, plus a new `client_brief` (Contesto, Soluzione, Risultati); the dialog is replaced by the client wizard (Stories 2.15, 2.16). The description limit (400), the logo rules, live client info (AD-22) and `getClientInfoForCase` stay; `getClientInfoForCase` now returns `{ clientId, name, industries, description, logoId, brief }`. The Never item "sector as … fixed list" is overridden for "fixed list"; the rework is built in Story 2.15.
 
+> **Amended 2026-10-19 (SVG logos)** by the owner ([spec-svg-client-logo](spec-svg-client-logo.md)): SVG logos are accepted (`image/svg+xml`, `.svg`, ≤5 MB) when a dependency-free safety scan passes in the browser and at confirm; they are always shown through `<img>`. The ≥400 px and ≤8000 px rules apply to PNG, JPEG and WebP only. This overrides the Never item "SVG logos", the "Logo wrong type" row's SVG case and "a new bucket or bucket-limit change" for the `material` bucket's allowed types (forward migration `20261019160000_case_study_client_logo_svg.sql`).
+
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
 
 ## Intent

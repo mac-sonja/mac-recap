@@ -328,7 +328,7 @@ const INFO = { industries: ["lusso"], description: "Brand." };
 
 /** In-memory LogoStorage: a stored object per key, as the browser's PUT left it. */
 function fakeLogoStorage() {
-  const objects = new Map<string, { stored: StoredLogo; image: LogoImage }>();
+  const objects = new Map<string, { stored: StoredLogo; image: LogoImage; bytes?: Uint8Array }>();
   const keyOf = (t: { clientId: string; logoId: string }) => `${t.clientId}/${t.logoId}`;
   const storage = {
     presignUpload: vi.fn<LogoStorage["presignUpload"]>(async (t) =>
@@ -336,6 +336,10 @@ function fakeLogoStorage() {
     ),
     presignDownload: vi.fn<LogoStorage["presignDownload"]>(async (t) => ok(`https://storage/${keyOf(t)}?sig`)),
     head: vi.fn<LogoStorage["head"]>(async (t) => ok(objects.get(keyOf(t))?.stored ?? null)),
+    read: vi.fn<LogoStorage["read"]>(async (t) => {
+      const found = objects.get(keyOf(t));
+      return ok(found === undefined ? null : (found.bytes ?? new Uint8Array(found.stored.sizeBytes)));
+    }),
     dimensions: vi.fn<LogoStorage["dimensions"]>(async (t) => ok(objects.get(keyOf(t))?.image ?? null)),
     remove: vi.fn<LogoStorage["remove"]>(async (t) => {
       objects.delete(keyOf(t));
@@ -351,7 +355,16 @@ function fakeLogoStorage() {
       stored: { sizeBytes: over.sizeBytes ?? 2048, contentType: over.contentType === undefined ? "image/png" : over.contentType },
       image: { format: over.format === undefined ? "png" : over.format, width: over.width ?? 800, height: over.height ?? 400 },
     });
-  return { storage, put, objects, keyOf };
+  /** Stores an SVG body as uploaded with the SVG content type and its real size. */
+  const putSvg = (clientId: string, logoId: string, text: string, over: { sizeBytes?: number } = {}) => {
+    const bytes = new TextEncoder().encode(text);
+    objects.set(keyOf({ clientId, logoId }), {
+      stored: { sizeBytes: over.sizeBytes ?? bytes.byteLength, contentType: "image/svg+xml" },
+      image: { format: null, width: 0, height: 0 },
+      bytes,
+    });
+  };
+  return { storage, put, putSvg, objects, keyOf };
 }
 
 /** In-memory ClientMaterialStorage: a stored object per key, as the browser's PUT left it. */
@@ -639,8 +652,15 @@ describe("requestClientLogoUpload", () => {
     expect(storage.presignUpload).toHaveBeenCalledWith({ clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/webp" });
   });
 
+  it("issues a signed PUT for an SVG logo (the scan runs at confirm)", async () => {
+    const { run, storage } = deps();
+    const result = await run(actor, { clientId: LUMEN.id, contentType: "image/svg+xml", sizeBytes: 3 * 1024 });
+    expect(result.ok).toBe(true);
+    expect(storage.presignUpload).toHaveBeenCalledWith({ clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/svg+xml" });
+  });
+
   it.each([
-    ["an SVG", { contentType: "image/svg+xml", sizeBytes: 10 }],
+    ["a 6 MB SVG", { contentType: "image/svg+xml", sizeBytes: 6 * 1024 * 1024 }],
     ["a GIF", { contentType: "image/gif", sizeBytes: 10 }],
     ["a PDF", { contentType: "application/pdf", sizeBytes: 10 }],
     ["an empty file", { contentType: "image/png", sizeBytes: 0 }],
@@ -701,11 +721,93 @@ describe("confirmClientLogoUpload", () => {
     expect(logos.size).toBe(1);
   });
 
-  it("refuses an SVG content type before reading storage", async () => {
+  it("refuses a GIF content type before reading storage", async () => {
     const { run, storage } = deps();
-    const result = await run(actor, { ...input, contentType: "image/svg+xml" });
+    const result = await run(actor, { ...input, contentType: "image/gif" });
     expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
     expect(storage.head).not.toHaveBeenCalled();
+  });
+
+  describe("an SVG logo", () => {
+    const svgInput = { ...input, contentType: "image/svg+xml" };
+    const CLEAN = '<svg xmlns="http://www.w3.org/2000/svg" width="10" viewBox="0 0 10 10"><defs><linearGradient id="g"/></defs><use href="#a"/><path id="a" d="M0 0h10v10z" fill="url(#g)"/></svg>';
+
+    it("records a clean SVG after the safety scan, with no pixel check (10 px wide)", async () => {
+      const { run, putSvg, logos, storage } = deps();
+      putSvg(LUMEN.id, LOGO_ID, CLEAN);
+      expect(await run(actor, svgInput)).toEqual(ok({ logoId: LOGO_ID }));
+      expect(logos.get(LOGO_ID)).toEqual({ id: LOGO_ID, clientId: LUMEN.id, contentType: "image/svg+xml", sizeBytes: new TextEncoder().encode(CLEAN).byteLength });
+      expect(storage.read).toHaveBeenCalledWith({ clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/svg+xml" });
+      expect(storage.dimensions).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["a script", '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'],
+      ["an event handler", '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><rect ONclick="x"/></svg>'],
+      ["an external href", '<svg xmlns="http://www.w3.org/2000/svg"><image href="https://evil.example/x.png"/></svg>'],
+      ["an obfuscated javascript:", '<svg xmlns="http://www.w3.org/2000/svg"><a href="&#106;avascript:alert(1)"/></svg>'],
+    ])("refuses an SVG with %s as CLIENT_LOGO_INVALID, reason unsafe_svg, and writes no row", async (_label, text) => {
+      const { run, putSvg, logos } = deps();
+      putSvg(LUMEN.id, LOGO_ID, text);
+      const result = await run(actor, svgInput);
+      expect(result.ok || result.error).toMatchObject({ code: "CLIENT_LOGO_INVALID", details: { reason: "unsafe_svg" } });
+      expect(logos.size).toBe(0);
+    });
+
+    it.each([
+      ["HTML", "<!doctype html><html><body>x</body></html>"],
+      ["no closing </svg>", '<svg xmlns="http://www.w3.org/2000/svg"><rect/>'],
+    ])("refuses a .svg holding %s as CLIENT_LOGO_INVALID without the unsafe reason", async (_label, text) => {
+      const { run, putSvg, logos } = deps();
+      putSvg(LUMEN.id, LOGO_ID, text);
+      const result = await run(actor, svgInput);
+      expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
+      expect(result.ok || (result.error.details as { reason?: string }).reason).toBeUndefined();
+      expect(logos.size).toBe(0);
+    });
+
+    it("refuses PNG bytes stored as an SVG (not UTF-8)", async () => {
+      const { run, objects, keyOf, logos } = deps();
+      const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      objects.set(keyOf({ clientId: LUMEN.id, logoId: LOGO_ID }), {
+        stored: { sizeBytes: bytes.byteLength, contentType: "image/svg+xml" },
+        image: { format: "png", width: 800, height: 400 },
+        bytes,
+      });
+      const result = await run(actor, svgInput);
+      expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
+      expect(result.ok || (result.error.details as { reason?: string }).reason).toBeUndefined();
+      expect(logos.size).toBe(0);
+    });
+
+    it("refuses an SVG declared but stored as another type, or a stored object over 5 MB", async () => {
+      const typed = deps();
+      typed.put(LUMEN.id, LOGO_ID, { contentType: "image/png" });
+      expect((await typed.run(actor, svgInput)).ok).toBe(false);
+      const big = deps();
+      big.putSvg(LUMEN.id, LOGO_ID, CLEAN, { sizeBytes: 6 * 1024 * 1024 });
+      const result = await big.run(actor, svgInput);
+      expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
+      expect(big.storage.read).not.toHaveBeenCalled();
+      expect(big.logos.size).toBe(0);
+    });
+
+    it("refuses an SVG whose object vanished between head and read", async () => {
+      const { run, putSvg, storage, logos } = deps();
+      putSvg(LUMEN.id, LOGO_ID, CLEAN);
+      storage.read.mockResolvedValueOnce(ok(null));
+      const result = await run(actor, svgInput);
+      expect(result.ok || result.error.code).toBe("CLIENT_LOGO_INVALID");
+      expect(logos.size).toBe(0);
+    });
+
+    it("passes a failed read through as STORAGE_FAILED", async () => {
+      const { run, putSvg, storage } = deps();
+      putSvg(LUMEN.id, LOGO_ID, CLEAN);
+      storage.read.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "down" }));
+      const result = await run(actor, svgInput);
+      expect(result.ok || result.error.code).toBe("STORAGE_FAILED");
+    });
   });
 
   it("refuses an object uploaded under another client's id", async () => {

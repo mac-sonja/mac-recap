@@ -15,8 +15,8 @@ export interface PresignedClientLogoUpload extends PresignedLogoUpload {
 
 /**
  * Issues a signed upload (PUT) for a new logo of an existing client, under
- * `clients/{clientId}/logos/{logoId}.{ext}`. The declared type (PNG, JPEG or
- * WebP) and size (1 B–5 MB) are checked first: `CLIENT_LOGO_INVALID` otherwise.
+ * `clients/{clientId}/logos/{logoId}.{ext}`. The declared type (PNG, JPEG,
+ * WebP or SVG) and size (1 B–5 MB) are checked first: `CLIENT_LOGO_INVALID` otherwise.
  * Nothing is stored: the `client_logo` row is created only by
  * `confirmClientLogoUpload`. The caller has already authorized `manage clients`.
  * Errors: `INVALID_INPUT`, `CLIENT_LOGO_INVALID`, `CLIENT_NOT_FOUND`, `STORAGE_FAILED`.

@@ -83,6 +83,7 @@ const TYPE_BY_EXTENSION: Readonly<Record<string, string>> = {
   jpeg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
+  svg: "image/svg+xml",
   mp4: "video/mp4",
   mov: "video/quicktime",
   pdf: "application/pdf",

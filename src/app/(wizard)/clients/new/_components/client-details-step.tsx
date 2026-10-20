@@ -302,6 +302,7 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
 
   function showLogoFailure(kind: LogoFailure) {
     if (kind === "fatal") setFailed(true);
+    else if (kind === "unsafe") logo.showError(it.clients.errors.logoUnsafe);
     else logo.showError(kind === "invalid" ? it.clients.errors.logoUnreadable : it.clients.errors.logoFailed);
   }
 

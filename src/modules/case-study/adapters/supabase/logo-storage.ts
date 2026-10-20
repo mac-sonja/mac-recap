@@ -4,7 +4,7 @@ import { logoKey } from "@/modules/case-study/adapters/logo-key";
 import { LOGO_MAX_BYTES } from "@/modules/case-study/domain/case-study";
 import type { LogoStorage, LogoTarget } from "@/modules/case-study/ports/logo-storage";
 import { log } from "@/shared/log";
-import { err, ok } from "@/shared/result";
+import { err, ok, type Result } from "@/shared/result";
 import { createSupabaseAdminClient } from "./admin";
 
 /**
@@ -46,6 +46,21 @@ export function createSupabaseLogoStorage(client: () => AdminClient = createSupa
     return memo.storage.from(LOGO_BUCKET);
   };
 
+  /** The object's bytes; `ok(null)` when missing, empty bytes when over `LOGO_MAX_BYTES` (never read). */
+  async function readBytes(target: LogoTarget): Promise<Result<Uint8Array | null>> {
+    try {
+      const { data, error } = await bucket().download(keyOf(target));
+      if (error) throw error;
+      // `head` has already bounded the size; this is the backstop before reading.
+      if (data.size > LOGO_MAX_BYTES) return ok(new Uint8Array(0));
+      return ok(new Uint8Array(await data.arrayBuffer()));
+    } catch (error) {
+      if (isNotFound(error)) return ok(null);
+      log.error(`logo download failed: ${errorLabel(error)}`, { clientId: target.clientId });
+      return err({ code: "STORAGE_FAILED", message: "Could not check the upload." });
+    }
+  }
+
   return {
     async presignUpload(target) {
       try {
@@ -85,21 +100,16 @@ export function createSupabaseLogoStorage(client: () => AdminClient = createSupa
       }
     },
 
+    read: (target) => readBytes(target),
+
     async dimensions(target) {
-      let bytes: Uint8Array;
-      try {
-        const { data, error } = await bucket().download(keyOf(target));
-        if (error) throw error;
-        // `head` has already bounded the size; this is the backstop before reading.
-        if (data.size > LOGO_MAX_BYTES) return ok({ format: null, width: 0, height: 0 });
-        bytes = new Uint8Array(await data.arrayBuffer());
-      } catch (error) {
-        if (isNotFound(error)) return ok(null);
-        log.error(`logo download failed: ${errorLabel(error)}`, { clientId: target.clientId });
-        return err({ code: "STORAGE_FAILED", message: "Could not check the upload." });
-      }
+      const bytes = await readBytes(target);
+      if (!bytes.ok) return bytes;
+      if (bytes.value === null) return ok(null);
+      // Over the size cap (never read): no format, so the use case refuses it.
+      if (bytes.value.byteLength === 0) return ok({ format: null, width: 0, height: 0 });
       // Not a readable PNG, JPEG or WebP: the use case rejects it as an invalid logo.
-      return ok(imageSize(bytes) ?? { format: null, width: 0, height: 0 });
+      return ok(imageSize(bytes.value) ?? { format: null, width: 0, height: 0 });
     },
 
     async remove(target) {
