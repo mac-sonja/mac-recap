@@ -32,6 +32,9 @@
   --color-info: #b2d9ef;
   --color-danger: #ff4d4f;
   --color-danger-foreground: #000000;
+  /* Destructive buttons: white label (owner, 2026-10-20) on a deeper red, so the label keeps WCAG AA contrast (5.6:1; #ff4d4f with white is 3.3:1). */
+  --color-danger-strong: #cf1322;
+  --color-danger-strong-foreground: #ffffff;
   --color-focus-ring: #cbff00;
 
   /* Client logos sit on a small white tile, so dark logos with a transparent background stay visible (owner, 2026-10-16). */

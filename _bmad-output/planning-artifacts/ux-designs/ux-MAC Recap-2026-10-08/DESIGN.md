@@ -23,6 +23,8 @@ colors:
   info: '#B2D9EF'
   danger: '#FF4D4F'
   danger-foreground: '#000000'
+  danger-strong: '#CF1322'  # destructive button fill; white label keeps AA (owner, 2026-10-20)
+  danger-strong-foreground: '#FFFFFF'
   focus-ring: '#CBFF00'
   # Lifecycle status hues (badge text + tint source). Labels per EXPERIENCE.md Option A.
   status-draft: '#F2F2F2'
@@ -83,8 +85,8 @@ components:
     foreground: '{colors.foreground}'
     radius: '{rounded.md}'
   button-danger:
-    background: '{colors.danger}'
-    foreground: '{colors.danger-foreground}'
+    background: '{colors.danger-strong}'
+    foreground: '{colors.danger-strong-foreground}'
     radius: '{rounded.md}'
   panel:
     background: '{colors.surface-raised}'
