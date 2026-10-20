@@ -26,8 +26,8 @@ Scope: the standalone MVP, Epics 2–6, keeping PRD v2 numbering (Epic 1 is team
 
 ### Functional Requirements
 
-FR1: The owner/designer creates a case study by hand, and the system gives it a unique, permanent ID (a database-generated uuid that is never changed or reused) and a readable **case history code** (client code, year, number, e.g. `LUM-2026-01`), fixed at creation. The code is what people see; the uuid is the only identifier exposed to other systems and used in URLs, and is ready for the later project-order link. Every case belongs to one client record, picked from the client list. There is no trigger at project close. (CAP-1, Stories 2.2 and 2.5)
-FR2: The owner/designer uploads material (images, videos, text documents, PDFs) to a case study. The limit is 20 files of at most 50 MB each, of an allowlisted type. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others. Any number of images and videos can be marked as favourite; the mark is optional. The owner/designer also fills in an optional details form (context, solution, results), which is the only place for typed project text, is saved, can be cited as a claim source, and never counts as material. (CAP-2, CAP-3, Stories 2.3–2.4)
+FR1: The owner/designer creates a case study by hand, and the system gives it a unique, permanent ID (a database-generated uuid that is never changed or reused) and a readable **case history code** (client code, year, number, e.g. `LUM-2026-01`), fixed at creation. The code is what people see; the uuid is the only identifier exposed to other systems and used in URLs, and is ready for the later project-order link. Every case belongs to one client record, picked from the client list. There is no trigger at project close. (CAP-1, Stories 2.2 and 2.5) Amended (owner, 2026-10-20, Story 2.17): every case also has a business line, picked from a fixed list (Branding, Social media, Video, Web design, Advertising, Eventi) on wizard step 1 **Dettagli**, together with name, client, year and language; cases created before this change have none until they are reopened.
+FR2: The owner/designer uploads material (images, videos, text documents, PDFs) to a case study. The limit is 20 files of at most 50 MB each, of an allowlisted type. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others. Any number of images and videos can be marked as favourite; the mark is optional. The owner/designer also fills in an optional details form (context, solution, results), which is the only place for typed project text, is saved, can be cited as a claim source, and never counts as material. (CAP-2, CAP-3, Stories 2.3–2.4) Amended (owner, 2026-10-20, Story 2.17): the details form is part of wizard step 1 **Dettagli**, before the material; the material is step 2.
 FR3: The system generates a graphic case study in the background by applying MAC templates to the uploaded material. The case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The narrative follows challenge, approach and result (always present, can't be removed or reordered), covers the technical and the graphic side, and uses only the uploaded material, the form answers and the client's info (description, industries and brief; SCP 2026-10-19). Every case study shows an About the client block with the client's logo, name, industries and description, as entered on the client and always current: drafts and approved case studies alike show the client's info as it is now. Template design and assets stay unchanged. Generation is refused when there is no material, even with the form filled in. Layouts are produced for every MVP export format. (CAP-4, CAP-5, Story 3.1)
 FR4: Templates adapt their layout to the number of available media items, using the template's own media-count rules (slot mapping per count). (CAP-4, Story 3.2)
 FR5: The owner/designer reviews and edits case studies through the review dashboard (every case with its status, a To review queue oldest first, delete only in Bozza) and the configurator (generated text in place, layout variant, shuffle, spacing, media replace / reorder / remove, font pairing and text scale per format). Layout, spacing and typography accept only template-defined values; media come only from this case's material; the preview matches the exported files exactly; there is no canvas-ratio control. (CAP-6, CAP-7, Stories 4.1–4.2)
@@ -94,13 +94,13 @@ From the architecture spine (AD-1 to AD-21 are binding):
 UX-DR1: Navigation shell. Left sidebar with + New case study (owner/designer), Case studies, To review with count (owner/designer), **Clients** (owner/designer), Templates (owner/designer, scope per C4), Users (admin), the **Account** menu with sign-out. *RECAP* sits by the logo. Wizard and configurator are full-screen with a back arrow and no sidebar. Dialogs stack at most one level deep.
 UX-DR2: Role-based absence. A control a role can't use is absent, not disabled. Guardrail controls are shown disabled with their reason. A direct URL to a surface the role can't use returns to the role's landing page (owner/designer: Case studies table; account/sales/social: library; admin: Users).
 UX-DR3: Status badge. Always colour plus text label, using tokens `status-draft`, `status-generating`, `status-review`, `status-approved`. Labels from the OP 8 interim (Bozza, In elaborazione, Da approvare, Approvato).
-UX-DR4: Owner/designer Case studies table. Columns ID (the case history code, monospace), Name, Client, Year, Status, Updated, Links (count, Approvato only). Search "Search name, client or code", ~250 ms debounce, case- and accent-insensitive over name, client name, client code and case code. Sorting by ID orders codes naturally (`LUM-2026-9` < `LUM-2026-10`). Status segmented filter with per-segment counts, combined with search (AND). Default sort Updated newest; header click sorts. Row click by status (Bozza → wizard at first incomplete step; In elaborazione → no-op with "Still generating" tooltip; Da approvare → configurator; Approvato → configurator plus View). Overflow menu: View, Export, Share (Approvato), Delete (Bozza, with confirm). Rows in In elaborazione update without reload. Empty and no-results states with their copy.
+UX-DR4: Owner/designer Case studies table. Columns ID (the case history code, monospace), Name, Client, Year, Status, Business line (sortable, empty for cases created before Story 2.17), Updated, Links (count, Approvato only). A toolbar at the top right holds the search "Cerca progetto o cliente…" (~250 ms debounce, case- and accent-insensitive over name, client name, client code, case code and business line label) and the segmented status filter Tutti · Bozza · In elaborazione · Da approvare · Approvato (single choice, default Tutti, a pill track with the selected segment filled), combined with the search (AND); the segments have no counts until Story 4.1. Sorting by ID orders codes naturally (`LUM-2026-9` < `LUM-2026-10`). Default sort Updated newest; header click sorts. Row click by status (Bozza → wizard at the first incomplete step: Dettagli without a business line, else Materiale without a file, else Genera; In elaborazione → no-op with "Still generating" tooltip; Da approvare → configurator; Approvato → configurator plus View). Overflow menu: View, Export, Share (Approvato), Delete (Bozza, with confirm). Rows in In elaborazione update without reload. Empty and no-results states with their copy (the no-results line names the search and the status). Amended (owner, 2026-10-20, Story 2.17): the Business line column, the toolbar with the new search copy, and the status filter without counts (Story 4.1 may add them).
 UX-DR5: To review queue. The table pre-filtered to Da approvare, oldest first; sidebar count; no assignment or claiming; empty copy "Nothing to review."
 UX-DR6: Library view. Card grid (cover = first slide of the 16:9 deck, name, client, year; no tags); approved only; no status filter or badge; same search; facets Client and Year as multi-select chips with active filters and Clear all; newest approved first; paginates at 24, no infinite scroll; empty copy "No approved case studies yet."; owner/designer Table / Library toggle.
-UX-DR7: Wizard step 0. Name (required) and client (required, picked from the existing clients; no free text, no adding here), year defaulting to the current year. The case is created and its code shown in the header; saved as Bozza from that moment; leaving and returning loses nothing.
-UX-DR8: Wizard step 1 Material, in the focused wizard (per `mockups/material-step.html`). Dropzone plus browse button with accepted-type chips; no pasted text; copy "Up to 20 files, 50 MB each."; per-file inline rejections ("Over 50 MB. Not uploaded." / unsupported-type copy / 21st file) that don't block others; parallel uploads with per-file progress, progress and rejections announced to screen readers; rows (thumbnail, name, size, remove, plus a **Preferito** toggle on images and videos); remove is immediate, with no confirm and no undo; **Avanti** is active from the first uploaded file, and Dettagli and Genera can't be reached with 0 files.
-UX-DR9: Wizard step 2 Details. Context, Solution, Results textareas with one-line prompts, a "{n} of 3" counter, all optional.
-UX-DR10: Wizard step 3 Generate. Summary "{n} files, {m} of 3 details filled."; Generate disabled without material, with the visible reason linked via `aria-describedby`; processing state with leave-page copy and Back to case studies; no ETA or percentage; failure banner "Generation didn't finish. Your material and details are saved." with Try again.
+UX-DR7: Wizard step 1 **Dettagli** (the wizard is 1 Dettagli · 2 Materiale · 3 Genera). In order: Nome (required); Cliente (required, picked from the existing clients; no free text, no adding here; `?clientId=` preselects it); Anno (defaults to the current year); Lingua; Business line (required, single-select pills: Branding, Social media, Video, Web design, Advertising, Eventi); Contesto, Soluzione, Risultati (optional textareas with one-line prompts). **Avanti** is inactive until name, client, year and business line are set, with the reason linked via `aria-describedby`. On a new case **Avanti** creates it (code shown in the header, saved as Bozza from that moment), saves the texts and opens step 2; leaving before that with something entered asks "Le informazioni inserite non sono ancora salvate. Uscire comunque?". On an existing draft the texts autosave and name, year, language and business line save on **Avanti**; the client is fixed once the case exists, and a year change renumbers the draft (AD-21 owner note). Amended (owner, 2026-10-20, Story 2.17): step 0 and the old Details step merge into this step, which adds the business line.
+UX-DR8: Wizard step 2 Material, in the focused wizard (per `mockups/material-step.html`). Reached once the business line is set. Dropzone plus browse button with accepted-type chips; no pasted text; copy "Fino a 20 file, 50 MB ciascuno."; per-file inline rejections (over 50 MB / unsupported type / 21st file) that don't block others; parallel uploads with per-file progress, progress and rejections announced to screen readers; rows (thumbnail, name, size, remove, plus a **Preferito** toggle on images and videos); remove is immediate, with no confirm and no undo; **Avanti** is active from the first uploaded file and opens step 3 Genera, which can't be reached with 0 files. Renumbered (owner, 2026-10-20, Story 2.17): was step 1.
+UX-DR9: The details form (Context, Solution, Results textareas with one-line prompts, a "{n} of 3" counter, all optional) is part of wizard step 1 **Dettagli** (UX-DR7). Amended (owner, 2026-10-20, Story 2.17): it was step 2.
+UX-DR10: Wizard step 3 Generate. Summary "{n} files, {m} of 3 details filled."; Generate disabled without material, with the visible reason linked via `aria-describedby`; processing state with leave-page copy and Back to case studies; no ETA or percentage; failure banner "Generation didn't finish. Your material and details are saved." with Try again. (owner, 2026-10-20, Story 2.17: still step 3; it needs the business line and at least one file.)
 UX-DR11: Draft-ready toast anywhere in the app: "{Name} is ready to review." with Open (C3).
 UX-DR12: Configurator frame. Top bar (back, name, status badge, save state, Approve or Update approved version); left Formats pane (one entry per registry format: name, ratio, pixel size, looked-at check mark); centre canvas at fit-to-pane zoom with page strip for multi-page formats; right pane Edit and Check tabs. At 1024–1279 px the panes narrow and the right pane can collapse. Below 1024 px: "The configurator needs a larger screen." Client intro and collections (SCP 2026-10-16): three modes share the frame: *case history* (as today), *client intro* (same panes, intro blocks), *client overview* (left pane lists the intro and the client's case histories; the format switch moves to the top bar). The collection configurator (UX-DR39) reuses the frame with fewer controls.
 UX-DR34: Adding material after generation. To add material to a case in Da approvare or Approvato, the owner/designer goes back to the wizard's Material step; the case keeps its status, and the new material is available to Replace media (EXPERIENCE `[ASSUMPTION]`, spine *Deferred: Regenerate*).
@@ -191,7 +191,58 @@ Epic numbering follows PRD v2 (Epic 1 is team setup, not product scope). Epics r
 The owner/designer creates a case study by hand, gets its permanent ID, uploads files, marks favourite images and videos and fills in the details form, all saved in Supabase (database and storage) inside a gated environment. Also lays the foundation later epics build on: starter scaffold, module skeleton, actor and policy seam with a dev actor, basic-auth gate, event log, app shell, design tokens and a basic Case studies table.
 **FRs covered:** FR1, FR2, CAP-12 (also FR11, client wizard and client material, Stories 2.15 and 2.16; SCP 2026-10-19)
 
-### Epic 3: Generate a graphic case study from the material (Sprint 2, due 2026-10-21)
+#### Story 2.17: Case wizard details first, business line, and table filters
+
+As an owner/designer,
+I want the case history wizard to start with all the details, business line included, and the Case history table to filter by status,
+So that a case history is created like a client, and I can find cases by status and business line.
+
+Covers: FR1 (amended), FR2 (amended), UX-DR4 (amended), UX-DR7–UX-DR10 (amended) (owner, 2026-10-20; [spec](../implementation-artifacts/spec-2-17-case-wizard-details-first-and-table-filters.md))
+Order: MVP, Sprint 2 (owner, 2026-10-20).
+
+**Acceptance Criteria:**
+
+**Given** the case wizard
+**When** it opens
+**Then** the stepper reads 1 Dettagli · 2 Materiale · 3 Genera, and step 1 shows, in order, Nome, Cliente, Anno, Lingua, Business line (single-select pills: Branding, Social media, Video, Web design, Advertising, Eventi) and Contesto, Soluzione, Risultati (optional)
+
+**Given** step 1 with name, client, year or business line missing
+**When** I look at **Avanti**
+**Then** it is inactive with the reason linked via `aria-describedby`, and a direct call without a business line (or with one outside the list) fails with `INVALID_INPUT` and writes nothing
+
+**Given** a new case with every required field set
+**When** I press **Avanti**
+**Then** the case is created with its code and business line, the texts are saved, and step 2 opens; if a text save fails, the case stays, step 1 shows the error, and a retry saves only the texts
+
+**Given** an existing draft
+**When** I edit step 1
+**Then** the texts autosave, name, year, language and business line save on **Avanti** (one `case_details_updated` event when something changed), and the client is fixed
+
+**Given** a draft `LUM-2026-03` whose year I change to 2025 while `LUM-2025-01` exists
+**When** I press **Avanti**
+**Then** it becomes `LUM-2025-02`, the 2025 counter advances, 2026's `03` is never reused, and the event records the previous year and code (AD-21 owner note: drafts renumber when their year changes, 2026-10-20); a case that is no longer a draft is refused with `STALE_STATUS` and nothing is written
+
+**Given** a new case with something entered, or a draft whose edits can't be saved (a required field missing)
+**When** I follow a link or reload before saving
+**Then** I'm asked "Le informazioni inserite non sono ancora salvate. Uscire comunque?" (the browser's own prompt on a reload); leaving discards those edits, and a draft's texts still save
+
+**Given** a Bozza row
+**When** I click it
+**Then** the wizard opens at Dettagli without a business line (cases created before this story), else Materiale without a file, else Genera
+
+**Given** the Case history table
+**When** it loads
+**Then** a top-right toolbar holds the search "Cerca progetto o cliente…" (name, client name, client code, case code and business line label, accent- and case-insensitive) and a segmented status filter (Tutti · Bozza · In elaborazione · Da approvare · Approvato, default Tutti, no counts) combined with the search (AND), and a sortable Business line column is empty for older cases
+
+**Given** a client page
+**When** I press **Nuova case history**
+**Then** step 1 opens with that client preselected
+
+**Given** CI
+**When** the `check`, `db` and `image` jobs run
+**Then** they pass, and `db.types.ts` matches the generated types
+
+## Epic 3: Generate a graphic case study from the material (Sprint 2, due 2026-10-21)
 The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
 **FRs covered:** FR3, FR4, NFR1, NFR5, NFR6, CAP-12 (also FR11, client intro draft)
 
@@ -387,6 +438,7 @@ I want to create a case study by entering its name and client,
 So that it gets a permanent ID and is saved as a draft I can fill in later.
 
 Covers: FR1, CAP-1, AR2, AR3 (create, `draft`), AR20, UX-DR7, PRD Story 2.2
+Note (owner, 2026-10-20, Story 2.17): "step 0" below is now step 1 **Dettagli**, which also asks for the business line; the case is created on its **Avanti**.
 ⚑ Interim: IR-OP8, IR-OP13 (the `case_event` log is what the tool keeps for the measures; no hands-on time)
 UX gap: narrative language (`it` | `en`) has no designed control; it is placed in this form as a select defaulting to Italiano.
 Note (amended 2026-10-15, [Sprint Change Proposal 2026-10-15](sprint-change-proposal-2026-10-15.md)): the client is picked from the client list and the header shows the case history code; Story 2.12 delivers these ACs. The migration AC's free-text `client` column is superseded by Story 2.12.
@@ -424,6 +476,7 @@ I want a table of all case studies with search,
 So that I can find a draft I started and carry on where I left off.
 
 Covers: UX-DR4 (columns, search, sort, Bozza row click, empty and no-results states, `/` shortcut), UX-DR30 (skeleton, below 1024 px), CAP-6 (list part), AR11 (list scope)
+Note (owner, 2026-10-20, Story 2.17): the table gains a Business line column and the status filter, with the search "Cerca progetto o cliente…" in a top-right toolbar (UX-DR4).
 ⚑ Interim: IR-OP8
 Note: the status filter, row actions, delete and the To review queue come in Story 4.1, when more than one status exists.
 Note (amended 2026-10-15, [Sprint Change Proposal 2026-10-15](sprint-change-proposal-2026-10-15.md)): the ID column shows the case history code and search matches the codes; Story 2.12 delivers these ACs.
@@ -470,6 +523,7 @@ I want to drop up to 20 project files into a case study,
 So that the material is stored safely with the case and ready for generation.
 
 Covers: FR2 (files), CAP-2, AR8, AR18 (soft delete, upload doesn't change status), AR20, UX-DR8 (dropzone, limits, progress, rows, remove), NFR8, PRD Stories 2.1 and 2.3
+Note (owner, 2026-10-20, Story 2.17): Material is now wizard step 2; "step 1" below reads step 2, and its **Avanti** opens step 3.
 ⚑ Interim: IR-OP12 (images are shown whole, scaled by the browser; no crop)
 
 **Acceptance Criteria:**
@@ -580,6 +634,7 @@ I want to write short answers on context, solution and results,
 So that the narrative can use what isn't in the files, and each answer can be cited when I check claims.
 
 Covers: FR2 (details form), CAP-3, AR18 (form fields as stable-key refs, never material), UX-DR8 (Avanti gate), UX-DR9, UX-DR4 (Bozza row opens first incomplete step)
+Note (owner, 2026-10-20, Story 2.17): the form moves into step 1 **Dettagli**, before the material; "step 2 (Details)" below reads step 1, and "step 1 (Material)" reads step 2.
 
 **Acceptance Criteria:**
 
@@ -662,6 +717,7 @@ I want every case history to belong to a client record and to carry a short code
 So that I can recognise and quote a case history at a glance, and clients are spelled one way.
 
 Covers: FR1 (amended), CAP-1, AR2, AR23, AR12, AR20, UX-DR4, UX-DR7 ([Sprint Change Proposal 2026-10-15](sprint-change-proposal-2026-10-15.md)). It delivers the amended ACs of Stories 2.5 and 2.6.
+Note (owner, 2026-10-20, Story 2.17): "wizard step 0" below is now step 1 **Dettagli**.
 Order: first. It has to land before 2.13 and before Epic 3.
 
 **Acceptance Criteria:**
@@ -730,6 +786,7 @@ I want a Clients page where I add and rename clients and see each client's case 
 So that the client list stays clean and I can find everything we did for one client.
 
 Covers: UX-DR1 (Clients item), UX-DR35, UX-DR30, AR11 (`list clients`, `manage clients`), AR23 ([Sprint Change Proposal 2026-10-15](sprint-change-proposal-2026-10-15.md))
+Note (owner, 2026-10-20, Story 2.17): **Nuova case history** on a client page opens case wizard step 1 **Dettagli** (was step 0) with the client preselected.
 Order: after 2.12, before Epic 3.
 
 **Acceptance Criteria:**
@@ -1336,6 +1393,7 @@ I want to filter case studies by status and see the ones waiting for review, old
 So that nothing sits waiting and I can clear out drafts I don't need.
 
 Covers: FR5 (dashboard), CAP-6, AR3 (delete only in `draft`, soft), UX-DR1 (To review entry), UX-DR4 (status filter, Delete row action), UX-DR5, UX-DR28 (Delete confirm), PRD Story 4.1
+Note (owner, 2026-10-20, Story 2.17): the segmented status filter (without counts) already ships in Story 2.17; this story adds the counts, row actions, delete and the To review queue.
 ⚑ Interim: IR-OP8
 
 **Acceptance Criteria:**

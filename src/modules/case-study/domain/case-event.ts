@@ -10,6 +10,13 @@ export const CASE_CREATED = "case_created";
  */
 export const CASE_DELETED = "case_deleted";
 
+/**
+ * The event written when a draft's name, year, language or business line change
+ * (Story 2.17), in the same transaction; `data` is `{ name, year, locale, businessLine }`, plus
+ * `{ previousYear, previousCode, code }` when a year change renumbered the draft.
+ */
+export const CASE_DETAILS_UPDATED = "case_details_updated";
+
 /** The event written with every status change, in the same transaction; `data` is `{ event, from, to }`. */
 export const TRANSITION = "transition";
 

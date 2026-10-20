@@ -8,18 +8,18 @@ const href = (step: number) => `/case-studies/new?caseId=${ID}&amp;step=${step}`
 const isLink = (segment: RegExpMatchArray) => segment[4].startsWith("<a ");
 
 describe("Stepper", () => {
-  it("lists Materiale, Dettagli, Genera with no step active at step 0", () => {
-    const html = renderToStaticMarkup(<Stepper current={0} />);
+  it("lists Dettagli, Materiale, Genera; on a new case step 1 is current and nothing is a link", () => {
+    const html = renderToStaticMarkup(<Stepper current={1} />);
     expect(html).toContain('<ol aria-label="Passaggi"');
     const items = segments(html);
     expect(items.map((m) => m[4].replace(/<[^>]+>[^<]*<\/[^>]+>/g, "").replace(/<\/?span[^>]*>/g, ""))).toEqual([
-      "Materiale",
       "Dettagli",
+      "Materiale",
       "Genera",
     ]);
     expect(items.some(isLink)).toBe(false);
-    expect(items.every((m) => m[2] === undefined)).toBe(true);
-    expect(items.every((m) => !m[3].includes("bg-surface-selected"))).toBe(true);
+    expect(items[0][2]).toBe(' aria-current="step"');
+    expect(items[0][3]).toContain("bg-surface-selected");
   });
 
   it("marks the current step selected and earlier steps done with a check", () => {
@@ -38,39 +38,51 @@ describe("Stepper", () => {
     expect([first, second, third].some(isLink)).toBe(false);
   });
 
-  it("on step 2 with files links Materiale and Genera, named with the step and its state; the current step is not a link", () => {
+  it("on step 2 with files links Dettagli and Genera, named with the step and its state; the current step is not a link", () => {
     const [first, second, third] = segments(renderToStaticMarkup(<Stepper current={2} caseId={ID} reachable />));
     expect(first[4]).toMatch(new RegExp(`^<a [^>]*href="${href(1).replace(/[?]/g, "\\?")}"`));
-    expect(first[4]).toContain('<span class="sr-only">vai a </span>Materiale<span class="sr-only">, completato</span>');
+    expect(first[4]).toContain('<span class="sr-only">vai a </span>Dettagli<span class="sr-only">, completato</span>');
     expect(isLink(second)).toBe(false);
     expect(second[2]).toBe(' aria-current="step"');
     expect(third[4]).toMatch(new RegExp(`^<a [^>]*href="${href(3).replace(/[?]/g, "\\?")}"`));
     expect(third[4]).toContain('<span class="sr-only">vai a </span>Genera');
   });
 
-  it("with 0 files on step 1 leaves Dettagli and Genera as plain segments", () => {
+  it("on step 1 with nothing reachable leaves Materiale and Genera as plain segments", () => {
     const items = segments(renderToStaticMarkup(<Stepper current={1} caseId={ID} reachable={false} />));
     expect(items.some(isLink)).toBe(false);
     expect(items[0][2]).toBe(' aria-current="step"');
   });
 
-  it("on step 1 with files links Dettagli and Genera", () => {
-    const [first, second, third] = segments(renderToStaticMarkup(<Stepper current={1} caseId={ID} reachable />));
+  it("asks a per-step reachable for each later step: Materiale yes, Genera no", () => {
+    const asked: number[] = [];
+    const reachable = (step: 1 | 2 | 3) => {
+      asked.push(step);
+      return step === 2;
+    };
+    const [first, second, third] = segments(renderToStaticMarkup(<Stepper current={1} caseId={ID} reachable={reachable} />));
     expect(isLink(first)).toBe(false);
     expect(second[4]).toContain(`href="${href(2)}"`);
-    expect(third[4]).toContain(`href="${href(3)}"`);
+    expect(isLink(third)).toBe(false);
+    expect(asked).toContain(2);
+    expect(asked).toContain(3);
   });
 
-  it("keeps done steps and Materiale links even when the material check says no files", () => {
+  it("keeps done steps and Dettagli links even when nothing later is reachable", () => {
     const [first, second] = segments(renderToStaticMarkup(<Stepper current={3} caseId={ID} reachable={false} />));
     expect(first[4]).toContain(`href="${href(1)}"`);
     expect(second[4]).toContain(`href="${href(2)}"`);
   });
+
+  it("links Dettagli from Materiale when nothing else is reachable", () => {
+    const [first, , third] = segments(renderToStaticMarkup(<Stepper current={2} caseId={ID} reachable={() => false} />));
+    expect(first[4]).toContain(`href="${href(1)}"`);
+    expect(isLink(third)).toBe(false);
+  });
 });
 
 describe("StepDots", () => {
-  it("widens only the current dot and none at step 0", () => {
-    expect(renderToStaticMarkup(<StepDots current={0} />)).not.toContain("data-active");
+  it("widens only the current dot", () => {
     const html = renderToStaticMarkup(<StepDots current={3} />);
     expect(html.match(/data-active/g)).toHaveLength(1);
     expect(html).toMatch(/data-dot="3" data-active="" class="[^"]*\bw-5\b/);

@@ -209,7 +209,7 @@ describe("MaterialStep: uploads", () => {
     expect(screen.getByText("3 / 20 file")).toBeTruthy();
     const link = avanti();
     expect(link.tagName).toBe("A");
-    expect(link.getAttribute("href")).toBe(`/case-studies/new?caseId=${CASE_ID}&step=2`);
+    expect(link.getAttribute("href")).toBe(`/case-studies/new?caseId=${CASE_ID}&step=3`);
     expect(screen.queryByText(/I preferiti sono facoltativi/)).toBeNull();
     expect(liveRegion().textContent).toContain("key.png caricato.");
     // The image's thumbnail is refreshed from the listing.

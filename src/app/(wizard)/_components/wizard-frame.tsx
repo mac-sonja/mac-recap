@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 import { StatusBadge } from "@/app/_components/status-badge";
 import type { CaseStatus } from "@/modules/access";
 import { it } from "@/shared/i18n/it";
-import { StepDots, Stepper, type WizardStep } from "./stepper";
+import { StepDots, Stepper, type Reachable, type WizardStep } from "./stepper";
 
-/** The case the wizard is on; absent at step 0 until the case is created. */
+/** The case the wizard is on; absent on step 1 until the case is created. */
 export interface WizardCase {
   /** The uuid: links and keys only, never shown. */
   id: string;
@@ -20,8 +20,8 @@ export interface WizardFrameProps {
   /** `null` before the case exists (or in another wizard): the title then reads the eyebrow. */
   caseStudy: WizardCase | null;
   current: WizardStep;
-  /** Whether the case has material: Dettagli and Genera are stepper links only then. */
-  reachable?: boolean;
+  /** Which later steps are stepper links (see `Reachable`). */
+  reachable?: Reachable;
   /** The step's content. Hidden below 1024px, where the larger-screen message shows instead. */
   children: ReactNode;
   /** The top bar's back arrow (default: Case history). */

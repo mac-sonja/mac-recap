@@ -1,13 +1,14 @@
 /**
- * The new-case-study wizard on an existing case. With no `step`, the page opens the
- * first incomplete step (Dettagli when the case has material, else Materiale).
- * `step` names one explicitly: `&step=1`, `&step=2` or `&step=3` (2 and 3 only open
- * when the case has material).
+ * The new-case-study wizard on an existing case (Story 2.17). With no `step`, the
+ * page opens the first incomplete step: Dettagli when the business line is missing,
+ * else Materiale when there is no file, else Genera. `step` names one explicitly:
+ * `&step=1` Dettagli, `&step=2` Materiale (once the business line is set) or
+ * `&step=3` Genera (once there is a file too).
  */
 export const wizardHref = (id: string, step?: 1 | 2 | 3) =>
   `/case-studies/new?caseId=${encodeURIComponent(id)}${step === undefined ? "" : `&step=${step}`}`;
 
-/** The wizard's step 0 with `clientId` preselected in the client picker (a client's page). */
+/** The wizard's step 1 with `clientId` preselected in the client picker (a client's page). */
 export const newCaseForClientHref = (clientId: string) => `/case-studies/new?clientId=${encodeURIComponent(clientId)}`;
 
 /** A client's page. */

@@ -3,20 +3,23 @@
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
 import { PRIMARY_ACTION } from "@/app/_components/button-styles";
 import { StatusBadge } from "@/app/_components/status-badge";
 import { wizardHref } from "@/app/_lib/routes";
+import { CASE_STATUSES } from "@/shared/case-status";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import {
   DEFAULT_SORT,
+  businessLineLabel,
   filterRows,
   nextSort,
   sortRows,
   type CaseStudyRow,
   type SortKey,
   type SortState,
+  type StatusFilter,
 } from "./filter-sort";
 
 export interface CaseStudiesTableProps {
@@ -38,8 +41,64 @@ const COLUMNS: ReadonlyArray<{ key: SortKey; label: string }> = [
   { key: "client", label: it.caseStudies.table.columns.client },
   { key: "year", label: it.caseStudies.table.columns.year },
   { key: "status", label: it.caseStudies.table.columns.status },
+  { key: "businessLine", label: it.caseStudies.table.columns.businessLine },
   { key: "updated", label: it.caseStudies.table.columns.updated },
 ];
+
+/** The status filter's segments, in order: *Tutti*, then the lifecycle. */
+const FILTERS: ReadonlyArray<{ value: StatusFilter; label: string }> = [
+  { value: "all", label: it.caseStudies.filter.all },
+  ...CASE_STATUSES.map((status) => ({ value: status, label: it.status[status] })),
+];
+
+/**
+ * The status filter (Story 2.17): a segmented control (DESIGN.md: a pill track
+ * with the selected segment filled), single choice, as a radiogroup. Only the
+ * selected segment is in the tab order; the arrow keys move and select, wrapping,
+ * and Home and End go to the first and last.
+ */
+function StatusSegments({ value, onChange }: { value: StatusFilter; onChange: (value: StatusFilter) => void }) {
+  const segments = useRef<Array<HTMLButtonElement | null>>([]);
+
+  function pick(index: number) {
+    segments.current[index]?.focus();
+    onChange(FILTERS[index].value);
+  }
+
+  function onKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, index: number) {
+    const last = FILTERS.length - 1;
+    let next: number | null = null;
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = index === 0 ? last : index - 1;
+    else if (event.key === "ArrowRight" || event.key === "ArrowDown") next = index === last ? 0 : index + 1;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = last;
+    if (next === null) return;
+    event.preventDefault();
+    pick(next);
+  }
+
+  return (
+    <div role="radiogroup" aria-label={it.caseStudies.filter.label} className="inline-flex shrink-0 gap-0.5 rounded-full bg-surface-control p-[3px]">
+      {FILTERS.map((filter, index) => (
+        <button
+          key={filter.value}
+          ref={(element) => {
+            segments.current[index] = element;
+          }}
+          type="button"
+          role="radio"
+          aria-checked={filter.value === value}
+          tabIndex={filter.value === value ? 0 : -1}
+          onClick={() => pick(index)}
+          onKeyDown={(event) => onKeyDown(event, index)}
+          className="whitespace-nowrap rounded-full px-3 py-1.5 font-label text-xs text-foreground-muted hover:text-foreground aria-checked:bg-surface-selected aria-checked:text-foreground"
+        >
+          {filter.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** Input types that do not take typed text: `/` there still focuses search. */
 const NON_TEXT_INPUTS = new Set(["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"]);
@@ -53,11 +112,14 @@ function isTextField(el: Element | null): boolean {
 
 /**
  * The Case studies table: ID (the case history code, mono), Name, Client (its
- * current name), Year, Status, Updated and Links (blank). Default sort Updated
- * newest first; a header click sorts by it, again reverses; ID sorts codes
- * naturally. Search covers name, client name, client code and case code (case- and
- * accent-insensitive, debounced);
- * `/` focuses it unless focus is already in a text field. A Bozza row opens
+ * current name), Year, Status, Business line (empty for cases created before Story
+ * 2.17), Updated and Links (blank). Default sort Updated newest first; a header
+ * click sorts by it, again reverses; ID sorts codes naturally. The top-right toolbar
+ * holds the status filter (*Tutti* · Bozza · In elaborazione · Da approvare ·
+ * Approvato, default *Tutti*) and the search "Cerca progetto o cliente…", which covers
+ * name, client name, client code, case code and business line label (case- and
+ * accent-insensitive, debounced); both apply together. `/` focuses the search unless
+ * focus is already in a text field. A Bozza row opens
  * `/case-studies/new?caseId={id}`; other rows are not links yet.
  */
 export function CaseStudiesTable({
@@ -72,6 +134,7 @@ export function CaseStudiesTable({
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  const [status, setStatus] = useState<StatusFilter>("all");
 
   useEffect(() => {
     if (input === query) return;
@@ -93,7 +156,7 @@ export function CaseStudiesTable({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const visible = useMemo(() => sortRows(filterRows(rows, query), sort), [rows, query, sort]);
+  const visible = useMemo(() => sortRows(filterRows(rows, query, status), sort), [rows, query, status, sort]);
 
   if (rows.length === 0) {
     return (
@@ -112,8 +175,16 @@ export function CaseStudiesTable({
   function clearSearch() {
     setInput("");
     setQuery("");
+    setStatus("all");
     searchRef.current?.focus();
   }
+
+  const noResults =
+    status === "all"
+      ? fill(it.caseStudies.noResults, { query: query.trim() })
+      : query.trim() === ""
+        ? fill(it.caseStudies.noResultsStatus, { status: it.status[status] })
+        : fill(it.caseStudies.noResultsQueryStatus, { query: query.trim(), status: it.status[status] });
 
   function openRow(event: MouseEvent<HTMLTableRowElement>, href: string) {
     // The name link navigates on its own; modifier or non-primary clicks and text selection (copying an ID) do not navigate.
@@ -125,7 +196,8 @@ export function CaseStudiesTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex max-w-md flex-col gap-1">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <StatusSegments value={status} onChange={setStatus} />
         <label htmlFor={searchId} className="sr-only">
           {it.caseStudies.search.label}
         </label>
@@ -137,13 +209,13 @@ export function CaseStudiesTable({
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder={it.caseStudies.search.placeholder}
-          className="w-full rounded-md border bg-surface-control px-3 py-2 font-body text-sm text-foreground placeholder:text-foreground-muted"
+          className="w-72 rounded-md border bg-surface-control px-3 py-2 font-body text-sm text-foreground placeholder:text-foreground-muted"
         />
       </div>
 
       {/* Always mounted, so screen readers announce the no-results message when it appears. */}
       <div role="status" className="font-body text-base text-foreground empty:hidden">
-        {visible.length === 0 ? fill(it.caseStudies.noResults, { query: query.trim() }) : null}
+        {visible.length === 0 ? noResults : null}
       </div>
 
       {visible.length === 0 ? (
@@ -214,6 +286,7 @@ export function CaseStudiesTable({
                     <td className="whitespace-nowrap px-3 py-2">
                       <StatusBadge status={row.status} />
                     </td>
+                    <td className="whitespace-nowrap px-3 py-2">{businessLineLabel(row)}</td>
                     <td className="whitespace-nowrap px-3 py-2 tabular-nums">
                       <time dateTime={row.updatedAt}>{row.updatedLabel}</time>
                     </td>

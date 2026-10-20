@@ -1,5 +1,5 @@
 import type { CaseEvent } from "@/modules/case-study/domain/case-event";
-import type { CaseStudy, CreateCaseStudyInput, ListScope } from "@/modules/case-study/domain/case-study";
+import type { CaseStudy, CreateCaseStudyInput, ListScope, UpdateCaseStudyDetailsInput } from "@/modules/case-study/domain/case-study";
 import type { TransitionEvent } from "@/modules/case-study/domain/transition";
 import type { CaseStatus } from "@/shared/case-status";
 import type { Result } from "@/shared/result";
@@ -16,6 +16,14 @@ export interface NewCaseEvent {
 export interface CaseStudyRepository {
   /** Inserts the case and its `case_created` event atomically; `err` only when the write fails. */
   create(input: CreateCaseStudyInput, actorId: string): Promise<Result<CaseStudy>>;
+  /**
+   * Saves a draft's name, year, locale and business line, with a `case_details_updated`
+   * event when something changed, atomically. A year change takes the next number for
+   * (client, new year) and a new code; the old number is never reused. `err NOT_FOUND` (unknown or soft-deleted),
+   * `err STALE_STATUS` (no longer a draft), otherwise `err` only when the write fails.
+   * Nothing is written on any `err`.
+   */
+  updateDetails(input: UpdateCaseStudyDetailsInput, actorId: string): Promise<Result<CaseStudy>>;
   /** `ok(null)` when no non-deleted case has this id; `err` only when the lookup itself fails. */
   findById(id: string): Promise<Result<CaseStudy | null>>;
   /**

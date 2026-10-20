@@ -1,4 +1,6 @@
+import type { BusinessLine } from "@/modules/case-study";
 import { CASE_STATUSES, type CaseStatus } from "@/shared/case-status";
+import { it } from "@/shared/i18n/it";
 
 /** One row of the Case studies table, as the server hands it to the browser. */
 export interface CaseStudyRow {
@@ -12,13 +14,15 @@ export interface CaseStudyRow {
   clientCode: string;
   year: number;
   status: CaseStatus;
+  /** Null for cases created before Story 2.17 (the cell stays empty). */
+  businessLine: BusinessLine | null;
   /** ISO timestamp, used for sorting. */
   updatedAt: string;
   /** `updatedAt` already formatted for display (Europe/Rome, Italian). */
   updatedLabel: string;
 }
 
-export const SORT_KEYS = ["id", "name", "client", "year", "status", "updated"] as const;
+export const SORT_KEYS = ["id", "name", "client", "year", "status", "businessLine", "updated"] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 export type SortDirection = "asc" | "desc";
 export interface SortState {
@@ -40,15 +44,27 @@ export function normalizeForSearch(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
+/** A row's business line as shown: its Italian label, or "" for a case without one. */
+export const businessLineLabel = (row: Pick<CaseStudyRow, "businessLine">) =>
+  row.businessLine === null ? "" : it.businessLines[row.businessLine];
+
+/** The status filter: every status (*Tutti*) or exactly one. */
+export type StatusFilter = CaseStatus | "all";
+
 /**
- * Rows whose name, client name, client code or case code contains `query`
- * (normalized); a blank query keeps every row.
+ * Rows with the filtered status (`"all"` keeps every status) whose name, client
+ * name, client code, case code or business line label contains `query`
+ * (normalized); both must match. A blank query keeps every row of the status.
  */
-export function filterRows(rows: readonly CaseStudyRow[], query: string): CaseStudyRow[] {
+export function filterRows(rows: readonly CaseStudyRow[], query: string, status: StatusFilter = "all"): CaseStudyRow[] {
   const needle = normalizeForSearch(query.trim());
-  if (needle === "") return [...rows];
-  return rows.filter((row) =>
-    [row.name, row.clientName, row.clientCode, row.code].some((field) => normalizeForSearch(field).includes(needle)),
+  return rows.filter(
+    (row) =>
+      (status === "all" || row.status === status) &&
+      (needle === "" ||
+        [row.name, row.clientName, row.clientCode, row.code, businessLineLabel(row)].some((field) =>
+          normalizeForSearch(field).includes(needle),
+        )),
   );
 }
 
@@ -68,6 +84,9 @@ function compare(a: CaseStudyRow, b: CaseStudyRow, key: SortKey): number {
       return collator.compare(a.code, b.code);
     case "client":
       return collator.compare(a.clientName, b.clientName);
+    case "businessLine":
+      // A case without one sorts before every label.
+      return collator.compare(businessLineLabel(a), businessLineLabel(b));
     default:
       return collator.compare(a[key], b[key]);
   }

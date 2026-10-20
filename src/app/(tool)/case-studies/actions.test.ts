@@ -6,6 +6,7 @@ import { err, ok } from "@/shared/result";
 const {
   getActor,
   create,
+  updateDetails,
   presignUpload,
   confirmUpload,
   removeAssetUseCase,
@@ -16,6 +17,7 @@ const {
 } = vi.hoisted(() => ({
   getActor: vi.fn(),
   create: vi.fn(),
+  updateDetails: vi.fn(),
   presignUpload: vi.fn(),
   confirmUpload: vi.fn(),
   removeAssetUseCase: vi.fn(),
@@ -30,7 +32,7 @@ vi.mock("@/modules/access", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/modules/access")>()),
   getActor,
 }));
-vi.mock("@/modules/case-study", () => ({ create }));
+vi.mock("@/modules/case-study", () => ({ create, updateDetails }));
 vi.mock("@/modules/material", () => ({
   presignUpload,
   confirmUpload,
@@ -43,6 +45,7 @@ vi.mock("@/modules/material", () => ({
 
 const {
   createCaseStudy,
+  updateCaseStudyDetails,
   presignAssetUpload,
   confirmAssetUpload,
   removeAsset,
@@ -67,6 +70,7 @@ const created: CaseStudy = {
   client: { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
   year: 2026,
   locale: "it",
+  businessLine: "branding",
   status: "draft",
   projectOrderRef: null,
   headRevisionId: null,
@@ -78,12 +82,13 @@ const created: CaseStudy = {
   deletedAt: null,
 };
 
-const input = { name: "Rebrand", clientId: "cccccccc-0000-4000-8000-000000000001", year: 2026 };
+const input = { name: "Rebrand", clientId: "cccccccc-0000-4000-8000-000000000001", year: 2026, businessLine: "branding" };
 
 beforeEach(() => {
   for (const fn of [
     getActor,
     create,
+    updateDetails,
     presignUpload,
     confirmUpload,
     removeAssetUseCase,
@@ -93,6 +98,39 @@ beforeEach(() => {
     setFavouriteUseCase,
   ])
     fn.mockReset();
+});
+
+describe("updateCaseStudyDetails", () => {
+  const details = { caseId: created.id, name: "Rebrand 2", year: 2025, locale: "en", businessLine: "video" };
+
+  it("saves the details for an owner/designer", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    updateDetails.mockResolvedValue(ok({ ...created, name: "Rebrand 2" }));
+    expect(await updateCaseStudyDetails(details)).toEqual({ ok: true, value: { ...created, name: "Rebrand 2" } });
+    expect(updateDetails).toHaveBeenCalledWith(actor("owner_designer"), details);
+  });
+
+  it.each(["account_sales_social", "admin", "system"] as const)("returns 403 FORBIDDEN for %s and never calls the use case", async (role) => {
+    getActor.mockResolvedValue(ok(actor(role)));
+    const result = await updateCaseStudyDetails(details);
+    expect(result).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
+    expect(updateDetails).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["INVALID_INPUT", 400, { fields: ["businessLine"] }],
+    ["NOT_FOUND", 404, { id: created.id }],
+    ["STALE_STATUS", 409, { id: created.id }],
+  ] as const)("maps %s to %i", async (code, status, details) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    updateDetails.mockResolvedValue(err({ code, message: "m", details }));
+    const result = await updateCaseStudyDetails({ caseId: created.id });
+    expect(result).toEqual({
+      ok: false,
+      status,
+      error: { code, message: "m", ...(code === "INVALID_INPUT" ? { fields: ["businessLine"] } : {}) },
+    });
+  });
 });
 
 describe("createCaseStudy", () => {

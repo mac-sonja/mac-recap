@@ -22,6 +22,7 @@ const rows: CaseStudyRow[] = [
     clientCode: "CIT",
     year: 2024,
     status: "approved",
+    businessLine: "video",
     updatedAt: "2026-10-02T10:00:00+00:00",
     updatedLabel: "02/10/2026, 12:00",
   },
@@ -33,6 +34,7 @@ const rows: CaseStudyRow[] = [
     clientCode: "ACM",
     year: 2026,
     status: "draft",
+    businessLine: "social_media",
     updatedAt: "2026-10-12T10:00:00+00:00",
     updatedLabel: "12/10/2026, 12:00",
   },
@@ -44,6 +46,7 @@ const rows: CaseStudyRow[] = [
     clientCode: "BET",
     year: 2025,
     status: "in_review",
+    businessLine: null,
     updatedAt: "2026-10-05T10:00:00+00:00",
     updatedLabel: "05/10/2026, 12:00",
   },
@@ -81,6 +84,7 @@ describe("CaseStudiesTable", () => {
       "Cliente",
       "Anno",
       "Stato",
+      "Business line",
       "Aggiornato",
       "Link",
     ]);
@@ -97,9 +101,103 @@ describe("CaseStudiesTable", () => {
     expect(cells[2].textContent).toBe("Acme");
     expect(cells[3].textContent).toBe("2026");
     expect(cells[4].textContent).toBe("Bozza");
-    expect(cells[5].querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-12T10:00:00+00:00");
-    expect(cells[5].textContent).toBe("12/10/2026, 12:00");
-    expect(cells[6].textContent).toBe("");
+    expect(cells[5].textContent).toBe("Social media");
+    expect(cells[6].querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-12T10:00:00+00:00");
+    expect(cells[6].textContent).toBe("12/10/2026, 12:00");
+    expect(cells[7].textContent).toBe("");
+    // A case created before the business line existed leaves the cell empty.
+    expect(within(table).getAllByRole("row")[2].querySelectorAll("td")[5].textContent).toBe("");
+  });
+
+  it("puts the status filter and the search in a top-right toolbar, Tutti selected", () => {
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    expect(search().getAttribute("placeholder")).toBe("Cerca progetto o cliente…");
+    const group = screen.getByRole("radiogroup", { name: "Filtra per stato" });
+    expect(within(group).getAllByRole("radio").map((r) => [r.textContent, r.getAttribute("aria-checked")])).toEqual([
+      ["Tutti", "true"],
+      ["Bozza", "false"],
+      ["In elaborazione", "false"],
+      ["Da approvare", "false"],
+      ["Approvato", "false"],
+    ]);
+    expect(group.className).toContain("rounded-full");
+    expect(group.parentElement?.className).toContain("justify-end");
+    expect(group.parentElement).toBe(search().parentElement);
+    // No counts on the segments.
+    expect(group.textContent).not.toMatch(/\d/);
+  });
+
+  it("filters by one status at a time; Tutti shows every row again", async () => {
+    const user = userEvent.setup();
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    await user.click(screen.getByRole("radio", { name: "Da approvare" }));
+    expect(names()).toEqual(["Émile"]);
+    expect(screen.getByRole("radio", { name: "Da approvare" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("radio", { name: "Tutti" }).getAttribute("aria-checked")).toBe("false");
+    await user.click(screen.getByRole("radio", { name: "Approvato" }));
+    expect(names()).toEqual(["Zeta"]);
+    await user.click(screen.getByRole("radio", { name: "Tutti" }));
+    expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
+  });
+
+  it("moves and selects with the arrow keys, wrapping; only the selected segment is tabbable", async () => {
+    const user = userEvent.setup();
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    const radios = () => screen.getAllByRole("radio");
+    expect(radios().map((r) => r.tabIndex)).toEqual([0, -1, -1, -1, -1]);
+    radios()[0].focus();
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(radios()[1]);
+    expect(names()).toEqual(["Alfa"]);
+    await user.keyboard("{ArrowLeft}{ArrowLeft}");
+    expect(document.activeElement).toBe(radios()[4]);
+    expect(radios()[4].getAttribute("aria-checked")).toBe("true");
+    expect(radios().map((r) => r.tabIndex)).toEqual([-1, -1, -1, -1, 0]);
+    await user.keyboard("{Home}");
+    expect(radios()[0].getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("combines the status filter with the search (both must match)", async () => {
+    const extra: CaseStudyRow = { ...rows[2], id: "dddddddd-0000-4000-8000-000000000004", name: "Lumière", clientName: "Lumen", status: "draft" };
+    render(<CaseStudiesTable rows={[...rows, extra]} canCreate />);
+    fireEvent.click(screen.getByRole("radio", { name: "Da approvare" }));
+    setSearch("lum");
+    act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
+    expect(names()).toEqual(["Émile"]);
+  });
+
+  it("searches the business line label", () => {
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    setSearch("social");
+    act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
+    expect(names()).toEqual(["Alfa"]);
+  });
+
+  it("sorts by Business line, cases without one first", async () => {
+    const user = userEvent.setup();
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    await user.click(within(header("Business line")).getByRole("button"));
+    expect(names()).toEqual(["Émile", "Alfa", "Zeta"]);
+    expect(header("Business line").getAttribute("aria-sort")).toBe("ascending");
+  });
+
+  it("names both the search and the status when together they leave no rows", () => {
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    fireEvent.click(screen.getByRole("radio", { name: "Da approvare" }));
+    setSearch("zeta");
+    act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Nessun risultato per “zeta” tra Da approvare.");
+  });
+
+  it("names the status when a filter alone leaves no rows; clearing resets search and filter", () => {
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    fireEvent.click(screen.getByRole("radio", { name: "In elaborazione" }));
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Nessuna case history in stato In elaborazione.");
+    fireEvent.click(screen.getByRole("button", { name: dict.caseStudies.clearSearch }));
+    expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
+    expect(screen.getByRole("radio", { name: "Tutti" }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("sorts by Name A→Z, then Z→A, with aria-sort following", async () => {

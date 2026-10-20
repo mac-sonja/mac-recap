@@ -38,6 +38,7 @@ import {
   type PresignedClientLogoUpload,
 } from "@/modules/case-study/application/request-client-logo-upload";
 import { makeTransition } from "@/modules/case-study/application/transition";
+import { makeUpdateCaseStudyDetails } from "@/modules/case-study/application/update-case-study-details";
 import { makeUpdateClient } from "@/modules/case-study/application/update-client";
 import type { CaseEvent } from "@/modules/case-study/domain/case-event";
 import type {
@@ -54,9 +55,10 @@ import type { ClientMaterialStorage } from "@/modules/case-study/ports/client-ma
 import type { LogoStorage } from "@/modules/case-study/ports/logo-storage";
 import type { Result } from "@/shared/result";
 
-export { CASE_CREATED, CASE_DELETED, TRANSITION } from "@/modules/case-study/domain/case-event";
+export { CASE_CREATED, CASE_DELETED, CASE_DETAILS_UPDATED, TRANSITION } from "@/modules/case-study/domain/case-event";
 export type { CaseEvent, RecordEventInput } from "@/modules/case-study/domain/case-event";
 export {
+  BUSINESS_LINES,
   CLIENT_BRIEF_FIELDS,
   CLIENT_BRIEF_MAX,
   CLIENT_DESCRIPTION_MAX,
@@ -71,6 +73,7 @@ export {
   YEAR_MIN,
 } from "@/modules/case-study/domain/case-study";
 export type {
+  BusinessLine,
   CaseStudy,
   Client,
   ClientBrief,
@@ -86,6 +89,7 @@ export type {
   ListScope,
   Locale,
   LogoContentType,
+  UpdateCaseStudyDetailsInput,
   UpdateClientInput,
 } from "@/modules/case-study/domain/case-study";
 export {
@@ -114,13 +118,26 @@ export type { FieldIssue } from "@/modules/case-study/domain/validation";
 /**
  * Creates a case study (status `draft`, permanent DB-generated id, and the next
  * readable code for its client and year, e.g. `LUM-2026-01`) and its
- * `case_created` event in one transaction. Input `{ name, clientId, year, locale? }`.
+ * `case_created` event in one transaction. Input `{ name, clientId, year, locale?, businessLine }`
+ * (`businessLine` one of `BUSINESS_LINES`).
  * Call only after `authorize(actor, 'create case')`. `INVALID_INPUT` names each
  * failing field in `details.fields`; `CLIENT_NOT_FOUND` for an unknown client.
  * Nothing is written on any error.
  */
 export function create(actor: Actor, input: unknown): Promise<Result<CaseStudy>> {
   return makeCreateCaseStudy(createSupabaseCaseStudyRepository())(actor, input);
+}
+
+/**
+ * Saves a draft's details (Story 2.17): input `{ caseId, name, year, locale, businessLine }`,
+ * every field as it should be after the save. The client never changes; a year change renumbers the draft in the new year (next number for its client, new code; owner 2026-10-20).
+ * A changed save writes one `case_details_updated` event with the actor in the same
+ * transaction; an unchanged one writes nothing. Call only after
+ * `authorize(actor, 'create case')`. `INVALID_INPUT` (naming each field), `NOT_FOUND`
+ * (unknown or deleted), `STALE_STATUS` (no longer a draft); nothing is written on any error.
+ */
+export function updateDetails(actor: Actor, input: unknown): Promise<Result<CaseStudy>> {
+  return makeUpdateCaseStudyDetails(createSupabaseCaseStudyRepository())(actor, input);
 }
 
 /** One case study by id; unknown, malformed or soft-deleted ids are `NOT_FOUND`. */

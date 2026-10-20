@@ -30,6 +30,19 @@ export function isClientIndustry(value: unknown): value is ClientIndustry {
   return typeof value === "string" && (CLIENT_INDUSTRIES as readonly string[]).includes(value);
 }
 
+/**
+ * The fixed business line list (owner, 2026-10-20), in display order. The
+ * `case_study_business_line_check` lists exactly these; the Italian labels live in
+ * `it.businessLines`. Every new case has one; cases created before Story 2.17 have none.
+ */
+export const BUSINESS_LINES = ["branding", "social_media", "video", "web_design", "advertising", "eventi"] as const;
+export type BusinessLine = (typeof BUSINESS_LINES)[number];
+export const businessLineSchema = z.enum(BUSINESS_LINES);
+
+export function isBusinessLine(value: unknown): value is BusinessLine {
+  return typeof value === "string" && (BUSINESS_LINES as readonly string[]).includes(value);
+}
+
 /** The client brief's fields, in display order (the `client_brief` columns and `save_client_brief_field` match). */
 export const CLIENT_BRIEF_FIELDS = ["context", "solution", "results"] as const;
 export type ClientBriefField = (typeof CLIENT_BRIEF_FIELDS)[number];
@@ -303,6 +316,8 @@ export const caseStudySchema = z.object({
   client: clientRefSchema,
   year: z.number().int(),
   locale: localeSchema,
+  /** Null only for cases created before Story 2.17. */
+  businessLine: businessLineSchema.nullable(),
   status: z.enum(CASE_STATUSES),
   projectOrderRef: z.string().nullable(),
   headRevisionId: z.uuid().nullable(),
@@ -317,18 +332,36 @@ export type CaseStudy = z.infer<typeof caseStudySchema>;
 
 const requiredText = z.string().trim().min(1, "Required.");
 
+const yearSchema = z.number().int("Must be a whole number.").min(YEAR_MIN).max(YEAR_MAX);
+
 /**
- * What a person supplies to create a case (wizard step 0). Name is trimmed and
+ * What a person supplies to create a case (wizard step 1 Dettagli). Name is trimmed and
  * required; `clientId` is a picked client's id; year is an integer in 1900–2100;
- * locale defaults to `it`. Any other key (status, code, project_order_ref, …) is dropped.
+ * locale defaults to `it`; `businessLine` is required and one of `BUSINESS_LINES`.
+ * Any other key (status, code, project_order_ref, …) is dropped.
  */
 export const createCaseStudyInputSchema = z.object({
   name: requiredText,
   clientId: z.uuid("Required."),
-  year: z.number().int("Must be a whole number.").min(YEAR_MIN).max(YEAR_MAX),
+  year: yearSchema,
   locale: localeSchema.default(DEFAULT_LOCALE),
+  businessLine: businessLineSchema,
 });
 export type CreateCaseStudyInput = z.infer<typeof createCaseStudyInputSchema>;
+
+/**
+ * What a person supplies to edit a draft's details (wizard step 1 on an existing
+ * case): every field required and as it should be after the save. The client is
+ * fixed once the case exists (its code depends on it), so there is no `clientId`.
+ */
+export const updateCaseStudyDetailsInputSchema = z.object({
+  caseId: z.uuid("Required."),
+  name: requiredText,
+  year: yearSchema,
+  locale: localeSchema,
+  businessLine: businessLineSchema,
+});
+export type UpdateCaseStudyDetailsInput = z.infer<typeof updateCaseStudyDetailsInputSchema>;
 
 /**
  * The scope of a list, as authorized by `list cases`: `{}` is every status,
