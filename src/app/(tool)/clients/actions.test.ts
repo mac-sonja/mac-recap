@@ -13,6 +13,7 @@ const {
   confirmMaterialUseCase,
   listMaterialUseCase,
   removeMaterialUseCase,
+  deleteClientUseCase,
 } = vi.hoisted(() => ({
   getActor: vi.fn(),
   createClientUseCase: vi.fn(),
@@ -24,6 +25,7 @@ const {
   confirmMaterialUseCase: vi.fn(),
   listMaterialUseCase: vi.fn(),
   removeMaterialUseCase: vi.fn(),
+  deleteClientUseCase: vi.fn(),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -41,6 +43,7 @@ vi.mock("@/modules/case-study", () => ({
   confirmClientMaterialUpload: confirmMaterialUseCase,
   listClientMaterial: listMaterialUseCase,
   removeClientMaterial: removeMaterialUseCase,
+  deleteClient: deleteClientUseCase,
 }));
 
 const actions = await import("./actions");
@@ -54,6 +57,7 @@ const {
   confirmClientMaterialUpload,
   listClientMaterial,
   removeClientMaterial,
+  deleteClient,
 } = actions;
 
 const actor = (role: Actor["role"]): Actor => ({
@@ -87,6 +91,7 @@ const cases = [
     { clientId: LUMEN.id, assetId: ASSET_ID, contentType: "image/jpeg" },
   ],
   ["removeClientMaterial", removeClientMaterial, removeMaterialUseCase, { clientId: LUMEN.id, assetId: ASSET_ID }],
+  ["deleteClient", deleteClient, deleteClientUseCase, { clientId: LUMEN.id, confirmName: "Lumen Srl" }],
 ] as const;
 
 /** Every action, the read-only listing included (its use case takes no actor). */
@@ -104,16 +109,18 @@ beforeEach(() => {
     confirmMaterialUseCase,
     listMaterialUseCase,
     removeMaterialUseCase,
+    deleteClientUseCase,
   ])
     fn.mockReset();
 });
 
 describe("client actions", () => {
-  it("exports only add, edit, the brief save, the two logo steps and the client material actions: no client delete", () => {
+  it("exports only add, edit, delete, the brief save, the two logo steps and the client material actions", () => {
     expect(Object.keys(actions).sort()).toEqual([
       "confirmClientLogoUpload",
       "confirmClientMaterialUpload",
       "createClient",
+      "deleteClient",
       "listClientMaterial",
       "removeClientMaterial",
       "requestClientLogoUpload",
@@ -205,6 +212,10 @@ describe("client actions", () => {
     ["confirmClientMaterialUpload", confirmClientMaterialUpload, confirmMaterialUseCase, "CLIENT_MATERIAL_LIMIT", 409],
     ["confirmClientMaterialUpload", confirmClientMaterialUpload, confirmMaterialUseCase, "UPLOAD_NOT_FOUND", 404],
     ["removeClientMaterial", removeClientMaterial, removeMaterialUseCase, "NOT_FOUND", 404],
+    ["removeClientMaterial", removeClientMaterial, removeMaterialUseCase, "CLIENT_NOT_FOUND", 404],
+    ["deleteClient", deleteClient, deleteClientUseCase, "CLIENT_DELETE_NAME_MISMATCH", 400],
+    ["deleteClient", deleteClient, deleteClientUseCase, "CLIENT_NOT_FOUND", 404],
+    ["deleteClient", deleteClient, deleteClientUseCase, "INVALID_INPUT", 400],
     ["listClientMaterial", listClientMaterial, listMaterialUseCase, "CLIENT_NOT_FOUND", 404],
   ] as const)("%s maps %s to %i and keeps details server-side", async (_name, action, useCase, code, status) => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));

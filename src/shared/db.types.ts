@@ -123,19 +123,25 @@ isOneToOne: false
                   ]
                 },"client": {
                   Row: {
-                    "code": string,"created_at": string,"created_by": string,"description": string | null,"id": string,"industries": (string)[],"logo_id": string | null,"name": string,"name_key": string,"updated_at": string
+                    "code": string,"created_at": string,"created_by": string,"deleted_at": string | null,"deleted_by": string | null,"description": string | null,"id": string,"industries": (string)[],"logo_id": string | null,"name": string,"name_key": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "code": string,"created_at"?: string,"created_by": string,"description"?: string | null,"id"?: string,"industries"?: (string)[],"logo_id"?: string | null,"name": string,"name_key": string,"updated_at"?: string
+                    "code": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"deleted_by"?: string | null,"description"?: string | null,"id"?: string,"industries"?: (string)[],"logo_id"?: string | null,"name": string,"name_key": string,"updated_at"?: string
                   }
                   Update: {
-                    "code"?: string,"created_at"?: string,"created_by"?: string,"description"?: string | null,"id"?: string,"industries"?: (string)[],"logo_id"?: string | null,"name"?: string,"name_key"?: string,"updated_at"?: string
+                    "code"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"deleted_by"?: string | null,"description"?: string | null,"id"?: string,"industries"?: (string)[],"logo_id"?: string | null,"name"?: string,"name_key"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
       foreignKeyName: "client_created_by_fkey"
       columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_deleted_by_fkey"
+      columns: ["deleted_by"]
 isOneToOne: false
       referencedRelation: "profile"
       referencedColumns: ["id"]
@@ -347,6 +353,8 @@ isOneToOne: false
               "code": string,
 "created_at": string,
 "created_by": string,
+"deleted_at": string | null,
+"deleted_by": string | null,
 "description": string | null,
 "id": string,
 "industries": (string)[],
@@ -361,6 +369,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"delete_client":
+{ Args: { "p_actor_id": string,"p_client_id": string,"p_confirm_name": string }; Returns: number
+                           },
 "delete_client_asset":
 { Args: { "p_asset_id": string }; Returns: boolean
                            },
@@ -504,6 +515,8 @@ isOneToOne: false
               "code": string,
 "created_at": string,
 "created_by": string,
+"deleted_at": string | null,
+"deleted_by": string | null,
 "description": string | null,
 "id": string,
 "industries": (string)[],

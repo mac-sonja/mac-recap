@@ -2,12 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
-import type { ClientBrief, ClientDetail, ListedClientAsset } from "@/modules/case-study";
+import type { CaseStudy, ClientBrief, ClientDetail, ListedClientAsset, ListScope } from "@/modules/case-study";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const getClient = vi.fn<(id: unknown) => Promise<Result<ClientDetail>>>();
 const listClientMaterial = vi.fn<(input: unknown) => Promise<Result<ListedClientAsset[]>>>();
+const listCases = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -19,6 +20,7 @@ vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requi
 vi.mock("@/modules/case-study", () => ({
   getClient: (id: unknown) => getClient(id),
   listClientMaterial: (input: unknown) => listClientMaterial(input),
+  list: (scope: ListScope) => listCases(scope),
   // A stand-in for the module's rule (its own tests cover the rule itself).
   isClientComplete: (client: ClientDetail, brief: ClientBrief) =>
     client.industries.length > 0 && client.description !== null && client.logoId !== null && Object.values(brief).every((t) => t.trim() !== ""),
@@ -46,6 +48,7 @@ vi.mock("@/app/(tool)/clients/actions", () => ({
   confirmClientMaterialUpload: vi.fn(),
   listClientMaterial: vi.fn(),
   removeClientMaterial: vi.fn(),
+  deleteClient: vi.fn(),
 }));
 vi.mock("@/app/(tool)/case-studies/actions", () => ({
   presignAssetUpload: vi.fn(),
@@ -112,6 +115,8 @@ beforeEach(() => {
   getClient.mockReset();
   listClientMaterial.mockReset();
   listClientMaterial.mockResolvedValue(ok([]));
+  listCases.mockReset();
+  listCases.mockResolvedValue(ok([{ id: "a" }, { id: "b" }] as unknown as CaseStudy[]));
   requireSurface.mockResolvedValue(shell("owner_designer"));
   getClient.mockResolvedValue(ok(COMPLETE));
 });
@@ -215,6 +220,27 @@ describe("NewClientPage", () => {
   it("throws into the error boundary when the lookup fails", async () => {
     getClient.mockResolvedValue(err({ code: "CLIENT_LOOKUP_FAILED", message: "down" }));
     await expect(renderPage({ clientId: ID })).rejects.toThrow(/CLIENT_LOOKUP_FAILED/);
+  });
+
+  it("shows Elimina cliente in danger style below step 1 of an existing client only, inside the wide-screen area", async () => {
+    const html = await renderPage({ clientId: ID, step: "1" });
+    expect(listCases).toHaveBeenCalledExactlyOnceWith({ clientId: ID });
+    expect(html).toMatch(/<button [^>]*class="[^"]*bg-danger[^"]*"[^>]*>Elimina cliente<\/button>/);
+    expect(html).toContain("Verranno eliminate anche le sue 2 case history");
+    // Below the form, within the frame's `hidden lg:block` area.
+    expect(html.indexOf("Elimina cliente")).toBeGreaterThan(html.indexOf("I dati del cliente"));
+    expect(html.indexOf("Elimina cliente")).toBeGreaterThan(html.indexOf('class="hidden lg:block"'));
+  });
+
+  it("has no Elimina cliente when adding a client or on step 2", async () => {
+    expect(await renderPage({})).not.toContain("Elimina cliente");
+    expect(await renderPage({ clientId: ID, step: "2" })).not.toContain("Elimina cliente");
+    expect(listCases).not.toHaveBeenCalled();
+  });
+
+  it("throws into the error boundary when the case count fails", async () => {
+    listCases.mockResolvedValue(err({ code: "CASE_LOOKUP_FAILED", message: "down" }));
+    await expect(renderPage({ clientId: ID })).rejects.toThrow(/CASE_LOOKUP_FAILED/);
   });
 
   it("renders nothing without a usable actor", async () => {

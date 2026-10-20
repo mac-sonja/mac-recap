@@ -3,9 +3,11 @@ import type { Actor } from "@/modules/access";
 import { CASE_CREATED, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import type { CaseStatus } from "@/shared/case-status";
 import { isClientComplete, type CaseStudy, type Client, type ClientBrief, type ClientRef, type ClientSummary } from "@/modules/case-study/domain/case-study";
+import { normalizeClientConfirmName } from "@/shared/client-name";
 import { err, ok } from "@/shared/result";
 import { makeCreateCaseStudy } from "./create-case-study";
 import { makeCreateClient } from "./create-client";
+import { makeDeleteClient } from "./delete-client";
 import { makeGetCaseStudy } from "./get-case-study";
 import { makeGetClient } from "./get-client";
 import { makeListCaseStudies } from "./list-case-studies";
@@ -264,6 +266,17 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
       const next = { ...found, name, industries, description, logoId };
       clients.set(id, next);
       return ok(view(next));
+    }),
+    // Mirrors delete_client: CLIENT_NOT_FOUND, the name check after trimming and collapsing
+    // whitespace; a deleted client leaves every read (here: the map).
+    deleteClient: vi.fn<ClientRepository["deleteClient"]>(async (clientId, confirmName) => {
+      const found = clients.get(clientId);
+      if (!found) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
+      if (normalizeClientConfirmName(confirmName) !== found.name) {
+        return err({ code: "CLIENT_DELETE_NAME_MISMATCH", message: "mismatch" });
+      }
+      clients.delete(clientId);
+      return ok(found.caseCount);
     }),
     findBrief: vi.fn<ClientRepository["findBrief"]>(async (clientId) => ok({ ...(clients.get(clientId)?.brief ?? EMPTY_BRIEF) })),
     saveBriefField: vi.fn<ClientRepository["saveBriefField"]>(async (clientId, field, text) => {
@@ -1488,5 +1501,66 @@ describe("removeClientMaterial", () => {
     expect(result.ok || result.error.code).toBe("NOT_FOUND");
     expect(assets.size).toBe(before);
     expect(storage.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteClient", () => {
+  const LUMEN_SRL: ClientSeed = { id: LUMEN.id, name: "Lumen S.r.l.", code: "LUM", caseCount: 2 };
+
+  it("deletes the client with the typed name, spaces trimmed and collapsed, and returns the cases deleted", async () => {
+    const { repo, clients } = fakeClientRepository([LUMEN_SRL]);
+    const result = await makeDeleteClient(repo)(actor, { clientId: LUMEN.id, confirmName: "  Lumen   S.r.l. " });
+    expect(result).toEqual(ok({ deletedCases: 2 }));
+    expect(repo.deleteClient).toHaveBeenCalledExactlyOnceWith(LUMEN.id, "  Lumen   S.r.l. ", actor.id);
+    expect(clients.has(LUMEN.id)).toBe(false);
+  });
+
+  it("does not count a no-break space as a space", async () => {
+    const { repo, clients } = fakeClientRepository([LUMEN_SRL]);
+    const result = await makeDeleteClient(repo)(actor, { clientId: LUMEN.id, confirmName: "Lumen\u00a0S.r.l." });
+    expect(result.ok || result.error.code).toBe("CLIENT_DELETE_NAME_MISMATCH");
+    expect(clients.has(LUMEN.id)).toBe(true);
+  });
+
+  it("returns CLIENT_DELETE_NAME_MISMATCH for another name and deletes nothing", async () => {
+    const { repo, clients } = fakeClientRepository([LUMEN_SRL]);
+    const result = await makeDeleteClient(repo)(actor, { clientId: LUMEN.id, confirmName: "Lumen" });
+    expect(result.ok || result.error.code).toBe("CLIENT_DELETE_NAME_MISMATCH");
+    expect(clients.has(LUMEN.id)).toBe(true);
+  });
+
+  it("returns CLIENT_NOT_FOUND for an unknown or already deleted client", async () => {
+    const { repo } = fakeClientRepository([LUMEN_SRL]);
+    const run = makeDeleteClient(repo);
+    expect(await run(actor, { clientId: LUMEN.id, confirmName: "Lumen S.r.l." })).toEqual(ok({ deletedCases: 2 }));
+    const again = await run(actor, { clientId: LUMEN.id, confirmName: "Lumen S.r.l." });
+    expect(again.ok || again.error.code).toBe("CLIENT_NOT_FOUND");
+    const unknown = await run(actor, { clientId: UNKNOWN_CLIENT_ID, confirmName: "X" });
+    expect(unknown.ok || unknown.error.code).toBe("CLIENT_NOT_FOUND");
+  });
+
+  it.each([
+    ["a malformed id", { clientId: "nope", confirmName: "Lumen S.r.l." }],
+    ["no name", { clientId: LUMEN.id }],
+    ["an empty name", { clientId: LUMEN.id, confirmName: "" }],
+    ["a blank name", { clientId: LUMEN.id, confirmName: " \t\n " }],
+    ["no input", null],
+  ])("returns INVALID_INPUT for %s and never calls the repository", async (_label, input) => {
+    const { repo } = fakeClientRepository([LUMEN_SRL]);
+    const result = await makeDeleteClient(repo)(actor, input);
+    expect(result.ok || result.error.code).toBe("INVALID_INPUT");
+    expect(repo.deleteClient).not.toHaveBeenCalled();
+  });
+
+  it("makes every later client write and read answer CLIENT_NOT_FOUND", async () => {
+    const { repo } = fakeClientRepository([LUMEN_SRL]);
+    await makeDeleteClient(repo)(actor, { clientId: LUMEN.id, confirmName: "Lumen S.r.l." });
+    const removed = await makeRemoveClientMaterial({ clients: repo, storage: fakeMaterialStorage().storage })(actor, {
+      clientId: LUMEN.id,
+      assetId: ASSET_ID,
+    });
+    expect(removed.ok || removed.error.code).toBe("CLIENT_NOT_FOUND");
+    const read = await makeGetClient(repo, fakeLogoStorage().storage)(LUMEN.id);
+    expect(read.ok || read.error.code).toBe("CLIENT_NOT_FOUND");
   });
 });

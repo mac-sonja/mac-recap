@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeClientConfirmName } from "@/shared/client-name";
 import { CASE_STATUSES } from "@/shared/case-status";
 
 /** Narrative locales (per case, default `it`). The `case_study.locale` check lists exactly these. */
@@ -250,6 +251,21 @@ export const saveClientBriefFieldInputSchema = z.object({
     .refine((text) => charCount(text.trim()) <= CLIENT_BRIEF_MAX, { message: FIELD_TOO_LONG }),
 });
 export type SaveClientBriefFieldInput = z.infer<typeof saveClientBriefFieldInputSchema>;
+
+/**
+ * Deletes a client (owner, 2026-10-19): `confirmName` is the name the person typed;
+ * it must equal the client's name after `normalizeClientConfirmName`
+ * (`src/shared/client-name.ts`; checked in SQL, `CLIENT_DELETE_NAME_MISMATCH`). A
+ * blank name is `INVALID_INPUT`. It is passed on as typed: SQL normalises it.
+ */
+export const deleteClientInputSchema = z.object({
+  clientId: z.uuid("Required."),
+  confirmName: z
+    .string()
+    .max(1000)
+    .refine((text) => normalizeClientConfirmName(text).length > 0, { message: "Required." }),
+});
+export type DeleteClientInput = z.infer<typeof deleteClientInputSchema>;
 
 /** A signed upload request for a logo: the declared type and size are checked first. */
 export const requestClientLogoUploadInputSchema = z.object({

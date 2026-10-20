@@ -3,7 +3,7 @@ import { removeClientMaterialInputSchema } from "@/modules/case-study/domain/cli
 import { parseInput } from "@/modules/case-study/domain/validation";
 import { log } from "@/shared/log";
 import { err, ok, type Result } from "@/shared/result";
-import type { ClientMaterialDeps } from "./client-material-deps";
+import { clientNotFound, type ClientMaterialDeps } from "./client-material-deps";
 
 const notFound = (clientId: string, assetId: string) =>
   err({ code: "NOT_FOUND", message: "No such file.", details: { clientId, assetId } });
@@ -12,8 +12,9 @@ const notFound = (clientId: string, assetId: string) =>
  * Removes one file of a client at once, with no undo: deletes its `client_asset` row,
  * then its object. A failed object delete never fails the removal: it is logged
  * with the client and actor ids (never the key) and the object stays orphaned. An unknown file, or one of another
- * client, is `NOT_FOUND` and nothing is deleted. The caller has already authorized
- * `manage clients`. Errors: `INVALID_INPUT`, `NOT_FOUND`, `CLIENT_LOOKUP_FAILED`,
+ * client, is `NOT_FOUND` and nothing is deleted; a deleted client is `CLIENT_NOT_FOUND`
+ * (its rows and objects stay). The caller has already authorized `manage clients`.
+ * Errors: `INVALID_INPUT`, `NOT_FOUND`, `CLIENT_NOT_FOUND`, `CLIENT_LOOKUP_FAILED`,
  * `CLIENT_WRITE_FAILED`.
  */
 export function makeRemoveClientMaterial({ clients, storage }: Pick<ClientMaterialDeps, "clients" | "storage">) {
@@ -21,6 +22,10 @@ export function makeRemoveClientMaterial({ clients, storage }: Pick<ClientMateri
     const parsed = parseInput(removeClientMaterialInputSchema, input);
     if (!parsed.ok) return parsed;
     const { clientId, assetId } = parsed.value;
+
+    const found = await clients.findById(clientId);
+    if (!found.ok) return found;
+    if (found.value === null) return clientNotFound(clientId);
 
     const assets = await clients.listAssets(clientId);
     if (!assets.ok) return assets;

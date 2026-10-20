@@ -6,12 +6,14 @@ import * as caseStudy from "@/modules/case-study";
 import type {
   Client,
   ClientBriefFieldSaved,
+  ClientDeleted,
   ListedClientAsset,
   PresignedClientLogoUpload,
   PresignedClientMaterial,
 } from "@/modules/case-study";
 
-// Clients are added and edited, never deleted (AD-21): there is no delete action.
+// Clients are added, edited and deleted (owner, 2026-10-19: clients can be deleted
+// (soft), with their cases).
 // Every action resolves the actor and authorizes `manage clients` before the use case runs.
 
 /**
@@ -43,6 +45,22 @@ export async function updateClient(input: unknown): Promise<ActionResult<Client>
   if (!decision.ok) return failure(decision.error);
   const updated = await caseStudy.updateClient(actor.value, input);
   return updated.ok ? updated : failure(updated.error);
+}
+
+/**
+ * Deletes a client and all its case histories, approved ones included: input
+ * `{ clientId, confirmName }`, where `confirmName` is the name the person typed. 403
+ * `FORBIDDEN` unless the role may `manage clients`; 400 `INVALID_INPUT` /
+ * `CLIENT_DELETE_NAME_MISMATCH`; 404 `CLIENT_NOT_FOUND` (unknown or already deleted).
+ * Nothing is written on any error.
+ */
+export async function deleteClient(input: unknown): Promise<ActionResult<ClientDeleted>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage clients");
+  if (!decision.ok) return failure(decision.error);
+  const deleted = await caseStudy.deleteClient(actor.value, input);
+  return deleted.ok ? deleted : failure(deleted.error);
 }
 
 /**

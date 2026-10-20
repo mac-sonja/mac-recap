@@ -51,7 +51,9 @@ export interface ClientUpdate extends ClientInfo {
 
 /**
  * Reads and writes `client`, `client_logo`, `client_brief` and `client_asset`. Implemented by
- * `adapters/supabase/client-repository.ts`. There is no delete (AD-21, AD-22).
+ * `adapters/supabase/client-repository.ts`. A client is deleted only softly, with its
+ * cases (`deleteClient`, owner 2026-10-19); every read and write here ignores a deleted
+ * client.
  */
 export interface ClientRepository {
   /** Every client (`{ id, name, code }`), ordered by name; `err` only when the read fails or a row fails validation. */
@@ -62,7 +64,7 @@ export interface ClientRepository {
    * the read fails or a row fails validation.
    */
   listWithCaseCounts(): Promise<Result<ClientSummary[]>>;
-  /** `ok(null)` when no client has this id; `err` only when the lookup itself fails. */
+  /** `ok(null)` when no non-deleted client has this id; `err` only when the lookup itself fails. */
   findById(id: string): Promise<Result<Client | null>>;
   /**
    * Adds a client through `create_client`, which assigns the code (AD-21).
@@ -78,6 +80,14 @@ export interface ClientRepository {
    * written on any `err`.
    */
   update(input: ClientUpdate, actorId: string): Promise<Result<Client>>;
+  /**
+   * Soft-deletes a client and every one of its non-deleted cases through
+   * `delete_client`, with one `case_deleted` case event per case, and returns the number of
+   * cases deleted. `err CLIENT_NOT_FOUND` (unknown or already deleted) /
+   * `CLIENT_DELETE_NAME_MISMATCH`, otherwise `err` only when the write fails. Nothing
+   * is written on any `err`.
+   */
+  deleteClient(clientId: string, confirmName: string, actorId: string): Promise<Result<number>>;
   /** The client's brief; `""` for each field when it has no row. `err` only when the lookup fails. */
   findBrief(clientId: string): Promise<Result<ClientBrief>>;
   /**
@@ -105,7 +115,10 @@ export interface ClientRepository {
    * write fails. Nothing is written on any `err`.
    */
   insertAsset(asset: NewClientAsset): Promise<Result<ClientAsset>>;
-  /** Deletes one `client_asset` row (of `clientId`, for the log) through `delete_client_asset`; `ok(false)` when no row has this id. */
+  /**
+   * Deletes one `client_asset` row (of `clientId`, for the log) through `delete_client_asset`;
+   * `ok(false)` when no row has this id, `err CLIENT_NOT_FOUND` when its client is deleted.
+   */
   deleteAsset(id: string, clientId: string): Promise<Result<boolean>>;
   /**
    * The client's current info for a non-deleted case (live: AD-22 as amended

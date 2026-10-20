@@ -20,6 +20,7 @@ import {
 import { makeConfirmClientLogoUpload } from "@/modules/case-study/application/confirm-client-logo-upload";
 import { makeCreateCaseStudy } from "@/modules/case-study/application/create-case-study";
 import { makeCreateClient } from "@/modules/case-study/application/create-client";
+import { makeDeleteClient, type ClientDeleted } from "@/modules/case-study/application/delete-client";
 import { makeGetCaseStudy } from "@/modules/case-study/application/get-case-study";
 import { makeGetClient } from "@/modules/case-study/application/get-client";
 import { makeGetClientInfoForCase } from "@/modules/case-study/application/get-client-info-for-case";
@@ -53,7 +54,7 @@ import type { ClientMaterialStorage } from "@/modules/case-study/ports/client-ma
 import type { LogoStorage } from "@/modules/case-study/ports/logo-storage";
 import type { Result } from "@/shared/result";
 
-export { CASE_CREATED, TRANSITION } from "@/modules/case-study/domain/case-event";
+export { CASE_CREATED, CASE_DELETED, TRANSITION } from "@/modules/case-study/domain/case-event";
 export type { CaseEvent, RecordEventInput } from "@/modules/case-study/domain/case-event";
 export {
   CLIENT_BRIEF_FIELDS,
@@ -81,6 +82,7 @@ export type {
   ClientSummary,
   CreateCaseStudyInput,
   CreateClientInput,
+  DeleteClientInput,
   ListScope,
   Locale,
   LogoContentType,
@@ -104,6 +106,7 @@ export type {
 export type { PresignedClientMaterial } from "@/modules/case-study/application/request-client-material-upload";
 export type { PresignedClientLogoUpload } from "@/modules/case-study/application/request-client-logo-upload";
 export type { ClientBriefFieldSaved } from "@/modules/case-study/application/save-client-brief-field";
+export type { ClientDeleted } from "@/modules/case-study/application/delete-client";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
 export type { TransitionEvent } from "@/modules/case-study/domain/transition";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
@@ -137,7 +140,7 @@ export function list(scope: ListScope): Promise<Result<CaseStudy[]>> {
 }
 
 /**
- * Every client (`{ id, name, code }`), sorted by name. Call only after
+ * Every non-deleted client (`{ id, name, code }`), sorted by name. Call only after
  * `authorize(actor, 'list clients')`.
  */
 export function listClients(): Promise<Result<ClientRef[]>> {
@@ -145,7 +148,7 @@ export function listClients(): Promise<Result<ClientRef[]>> {
 }
 
 /**
- * Every client with its count of non-deleted case studies and whether every
+ * Every non-deleted client with its count of non-deleted case studies and whether every
  * required field is filled (`{ id, name, code, caseCount, complete }`), sorted by name. Call only after `authorize(actor, 'list clients')`.
  */
 export function listClientSummaries(): Promise<Result<ClientSummary[]>> {
@@ -208,10 +211,24 @@ export function createClient(actor: Actor, input: unknown): Promise<Result<Clien
  * object); a failed delete never fails the save. Call only
  * after `authorize(actor, 'manage clients')`. `INVALID_INPUT`, `CLIENT_FIELD_INVALID`,
  * `CLIENT_FIELD_TOO_LONG`, `CLIENT_NOT_FOUND`, `CLIENT_NAME_TAKEN`, `CLIENT_LOGO_INVALID` (unknown logo, or
- * another client's); nothing is written on any error. Clients are never deleted.
+ * another client's); nothing is written on any error. A deleted client is `CLIENT_NOT_FOUND`.
  */
 export function updateClient(actor: Actor, input: unknown): Promise<Result<Client>> {
   return makeUpdateClient(createSupabaseClientRepository(), logoStorage())(actor, input);
+}
+
+/**
+ * Deletes a client and all its case histories, approved ones included (owner,
+ * 2026-10-19): input `{ clientId, confirmName }`, where `confirmName` must equal the
+ * client's name once trimmed with inner whitespace collapsed. Everything is
+ * soft-deleted in one transaction, with one `case_deleted` case event per case; returns
+ * `{ deletedCases }`. Afterwards the client is absent from every read and every
+ * client write is `CLIENT_NOT_FOUND`; its name may be reused, its code never is.
+ * Call only after `authorize(actor, 'manage clients')`. `INVALID_INPUT`,
+ * `CLIENT_NOT_FOUND`, `CLIENT_DELETE_NAME_MISMATCH`; nothing is written on any error.
+ */
+export function deleteClient(actor: Actor, input: unknown): Promise<Result<ClientDeleted>> {
+  return makeDeleteClient(createSupabaseClientRepository())(actor, input);
 }
 
 /**
@@ -283,7 +300,7 @@ export function listClientMaterial(input: unknown): Promise<Result<ListedClientA
  * Removes one client file at once, with no undo: input `{ clientId, assetId }`. Its
  * row and object are deleted; a failed object delete is logged and never fails the
  * removal. Call only after `authorize(actor, 'manage clients')`. Errors:
- * `INVALID_INPUT`, `NOT_FOUND` (unknown file, or another client's), `CLIENT_WRITE_FAILED`.
+ * `INVALID_INPUT`, `NOT_FOUND` (unknown file, or another client's), `CLIENT_NOT_FOUND`, `CLIENT_WRITE_FAILED`.
  */
 export function removeClientMaterial(actor: Actor, input: unknown): Promise<Result<void>> {
   return makeRemoveClientMaterial(clientMaterialDeps())(actor, input);
