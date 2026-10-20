@@ -6,7 +6,9 @@
 #                             JSON line with actorId, keeps running, exit 0 on SIGTERM/SIGINT;
 #                             exit 1 on invalid env; exit 1 with no readiness line when Supabase
 #                             is unreachable (no system actor)
-#   ffmpeg -version        -> 6.1.1
+#   ffmpeg -version        -> 6.1.1 (and ffprobe 6.1.1: the rendition worker uses both)
+#   sharp                  -> resolves from /app/dist (dist/worker.js leaves it external) and encodes WebP
+#   PID 1                  -> tini (ENTRYPOINT), for web and worker commands
 #   id -un                 -> pwuser
 # Usage: scripts/smoke-image.sh <image-tag>. Needs docker, curl and jq. Exits non-zero on any failure.
 set -uo pipefail
@@ -228,6 +230,34 @@ ffmpeg_version() {
   grep -q "ffmpeg version 6\.1\.1" <<<"$out" && pass "ffmpeg: $out" || fail "ffmpeg: '$out', expected 6.1.1"
 }
 
+ffprobe_version() {
+  local out
+  out="$(docker run --rm --name "$PREFIX-ffprobe" "$IMAGE" ffprobe -version 2>&1 | head -n1)"
+  grep -q "ffprobe version 6\.1\.1" <<<"$out" && pass "ffprobe: $out" || fail "ffprobe: '$out', expected 6.1.1"
+}
+
+# dist/worker.js leaves sharp external (a native module): it must resolve from /app/dist and encode WebP.
+worker_sharp() {
+  local out
+  out="$(docker run --rm --name "$PREFIX-sharp" -w /app/dist "$IMAGE" node -e '
+    const sharp = require(require.resolve("sharp", { paths: ["/app/dist"] }));
+    sharp({ create: { width: 8, height: 4, channels: 3, background: "#ff0000" } })
+      .webp().toBuffer({ resolveWithObject: true })
+      .then(({ info }) => console.log(`sharp ok ${info.format} ${info.width}x${info.height}`))
+      .catch((e) => { console.error(e.message); process.exit(1); });
+  ' 2>&1)"
+  grep -q "sharp ok webp 8x4" <<<"$out" && pass "worker: sharp resolves from dist and encodes WebP" || fail "worker: sharp: '$out'"
+}
+
+# tini is PID 1 for the web command and for an overridden (worker) command.
+init_tini() {
+  local comm
+  comm="$(docker run --rm --name "$PREFIX-init" "$IMAGE" cat /proc/1/comm 2>&1)"
+  [ "$comm" = "tini" ] && pass "init: PID 1 is tini" || fail "init: PID 1 is '$comm', expected tini"
+  comm="$(docker run --rm --name "$PREFIX-init-tini" "$IMAGE" tini --version 2>&1)"
+  grep -q "tini version 0\.19\.0" <<<"$comm" && pass "init: $comm" || fail "init: '$comm', expected tini 0.19.0"
+}
+
 image_user() {
   local user
   user="$(docker run --rm --name "$PREFIX-user" "$IMAGE" id -un 2>&1)"
@@ -245,6 +275,9 @@ fi
 worker_invalid_env
 worker_no_system_actor
 ffmpeg_version
+ffprobe_version
+worker_sharp
+init_tini
 image_user
 
 if [ "$failures" -gt 0 ]; then

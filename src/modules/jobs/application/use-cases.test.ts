@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Job, JobSummary } from "@/modules/jobs/domain/job";
 import { ok } from "@/shared/result";
 import { makeEnqueue } from "./enqueue";
-import { makeGetJobsFor } from "./get-jobs-for";
+import { makeGetJobsFor, makeLiveSubjects } from "./get-jobs-for";
 
 const SUBJECT = "bbbbbbbb-0000-4000-8000-000000000001";
 
@@ -48,4 +48,23 @@ describe("getJobsFor", () => {
     if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
     expect(listBySubject).not.toHaveBeenCalled();
   });
+});
+
+describe("liveSubjects", () => {
+  it("passes the kind and subject ids to the repository", async () => {
+    const liveSubjects = vi.fn(async () => ok([SUBJECT]));
+    expect(await makeLiveSubjects({ liveSubjects })({ kind: "rendition", subjectIds: [SUBJECT] })).toEqual(ok([SUBJECT]));
+    expect(liveSubjects).toHaveBeenCalledWith("rendition", [SUBJECT]);
+  });
+
+  it.each([{ kind: "nope", subjectIds: [SUBJECT] }, { kind: "rendition", subjectIds: ["x"] }, { kind: "rendition" }])(
+    "%j → INVALID_INPUT without a read",
+    async (input) => {
+      const liveSubjects = vi.fn();
+      const result = await makeLiveSubjects({ liveSubjects })(input);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
+      expect(liveSubjects).not.toHaveBeenCalled();
+    },
+  );
 });

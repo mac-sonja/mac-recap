@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import type { JobLoop, JobLoopOptions } from "@/modules/jobs";
 import { err, ok } from "@/shared/result";
-import { runWorker, type StopSignal, type WorkerDeps, type WorkerHost } from "./run";
+import { runWorker, workerHandlers, type StopSignal, type WorkerDeps, type WorkerHost } from "./run";
 
 const system: Actor = {
   id: "00000000-0000-4000-8000-0000000000aa",
@@ -34,6 +34,7 @@ function deps(over: Partial<WorkerDeps> = {}) {
     loadEnv: () => ({}),
     getSystemActor: vi.fn(async () => ok(system)),
     startJobLoop: loop.startJobLoop,
+    handlers: () => ({}),
     ...over,
   };
   return { all, loop };
@@ -55,7 +56,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("workerHandlers", () => {
+  it("registers exactly the rendition handler (Story 3.2)", () => {
+    const handlers = workerHandlers();
+    expect(Object.keys(handlers)).toEqual(["rendition"]);
+    expect(typeof handlers.rendition?.run).toBe("function");
+    expect(typeof handlers.rendition?.caseIdOf).toBe("function");
+  });
+});
+
 describe("runWorker", () => {
+  it("starts the loop with the handlers it is given", async () => {
+    const { host } = fakeHost();
+    const rendition = { run: vi.fn() };
+    const { all, loop } = deps({ handlers: () => ({ rendition }) });
+    await runWorker(host, all);
+    expect(loop.startJobLoop).toHaveBeenCalledWith({ actor: system, handlers: { rendition } });
+  });
+
   it("resolves the system actor, starts the loop with no handlers and logs one readiness line with the actor id", async () => {
     const { host, exit } = fakeHost();
     const { all, loop } = deps();

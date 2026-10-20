@@ -24,7 +24,7 @@ const row = (over: Record<string, unknown> = {}) => ({
 function stubClient(response: { data?: unknown; error: unknown; count?: number | null }) {
   const builder: Record<string, unknown> = {};
   const step = () => vi.fn(() => builder);
-  const calls = { select: step(), update: step(), eq: step(), is: step(), order: step(), maybeSingle: step() };
+  const calls = { select: step(), update: step(), eq: step(), is: step(), order: step(), maybeSingle: step(), in: step(), gt: step(), limit: step() };
   Object.assign(builder, calls, { then: (resolve: (r: typeof response) => unknown) => resolve(response) });
   const from = vi.fn(() => builder);
   const rpc = vi.fn(async () => response);
@@ -190,6 +190,53 @@ describe("createSupabaseAssetRepository", () => {
     ]);
     expect(stub.is).toHaveBeenCalledWith("deleted_at", null);
     expect(stub.maybeSingle).toHaveBeenCalledOnce();
+  });
+
+  it("getById reads one asset by id, removed or not, without a case or deleted_at filter", async () => {
+    const stub = stubClient({ data: row({ deleted_at: "2026-10-20T11:00:00+00:00" }), error: null });
+    const result = await createSupabaseAssetRepository(stub.factory).getById(ASSET_ID);
+    expect(stub.eq).toHaveBeenCalledExactlyOnceWith("id", ASSET_ID);
+    expect(stub.is).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true, value: expect.objectContaining({ id: ASSET_ID, deletedAt: "2026-10-20T11:00:00+00:00" }) });
+  });
+
+  it("getById returns null for an unknown id and ASSET_LOOKUP_FAILED when the read fails", async () => {
+    expect(await createSupabaseAssetRepository(stubClient({ data: null, error: null }).factory).getById(ASSET_ID)).toEqual({ ok: true, value: null });
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const failed = await createSupabaseAssetRepository(stubClient({ data: null, error: { code: "08006" } }).factory).getById(ASSET_ID);
+      expect(failed).toMatchObject({ ok: false, error: { code: "ASSET_LOOKUP_FAILED" } });
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("listLiveMediaPage reads live images and videos of live cases by id, after the cursor", async () => {
+    const stub = stubClient({ data: [{ ...row(), case_study: { deleted_at: null } }], error: null });
+    const result = await createSupabaseAssetRepository(stub.factory).listLiveMediaPage(ASSET_ID, 100);
+    expect(String((stub.select.mock.calls[0] as unknown[])[0])).toContain("case_study!inner(deleted_at)");
+    expect(stub.in).toHaveBeenCalledWith("kind", ["image", "video"]);
+    expect(stub.is.mock.calls).toEqual([
+      ["deleted_at", null],
+      ["case_study.deleted_at", null],
+    ]);
+    expect(stub.gt).toHaveBeenCalledWith("id", ASSET_ID);
+    expect(stub.order).toHaveBeenCalledWith("id", { ascending: true });
+    expect(stub.limit).toHaveBeenCalledWith(100);
+    expect(result).toEqual({ ok: true, value: [expect.objectContaining({ id: ASSET_ID, caseId: CASE_ID })] });
+  });
+
+  it("listLiveMediaPage from the start has no cursor; a failed read is ASSET_LOOKUP_FAILED", async () => {
+    const stub = stubClient({ data: [], error: null });
+    expect(await createSupabaseAssetRepository(stub.factory).listLiveMediaPage(null, 10)).toEqual({ ok: true, value: [] });
+    expect(stub.gt).not.toHaveBeenCalled();
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const failed = await createSupabaseAssetRepository(stubClient({ data: null, error: { code: "08006" } }).factory).listLiveMediaPage(null, 10);
+      expect(failed).toMatchObject({ ok: false, error: { code: "ASSET_LOOKUP_FAILED" } });
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it("get returns null when no live asset matched", async () => {

@@ -153,3 +153,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-16-client-material-step.md`
   summary: Client material uploads that are refused at confirm, hit the 3-file limit late, or are abandoned leave orphan objects under `clients/*/material/` with no `client_asset` row; a failed object delete on removal does the same.
   evidence: Story 2.16 review finding 9 (blind, edge-case); same pattern as the client-logo orphans deferred from 2.15. Needs a decision on cleanup (best-effort remove on refusal, or a periodic sweep).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-display-renditions-for-uploaded-media.md`
+  summary: `material.getRendition(assetId, spec)` doesn't check which case the asset belongs to; settle the signature (take `caseId`, require a match) when the first caller lands in Story 3.5.
+  evidence: Story 3.2 review finding 14; the asset lookup has no case filter.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-display-renditions-for-uploaded-media.md`
+  summary: Video renditions of 10-bit HEVC/HDR (iPhone) clips may look washed out; .mov, portrait-rotation and HDR inputs are untested.
+  evidence: Story 3.2 review finding 15; `video-processor.ts` forces yuv420p/libx264 with no tone mapping. Check with the owner's real footage on dev, then add tone mapping and fixtures.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-display-renditions-for-uploaded-media.md`
+  summary: Add a real-ffmpeg test for the poster's fallback to the first frame when seeking to 1 s yields no frame.
+  evidence: Story 3.2 review finding 16; no fixture reaches `video-processor.ts` line 146.

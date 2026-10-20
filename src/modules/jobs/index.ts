@@ -5,13 +5,13 @@ import { authorize } from "@/modules/access";
 import { recordEvent } from "@/modules/case-study";
 import { createSupabaseJobRepository } from "@/modules/jobs/adapters/supabase/job-repository";
 import { makeEnqueue } from "@/modules/jobs/application/enqueue";
-import { makeGetJobsFor } from "@/modules/jobs/application/get-jobs-for";
+import { makeGetJobsFor, makeLiveSubjects } from "@/modules/jobs/application/get-jobs-for";
 import { makeStartJobLoop, type JobLoop, type JobLoopOptions } from "@/modules/jobs/application/run-loop";
 import type { Job, JobSummary } from "@/modules/jobs/domain/job";
 import type { Result } from "@/shared/result";
 
 export type { JobLoop, JobLoopOptions } from "@/modules/jobs/application/run-loop";
-export { JOB_FAILED, JOB_KINDS, JOB_STATUSES } from "@/modules/jobs/domain/job";
+export { JOB_ABORTED, JOB_FAILED, JOB_KINDS, JOB_STATUSES } from "@/modules/jobs/domain/job";
 export type {
   EnqueueInput,
   Job,
@@ -43,6 +43,15 @@ export function enqueue(input: unknown): Promise<Result<Job>> {
  */
 export function getJobsFor(subjectId: unknown): Promise<Result<JobSummary[]>> {
   return makeGetJobsFor(createSupabaseJobRepository())(subjectId);
+}
+
+/**
+ * Which of `{ kind, subjectIds }` (at most 500 ids) have a job of that kind
+ * queued or running, in one read: e.g. which assets still wait for renditions.
+ * Call only after `authorize` for the subjects. Errors: `INVALID_INPUT`, `JOB_LOOKUP_FAILED`.
+ */
+export function liveSubjects(input: unknown): Promise<Result<string[]>> {
+  return makeLiveSubjects(createSupabaseJobRepository())(input);
 }
 
 /**

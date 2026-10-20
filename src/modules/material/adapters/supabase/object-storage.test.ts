@@ -30,6 +30,10 @@ function stubClient() {
       data: { size: 42, contentType: "video/quicktime" },
       error: null,
     })),
+    download: vi.fn<(path: string) => Answer<Blob>>(async () => ({ data: new Blob([new Uint8Array([1, 2, 3])]), error: null })),
+    upload: vi.fn<(path: string, body: Uint8Array, options: { contentType: string; upsert: boolean }) => Answer<{ path: string }>>(
+      async (path) => ({ data: { path }, error: null }),
+    ),
   };
   const from = vi.fn(() => bucket);
   const build = vi.fn(() => ({ storage: { from } }));
@@ -191,5 +195,63 @@ describe("createSupabaseObjectStorage", () => {
     await storage.presignDownloads([target], 900);
     expect(stub.build).toHaveBeenCalledOnce();
     expect(stub.from).toHaveBeenCalledTimes(3);
+  });
+
+  describe("rendition objects (Story 3.2)", () => {
+    const RENDITION = `cases/${CASE_ID}/assets/${ASSET_ID}/renditions/0123456789abcdef.webp`;
+
+    it("presignKeys signs the given keys in one call, in order", async () => {
+      const stub = stubClient();
+      const result = await createSupabaseObjectStorage(stub.factory).presignKeys([RENDITION], 900);
+      expect(stub.bucket.createSignedUrls).toHaveBeenCalledExactlyOnceWith([RENDITION], 900);
+      expect(result).toEqual({ ok: true, value: [`https://project.supabase.co/sign/${RENDITION}?token=g`] });
+      expect(await createSupabaseObjectStorage(stub.factory).presignKeys([], 900)).toEqual({ ok: true, value: [] });
+      expect(stub.bucket.createSignedUrls).toHaveBeenCalledOnce();
+    });
+
+    it("download returns the bytes, null for a missing object, STORAGE_FAILED otherwise (logging no key)", async () => {
+      const stub = stubClient();
+      expect(await createSupabaseObjectStorage(stub.factory).download(KEY)).toEqual({ ok: true, value: new Uint8Array([1, 2, 3]) });
+      expect(stub.bucket.download).toHaveBeenCalledWith(KEY);
+      stub.bucket.download.mockResolvedValueOnce({ data: null, error: apiError(404, "Object not found") });
+      expect(await createSupabaseObjectStorage(stub.factory).download(KEY)).toEqual({ ok: true, value: null });
+      await capturingLogs(async (write) => {
+        stub.bucket.download.mockResolvedValueOnce({ data: null, error: apiError(500) });
+        expect(await createSupabaseObjectStorage(stub.factory).download(KEY)).toMatchObject({ ok: false, error: { code: "STORAGE_FAILED" } });
+        const line = String(write.mock.calls[0][0]);
+        expect(JSON.parse(line)).toMatchObject({ level: "error", caseId: CASE_ID });
+        expect(line).not.toContain(ASSET_ID);
+      });
+    });
+
+    it("upload writes a rendition key with its type and upsert (a retry replaces it)", async () => {
+      const stub = stubClient();
+      const bytes = new Uint8Array([7]);
+      expect(await createSupabaseObjectStorage(stub.factory).upload(RENDITION, bytes, "image/webp")).toEqual({ ok: true, value: undefined });
+      expect(stub.bucket.upload).toHaveBeenCalledExactlyOnceWith(RENDITION, bytes, { contentType: "image/webp", upsert: true });
+    });
+
+    it.each([KEY, `cases/${CASE_ID}/assets/${ASSET_ID}/renditions/../original.mov`, `cases/${CASE_ID}/logos/x.webp`, "renditions/0123456789abcdef.webp"])(
+      "upload refuses anything but a rendition key: %s",
+      async (key) => {
+        const stub = stubClient();
+        expect(await createSupabaseObjectStorage(stub.factory).upload(key, new Uint8Array([1]), "image/webp")).toMatchObject({
+          ok: false,
+          error: { code: "STORAGE_WRITE_REFUSED" },
+        });
+        expect(stub.bucket.upload).not.toHaveBeenCalled();
+      },
+    );
+
+    it("an upload failure is STORAGE_FAILED", async () => {
+      const stub = stubClient();
+      stub.bucket.upload.mockResolvedValueOnce({ data: null, error: apiError(413, "Payload too large") });
+      await capturingLogs(async () => {
+        expect(await createSupabaseObjectStorage(stub.factory).upload(RENDITION, new Uint8Array([1]), "image/webp")).toMatchObject({
+          ok: false,
+          error: { code: "STORAGE_FAILED" },
+        });
+      });
+    });
   });
 });

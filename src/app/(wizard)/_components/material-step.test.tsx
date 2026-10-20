@@ -62,6 +62,7 @@ function listed(n: number, over: Partial<ListedAsset> = {}): ListedAsset {
     createdAt: "2026-10-14T10:00:00+00:00",
     isFavourite: false,
     thumbnailUrl: null,
+    thumbnailPending: false,
     ...over,
   };
 }
@@ -643,5 +644,126 @@ describe("MaterialStep: listed rows", () => {
     await user.click(screen.getByRole("button", { name: "Rimuovi guide.pdf" }));
     expect(avanti().tagName).toBe("BUTTON");
     expect(avanti().getAttribute("aria-disabled")).toBe("true");
+  });
+});
+
+describe("MaterialStep: thumbnail renditions (Story 3.2)", () => {
+  const imgSrc = (name: string) => rowOf(name).querySelector("img")?.getAttribute("src") ?? null;
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("an image waiting for its thumb shows the original, then the thumb once listed; polling stops", async () => {
+    const image = listed(1, { originalFileName: "hero.png", thumbnailUrl: "https://storage.test/original", thumbnailPending: true });
+    setup([image]);
+    expect(imgSrc("hero.png")).toBe("https://storage.test/original");
+    listAssets.mockResolvedValue({ ok: true, value: [{ ...image, thumbnailUrl: "https://storage.test/thumb", thumbnailPending: false }] });
+
+    await advance(4_999);
+    expect(listAssets).not.toHaveBeenCalled();
+    await advance(1);
+    expect(listAssets).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID });
+    expect(imgSrc("hero.png")).toBe("https://storage.test/thumb");
+
+    await advance(60_000);
+    expect(listAssets).toHaveBeenCalledOnce();
+  });
+
+  it("a video waiting for its poster shows the type icon, then the poster", async () => {
+    const video = listed(2, { kind: "video", contentType: "video/mp4", originalFileName: "spot.mp4", thumbnailPending: true });
+    setup([video]);
+    expect(rowOf("spot.mp4").querySelector("img")).toBeNull();
+    expect(rowOf("spot.mp4").querySelector("svg.lucide-film")).not.toBeNull();
+
+    listAssets.mockResolvedValue({ ok: true, value: [video] });
+    await advance(5_000);
+    expect(rowOf("spot.mp4").querySelector("img")).toBeNull();
+
+    listAssets.mockResolvedValue({ ok: true, value: [{ ...video, thumbnailUrl: "https://storage.test/poster", thumbnailPending: false }] });
+    await advance(5_000);
+    expect(imgSrc("spot.mp4")).toBe("https://storage.test/poster");
+    expect(listAssets).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-lists every 5 s for at most 2 minutes while the thumbnail never comes", async () => {
+    const video = listed(2, { kind: "video", contentType: "video/mp4", originalFileName: "spot.mp4", thumbnailPending: true });
+    listAssets.mockResolvedValue({ ok: true, value: [video] });
+    setup([video]);
+    await advance(60_000);
+    expect(listAssets).toHaveBeenCalledTimes(12);
+    await advance(60_000);
+    expect(listAssets).toHaveBeenCalledTimes(24);
+    await advance(5 * 60_000);
+    expect(listAssets).toHaveBeenCalledTimes(24);
+    expect(rowOf("spot.mp4").querySelector("svg.lucide-film")).not.toBeNull();
+  });
+
+  it("a later upload of a waiting file restarts the 2-minute window", async () => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const video = listed(2, { kind: "video", contentType: "video/mp4", originalFileName: "spot.mp4", thumbnailPending: true });
+    listAssets.mockResolvedValue({ ok: true, value: [video] });
+    const { user, input } = setup([video]);
+    await advance(90_000);
+    const beforeUpload = listAssets.mock.calls.length;
+    expect(beforeUpload).toBeGreaterThanOrEqual(17);
+
+    await user.upload(input, makeFile("second.mp4", "video/mp4"));
+    await waitFor(() => expect(rowOf("second.mp4").getAttribute("data-row-state")).toBe("listed"));
+    // Past the first window's end (2 min after opening): still re-listing.
+    await advance(60_000);
+    const pastFirstDeadline = listAssets.mock.calls.length;
+    expect(pastFirstDeadline).toBeGreaterThan(beforeUpload + 10);
+    await advance(30_000);
+    expect(listAssets.mock.calls.length).toBeGreaterThan(pastFirstDeadline);
+    // …and it stops 2 minutes after the upload.
+    await advance(5 * 60_000);
+    const stopped = listAssets.mock.calls.length;
+    await advance(60_000);
+    expect(listAssets.mock.calls.length).toBe(stopped);
+  });
+
+  it("never re-lists when nothing waits (documents, ready thumbnails)", async () => {
+    setup([
+      listed(1, { thumbnailUrl: "https://storage.test/thumb", thumbnailPending: false }),
+      listed(2, { kind: "document", contentType: "application/pdf", originalFileName: "brief.pdf" }),
+    ]);
+    await advance(3 * 60_000);
+    expect(listAssets).not.toHaveBeenCalled();
+  });
+
+  it("a failed listing keeps the rows and polling goes on", async () => {
+    const video = listed(2, { kind: "video", contentType: "video/mp4", originalFileName: "spot.mp4", thumbnailPending: true });
+    listAssets.mockRejectedValueOnce(new Error("network"));
+    setup([video]);
+    await advance(5_000);
+    expect(rowOf("spot.mp4")).toBeTruthy();
+    listAssets.mockResolvedValue({ ok: true, value: [{ ...video, thumbnailUrl: "https://storage.test/poster", thumbnailPending: false }] });
+    await advance(5_000);
+    expect(imgSrc("spot.mp4")).toBe("https://storage.test/poster");
+  });
+
+  it("an uploaded video starts the polling and gets its poster", async () => {
+    // Real time drives the upload; the polling interval is then skipped ahead.
+    vi.useRealTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { user, input } = setup();
+    await user.upload(input, makeFile("clip.mp4", "video/mp4"));
+    await screen.findByText("clip.mp4");
+    await waitFor(() => expect(rowOf("clip.mp4").getAttribute("data-row-state")).toBe("listed"));
+    expect(rowOf("clip.mp4").querySelector("img")).toBeNull();
+    // The video confirmed just now waits for its poster.
+    listAssets.mockResolvedValue({
+      ok: true,
+      value: [listed(9, { id: "asset-1", kind: "video", contentType: "video/mp4", originalFileName: "clip.mp4", thumbnailUrl: "https://storage.test/poster" })],
+    });
+    await advance(5_000);
+    expect(imgSrc("clip.mp4")).toBe("https://storage.test/poster");
   });
 });

@@ -131,6 +131,38 @@ export function createSupabaseAssetRepository(
       return toAsset(data as AssetRow);
     },
 
+    async getById(assetId) {
+      const { data, error } = await client().from("asset").select(ASSET_COLUMNS).eq("id", assetId).maybeSingle();
+      if (error) {
+        log.error(`asset get by id failed: ${error.code ?? "no-code"}`);
+        return err({ code: "ASSET_LOOKUP_FAILED", message: "Could not read the file." });
+      }
+      if (data === null) return ok(null);
+      return toAsset(data as AssetRow);
+    },
+
+    async listLiveMediaPage(afterId, limit) {
+      let query = client()
+        .from("asset")
+        .select(`${ASSET_COLUMNS}, case_study!inner(deleted_at)`)
+        .in("kind", ["image", "video"])
+        .is("deleted_at", null)
+        .is("case_study.deleted_at", null);
+      if (afterId !== null) query = query.gt("id", afterId);
+      const { data, error } = await query.order("id", { ascending: true }).limit(limit);
+      if (error) {
+        log.error(`asset media page failed: ${error.code ?? "no-code"}`);
+        return err({ code: "ASSET_LOOKUP_FAILED", message: "Could not read the files." });
+      }
+      const assets: Asset[] = [];
+      for (const row of data) {
+        const mapped = toAsset(row as unknown as AssetRow);
+        if (!mapped.ok) return mapped;
+        assets.push(mapped.value);
+      }
+      return ok(assets);
+    },
+
     async setFavourite(caseId, assetId, value) {
       const { data, error } = await client()
         .from("asset")

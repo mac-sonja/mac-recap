@@ -34,6 +34,40 @@ describe("module boundaries (I/O matrix)", () => {
     );
   });
 
+  describe("worker-only module entries (Story 3.2)", () => {
+    it("the worker importing a module's worker entry passes", async () => {
+      expect(await ruleIds("src/worker/run.ts", `import "@/modules/material/worker";\n`)).toEqual([]);
+      expect(await ruleIds("src/worker/run.ts", `export const m = import("@/modules/material/worker");\n`)).toEqual([]);
+    });
+
+    it("the worker importing other internals next to the worker entry still fails", async () => {
+      expect(await ruleIds("src/worker/run.ts", `import "@/modules/material/workers";\n`)).toContain("no-restricted-imports");
+      expect(await ruleIds("src/worker/run.ts", `import "@/modules/material/worker/x";\n`)).toContain("no-restricted-imports");
+      expect(await ruleIds("src/worker/run.ts", `import "@/modules/material/adapters/sharp/image-processor";\n`)).toContain(
+        "no-restricted-imports",
+      );
+    });
+
+    it.each(["src/app/x.ts", "src/app/c.tsx", "src/proxy.ts", "src/lib/x.ts"])("%s importing a module's worker entry fails", async (file) => {
+      expect(await ruleIds(file, `import "@/modules/material/worker";\n`)).toContain("no-restricted-imports");
+    });
+
+    it.each([
+      ["src/modules/material/index.ts", "@/modules/material/worker"],
+      ["src/modules/material/index.ts", "./worker"],
+      ["src/modules/material/application/a.ts", "@/modules/material/worker"],
+      ["src/modules/material/adapters/supabase/a.ts", "@/modules/material/worker"],
+      ["src/modules/generation/application/a.ts", "@/modules/material/worker"],
+    ])("%s importing %s fails", async (file, spec) => {
+      expect(await ruleIds(file, `import "${spec}";\n`)).toContain("no-restricted-imports");
+    });
+
+    it("sharp inside a module's adapters passes; in its worker entry it fails", async () => {
+      expect(await ruleIds("src/modules/material/adapters/sharp/a.ts", `import sharp from "sharp";\nexport { sharp };\n`)).toEqual([]);
+      expect(await ruleIds("src/modules/material/worker.ts", `import "sharp";\n`)).toContain("no-restricted-imports");
+    });
+  });
+
   it("a module importing another module's internals fails", async () => {
     expect(
       await ruleIds(

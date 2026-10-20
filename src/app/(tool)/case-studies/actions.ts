@@ -55,8 +55,9 @@ export async function confirmAssetUpload(input: unknown): Promise<ActionResult<A
 
 /**
  * The files of a case study: `{ caseId }` → its non-deleted assets, oldest first.
- * Images carry a `thumbnailUrl` valid 15 minutes; other kinds carry `null`.
- * 403 `FORBIDDEN` unless the role may `upload`; 400 `INVALID_INPUT`; 404 `NOT_FOUND`;
+ * Images and videos carry a `thumbnailUrl` valid 15 minutes (the thumbnail rendition
+ * when made, else an image's original; `null` for a video without its poster) and
+ * `thumbnailPending`; other kinds carry `null`. 403 `FORBIDDEN` unless the role may `upload`; 400 `INVALID_INPUT`; 404 `NOT_FOUND`;
  * 500 for `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`, `STORAGE_FAILED`.
  */
 export async function listAssets(input: unknown): Promise<ActionResult<ListedAsset[]>> {

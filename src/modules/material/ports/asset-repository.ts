@@ -30,6 +30,17 @@ export interface AssetRepository {
    */
   get(caseId: string, assetId: string): Promise<Result<Asset | null>>;
   /**
+   * One asset by id, soft-deleted or not (check `deletedAt`); `ok(null)` when
+   * there is none. `err ASSET_LOOKUP_FAILED` / `ASSET_INVALID` as `get`.
+   */
+  getById(assetId: string): Promise<Result<Asset | null>>;
+  /**
+   * One page of the live images and videos of live cases, by id: at most
+   * `limit` assets with an id after `afterId` (all from the start when null).
+   * Dev tooling only (the renditions backfill). `err ASSET_LOOKUP_FAILED`.
+   */
+  listLiveMediaPage(afterId: string | null, limit: number): Promise<Result<Asset[]>>;
+  /**
    * Compare-and-set: sets `is_favourite = value` on a live asset of the case only
    * where it is currently `!value`. `ok(true)` when a row changed, `ok(false)` when
    * none did (no such live asset, or it already holds `value`). Only images and

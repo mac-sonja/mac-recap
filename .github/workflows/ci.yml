@@ -18,6 +18,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # The video rendition test (Story 3.2) runs ffmpeg/ffprobe; it is skipped only where they are missing locally.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test

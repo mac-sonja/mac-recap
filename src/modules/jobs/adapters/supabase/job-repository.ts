@@ -147,5 +147,20 @@ export function createSupabaseJobRepository(
       }
       return ok(jobs);
     },
+
+    async liveSubjects(kind, subjectIds) {
+      if (subjectIds.length === 0) return ok([]);
+      const { data, error } = await client()
+        .from("job")
+        .select("subject_id")
+        .eq("kind", kind)
+        .in("subject_id", [...subjectIds])
+        .in("status", ["queued", "running"]);
+      if (error) {
+        log.error(`job live subjects failed: ${error.code}`);
+        return lookupFailed("list the live jobs");
+      }
+      return ok([...new Set(data.map((r) => r.subject_id))]);
+    },
   };
 }

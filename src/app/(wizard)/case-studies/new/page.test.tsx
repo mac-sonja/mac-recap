@@ -90,6 +90,7 @@ const asset: ListedAsset = {
   createdAt: "2026-10-14T10:00:00+00:00",
   isFavourite: true,
   thumbnailUrl: "https://bucket.s3/thumb?sig=1",
+  thumbnailPending: false,
 };
 
 const render = async (params: { caseId?: string | string[]; step?: string | string[]; clientId?: string | string[] } = {}) =>

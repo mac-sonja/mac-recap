@@ -10,6 +10,7 @@ const m = vi.hoisted(() => ({
     listLive: vi.fn(),
     countLive: vi.fn(),
     get: vi.fn(),
+    getById: vi.fn(),
     setFavourite: vi.fn(),
     create: vi.fn(),
     softDelete: vi.fn(),
@@ -20,10 +21,25 @@ const m = vi.hoisted(() => ({
     saveField: vi.fn(),
     read: vi.fn(),
   },
-  storage: { presignUpload: vi.fn(), presignDownload: vi.fn(), presignDownloads: vi.fn(), head: vi.fn() },
+  storage: {
+    presignUpload: vi.fn(),
+    presignDownload: vi.fn(),
+    presignDownloads: vi.fn(),
+    head: vi.fn(),
+    presignKeys: vi.fn(),
+    download: vi.fn(),
+    upload: vi.fn(),
+  },
+  renditions: { listForAsset: vi.fn(), listFor: vi.fn(), get: vi.fn(), upsert: vi.fn() },
+  enqueue: vi.fn(),
+  liveSubjects: vi.fn(),
 }));
 
 vi.mock("@/modules/case-study", () => ({ get: m.get, recordEvent: m.recordEvent }));
+vi.mock("@/modules/jobs", () => ({ enqueue: m.enqueue, liveSubjects: m.liveSubjects }));
+vi.mock("@/modules/material/adapters/supabase/rendition-repository", () => ({
+  createSupabaseRenditionRepository: () => m.renditions,
+}));
 vi.mock("@/modules/material/adapters/supabase/object-storage", () => ({ createSupabaseObjectStorage: m.createSupabaseObjectStorage }));
 vi.mock("@/modules/material/adapters/supabase/asset-repository", () => ({
   createSupabaseAssetRepository: () => m.repo,
@@ -68,6 +84,9 @@ beforeEach(async () => {
   m.repo.hasMaterial.mockResolvedValue(ok(true));
   m.storage.presignUpload.mockResolvedValue(ok({ url: "https://storage.test/upload", method: "PUT", headers: { "content-type": "image/png", "x-upsert": "false" } }));
   m.storage.head.mockResolvedValue(ok({ sizeBytes: 10, contentType: "image/png" }));
+  m.renditions.listFor.mockResolvedValue(ok([]));
+  m.enqueue.mockImplementation(async (input) => ok({ id: "job", ...input }));
+  m.liveSubjects.mockImplementation(async ({ subjectIds }) => ok(subjectIds));
   m.form.saveField.mockResolvedValue(ok(""));
   m.form.read.mockResolvedValue(ok({ context: "Bando PNRR", solution: "", results: "" }));
 });
@@ -104,6 +123,29 @@ describe("material index wiring", () => {
     expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "asset_uploaded", data: { assetId: ASSET_ID } });
   });
 
+  it("confirmUpload of an image enqueues its rendition job through the jobs module", async () => {
+    await material.confirmUpload(actor, { ...ref, contentType: "image/png", fileName: "a.png" });
+    expect(m.enqueue).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ kind: "rendition", subjectId: ASSET_ID, payload: { caseId: CASE_ID }, inputHash: expect.stringMatching(/^[0-9a-f]{64}$/) }),
+    );
+  });
+
+  it("getRendition reads the asset and rendition repositories and signs the stored path", async () => {
+    m.repo.getById.mockResolvedValue(
+      ok({ id: ASSET_ID, caseId: CASE_ID, kind: "image", originalFileName: "a.png", contentType: "image/png", sizeBytes: 10, createdBy: actor.id, createdAt: "2026-10-13T10:00:00Z", deletedAt: null, isFavourite: false }),
+    );
+    m.renditions.get.mockResolvedValue(
+      ok({ assetId: ASSET_ID, specHash: "0123456789abcdef", path: "cases/x/renditions/y.webp", contentType: "image/webp", width: 480, height: 320, sizeBytes: 9, createdAt: "t" }),
+    );
+    m.storage.presignKeys.mockResolvedValue(ok(["https://storage.test/r"]));
+    expect(await material.getRendition(ASSET_ID, "image.thumb")).toEqual(
+      ok({ url: "https://storage.test/r", width: 480, height: 320, contentType: "image/webp" }),
+    );
+    expect(m.repo.getById).toHaveBeenCalledWith(ASSET_ID);
+    expect(m.storage.presignKeys).toHaveBeenCalledWith(["cases/x/renditions/y.webp"], 900);
+    expect(material.RENDITION_SPEC_NAMES).toEqual(["image.thumb", "image.display", "video.poster", "video.display"]);
+  });
+
   it("removeAsset soft-deletes and records asset_removed", async () => {
     expect(await material.removeAsset(actor, ref)).toEqual(ok(undefined));
     expect(m.repo.softDelete).toHaveBeenCalledWith(CASE_ID, ASSET_ID);
@@ -114,9 +156,10 @@ describe("material index wiring", () => {
   it("listAssets lists through the asset repository and signs image thumbnails with the storage adapter", async () => {
     const result = await material.listAssets({ caseId: CASE_ID });
     expect(result).toEqual(
-      ok([{ id: ASSET_ID, kind: "image", originalFileName: "a.png", contentType: "image/png", sizeBytes: 10, createdAt: "2026-10-13T10:00:00Z", isFavourite: false, thumbnailUrl: "https://storage.test/get" }]),
+      ok([{ id: ASSET_ID, kind: "image", originalFileName: "a.png", contentType: "image/png", sizeBytes: 10, createdAt: "2026-10-13T10:00:00Z", isFavourite: false, thumbnailUrl: "https://storage.test/get", thumbnailPending: true }]),
     );
     expect(m.repo.listLive).toHaveBeenCalledWith(CASE_ID);
+    expect(m.liveSubjects).toHaveBeenCalledWith({ kind: "rendition", subjectIds: [ASSET_ID] });
     expect(m.storage.presignDownloads).toHaveBeenCalledWith([{ caseId: CASE_ID, assetId: ASSET_ID, contentType: "image/png" }], 900);
     expect(m.recordEvent).not.toHaveBeenCalled();
   });

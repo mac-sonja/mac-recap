@@ -44,11 +44,12 @@ function stub(rpcResponse: { data: unknown; error: unknown }, listResponse: { da
   const eq = vi.fn(() => builder);
   const order = vi.fn(() => builder);
   const limit = vi.fn(() => builder);
-  Object.assign(builder, { select, eq, order, limit, then: (resolve: (r: typeof listResponse) => unknown) => resolve(listResponse) });
+  const inFilter = vi.fn(() => builder);
+  Object.assign(builder, { select, eq, order, limit, in: inFilter, then: (resolve: (r: typeof listResponse) => unknown) => resolve(listResponse) });
   const from = vi.fn(() => builder);
   const rpc = vi.fn(async () => rpcResponse);
   const factory = (() => ({ from, rpc })) as unknown as Parameters<typeof createSupabaseJobRepository>[0];
-  return { repo: createSupabaseJobRepository(factory), rpc, from, select, eq, order, limit };
+  return { repo: createSupabaseJobRepository(factory), rpc, from, select, eq, order, limit, inFilter };
 }
 
 beforeEach(() => {
@@ -173,5 +174,34 @@ describe("listBySubject", () => {
       ["id", { ascending: true }],
     ]);
     expect(limit).toHaveBeenCalledWith(50);
+  });
+});
+
+describe("liveSubjects", () => {
+  const OTHER = "bbbbbbbb-0000-4000-8000-000000000002";
+
+  it("reads the queued or running jobs of the kind for the subjects in one query, distinct", async () => {
+    const { repo, from, select, eq, inFilter } = stub({ data: null, error: null }, { data: [{ subject_id: SUBJECT }, { subject_id: SUBJECT }], error: null });
+    expect(await repo.liveSubjects("rendition", [SUBJECT, OTHER])).toEqual({ ok: true, value: [SUBJECT] });
+    expect(from).toHaveBeenCalledOnce();
+    expect(select).toHaveBeenCalledWith("subject_id");
+    expect(eq).toHaveBeenCalledWith("kind", "rendition");
+    expect(inFilter.mock.calls).toEqual([
+      ["subject_id", [SUBJECT, OTHER]],
+      ["status", ["queued", "running"]],
+    ]);
+  });
+
+  it("no subjects: no query", async () => {
+    const { repo, from } = stub({ data: null, error: null });
+    expect(await repo.liveSubjects("rendition", [])).toEqual({ ok: true, value: [] });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("a failed read is JOB_LOOKUP_FAILED", async () => {
+    const { repo } = stub({ data: null, error: null }, { data: null, error: { code: "08006" } });
+    const result = await repo.liveSubjects("rendition", [SUBJECT]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("JOB_LOOKUP_FAILED");
   });
 });

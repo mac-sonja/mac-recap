@@ -59,6 +59,7 @@ function fakeRepo(queue: Array<Result<Job | null>> = []) {
     ),
     release: vi.fn<JobRepository["release"]>(async () => ok(true)),
     listBySubject: vi.fn<JobRepository["listBySubject"]>(),
+    liveSubjects: vi.fn<JobRepository["liveSubjects"]>(),
   };
   return repo;
 }

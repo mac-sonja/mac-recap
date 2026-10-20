@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { FORBIDDEN_IN_WEB, forbiddenImports, sourceFiles } from "./helpers/web-imports";
+import { FORBIDDEN_IN_WEB, forbiddenImports, reachedSources, sourceFiles } from "./helpers/web-imports";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const fixtures = "test/fixtures/web-imports";
@@ -20,6 +20,27 @@ describe("web code never imports worker-only packages (AD-10)", () => {
     expect(entries.filter((e) => e.includes("/src/app/")).length).toBeGreaterThan(10);
     const found = await forbiddenImports(root, entries);
     expect(found, found.map((f) => `${f.importer} imports ${f.path}`).join("\n")).toEqual([]);
+  });
+});
+
+describe("worker-only module entries (Story 3.2)", () => {
+  /** A module's worker entry and the adapters only it uses (sharp, ffmpeg). */
+  const WORKER_ONLY = /^src\/modules\/[^/]+\/(worker\.ts$|adapters\/(sharp|ffmpeg)\/)/;
+
+  it("no web entry reaches src/modules/*/worker.ts or the sharp/ffmpeg adapters", async () => {
+    const reached = await reachedSources(root, webEntries());
+    expect(reached).toContain("src/modules/material/index.ts");
+    expect(reached.filter((file) => WORKER_ONLY.test(file))).toEqual([]);
+  });
+
+  it("the worker entry does reach them, with sharp and child_process (positive control)", async () => {
+    const entry = [`${root}src/worker/index.ts`];
+    const reached = await reachedSources(root, entry);
+    expect(reached).toContain("src/modules/material/worker.ts");
+    expect(reached).toContain("src/modules/material/adapters/sharp/image-processor.ts");
+    expect(reached).toContain("src/modules/material/adapters/ffmpeg/video-processor.ts");
+    const paths = (await forbiddenImports(root, entry)).map((f) => f.path);
+    expect(paths).toEqual(expect.arrayContaining(["sharp", "node:child_process"]));
   });
 });
 

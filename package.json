@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build && npm run build:dist",
-    "build:dist": "esbuild worker=src/worker/index.ts preflight=src/preflight.ts --bundle --platform=node --target=node24 --format=cjs --outdir=dist --log-level=warning",
+    "build:dist": "esbuild worker=src/worker/index.ts preflight=src/preflight.ts --bundle --platform=node --target=node24 --format=cjs --outdir=dist --external:sharp --log-level=warning",
+    "dev:renditions-backfill": "esbuild renditions-backfill=src/worker/renditions-backfill-entry.ts --bundle --platform=node --target=node24 --format=cjs --outdir=dist --external:sharp --log-level=warning && node --env-file=.env.local dist/renditions-backfill.js",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
