@@ -218,7 +218,7 @@ describe("ClientCombobox", () => {
     expect(options()).toEqual([]);
     expect(input().getAttribute("aria-expanded")).toBe("false");
     const note = document.getElementById(input().getAttribute("aria-describedby") ?? "");
-    expect(note?.textContent).toBe("Nessun cliente trovato. Aggiungilo nella pagina Clienti.");
+    expect(note?.textContent).toBe("Nessun cliente con questo nome. Aggiungilo dalla pagina Clienti.");
     expect(screen.getByRole("link", { name: "pagina Clienti" }).getAttribute("href")).toBe("/clients");
     // Enter with no list submits nothing and picks nothing.
     await user.keyboard("{Enter}");

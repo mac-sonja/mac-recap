@@ -1,48 +1,23 @@
-"use client";
-
-import { CircleUser } from "lucide-react";
-import { useId, useRef, useState } from "react";
-import { it } from "@/shared/i18n/it";
-
 /**
- * The actor's display name and role label behind a disclosure button.
- * No sign-out until Epic 6 (absent, not disabled). Escape closes and returns focus.
+ * The person using the tool: an initial in a dark disc, their name and role
+ * (sidebar footer). Static until sign-out arrives in Epic 6: a menu with nothing
+ * in it would only add a click. Collapsed to the initial below 1280 px, with the
+ * name kept for screen readers.
  */
 export function UserMenu({ displayName, roleLabel }: { displayName: string; roleLabel: string }) {
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
-  const buttonRef = useRef<HTMLButtonElement>(null);
-
+  const initial = displayName.trim().charAt(0).toLocaleUpperCase("it-IT") || "?";
   return (
-    <div
-      className="relative"
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && open) {
-          setOpen(false);
-          buttonRef.current?.focus();
-        }
-      }}
-    >
-      <div
-        id={panelId}
-        hidden={!open}
-        className="absolute bottom-full left-0 z-10 mb-2 w-56 rounded-lg border bg-surface-raised p-3"
+    <div className="flex items-center justify-center gap-2.5 px-1 xl:justify-start" title={displayName}>
+      <span
+        aria-hidden="true"
+        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground-strong font-label text-xs font-semibold text-surface"
       >
-        <p className="font-body text-sm text-foreground">{displayName}</p>
-        <p className="font-label text-xs text-foreground-muted">{roleLabel}</p>
-      </div>
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-expanded={open}
-        aria-controls={panelId}
-        title={it.shell.userMenu.button}
-        onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-center gap-3 rounded-md px-3 py-2 font-label text-sm text-foreground-muted hover:bg-surface-control hover:text-foreground xl:justify-start"
-      >
-        <CircleUser aria-hidden="true" className="size-5 shrink-0" />
-        <span className="sr-only xl:not-sr-only">{it.shell.userMenu.button}</span>
-      </button>
+        {initial}
+      </span>
+      <span className="sr-only min-w-0 flex-col xl:not-sr-only xl:flex">
+        <span className="truncate font-label text-sm leading-tight font-medium text-foreground">{displayName}</span>
+        <span className="truncate font-label text-xs leading-tight text-foreground-muted">{roleLabel}</span>
+      </span>
     </div>
   );
 }

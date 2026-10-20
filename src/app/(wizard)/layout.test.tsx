@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
+import { it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
 const getActor = vi.fn<() => Promise<Result<Actor>>>();
@@ -13,7 +14,7 @@ vi.mock("@/modules/access", async () => {
 
 const { default: WizardLayout } = await import("./layout");
 
-const NO_ACTOR = "Non è stato possibile identificare il tuo profilo.";
+const NO_ACTOR = dict.shell.noActor;
 
 const renderLayout = async () => renderToStaticMarkup(await WizardLayout({ children: <p>content</p> }));
 

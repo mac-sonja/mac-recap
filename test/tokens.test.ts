@@ -94,3 +94,21 @@ describe("components read tokens only", () => {
     expect(source).not.toMatch(FONT_STACK);
   });
 });
+
+describe("light and dark themes", () => {
+  const darkExplicit = css.match(/:root\[data-theme="dark"\]\s*\{([^}]*)\}/)?.[1] ?? "";
+  const darkSystem = css.match(/@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\[data-theme="light"\]\)\s*\{([^}]*)\}/)?.[1] ?? "";
+
+  it("redefines the surfaces and text for a picked dark theme and for a dark system", () => {
+    for (const block of [darkExplicit, darkSystem]) {
+      for (const name of ["surface", "surface-raised", "foreground", "foreground-muted", "focus-ring"]) {
+        expect(block).toMatch(new RegExp(`--color-${name}\\s*:`));
+      }
+    }
+  });
+
+  it("keeps the two dark blocks identical", () => {
+    const norm = (block: string) => block.replace(/\s+/g, " ").trim();
+    expect(norm(darkSystem)).toBe(norm(darkExplicit));
+  });
+});

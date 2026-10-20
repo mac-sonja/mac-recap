@@ -3,6 +3,7 @@ import { listScopeFor } from "@/app/_lib/list-scope";
 import { requireSurface } from "@/app/_lib/surface";
 import { authorize, can } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
+import { PageHeader } from "@/app/_components/page-header";
 import { it } from "@/shared/i18n/it";
 import { formatDateTime } from "@/shared/i18n/format";
 import { CaseStudiesTable } from "./_components/case-studies-table";
@@ -39,8 +40,8 @@ export default async function CaseStudiesPage() {
   }));
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="font-heading text-2xl font-medium text-foreground">{it.caseStudies.heading}</h1>
+    <div className="flex flex-col gap-8">
+      <PageHeader title={it.caseStudies.heading} lead={it.caseStudies.lead} />
       <CaseStudiesTable rows={rows} canCreate={can(actor, "create case")} />
     </div>
   );

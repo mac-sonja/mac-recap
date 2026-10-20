@@ -1,16 +1,27 @@
 /** Timestamps are stored in UTC and always shown in Europe/Rome, Italian format. */
-const DATE_TIME = new Intl.DateTimeFormat("it-IT", {
+const DAY_TIME = new Intl.DateTimeFormat("it-IT", {
   timeZone: "Europe/Rome",
-  day: "2-digit",
-  month: "2-digit",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const DAY_YEAR_TIME = new Intl.DateTimeFormat("it-IT", {
+  timeZone: "Europe/Rome",
+  day: "numeric",
+  month: "short",
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
 });
 
-/** An ISO timestamp as Italian date and time in Europe/Rome, e.g. `13/10/2026, 09:05`. */
-export function formatDateTime(iso: string): string {
-  return DATE_TIME.format(new Date(iso));
+/**
+ * An ISO timestamp as a short Italian date and time in Europe/Rome: `13 ott, 09:05`
+ * in the current year, `13 ott 2025, 09:05` otherwise.
+ */
+export function formatDateTime(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso);
+  return (currentYear(date) === currentYear(now) ? DAY_TIME : DAY_YEAR_TIME).format(date);
 }
 
 const YEAR = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Rome", year: "numeric" });

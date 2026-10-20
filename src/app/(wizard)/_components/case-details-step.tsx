@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { createCaseStudy, saveDetailsField, updateCaseStudyDetails } from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
+import { FIELD, FIELD_HINT, FIELD_LABEL, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { wizardHref } from "@/app/_lib/routes";
 import type { BusinessLine, ClientRef, Locale } from "@/modules/case-study";
@@ -41,9 +42,8 @@ export const TITLE_DEBOUNCE_MS = 300;
 /** How many live-region lines stay mounted. */
 const ANNOUNCEMENTS_KEPT = 5;
 
-const INPUT =
-  "w-full rounded-md border bg-surface-control px-3 py-2 font-body text-sm text-foreground placeholder:text-foreground-muted aria-invalid:border-danger";
-const LABEL = "font-label text-xs text-foreground-muted";
+const INPUT = FIELD;
+const LABEL = FIELD_LABEL;
 
 /** Characters as the server counts them: code points, so an emoji is one. */
 const codePoints = (text: string) => [...text].length;
@@ -501,7 +501,7 @@ export function CaseDetailsStep({
                 })()}
                 className={cn(INPUT, "text-foreground-muted")}
               />
-              <p id={ids.clientFixed} className={LABEL}>
+              <p id={ids.clientFixed} className={FIELD_HINT}>
                 {it.wizard.clientFixed}
               </p>
             </>
@@ -590,7 +590,7 @@ export function CaseDetailsStep({
         </div>
       </div>
 
-      <h2 className="mt-10 mb-6 font-heading text-xl font-medium text-foreground-strong">{copy.heading}</h2>
+      <h2 className={cn("mt-12 mb-6", STEP_HEADING)}>{copy.heading}</h2>
 
       <div className="flex flex-col gap-5">
         {TEXT_FIELDS.map((field) => {
@@ -618,10 +618,10 @@ export function CaseDetailsStep({
                 aria-describedby={message === null ? undefined : textErrorId}
                 onChange={(event) => texts.change(field, event.target.value)}
                 onBlur={() => void texts.save(field)}
-                className="min-h-[120px] w-full resize-y rounded-md border border-transparent bg-surface-control p-3 font-body text-sm text-foreground placeholder:text-foreground-muted"
+                className={TEXTAREA}
               />
               {message !== null && (
-                <p id={textErrorId} className={cn("font-label text-xs", over || saveFailed ? "text-danger" : "text-foreground-muted")}>
+                <p id={textErrorId} className={cn(FIELD_HINT, (over || saveFailed) && "text-danger")}>
                   {message}
                 </p>
               )}
@@ -650,7 +650,7 @@ export function CaseDetailsStep({
             aria-disabled={!ready || pending}
             aria-describedby={!hasClients ? ids.noClients : ready ? undefined : ids.reason}
             aria-busy={pending || undefined}
-            className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, !ready && "cursor-not-allowed", "px-[18px] py-2.5")}
+            className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, !ready && "cursor-not-allowed", "h-10 px-5")}
           >
             {it.wizard.next}
           </button>

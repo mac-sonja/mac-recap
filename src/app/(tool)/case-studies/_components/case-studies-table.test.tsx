@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { it as dict } from "@/shared/i18n/it";
+import { fill, it as dict } from "@/shared/i18n/it";
 import type { CaseStudyRow } from "./filter-sort";
 
 const push = vi.fn();
@@ -24,7 +24,7 @@ const rows: CaseStudyRow[] = [
     status: "approved",
     businessLine: "video",
     updatedAt: "2026-10-02T10:00:00+00:00",
-    updatedLabel: "02/10/2026, 12:00",
+    updatedLabel: "2 ott, 12:00",
   },
   {
     id: DRAFT_ID,
@@ -36,7 +36,7 @@ const rows: CaseStudyRow[] = [
     status: "draft",
     businessLine: "social_media",
     updatedAt: "2026-10-12T10:00:00+00:00",
-    updatedLabel: "12/10/2026, 12:00",
+    updatedLabel: "12 ott, 12:00",
   },
   {
     id: "cccccccc-0000-4000-8000-000000000003",
@@ -48,7 +48,7 @@ const rows: CaseStudyRow[] = [
     status: "in_review",
     businessLine: null,
     updatedAt: "2026-10-05T10:00:00+00:00",
-    updatedLabel: "05/10/2026, 12:00",
+    updatedLabel: "5 ott, 12:00",
   },
 ];
 
@@ -67,6 +67,11 @@ const names = () =>
 
 const header = (label: string) => screen.getByRole("columnheader", { name: label });
 const search = () => screen.getByRole("searchbox", { name: dict.caseStudies.search.label });
+const COLUMNS = dict.caseStudies.table.columns;
+const SEGMENTS = dict.caseStudies.filter;
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** A status filter segment by its label; its accessible name also carries the count ("Tutte 3"). */
+const segment = (label: string) => screen.getByRole("radio", { name: new RegExp(`^${escape(label)} \\d+$`) });
 
 /** Sets the search text under fake timers; the debounce has not elapsed yet. */
 function setSearch(text: string) {
@@ -79,17 +84,17 @@ describe("CaseStudiesTable", () => {
     render(<CaseStudiesTable rows={rows} canCreate />);
     const table = screen.getByRole("table", { name: dict.caseStudies.table.caption });
     expect(within(table).getAllByRole("columnheader").map((th) => th.textContent)).toEqual([
-      "ID",
-      "Nome",
-      "Cliente",
-      "Anno",
-      "Stato",
-      "Business line",
-      "Aggiornato",
-      "Link",
+      COLUMNS.id,
+      COLUMNS.name,
+      COLUMNS.client,
+      COLUMNS.year,
+      COLUMNS.status,
+      COLUMNS.businessLine,
+      COLUMNS.updated,
+      COLUMNS.links,
     ]);
     expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
-    expect(header("Aggiornato").getAttribute("aria-sort")).toBe("descending");
+    expect(header(COLUMNS.updated).getAttribute("aria-sort")).toBe("descending");
 
     const first = within(table).getAllByRole("row")[1];
     const cells = first.querySelectorAll("td");
@@ -100,43 +105,50 @@ describe("CaseStudiesTable", () => {
     expect(first.getAttribute("data-case-id")).toBe(DRAFT_ID);
     expect(cells[2].textContent).toBe("Acme");
     expect(cells[3].textContent).toBe("2026");
-    expect(cells[4].textContent).toBe("Bozza");
-    expect(cells[5].textContent).toBe("Social media");
+    expect(cells[4].textContent).toBe(dict.status.draft);
+    expect(cells[5].textContent).toBe(dict.businessLines.social_media);
     expect(cells[6].querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-12T10:00:00+00:00");
-    expect(cells[6].textContent).toBe("12/10/2026, 12:00");
+    expect(cells[6].textContent).toBe("12 ott, 12:00");
     expect(cells[7].textContent).toBe("");
     // A case created before the business line existed leaves the cell empty.
     expect(within(table).getAllByRole("row")[2].querySelectorAll("td")[5].textContent).toBe("");
   });
 
-  it("puts the status filter and the search in a top-right toolbar, Tutti selected", () => {
+  it("puts the status filter and the search in one toolbar, Tutte selected, each segment with its count", () => {
     render(<CaseStudiesTable rows={rows} canCreate />);
-    expect(search().getAttribute("placeholder")).toBe("Cerca progetto o cliente…");
-    const group = screen.getByRole("radiogroup", { name: "Filtra per stato" });
+    expect(search().getAttribute("placeholder")).toBe(dict.caseStudies.search.placeholder);
+    const group = screen.getByRole("radiogroup", { name: SEGMENTS.label });
     expect(within(group).getAllByRole("radio").map((r) => [r.textContent, r.getAttribute("aria-checked")])).toEqual([
-      ["Tutti", "true"],
-      ["Bozza", "false"],
-      ["In elaborazione", "false"],
-      ["Da approvare", "false"],
-      ["Approvato", "false"],
+      [`${SEGMENTS.all} 3`, "true"],
+      [`${SEGMENTS.statuses.draft} 1`, "false"],
+      [`${SEGMENTS.statuses.generating} 0`, "false"],
+      [`${SEGMENTS.statuses.in_review} 1`, "false"],
+      [`${SEGMENTS.statuses.approved} 1`, "false"],
     ]);
     expect(group.className).toContain("rounded-full");
-    expect(group.parentElement?.className).toContain("justify-end");
-    expect(group.parentElement).toBe(search().parentElement);
-    // No counts on the segments.
-    expect(group.textContent).not.toMatch(/\d/);
+    // Same toolbar row: the search sits in its own wrapper next to the segments.
+    expect(group.parentElement).toBe(search().parentElement?.parentElement);
   });
 
-  it("filters by one status at a time; Tutti shows every row again", async () => {
+  it("counts the segments under the current search", () => {
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    setSearch("zeta");
+    act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
+    expect(segment(SEGMENTS.all).textContent).toBe(`${SEGMENTS.all} 1`);
+    expect(segment(SEGMENTS.statuses.approved).textContent).toBe(`${SEGMENTS.statuses.approved} 1`);
+    expect(segment(SEGMENTS.statuses.draft).textContent).toBe(`${SEGMENTS.statuses.draft} 0`);
+  });
+
+  it("filters by one status at a time; Tutte shows every row again", async () => {
     const user = userEvent.setup();
     render(<CaseStudiesTable rows={rows} canCreate />);
-    await user.click(screen.getByRole("radio", { name: "Da approvare" }));
+    await user.click(segment(SEGMENTS.statuses.in_review));
     expect(names()).toEqual(["Émile"]);
-    expect(screen.getByRole("radio", { name: "Da approvare" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByRole("radio", { name: "Tutti" }).getAttribute("aria-checked")).toBe("false");
-    await user.click(screen.getByRole("radio", { name: "Approvato" }));
+    expect(segment(SEGMENTS.statuses.in_review).getAttribute("aria-checked")).toBe("true");
+    expect(segment(SEGMENTS.all).getAttribute("aria-checked")).toBe("false");
+    await user.click(segment(SEGMENTS.statuses.approved));
     expect(names()).toEqual(["Zeta"]);
-    await user.click(screen.getByRole("radio", { name: "Tutti" }));
+    await user.click(segment(SEGMENTS.all));
     expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
   });
 
@@ -160,7 +172,7 @@ describe("CaseStudiesTable", () => {
   it("combines the status filter with the search (both must match)", async () => {
     const extra: CaseStudyRow = { ...rows[2], id: "dddddddd-0000-4000-8000-000000000004", name: "Lumière", clientName: "Lumen", status: "draft" };
     render(<CaseStudiesTable rows={[...rows, extra]} canCreate />);
-    fireEvent.click(screen.getByRole("radio", { name: "Da approvare" }));
+    fireEvent.click(segment(SEGMENTS.statuses.in_review));
     setSearch("lum");
     act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
     expect(names()).toEqual(["Émile"]);
@@ -173,44 +185,46 @@ describe("CaseStudiesTable", () => {
     expect(names()).toEqual(["Alfa"]);
   });
 
-  it("sorts by Business line, cases without one first", async () => {
+  it("sorts by Area, cases without one first", async () => {
     const user = userEvent.setup();
     render(<CaseStudiesTable rows={rows} canCreate />);
-    await user.click(within(header("Business line")).getByRole("button"));
+    await user.click(within(header(COLUMNS.businessLine)).getByRole("button"));
     expect(names()).toEqual(["Émile", "Alfa", "Zeta"]);
-    expect(header("Business line").getAttribute("aria-sort")).toBe("ascending");
+    expect(header(COLUMNS.businessLine).getAttribute("aria-sort")).toBe("ascending");
   });
 
   it("names both the search and the status when together they leave no rows", () => {
     render(<CaseStudiesTable rows={rows} canCreate />);
-    fireEvent.click(screen.getByRole("radio", { name: "Da approvare" }));
+    fireEvent.click(segment(SEGMENTS.statuses.in_review));
     setSearch("zeta");
     act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
     expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.getByRole("status").textContent).toBe("Nessun risultato per “zeta” tra Da approvare.");
+    expect(screen.getByRole("status").textContent).toBe(
+      fill(dict.caseStudies.noResultsQueryStatus, { query: "zeta", status: dict.status.in_review }),
+    );
   });
 
   it("names the status when a filter alone leaves no rows; clearing resets search and filter", () => {
     render(<CaseStudiesTable rows={rows} canCreate />);
-    fireEvent.click(screen.getByRole("radio", { name: "In elaborazione" }));
+    fireEvent.click(segment(SEGMENTS.statuses.generating));
     expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.getByRole("status").textContent).toBe("Nessuna case history in stato In elaborazione.");
+    expect(screen.getByRole("status").textContent).toBe(fill(dict.caseStudies.noResultsStatus, { status: dict.status.generating }));
     fireEvent.click(screen.getByRole("button", { name: dict.caseStudies.clearSearch }));
     expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
-    expect(screen.getByRole("radio", { name: "Tutti" }).getAttribute("aria-checked")).toBe("true");
+    expect(segment(SEGMENTS.all).getAttribute("aria-checked")).toBe("true");
   });
 
   it("sorts by Name A→Z, then Z→A, with aria-sort following", async () => {
     const user = userEvent.setup();
     render(<CaseStudiesTable rows={rows} canCreate />);
-    await user.click(within(header("Nome")).getByRole("button"));
+    await user.click(within(header(COLUMNS.name)).getByRole("button"));
     expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
-    expect(header("Nome").getAttribute("aria-sort")).toBe("ascending");
-    expect(header("Aggiornato").hasAttribute("aria-sort")).toBe(false);
+    expect(header(COLUMNS.name).getAttribute("aria-sort")).toBe("ascending");
+    expect(header(COLUMNS.updated).hasAttribute("aria-sort")).toBe(false);
 
-    await user.click(within(header("Nome")).getByRole("button"));
+    await user.click(within(header(COLUMNS.name)).getByRole("button"));
     expect(names()).toEqual(["Zeta", "Émile", "Alfa"]);
-    expect(header("Nome").getAttribute("aria-sort")).toBe("descending");
+    expect(header(COLUMNS.name).getAttribute("aria-sort")).toBe("descending");
   });
 
   it("filters only after the debounce, case- and accent-insensitively", () => {
@@ -238,9 +252,9 @@ describe("CaseStudiesTable", () => {
   it("sorts ID by code naturally: CIT-2024-9 before CIT-2024-10", async () => {
     const user = userEvent.setup();
     render(<CaseStudiesTable rows={rows} canCreate />);
-    await user.click(within(header("ID")).getByRole("button"));
+    await user.click(within(header(COLUMNS.id)).getByRole("button"));
     expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
-    await user.click(within(header("ID")).getByRole("button"));
+    await user.click(within(header(COLUMNS.id)).getByRole("button"));
     expect(names()).toEqual(["Zeta", "Émile", "Alfa"]);
   });
 
@@ -249,7 +263,7 @@ describe("CaseStudiesTable", () => {
     setSearch("nessuno");
     act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
     expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.getByRole("status").textContent).toContain("Nessun risultato per 'nessuno'.");
+    expect(screen.getByRole("status").textContent).toBe(fill(dict.caseStudies.noResults, { query: "nessuno" }));
 
     fireEvent.click(screen.getByRole("button", { name: dict.caseStudies.clearSearch }));
     expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
@@ -264,23 +278,36 @@ describe("CaseStudiesTable", () => {
     render(<CaseStudiesTable rows={[]} canCreate={canCreate} />);
     expect(screen.getByText(dict.caseStudies.empty)).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
-    const create = screen.queryAllByRole("link", { name: dict.shell.nav.newCaseStudy });
+    const create = screen.queryAllByRole("link", { name: dict.caseStudies.emptyAction });
     expect(create).toHaveLength(links);
-    if (links) expect(create[0].getAttribute("href")).toBe("/case-studies/new");
+    if (links) {
+      expect(create[0].getAttribute("href")).toBe("/case-studies/new");
+      // Just the label: no plus icon.
+      expect(create[0].querySelector("svg")).toBeNull();
+    }
   });
 
-  it("takes the empty message and the new-case link from its props", () => {
+  it("takes the empty message, the action label and the new-case link from its props", () => {
     const href = "/case-studies/new?clientId=cccccccc-0000-4000-8000-000000000001";
-    render(<CaseStudiesTable rows={[]} canCreate emptyMessage={dict.clients.detail.noCases} newHref={href} />);
+    render(
+      <CaseStudiesTable
+        rows={[]}
+        canCreate
+        emptyMessage={dict.clients.detail.noCases}
+        emptyAction={dict.clients.detail.newCase}
+        newHref={href}
+      />,
+    );
     expect(screen.getByText(dict.clients.detail.noCases)).toBeTruthy();
     expect(screen.queryByText(dict.caseStudies.empty)).toBeNull();
-    expect(screen.getByRole("link", { name: dict.shell.nav.newCaseStudy }).getAttribute("href")).toBe(href);
+    expect(screen.queryByRole("link", { name: dict.caseStudies.emptyAction })).toBeNull();
+    expect(screen.getByRole("link", { name: dict.clients.detail.newCase }).getAttribute("href")).toBe(href);
   });
 
   it("focuses search on / outside a text field", async () => {
     const user = userEvent.setup();
     render(<CaseStudiesTable rows={rows} canCreate />);
-    within(header("Nome")).getByRole("button").focus();
+    within(header(COLUMNS.name)).getByRole("button").focus();
     await user.keyboard("/");
     expect(document.activeElement).toBe(search());
     expect((search() as HTMLInputElement).value).toBe("");

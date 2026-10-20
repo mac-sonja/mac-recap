@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ClientDeleted } from "@/modules/case-study";
+import { it as dict, fill } from "@/shared/i18n/it";
 
 const push = vi.fn();
 const refresh = vi.fn();
@@ -30,7 +31,7 @@ const open = async (caseCount = 2) => {
   render(<DeleteClientButton clientId={CLIENT_ID} name={NAME} caseCount={caseCount} />);
   await user.click(screen.getByRole("button", { name: "Elimina cliente" }));
   const dialog = await screen.findByRole("dialog", { name: `Eliminare ${NAME}?` });
-  return { user, dialog, input: screen.getByLabelText("Scrivi il nome del cliente per confermare"), confirm: screen.getByRole("button", { name: "Elimina" }) };
+  return { user, dialog, input: screen.getByLabelText("Per conferma, scrivi il nome del cliente"), confirm: screen.getByRole("button", { name: "Elimina" }) };
 };
 
 describe("DeleteClientButton", () => {
@@ -38,15 +39,15 @@ describe("DeleteClientButton", () => {
     const { dialog } = await open(2);
     expect(dialog.hasAttribute("aria-describedby")).toBe(true);
     expect(dialog.textContent).toContain(
-      "Verranno eliminate anche le sue 2 case history, comprese quelle approvate. L'operazione non si può annullare.",
+      fill(dict.clientWizard.delete.withCases, { n: 2 }),
     );
     expect(screen.getByRole("button", { name: "Annulla" })).toBeTruthy();
   });
 
   it("says the client has no case histories when the count is 0", async () => {
     const { dialog } = await open(0);
-    expect(dialog.textContent).toContain("Il cliente non ha case history.");
-    expect(dialog.textContent).not.toContain("Verranno eliminate");
+    expect(dialog.textContent).toContain(dict.clientWizard.delete.noCases);
+    expect(dialog.textContent).not.toContain("Con lui spariscono");
   });
 
   it("keeps Elimina inactive until the typed name matches, and never calls the action before", async () => {
@@ -102,7 +103,7 @@ describe("DeleteClientButton", () => {
     const { user, input, confirm } = await open();
     await user.type(input, NAME);
     await user.click(confirm);
-    expect(await screen.findByText("Non è stato possibile eliminare il cliente. Riprova.")).toBeTruthy();
+    expect(await screen.findByText("Non siamo riusciti a eliminare il cliente. Riprova.")).toBeTruthy();
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -111,7 +112,7 @@ describe("DeleteClientButton", () => {
     const { user, input, confirm } = await open();
     await user.type(input, NAME);
     await user.click(confirm);
-    expect(await screen.findByText("Il nome del cliente è cambiato. Ricarica la pagina e riprova.")).toBeTruthy();
+    expect(await screen.findByText("Nel frattempo il nome del cliente è cambiato. Ricarica la pagina e riprova.")).toBeTruthy();
     expect(refresh).toHaveBeenCalledOnce();
     expect(push).not.toHaveBeenCalled();
     expect(confirm.hasAttribute("aria-disabled")).toBe(false);
@@ -122,7 +123,7 @@ describe("DeleteClientButton", () => {
     const { user, input, confirm } = await open();
     await user.type(input, NAME);
     await user.click(confirm);
-    expect(await screen.findByText("Non è stato possibile eliminare il cliente. Riprova.")).toBeTruthy();
+    expect(await screen.findByText("Non siamo riusciti a eliminare il cliente. Riprova.")).toBeTruthy();
     expect(confirm.hasAttribute("aria-disabled")).toBe(false);
     await user.click(confirm);
     await waitFor(() => expect(push).toHaveBeenCalledWith("/clients"));

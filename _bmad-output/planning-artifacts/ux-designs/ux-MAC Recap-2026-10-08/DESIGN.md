@@ -3,7 +3,7 @@ name: MAC Recap
 description: Visual identity of the MAC Recap tool UI (not the case study templates). Dark, neutral-grey chrome on black; lime for the main calls to action and a few details, blue for secondary emphasis. shadcn/ui (new-york, neutral base) on Next.js + Tailwind; tokens below override the shadcn defaults.
 status: final
 created: 2026-10-08
-updated: 2026-10-16
+updated: 2026-10-20
 colors:
   # Surfaces: black page, neutral grey ramp sampled from imports/ui-refs. No navy anywhere in the UI.
   surface: '#000000'
@@ -152,6 +152,17 @@ components:
   focus-indicator:
     color: '{colors.focus-ring}'
 ---
+
+> **Visual refresh, 2026-10-20 (owner).** The tool now has two themes: a light one
+> (warm paper page, white cards, warm grey controls; the default when the system is
+> light) and the dark one described below. People pick Automatico / Chiaro / Scuro at
+> the bottom of the sidebar. Status badges gained a dot and new hues (draft grey,
+> generating violet, review orange, approved green — lime in dark). Owner/designer
+> now lands on a Home dashboard. The live values are in `src/app/globals.css`; the
+> rules for tokens, copy voice, calls to action and motion are in
+> `.claude/skills/mac-recap-ui/SKILL.md`. The colour values in this front matter
+> describe the dark theme.
+
 
 ## Brand & Style
 

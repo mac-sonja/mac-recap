@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { it } from "@/shared/i18n/it";
 
 /**
@@ -13,7 +14,7 @@ export default function WizardError() {
       <p role="alert" className="max-w-prose font-body text-base text-foreground">
         {it.wizard.loadFailed}
       </p>
-      <Link href="/case-studies" className="font-label text-sm text-foreground underline underline-offset-2">
+      <Link href="/case-studies" className={SECONDARY_ACTION}>
         {it.wizard.back}
       </Link>
     </main>

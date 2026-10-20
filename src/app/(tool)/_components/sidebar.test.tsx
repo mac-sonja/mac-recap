@@ -6,7 +6,13 @@ vi.mock("next/navigation", () => ({ usePathname: () => pathname.current }));
 
 const { Sidebar } = await import("./sidebar");
 
-const render = (show: { showNewCaseStudy: boolean; showCaseStudies: boolean; showClients?: boolean }) =>
+const render = (show: {
+  showNewCaseStudy: boolean;
+  showCaseStudies: boolean;
+  showClients?: boolean;
+  toReviewCount?: number;
+  theme?: "system" | "light" | "dark";
+}) =>
   renderToStaticMarkup(<Sidebar showClients={false} {...show} displayName="Dev Owner" roleLabel="Owner/designer" />);
 
 afterEach(() => {
@@ -14,12 +20,13 @@ afterEach(() => {
 });
 
 describe("Sidebar", () => {
-  it("shows the new-case-study action, Case studies and the user menu", () => {
+  it("shows the new-case action, Home, Case, the appearance switch and the profile", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });
     expect(html).toContain('aria-label="Navigazione principale"');
-    expect(html).toContain("Nuova case history");
+    expect(html).toContain("Nuova case");
+    expect(html).toContain('href="/home"');
     expect(html.match(/<a [^>]*aria-current="page"[^>]*>/)?.[0]).toContain('href="/case-studies"');
-    expect(html).toContain("Account");
+    expect(html).toContain('role="radiogroup" aria-label="Aspetto"');
     expect(html).toContain("Dev Owner");
     expect(html).toContain("Owner/designer");
   });
@@ -40,9 +47,25 @@ describe("Sidebar", () => {
     expect(active).toContain("text-foreground");
   });
 
-  it("has no To review, Templates, Users or sign-out entries", () => {
+  it("has no Templates, Users or sign-out entries", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });
-    expect(html).not.toMatch(/Da rivedere|Template|Utenti|Esci|\/users|\/templates|\/review/i);
+    expect(html).not.toMatch(/Template|Utenti|Esci|\/users|\/templates|\/review/i);
+  });
+
+  it("shows the cases to review after Case only when there are some", () => {
+    expect(render({ showNewCaseStudy: true, showCaseStudies: true, toReviewCount: 2 })).toContain("2 da rivedere");
+    expect(render({ showNewCaseStudy: true, showCaseStudies: true, toReviewCount: 0 })).not.toContain("da rivedere");
+  });
+
+  it("marks Home active on /home", () => {
+    pathname.current = "/home";
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true });
+    expect(html.match(/<a [^>]*aria-current="page"[^>]*>/)?.[0]).toContain('href="/home"');
+  });
+
+  it("checks the theme from the cookie", () => {
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, theme: "dark" });
+    expect(html).toMatch(/aria-checked="true"[^>]*aria-label="Scuro"/);
   });
 
   it("keeps labels for screen readers when collapsed to icons below 1280 px", () => {
@@ -50,10 +73,10 @@ describe("Sidebar", () => {
     expect(html.match(/sr-only xl:not-sr-only/g)?.length).toBe(3);
   });
 
-  it("puts Clienti right after Case history when allowed", () => {
+  it("puts Clienti right after Case when allowed", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true });
     const hrefs = [...html.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1]);
-    expect(hrefs).toEqual(["/case-studies/new", "/case-studies", "/clients"]);
+    expect(hrefs).toEqual(["/case-studies/new", "/home", "/case-studies", "/clients"]);
     expect(html).toContain("Clienti");
     expect(html.match(/sr-only xl:not-sr-only/g)?.length).toBe(4);
   });
@@ -74,8 +97,9 @@ describe("Sidebar", () => {
 
   it("omits items the policy denies instead of disabling them", () => {
     const html = render({ showNewCaseStudy: false, showCaseStudies: false });
-    expect(html).not.toContain("Nuova case history");
+    expect(html).not.toContain("Nuova case");
     expect(html).not.toContain('href="/case-studies"');
+    expect(html).not.toContain('href="/home"');
     expect(html).not.toContain('href="/clients"');
     expect(html).not.toContain("disabled");
   });

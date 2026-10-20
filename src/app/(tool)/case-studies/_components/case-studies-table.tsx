@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, FolderOpen, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
-import { PRIMARY_ACTION } from "@/app/_components/button-styles";
+import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
+import { CARD, SEARCH_FIELD, SEARCH_ICON, TH } from "@/app/_components/field-styles";
 import { StatusBadge } from "@/app/_components/status-badge";
 import { wizardHref } from "@/app/_lib/routes";
 import { CASE_STATUSES } from "@/shared/case-status";
@@ -29,8 +30,10 @@ export interface CaseStudiesTableProps {
   canCreate: boolean;
   /** The empty-state line; defaults to the Case history page's. */
   emptyMessage?: string;
-  /** Where the empty state's "Nuova case history" goes; defaults to the wizard's step 0. */
+  /** Where the empty state's call to action goes; defaults to the wizard's step 0. */
   newHref?: string;
+  /** The empty state's call to action label. */
+  emptyAction?: string;
 }
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -45,10 +48,10 @@ const COLUMNS: ReadonlyArray<{ key: SortKey; label: string }> = [
   { key: "updated", label: it.caseStudies.table.columns.updated },
 ];
 
-/** The status filter's segments, in order: *Tutti*, then the lifecycle. */
+/** The status filter's segments, in order: *Tutte*, then the lifecycle (plural labels). */
 const FILTERS: ReadonlyArray<{ value: StatusFilter; label: string }> = [
   { value: "all", label: it.caseStudies.filter.all },
-  ...CASE_STATUSES.map((status) => ({ value: status, label: it.status[status] })),
+  ...CASE_STATUSES.map((status) => ({ value: status, label: it.caseStudies.filter.statuses[status] })),
 ];
 
 /**
@@ -57,7 +60,16 @@ const FILTERS: ReadonlyArray<{ value: StatusFilter; label: string }> = [
  * selected segment is in the tab order; the arrow keys move and select, wrapping,
  * and Home and End go to the first and last.
  */
-function StatusSegments({ value, onChange }: { value: StatusFilter; onChange: (value: StatusFilter) => void }) {
+function StatusSegments({
+  value,
+  onChange,
+  counts,
+}: {
+  value: StatusFilter;
+  onChange: (value: StatusFilter) => void;
+  /** Rows per segment under the current search. */
+  counts: Readonly<Record<StatusFilter, number>>;
+}) {
   const segments = useRef<Array<HTMLButtonElement | null>>([]);
 
   function pick(index: number) {
@@ -91,9 +103,10 @@ function StatusSegments({ value, onChange }: { value: StatusFilter; onChange: (v
           tabIndex={filter.value === value ? 0 : -1}
           onClick={() => pick(index)}
           onKeyDown={(event) => onKeyDown(event, index)}
-          className="whitespace-nowrap rounded-full px-3 py-1.5 font-label text-xs text-foreground-muted hover:text-foreground aria-checked:bg-surface-selected aria-checked:text-foreground"
+          className="inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-full px-3 font-label text-[13px] text-foreground-muted transition-colors duration-150 hover:text-foreground aria-checked:bg-surface-raised aria-checked:font-medium aria-checked:text-foreground aria-checked:shadow-control"
         >
           {filter.label}
+          <span className="font-mono text-[11px] text-foreground-muted tabular-nums"> {counts[filter.value]}</span>
         </button>
       ))}
     </div>
@@ -114,9 +127,9 @@ function isTextField(el: Element | null): boolean {
  * The Case studies table: ID (the case history code, mono), Name, Client (its
  * current name), Year, Status, Business line (empty for cases created before Story
  * 2.17), Updated and Links (blank). Default sort Updated newest first; a header
- * click sorts by it, again reverses; ID sorts codes naturally. The top-right toolbar
- * holds the status filter (*Tutti* · Bozza · In elaborazione · Da approvare ·
- * Approvato, default *Tutti*) and the search "Cerca progetto o cliente…", which covers
+ * click sorts by it, again reverses; ID sorts codes naturally. The toolbar above the table
+ * holds the status filter (*Tutte* · Bozze · In creazione · Da rivedere ·
+ * Approvate, each with its count, default *Tutte*) and the search, which covers
  * name, client name, client code, case code and business line label (case- and
  * accent-insensitive, debounced); both apply together. `/` focuses the search unless
  * focus is already in a text field. A Bozza row opens
@@ -127,6 +140,7 @@ export function CaseStudiesTable({
   canCreate,
   emptyMessage = it.caseStudies.empty,
   newHref = "/case-studies/new",
+  emptyAction = it.caseStudies.emptyAction,
 }: CaseStudiesTableProps) {
   const router = useRouter();
   const searchId = useId();
@@ -157,15 +171,23 @@ export function CaseStudiesTable({
   }, []);
 
   const visible = useMemo(() => sortRows(filterRows(rows, query, status), sort), [rows, query, status, sort]);
+  const counts = useMemo(() => {
+    const matching = filterRows(rows, query, "all");
+    const byStatus: Record<StatusFilter, number> = { all: matching.length, draft: 0, generating: 0, in_review: 0, approved: 0 };
+    for (const row of matching) byStatus[row.status] += 1;
+    return byStatus;
+  }, [rows, query]);
 
   if (rows.length === 0) {
     return (
-      <div className="flex flex-col items-start gap-4">
-        <p className="max-w-prose font-body text-base text-foreground">{emptyMessage}</p>
+      <div className={cn(CARD, "flex flex-col items-center gap-4 px-8 py-14 text-center")}>
+        <span className="flex size-11 items-center justify-center rounded-full bg-surface-control text-foreground-muted">
+          <FolderOpen aria-hidden="true" className="size-5" strokeWidth={1.75} />
+        </span>
+        <p className="max-w-sm font-body text-[15px] leading-snug text-foreground-muted">{emptyMessage}</p>
         {canCreate && (
           <Link href={newHref} className={PRIMARY_ACTION}>
-            <Plus aria-hidden="true" className="size-4" />
-            {it.shell.nav.newCaseStudy}
+            {emptyAction}
           </Link>
         )}
       </div>
@@ -183,8 +205,8 @@ export function CaseStudiesTable({
     status === "all"
       ? fill(it.caseStudies.noResults, { query: query.trim() })
       : query.trim() === ""
-        ? fill(it.caseStudies.noResultsStatus, { status: it.status[status] })
-        : fill(it.caseStudies.noResultsQueryStatus, { query: query.trim(), status: it.status[status] });
+        ? fill(it.caseStudies.noResultsStatus, { status: it.caseStudies.filter.statuses[status] })
+        : fill(it.caseStudies.noResultsQueryStatus, { query: query.trim(), status: it.caseStudies.filter.statuses[status] });
 
   function openRow(event: MouseEvent<HTMLTableRowElement>, href: string) {
     // The name link navigates on its own; modifier or non-primary clicks and text selection (copying an ID) do not navigate.
@@ -196,12 +218,14 @@ export function CaseStudiesTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <StatusSegments value={status} onChange={setStatus} />
+      <div className="flex flex-wrap items-center gap-3">
+        <StatusSegments value={status} onChange={setStatus} counts={counts} />
         <label htmlFor={searchId} className="sr-only">
           {it.caseStudies.search.label}
         </label>
-        <input
+        <div className="relative w-full max-w-xs">
+          <Search aria-hidden="true" className={SEARCH_ICON} />
+          <input
           ref={searchRef}
           id={searchId}
           type="search"
@@ -209,30 +233,27 @@ export function CaseStudiesTable({
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder={it.caseStudies.search.placeholder}
-          className="w-72 rounded-md border bg-surface-control px-3 py-2 font-body text-sm text-foreground placeholder:text-foreground-muted"
+          className={SEARCH_FIELD}
         />
+        </div>
       </div>
 
       {/* Always mounted, so screen readers announce the no-results message when it appears. */}
-      <div role="status" className="font-body text-base text-foreground empty:hidden">
+      <div role="status" className="font-body text-[15px] text-foreground empty:hidden">
         {visible.length === 0 ? noResults : null}
       </div>
 
       {visible.length === 0 ? (
         <div className="flex flex-col items-start gap-3">
-          <button
-            type="button"
-            onClick={clearSearch}
-            className="rounded-md bg-surface-control px-3 py-2 font-label text-sm text-foreground hover:bg-surface-selected"
-          >
+          <button type="button" onClick={clearSearch} className={SECONDARY_ACTION}>
             {it.caseStudies.clearSearch}
           </button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border bg-surface-raised">
+        <div className={cn(CARD, "overflow-x-auto")}>
           <table className="w-full border-collapse text-left font-body text-sm text-foreground">
             <caption className="sr-only">{it.caseStudies.table.caption}</caption>
-            <thead className="border-b">
+            <thead className="border-b border-border">
               <tr>
                 {COLUMNS.map(({ key, label }) => {
                   const active = sort.key === key;
@@ -242,12 +263,12 @@ export function CaseStudiesTable({
                       key={key}
                       scope="col"
                       aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
-                      className="whitespace-nowrap px-3 py-2 font-label text-xs text-foreground-muted"
+                      className={TH}
                     >
                       <button
                         type="button"
                         onClick={() => setSort((current) => nextSort(current, key))}
-                        className="inline-flex items-center gap-1 rounded-sm hover:text-foreground"
+                        className={cn("inline-flex items-center gap-1 rounded-sm transition-colors hover:text-foreground", active && "text-foreground")}
                       >
                         {label}
                         <Arrow aria-hidden="true" className={cn("size-3", !active && "invisible")} />
@@ -255,7 +276,7 @@ export function CaseStudiesTable({
                     </th>
                   );
                 })}
-                <th scope="col" className="px-3 py-2 font-label text-xs text-foreground-muted">
+                <th scope="col" className={TH}>
                   {it.caseStudies.table.columns.links}
                 </th>
               </tr>
@@ -269,10 +290,13 @@ export function CaseStudiesTable({
                     key={row.id}
                     data-case-id={row.id}
                     onClick={href === null ? undefined : (event) => openRow(event, href)}
-                    className={cn("border-b last:border-b-0", href !== null && "cursor-pointer hover:bg-surface-control")}
+                    className={cn(
+                      "border-b border-border transition-colors duration-150 last:border-b-0",
+                      href !== null && "cursor-pointer hover:bg-surface-hover",
+                    )}
                   >
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-foreground-muted">{row.code}</td>
-                    <td className="px-3 py-2">
+                    <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-foreground-muted">{row.code}</td>
+                    <td className="px-4 py-3.5 font-medium text-foreground-strong">
                       {href === null ? (
                         row.name
                       ) : (
@@ -281,16 +305,16 @@ export function CaseStudiesTable({
                         </Link>
                       )}
                     </td>
-                    <td className="px-3 py-2">{row.clientName}</td>
-                    <td className="px-3 py-2 tabular-nums">{row.year}</td>
-                    <td className="whitespace-nowrap px-3 py-2">
+                    <td className="px-4 py-3.5 text-foreground">{row.clientName}</td>
+                    <td className="px-4 py-3.5 text-foreground-muted tabular-nums">{row.year}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5">
                       <StatusBadge status={row.status} />
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2">{businessLineLabel(row)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                    <td className="whitespace-nowrap px-4 py-3.5 text-foreground-muted">{businessLineLabel(row)}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-foreground-muted tabular-nums">
                       <time dateTime={row.updatedAt}>{row.updatedLabel}</time>
                     </td>
-                    <td className="px-3 py-2" />
+                    <td className="px-4 py-3.5" />
                   </tr>
                 );
               })}

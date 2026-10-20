@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
 import type { ClientSummary } from "@/modules/case-study";
+import { fill, it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
@@ -39,16 +40,18 @@ beforeEach(() => {
 });
 
 describe("ClientsPage", () => {
-  it("guards on list clients and shows ID (mono), Nome and the case count; the uuid only in hrefs", async () => {
+  it("guards on list clients and shows a card per client with name, code (mono) and the case count; the uuid only in hrefs", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([ACME, LUMEN]));
     const html = await renderPage();
     expect(requireSurface).toHaveBeenCalledWith("list clients");
-    expect(html).toMatch(/<h1[^>]*>Clienti<\/h1>/);
-    expect(html).toContain("Elenco dei clienti");
-    expect(html).toMatch(/<td class="[^"]*font-mono[^"]*">LUM<\/td>/);
+    expect(html).toMatch(new RegExp(`<h1[^>]*>${dict.clients.heading}</h1>`));
+    expect(html).toContain(dict.clients.lead);
+    expect(html).toContain(`<ul aria-label="${dict.clients.table.caption}"`);
+    expect(html.match(/<li data-client-id=/g)).toHaveLength(2);
+    expect(html).toMatch(/<span class="[^"]*font-mono[^"]*"><span class="sr-only">Codice <\/span>LUM<\/span>/);
     expect(html).toContain(`href="/clients/${LUMEN.id}"`);
-    expect(html).toMatch(/<td class="[^"]*tabular-nums[^"]*">2<\/td>/);
+    expect(html).toMatch(new RegExp(`<span class="[^"]*tabular-nums[^"]*">${fill(dict.clients.caseCount, { n: 2 })}</span>`));
     expect(html).not.toMatch(new RegExp(`>${LUMEN.id}<`));
   });
 
@@ -79,10 +82,10 @@ describe("ClientsPage", () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([]));
     const html = await renderPage();
-    expect(html).toContain("Nessun cliente. Aggiungi il primo.");
-    expect(html).toContain("Nessun cliente.</span>");
-    expect(html).toContain("Aggiungi cliente");
-    expect(html).not.toContain("<table");
+    expect(html).toContain(dict.clients.empty);
+    expect(html).toContain(`${dict.clients.emptyReadOnly}</span>`);
+    expect(html).toContain(dict.clients.add);
+    expect(html).not.toContain(`aria-label="${dict.clients.table.caption}"`);
   });
 
   it.each([
@@ -108,11 +111,12 @@ describe("ClientsPage", () => {
 });
 
 describe("Loading", () => {
-  it("shows skeleton rows hidden from screen readers and announces loading", () => {
+  it("shows skeleton cards hidden from screen readers and announces loading", () => {
     const html = renderToStaticMarkup(<Loading />);
-    expect(html.match(/data-skeleton-row/g)).toHaveLength(6);
+    expect(html.match(/data-skeleton-row/g)).toHaveLength(8);
+    expect(html).toContain('<div aria-hidden="true" class="flex flex-col gap-5">');
     expect(html).toContain('aria-busy="true"');
-    expect(html).toContain('<p role="status" class="sr-only">Caricamento…</p>');
+    expect(html).toContain(`<p role="status" class="sr-only">${dict.clients.loading}</p>`);
     expect(html).toContain("motion-safe:animate-pulse");
     expect(html).not.toMatch(/(^|[\s"])animate-pulse/);
   });

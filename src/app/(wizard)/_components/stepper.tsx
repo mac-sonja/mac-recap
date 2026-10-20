@@ -40,7 +40,7 @@ export interface StepperProps {
 export function Stepper({ current, caseId, reachable = false, steps = WIZARD_STEPS, hrefFor }: StepperProps) {
   const linkTo = hrefFor ?? (caseId === undefined ? undefined : (step: 1 | 2 | 3) => wizardHref(caseId, step));
   return (
-    <ol aria-label={it.wizard.stepper.label} className="flex gap-1 rounded-md bg-surface-control p-[3px]">
+    <ol aria-label={it.wizard.stepper.label} className="flex gap-1 rounded-full bg-surface-control p-[3px]">
       {steps.map((label, index) => {
         const step = (index + 1) as 1 | 2 | 3;
         const isCurrent = step === current;
@@ -67,15 +67,15 @@ export function Stepper({ current, caseId, reachable = false, steps = WIZARD_STE
             data-step={step}
             aria-current={isCurrent ? "step" : undefined}
             className={cn(
-              "flex flex-1 rounded-sm font-label text-sm text-foreground-muted",
-              isCurrent && "bg-surface-selected text-foreground",
+              "flex flex-1 rounded-full font-label text-sm text-foreground-muted",
+              isCurrent && "bg-surface-raised font-medium text-foreground-strong shadow-control",
               isDone && "text-foreground",
             )}
           >
             {isLink ? (
               <Link
                 href={linkTo(step)}
-                className="flex flex-1 items-center justify-center gap-2 rounded-sm py-2 hover:bg-surface-selected hover:text-foreground-strong"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full py-2 transition-colors duration-150 hover:bg-surface-hover hover:text-foreground-strong"
               >
                 {content}
               </Link>
@@ -98,7 +98,7 @@ export function StepDots({ current, steps = WIZARD_STEPS }: { current: WizardSte
           key={label}
           data-dot={index + 1}
           data-active={index + 1 === current ? "" : undefined}
-          className={cn("h-1.5 w-1.5 rounded-full bg-surface-selected", index + 1 === current && "w-5 bg-foreground")}
+          className={cn("h-1.5 w-1.5 rounded-full bg-border-strong", index + 1 === current && "w-5 bg-foreground")}
         />
       ))}
     </div>

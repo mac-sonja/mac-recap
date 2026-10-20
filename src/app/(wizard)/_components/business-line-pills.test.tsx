@@ -12,7 +12,7 @@ function Harness({ initial = null, onSelect }: { initial?: BusinessLine | null; 
   const [selected, setSelected] = useState<BusinessLine | null>(initial);
   return (
     <>
-      <span id="label">Business line</span>
+      <span id="label">Area</span>
       <BusinessLinePills
         options={OPTIONS}
         selected={selected}
@@ -42,13 +42,13 @@ describe("BusinessLinePills", () => {
 
   it("is a named radiogroup of the seven business lines, none checked, the first in the tab order", () => {
     render(<Harness />);
-    expect(screen.getByRole("radiogroup", { name: "Business line" })).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "Area" })).toBeTruthy();
     expect(radios().map((r) => r.textContent)).toEqual(["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi", "Sviluppo"]);
     expect(checked()).toEqual([]);
     expect(radios().map((r) => r.tabIndex)).toEqual([0, -1, -1, -1, -1, -1, -1]);
     // The client industry pill look, with the checked state.
     expect(radios()[0].className).toContain("rounded-full");
-    expect(radios()[0].className).toContain("aria-checked:bg-accent/10");
+    expect(radios()[0].className).toContain("aria-checked:bg-foreground-strong");
   });
 
   it("picks one on click (single choice); the picked one becomes the tab stop", async () => {
