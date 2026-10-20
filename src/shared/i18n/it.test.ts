@@ -128,8 +128,8 @@ describe("wizard copy", () => {
 
 describe("business line copy", () => {
   test("has the owner's labels in display order", () => {
-    expect(Object.keys(it.businessLines)).toEqual(["branding", "social_media", "video", "web_design", "advertising", "eventi"]);
-    expect(Object.values(it.businessLines)).toEqual(["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi"]);
+    expect(Object.keys(it.businessLines)).toEqual(["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"]);
+    expect(Object.values(it.businessLines)).toEqual(["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi", "Sviluppo"]);
   });
 });
 

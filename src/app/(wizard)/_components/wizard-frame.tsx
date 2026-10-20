@@ -82,8 +82,14 @@ export function WizardFrame({
             </>
           )}
         </header>
-        {/* The scroll padding keeps a focused field clear of the sticky footer. */}
-        <main className="flex flex-1 overflow-auto scroll-pb-36 px-6 py-10">
+        {/*
+          No bottom padding from 1024 px, so the sticky footer sits flush on the viewport's
+          bottom edge (owner, 2026-10-20); the footer pads itself. The scroll padding keeps a
+          focused field clear of it. `relative` keeps the steps' absolutely placed screen-reader
+          regions (`sr-only`) inside this scroll area; otherwise they stretch the document below the
+          frame and the page itself scrolls past the footer into an empty band.
+        */}
+        <main className="relative flex flex-1 overflow-auto scroll-pb-28 px-6 pt-10 pb-10 lg:pb-0">
           <div className="m-auto w-full max-w-[820px]">
             <p className="mb-2 font-label text-xs text-foreground-muted">{eyebrow}</p>
             <h1 className="mb-8 break-words font-display text-[2.5rem] leading-tight font-medium tracking-tight text-foreground-strong">
@@ -105,11 +111,11 @@ export function WizardFrame({
 
 /**
  * The footer's layout: sticky at the bottom of the scrolling column, opaque, under a
- * divider. The sticky edge is the main area's 40 px bottom padding, so a solid shadow
- * of that height keeps content from showing through below the footer.
+ * divider. The main area has no bottom padding at this width, so the sticky edge is
+ * the viewport's bottom edge: nothing shows below the footer, and no filler is needed.
  */
 export const WIZARD_FOOTER =
-  "sticky bottom-0 z-10 mt-8 grid grid-cols-[1fr_auto_1fr] items-center border-t bg-surface pt-5 pb-6 shadow-[0_2.5rem_0_var(--color-surface)]";
+  "sticky bottom-0 z-10 mt-8 grid grid-cols-[1fr_auto_1fr] items-center border-t bg-surface pt-5 pb-6";
 
 /**
  * The wizard footer under a divider: an optional left slot, the step dots in the

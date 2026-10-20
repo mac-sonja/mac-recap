@@ -639,6 +639,19 @@ describe("business line and details (Story 2.17)", () => {
     expect(rows[0].nullable).toBe("YES");
   });
 
+  it("accepts the business line sviluppo (owner, 2026-10-20) and still refuses an unknown one", async () => {
+    const insert = (line: string) =>
+      inRolledBackTx(
+        "insert into public.case_study (name, client_id, number, code, year, locale, business_line, created_by) values ('R', $2, 9999, 'ZZZ-1', 2026, 'it', $3, $1) returning business_line",
+        [DEV_ACTOR_ID, acme.id, line],
+      );
+    await expect(insert("sviluppo")).resolves.toMatchObject({ rows: [{ business_line: "sviluppo" }] });
+    await expect(insert("moda")).rejects.toMatchObject({ code: "23514" });
+    const { create } = await loadCaseStudy();
+    const created = await create(await devActor(), { name: "R", clientId: acme.id, year: 2026, businessLine: "sviluppo" });
+    expect(created.ok && created.value.businessLine).toBe("sviluppo");
+  });
+
   it("create_case_study refuses a null business line (P0001 INVALID_INPUT) and writes nothing", async () => {
     const before = await counts();
     await expect(

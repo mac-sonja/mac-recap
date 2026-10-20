@@ -29,7 +29,7 @@ const ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const LUMEN: ClientRef = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" };
 const TORINO: ClientRef = { id: "cccccccc-0000-4000-8000-000000000002", name: "Città di Torino", code: "CIT" };
 const CLIENTS: ClientRef[] = [TORINO, LUMEN];
-const BUSINESS_LINES: BusinessLine[] = ["branding", "social_media", "video", "web_design", "advertising", "eventi"];
+const BUSINESS_LINES: BusinessLine[] = ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"];
 const EMPTY: DetailsForm = { context: "", solution: "", results: "" };
 const STEP_1 = `/case-studies/new?caseId=${ID}&step=1`;
 const STEP_2 = `/case-studies/new?caseId=${ID}&step=2`;
@@ -205,15 +205,14 @@ describe("CaseDetailsStep, a new case", () => {
     const marks = [...document.querySelectorAll("[data-required-mark]")];
     expect(marks.map((mark) => mark.previousElementSibling?.textContent)).toEqual(["Nome della case history", "Cliente", "Anno", "Business line"]);
     expect(marks.every((mark) => mark.textContent === "*" && mark.getAttribute("aria-hidden") === "true")).toBe(true);
-    const legend = document.querySelector("[data-required-legend]");
-    expect(legend?.textContent).toBe("* obbligatorio");
-    expect((legend?.compareDocumentPosition(field("Nome della case history")) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The markers only: no "* obbligatorio" legend (owner, 2026-10-20).
+    expect(document.body.textContent).not.toContain("obbligatorio");
     expect(screen.getByRole("radiogroup", { name: "Business line" }).getAttribute("aria-required")).toBe("true");
     expect(screen.queryByLabelText("Lingua del testo")).toBeNull();
     expect(document.body.textContent).not.toMatch(/Lingua|Italiano|English/);
     const group = screen.getByRole("radiogroup", { name: "Business line" });
     expect(screen.getAllByRole("radio").map((r) => [r.textContent, r.getAttribute("aria-checked")])).toEqual(
-      ["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi"].map((label) => [label, "false"]),
+      ["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi", "Sviluppo"].map((label) => [label, "false"]),
     );
     expect(screen.getAllByRole("textbox").map((t) => t.getAttribute("name"))).toEqual(["name", "context", "solution", "results"]);
     const order = [field("Nome della case history"), field("Cliente"), field("Anno"), group, textarea("Contesto")];

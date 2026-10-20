@@ -28,9 +28,13 @@ describe("WizardFrame", () => {
     );
     expect(html).toContain('<div class="flex h-dvh flex-col');
     expect(html).toContain('<header class="flex h-15 shrink-0');
-    expect(html).toContain('<main class="flex flex-1 overflow-auto');
-    // Scroll padding keeps a focused field clear of the sticky footer.
-    expect(html).toMatch(/<main class="[^"]*\bscroll-pb-36\b/);
+    // `relative`: sr-only regions stay inside the scroll area instead of stretching the page.
+    expect(html).toContain('<main class="relative flex flex-1 overflow-auto');
+    // Scroll padding keeps a focused field clear of the sticky footer; no bottom padding
+    // from 1024 px, so the footer sits flush on the viewport's bottom edge (owner, 2026-10-20).
+    const main = html.match(/<main class="([^"]*)"/)?.[1].split(" ") ?? [];
+    expect(main).toEqual(expect.arrayContaining(["scroll-pb-28", "pt-10", "lg:pb-0"]));
+    expect(main).not.toContain("py-10");
     expect(html).toContain('<div class="m-auto w-full max-w-[820px]">');
   });
 
@@ -98,6 +102,8 @@ describe("WizardFooter", () => {
     const classes = html.match(/<div data-wizard-footer="" class="([^"]*)"/)?.[1].split(" ") ?? [];
     expect(classes).toEqual(expect.arrayContaining(["sticky", "bottom-0", "z-10", "bg-surface", "border-t", "pt-5", "pb-6"]));
     expect(classes).not.toContain("fixed");
+    // Flush on the viewport's bottom edge: no filler shadow below it (owner, 2026-10-20).
+    expect(classes.some((c) => c.startsWith("shadow"))).toBe(false);
     // Start, dots, action: the DOM order (and so the focus order) is unchanged.
     expect(html).toMatch(/^<div data-wizard-footer=""[^>]*><div class="font-label[^"]*"><\/div><div aria-hidden="true"[^>]*>.*<\/div><div class="justify-self-end"><button/);
   });

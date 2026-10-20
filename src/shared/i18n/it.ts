@@ -66,6 +66,7 @@ export const it = {
     web_design: "Web design",
     advertising: "Advertising",
     eventi: "Eventi",
+    sviluppo: "Sviluppo",
   },
   /** The new-case-study wizard (Story 2.5): frame, stepper and step 1 Dettagli (Story 2.17). */
   wizard: {
@@ -93,7 +94,7 @@ export const it = {
       year: "Anno",
       businessLine: "Business line",
     },
-    /** After a required field's label (Anno); hidden from screen readers, which read `aria-required`. */
+    /** After a required field's label (case and client wizard step 1, no legend); hidden from screen readers, which read `aria-required`. */
     requiredMark: "*",
     /** The browser tab while the case wizard's Dettagli step is open; `{title}` is the live title. */
     tabTitle: "{title} · {app}",
@@ -115,8 +116,6 @@ export const it = {
     clientCount: "{n} clienti",
     clientCountOne: "1 cliente",
     clientCountNone: "Nessun cliente trovato",
-    /** Above step 1's fields: what the marker after a label means. */
-    requiredLegend: "* obbligatorio",
     /** Accessible name of the client search's list of options. */
     clientList: "Clienti",
     /** Under the client search when the typed text matches no client. `{link}` is `noClientsLink`. */

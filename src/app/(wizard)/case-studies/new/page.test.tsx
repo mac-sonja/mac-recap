@@ -24,7 +24,7 @@ vi.mock("@/modules/case-study", () => ({
   listClients: () => listClients(),
   YEAR_MIN: 1900,
   YEAR_MAX: 2100,
-  BUSINESS_LINES: ["branding", "social_media", "video", "web_design", "advertising", "eventi"],
+  BUSINESS_LINES: ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"],
 }));
 vi.mock("@/shared/i18n/format", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/shared/i18n/format")>()),
@@ -144,6 +144,7 @@ describe("NewCaseStudyPage", () => {
       "Web design",
       "Advertising",
       "Eventi",
+      "Sviluppo",
     ]);
     expect(html.indexOf('role="radiogroup"')).toBeLessThan(html.indexOf('name="context"'));
     expect(html).toMatch(/<textarea [^>]*name="results"/);

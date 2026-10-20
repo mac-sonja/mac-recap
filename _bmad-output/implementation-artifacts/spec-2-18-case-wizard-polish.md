@@ -113,6 +113,11 @@ context:
 ## Spec Change Log
 
 - **2026-10-20, implementation decision (does not change the owner's intent).** The footer uses `position: sticky` at the bottom of the wizard column instead of `fixed`. It stays in view while the page scrolls ("non deve scrollare"), aligns with the column without scrollbar offsets, and never covers the last field, so no extra bottom padding is needed. KEEP: sticky, with scroll padding so focused fields aren't hidden behind it.
+- **2026-10-20, owner review of the preview (changes the intent: a migration is now part of this story).** Four changes:
+  1. **Business line Sviluppo.** A seventh business line `sviluppo`, label "Sviluppo", shown last (after Eventi), in `BUSINESS_LINES`, `it.businessLines`, the pills and the table search. Forward migration `20261020150000_case_study_business_line_sviluppo.sql` drops and re-adds `case_study_business_line_check` (same name, still `NOT VALID`) with the seven values; `create_case_study` and `update_case_study_details` don't list the values, so they're unchanged. This replaces "Never: changing the business line list" and "No migration" for this item only.
+  2. **Field focus.** A focused form field (text inputs, the client search, the year, textareas, selects; every wizard and the client forms) shows a thin 1 px border in the focus colour instead of the 2 px outline. One unlayered rule in `globals.css`; buttons, pills and links keep the outline ring.
+  3. **No empty band under the footer.** `main` has no bottom padding from 1024 px and the footer's filler shadow is gone, so the sticky footer sits flush on the window's bottom edge. `main` is `relative`, so the steps' `sr-only` live regions no longer stretch the page below the frame (that made the whole page scroll past the footer into an empty band). Scroll padding is `scroll-pb-28`, still clearing the footer for a focused field.
+  4. **No "* obbligatorio" legend.** The legend and its `requiredLegend` copy key are removed; the "*" markers stay. `RequiredLabel` moves to `required-label.tsx` and marks every required field on client wizard step 1 (Nome, Settore, Descrizione, Logo, Contesto, Soluzione, Risultati), with no legend there either.
 
 ## Review Triage Log
 

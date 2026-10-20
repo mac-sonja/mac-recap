@@ -94,3 +94,21 @@
     }
   }
 }
+
+/*
+ * Form fields (text inputs, the client search, the year, textareas, selects) show
+ * focus as a thin 1 px border in the focus-ring colour instead of the 2 px outline
+ * (owner, 2026-10-20). Lime on the dark control surface keeps focus clearly visible
+ * (WCAG 2.4.7). Buttons, pills and links keep the outline above. Unlayered on
+ * purpose, so it wins over field utilities such as `border-transparent`. The
+ * transparent outline still shows in forced-colors mode.
+ */
+:is(
+    input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
+    textarea,
+    select
+  ):focus-visible {
+  outline: 1px solid transparent;
+  outline-offset: 0;
+  border-color: var(--color-focus-ring);
+}

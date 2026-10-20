@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { createCaseStudy, saveDetailsField, updateCaseStudyDetails } from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
@@ -14,6 +14,7 @@ import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { BusinessLinePills } from "./business-line-pills";
 import { ClientCombobox, clientLabel } from "./client-combobox";
+import { RequiredLabel } from "./required-label";
 import { useAutosaveFields } from "./use-autosave-fields";
 import { WizardFooter } from "./wizard-frame";
 import { useLiveWizardTitle } from "./wizard-title";
@@ -89,21 +90,6 @@ export interface CaseDetailsStepProps {
   initialDetails: DetailsForm;
   /** `MAX_FORM_FIELD_CHARS`, counted in code points like the server. */
   maxChars: number;
-}
-
-/**
- * A required field's label with the "*" marker beside it (outside the label, so the
- * field's name stays the label; screen readers hear `aria-required` instead).
- */
-function RequiredLabel({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex items-baseline gap-0.5">
-      {children}
-      <span aria-hidden="true" data-required-mark="" className="font-label text-xs text-foreground">
-        {it.wizard.requiredMark}
-      </span>
-    </div>
-  );
 }
 
 /** "Nessun cliente. Aggiungilo nella pagina Clienti.", with "pagina Clienti" a link to the Clients page. */
@@ -468,10 +454,6 @@ export function CaseDetailsStep({
 
   return (
     <form noValidate onSubmit={onSubmit} aria-busy={pending || undefined}>
-      {/* Visual only: each required field says so with `aria-required`. */}
-      <p aria-hidden="true" data-required-legend="" className="mb-4 font-label text-xs text-foreground-muted">
-        {it.wizard.requiredLegend}
-      </p>
       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
         <div className="col-span-2 flex flex-col gap-1.5">
           <RequiredLabel>
