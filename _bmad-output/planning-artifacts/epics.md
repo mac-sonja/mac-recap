@@ -195,7 +195,29 @@ The owner/designer creates a case study by hand, gets its permanent ID, uploads 
 The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
 **FRs covered:** FR3, FR4, NFR1, NFR5, NFR6, CAP-12 (also FR11, client intro draft)
 
-### Epic 4: Review, edit and approve a case study (Sprint 2)
+#### Story 3.10: Test draft without AI (dev only)
+
+As the team,
+I want to turn a case with material into a reviewable draft without calling the AI,
+So that the configurator (Epic 4) can be built and tried before the narrative guidelines exist.
+
+Covers: none (dev tooling) ([Sprint Change Proposal 2026-10-20](sprint-change-proposal-2026-10-20.md))
+Order: after 3.5, before 4.1 (owner, 2026-10-20).
+
+**Acceptance Criteria:**
+
+**Given** a case in Bozza with at least one file
+**When** the dev command runs for it (e.g. `npm run dev:test-draft -- <caseId>`), against mac-recap-dev or a local database only
+**Then**:
+- it moves the case through the normal transitions (generate, then generation_succeeded) with the dev actor
+- it writes a `working` revision built by Story 3.3's document schema, with placeholder challenge, approach and result text marked "[bozza di prova]", each claim citing the case's own form answers or files
+- it lays the revision out with Story 3.4's templates and 3.5's renderers for every MVP format
+- the case appears in **Da approvare**
+
+**And** the command refuses to run against the production project ref, and there is no UI entry point
+**And** no LLM is called
+
+## Epic 4: Review, edit and approve a case study (Sprint 2)
 The owner/designer works the To review queue, refines the draft in the configurator, checks every block against the material and approves; later edits to an approved case go live only through Update approved version.
 **FRs covered:** FR5, FR6, NFR2, NFR7 (approval), CAP-12 (also FR11 intro review, FR12 client overview)
 
@@ -213,7 +235,7 @@ Each user signs in with one of three fixed roles; the admin manages users and ro
 - Every story that adds a server action or route calls `access.getActor()` and `access.authorize()` first (AR11), returns `Result<T, AppError>` (AR21), uses Italian copy from the dictionary (UX-DR29), and emits the `case_event` rows its mutations require (AR20). These are not repeated in each story's criteria.
 - NFR10 (sequential epics, sprint dates) is met by the epic order itself: stories within an epic depend only on earlier stories and earlier epics, never later ones.
 - Tables and storage prefixes are created by the first story that needs them, through a forward-only migration (AR12).
-- **Client intro and collections stories** (2.15, 2.16 (SCP 2026-10-19), 3.9, 4.11, 4.12, 5.9, 5.10, 5.11, 6.5; [Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md)) are MVP and built before the October 30 demo (owner amendment 2026-10-16: "Tutto. dovremmo farcela"). Epics stay in order (NFR10); inside each epic a new story comes after the stories it depends on and after that epic's demo-path stories. Sprint 2: 2.15 → 2.16 → 3.2–3.8 → 3.9 → 4.1–4.8 → 4.11 → 4.9 → 4.12 (client creation first, owner 2026-10-19). Sprint 3: 5.1–5.8 → 5.9 → 5.10 → 5.11 → 6.1–6.4 → 6.5. If dates slip, the owner decides at each checkpoint; the proposed slip order is 5.11, 5.10, 4.12, 5.9, then the client intro (3.9, 4.11, 2.16, 2.15), and the demo path (3.2–3.8, 4.1–4.8, 5.1–5.4) never slips.
+- **Client intro and collections stories** (2.15, 2.16 (SCP 2026-10-19), 3.9, 4.11, 4.12, 5.9, 5.10, 5.11, 6.5; [Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md)) are MVP and built before the October 30 demo (owner amendment 2026-10-16: "Tutto. dovremmo farcela"). Epics stay in order (NFR10); inside each epic a new story comes after the stories it depends on and after that epic's demo-path stories. Sprint 2: 2.15 → 2.16 → 3.2–3.8 → 3.9 → 4.1–4.8 → 4.11 → 4.9 → 4.12 (client creation first, owner 2026-10-19). Sprint 3: 5.1–5.8 → 5.9 → 5.10 → 5.11 → 6.1–6.4 → 6.5. If dates slip, the owner decides at each checkpoint; the proposed slip order is 5.11, 5.10, 4.12, 5.9, then the client intro (3.9, 4.11, 2.16, 2.15), and the demo path (3.2–3.8, 4.1–4.8, 5.1–5.4) never slips. Owner, 2026-10-20 ([SCP 2026-10-20](sprint-change-proposal-2026-10-20.md)): Sprint 2 runs 3.2–3.5 → 3.10 → 4.1–4.8 → 3.6–3.9 → 4.11 → 4.9 → 4.12; the Bento configurator is designed with the owner before 4.2.
 
 ## Epic 2: Create a case study and collect its material
 

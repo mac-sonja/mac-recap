@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-19-2026 20:00
+last_updated: 10-20-2026 10:00
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -60,15 +60,16 @@ development_status:
   3-3-the-case-study-document-revisions-and-the-format-registry: backlog  # About block per SCP 2026-10-16; client info read live, no snapshot (owner amendment); after 2.14; amendment per SCP 2026-10-16 client intro and collections (document kind, revision subject)
   3-4-templates-as-versioned-code-with-media-count-rules: backlog  # About the client area per SCP 2026-10-16; amendment per SCP 2026-10-16 client intro and collections (pageKey and intro/body role)
   3-5-one-renderer-per-format: backlog  # amendment per SCP 2026-10-16 client intro and collections (page keys, starting page number)
-  3-6-narrative-generator-port-and-anthropic-adapter: backlog  # client info as LLM input per SCP 2026-10-16
+  3-6-narrative-generator-port-and-anthropic-adapter: backlog  # client info as LLM input per SCP 2026-10-16; runs after 4.8, when the narrative guidelines arrive (SCP 2026-10-20)
   3-7-generate-a-case-study: backlog  # no client snapshot; job reads current client info when it runs (SCP 2026-10-16 owner amendment)
   3-8-tell-me-when-the-draft-is-ready: backlog
   3-9-client-intro-template-and-draft: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 3.8, last in Epic 3; starts from 2.16's Crea introduzione, inputs gain industries, brief and client material (SCP 2026-10-19)
+  3-10-test-draft-without-ai: backlog  # dev only, no LLM (SCP 2026-10-20); after 3.5, before 4.1
   epic-3-retrospective: optional
 
   epic-4: backlog
-  4-1-review-dashboard-and-to-review-queue: backlog
-  4-2-open-a-draft-in-the-configurator: backlog  # amendment per SCP 2026-10-16 client intro and collections (read by subject)
+  4-1-review-dashboard-and-to-review-queue: backlog  # after 3.10, before 3.6 (SCP 2026-10-20)
+  4-2-open-a-draft-in-the-configurator: backlog  # amendment per SCP 2026-10-16 client intro and collections (read by subject); Bento designed with the owner first (SCP 2026-10-20)
   4-3-edit-generated-text-in-place-with-autosave: backlog
   4-4-adjust-the-layout-per-format: backlog
   4-5-replace-reorder-and-remove-media: backlog
