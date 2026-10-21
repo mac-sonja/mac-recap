@@ -34,7 +34,7 @@ describe("fill", () => {
 
 describe("case studies table copy", () => {
   test("has the approved strings", () => {
-    expect(Object.values(it.caseStudies.table.columns)).toEqual(["ID", "Case history", "Cliente", "Anno", "Stato", "Business line", "Aggiornata", "Link"]);
+    expect(Object.values(it.caseStudies.table.columns)).toEqual(["ID", "Case history", "Cliente", "Anno", "Stato", "Servizi", "Aggiornata", "Link"]);
     expect(t("caseStudies.search.label")).toBe("Cerca progetto o cliente");
     expect(t("caseStudies.search.placeholder")).toBe("Cerca progetto o cliente…");
     expect(t("caseStudies.filter.all")).toBe("Tutti");
@@ -101,10 +101,10 @@ describe("wizard copy", () => {
     expect(t("wizard.eyebrow")).toBe("Nuova case history");
     expect(t("wizard.back")).toBe("Torna alle case history");
     expect(Object.values(it.wizard.steps)).toEqual(["Dettagli", "Materiale", "Genera"]);
-    expect(Object.values(it.wizard.fields)).toEqual(["Titolo della case history", "Cliente", "Anno", "Business line"]);
-    expect(t("wizard.errors.businessLine")).toBe("Scegli la business line.");
+    expect(Object.values(it.wizard.fields)).toEqual(["Titolo della case history", "Cliente", "Anno", "Servizi"]);
+    expect(t("wizard.errors.businessLine")).toBe("Scegli un servizio.");
     expect(t("wizard.unsavedConfirm")).toBe("Quello che hai scritto non è ancora salvato. Vuoi uscire lo stesso?");
-    expect(fill(t("wizard.nextReason"), { fields: "Titolo della case history, Business line" })).toBe("Per andare avanti manca: Titolo della case history, Business line.");
+    expect(fill(t("wizard.nextReason"), { fields: "Titolo della case history, Servizi" })).toBe("Per andare avanti manca: Titolo della case history, Servizi.");
     expect("locales" in it.wizard).toBe(false);
     expect("locale" in it.wizard.errors).toBe(false);
     expect(t("wizard.requiredMark")).toBe("*");

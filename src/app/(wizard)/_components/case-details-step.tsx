@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createCaseStudy, saveDetailsField, updateCaseStudyDetails } from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
-import { FIELD, FIELD_HINT, FIELD_LABEL, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
+import { CARD, FIELD, FIELD_HINT, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { wizardHref } from "@/app/_lib/routes";
 import type { BusinessLine, ClientRef, Locale } from "@/modules/case-study";
@@ -14,7 +14,7 @@ import type { DetailsForm, FormField } from "@/modules/material";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { BusinessLinePills } from "./business-line-pills";
-import { ClientCombobox, clientLabel } from "./client-combobox";
+import { ClientCombobox } from "./client-combobox";
 import { RequiredLabel } from "./required-label";
 import { useAutosaveFields } from "./use-autosave-fields";
 import { WizardFooter } from "./wizard-frame";
@@ -42,8 +42,25 @@ export const TITLE_DEBOUNCE_MS = 300;
 /** How many live-region lines stay mounted. */
 const ANNOUNCEMENTS_KEPT = 5;
 
-const INPUT = FIELD;
-const LABEL = FIELD_LABEL;
+/** Dettagli's look (owner's mock, 2026-10-21): grey filled fields inside white cards. */
+const FILLED = "border-transparent bg-surface-control hover:border-transparent focus-visible:bg-surface-raised";
+const INPUT = cn(FIELD, FILLED);
+const TEXT_INPUT = cn(TEXTAREA, FILLED);
+/** A card's heading: the field's label, small caps after its number. */
+const CARD_LABEL = "font-label text-[11px] font-semibold tracking-[0.12em] text-foreground-muted uppercase";
+
+/** One field in its own white card, headed "01 — LABEL" (the number is decorative), the field under it. */
+function FieldCard({ number, label, children }: { number: number; label: ReactNode; children: ReactNode }) {
+  return (
+    <div className={cn(CARD, "flex flex-col gap-3 p-5")}>
+      <div className="flex items-baseline gap-1.5">
+        <span aria-hidden="true" className={CARD_LABEL}>{`${String(number).padStart(2, "0")} —`}</span>
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 /** Characters as the server counts them: code points, so an emoji is one. */
 const codePoints = (text: string) => [...text].length;
@@ -51,13 +68,19 @@ const codePoints = (text: string) => [...text].length;
 /** The info fields as the server holds them (what **Avanti** saves on an existing case). */
 interface Info {
   name: string;
+  clientId: string;
   year: number;
   locale: Locale;
   businessLine: BusinessLine | null;
 }
 
 const sameInfo = (a: Info | null, b: Info) =>
-  a !== null && a.name === b.name && a.year === b.year && a.locale === b.locale && a.businessLine === b.businessLine;
+  a !== null &&
+  a.name === b.name &&
+  a.clientId === b.clientId &&
+  a.year === b.year &&
+  a.locale === b.locale &&
+  a.businessLine === b.businessLine;
 
 /** The case being edited, as the page loaded it. */
 export interface CaseDetailsCase {
@@ -150,7 +173,6 @@ export function CaseDetailsStep({
     clientId: `${baseId}-client`,
     year: `${baseId}-year`,
     businessLine: `${baseId}-business-line`,
-    clientFixed: `${baseId}-client-fixed`,
     noClients: `${baseId}-no-clients`,
     reason: `${baseId}-reason`,
   };
@@ -160,12 +182,12 @@ export function CaseDetailsStep({
   const code = useRef(caseStudy?.code ?? "");
   /** The case's id once it exists; read synchronously by the autosave. */
   const caseRef = useRef<string | null>(caseStudy?.id ?? null);
-  const [caseId, setCaseId] = useState<string | null>(caseStudy?.id ?? null);
+  const [, setCaseId] = useState<string | null>(caseStudy?.id ?? null);
   /** The info fields the server holds, so **Avanti** skips an unchanged save. */
   const savedInfo = useRef<Info | null>(
     caseStudy === null
       ? null
-      : { name: caseStudy.name, year: caseStudy.year, locale: caseStudy.locale, businessLine: caseStudy.businessLine },
+      : { name: caseStudy.name, clientId: caseStudy.client.id, year: caseStudy.year, locale: caseStudy.locale, businessLine: caseStudy.businessLine },
   );
   const busy = useRef(false);
   const unmounted = useRef(false);
@@ -201,8 +223,9 @@ export function CaseDetailsStep({
     };
   }, []);
 
-  const fixedClient = caseStudy?.client ?? null;
-  const hasClients = fixedClient !== null || clients.length > 0;
+  // The client can change while the case is a draft (owner, 2026-10-21); without the list, its own client is the one option.
+  const clientOptions = clients.length > 0 || caseStudy === null ? clients : [caseStudy.client];
+  const hasClients = clientOptions.length > 0;
   const tooLong = (text: string) => codePoints(text) > maxChars;
   const limitMessage = fill(copy.errors.tooLong, { max: maxChars.toLocaleString("it-IT") });
 
@@ -213,7 +236,7 @@ export function CaseDetailsStep({
   }
 
   const parsedYear = () => (/^\d+$/.test(year.trim()) ? Number(year.trim()) : Number.NaN);
-  const currentInfo = (): Info => ({ name: name.trim(), year: parsedYear(), locale, businessLine });
+  const currentInfo = (): Info => ({ name: name.trim(), clientId, year: parsedYear(), locale, businessLine });
   const yearValid = (value: number) => Number.isInteger(value) && value >= yearMin && value <= yearMax;
   const initialClient = useRef(clientId);
 
@@ -389,11 +412,13 @@ export function CaseDetailsStep({
         if (unmounted.current) return;
         if (!updated.ok) {
           if (updated.error.code === "NOT_FOUND" || updated.error.code === "STALE_STATUS") setFailed(it.wizard.errors.notDraft);
+          // A stale list: retrying the same pick fails again, so say so on the field.
+          else if (updated.error.code === "CLIENT_NOT_FOUND") show({ clientId: it.wizard.errors.clientNotFound });
           else if (!showInvalid(updated)) setFailed(it.wizard.errors.saveFailed);
           return;
         }
         savedInfo.current = info;
-        // A year change renumbers the draft (owner, 2026-10-20): the top bar must show the new code.
+        // A client or year change renumbers the draft (owner, 2026-10-20/21): the top bar must show the new code.
         renumbered = updated.value.code !== code.current;
         code.current = updated.value.code;
       }
@@ -454,13 +479,16 @@ export function CaseDetailsStep({
 
   return (
     <form noValidate onSubmit={onSubmit} aria-busy={pending || undefined}>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-        <div className="col-span-2 flex flex-col gap-1.5">
-          <RequiredLabel>
-            <label htmlFor={ids.name} className={LABEL}>
-              {it.wizard.fields.name}
-            </label>
-          </RequiredLabel>
+      <div className="flex flex-col gap-3">
+        <FieldCard number={1}
+          label={
+            <RequiredLabel>
+              <label htmlFor={ids.name} className={CARD_LABEL}>
+                {it.wizard.fields.name}
+              </label>
+            </RequiredLabel>
+          }
+        >
           <input
             id={ids.name}
             name="name"
@@ -479,42 +507,27 @@ export function CaseDetailsStep({
             className={INPUT}
           />
           {fieldError("name")}
-        </div>
+        </FieldCard>
 
-        <div className="col-span-2 flex flex-col gap-1.5">
-          {caseId !== null ? (
-            <>
-              <RequiredLabel>
-                <label htmlFor={ids.clientId} className={LABEL}>
+        <FieldCard
+          number={2}
+          label={
+            <RequiredLabel>
+              {hasClients ? (
+                <label htmlFor={ids.clientId} className={CARD_LABEL}>
                   {it.wizard.fields.client}
                 </label>
-              </RequiredLabel>
-              <input
-                id={ids.clientId}
-                name="client"
-                type="text"
-                readOnly
-                aria-describedby={ids.clientFixed}
-                value={(() => {
-                  const client = fixedClient ?? clients.find((option) => option.id === clientId);
-                  return client === undefined ? "" : clientLabel(client);
-                })()}
-                className={cn(INPUT, "text-foreground-muted")}
-              />
-              <p id={ids.clientFixed} className={FIELD_HINT}>
-                {it.wizard.clientFixed}
-              </p>
-            </>
-          ) : hasClients ? (
+              ) : (
+                <span className={CARD_LABEL}>{it.wizard.fields.client}</span>
+              )}
+            </RequiredLabel>
+          }
+        >
+          {hasClients ? (
             <>
-              <RequiredLabel>
-                <label htmlFor={ids.clientId} className={LABEL}>
-                  {it.wizard.fields.client}
-                </label>
-              </RequiredLabel>
               <ClientCombobox
                 id={ids.clientId}
-                clients={clients}
+                clients={clientOptions}
                 value={clientId}
                 onChange={(picked) => {
                   setClientId(picked);
@@ -527,23 +540,21 @@ export function CaseDetailsStep({
               {fieldError("clientId")}
             </>
           ) : (
-            <>
-              <RequiredLabel>
-                <span className={LABEL}>{it.wizard.fields.client}</span>
-              </RequiredLabel>
-              <p id={ids.noClients} className="font-body text-sm text-foreground">
-                {noClientsNote()}
-              </p>
-            </>
+            <p id={ids.noClients} className="font-body text-sm text-foreground">
+              {noClientsNote()}
+            </p>
           )}
-        </div>
+        </FieldCard>
 
-        <div className="flex flex-col gap-1.5">
-          <RequiredLabel>
-            <label htmlFor={ids.year} className={LABEL}>
-              {it.wizard.fields.year}
-            </label>
-          </RequiredLabel>
+        <FieldCard number={3}
+          label={
+            <RequiredLabel>
+              <label htmlFor={ids.year} className={CARD_LABEL}>
+                {it.wizard.fields.year}
+              </label>
+            </RequiredLabel>
+          }
+        >
           <input
             id={ids.year}
             name="year"
@@ -561,17 +572,20 @@ export function CaseDetailsStep({
               setYear(event.target.value);
               clearError("year");
             }}
-            className={cn(INPUT, "tabular-nums")}
+            className={cn(INPUT, "max-w-48 tabular-nums")}
           />
           {fieldError("year")}
-        </div>
+        </FieldCard>
 
-        <div className="col-span-2 flex flex-col gap-1.5">
-          <RequiredLabel>
-            <span id={ids.businessLine} className={LABEL}>
-              {it.wizard.fields.businessLine}
-            </span>
-          </RequiredLabel>
+        <FieldCard number={4}
+          label={
+            <RequiredLabel>
+              <span id={ids.businessLine} className={CARD_LABEL}>
+                {it.wizard.fields.businessLine}
+              </span>
+            </RequiredLabel>
+          }
+        >
           <div ref={pillsRef}>
             <BusinessLinePills
               options={businessLines}
@@ -587,13 +601,13 @@ export function CaseDetailsStep({
             />
           </div>
           {fieldError("businessLine")}
-        </div>
+        </FieldCard>
       </div>
 
-      <h2 className={cn("mt-12 mb-6", STEP_HEADING)}>{copy.heading}</h2>
+      <h2 className={cn("mt-10 mb-4", STEP_HEADING)}>{copy.heading}</h2>
 
-      <div className="flex flex-col gap-5">
-        {TEXT_FIELDS.map((field) => {
+      <div className="flex flex-col gap-3">
+        {TEXT_FIELDS.map((field, index) => {
           const id = `${baseId}-${field}`;
           const textErrorId = `${id}-error`;
           const text = values[field];
@@ -602,10 +616,15 @@ export function CaseDetailsStep({
           const saveFailed = texts.failed.has(field);
           const message = over ? limitMessage : saveFailed ? copy.errors.saveFailed : atLimit ? limitMessage : null;
           return (
-            <div key={field} className="flex flex-col gap-1.5">
-              <label htmlFor={id} className={LABEL}>
-                {copy.labels[field]}
-              </label>
+            <FieldCard
+              key={field}
+              number={5 + index}
+              label={
+                <label htmlFor={id} className={CARD_LABEL}>
+                  {copy.labels[field]}
+                </label>
+              }
+            >
               <textarea
                 id={id}
                 ref={(element) => {
@@ -618,14 +637,14 @@ export function CaseDetailsStep({
                 aria-describedby={message === null ? undefined : textErrorId}
                 onChange={(event) => texts.change(field, event.target.value)}
                 onBlur={() => void texts.save(field)}
-                className={TEXTAREA}
+                className={TEXT_INPUT}
               />
               {message !== null && (
                 <p id={textErrorId} className={cn(FIELD_HINT, (over || saveFailed) && "text-danger")}>
                   {message}
                 </p>
               )}
-            </div>
+            </FieldCard>
           );
         })}
       </div>

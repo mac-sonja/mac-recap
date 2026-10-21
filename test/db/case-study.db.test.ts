@@ -651,6 +651,7 @@ describe("business line and details (Story 2.17)", () => {
   const details = (caseId: string, over: Record<string, unknown> = {}) => ({
     caseId,
     name: "Rebrand",
+    clientId: acme.id,
     year: 2026,
     locale: "it",
     businessLine: "branding",
@@ -733,7 +734,7 @@ describe("business line and details (Story 2.17)", () => {
     expect(events.at(-1)).toEqual({
       type: CASE_DETAILS_UPDATED,
       actor_id: DEV_ACTOR_ID,
-      data: { name: "Rebrand 2", year: 2026, locale: "en", businessLine: "social_media" },
+      data: { name: "Rebrand 2", clientId: acme.id, year: 2026, locale: "en", businessLine: "social_media" },
     });
   });
 
@@ -778,10 +779,10 @@ describe("business line and details (Story 2.17)", () => {
   it("update_case_study_details itself refuses a null or unknown business line", async () => {
     const created = await createCase();
     await expect(
-      pool.query("select public.update_case_study_details($1, 'R', 2026, 'it', null, $2)", [created.id, DEV_ACTOR_ID]),
+      pool.query("select public.update_case_study_details($1, 'R', $3, 2026, 'it', null, $2)", [created.id, DEV_ACTOR_ID, acme.id]),
     ).rejects.toMatchObject({ code: "P0001", message: "INVALID_INPUT" });
     await expect(
-      pool.query("select public.update_case_study_details($1, 'R', 2026, 'it', 'moda', $2)", [created.id, DEV_ACTOR_ID]),
+      pool.query("select public.update_case_study_details($1, 'R', $3, 2026, 'it', 'moda', $2)", [created.id, DEV_ACTOR_ID, acme.id]),
     ).rejects.toMatchObject({ code: "23514" });
   });
 
@@ -798,7 +799,7 @@ describe("business line and details (Story 2.17)", () => {
       expect([earlier.code, moved.code]).toEqual([`${client.code}-2025-01`, `${client.code}-2026-02`]);
 
       const { updateDetails } = await loadCaseStudy();
-      const result = await updateDetails(await devActor(), details(moved.id, { year: 2025 }));
+      const result = await updateDetails(await devActor(), details(moved.id, { clientId: client.id, year: 2025 }));
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value).toMatchObject({ id: moved.id, year: 2025, number: 2, code: `${client.code}-2025-02` });
@@ -809,6 +810,7 @@ describe("business line and details (Story 2.17)", () => {
         actor_id: DEV_ACTOR_ID,
         data: {
           name: "Rebrand",
+          clientId: client.id,
           year: 2025,
           locale: "it",
           businessLine: "branding",
@@ -821,8 +823,33 @@ describe("business line and details (Story 2.17)", () => {
       // 2026's 02 is not reused: the next 2026 case is 03.
       expect((await createCase({ clientId: client.id, year: 2026 })).code).toBe(`${client.code}-2026-03`);
       // Moving back takes a new 2026 number too.
-      const back = await updateDetails(await devActor(), details(moved.id, { year: 2026 }));
+      const back = await updateDetails(await devActor(), details(moved.id, { clientId: client.id, year: 2026 }));
       expect(back.ok && back.value.code).toBe(`${client.code}-2026-04`);
+    });
+
+    it("a client change (owner, 2026-10-21) takes the new client's next number and code; the case id stays", async () => {
+      const other = await createTestClient(pool, DEV_ACTOR_ID);
+      const created = await createCase();
+      const { updateDetails } = await loadCaseStudy();
+      const result = await updateDetails(await devActor(), details(created.id, { clientId: other.id }));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toMatchObject({ id: created.id, client: { id: other.id }, number: 1, code: `${other.code}-2026-01` });
+      expect((await eventsOf(created.id)).at(-1)?.data).toMatchObject({
+        clientId: other.id,
+        previousClientId: acme.id,
+        previousCode: created.code,
+        code: `${other.code}-2026-01`,
+      });
+    });
+
+    it("refuses an unknown client with CLIENT_NOT_FOUND; nothing written", async () => {
+      const created = await createCase();
+      const { updateDetails } = await loadCaseStudy();
+      const before = await counts();
+      const result = await updateDetails(await devActor(), details(created.id, { clientId: "cccccccc-0000-4000-8000-00000000ffff" }));
+      expect(result.ok ? null : result.error.code).toBe("CLIENT_NOT_FOUND");
+      expect(await counts()).toEqual(before);
     });
 
     it("keeps number and code when only other fields change", async () => {
@@ -846,7 +873,7 @@ describe("business line and details (Story 2.17)", () => {
       const db = await pool.connect();
       try {
         await db.query("begin");
-        await db.query("select public.update_case_study_details($1, 'R', 2023, 'it', 'branding', $2)", [created.id, DEV_ACTOR_ID]);
+        await db.query("select public.update_case_study_details($1, 'R', $3, 2023, 'it', 'branding', $2)", [created.id, DEV_ACTOR_ID, acme.id]);
         await expect(db.query("update public.case_study set number = number + 1000 where id = $1", [created.id])).rejects.toMatchObject({
           code: "P0001",
           message: expect.stringMatching(/immutable/),
@@ -944,7 +971,7 @@ describe("RLS lockout", () => {
 
   const FUNCTIONS = [
     `public.create_case_study('I', '${UNKNOWN_ID}'::uuid, 2026, 'it', 'branding', '${DEV_ACTOR_ID}')`,
-    `public.update_case_study_details('${UNKNOWN_ID}'::uuid, 'I', 2026, 'it', 'branding', '${DEV_ACTOR_ID}')`,
+    `public.update_case_study_details('${UNKNOWN_ID}'::uuid, 'I', '${UNKNOWN_ID}'::uuid, 2026, 'it', 'branding', '${DEV_ACTOR_ID}')`,
     `public.create_client('Intruder', null, null, '${DEV_ACTOR_ID}')`,
     `public.update_client('${UNKNOWN_ID}', 'Intruder', null, null, null, '${DEV_ACTOR_ID}')`,
     `public.save_client_brief_field('${UNKNOWN_ID}', 'context', 'x', '${DEV_ACTOR_ID}')`,

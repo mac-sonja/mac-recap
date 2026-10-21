@@ -82,12 +82,16 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   if (requested === 2) {
     const form = await material.getDetailsForm({ caseId: id });
     if (!form.ok) throw new Error(`Details could not be loaded: ${form.error.code}`);
+    // The client can change while the case is a draft (owner, 2026-10-21): offer every client.
+    // Without `list clients` (or when the list fails) the field offers the case's own client only.
+    const listed = authorize(shell.actor, "list clients").ok ? await caseStudy.listClients() : null;
+    const clients = listed?.ok ? listed.value : [];
     return (
       <WizardFrame caseStudy={wizardCase} current={2} reachable={reachable}>
         <CaseDetailsStep
           key={id}
           caseStudy={{ id, code, name, year, locale, businessLine, client }}
-          clients={[]}
+          clients={clients}
           defaultYear={year}
           yearMin={caseStudy.YEAR_MIN}
           yearMax={caseStudy.YEAR_MAX}

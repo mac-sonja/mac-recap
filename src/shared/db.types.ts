@@ -601,7 +601,7 @@ isOneToOne: false
         isSetofReturn: false
       } },
 "update_case_study_details":
-{ Args: { "p_actor_id": string,"p_business_line": string,"p_case_id": string,"p_locale": string,"p_name": string,"p_year": number }; Returns: {
+{ Args: { "p_actor_id": string,"p_business_line": string,"p_case_id": string,"p_client_id": string,"p_locale": string,"p_name": string,"p_year": number }; Returns: {
               "approved_revision_id": string | null,
 "business_line": string | null,
 "client_id": string,

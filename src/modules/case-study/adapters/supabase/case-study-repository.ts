@@ -40,6 +40,7 @@ const UPDATE_DETAILS_REFUSALS: Refusals = {
   NOT_FOUND: { code: "NOT_FOUND", message: "No case study with this id." },
   STALE_STATUS: { code: "STALE_STATUS", message: "The case study is no longer a draft." },
   INVALID_INPUT: { code: "INVALID_INPUT", message: "businessLine: Required." },
+  CLIENT_NOT_FOUND: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
 };
 /** Postgres check_violation, and the constraint naming a business line outside the list. */
 const CHECK_VIOLATION = "23514";
@@ -146,6 +147,7 @@ export function createSupabaseCaseStudyRepository(
       const { data, error } = await client().rpc("update_case_study_details", {
         p_case_id: input.caseId,
         p_name: input.name,
+        p_client_id: input.clientId,
         p_year: input.year,
         p_locale: input.locale,
         p_business_line: input.businessLine,
@@ -154,6 +156,7 @@ export function createSupabaseCaseStudyRepository(
       if (error) {
         const refused = refusalOf(error, UPDATE_DETAILS_REFUSALS);
         if (refused?.code === "INVALID_INPUT") return err({ ...refused, details: { fields: ["businessLine"] } });
+        if (refused?.code === "CLIENT_NOT_FOUND") return err({ ...refused, details: { clientId: input.clientId } });
         if (refused) return err({ ...refused, details: { id: input.caseId } });
         if (isBusinessLineCheck(error)) return businessLineRefused();
         log.error(`case_study details update failed: ${error.code}`, { caseId: input.caseId, actorId });

@@ -74,7 +74,12 @@ export function BusinessLinePills({ options, selected, onSelect, labelledBy, des
           tabIndex={businessLine === tabStop ? 0 : -1}
           onClick={() => pick(index)}
           onKeyDown={(event) => onKeyDown(event, index)}
-          className={cn(PILL, PILL_CHECKED, "hover:text-foreground aria-disabled:cursor-not-allowed aria-disabled:opacity-60")}
+          className={cn(
+            PILL,
+            PILL_CHECKED,
+            // Grey filled chips (owner's mock, 2026-10-21); selected stays solid ink.
+            "min-h-9 border-transparent bg-surface-control px-3.5 py-1.5 text-[13px] text-foreground hover:bg-surface-selected aria-checked:hover:bg-foreground-strong aria-disabled:cursor-not-allowed aria-disabled:opacity-60",
+          )}
         >
           {it.businessLines[businessLine]}
         </button>

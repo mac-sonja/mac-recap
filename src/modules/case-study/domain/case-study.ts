@@ -361,13 +361,14 @@ export const createCaseStudyInputSchema = z.object({
 export type CreateCaseStudyInput = z.infer<typeof createCaseStudyInputSchema>;
 
 /**
- * What a person supplies to edit a draft's details (wizard step 1 on an existing
- * case): every field required and as it should be after the save. The client is
- * fixed once the case exists (its code depends on it), so there is no `clientId`.
+ * What a person supplies to edit a draft's details (wizard step Dettagli): every
+ * field required and as it should be after the save. The client can change while
+ * the case is a draft (owner, 2026-10-21): the code then follows the new client.
  */
 export const updateCaseStudyDetailsInputSchema = z.object({
   caseId: z.uuid("Required."),
   name: requiredText,
+  clientId: z.uuid("Required."),
   year: yearSchema,
   locale: localeSchema,
   businessLine: businessLineSchema,

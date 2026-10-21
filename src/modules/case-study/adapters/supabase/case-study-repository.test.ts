@@ -116,7 +116,7 @@ describe("createSupabaseCaseStudyRepository().create", () => {
 });
 
 describe("createSupabaseCaseStudyRepository().updateDetails", () => {
-  const input = { caseId: row().id, name: "Rebrand 2", year: 2025, locale: "en" as const, businessLine: "video" as const };
+  const input = { caseId: row().id, name: "Rebrand 2", clientId: CLIENT_ID, year: 2025, locale: "en" as const, businessLine: "video" as const };
 
   it("calls update_case_study_details, then re-reads the case with its client", async () => {
     const { factory, rpc, eq } = stubClient({ data: row({ status: "draft", business_line: "video" }), error: null }, { data: { id: row().id }, error: null });
@@ -124,6 +124,7 @@ describe("createSupabaseCaseStudyRepository().updateDetails", () => {
     expect(rpc).toHaveBeenCalledExactlyOnceWith("update_case_study_details", {
       p_case_id: row().id,
       p_name: "Rebrand 2",
+      p_client_id: CLIENT_ID,
       p_year: 2025,
       p_locale: "en",
       p_business_line: "video",
@@ -169,7 +170,7 @@ describe("another check violation", () => {
       const result =
         write === "create"
           ? await repo.create({ name: "R", clientId: CLIENT_ID, year: 2026, locale: "it", businessLine: "video" }, ACTOR_ID)
-          : await repo.updateDetails({ caseId: row().id, name: "R", year: 2026, locale: "it", businessLine: "video" }, ACTOR_ID);
+          : await repo.updateDetails({ caseId: row().id, name: "R", clientId: CLIENT_ID, year: 2026, locale: "it", businessLine: "video" }, ACTOR_ID);
       expect(result.ok ? null : result.error.code).toBe("CASE_STUDY_WRITE_FAILED");
       expect(String(stdout.mock.calls[0][0])).toContain("23514");
     } finally {

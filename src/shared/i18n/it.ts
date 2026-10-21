@@ -94,7 +94,7 @@ export const it = {
         client: "Cliente",
         year: "Anno",
         status: "Stato",
-        businessLine: "Business line",
+        businessLine: "Servizi",
         updated: "Aggiornata",
         links: "Link",
       },
@@ -168,14 +168,12 @@ export const it = {
       name: "Titolo della case history",
       client: "Cliente",
       year: "Anno",
-      businessLine: "Business line",
+      businessLine: "Servizi",
     },
     /** After a required field's label (case and client wizard step 1, no legend); hidden from screen readers, which read `aria-required`. */
     requiredMark: "*",
     /** The browser tab while the case wizard's Dettagli step is open; `{title}` is the live title. */
     tabTitle: "{title} · {app}",
-    /** Under the client of an existing case: it is fixed once the case exists. */
-    clientFixed: "Il cliente resta questo: il codice della case history nasce da lui.",
     /** Asked before leaving step 1 with entries that can't be kept (a new case, or required fields missing). */
     unsavedConfirm: "Quello che hai scritto non è ancora salvato. Vuoi uscire lo stesso?",
     /** Why Avanti is inactive on step 1; `{fields}` names the missing ones. */
@@ -204,7 +202,7 @@ export const it = {
       clientNotFound: "Questo cliente non c’è più. Ricarica la pagina e sceglilo di nuovo.",
       /** `{min}` and `{max}` are filled with the accepted years. */
       year: "Scrivi un anno tra il {min} e il {max}.",
-      businessLine: "Scegli la business line.",
+      businessLine: "Scegli un servizio.",
       generic: "Non siamo riusciti a creare la case history. Quello che hai scritto è ancora qui: riprova.",
       /** An existing case's details could not be saved. */
       saveFailed: "Non siamo riusciti a salvare. Quello che hai scritto è ancora qui: riprova.",

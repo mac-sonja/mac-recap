@@ -125,17 +125,18 @@ describe("BUSINESS_LINES", () => {
 
 describe("updateCaseStudyDetailsInputSchema", () => {
   const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
-  const details = { caseId: CASE_ID, name: " Rebrand ", year: 2026, locale: "en", businessLine: "eventi" };
+  const details = { caseId: CASE_ID, name: " Rebrand ", clientId: CLIENT_ID, year: 2026, locale: "en", businessLine: "eventi" };
 
-  it("trims the name and drops a client or code", () => {
-    expect(parseInput(updateCaseStudyDetailsInputSchema, { ...details, clientId: CLIENT_ID, code: "X-2026-01" })).toEqual({
+  it("trims the name, keeps the client (it can change on a draft) and drops a code", () => {
+    expect(parseInput(updateCaseStudyDetailsInputSchema, { ...details, code: "X-2026-01" })).toEqual({
       ok: true,
-      value: { caseId: CASE_ID, name: "Rebrand", year: 2026, locale: "en", businessLine: "eventi" },
+      value: { caseId: CASE_ID, name: "Rebrand", clientId: CLIENT_ID, year: 2026, locale: "en", businessLine: "eventi" },
     });
   });
 
   it.each([
     ["no case id", { ...details, caseId: undefined }, ["caseId"]],
+    ["no client", { ...details, clientId: undefined }, ["clientId"]],
     ["no locale", { ...details, locale: undefined }, ["locale"]],
     ["no business line", { ...details, businessLine: undefined }, ["businessLine"]],
     ["an unknown business line", { ...details, businessLine: "moda" }, ["businessLine"]],
