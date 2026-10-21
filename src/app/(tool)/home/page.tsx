@@ -17,6 +17,9 @@ import { cn } from "@/shared/utils";
 /** How many cases each list on the Dashboard shows before *Vedi tutte*. */
 const LIST_SIZE = 5;
 
+/** How many lines *Attività* holds; past about five it scrolls inside its card (owner, 2026-10-21). */
+const ACTIVITY_SIZE = 50;
+
 interface HomeCase {
   id: string;
   code: string;
@@ -144,7 +147,12 @@ function Activity({ cases, more }: { cases: readonly HomeCase[]; more?: ReactNod
       {cases.length === 0 ? (
         <p className="px-5 pt-2 pb-6 font-body text-sm text-foreground-muted">{it.home.activity.empty}</p>
       ) : (
-        <ul className="flex flex-col px-5 pb-2">
+        // Scrolls inside the card; focusable so it scrolls from the keyboard too.
+        <ul
+          tabIndex={0}
+          aria-labelledby="home-activity"
+          className="flex max-h-[22rem] flex-col overflow-y-auto overscroll-contain px-5 pb-2 focus-visible:outline-offset-[-2px]"
+        >
           {cases.map((c) => {
             const Icon = ACTIVITY_ICON[c.status];
             const content = (
@@ -258,7 +266,7 @@ export default async function HomePage() {
       </div>
 
       <div className={cn("grid gap-4", canCreate && "xl:grid-cols-[1fr_20rem]")}>
-        <Activity cases={cases.slice(0, LIST_SIZE)} more={cases.length > 0 ? seeAll : undefined} />
+        <Activity cases={cases.slice(0, ACTIVITY_SIZE)} more={cases.length > 0 ? seeAll : undefined} />
         {canCreate && (
           <section
             aria-labelledby="home-start"

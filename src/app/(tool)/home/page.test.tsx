@@ -100,6 +100,16 @@ describe("HomePage", () => {
     expect(html).toContain('<strong class="font-semibold text-foreground-strong">Mattoni</strong> è stata approvata.');
   });
 
+  it("lists every case in Attività (not just five), in a list that scrolls inside its card", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(ok(Array.from({ length: 8 }, () => caseStudy({ status: "approved" }))));
+    const html = await renderPage();
+    const activity = html.match(/<ul tabindex="0" aria-labelledby="home-activity" class="([^"]*)">(.*?)<\/ul>/);
+    expect(activity?.[1]).toContain("overflow-y-auto");
+    expect(activity?.[1]).toContain("max-h-[22rem]");
+    expect(activity?.[2].match(/<li /g)).toHaveLength(8);
+  });
+
   it("shows friendly empty lines with no cases", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     list.mockResolvedValue(ok([]));
