@@ -1,6 +1,6 @@
 // Public surface of the case-study module. Code outside this module imports only this file.
 // The module owns `case_study`, `client`, `client_logo`, `client_brief`, `client_asset`,
-// `case_number_counter` and `case_event`, and the `material` bucket's
+// `case_number_counter`, `case_event` and `revision`, and the `material` bucket's
 // `clients/{clientId}/logos/**` and `clients/{clientId}/material/**` (AD-1, AD-22):
 // nobody else writes them.
 import { randomUUID } from "node:crypto";
@@ -28,6 +28,13 @@ import { makeListCaseStudies } from "@/modules/case-study/application/list-case-
 import { makeListClientSummaries } from "@/modules/case-study/application/list-client-summaries";
 import { makeListClients } from "@/modules/case-study/application/list-clients";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
+import {
+  makeCreateWorkingRevision,
+  makeGetEditableRevision,
+  makeGetLiveRevision,
+  type CaseStudyRevision,
+} from "@/modules/case-study/application/revisions";
+import { createSupabaseRevisionRepository } from "@/modules/case-study/adapters/supabase/revision-repository";
 import {
   makeSaveClientBriefField,
   type ClientBriefFieldSaved,
@@ -112,6 +119,15 @@ export type { PresignedClientLogoUpload } from "@/modules/case-study/application
 export type { ClientBriefFieldSaved } from "@/modules/case-study/application/save-client-brief-field";
 export type { ClientDeleted } from "@/modules/case-study/application/delete-client";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
+export { REVISION_CREATED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
+export type {
+  CreateWorkingRevisionInput,
+  RevisionManifest,
+  RevisionMeta,
+  RevisionStatus,
+  RevisionSubject,
+} from "@/modules/case-study/domain/revision";
+export type { CaseStudyRevision } from "@/modules/case-study/application/revisions";
 export type { TransitionEvent } from "@/modules/case-study/domain/transition";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
 
@@ -335,7 +351,8 @@ export function getClientInfoForCase(caseId: unknown): Promise<Result<CaseClient
 
 /**
  * Appends one `case_event` row (`{ caseId, type, revisionId?, data? }`) with the actor.
- * Every mutation logs through here; an unknown case is `NOT_FOUND`.
+ * Every mutation logs through here; an unknown case is `NOT_FOUND`, an unknown
+ * revision `REVISION_NOT_FOUND`.
  */
 export function recordEvent(actor: Actor, input: unknown): Promise<Result<CaseEvent>> {
   return makeRecordEvent(createSupabaseCaseStudyRepository())(actor, input);
@@ -350,4 +367,58 @@ export function recordEvent(actor: Actor, input: unknown): Promise<Result<CaseEv
  */
 export function transition(caseId: unknown, event: unknown, actor: Actor): Promise<Result<CaseStudy>> {
   return makeTransition(createSupabaseCaseStudyRepository())(caseId, event, actor);
+}
+
+function revisionDeps() {
+  return { cases: createSupabaseCaseStudyRepository(), revisions: createSupabaseRevisionRepository() };
+}
+
+/**
+ * The one write that creates a revision (Story 3.3); every later writer (test
+ * draft, generator, Epic 4) uses it. Input `{ caseId, doc, manifest?, meta?,
+ * expectedHeadVersion }`, `meta` being `{ model, fellBack, promptVersion }` (strings
+ * 1–200 characters or null) and `expectedHeadVersion` the `headVersion` read
+ * (0–2147483647). `doc` must pass `generation.validateNewDocument` (one entry for
+ * exactly each registry format) before anything is written. Inserts a `working`
+ * revision with `generatedDoc = doc`, makes it the head only if `headVersion` still
+ * equals `expectedHeadVersion` (then increments it), supersedes a previous `working`
+ * head, and writes one `revision_created` case event with the revision id, in one
+ * transaction. `doc` holds no client values (the schema refuses them); callers must
+ * not put client values in the manifest either (its refs-and-hashes shape arrives
+ * with Story 3.7). Call only with an already-authorized actor.
+ *
+ * Errors, with nothing written: `INVALID_INPUT`, `DOCUMENT_INVALID`,
+ * `DOCUMENT_SCHEMA_UNSUPPORTED`, `FORMAT_NOT_IN_REVISION`, `NOT_FOUND` (unknown or
+ * soft-deleted case), `STALE_HEAD`. `REVISION_WRITE_FAILED`, and `REVISION_INVALID`,
+ * `DOCUMENT_INVALID` or `DOCUMENT_SCHEMA_UNSUPPORTED` on the returned row, can
+ * come after the call reached the database, so the write may have committed:
+ * re-read the head (`getEditableRevision`) rather than retry.
+ */
+export function createWorkingRevision(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+  return makeCreateWorkingRevision(revisionDeps())(actor, input);
+}
+
+/**
+ * The live revision of a subject (`{ kind: "case", id }`): the approved one, or
+ * `null` when none is approved. Documents are upgraded to the current schema in
+ * memory, never written back. Errors: `INVALID_INPUT` (malformed subject),
+ * `SUBJECT_NOT_SUPPORTED` (`{ kind: "client_intro" }`, until Story 3.9), `NOT_FOUND`
+ * (unknown or soft-deleted case), `REVISION_POINTER_INVALID` (the pointed revision is
+ * missing, another case's, or not `approved`; logged), `CASE_STUDY_LOOKUP_FAILED`,
+ * `CASE_STUDY_INVALID`, `REVISION_LOOKUP_FAILED`, `REVISION_INVALID` (the row),
+ * `DOCUMENT_INVALID` and `DOCUMENT_SCHEMA_UNSUPPORTED` (a stored document that does
+ * not upgrade).
+ */
+export function getLiveRevision(subject: unknown): Promise<Result<CaseStudyRevision | null>> {
+  return makeGetLiveRevision(revisionDeps())(subject);
+}
+
+/**
+ * The editable revision of a subject (`{ kind: "case", id }`): the head, or
+ * `null` when it has none. Same upgrade and errors as `getLiveRevision`, except
+ * that the head may have any status (`REVISION_POINTER_INVALID` only when it is
+ * missing or another case's).
+ */
+export function getEditableRevision(subject: unknown): Promise<Result<CaseStudyRevision | null>> {
+  return makeGetEditableRevision(revisionDeps())(subject);
 }

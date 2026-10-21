@@ -2,7 +2,8 @@
 title: 'Story 3.3: The case study document, revisions and the format registry'
 type: 'feature'
 created: '2026-10-20'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: '975c6e1c7040eda4a67b0efa350e7164ccd0300b'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -105,11 +106,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `rendering/domain/formats.ts` with the registry and `requireFormat`, plus tests.
-- [ ] `generation/domain/document.ts`: the schema v1, v0 fixture types, `upgrade`, and a `validateNewDocument(doc)` that also checks the format keys. Tests for every matrix row on the schema side.
-- [ ] The migration (table, checks, trigger, RLS and grants, FKs, `create_working_revision`), with DB tests for the table rows of the matrix plus grants and RLS.
-- [ ] The case-study revision repository, use cases and index exports, with use-case tests (upgrade on read with no write-back; live versus editable; deleted case; `client_intro` subject).
-- [ ] `db.types.ts`: commit CI's file on drift.
+- [x] `rendering/domain/formats.ts` with the registry and `requireFormat`, plus tests.
+- [x] `generation/domain/document.ts`: the schema v1, v0 fixture types, `upgrade`, and a `validateNewDocument(doc)` that also checks the format keys. Tests for every matrix row on the schema side.
+- [x] The migration (table, checks, trigger, RLS and grants, FKs, `create_working_revision`), with DB tests for the table rows of the matrix plus grants and RLS.
+- [x] The case-study revision repository, use cases and index exports, with use-case tests (upgrade on read with no write-back; live versus editable; deleted case; `client_intro` subject).
+- [x] `db.types.ts`: commit CI's file on drift.
 
 **Acceptance Criteria:**
 - Given `src/app`, when the web-imports test runs, then the generation and rendering indexes are reachable and still pass.
@@ -120,3 +121,27 @@ context:
 **Commands:**
 - `npm run lint && npm run typecheck && npm test && npm run build` -- expected: all pass.
 - `npm run test:db` -- runs in CI only.
+
+## Review Triage Log
+
+| # | Source | Finding | Verdict | Route | Evidence |
+|---|--------|---------|---------|-------|----------|
+| 1 | blind, edge-case | `revision` has no delete or truncate guard, unlike case_study and case_event | medium | patch | Grants only; the pattern exists in the case_study migration. |
+| 2 | blind | Nothing in the DB prevents two `working` revisions per case | medium | patch | Only the RPC's supersede step enforces it. |
+| 3 | blind | `status` can move in any direction (superseded or approved back to working) | medium | patch | The immutability trigger leaves `status` free. |
+| 4 | edge-case, blind | Pointer checks: uppercase ids fail, a mispointed head gets the generic lookup code with no log, and `approvedRevisionId` isn't checked to be approved | medium | patch | `revisions.ts` compares raw strings and doesn't check status. |
+| 5 | blind, edge-case | Slot asset ids aren't required to be in `selectedMedia` | low | patch | Direct superRefine. |
+| 6 | edge-case | Block text, claims and block counts are unbounded | medium | patch | Documents are stored twice (`doc` and `generated_doc`). |
+| 7 | verification-gap | Meta and manifest never go through the real adapter in a test | medium | patch | The fake echoes input; DB tests use raw SQL. |
+| 8 | verification-gap | `createWorkingRevision`'s `NOT_FOUND` mapping is untested through the adapter | low | patch | Only raw SQL is tested. |
+| 9 | blind | The compare-and-set isn't tested under concurrency | medium | patch | Sequential tests only; helpers exist. |
+| 10 | blind | FK columns pointing at `revision` have no indexes | low | patch | Direct DDL. |
+| 11 | blind | The `generated_doc` schemaVersion check is never tested alone | low | patch | The test binds the same value to both. |
+| 12 | blind | `REVISION_CREATED` and the SQL literal have no drift test | low | patch | Direct test. |
+| 13 | blind, edge-case | Doc comments are wrong or incomplete (malformed subject → `INVALID_INPUT`; missing codes; manifest claim; post-commit errors) | low | patch | Direct correction. |
+| 14 | edge-case | `expectedHeadVersion` and meta lengths aren't bounded in zod, so DB range and check errors become generic | low | patch | Direct schema bounds. |
+| 15 | edge-case | The extra-format-keys error details are unbounded | low | patch | Cap the count. |
+| 16 | blind | Unknown actor gives a generic write error | low | reject | Actors come from `getActor`/the system actor only. |
+| 17 | edge-case | `recordEvent` can point at another case's revision | low | reject | No caller passes a revision id yet; Epic 4 adds them. |
+| 18 | edge-case | Template ref isn't checked against kind | low | reject | Templates arrive in Story 3.4. |
+| 19 | blind | Spec and tracker statuses differ | false | reject | Normal workflow states. |
