@@ -142,8 +142,8 @@ describe("material step copy", () => {
 
   test("has the mockup strings", () => {
     expect(t("wizard.material.heading")).toBe("Porta qui il materiale del progetto");
-    expect(t("wizard.material.drop.lead")).toBe("Trascina qui i file oppure");
-    expect(t("wizard.material.drop.browse")).toBe("sceglili dal computer");
+    expect(t("wizard.material.drop.lead")).toBe("Trascina qui i file o");
+    expect(t("wizard.material.drop.browse")).toBe("sfoglia");
     expect(fill(t("wizard.material.drop.hint"), { max: 20, size: 50 })).toBe("Fino a 20 file, massimo 50 MB l’uno.");
     expect(Object.values(m.drop.types)).toEqual(["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]);
     expect(t("wizard.material.list.label")).toBe("Materiale");
