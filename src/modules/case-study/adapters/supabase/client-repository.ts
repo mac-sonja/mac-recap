@@ -18,7 +18,7 @@ import {
   type Client,
   type ClientBrief,
   type ClientRef,
-  type ClientSummary,
+  type StoredClientSummary,
 } from "@/modules/case-study/domain/case-study";
 import { log } from "@/shared/log";
 import { err, ok, type AppError, type Result } from "@/shared/result";
@@ -29,10 +29,11 @@ const CLIENT_REF_COLUMNS = "id, name, code";
 const CLIENT_COLUMNS = "id, name, code, industries, description, logo_id";
 const BRIEF_COLUMNS = "context, solution, results";
 /**
- * The client with what `isClientComplete` reads and the count of its embedded case
- * studies; the embedded filter keeps non-deleted ones only.
+ * The client with what `isClientComplete` reads, the count of its embedded case
+ * studies (the embedded filter keeps non-deleted ones only) and its current logo,
+ * embedded through `client.logo_id` (named: `client_logo` also points back at `client`).
  */
-const CLIENT_SUMMARY_COLUMNS = `${CLIENT_COLUMNS}, client_brief(${BRIEF_COLUMNS}), case_study(count)`;
+const CLIENT_SUMMARY_COLUMNS = `${CLIENT_COLUMNS}, client_brief(${BRIEF_COLUMNS}), case_study(count), logo:client_logo!client_logo_id_fkey(id, mime_type)`;
 const LOGO_COLUMNS = "id, client_id, mime_type, size_bytes";
 const ASSET_COLUMNS = "id, client_id, position, file_name, mime_type, size_bytes, width, height, created_at";
 /** A case's client and its brief, embedded through `case_study.client_id` (the only FK from case_study to client). */
@@ -173,12 +174,17 @@ export function toClientBrief(embedded: BriefRow | BriefRow[] | null | undefined
 }
 
 /**
- * Maps a `client` row with its brief and embedded case count; a missing or malformed
- * count or brief fails validation. `complete` is `isClientComplete`.
+ * Maps a `client` row with its brief, embedded case count and current logo; a missing
+ * or malformed count or brief fails validation. `complete` is `isClientComplete`. A
+ * logo with an unknown type is left out (the list shows the monogram), never failing the row.
  */
 export function toClientSummary(
-  row: ClientRow & { client_brief: BriefRow | BriefRow[] | null; case_study: { count: number }[] | null },
-): Result<ClientSummary> {
+  row: ClientRow & {
+    client_brief: BriefRow | BriefRow[] | null;
+    case_study: { count: number }[] | null;
+    logo?: { id: string; mime_type: string } | null;
+  },
+): Result<StoredClientSummary> {
   const client = toClient(row);
   if (!client.ok) return client;
   const brief = toClientBrief(row.client_brief);
@@ -186,7 +192,8 @@ export function toClientSummary(
   const count = row.case_study?.[0]?.count;
   if (typeof count !== "number" || !Number.isInteger(count) || count < 0) return invalidRow(row.id);
   const { id, name, code } = client.value;
-  return ok({ id, name, code, caseCount: count, complete: isClientComplete(client.value, brief) });
+  const logo = row.logo && isLogoContentType(row.logo.mime_type) ? { id: row.logo.id, contentType: row.logo.mime_type } : null;
+  return ok({ id, name, code, caseCount: count, complete: isClientComplete(client.value, brief), logo });
 }
 
 /** Maps a `client_logo` row; an unknown mime type fails validation. */
@@ -266,7 +273,7 @@ export function createSupabaseClientRepository(
         log.error(`client summary list failed: ${error.code}`);
         return err({ code: "CLIENT_LOOKUP_FAILED", message: "Could not list the clients." });
       }
-      const clients: ClientSummary[] = [];
+      const clients: StoredClientSummary[] = [];
       for (const row of data) {
         const mapped = toClientSummary(row);
         if (!mapped.ok) return mapped;

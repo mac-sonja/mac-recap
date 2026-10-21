@@ -8,11 +8,11 @@ const { ClientsTable } = await import("./clients-table");
 const { SEARCH_DEBOUNCE_MS } = await import("@/app/(tool)/case-studies/_components/case-studies-table");
 const { it: dict, fill } = await import("@/shared/i18n/it");
 
-const LUMEN: ClientRow = { id: "cccccccc-0000-4000-8000-000000000001", code: "LUM", name: "Lumen Srl", caseCount: 2, complete: true };
-const ACME: ClientRow = { id: "cccccccc-0000-4000-8000-000000000003", code: "ACM", name: "Acme", caseCount: 0, complete: false };
+const LUMEN: ClientRow = { id: "cccccccc-0000-4000-8000-000000000001", code: "LUM", name: "Lumen Srl", caseCount: 2, complete: true, logoUrl: null };
+const ACME: ClientRow = { id: "cccccccc-0000-4000-8000-000000000003", code: "ACM", name: "Acme", caseCount: 0, complete: false, logoUrl: null };
 const rows: ClientRow[] = [
   LUMEN,
-  { id: "cccccccc-0000-4000-8000-000000000002", code: "CIT", name: "Città di Torino", caseCount: 10, complete: true },
+  { id: "cccccccc-0000-4000-8000-000000000002", code: "CIT", name: "Città di Torino", caseCount: 10, complete: true, logoUrl: null },
   ACME,
 ];
 
@@ -44,6 +44,37 @@ describe("ClientsTable", () => {
     expect(within(card("Acme")).getByText(fill(dict.clients.caseCount, { n: 0 }))).toBeTruthy();
     expect(within(card("Acme")).getByText(dict.clients.incomplete)).toBeTruthy();
     expect(within(card("Città di Torino")).getByText(fill(dict.clients.caseCount, { n: 10 }))).toBeTruthy();
+  });
+
+  it("shows the logo, decorative, on the white tile at the monogram's size", () => {
+    const url = "https://storage.example/clients/lumen/logo.svg?token=sig";
+    render(<ClientsTable rows={[{ ...LUMEN, logoUrl: url }]} canManage />);
+    const img = card("Lumen Srl").querySelector("img")!;
+    expect(img.getAttribute("src")).toBe(url);
+    expect(img.getAttribute("alt")).toBe("");
+    const tile = img.parentElement!;
+    expect(tile.getAttribute("aria-hidden")).toBe("true");
+    expect(tile.className).toContain("size-11");
+    expect(tile.className).toContain("bg-logo-tile");
+    expect(img.className).toContain("object-contain");
+    expect(within(card("Lumen Srl")).queryByText("L")).toBeNull();
+    // The link's name stays the client's, not doubled by the mark.
+    expect(within(card("Lumen Srl")).getByRole("link").textContent?.startsWith("Lumen Srl")).toBe(true);
+  });
+
+  it("shows the monogram when the client has no logo", () => {
+    render(<ClientsTable rows={[LUMEN]} canManage />);
+    expect(card("Lumen Srl").querySelector("img")).toBeNull();
+    const monogram = within(card("Lumen Srl")).getByText("L");
+    expect(monogram.getAttribute("aria-hidden")).toBe("true");
+    expect(monogram.className).toContain("size-11");
+  });
+
+  it("falls back to the monogram when the logo fails to load", () => {
+    render(<ClientsTable rows={[{ ...LUMEN, logoUrl: "https://storage.example/expired" }]} canManage />);
+    fireEvent.error(card("Lumen Srl").querySelector("img")!);
+    expect(card("Lumen Srl").querySelector("img")).toBeNull();
+    expect(within(card("Lumen Srl")).getByText("L").getAttribute("aria-hidden")).toBe("true");
   });
 
   it("uses the singular case count for one case", () => {

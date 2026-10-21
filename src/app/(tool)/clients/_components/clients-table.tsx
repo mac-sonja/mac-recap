@@ -9,6 +9,7 @@ import { clientHref, clientWizardHref } from "@/app/_lib/routes";
 import { SEARCH_DEBOUNCE_MS } from "@/app/(tool)/case-studies/_components/case-studies-table";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
+import { LogoTile } from "./logo-tile";
 import {
   DEFAULT_CLIENT_SORT,
   filterClientRows,
@@ -49,7 +50,7 @@ function monogramTone(code: string): string {
   return MONOGRAMS[hash % MONOGRAMS.length];
 }
 
-/** A client's initial on a deep colour tile (the card's mark until logos reach the list). */
+/** A client's initial on a deep colour tile: the card's mark when it has no logo, or the logo fails to load. */
 function Monogram({ name, code }: { name: string; code: string }) {
   return (
     <span
@@ -62,6 +63,17 @@ function Monogram({ name, code }: { name: string; code: string }) {
       {name.trim().charAt(0).toLocaleUpperCase("it-IT")}
     </span>
   );
+}
+
+/**
+ * The card's mark: the client's logo on the white logo tile at the monogram's size,
+ * decorative like the monogram (the card already names the client). No logo, or a
+ * logo that fails to load (e.g. an expired link), shows the monogram.
+ */
+function ClientMark({ row }: { row: Pick<ClientRow, "name" | "code" | "logoUrl"> }) {
+  const monogram = <Monogram name={row.name} code={row.code} />;
+  if (row.logoUrl === null) return monogram;
+  return <LogoTile src={row.logoUrl} alt="" decorative fallback={monogram} className="size-11 rounded-md p-1.5" />;
 }
 
 /** Input types that do not take typed text: `/` there still focuses search (as on the Case history table). */
@@ -81,7 +93,7 @@ function isTextField(el: Element | null): boolean {
 export const rowHref = (row: Pick<ClientRow, "id">) => clientHref(row.id);
 
 /**
- * The Clients grid: one card per client with its initial, name, code (mono), case
+ * The Clients grid: one card per client with its logo (or initial), name, code (mono), case
  * count and whether its profile is complete. Default order Name A–Z; the sort menu
  * offers Z–A, most cases and code. Search covers name and code (case- and
  * accent-insensitive, debounced); `/` focuses it unless focus is already in a text
@@ -221,7 +233,7 @@ export function ClientsTable({ rows, canManage }: ClientsTableProps) {
                   )}
                 >
                   <span className="flex min-w-0 items-center gap-3">
-                    <Monogram name={row.name} code={row.code} />
+                    <ClientMark row={row} />
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate font-label text-[15px] font-semibold text-foreground-strong">{row.name}</span>
                       <span className="font-mono text-xs text-foreground-muted">

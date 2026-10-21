@@ -22,7 +22,8 @@ async function sidebarCounts(actor: Actor): Promise<{ toReview: number | null; c
   const scope = listScopeFor(actor);
   const [cases, clients] = await Promise.all([
     scope !== null && authorize(actor, "list cases", scope).ok ? caseStudy.list(scope) : null,
-    can(actor, "list clients") ? caseStudy.listClientSummaries() : null,
+    // The plain list: the count needs no case counts or signed logo links.
+    can(actor, "list clients") ? caseStudy.listClients() : null,
   ]);
   return {
     toReview: cases?.ok ? cases.value.filter((c) => c.status === "in_review").length : null,

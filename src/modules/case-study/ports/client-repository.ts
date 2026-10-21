@@ -5,7 +5,7 @@ import type {
   ClientInfo,
   ClientRef,
   CaseClientInfo,
-  ClientSummary,
+  StoredClientSummary,
   LogoContentType,
 } from "@/modules/case-study/domain/case-study";
 import type { ClientAsset, ClientMaterialContentType } from "@/modules/case-study/domain/client-material";
@@ -60,10 +60,11 @@ export interface ClientRepository {
   list(): Promise<Result<ClientRef[]>>;
   /**
    * Every client with the number of its non-deleted case studies and whether every
-   * required field is filled (`isClientComplete`), ordered by name; `err` only when
-   * the read fails or a row fails validation.
+   * required field is filled (`isClientComplete`), with its current logo's id and type
+   * (null when it has none), ordered by name; `err` only when the read fails or a row
+   * fails validation.
    */
-  listWithCaseCounts(): Promise<Result<ClientSummary[]>>;
+  listWithCaseCounts(): Promise<Result<StoredClientSummary[]>>;
   /** `ok(null)` when no non-deleted client has this id; `err` only when the lookup itself fails. */
   findById(id: string): Promise<Result<Client | null>>;
   /**

@@ -97,20 +97,25 @@ describe("createSupabaseClientRepository().list", () => {
 describe("createSupabaseClientRepository().listWithCaseCounts", () => {
   it("lists non-deleted clients, counts only non-deleted cases and says whether every required field is filled, by name with an id tie-break", async () => {
     const rows = [
-      { ...infoRow(), client_brief: BRIEF, case_study: [{ count: 3 }] },
-      { ...infoRow({ id: "cccccccc-0000-4000-8000-000000000002", industries: [], description: null, logo_id: null }), client_brief: null, case_study: [{ count: 0 }] },
+      { ...infoRow(), client_brief: BRIEF, case_study: [{ count: 3 }], logo: { id: LOGO_ID, mime_type: "image/svg+xml" } },
+      {
+        ...infoRow({ id: "cccccccc-0000-4000-8000-000000000002", industries: [], description: null, logo_id: null }),
+        client_brief: null,
+        case_study: [{ count: 0 }],
+        logo: null,
+      },
     ];
     const { factory, from, select, is, order } = stubClient({ data: rows, error: null });
     expect(await createSupabaseClientRepository(factory).listWithCaseCounts()).toEqual({
       ok: true,
       value: [
-        { ...client(), caseCount: 3, complete: true },
-        { ...client({ id: "cccccccc-0000-4000-8000-000000000002" }), caseCount: 0, complete: false },
+        { ...client(), caseCount: 3, complete: true, logo: { id: LOGO_ID, contentType: "image/svg+xml" } },
+        { ...client({ id: "cccccccc-0000-4000-8000-000000000002" }), caseCount: 0, complete: false, logo: null },
       ],
     });
     expect(from).toHaveBeenCalledWith("client");
     expect(select).toHaveBeenCalledWith(
-      "id, name, code, industries, description, logo_id, client_brief(context, solution, results), case_study(count)",
+      "id, name, code, industries, description, logo_id, client_brief(context, solution, results), case_study(count), logo:client_logo!client_logo_id_fkey(id, mime_type)",
     );
     expect(is.mock.calls).toEqual([
       ["deleted_at", null],
@@ -120,6 +125,13 @@ describe("createSupabaseClientRepository().listWithCaseCounts", () => {
       ["name", { ascending: true }],
       ["id", { ascending: true }],
     ]);
+  });
+
+  it("leaves out a logo with an unknown type rather than failing the row", async () => {
+    const rows = [{ ...infoRow(), client_brief: BRIEF, case_study: [{ count: 1 }], logo: { id: LOGO_ID, mime_type: "image/gif" } }];
+    const { factory } = stubClient({ data: rows, error: null });
+    const result = await createSupabaseClientRepository(factory).listWithCaseCounts();
+    expect(result.ok && result.value[0].logo).toBeNull();
   });
 
   it("counts a client with a blank brief text as unfinished", async () => {

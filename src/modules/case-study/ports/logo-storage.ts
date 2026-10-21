@@ -38,6 +38,12 @@ export interface LogoStorage {
   presignUpload(target: LogoTarget): Promise<Result<PresignedLogoUpload>>;
   /** A signed GET valid `ttlSeconds` (at most 15 minutes). `err` only on failure. */
   presignDownload(target: LogoTarget, ttlSeconds: number): Promise<Result<string>>;
+  /**
+   * Signed GETs valid `ttlSeconds` (at most 15 minutes), in one storage call, in the
+   * order of `targets` (any clients); an entry is `null` when that object could not be
+   * signed. `err` only when the whole call fails.
+   */
+  presignDownloads(targets: readonly LogoTarget[], ttlSeconds: number): Promise<Result<(string | null)[]>>;
   /** The object's stored metadata; `ok(null)` when it does not exist. */
   head(target: LogoTarget): Promise<Result<StoredLogo | null>>;
   /**

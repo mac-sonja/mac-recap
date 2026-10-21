@@ -88,6 +88,21 @@ export function createSupabaseLogoStorage(client: () => AdminClient = createSupa
       }
     },
 
+    async presignDownloads(targets, ttlSeconds) {
+      if (targets.length === 0) return ok([]);
+      const paths = targets.map(keyOf);
+      try {
+        const { data, error } = await bucket().createSignedUrls(paths, Math.min(ttlSeconds, MAX_DOWNLOAD_TTL_SECONDS));
+        if (error) throw error;
+        const byPath = new Map(data.filter((d) => d.path !== null && d.error === null).map((d) => [d.path, d.signedUrl]));
+        // The caller logs each unsigned logo with its client id.
+        return ok(paths.map((path) => byPath.get(path) ?? null));
+      } catch (error) {
+        log.error(`logo presign gets failed: ${errorLabel(error)}`);
+        return err({ code: "STORAGE_FAILED", message: "Could not prepare the logo links." });
+      }
+    },
+
     async head(target) {
       try {
         const { data, error } = await bucket().info(keyOf(target));

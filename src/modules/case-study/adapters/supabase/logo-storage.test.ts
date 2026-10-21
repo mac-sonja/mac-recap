@@ -16,6 +16,10 @@ function stubClient(download: () => Promise<{ data: Blob | null; error: unknown 
   const bucket = {
     createSignedUploadUrl: vi.fn(async (path: string) => ({ data: { signedUrl: `https://x/upload/${path}?token=t`, token: "t", path }, error: null })),
     createSignedUrl: vi.fn(async (path: string) => ({ data: { signedUrl: `https://x/sign/${path}?token=g` }, error: null as unknown })),
+    createSignedUrls: vi.fn(async (paths: string[]) => ({
+      data: paths.map((path) => ({ path, signedUrl: `https://x/sign/${path}?token=g`, error: null as string | null })),
+      error: null as unknown,
+    })),
     info: vi.fn(async () => ({ data: { size: 42, contentType: "image/webp" }, error: null as unknown })),
     download: vi.fn(download),
     remove: vi.fn<(paths: string[]) => Promise<{ data: unknown; error: unknown }>>(async () => ({ data: [], error: null })),
@@ -55,6 +59,41 @@ describe("createSupabaseLogoStorage", () => {
     });
     expect(stub.bucket.createSignedUrl).toHaveBeenCalledWith(KEY, MAX_DOWNLOAD_TTL_SECONDS);
     expect(MAX_DOWNLOAD_TTL_SECONDS).toBe(900);
+  });
+
+  it("signs GETs of several clients' logos in one call for at most 15 minutes, in order, null for one that can't be signed", async () => {
+    const stub = stubClient();
+    const other = { clientId: "cccccccc-0000-4000-8000-000000000002", logoId: "eeeeeeee-0000-4000-8000-000000000002", contentType: "image/svg+xml" as const };
+    const otherKey = `clients/${other.clientId}/logos/${other.logoId}.svg`;
+    expect(await createSupabaseLogoStorage(stub.factory).presignDownloads([target, other], 3600)).toEqual({
+      ok: true,
+      value: [`https://x/sign/${KEY}?token=g`, `https://x/sign/${otherKey}?token=g`],
+    });
+    expect(stub.bucket.createSignedUrls).toHaveBeenCalledWith([KEY, otherKey], MAX_DOWNLOAD_TTL_SECONDS);
+    stub.bucket.createSignedUrls.mockResolvedValueOnce({
+      data: [
+        { path: otherKey, signedUrl: "https://x/b", error: null },
+        { path: KEY, signedUrl: "", error: "Object not found" },
+      ],
+      error: null,
+    });
+    expect(await createSupabaseLogoStorage(stub.factory).presignDownloads([target, other], 600)).toEqual({ ok: true, value: [null, "https://x/b"] });
+    expect(stub.bucket.createSignedUrls).toHaveBeenLastCalledWith([KEY, otherKey], 600);
+  });
+
+  it("signs nothing for no logos", async () => {
+    const stub = stubClient();
+    expect(await createSupabaseLogoStorage(stub.factory).presignDownloads([], 60)).toEqual({ ok: true, value: [] });
+    expect(stub.bucket.createSignedUrls).not.toHaveBeenCalled();
+  });
+
+  it("answers STORAGE_FAILED when the batch signing fails, logging no key", async () => {
+    const stub = stubClient();
+    stub.bucket.createSignedUrls.mockResolvedValueOnce({ data: null as never, error: new StorageApiError("boom", 500, "500") });
+    const { result, lines } = await quietly(() => createSupabaseLogoStorage(stub.factory).presignDownloads([target], 60));
+    expect(result).toMatchObject({ ok: false, error: { code: "STORAGE_FAILED" } });
+    expect(lines).toHaveLength(1);
+    expect(lines.join("")).not.toContain(KEY);
   });
 
   it("logs a failed signed GET with the client id only, never the key", async () => {
