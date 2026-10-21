@@ -48,7 +48,7 @@ describe("ToolLayout", () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     const html = await renderLayout();
     expect(html).toContain("<nav");
-    expect(html).toContain("Nuova case");
+    expect(html).toContain("Nuova case history");
     expect(html).toContain('href="/home"');
     expect(html).toContain('href="/case-studies"');
     expect(html).toContain('href="/clients"');
@@ -71,7 +71,7 @@ describe("ToolLayout", () => {
   it("shows the cases to review after Case and the client count after Clienti", async () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     const html = await renderLayout();
-    expect(html).toContain("2 da rivedere");
+    expect(html).toContain("2 da approvare");
     expect(html).toMatch(/>3<\/span>/);
   });
 
@@ -81,7 +81,7 @@ describe("ToolLayout", () => {
     listClientSummaries.mockResolvedValue(err({ code: "CLIENT_READ_FAILED", message: "m" }));
     const html = await renderLayout();
     expect(html).toContain("<nav");
-    expect(html).not.toContain("da rivedere");
+    expect(html).not.toContain("da approvare");
   });
 
   it("renders only the no-actor message on UNAUTHENTICATED", async () => {

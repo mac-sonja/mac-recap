@@ -123,14 +123,14 @@ const plain = (step: number) => new RegExp(`<li data-step="${step}"[^>]*><span `
 const radio = (html: string, label: string) => html.match(new RegExp(`<button [^>]*role="radio"[^>]*>${label}</button>`))?.[0] ?? "";
 
 describe("NewCaseStudyPage", () => {
-  it("guards on create case and shows step 1 Dettagli for a new case: title Nuova case, Dettagli current", async () => {
+  it("guards on create case and shows step 1 Dettagli for a new case: title Nuova case history, Dettagli current", async () => {
     const html = await render();
     expect(requireSurface).toHaveBeenCalledWith("create case");
     expect(get).not.toHaveBeenCalled();
-    expect(html).toMatch(/<h1 class="[^"]*">Nuova case<\/h1>/);
+    expect(html).toMatch(/<h1 class="[^"]*">Nuova case history<\/h1>/);
     expect(html).toMatch(/<li data-step="1" aria-current="step"/);
     expect(html).not.toMatch(/<a [^>]*href="\/case-studies\/new\?caseId/);
-    expect(html).toContain("Titolo della case");
+    expect(html).toContain("Titolo della case history");
     const year = html.match(/<input [^>]*name="year"[^>]*>/)?.[0] ?? "";
     expect(year).toContain('min="1900"');
     expect(year).toContain('max="2100"');
@@ -175,7 +175,7 @@ describe("NewCaseStudyPage", () => {
   /** The client search box's text. */
   const selected = (html: string) => combobox(html).match(/ value="([^"]*)"/)?.[1];
 
-  it("a client page's Nuova case (?clientId=) opens step 1 with that client preselected", async () => {
+  it("a client page's Nuova case history (?clientId=) opens step 1 with that client preselected", async () => {
     const html = await render({ clientId: clients[1].id });
     expect(selected(html)).toBe("Città di Torino (CIT)");
     expect(html).toMatch(/<li data-step="1" aria-current="step"/);
@@ -188,7 +188,7 @@ describe("NewCaseStudyPage", () => {
   ])("a new case ignores a %s ?clientId= without an error", async (_label, clientId) => {
     const html = await render({ clientId });
     expect(selected(html)).toBe("");
-    expect(html).toContain("Titolo della case");
+    expect(html).toContain("Titolo della case history");
   });
 
   it("throws into the error boundary when the clients can't be listed", async () => {
@@ -258,7 +258,7 @@ describe("NewCaseStudyPage", () => {
       expect(get).toHaveBeenCalledExactlyOnceWith(ID);
       expect(getDetailsForm).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
       expect(html).toMatch(/<h1 class="[^"]*">Rebrand Lumen 2026<\/h1>/);
-      expect(html).toMatch(/<span class="[^"]*font-mono[^"]*"><span class="sr-only">Codice <\/span>LUM-2026-01<\/span>/);
+      expect(html).toMatch(/<span class="[^"]*font-mono[^"]*"><span class="sr-only">ID <\/span>LUM-2026-01<\/span>/);
       expect(html).not.toContain(`>${ID}<`);
       expect(html).toContain(">Bozza</span>");
       expect(html).toMatch(/<li data-step="1" aria-current="step"/);
@@ -292,7 +292,7 @@ describe("NewCaseStudyPage", () => {
       const html = await render({ caseId: ID, step: "1" });
       expect(html).toMatch(/<input [^>]*name="name"[^>]*value="Rebrand Lumen 2026"/);
       expect(html).not.toContain('aria-checked="true"');
-      const reason = html.match(/<span id="([^"]+)">Per andare avanti manca: Area\.<\/span>/)?.[1];
+      const reason = html.match(/<span id="([^"]+)">Per andare avanti manca: Business line\.<\/span>/)?.[1];
       expect(reason).toBeDefined();
       expect(html).toMatch(new RegExp(`<button type="submit" aria-disabled="true" aria-describedby="${reason}"[^>]*>Avanti</button>`));
       expect(html).toMatch(plain(2));

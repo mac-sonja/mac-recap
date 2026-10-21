@@ -6,9 +6,9 @@ import { StatusBadge } from "./status-badge";
 describe("StatusBadge", () => {
   it.each([
     ["draft", "Bozza", "status-draft"],
-    ["generating", "In creazione", "status-generating"],
-    ["in_review", "Da rivedere", "status-review"],
-    ["approved", "Approvata", "status-approved"],
+    ["generating", "In elaborazione", "status-generating"],
+    ["in_review", "Da approvare", "status-review"],
+    ["approved", "Approvato", "status-approved"],
   ] as const)("%s shows %s tinted from the %s tokens", (status, label, token) => {
     const html = renderToStaticMarkup(<StatusBadge status={status} />);
     expect(html).toContain(`>${label}</span>`);

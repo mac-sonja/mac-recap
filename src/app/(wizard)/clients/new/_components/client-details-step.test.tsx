@@ -307,7 +307,7 @@ describe("ClientDetailsStep on an existing client", () => {
   it("prefills every field, states the code stays, and goes to step 2 without saving when nothing changed", async () => {
     const user = setup();
     renderStep(EXISTING);
-    expect(screen.getByText("Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case.")).toBeTruthy();
+    expect(screen.getByText("Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case history.")).toBeTruthy();
     expect(field("Nome").value).toBe("Lumen Srl");
     expect(pill("Energia").getAttribute("aria-pressed")).toBe("true");
     expect(pill("Interior design").getAttribute("aria-pressed")).toBe("false");

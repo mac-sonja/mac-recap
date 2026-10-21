@@ -3,8 +3,8 @@ import { fill, it, t } from "./it";
 
 describe("Italian dictionary", () => {
   test("resolves dot-path keys", () => {
-    expect(t("shell.nav.caseStudies")).toBe("Case");
-    expect(t("status.in_review")).toBe("Da rivedere");
+    expect(t("shell.nav.caseStudies")).toBe("Case history");
+    expect(t("status.in_review")).toBe("Da approvare");
   });
 
   test("throws on a path that is not a string", () => {
@@ -19,7 +19,7 @@ describe("Italian dictionary", () => {
 
 describe("fill", () => {
   test("inserts params into a dictionary template", () => {
-    expect(fill(t("caseStudies.noResults"), { query: "Città" })).toBe("Nessuna case per “Città”.");
+    expect(fill(t("caseStudies.noResults"), { query: "Città" })).toBe("Nessuna case history per “Città”.");
   });
 
   test("inserts values verbatim, including replacement patterns and braces", () => {
@@ -34,20 +34,20 @@ describe("fill", () => {
 
 describe("case studies table copy", () => {
   test("has the approved strings", () => {
-    expect(Object.values(it.caseStudies.table.columns)).toEqual(["Codice", "Case", "Cliente", "Anno", "Stato", "Area", "Aggiornata", "Link"]);
-    expect(t("caseStudies.search.label")).toBe("Cerca per nome, cliente o codice");
-    expect(t("caseStudies.search.placeholder")).toBe("Nome, cliente o codice");
-    expect(t("caseStudies.filter.all")).toBe("Tutte");
-    expect(Object.values(it.caseStudies.filter.statuses)).toEqual(["Bozze", "In creazione", "Da rivedere", "Approvate"]);
-    expect(fill(t("caseStudies.noResultsStatus"), { status: "Da rivedere" })).toBe("Nessuna case in “Da rivedere”.");
-    expect(fill(t("caseStudies.noResultsQueryStatus"), { query: "lum", status: "Da rivedere" })).toBe("Nessuna case per “lum” in “Da rivedere”.");
+    expect(Object.values(it.caseStudies.table.columns)).toEqual(["ID", "Case history", "Cliente", "Anno", "Stato", "Business line", "Aggiornata", "Link"]);
+    expect(t("caseStudies.search.label")).toBe("Cerca progetto o cliente");
+    expect(t("caseStudies.search.placeholder")).toBe("Cerca progetto o cliente…");
+    expect(t("caseStudies.filter.all")).toBe("Tutti");
+    expect(Object.values(it.caseStudies.filter.statuses)).toEqual(["Bozza", "In elaborazione", "Da approvare", "Approvato"]);
+    expect(fill(t("caseStudies.noResultsStatus"), { status: "Da approvare" })).toBe("Nessuna case history in “Da approvare”.");
+    expect(fill(t("caseStudies.noResultsQueryStatus"), { query: "lum", status: "Da approvare" })).toBe("Nessuna case history per “lum” in “Da approvare”.");
     expect(t("caseStudies.clearSearch")).toBe("Azzera i filtri");
     expect(t("caseStudies.empty")).toBe(
       "Qui raccoglierai le storie dei vostri progetti. Parti dal materiale di un lavoro appena chiuso.",
     );
     expect(t("caseStudies.emptyAction")).toBe("Crea la prima");
     expect(t("caseStudies.narrowScreen")).toBe("Questa pagina dà il meglio su uno schermo più grande.");
-    expect(t("caseStudies.table.caption")).toBe("Elenco delle case");
+    expect(t("caseStudies.table.caption")).toBe("Elenco delle case history");
     expect(t("caseStudies.loading")).toBe("Un attimo…");
   });
 });
@@ -56,7 +56,7 @@ describe("clients copy", () => {
   test("has the approved strings", () => {
     expect(t("shell.nav.clients")).toBe("Clienti");
     expect(t("clients.heading")).toBe("Clienti");
-    expect(Object.values(it.clients.table.columns)).toEqual(["Codice", "Cliente", "Case"]);
+    expect(Object.values(it.clients.table.columns)).toEqual(["ID", "Cliente", "Case history"]);
     expect(t("clients.add")).toBe("Aggiungi cliente");
     expect(t("clients.edit")).toBe("Modifica");
     expect(t("clients.empty")).toBe("Ancora nessun cliente. Aggiungi il primo e partiamo.");
@@ -64,7 +64,7 @@ describe("clients copy", () => {
     expect(Object.values(it.clients.industries)).toEqual(["Interior design", "Energia", "Risorse umane", "Lusso"]);
     expect(Object.keys(it.clients.industries)).toEqual(["interior_design", "energia", "risorse_umane", "lusso"]);
     expect(t("clients.detail.industries")).toBe("Settore");
-    expect(t("clients.detail.noCases")).toBe("Nessuna case per questo cliente, per ora.");
+    expect(t("clients.detail.noCases")).toBe("Nessuna case history per questo cliente, per ora.");
   });
 });
 
@@ -73,7 +73,7 @@ describe("client wizard copy", () => {
     expect(t("clientWizard.eyebrow")).toBe("Nuovo cliente");
     expect(Object.values(it.clientWizard.steps)).toEqual(["Dettagli", "Materiale", "Introduzione"]);
     expect(fill(t("clientWizard.editNote"), { code: "LUM" })).toBe(
-      "Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case.",
+      "Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case history.",
     );
     expect(Object.values(it.clientWizard.details.labels)).toEqual([
       "Nome",
@@ -98,30 +98,30 @@ describe("client wizard copy", () => {
 
 describe("wizard copy", () => {
   test("has the approved strings", () => {
-    expect(t("wizard.eyebrow")).toBe("Nuova case");
-    expect(t("wizard.back")).toBe("Torna alle case");
+    expect(t("wizard.eyebrow")).toBe("Nuova case history");
+    expect(t("wizard.back")).toBe("Torna alle case history");
     expect(Object.values(it.wizard.steps)).toEqual(["Dettagli", "Materiale", "Genera"]);
-    expect(Object.values(it.wizard.fields)).toEqual(["Titolo della case", "Cliente", "Anno", "Area"]);
-    expect(t("wizard.errors.businessLine")).toBe("Scegli l’area del progetto.");
+    expect(Object.values(it.wizard.fields)).toEqual(["Titolo della case history", "Cliente", "Anno", "Business line"]);
+    expect(t("wizard.errors.businessLine")).toBe("Scegli la business line.");
     expect(t("wizard.unsavedConfirm")).toBe("Quello che hai scritto non è ancora salvato. Vuoi uscire lo stesso?");
-    expect(fill(t("wizard.nextReason"), { fields: "Titolo della case, Area" })).toBe("Per andare avanti manca: Titolo della case, Area.");
+    expect(fill(t("wizard.nextReason"), { fields: "Titolo della case history, Business line" })).toBe("Per andare avanti manca: Titolo della case history, Business line.");
     expect("locales" in it.wizard).toBe(false);
     expect("locale" in it.wizard.errors).toBe(false);
     expect(t("wizard.requiredMark")).toBe("*");
     expect(fill(t("wizard.tabTitle"), { title: "Rebranding Lumen", app: "MAC Recap" })).toBe("Rebranding Lumen · MAC Recap");
     expect(fill(t("wizard.noClientMatch"), { link: t("wizard.noClientsLink") })).toBe("Nessun cliente con questo nome. Aggiungilo dalla pagina Clienti.");
     expect(t("wizard.next")).toBe("Avanti");
-    expect(t("wizard.errors.name")).toBe("Dai un titolo alla case.");
+    expect(t("wizard.errors.name")).toBe("Dai un titolo alla case history.");
     expect(t("wizard.errors.client")).toBe("Scegli per quale cliente è.");
     expect(fill(t("wizard.clientOption"), { name: "Lumen Srl", code: "LUM" })).toBe("Lumen Srl (LUM)");
     expect(fill(t("wizard.noClients"), { link: t("wizard.noClientsLink") })).toBe("Non c’è ancora nessun cliente. Aggiungilo dalla pagina Clienti.");
     expect(t("wizard.clientPlaceholder")).toBe("Cerca o scegli un cliente");
     expect(t("wizard.errors.clientNotFound")).toMatch(/^Questo cliente non c’è più\. Ricarica la pagina/);
     expect(fill(t("wizard.errors.year"), { min: 1900, max: 2100 })).toBe("Scrivi un anno tra il 1900 e il 2100.");
-    expect(t("wizard.errors.generic")).toMatch(/^Non siamo riusciti a creare la case\./);
+    expect(t("wizard.errors.generic")).toMatch(/^Non siamo riusciti a creare la case history\./);
     expect(t("wizard.generatePlaceholder")).toBe("La generazione arriva nella prossima versione. Ci stiamo lavorando.");
     expect(t("wizard.stepper.goTo")).toBe("vai a");
-    expect(t("wizard.loadFailed")).toBe("Non riusciamo ad aprire questa case. Riprova tra qualche istante.");
+    expect(t("wizard.loadFailed")).toBe("Non riusciamo ad aprire questa case history. Riprova tra qualche istante.");
   });
 
   test("names each missing required field", () => {
@@ -197,7 +197,12 @@ describe("voice", () => {
   ];
 
   test("calls to action are at most three words", () => {
-    for (const label of actions) expect(label.split(/\s+/).length, label).toBeLessThanOrEqual(3);
+    // owner wording, 2026-10-21: the client page's button keeps its four words.
+    const allowedLonger = new Set<string>([it.clients.detail.newCase]);
+    for (const label of actions) {
+      if (allowedLonger.has(label)) continue;
+      expect(label.split(/\s+/).length, label).toBeLessThanOrEqual(3);
+    }
   });
 
   test("calls to action never repeat", () => {

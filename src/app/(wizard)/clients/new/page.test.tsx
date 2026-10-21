@@ -145,7 +145,7 @@ describe("NewClientPage", () => {
     expect(backLink(html)).toEqual({ href: `/clients/${ID}`, label: "Torna al cliente" });
     expect(html).toContain('<span class="sr-only">Codice </span>LUM</span>');
     expect(html).toMatch(/<h1 [^>]*>Lumen Srl<\/h1>/);
-    expect(html).toContain("Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case.");
+    expect(html).toContain("Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case history.");
     expect(html).toContain('value="Lumen Srl"');
     // A finished client may jump to Materiale from the stepper.
     expect(segments(html)[1]).toMatchObject({ href: `/clients/new?clientId=${ID}&step=2` });
@@ -226,7 +226,7 @@ describe("NewClientPage", () => {
     const html = await renderPage({ clientId: ID, step: "1" });
     expect(listCases).toHaveBeenCalledExactlyOnceWith({ clientId: ID });
     expect(html).toMatch(/<button [^>]*class="[^"]*bg-danger[^"]*"[^>]*>Elimina cliente<\/button>/);
-    expect(html).toContain("Con lui spariscono anche le sue 2 case");
+    expect(html).toContain("Con lui spariscono anche le sue 2 case history");
     // Below the form, within the frame's `hidden lg:block` area.
     expect(html.indexOf("Elimina cliente")).toBeGreaterThan(html.indexOf("Presentaci il cliente"));
     expect(html.indexOf("Elimina cliente")).toBeGreaterThan(html.indexOf('class="hidden lg:block"'));
