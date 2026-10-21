@@ -1,6 +1,7 @@
 "use client";
 
-import { PILL, PILL_GAP } from "@/app/(tool)/clients/_components/industry-pills";
+import { Check } from "lucide-react";
+import { CHOICE_PILL, PILL_GAP } from "@/app/(tool)/clients/_components/industry-pills";
 import type { BusinessLine } from "@/modules/case-study";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -21,13 +22,10 @@ export interface BusinessLinePillsProps {
   disabled?: boolean;
 }
 
-/** Selected: solid ink, as the client industry pills. */
-const PILL_PRESSED = "aria-pressed:bg-foreground-strong aria-pressed:text-surface aria-pressed:hover:bg-foreground-strong";
-
 /**
  * The case's Servizi as multi-select pills (owner, 2026-10-21): a named group of
  * toggle buttons (`aria-pressed`), each in the tab order; Space, Enter or a click
- * switches one on or off. Grey filled chips (owner's mock), solid ink when on.
+ * switches one on or off. `CHOICE_PILL`s, as the client's Settori.
  */
 export function BusinessLinePills({ options, selected, onToggle, labelledBy, describedBy, invalid, disabled }: BusinessLinePillsProps) {
   return (
@@ -47,12 +45,9 @@ export function BusinessLinePills({ options, selected, onToggle, labelledBy, des
           onClick={() => {
             if (!disabled) onToggle(businessLine);
           }}
-          className={cn(
-            PILL,
-            PILL_PRESSED,
-            "min-h-9 border-transparent bg-surface-control px-3.5 py-1.5 text-[13px] text-foreground hover:bg-surface-selected aria-disabled:cursor-not-allowed aria-disabled:opacity-60",
-          )}
+          className={cn(CHOICE_PILL, "aria-disabled:cursor-not-allowed aria-disabled:opacity-60")}
         >
+          {selected.includes(businessLine) && <Check aria-hidden="true" className="size-3.5" strokeWidth={2.5} />}
           {it.businessLines[businessLine]}
         </button>
       ))}

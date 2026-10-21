@@ -10,7 +10,7 @@ import {
   setAssetFavourite,
 } from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
-import { STEP_HEADING } from "@/app/_components/field-styles";
+import { CARD, CARD_LABEL, STEP_HEADING, STEP_INTRO } from "@/app/_components/field-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { wizardHref } from "@/app/_lib/routes";
 import type { Asset, ListedAsset } from "@/modules/material";
@@ -516,57 +516,58 @@ export function MaterialStep({
   }
 
   const ready = isReady(listed.map((row) => row.asset));
-  const intro: ReactNode = copyOverrides?.intro;
+  const intro: ReactNode = copyOverrides?.intro ?? copy.intro;
 
   return (
     <div>
-      <h2 className={cn(STEP_HEADING, intro === undefined ? "mb-6" : "mb-1.5")}>
-        {copyOverrides?.heading ?? copy.heading}
-      </h2>
-      {intro !== undefined && <p className="mb-6 font-body text-sm text-foreground-muted">{intro}</p>}
+      <h2 className={cn(STEP_HEADING, "mb-2")}>{copyOverrides?.heading ?? copy.heading}</h2>
+      <p className={cn(STEP_INTRO, "mb-5")}>{intro}</p>
 
       {/* Always mounted, so screen readers announce the message when it appears. */}
       <div role="alert" className="mb-4 rounded-md bg-danger/10 px-4 py-3 font-body text-sm text-foreground shadow-[inset_0_0_0_1px] shadow-danger/30 empty:hidden">
         {storageOff ? copy.errors.storage : null}
       </div>
 
-      <DropZone
-        accept={acceptFor(allowedContentTypes)}
-        maxFiles={maxAssets}
-        maxFileMegabytes={Math.round(maxFileBytes / (1024 * 1024))}
-        compact={rows.length > 0}
-        disabled={storageOff}
-        onFiles={addFiles}
-      />
+      {/* Racconto's look (owner's mock, 2026-10-21): the drop zone and the list in one white card. */}
+      <div className={cn(CARD, "flex flex-col gap-4 p-5")}>
+        <DropZone
+          accept={acceptFor(allowedContentTypes)}
+          maxFiles={maxAssets}
+          maxFileMegabytes={Math.round(maxFileBytes / (1024 * 1024))}
+          compact={rows.length > 0}
+          disabled={storageOff}
+          onFiles={addFiles}
+        />
+
+        {rows.length > 0 && (
+          <section>
+            <div className="mb-3 flex items-baseline justify-between">
+              <h3 id={`${reasonId}-list`} className={CARD_LABEL}>
+                {copy.list.label}
+              </h3>
+              <span className="font-label text-xs text-foreground-muted">
+                {fill(copy.list.count, { n: listed.length, max: maxAssets })}
+              </span>
+            </div>
+            <ul aria-labelledby={`${reasonId}-list`} className="overflow-hidden rounded-lg border border-border">
+              {rows.map((row) => (
+                <AssetRow
+                  key={row.key}
+                  row={row}
+                  onToggleFavourite={saveFavourite === undefined ? undefined : toggleFavourite}
+                  onRemove={remove}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
 
       <div role="status" aria-live="polite" aria-relevant="additions" className="sr-only">
         {announcements.map((line) => (
           <p key={line.id}>{line.text}</p>
         ))}
       </div>
-
-      {rows.length > 0 && (
-        <section>
-          <div className="mt-6 mb-2 flex items-baseline justify-between">
-            <h3 id={`${reasonId}-list`} className="font-label text-xs font-normal text-foreground-muted">
-              {copy.list.label}
-            </h3>
-            <span className="font-mono text-xs text-foreground-muted">
-              {fill(copy.list.count, { n: listed.length, max: maxAssets })}
-            </span>
-          </div>
-          <ul aria-labelledby={`${reasonId}-list`} className="overflow-hidden rounded-lg shadow-card">
-            {rows.map((row) => (
-              <AssetRow
-                key={row.key}
-                row={row}
-                onToggleFavourite={saveFavourite === undefined ? undefined : toggleFavourite}
-                onRemove={remove}
-              />
-            ))}
-          </ul>
-        </section>
-      )}
 
       <WizardFooter
         start={ready ? undefined : <span id={reasonId}>{footer.reason}</span>}

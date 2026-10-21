@@ -85,8 +85,8 @@ export function DropZone({ accept, maxFiles, maxFileMegabytes, compact, disabled
         }}
         onDrop={onDrop}
         className={cn(
-          "cursor-pointer rounded-xl border border-border-strong bg-surface-control text-center font-body text-[15px] text-foreground transition-[border-color,background-color] duration-200 ease-out hover:border-foreground-muted/60",
-          compact ? "px-6 py-7" : "px-6 py-12",
+          "cursor-pointer rounded-lg border border-transparent bg-field text-center font-body text-sm text-foreground transition-[border-color,background-color] duration-150 ease-out hover:bg-surface-selected",
+          compact ? "px-6 py-6" : "px-6 py-10",
           over && "border-accent bg-accent/5",
           disabled && "cursor-not-allowed opacity-60",
         )}
@@ -112,7 +112,7 @@ export function DropZone({ accept, maxFiles, maxFileMegabytes, compact, disabled
               {TYPES.map((type) => (
                 <li
                   key={type}
-                  className="rounded-full bg-surface-control px-2.5 py-1 font-mono text-[11px] text-foreground-muted"
+                  className="rounded-full bg-surface-raised px-2.5 py-1 font-mono text-[11px] text-foreground-muted"
                 >
                   {type}
                 </li>

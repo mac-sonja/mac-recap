@@ -121,7 +121,9 @@ const stepUrl = (step: number) => `REDIRECT /case-studies/new?caseId=${ID}&step=
 const linkTo = (step: number) => new RegExp(`<li data-step="${step}"[^>]*><a [^>]*href="/case-studies/new\\?caseId=${ID}&amp;step=${step}"`);
 const plain = (step: number) => new RegExp(`<li data-step="${step}"[^>]*><span `);
 /** A Servizi pill (a toggle button), or "". */
-const pill = (html: string, label: string) => html.match(new RegExp(`<button [^>]*aria-pressed="(?:true|false)"[^>]*>${label}</button>`))?.[0] ?? "";
+// A selected pill carries its check icon before the label.
+const pill = (html: string, label: string) =>
+  html.match(new RegExp(`<button [^>]*aria-pressed="(?:true|false)"[^>]*>(?:<svg.*?</svg>)?${label}</button>`))?.[0] ?? "";
 
 describe("NewCaseStudyPage", () => {
   it("guards on create case and opens the new-case dialog: client only, over Materiale (material first)", async () => {

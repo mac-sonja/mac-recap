@@ -22,6 +22,8 @@
   --color-surface-sidebar: #f9f8f5;
   --color-surface-raised: #ffffff;
   --color-surface-control: #ebeae5;
+  /* A filled form field (owner's mock, 2026-10-21). */
+  --color-field: #f5f5f4;
   --color-surface-hover: #f1f0ec;
   --color-surface-selected: #e5e4de;
   --color-border: #e6e5e0;
@@ -39,6 +41,9 @@
   --color-primary: #cbff00;
   --color-primary-hover: #bdf000;
   --color-primary-foreground: #0b0b0a;
+  /* A chosen option (Servizi pills): a pale lime tint with olive ink, since lime itself is unreadable as text. */
+  --color-primary-tint: #eef6d4;
+  --color-primary-ink: #46600a;
   --color-accent: #0a6cff;
   --color-info: #0a55c8;
   --color-danger: #d92d20;
@@ -160,6 +165,7 @@
     --color-surface-sidebar: #0a0a0a;
     --color-surface-raised: #141414;
     --color-surface-control: #1e1e1e;
+    --color-field: #1e1e1e;
     --color-surface-hover: #1a1a1a;
     --color-surface-selected: #282828;
     --color-border: #232323;
@@ -187,6 +193,8 @@
     --color-status-approved: #cbff00;
     --color-status-approved-foreground: #d9ff4d;
     --color-status-approved-tint: rgb(203 255 0 / 0.1);
+    --color-primary-tint: rgb(203 255 0 / 0.12);
+    --color-primary-ink: #d9ff4d;
     --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.06);
     --shadow-control: 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.5);
     --shadow-popover: 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 40px -8px rgb(0 0 0 / 0.7);
@@ -199,6 +207,7 @@
       --color-surface-sidebar: #0a0a0a;
       --color-surface-raised: #141414;
       --color-surface-control: #1e1e1e;
+      --color-field: #1e1e1e;
       --color-surface-hover: #1a1a1a;
       --color-surface-selected: #282828;
       --color-border: #232323;
@@ -226,6 +235,8 @@
       --color-status-approved: #cbff00;
       --color-status-approved-foreground: #d9ff4d;
       --color-status-approved-tint: rgb(203 255 0 / 0.1);
+      --color-primary-tint: rgb(203 255 0 / 0.12);
+      --color-primary-ink: #d9ff4d;
       --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.06);
       --shadow-control: 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.5);
       --shadow-popover: 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 40px -8px rgb(0 0 0 / 0.7);
@@ -285,8 +296,8 @@
 
 /*
  * Form fields (text inputs, the client search, the year, textareas, selects) show
- * focus as a thin 1 px border in the focus-ring colour instead of the 2 px outline
- * (owner, 2026-10-20), plus a soft halo. Buttons, pills and links keep the outline
+ * focus by turning white with a grey hairline and a soft lime halo instead of the
+ * 2 px outline (owner's mock, 2026-10-21). Buttons, pills and links keep the outline
  * above. Unlayered on purpose, so it wins over field utilities such as
  * `border-transparent`. The transparent outline still shows in forced-colors mode.
  */
@@ -297,6 +308,7 @@
   ):focus-visible {
   outline: 1px solid transparent;
   outline-offset: 0;
-  border-color: var(--color-focus-ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-focus-ring) 22%, transparent);
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-raised);
+  box-shadow: 0 0 0 4px var(--color-primary-tint);
 }

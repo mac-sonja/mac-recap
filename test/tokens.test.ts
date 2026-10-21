@@ -51,7 +51,7 @@ describe("theme tokens", () => {
     expect(css).toMatch(/:focus-visible\s*\{[^}]*var\(--color-focus-ring\)/);
   });
 
-  it("form fields show focus as a thin border in the focus-ring colour, not the outline", () => {
+  it("form fields show focus as white with a grey hairline and a lime halo, not the outline", () => {
     const rule = css.match(/:is\(\s*input:not\(([^)]*)\),\s*textarea,\s*select\s*\):focus-visible\s*\{([^}]*)\}/);
     expect(rule).not.toBeNull();
     const [, excluded, body] = rule!;
@@ -59,7 +59,9 @@ describe("theme tokens", () => {
     for (const type of ["checkbox", "radio", "file", "button", "submit"]) expect(excluded).toContain(`[type="${type}"]`);
     expect(body).toMatch(/outline:\s*1px solid transparent;/);
     expect(body).toMatch(/outline-offset:\s*0;/);
-    expect(body).toMatch(/border-color:\s*var\(--color-focus-ring\);/);
+    expect(body).toMatch(/border-color:\s*var\(--color-border-strong\);/);
+    expect(body).toMatch(/background-color:\s*var\(--color-surface-raised\);/);
+    expect(body).toMatch(/box-shadow:\s*0 0 0 4px var\(--color-primary-tint\);/);
     // Unlayered, so field utilities such as `border-transparent` can't hide it.
     expect(css.indexOf(rule![0])).toBeGreaterThan(css.lastIndexOf("@layer base"));
     expect(css.slice(css.indexOf("@layer base"), css.indexOf(rule![0]))).toMatch(/\n\}\n/);

@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { createCaseStudy, saveDetailsField, updateCaseStudyDetails } from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
-import { CARD, FIELD, FIELD_HINT, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
+import { CARD_LABEL, FIELD, FIELD_HINT, FIELD_LABEL, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { wizardHref } from "@/app/_lib/routes";
 import type { BusinessLine, ClientRef, Locale } from "@/modules/case-study";
@@ -15,6 +15,7 @@ import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { BusinessLinePills } from "./business-line-pills";
 import { ClientCombobox } from "./client-combobox";
+import { FieldCard } from "./field-card";
 import { RequiredLabel } from "./required-label";
 import { useAutosaveFields } from "./use-autosave-fields";
 import { WizardFooter } from "./wizard-frame";
@@ -45,25 +46,8 @@ export const TITLE_DEBOUNCE_MS = 300;
 /** How many live-region lines stay mounted. */
 const ANNOUNCEMENTS_KEPT = 5;
 
-/** Dettagli's look (owner's mock, 2026-10-21): grey filled fields inside white cards. */
-const FILLED = "border-transparent bg-surface-control hover:border-transparent focus-visible:bg-surface-raised";
-const INPUT = cn(FIELD, FILLED);
-const TEXT_INPUT = cn(TEXTAREA, FILLED);
-/** A card's heading: the field's label, small caps after its number. */
-const CARD_LABEL = "font-label text-[11px] font-semibold tracking-[0.12em] text-foreground-muted uppercase";
-
-/** One field in its own white card, headed "01 — LABEL" (the number is decorative), the field under it. */
-function FieldCard({ number, label, children }: { number: number; label: ReactNode; children: ReactNode }) {
-  return (
-    <div className={cn(CARD, "flex flex-col gap-3 p-5")}>
-      <div className="flex items-baseline gap-1.5">
-        <span aria-hidden="true" className={CARD_LABEL}>{`${String(number).padStart(2, "0")} —`}</span>
-        {label}
-      </div>
-      {children}
-    </div>
-  );
-}
+const INPUT = FIELD;
+const TEXT_INPUT = TEXTAREA;
 
 /** Characters as the server counts them: code points, so an emoji is one. */
 const codePoints = (text: string) => [...text].length;
@@ -483,33 +467,60 @@ export function CaseDetailsStep({
   return (
     <form noValidate onSubmit={onSubmit} aria-busy={pending || undefined}>
       <div className="flex flex-col gap-3">
-        <FieldCard number={1}
-          label={
+        <FieldCard number={1} label={<span className={CARD_LABEL}>{it.wizard.steps.details}</span>}>
+          <div className="flex flex-col gap-2">
             <RequiredLabel>
-              <label htmlFor={ids.name} className={CARD_LABEL}>
+              <label htmlFor={ids.name} className={FIELD_LABEL}>
                 {it.wizard.fields.name}
               </label>
             </RequiredLabel>
-          }
-        >
-          <input
-            id={ids.name}
-            name="name"
-            type="text"
-            autoComplete="off"
-            required
-            aria-required="true"
-            aria-invalid={errors.name !== undefined || undefined}
-            aria-describedby={describedBy(errorOf("name"))}
-            value={name}
-            onChange={(event) => {
-              setName(event.target.value);
-              clearError("name");
-            }}
-            onBlur={() => setTitleName(name.trim())}
-            className={INPUT}
-          />
-          {fieldError("name")}
+            <input
+              id={ids.name}
+              name="name"
+              type="text"
+              autoComplete="off"
+              required
+              aria-required="true"
+              aria-invalid={errors.name !== undefined || undefined}
+              aria-describedby={describedBy(errorOf("name"))}
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value);
+                clearError("name");
+              }}
+              onBlur={() => setTitleName(name.trim())}
+              className={INPUT}
+            />
+            {fieldError("name")}
+          </div>
+
+          <div className="mt-2 flex flex-col gap-2">
+            <RequiredLabel>
+              <label htmlFor={ids.year} className={FIELD_LABEL}>
+                {it.wizard.fields.year}
+              </label>
+            </RequiredLabel>
+            <input
+              id={ids.year}
+              name="year"
+              type="number"
+              inputMode="numeric"
+              min={yearMin}
+              max={yearMax}
+              step={1}
+              required
+              aria-required="true"
+              aria-invalid={errors.year !== undefined || undefined}
+              aria-describedby={describedBy(errorOf("year"))}
+              value={year}
+              onChange={(event) => {
+                setYear(event.target.value);
+                clearError("year");
+              }}
+              className={cn(INPUT, "max-w-48 tabular-nums")}
+            />
+            {fieldError("year")}
+          </div>
         </FieldCard>
 
         <FieldCard
@@ -550,37 +561,6 @@ export function CaseDetailsStep({
         </FieldCard>
 
         <FieldCard number={3}
-          label={
-            <RequiredLabel>
-              <label htmlFor={ids.year} className={CARD_LABEL}>
-                {it.wizard.fields.year}
-              </label>
-            </RequiredLabel>
-          }
-        >
-          <input
-            id={ids.year}
-            name="year"
-            type="number"
-            inputMode="numeric"
-            min={yearMin}
-            max={yearMax}
-            step={1}
-            required
-            aria-required="true"
-            aria-invalid={errors.year !== undefined || undefined}
-            aria-describedby={describedBy(errorOf("year"))}
-            value={year}
-            onChange={(event) => {
-              setYear(event.target.value);
-              clearError("year");
-            }}
-            className={cn(INPUT, "max-w-48 tabular-nums")}
-          />
-          {fieldError("year")}
-        </FieldCard>
-
-        <FieldCard number={4}
           label={
             <RequiredLabel>
               <span id={ids.businessLines} className={CARD_LABEL}>
@@ -624,7 +604,7 @@ export function CaseDetailsStep({
           return (
             <FieldCard
               key={field}
-              number={5 + index}
+              number={4 + index}
               label={
                 <label htmlFor={id} className={CARD_LABEL}>
                   {copy.labels[field]}

@@ -5,12 +5,12 @@ import { IndustryPills } from "./industry-pills";
 const OPTIONS = ["interior_design", "energia", "risorse_umane", "lusso"] as const;
 
 describe("IndustryPills", () => {
-  it("is a labelled group of toggle buttons with the favourite toggle's pressed style", () => {
+  it("is a labelled group of toggle buttons; a selected one has the lime tint and a check", () => {
     const html = renderToStaticMarkup(
       <IndustryPills options={OPTIONS} selected={["lusso"]} onToggle={() => undefined} labelledBy="label" describedBy="hint" />,
     );
     expect(html).toMatch(/^<div role="group" aria-labelledby="label" aria-describedby="hint"/);
-    const buttons = [...html.matchAll(/<button type="button" aria-pressed="(true|false)" class="([^"]*)">([^<]*)<\/button>/g)];
+    const buttons = [...html.matchAll(/<button type="button" aria-pressed="(true|false)" class="([^"]*)">(?:<svg.*?<\/svg>)?([^<]*)<\/button>/g)];
     expect(buttons.map((m) => [m[3], m[1]])).toEqual([
       ["Interior design", "false"],
       ["Energia", "false"],
@@ -18,14 +18,16 @@ describe("IndustryPills", () => {
       ["Lusso", "true"],
     ]);
     expect(buttons[0][2]).toContain("rounded-full");
-    expect(buttons[0][2]).toContain("aria-pressed:bg-foreground-strong");
-    expect(buttons[0][2]).toContain("aria-pressed:text-surface");
+    expect(buttons[0][2]).toContain("aria-pressed:bg-primary-tint");
+    expect(buttons[0][2]).toContain("aria-pressed:text-primary-ink");
+    expect(buttons[3][0]).toContain("<svg");
+    expect(buttons[0][0]).not.toContain("<svg");
   });
 
-  it("uses the larger pill when editable (Story 2.18): 40px tall, 14px text, about 8px apart; the read-only list stays small", () => {
+  it("uses the small grey choice pill when editable (owner's mock): 28px tall, 13px text, about 8px apart; the read-only list stays small", () => {
     const html = renderToStaticMarkup(<IndustryPills options={OPTIONS} selected={[]} onToggle={() => undefined} />);
     const classes = html.match(/<button [^>]*class="([^"]*)"/)?.[1].split(" ") ?? [];
-    expect(classes).toEqual(expect.arrayContaining(["min-h-10", "px-4", "py-2", "text-sm"]));
+    expect(classes).toEqual(expect.arrayContaining(["min-h-7", "px-2.5", "py-1", "text-[13px]", "bg-surface-control"]));
     expect(classes).not.toContain("text-xs");
     expect(html).toMatch(/^<div role="group" class="flex flex-wrap gap-2"/);
     const readOnly = renderToStaticMarkup(<IndustryPills options={OPTIONS} selected={["lusso"]} label="Settore" />);

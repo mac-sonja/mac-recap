@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, SECONDARY_ACTION } from "@/app/_components/button-styles";
-import { FIELD, FIELD_HINT, FIELD_LABEL, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
+import { CARD, CARD_LABEL, FIELD, FIELD_HINT, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { clientWizardHref } from "@/app/_lib/routes";
 import { createClient, saveClientBriefField, updateClient } from "@/app/(tool)/clients/actions";
@@ -14,6 +14,7 @@ import { LogoStepFailed, logoFailureOf, useClientLogo, type LogoFailure } from "
 import type { ClientLimits } from "@/app/(tool)/clients/_lib/client-limits";
 import { acceptFor } from "@/app/(wizard)/_lib/upload";
 import { useAutosaveFields } from "@/app/(wizard)/_components/use-autosave-fields";
+import { FieldCard } from "@/app/(wizard)/_components/field-card";
 import { RequiredLabel, RequiredMark } from "@/app/(wizard)/_components/required-label";
 import { WizardFooter } from "@/app/(wizard)/_components/wizard-frame";
 import type { Client, ClientBrief, ClientBriefField, ClientDetail, ClientIndustry } from "@/modules/case-study";
@@ -39,8 +40,9 @@ interface InfoFields {
 const ANNOUNCEMENTS_KEPT = 5;
 
 const INPUT = FIELD;
+const TEXT_INPUT = TEXTAREA;
 const SECONDARY = SECONDARY_ACTION;
-const LABEL = FIELD_LABEL;
+const LABEL = CARD_LABEL;
 const ERROR = "font-label text-xs text-danger";
 
 /** Characters as the server counts them: code points, so an emoji is one. */
@@ -328,13 +330,17 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
       )}
       <h2 className={cn("mb-6", STEP_HEADING)}>{copy.heading}</h2>
 
-      <div className="flex flex-col gap-5">
-        <div className="flex flex-col gap-1.5">
-          <RequiredLabel>
-            <label htmlFor={ids.name} className={LABEL}>
-              {copy.labels.name}
-            </label>
-          </RequiredLabel>
+      <div className="flex flex-col gap-3">
+        <FieldCard
+          number={1}
+          label={
+            <RequiredLabel>
+              <label htmlFor={ids.name} className={LABEL}>
+                {copy.labels.name}
+              </label>
+            </RequiredLabel>
+          }
+        >
           <input
             id={ids.name}
             name="name"
@@ -356,14 +362,18 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
               {errors.name}
             </p>
           )}
-        </div>
+        </FieldCard>
 
-        <div className="flex flex-col gap-1.5">
-          <RequiredLabel>
-            <span id={ids.industriesLabel} className={LABEL}>
-              {copy.labels.industries}
-            </span>
-          </RequiredLabel>
+        <FieldCard
+          number={2}
+          label={
+            <RequiredLabel>
+              <span id={ids.industriesLabel} className={LABEL}>
+                {copy.labels.industries}
+              </span>
+            </RequiredLabel>
+          }
+        >
           <div ref={firstPill}>
             <IndustryPills
               options={options}
@@ -381,15 +391,18 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
               {errors.industries}
             </p>
           )}
-        </div>
+        </FieldCard>
 
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-baseline justify-between gap-2">
+        <FieldCard
+          number={3}
+          label={
             <RequiredLabel>
               <label htmlFor={ids.description} className={LABEL}>
                 {copy.labels.description}
               </label>
             </RequiredLabel>
+          }
+          aside={
             <p
               id={ids.counter}
               aria-live="polite"
@@ -400,7 +413,8 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
             >
               {fill(copy.counter, { n: descriptionCount, max: limits.descriptionMax })}
             </p>
-          </div>
+          }
+        >
           <textarea
             id={ids.description}
             name="description"
@@ -414,19 +428,23 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
               setDescription(event.target.value);
               clearError("description");
             }}
-            className={cn(INPUT, "resize-y")}
+            className={TEXT_INPUT}
           />
           {errors.description === undefined ? null : (
             <p id={ids.descriptionError} className={ERROR}>
               {errors.description}
             </p>
           )}
-        </div>
+        </FieldCard>
 
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className={cn(LABEL, "mb-1.5 flex items-baseline gap-0.5")}>
-            {copy.labels.logo}
-            <RequiredMark />
+        {/* A fieldset, so the logo button is grouped under its legend; the same card as the others. */}
+        <fieldset className={cn(CARD, "flex flex-col gap-3 p-5")}>
+          <legend className="float-left mb-3 flex w-full items-baseline gap-1.5">
+            <span aria-hidden="true" className={LABEL}>04 —</span>
+            <span className={cn(LABEL, "flex items-baseline gap-0.5")}>
+              {copy.labels.logo}
+              <RequiredMark />
+            </span>
           </legend>
           <div className="flex items-center gap-3">
             {logo.previewUrl === null ? null : (
@@ -468,7 +486,7 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
           )}
         </fieldset>
 
-        {BRIEF_FIELDS.map((field) => {
+        {BRIEF_FIELDS.map((field, index) => {
           const id = `${baseId}-${field}`;
           const errorId = `${id}-error`;
           const text = values[field];
@@ -476,12 +494,17 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
           const saveFailed = brief.failed.has(field);
           const message = over ? fill(it.clients.errors.fieldTooLong, { max: limits.briefMax }) : saveFailed ? copy.errors.saveFailed : null;
           return (
-            <div key={field} className="flex flex-col gap-1.5">
-              <RequiredLabel>
-                <label htmlFor={id} className={LABEL}>
-                  {copy.labels[field]}
-                </label>
-              </RequiredLabel>
+            <FieldCard
+              key={field}
+              number={5 + index}
+              label={
+                <RequiredLabel>
+                  <label htmlFor={id} className={LABEL}>
+                    {copy.labels[field]}
+                  </label>
+                </RequiredLabel>
+              }
+            >
               <textarea
                 id={id}
                 ref={(element) => {
@@ -496,14 +519,14 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
                 aria-describedby={message === null ? undefined : errorId}
                 onChange={(event) => brief.change(field, event.target.value)}
                 onBlur={() => void brief.save(field)}
-                className={TEXTAREA}
+                className={TEXT_INPUT}
               />
               {message !== null && (
                 <p id={errorId} className={ERROR}>
                   {message}
                 </p>
               )}
-            </div>
+            </FieldCard>
           );
         })}
       </div>
