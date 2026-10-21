@@ -5,6 +5,10 @@
 // nobody else writes them.
 import { randomUUID } from "node:crypto";
 import type { Actor } from "@/modules/access";
+import { listCaseActivity } from "@/modules/case-study/adapters/supabase/case-activity";
+import { ACTIVITY_LIMIT, type CaseActivity } from "@/modules/case-study/domain/case-activity";
+import { listScopeSchema } from "@/modules/case-study/domain/case-study";
+import { parseInput } from "@/modules/case-study/domain/validation";
 import { createSupabaseCaseStudyRepository } from "@/modules/case-study/adapters/supabase/case-study-repository";
 import { createSupabaseClientRepository } from "@/modules/case-study/adapters/supabase/client-repository";
 import { createSupabaseClientMaterialStorage } from "@/modules/case-study/adapters/supabase/client-material-storage";
@@ -64,6 +68,8 @@ import type { Result } from "@/shared/result";
 
 export { CASE_CREATED, CASE_DELETED, CASE_DETAILS_UPDATED, TRANSITION } from "@/modules/case-study/domain/case-event";
 export type { CaseEvent, RecordEventInput } from "@/modules/case-study/domain/case-event";
+export { ACTIVITY_TYPES } from "@/modules/case-study/domain/case-activity";
+export type { ActivityType, CaseActivity } from "@/modules/case-study/domain/case-activity";
 export {
   BUSINESS_LINES,
   CLIENT_BRIEF_FIELDS,
@@ -170,6 +176,17 @@ export function get(id: unknown): Promise<Result<CaseStudy>> {
  */
 export function list(scope: ListScope): Promise<Result<CaseStudy[]>> {
   return makeListCaseStudies(createSupabaseCaseStudyRepository())(scope);
+}
+
+/**
+ * The Dashboard's *Attività*: the newest events of the cases within `scope` (the
+ * same scope as `list`, derived and authorized the same way), each with who did it
+ * and which case. A malformed scope is `INVALID_INPUT`.
+ */
+export async function listActivity(scope: ListScope): Promise<Result<CaseActivity[]>> {
+  const parsed = parseInput(listScopeSchema, scope);
+  if (!parsed.ok) return parsed;
+  return listCaseActivity(parsed.value, ACTIVITY_LIMIT);
 }
 
 /**

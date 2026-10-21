@@ -478,6 +478,25 @@ describe("list", () => {
   });
 });
 
+describe("listActivity (the Dashboard's Attività)", () => {
+  it("reads the newest events first with the actor's name and the case, only the kinds it shows, and honours the scope", async () => {
+    const created = await createCase({ name: "Activity case" });
+    const actor = await devActor();
+    const { recordEvent, listActivity } = await loadCaseStudy();
+    await recordEvent(actor, { caseId: created.id, type: "asset_uploaded", data: { assetId: "a1" } });
+    await recordEvent(actor, { caseId: created.id, type: "asset_favourited", data: { assetId: "a1" } });
+    const result = await listActivity({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const mine = result.value.filter((e) => e.case.id === created.id);
+    expect(mine.map((e) => e.type)).toEqual(["asset_uploaded", "case_created"]);
+    expect(mine[0]).toMatchObject({ actorName: "Dev owner/designer", case: { name: "Activity case", code: created.code, status: "draft" } });
+    // An approved-only scope (account/sales/social) never sees a draft's events.
+    const approvedOnly = await listActivity({ status: "approved" });
+    expect(approvedOnly.ok && approvedOnly.value.some((e) => e.case.id === created.id)).toBe(false);
+  });
+});
+
 describe("recordEvent", () => {
   it("appends one case_event row with the actor, type and data", async () => {
     const created = await createCase();

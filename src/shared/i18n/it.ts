@@ -55,13 +55,25 @@ export const it = {
       empty: "Nessuna bozza in sospeso.",
     },
     /** One line per case, its latest change; `{name}` is the case name, shown in bold. */
+    /**
+     * One line per change, newest first (owner, 2026-10-21): `{actor}` is who did it,
+     * `{name}` the case (in bold); `{n}` counts changes of one kind made in a row.
+     */
     activity: {
       heading: "Attività",
       empty: "Ancora nessuna case history. La prima è a un clic.",
-      draft: "La bozza di {name} è stata aggiornata.",
-      generating: "Stiamo scrivendo la bozza di {name}.",
-      in_review: "La bozza di {name} è pronta da rivedere.",
-      approved: "{name} è stata approvata.",
+      failed: "Non siamo riusciti a caricare le attività. Ricarica la pagina per riprovare.",
+      created: "{actor} ha creato {name}.",
+      detailsUpdated: "{actor} ha aggiornato i dettagli di {name}.",
+      storyWritten: "{actor} ha scritto il racconto di {name}.",
+      uploadedOne: "{actor} ha caricato un file in {name}.",
+      uploaded: "{actor} ha caricato {n} file in {name}.",
+      removedOne: "{actor} ha tolto un file da {name}.",
+      removed: "{actor} ha tolto {n} file da {name}.",
+      generate: "{actor} ha avviato la bozza di {name}.",
+      generated: "La bozza di {name} è pronta da rivedere.",
+      generationFailed: "Non siamo riusciti a scrivere la bozza di {name}.",
+      approved: "{actor} ha approvato {name}.",
     },
     seeAll: "Vedi tutte",
     start: {
