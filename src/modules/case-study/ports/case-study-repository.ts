@@ -40,6 +40,13 @@ export interface CaseStudyRepository {
    * only when the write fails. Nothing is written on any `err`.
    */
   transition(change: StatusChange): Promise<Result<CaseStudy>>;
+  /**
+   * Soft-deletes a non-deleted draft (`deleted_at`) and appends its `case_deleted` event
+   * atomically. `err NOT_FOUND` (unknown or already deleted), `err CASE_NOT_DELETABLE`
+   * (no longer a draft), otherwise `err` only when the write fails. Nothing is written
+   * on any `err`; no row or object is ever removed.
+   */
+  softDelete(caseId: string, actorId: string): Promise<Result<void>>;
 }
 
 export interface StatusChange {

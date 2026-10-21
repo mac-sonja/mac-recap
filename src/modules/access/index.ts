@@ -46,6 +46,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   NOT_FOUND: 404,
   INVALID_TRANSITION: 409,
   STALE_STATUS: 409,
+  // Delete (Story 4.1): only a draft may be deleted.
+  CASE_NOT_DELETABLE: 409,
   // Clients and case history codes (Story 2.12, AD-21).
   CLIENT_NOT_FOUND: 404,
   CLIENT_NAME_TAKEN: 409,
