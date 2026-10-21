@@ -81,6 +81,8 @@ export const it = {
         updated: "Aggiornata",
         links: "Link",
       },
+      /** The Link column's icon, read by screen readers; `{name}` is the case name. */
+      openLink: "Apri il link di {name} in un’altra scheda",
     },
     search: {
       label: "Cerca progetto o cliente",

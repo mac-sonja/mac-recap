@@ -382,6 +382,18 @@ describe("CaseStudiesTable", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("shows a link icon that opens the public link in a new tab, only for cases that have one", () => {
+    const withLink = rows.map((r) => (r.id === DRAFT_ID ? { ...r, publicUrl: "https://example.it/c/alfa" } : r));
+    render(<CaseStudiesTable rows={withLink} canCreate />);
+    const links = screen.getAllByRole("link", { name: /in un’altra scheda/ });
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute("href")).toBe("https://example.it/c/alfa");
+    expect(links[0]?.getAttribute("target")).toBe("_blank");
+    expect(links[0]?.getAttribute("aria-label")).toBe(fill(dict.caseStudies.table.openLink, { name: "Alfa" }));
+    fireEvent.click(links[0]!);
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("keeps the status region mounted and empty while there are results", () => {
     render(<CaseStudiesTable rows={rows} canCreate />);
     expect(screen.getByRole("status").textContent).toBe("");
