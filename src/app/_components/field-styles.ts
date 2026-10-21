@@ -11,6 +11,12 @@ export const SEARCH_ICON = "pointer-events-none absolute top-1/2 left-3 size-4 -
 /** A white card that holds a table or a list (hairline + soft shadow, no solid border). */
 export const CARD = "rounded-xl bg-surface-raised shadow-card";
 
+/** A label at the top of a white card: small caps, muted ("01 — PROGETTO"). */
+export const CARD_LABEL = "font-label text-[11px] font-semibold tracking-[0.12em] text-foreground-muted uppercase";
+
+/** The line under a wizard step's heading. */
+export const STEP_INTRO = "max-w-[60ch] font-body text-sm leading-relaxed text-foreground";
+
 /** A table header cell. */
 export const TH = "whitespace-nowrap px-4 py-3 font-label text-xs font-medium text-foreground-muted";
 

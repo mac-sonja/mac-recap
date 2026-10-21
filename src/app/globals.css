@@ -39,6 +39,9 @@
   --color-primary: #cbff00;
   --color-primary-hover: #bdf000;
   --color-primary-foreground: #0b0b0a;
+  /* A chosen option (Servizi pills): a pale lime tint with olive ink, since lime itself is unreadable as text. */
+  --color-primary-tint: #eef6d4;
+  --color-primary-ink: #46600a;
   --color-accent: #0a6cff;
   --color-info: #0a55c8;
   --color-danger: #d92d20;
@@ -187,6 +190,8 @@
     --color-status-approved: #cbff00;
     --color-status-approved-foreground: #d9ff4d;
     --color-status-approved-tint: rgb(203 255 0 / 0.1);
+    --color-primary-tint: rgb(203 255 0 / 0.12);
+    --color-primary-ink: #d9ff4d;
     --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.06);
     --shadow-control: 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.5);
     --shadow-popover: 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 40px -8px rgb(0 0 0 / 0.7);
@@ -226,6 +231,8 @@
       --color-status-approved: #cbff00;
       --color-status-approved-foreground: #d9ff4d;
       --color-status-approved-tint: rgb(203 255 0 / 0.1);
+      --color-primary-tint: rgb(203 255 0 / 0.12);
+      --color-primary-ink: #d9ff4d;
       --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.06);
       --shadow-control: 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.5);
       --shadow-popover: 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 40px -8px rgb(0 0 0 / 0.7);

@@ -36,7 +36,7 @@ describe("BusinessLinePills", () => {
   it("uses grey filled chips (owner's mock, 2026-10-21), about 8px apart", () => {
     render(<Harness />);
     for (const pill of pills()) {
-      expect(pill.className.split(" ")).toEqual(expect.arrayContaining(["min-h-9", "bg-surface-control", "border-transparent", "text-[13px]"]));
+      expect(pill.className.split(" ")).toEqual(expect.arrayContaining(["min-h-7", "bg-surface-control", "border-transparent", "text-[13px]"]));
     }
     expect(screen.getByRole("group").className).toBe("flex flex-wrap gap-2");
   });

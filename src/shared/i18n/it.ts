@@ -216,6 +216,8 @@ export const it = {
     /** Step 1, Material (Story 2.7). */
     material: {
       heading: "Porta qui il materiale del progetto",
+      /** Under the heading, as on Racconto. */
+      intro: "Foto, video, presentazioni, appunti: tutto quello che hai sul progetto. L’AI parte da qui, insieme a quello che scriverai dopo.",
       drop: {
         /** Followed by the lime `browse` link. */
         lead: "Trascina qui i file o",

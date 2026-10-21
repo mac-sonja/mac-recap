@@ -196,7 +196,7 @@ afterEach(() => {
 });
 
 describe("CaseDetailsStep, a new case", () => {
-  it("shows the fields in order: name, client (a search box), year (prefilled, marked required), Servizi, then the two texts; no language", () => {
+  it("shows the fields in order: name and year in the Dettagli card, client (a search box), Servizi, then the two texts; no language", () => {
     renderNew();
     expect(field("Titolo della case history")).toHaveProperty("required", true);
     expect(field("Cliente").getAttribute("role")).toBe("combobox");
@@ -204,7 +204,7 @@ describe("CaseDetailsStep, a new case", () => {
     expect(field("Anno")).toHaveProperty("required", true);
     expect(field("Anno").getAttribute("aria-required")).toBe("true");
     const marks = [...document.querySelectorAll("[data-required-mark]")];
-    expect(marks.map((mark) => mark.previousElementSibling?.textContent)).toEqual(["Titolo della case history", "Cliente", "Anno", "Servizi"]);
+    expect(marks.map((mark) => mark.previousElementSibling?.textContent)).toEqual(["Titolo della case history", "Anno", "Cliente", "Servizi"]);
     expect(marks.every((mark) => mark.textContent === "*" && mark.getAttribute("aria-hidden") === "true")).toBe(true);
     // The markers only: no "* obbligatorio" legend (owner, 2026-10-20).
     expect(document.body.textContent).not.toContain("obbligatorio");
@@ -216,7 +216,7 @@ describe("CaseDetailsStep, a new case", () => {
     );
     expect(screen.getAllByRole("textbox").map((t) => t.getAttribute("name"))).toEqual(["name", "context", "solution"]);
     expect(screen.queryByLabelText("Risultati")).toBeNull();
-    const order = [field("Titolo della case history"), field("Cliente"), field("Anno"), group, textarea("Contesto")];
+    const order = [field("Titolo della case history"), field("Anno"), field("Cliente"), group, textarea("Contesto")];
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
