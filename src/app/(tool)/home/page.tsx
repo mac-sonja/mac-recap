@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronRight } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Hourglass, PenLine, Sparkles, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -10,11 +10,11 @@ import { wizardHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
 import { authorize, can, type CaseStatus } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
-import { formatDateTime } from "@/shared/i18n/format";
+import { formatDateTime, formatRelative } from "@/shared/i18n/format";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
-/** How many cases each list on the Home shows before *Vedi tutte*. */
+/** How many cases each list on the Dashboard shows before *Vedi tutte*. */
 const LIST_SIZE = 5;
 
 interface HomeCase {
@@ -111,10 +111,80 @@ function CaseList({
   );
 }
 
+/** The icon in front of each *Attività* line, by the case's status. */
+const ACTIVITY_ICON: Readonly<Record<CaseStatus, LucideIcon>> = {
+  draft: PenLine,
+  generating: Hourglass,
+  in_review: Sparkles,
+  approved: Check,
+};
+
+/** An *Attività* sentence with the case name in bold where the template says `{name}`. */
+function ActivitySentence({ template, name }: { template: string; name: string }) {
+  const [before, after] = template.split("{name}");
+  return (
+    <>
+      {before}
+      <strong className="font-semibold text-foreground-strong">{name}</strong>
+      {after}
+    </>
+  );
+}
+
+/** The latest change of each case as a short sentence and how long ago it happened. */
+function Activity({ cases, more }: { cases: readonly HomeCase[]; more?: ReactNode }) {
+  return (
+    <section aria-labelledby="home-activity" className={cn(CARD, "flex flex-col")}>
+      <div className="flex items-center justify-between gap-4 px-5 pt-4 pb-2">
+        <h2 id="home-activity" className="font-heading text-[15px] font-semibold text-foreground-strong">
+          {it.home.activity.heading}
+        </h2>
+        {more}
+      </div>
+      {cases.length === 0 ? (
+        <p className="px-5 pt-2 pb-6 font-body text-sm text-foreground-muted">{it.home.activity.empty}</p>
+      ) : (
+        <ul className="flex flex-col px-5 pb-2">
+          {cases.map((c) => {
+            const Icon = ACTIVITY_ICON[c.status];
+            const content = (
+              <>
+                <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-foreground-muted" strokeWidth={1.75} />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-body text-sm text-foreground">
+                    <ActivitySentence template={it.home.activity[c.status]} name={c.name} />
+                  </span>
+                  <time dateTime={c.updatedAt} title={formatDateTime(c.updatedAt)} className="font-label text-xs text-foreground-muted">
+                    {formatRelative(c.updatedAt)}
+                  </time>
+                </span>
+              </>
+            );
+            return (
+              <li key={c.id} className="border-b border-border last:border-b-0">
+                {c.href === null ? (
+                  <div className="flex items-start gap-3 py-3.5">{content}</div>
+                ) : (
+                  <Link
+                    href={c.href}
+                    className="-mx-2 flex items-start gap-3 rounded-md px-2 py-3.5 transition-colors duration-150 hover:bg-surface-hover"
+                  >
+                    {content}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 /**
- * The Home dashboard (owner/designer landing, 2026-10-20): a greeting, four
- * numbers (cases, to review, open drafts, approved), the cases waiting for a
- * review, the drafts to pick up again and the latest changes. Same scope and
+ * The Dashboard (owner/designer landing at `/home`, 2026-10-21): a greeting,
+ * three numbers (to approve, being written, open drafts), the cases waiting for
+ * a review, the drafts to pick up again and the latest activity. Same scope and
  * policy as the Case page (`list cases`); nothing here is new data, it is the
  * case list seen from the point of view of "what do I do next".
  */
@@ -143,7 +213,7 @@ export default async function HomePage() {
 
   const toReview = cases.filter((c) => c.status === "in_review");
   const drafts = cases.filter((c) => c.status === "draft");
-  const approved = cases.filter((c) => c.status === "approved");
+  const generating = cases.filter((c) => c.status === "generating");
   const firstName = actor.displayName.trim().split(/\s+/)[0] ?? "";
   const canCreate = can(actor, "create case");
 
@@ -166,11 +236,10 @@ export default async function HomePage() {
         <p className="font-body text-[15px] text-foreground-muted">{it.home.lead}</p>
       </header>
 
-      <ul aria-label={it.home.stats.label} className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <ul aria-label={it.home.stats.label} className="grid grid-cols-3 gap-4">
         <Stat index={0} label={it.home.stats.toReview} value={toReview.length} accent />
-        <Stat index={1} label={it.home.stats.drafts} value={drafts.length} />
-        <Stat index={2} label={it.home.stats.approved} value={approved.length} />
-        <Stat index={3} label={it.home.stats.total} value={cases.length} />
+        <Stat index={1} label={it.home.stats.generating} value={generating.length} />
+        <Stat index={2} label={it.home.stats.drafts} value={drafts.length} />
       </ul>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -189,13 +258,7 @@ export default async function HomePage() {
       </div>
 
       <div className={cn("grid gap-4", canCreate && "xl:grid-cols-[1fr_20rem]")}>
-        <CaseList
-          id="home-recent"
-          heading={it.home.recent.heading}
-          empty={it.home.recent.empty}
-          cases={cases.slice(0, LIST_SIZE)}
-          more={cases.length > 0 ? seeAll : undefined}
-        />
+        <Activity cases={cases.slice(0, LIST_SIZE)} more={cases.length > 0 ? seeAll : undefined} />
         {canCreate && (
           <section
             aria-labelledby="home-start"

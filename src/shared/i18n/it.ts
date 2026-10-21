@@ -12,7 +12,7 @@ export const it = {
     nav: {
       label: "Navigazione principale",
       newCaseStudy: "Nuova case history",
-      home: "Home",
+      home: "Dashboard",
       caseStudies: "Case history",
       clients: "Clienti",
       /** After Case in the sidebar: `{n}` cases waiting for a review. */
@@ -31,29 +31,32 @@ export const it = {
     noActor:
       "Non riusciamo a riconoscere il tuo profilo. Prova a ricaricare la pagina: se non basta, scrivi a un amministratore.",
   },
-  /** The Home dashboard. `{name}` is the person's first name. */
+  /** The Dashboard (route `/home`). `{name}` is the person's first name. */
   home: {
     greeting: "Ciao, {name}",
     lead: "Ecco a che punto sono i racconti dei vostri progetti.",
     stats: {
       label: "In sintesi",
-      total: "Case history in archivio",
       toReview: "Da approvare",
+      generating: "In elaborazione",
       drafts: "Bozze aperte",
-      approved: "Pronte da condividere",
-      clients: "Clienti",
     },
     review: {
-      heading: "Ti aspettano",
+      heading: "Da approvare",
       empty: "Niente da approvare. Goditi il momento.",
     },
     drafts: {
-      heading: "Da riprendere",
+      heading: "A metà strada",
       empty: "Nessuna bozza in sospeso.",
     },
-    recent: {
-      heading: "Movimenti recenti",
+    /** One line per case, its latest change; `{name}` is the case name, shown in bold. */
+    activity: {
+      heading: "Attività",
       empty: "Ancora nessuna case history. La prima è a un clic.",
+      draft: "La bozza di {name} è stata aggiornata.",
+      generating: "Stiamo scrivendo la bozza di {name}.",
+      in_review: "La bozza di {name} è pronta da rivedere.",
+      approved: "{name} è stata approvata.",
     },
     seeAll: "Vedi tutte",
     start: {

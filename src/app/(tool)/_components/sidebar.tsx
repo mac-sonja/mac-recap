@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Folder, House, Plus, type LucideIcon } from "lucide-react";
+import { Building2, Folder, LayoutDashboard, Plus, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PRESSABLE } from "@/app/_components/button-styles";
@@ -104,7 +104,7 @@ export function Sidebar({
             <span className={LABEL}>{it.shell.nav.newCaseStudy}</span>
           </Link>
         )}
-        {showCaseStudies && <NavLink href="/home" icon={House} label={it.shell.nav.home} active={isHome} />}
+        {showCaseStudies && <NavLink href="/home" icon={LayoutDashboard} label={it.shell.nav.home} active={isHome} />}
         {showCaseStudies && (
           <NavLink
             href="/case-studies"

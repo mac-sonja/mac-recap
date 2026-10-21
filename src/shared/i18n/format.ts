@@ -46,3 +46,21 @@ export function formatBytes(bytes: number): string {
   if (kilobytes < 1024) return `${SIZE.format(kilobytes)} KB`;
   return `${SIZE.format(bytes / MB)} MB`;
 }
+
+const RELATIVE = new Intl.RelativeTimeFormat("it-IT", { numeric: "auto" });
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/**
+ * How long ago an ISO timestamp was, in Italian: `adesso`, `5 minuti fa`, `2 ore fa`,
+ * `ieri`, `3 giorni fa`; from a week on it falls back to `formatDateTime`.
+ */
+export function formatRelative(iso: string, now: Date = new Date()): string {
+  const ago = now.getTime() - new Date(iso).getTime();
+  if (ago < MINUTE) return "adesso";
+  if (ago < HOUR) return RELATIVE.format(-Math.floor(ago / MINUTE), "minute");
+  if (ago < DAY) return RELATIVE.format(-Math.floor(ago / HOUR), "hour");
+  if (ago < 7 * DAY) return RELATIVE.format(-Math.floor(ago / DAY), "day");
+  return formatDateTime(iso, now);
+}

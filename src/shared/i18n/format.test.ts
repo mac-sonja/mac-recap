@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentYear, formatBytes, formatDateTime } from "./format";
+import { currentYear, formatBytes, formatDateTime, formatRelative } from "./format";
 
 describe("formatDateTime", () => {
   it.each([
@@ -38,5 +38,21 @@ describe("formatBytes", () => {
     [1234.5 * 1024 * 1024, "1234,5 MB"],
   ])("formats %d bytes as %s", (bytes, expected) => {
     expect(formatBytes(bytes)).toBe(expected);
+  });
+});
+
+describe("formatRelative", () => {
+  const now = new Date("2026-10-21T12:00:00Z");
+
+  it("says how long ago, in Italian", () => {
+    expect(formatRelative("2026-10-21T11:59:30Z", now)).toBe("adesso");
+    expect(formatRelative("2026-10-21T11:55:00Z", now)).toBe("5 minuti fa");
+    expect(formatRelative("2026-10-21T10:00:00Z", now)).toBe("2 ore fa");
+    expect(formatRelative("2026-10-20T08:00:00Z", now)).toBe("ieri");
+    expect(formatRelative("2026-10-18T12:00:00Z", now)).toBe("3 giorni fa");
+  });
+
+  it("falls back to the date from a week on", () => {
+    expect(formatRelative("2026-10-10T07:05:00Z", now)).toBe(formatDateTime("2026-10-10T07:05:00Z", now));
   });
 });
