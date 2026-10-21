@@ -59,8 +59,8 @@ describe("createCaseStudyInputSchema", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("INVALID_INPUT");
-      expect((result.error.details as { fields: string[] }).fields).toEqual(["name", "clientId", "businessLine"]);
-      expect(result.error.message).toContain("name, clientId, businessLine");
+      expect((result.error.details as { fields: string[] }).fields).toEqual(["name", "clientId"]);
+      expect(result.error.message).toContain("name, clientId");
     }
   });
 
@@ -82,14 +82,17 @@ describe("createCaseStudyInputSchema", () => {
     ["NaN", { ...valid, year: Number.NaN }, "year"],
     ["an unknown locale", { ...valid, locale: "fr" }, "locale"],
     ["a null locale", { ...valid, locale: null }, "locale"],
-    ["no business line", { ...valid, businessLine: undefined }, "businessLine"],
-    ["a null business line", { ...valid, businessLine: null }, "businessLine"],
     ["an unknown business line", { ...valid, businessLine: "moda" }, "businessLine"],
     ["a business line label", { ...valid, businessLine: "Social media" }, "businessLine"],
   ])("rejects %s", (_label, input, field) => {
     const result = parseInput(createCaseStudyInputSchema, input);
     expect(result.ok).toBe(false);
     if (!result.ok) expect((result.error.details as { fields: string[] }).fields).toEqual([field]);
+  });
+
+  it.each([undefined, null])("accepts %s as no business line yet (the new-case dialog, client only)", (businessLine) => {
+    const result = parseInput(createCaseStudyInputSchema, { ...valid, businessLine });
+    expect(result).toEqual({ ok: true, value: { ...valid, locale: "it", businessLine: null } });
   });
 
   it.each([1900, 2100])("accepts the boundary year %i", (year) => {

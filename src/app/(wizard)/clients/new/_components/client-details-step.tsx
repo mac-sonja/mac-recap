@@ -19,7 +19,6 @@ import { WizardFooter } from "@/app/(wizard)/_components/wizard-frame";
 import type { Client, ClientBrief, ClientBriefField, ClientDetail, ClientIndustry } from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import { CLIENT_WIZARD_STEPS } from "./client-steps";
 import { IndustryPills } from "@/app/(tool)/clients/_components/industry-pills";
 
 const copy = it.clientWizard.details;
@@ -521,8 +520,6 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
       </div>
 
       <WizardFooter
-        current={1}
-        steps={CLIENT_WIZARD_STEPS}
         start={ready ? undefined : <span id={ids.reason}>{fill(copy.nextReason, { fields: missing.join(copy.listSeparator) })}</span>}
         action={
           <button

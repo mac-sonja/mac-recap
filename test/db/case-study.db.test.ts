@@ -226,7 +226,6 @@ describe("invalid input writes nothing", () => {
     ["year below 1900", { year: 1899 }, ["year"]],
     ["year above 2100", { year: 2101 }, ["year"]],
     ["unknown locale", { locale: "de" }, ["locale"]],
-    ["no business line", { businessLine: undefined }, ["businessLine"]],
     ["an unknown business line", { businessLine: "moda" }, ["businessLine"]],
   ])("%s → INVALID_INPUT naming %j", async (_label, over, fields) => {
     const { create } = await loadCaseStudy();
@@ -238,6 +237,13 @@ describe("invalid input writes nothing", () => {
       expect((result.error.details as { fields: string[] }).fields).toEqual(fields);
     }
     expect(await counts()).toEqual(before);
+  });
+
+  it("creates a case without a business line (the new-case dialog: client only)", async () => {
+    const { create } = await loadCaseStudy();
+    const result = await create(await devActor(), { name: "R", clientId: acme.id, year: 2026 });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.businessLine).toBeNull();
   });
 
   const INSERT = "insert into public.case_study (name, client_id, number, code, year, locale, created_by)";
@@ -666,11 +672,10 @@ describe("business line and details (Story 2.17)", () => {
     expect(created.ok && created.value.businessLine).toBe("sviluppo");
   });
 
-  it("create_case_study refuses a null business line (P0001 INVALID_INPUT) and writes nothing", async () => {
+  it("create_case_study takes a null business line (material first, 2026-10-21) and refuses one outside the list", async () => {
+    const { rows } = await pool.query("select (public.create_case_study('R', $1, 2026, 'it', null, $2)).business_line", [acme.id, DEV_ACTOR_ID]);
+    expect(rows).toEqual([{ business_line: null }]);
     const before = await counts();
-    await expect(
-      pool.query("select public.create_case_study('R', $1, 2026, 'it', null, $2)", [acme.id, DEV_ACTOR_ID]),
-    ).rejects.toMatchObject({ code: "P0001", message: "INVALID_INPUT" });
     await expect(
       pool.query("select public.create_case_study('R', $1, 2026, 'it', 'moda', $2)", [acme.id, DEV_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "23514" });

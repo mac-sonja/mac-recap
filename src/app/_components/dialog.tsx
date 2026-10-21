@@ -35,6 +35,8 @@ export interface DialogProps {
   actions?: ReactNode;
   /** When given, an × at the top right closes the dialog; the string is its accessible name. */
   closeLabel?: string;
+  /** A wider dialog (max 32rem instead of 28rem), e.g. for a field with a dropdown list. */
+  wide?: boolean;
 }
 
 /**
@@ -43,7 +45,7 @@ export interface DialogProps {
  * a second Dialog while one is open is refused with a warning. Focus moves into the
  * dialog on open and returns to the opener on close. A backdrop click does not close it.
  */
-export function Dialog({ open, onClose, title, description, children, actions, closeLabel }: DialogProps) {
+export function Dialog({ open, onClose, title, description, children, actions, closeLabel, wide = false }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descriptionId = useId();
@@ -106,7 +108,7 @@ export function Dialog({ open, onClose, title, description, children, actions, c
       tabIndex={-1}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      className="m-auto w-full max-w-md rounded-xl bg-surface-raised p-6 text-foreground shadow-popover backdrop:bg-scrim/40 backdrop:backdrop-blur-[2px] open:motion-safe:animate-dialog-in"
+      className={`m-auto w-full ${wide ? "max-w-lg" : "max-w-md"} rounded-xl bg-surface-raised p-6 text-foreground shadow-popover backdrop:bg-scrim/40 backdrop:backdrop-blur-[2px] open:motion-safe:animate-dialog-in`}
     >
       <div className="flex items-start justify-between gap-4">
         <h2 id={titleId} className="font-heading text-lg font-semibold tracking-[-0.01em] text-foreground-strong">

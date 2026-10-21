@@ -345,9 +345,10 @@ const requiredText = z.string().trim().min(1, "Required.");
 const yearSchema = z.number().int("Must be a whole number.").min(YEAR_MIN).max(YEAR_MAX);
 
 /**
- * What a person supplies to create a case (wizard step 1 Dettagli). Name is trimmed and
+ * What a person supplies to create a case (the wizard's new-case dialog). Name is trimmed and
  * required; `clientId` is a picked client's id; year is an integer in 1900–2100;
- * locale defaults to `it`; `businessLine` is required and one of `BUSINESS_LINES`.
+ * locale defaults to `it`; `businessLine` is one of `BUSINESS_LINES`, or null (the
+ * default) for a case that starts on Materiale and gets it in Dettagli (owner, 2026-10-21).
  * Any other key (status, code, project_order_ref, …) is dropped.
  */
 export const createCaseStudyInputSchema = z.object({
@@ -355,7 +356,7 @@ export const createCaseStudyInputSchema = z.object({
   clientId: z.uuid("Required."),
   year: yearSchema,
   locale: localeSchema.default(DEFAULT_LOCALE),
-  businessLine: businessLineSchema,
+  businessLine: businessLineSchema.nullable().default(null),
 });
 export type CreateCaseStudyInput = z.infer<typeof createCaseStudyInputSchema>;
 

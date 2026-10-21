@@ -382,7 +382,7 @@ export function CaseDetailsStep({
         savedInfo.current = info;
         setCaseId(id);
         // The URL names the case from now on, so a reload resumes it instead of creating another.
-        window.history.replaceState(null, "", wizardHref(id, 1));
+        window.history.replaceState(null, "", wizardHref(id, 2));
       } else if (!discardInfo && !sameInfo(savedInfo.current, info)) {
         // 1. An existing case: save the changed info fields.
         const updated = await updateCaseStudyDetails({ caseId: id, ...info });
@@ -424,7 +424,7 @@ export function CaseDetailsStep({
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void saveAndGo((id) => wizardHref(id, 2), { requireReady: true });
+    void saveAndGo((id) => wizardHref(id, 3), { requireReady: true });
   }
 
   const missingLabels = [
@@ -642,7 +642,6 @@ export function CaseDetailsStep({
       </div>
 
       <WizardFooter
-        current={1}
         start={reasonStart}
         action={
           <button

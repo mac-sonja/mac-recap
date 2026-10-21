@@ -85,7 +85,6 @@ describe("createSupabaseCaseStudyRepository().create", () => {
   });
 
   it.each([
-    ["the P0001 INVALID_INPUT refusal (no business line)", { code: "P0001", message: "INVALID_INPUT" }],
     ["the business line check", { code: "23514", message: 'new row for relation "case_study" violates check constraint "case_study_business_line_check"' }],
   ])("maps %s to INVALID_INPUT naming businessLine", async (_label, error) => {
     const { factory, from } = stubClient({ data: null, error: null }, { data: null, error });

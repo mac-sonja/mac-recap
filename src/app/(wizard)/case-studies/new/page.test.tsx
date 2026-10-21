@@ -123,31 +123,20 @@ const plain = (step: number) => new RegExp(`<li data-step="${step}"[^>]*><span `
 const radio = (html: string, label: string) => html.match(new RegExp(`<button [^>]*role="radio"[^>]*>${label}</button>`))?.[0] ?? "";
 
 describe("NewCaseStudyPage", () => {
-  it("guards on create case and shows step 1 Dettagli for a new case: title Nuova case history, Dettagli current", async () => {
+  it("guards on create case and opens the new-case dialog: client only, over Materiale (material first)", async () => {
     const html = await render();
     expect(requireSurface).toHaveBeenCalledWith("create case");
     expect(get).not.toHaveBeenCalled();
     expect(html).toMatch(/<h1 class="[^"]*">Nuova case history<\/h1>/);
-    expect(html).toMatch(/<li data-step="1" aria-current="step"/);
+    expect(html).toMatch(/<li data-step="1" aria-current="step"[^>]*>.*Materiale/);
     expect(html).not.toMatch(/<a [^>]*href="\/case-studies\/new\?caseId/);
-    expect(html).toContain("Titolo della case history");
-    const year = html.match(/<input [^>]*name="year"[^>]*>/)?.[0] ?? "";
-    expect(year).toContain('min="1900"');
-    expect(year).toContain('max="2100"');
-    expect(year).toContain('value="2031"');
-    // Area pills, none picked, then the three texts.
-    expect(html).toContain('role="radiogroup"');
-    expect([...html.matchAll(/role="radio" aria-checked="false"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1])).toEqual([
-      "Branding",
-      "Social media",
-      "Video",
-      "Web design",
-      "Advertising",
-      "Eventi",
-      "Sviluppo",
-    ]);
-    expect(html.indexOf('role="radiogroup"')).toBeLessThan(html.indexOf('name="context"'));
-    expect(html).toMatch(/<textarea [^>]*name="results"/);
+    expect(html).toMatch(/<dialog [^>]*>.*Cliente.*<\/dialog>/);
+    expect(html).toMatch(/<button type="submit"[^>]*>Avanti<\/button>/);
+    // No title, year, business line or texts: Dettagli asks for them later.
+    expect(html).not.toContain("Titolo della case history");
+    expect(html).not.toContain('name="year"');
+    expect(html).not.toContain('role="radiogroup"');
+    expect(html).not.toContain("<textarea");
     expect(getDetailsForm).not.toHaveBeenCalled();
     expect(html).not.toContain("<aside");
     expect(html).not.toContain("<nav");
@@ -161,7 +150,6 @@ describe("NewCaseStudyPage", () => {
     const list = html.match(/<ul [^>]*role="listbox"[^>]*>.*?<\/ul>/)?.[0] ?? "";
     expect([...list.matchAll(/<li [^>]*role="option"[^>]*>([^<]*)<\/li>/g)].map((m) => m[1])).toEqual(["Lumen Srl (LUM)", "Città di Torino (CIT)"]);
     expect(html).not.toContain("<select");
-    expect(html).not.toContain("Lingua del testo");
   });
 
   it("a new case with no clients shows the note instead of the select", async () => {
@@ -175,10 +163,9 @@ describe("NewCaseStudyPage", () => {
   /** The client search box's text. */
   const selected = (html: string) => combobox(html).match(/ value="([^"]*)"/)?.[1];
 
-  it("a client page's Nuova case history (?clientId=) opens step 1 with that client preselected", async () => {
+  it("a client page's Nuova case history (?clientId=) opens the dialog with that client preselected", async () => {
     const html = await render({ clientId: clients[1].id });
     expect(selected(html)).toBe("Città di Torino (CIT)");
-    expect(html).toMatch(/<li data-step="1" aria-current="step"/);
   });
 
   it.each([
@@ -188,7 +175,7 @@ describe("NewCaseStudyPage", () => {
   ])("a new case ignores a %s ?clientId= without an error", async (_label, clientId) => {
     const html = await render({ clientId });
     expect(selected(html)).toBe("");
-    expect(html).toContain("Titolo della case history");
+    expect(html).toContain('role="combobox"');
   });
 
   it("throws into the error boundary when the clients can't be listed", async () => {
@@ -208,7 +195,7 @@ describe("NewCaseStudyPage", () => {
   });
 
   it("shows the larger-screen message below lg and hides the form there", async () => {
-    const html = await render();
+    const html = await render({ caseId: ID, step: "2" });
     expect(html).toMatch(/<p class="[^"]*\blg:hidden\b[^"]*">Questa pagina dà il meglio su uno schermo più grande\.<\/p>/);
     expect(html).toMatch(/<div class="hidden lg:block">.*<form/);
     // The title shows at every width.
@@ -221,20 +208,22 @@ describe("NewCaseStudyPage", () => {
     expect(get).not.toHaveBeenCalled();
   });
 
-  describe("opening step (first incomplete)", () => {
-    it("a draft without a business line (legacy) opens Dettagli", async () => {
-      get.mockResolvedValue(ok(legacy));
-      hasMaterial.mockResolvedValue(ok(true));
-      await expect(render({ caseId: ID })).rejects.toThrow(stepUrl(1));
-    });
-
+  describe("opening step (first incomplete): Materiale, then Dettagli, then Genera", () => {
     it.each([
       ["without material", ok(false)],
       ["when the material check fails", err({ code: "MATERIAL_LOOKUP_FAILED", message: "down" })],
-    ] as const)("a draft with a business line %s opens Materiale", async (_label, result) => {
+    ] as const)("a draft %s opens Materiale, even without a business line", async (_label, result) => {
       hasMaterial.mockResolvedValue(result);
-      await expect(render({ caseId: ID })).rejects.toThrow(stepUrl(2));
+      await expect(render({ caseId: ID })).rejects.toThrow(stepUrl(1));
+      get.mockResolvedValue(ok(legacy));
+      await expect(render({ caseId: ID })).rejects.toThrow(stepUrl(1));
       expect(listAssets).not.toHaveBeenCalled();
+    });
+
+    it("a draft with a file and no business line (a new case) opens Dettagli", async () => {
+      get.mockResolvedValue(ok(legacy));
+      hasMaterial.mockResolvedValue(ok(true));
+      await expect(render({ caseId: ID })).rejects.toThrow(stepUrl(2));
     });
 
     it("a draft with a business line and a file opens Genera", async () => {
@@ -247,23 +236,21 @@ describe("NewCaseStudyPage", () => {
       hasMaterial.mockResolvedValue(ok(true));
       await expect(render({ caseId: ID, step: step as string | string[] })).rejects.toThrow(stepUrl(3));
       get.mockResolvedValue(ok(legacy));
-      await expect(render({ caseId: ID, step: step as string | string[] })).rejects.toThrow(stepUrl(1));
+      await expect(render({ caseId: ID, step: step as string | string[] })).rejects.toThrow(stepUrl(2));
     });
   });
 
-  describe("step 1 Dettagli on an existing case", () => {
+  describe("step 2 Dettagli", () => {
     it("shows the case in the top bar and the saved details prefilled; the client is fixed", async () => {
       getDetailsForm.mockResolvedValue(ok({ context: "Lumen voleva un'identità unica.", solution: "", results: "" }));
-      const html = await render({ caseId: ID, step: "1" });
+      const html = await render({ caseId: ID, step: "2" });
       expect(get).toHaveBeenCalledExactlyOnceWith(ID);
       expect(getDetailsForm).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
       expect(html).toMatch(/<h1 class="[^"]*">Rebrand Lumen 2026<\/h1>/);
       expect(html).toMatch(/<span class="[^"]*font-mono[^"]*"><span class="sr-only">ID <\/span>LUM-2026-01<\/span>/);
       expect(html).not.toContain(`>${ID}<`);
       expect(html).toContain(">Bozza</span>");
-      expect(html).toMatch(/<li data-step="1" aria-current="step"/);
-      expect(html).toMatch(/data-dot="1" data-active=""/);
-      expect(html.match(/data-active=""/g)).toHaveLength(1);
+      expect(html).toMatch(/<li data-step="2" aria-current="step"/);
       expect(html).toMatch(/<input [^>]*name="name"[^>]*value="Rebrand Lumen 2026"/);
       expect(html.match(/<input [^>]*name="client"[^>]*>/)?.[0]).toMatch(/readonly="".*value="Lumen Srl \(LUM\)"|value="Lumen Srl \(LUM\)".*readonly=""/i);
       expect(html).not.toContain('name="clientId"');
@@ -274,44 +261,42 @@ describe("NewCaseStudyPage", () => {
     });
 
     it("links Materiale but not Genera without a file", async () => {
-      const html = await render({ caseId: ID, step: "1" });
-      expect(html).toMatch(linkTo(2));
+      const html = await render({ caseId: ID, step: "2" });
+      expect(html).toMatch(linkTo(1));
       expect(html).toMatch(plain(3));
     });
 
     it("links Materiale and Genera with a file", async () => {
       hasMaterial.mockResolvedValue(ok(true));
-      const html = await render({ caseId: ID, step: "1" });
-      expect(html).toMatch(linkTo(2));
+      const html = await render({ caseId: ID, step: "2" });
+      expect(html).toMatch(linkTo(1));
       expect(html).toMatch(linkTo(3));
     });
 
-    it("a legacy draft opens prefilled with no pill picked, an inactive Avanti with its reason, and no later links", async () => {
+    it("a draft without a business line opens with no pill picked, an inactive Avanti with its reason, and Genera not a link", async () => {
       get.mockResolvedValue(ok(legacy));
       hasMaterial.mockResolvedValue(ok(true));
-      const html = await render({ caseId: ID, step: "1" });
+      const html = await render({ caseId: ID, step: "2" });
       expect(html).toMatch(/<input [^>]*name="name"[^>]*value="Rebrand Lumen 2026"/);
       expect(html).not.toContain('aria-checked="true"');
       const reason = html.match(/<span id="([^"]+)">Per andare avanti manca: Business line\.<\/span>/)?.[1];
       expect(reason).toBeDefined();
       expect(html).toMatch(new RegExp(`<button type="submit" aria-disabled="true" aria-describedby="${reason}"[^>]*>Avanti</button>`));
-      expect(html).toMatch(plain(2));
+      expect(html).toMatch(linkTo(1));
       expect(html).toMatch(plain(3));
     });
 
     it("throws into the error boundary when the details cannot be loaded", async () => {
       getDetailsForm.mockResolvedValue(err({ code: "DETAILS_LOOKUP_FAILED", message: "down" }));
-      await expect(render({ caseId: ID, step: "1" })).rejects.toThrow(/DETAILS_LOOKUP_FAILED/);
+      await expect(render({ caseId: ID, step: "2" })).rejects.toThrow(/DETAILS_LOOKUP_FAILED/);
     });
   });
 
-  describe("step 2 Materiale", () => {
+  describe("step 1 Materiale", () => {
     it("shows the empty Material step: drop zone, chips and hint, inactive Avanti with its reason, no list", async () => {
-      const html = await render({ caseId: ID, step: "2" });
+      const html = await render({ caseId: ID, step: "1" });
       expect(listAssets).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
-      expect(html).toMatch(/<li data-step="2" aria-current="step"/);
-      expect(html).toMatch(/data-dot="2" data-active=""/);
-      expect(html.match(/data-active=""/g)).toHaveLength(1);
+      expect(html).toMatch(/<li data-step="1" aria-current="step"/);
       expect(html).toContain("Porta qui il materiale del progetto");
       expect(html).toMatch(/role="button"[^>]*aria-label="Trascina qui i file oppure sceglili dal computer"/);
       expect(html).toContain("Fino a 20 file, massimo 50 MB l’uno.");
@@ -322,12 +307,12 @@ describe("NewCaseStudyPage", () => {
       expect(html).toMatch(new RegExp(`<button type="button" aria-disabled="true" aria-describedby="${reason}"[^>]*>Avanti</button>`));
       expect(html).not.toContain(">Materiale</h3>");
       expect(html).not.toContain("<img");
-      // Dettagli is done and a link; Genera needs a file.
-      expect(html).toMatch(linkTo(1));
+      // Dettagli is always a link; Genera needs a file.
+      expect(html).toMatch(linkTo(2));
       expect(html).toMatch(plain(3));
     });
 
-    it("lists the files from the server, with an active Avanti to step 3 and Genera a link", async () => {
+    it("lists the files from the server, with an active Avanti to step 2 Dettagli and Genera a link", async () => {
       listAssets.mockResolvedValue(
         ok([
           asset,
@@ -335,25 +320,26 @@ describe("NewCaseStudyPage", () => {
         ]),
       );
       hasMaterial.mockResolvedValue(ok(true));
-      const html = await render({ caseId: ID, step: "2" });
+      const html = await render({ caseId: ID, step: "1" });
       expect(html).toContain(">Materiale</h3>");
       expect(html).toContain("2 / 20 file");
       expect(html.indexOf("lumen-keyvisual-final.png")).toBeLessThan(html.indexOf("brief.pdf"));
       expect(html).toContain('<img src="https://bucket.s3/thumb?sig=1" alt=""');
       expect(html).toContain("4,2 MB");
-      expect(html).toMatch(new RegExp(`<a [^>]*href="/case-studies/new\\?caseId=${ID}&amp;step=3"[^>]*>Avanti</a>`));
+      expect(html).toMatch(new RegExp(`<a [^>]*href="/case-studies/new\\?caseId=${ID}&amp;step=2"[^>]*>Avanti</a>`));
       expect(html).toMatch(linkTo(3));
     });
 
     it("throws into the error boundary when the files cannot be listed", async () => {
       listAssets.mockResolvedValue(err({ code: "ASSET_LOOKUP_FAILED", message: "down" }));
-      await expect(render({ caseId: ID, step: "2" })).rejects.toThrow(/ASSET_LOOKUP_FAILED/);
+      await expect(render({ caseId: ID, step: "1" })).rejects.toThrow(/ASSET_LOOKUP_FAILED/);
     });
 
-    it("a legacy draft without a business line is sent back to Dettagli", async () => {
+    it("opens without a business line too (a case fresh from the dialog)", async () => {
       get.mockResolvedValue(ok(legacy));
-      await expect(render({ caseId: ID, step: "2" })).rejects.toThrow(stepUrl(1));
-      expect(listAssets).not.toHaveBeenCalled();
+      const html = await render({ caseId: ID, step: "1" });
+      expect(html).toMatch(/<li data-step="1" aria-current="step"/);
+      expect(listAssets).toHaveBeenCalledOnce();
     });
   });
 
@@ -373,13 +359,13 @@ describe("NewCaseStudyPage", () => {
       ["when the material check fails", err({ code: "MATERIAL_LOOKUP_FAILED", message: "down" })],
     ] as const)("redirects %s to Materiale", async (_label, result) => {
       hasMaterial.mockResolvedValue(result);
-      await expect(render({ caseId: ID, step: "3" })).rejects.toThrow(stepUrl(2));
+      await expect(render({ caseId: ID, step: "3" })).rejects.toThrow(stepUrl(1));
     });
 
-    it("redirects a legacy draft to Dettagli even with a file", async () => {
+    it("redirects a draft without a business line to Dettagli even with a file", async () => {
       get.mockResolvedValue(ok(legacy));
       hasMaterial.mockResolvedValue(ok(true));
-      await expect(render({ caseId: ID, step: "3" })).rejects.toThrow(stepUrl(1));
+      await expect(render({ caseId: ID, step: "3" })).rejects.toThrow(stepUrl(2));
     });
   });
 

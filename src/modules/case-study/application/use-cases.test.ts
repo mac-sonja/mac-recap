@@ -203,7 +203,6 @@ describe("create", () => {
     ["non-integer year", { name: "R", clientId: ACME.id, year: 2026.1, ...BL }, ["year"]],
     ["year out of range", { name: "R", clientId: ACME.id, year: 1850, ...BL }, ["year"]],
     ["bad locale", { name: "R", clientId: ACME.id, year: 2026, locale: "de", ...BL }, ["locale"]],
-    ["no business line", { name: "R", clientId: ACME.id, year: 2026 }, ["businessLine"]],
     ["an unknown business line", { name: "R", clientId: ACME.id, year: 2026, businessLine: "moda" }, ["businessLine"]],
     ["a business line label", { name: "R", clientId: ACME.id, year: 2026, businessLine: "Social media" }, ["businessLine"]],
   ])("%s → INVALID_INPUT naming the fields; nothing written", async (_label, input, fields) => {

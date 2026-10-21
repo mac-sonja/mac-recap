@@ -127,7 +127,7 @@ describe("NewClientPage", () => {
     expect(requireSurface).toHaveBeenCalledWith("manage clients");
     expect(getClient).not.toHaveBeenCalled();
     expect(backLink(html)).toEqual({ href: "/clients", label: "Torna ai clienti" });
-    expect(html).toContain('<p class="mb-2 font-label text-[13px] font-medium text-foreground-muted">Nuovo cliente</p>');
+    expect(html).toMatch(/<p class="[^"]*\buppercase\b[^"]*">Nuovo cliente<\/p>/);
     expect(html).toMatch(/<h1 [^>]*>Nuovo cliente<\/h1>/);
     expect(html).not.toContain("data-status");
     expect(segments(html)).toEqual([

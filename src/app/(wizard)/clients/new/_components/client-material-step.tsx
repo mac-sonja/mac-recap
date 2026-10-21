@@ -13,7 +13,6 @@ import type { ListedClientAsset } from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
 import type { StepAsset } from "../../../_components/asset-row";
 import { MaterialStep, type MaterialActions } from "../../../_components/material-step";
-import { CLIENT_WIZARD_STEPS } from "./client-steps";
 
 const copy = it.clientWizard.material;
 
@@ -84,8 +83,6 @@ export function ClientMaterialStep({ clientId, initialAssets, limits }: ClientMa
       // `@/modules/case-study`: a value import would bundle its server adapters.
       ready={(files) => files.filter((file) => file.kind === "image").length >= limits.minImages}
       footerAction={{ label: copy.createIntro, href: clientHref(clientId), reason: copy.createIntroReason }}
-      steps={CLIENT_WIZARD_STEPS}
-      step={2}
       checkFile={checkFile}
     />
   );

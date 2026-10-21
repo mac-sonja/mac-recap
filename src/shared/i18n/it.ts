@@ -144,12 +144,14 @@ export const it = {
       /** Read by screen readers before the name of a step that is a link. */
       goTo: "vai a",
     },
-    /** In stepper order: 1 Dettagli, 2 Materiale, 3 Genera (Story 2.17). */
+    /** In stepper order: Materiale, Dettagli, Genera (material first, owner 2026-10-21). */
     steps: {
       details: "Dettagli",
       material: "Materiale",
       generate: "Genera",
     },
+    /** A new case's title until Dettagli gives it one: the new-case dialog asks for the client only. */
+    untitled: "Nome progetto",
     fields: {
       name: "Titolo della case history",
       client: "Cliente",
@@ -198,6 +200,7 @@ export const it = {
       notDraft: "Questa case history non è più una bozza. Torna all’elenco per vederla.",
     },
     next: "Avanti",
+    cancel: "Annulla",
     /** The wizard's error boundary: the case could not be loaded. */
     loadFailed: "Non riusciamo ad aprire questa case history. Riprova tra qualche istante.",
     /** Step 1, Material (Story 2.7). */
