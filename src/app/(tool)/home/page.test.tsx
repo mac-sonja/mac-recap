@@ -62,7 +62,7 @@ describe("HomePage", () => {
     expect(html).toContain("Ciao, Sonja");
   });
 
-  it("counts cases to review, drafts, approved and the total", async () => {
+  it("counts cases to approve, being written and open drafts", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     list.mockResolvedValue(
       ok([
@@ -77,9 +77,8 @@ describe("HomePage", () => {
     const stats = [...html.matchAll(/<li [^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span><span[^>]*>(\d+)<\/span><\/li>/g)].map((m) => [m[1], m[2]]);
     expect(stats).toEqual([
       ["Da approvare", "2"],
+      ["In elaborazione", "1"],
       ["Bozze aperte", "1"],
-      ["Pronte da condividere", "1"],
-      ["Case history in archivio", "5"],
     ]);
   });
 
@@ -89,7 +88,16 @@ describe("HomePage", () => {
     list.mockResolvedValue(ok([draft, caseStudy({ status: "in_review" })]));
     const html = await renderPage();
     expect(html).toContain(`href="/case-studies/new?caseId=${draft.id}"`);
-    expect(html.match(/href="\/case-studies\/new\?caseId=/g)).toHaveLength(2); // in Da riprendere and in Movimenti recenti
+    expect(html.match(/href="\/case-studies\/new\?caseId=/g)).toHaveLength(2); // in A metà strada and in Attività
+  });
+
+  it("tells each case's latest change in Attività, the name in bold", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(ok([caseStudy({ status: "in_review", name: "Showroom in tasca" }), caseStudy({ status: "approved", name: "Mattoni" })]));
+    const html = await renderPage();
+    expect(html).toContain("Attività");
+    expect(html).toContain('La bozza di <strong class="font-semibold text-foreground-strong">Showroom in tasca</strong> è pronta da rivedere.');
+    expect(html).toContain('<strong class="font-semibold text-foreground-strong">Mattoni</strong> è stata approvata.');
   });
 
   it("shows friendly empty lines with no cases", async () => {
