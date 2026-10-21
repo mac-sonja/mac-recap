@@ -672,11 +672,10 @@ describe("business line and details (Story 2.17)", () => {
     expect(created.ok && created.value.businessLine).toBe("sviluppo");
   });
 
-  it("create_case_study refuses a null business line (P0001 INVALID_INPUT) and writes nothing", async () => {
+  it("create_case_study takes a null business line (material first, 2026-10-21) and refuses one outside the list", async () => {
+    const { rows } = await pool.query("select (public.create_case_study('R', $1, 2026, 'it', null, $2)).business_line", [acme.id, DEV_ACTOR_ID]);
+    expect(rows).toEqual([{ business_line: null }]);
     const before = await counts();
-    await expect(
-      pool.query("select public.create_case_study('R', $1, 2026, 'it', null, $2)", [acme.id, DEV_ACTOR_ID]),
-    ).rejects.toMatchObject({ code: "P0001", message: "INVALID_INPUT" });
     await expect(
       pool.query("select public.create_case_study('R', $1, 2026, 'it', 'moda', $2)", [acme.id, DEV_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "23514" });
