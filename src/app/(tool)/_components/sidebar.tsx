@@ -1,9 +1,11 @@
 "use client";
 
-import { Building2, Folder, LayoutDashboard, Plus, type LucideIcon } from "lucide-react";
+import { Building2, Folder, LayoutDashboard, Plus, Search, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useId, useState, type FormEvent } from "react";
 import { PRESSABLE } from "@/app/_components/button-styles";
+import { SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -65,6 +67,52 @@ function NavLink({
   );
 }
 
+/**
+ * The search above **Nuova case history**: Enter opens the Case history page filtered
+ * by the text (`?q=`), which searches names, clients, codes and business lines.
+ * Collapsed (1024–1279 px) it is a magnifier that opens the Case history page.
+ */
+function SidebarSearch() {
+  const router = useRouter();
+  const id = useId();
+  const [text, setText] = useState("");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = text.trim();
+    router.push(query === "" ? "/case-studies" : `/case-studies?q=${encodeURIComponent(query)}`);
+    setText("");
+  }
+
+  return (
+    <>
+      <form role="search" onSubmit={submit} className="relative mb-3 hidden xl:block">
+        <label htmlFor={id} className="sr-only">
+          {it.shell.nav.search.label}
+        </label>
+        <Search aria-hidden="true" className={SEARCH_ICON} />
+        <input
+          id={id}
+          type="search"
+          autoComplete="off"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={it.shell.nav.search.placeholder}
+          className={SEARCH_FIELD}
+        />
+      </form>
+      <Link
+        href="/case-studies"
+        title={it.shell.nav.search.label}
+        aria-label={it.shell.nav.search.label}
+        className="mb-3 flex h-9 items-center justify-center rounded-md text-foreground-muted transition-colors duration-150 hover:bg-surface-hover hover:text-foreground xl:hidden"
+      >
+        <Search aria-hidden="true" className="size-[18px]" strokeWidth={1.75} />
+      </Link>
+    </>
+  );
+}
+
 export function Sidebar({
   showNewCaseStudy,
   showCaseStudies,
@@ -84,19 +132,20 @@ export function Sidebar({
   return (
     <aside className="sticky top-0 flex h-dvh w-16 shrink-0 flex-col border-r bg-surface-sidebar xl:w-64">
       <nav aria-label={it.shell.nav.label} className="flex flex-1 flex-col gap-0.5 p-2 xl:p-4">
-        <p className="mb-5 hidden items-end gap-2 px-2 pt-2 text-foreground-strong xl:flex">
+        <p className="mb-8 hidden items-end gap-2 px-2 pt-2 text-foreground-strong xl:flex">
           <MacWordmark label={it.app.name} className="h-[22px] w-auto" />
           {/* The wordmark's label already reads "MAC Recap". */}
           <span aria-hidden="true" className="font-label text-[11px] leading-none font-semibold tracking-[0.18em]">
             {it.app.wordmarkSuffix}
           </span>
         </p>
+        {showCaseStudies && <SidebarSearch />}
         {showNewCaseStudy && (
           <Link
             href="/case-studies/new"
             title={it.shell.nav.newCaseStudy}
             className={cn(
-              "mb-4 flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-3 font-label text-sm font-semibold text-primary-foreground shadow-primary hover:bg-primary-hover xl:justify-start",
+              "mb-8 flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-3 font-label text-sm font-semibold text-primary-foreground shadow-primary hover:bg-primary-hover xl:justify-start",
               PRESSABLE,
             )}
           >

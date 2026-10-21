@@ -79,6 +79,13 @@ describe("CaseStudiesPage", () => {
     expect(html).not.toMatch(/<td[^>]*>aaaaaaaa-0000-4000-8000-000000000001<\/td>/);
   });
 
+  it("starts the search from ?q= (the sidebar search)", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(ok([caseStudy({})]));
+    const html = renderToStaticMarkup(await CaseStudiesPage({ searchParams: Promise.resolve({ q: "lumen" }) }));
+    expect(html).toMatch(/<input[^>]*type="search"[^>]*value="lumen"/);
+  });
+
   it("queries approved cases only for account/sales/social", async () => {
     requireSurface.mockResolvedValue(shell("account_sales_social", "/library"));
     list.mockResolvedValue(ok([caseStudy({ status: "approved" })]));

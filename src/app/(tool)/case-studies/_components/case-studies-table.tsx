@@ -39,6 +39,8 @@ export interface CaseStudiesTableProps {
    * A client's page leaves it out: its header already has its own call to action.
    */
   showCreate?: boolean;
+  /** The search text to start with (the sidebar search's `?q=`). */
+  initialQuery?: string;
 }
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -147,12 +149,13 @@ export function CaseStudiesTable({
   newHref = "/case-studies/new",
   emptyAction = it.caseStudies.emptyAction,
   showCreate = false,
+  initialQuery = "",
 }: CaseStudiesTableProps) {
   const router = useRouter();
   const searchId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
-  const [input, setInput] = useState("");
-  const [query, setQuery] = useState("");
+  const [input, setInput] = useState(initialQuery);
+  const [query, setQuery] = useState(initialQuery);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [status, setStatus] = useState<StatusFilter>("all");
 
