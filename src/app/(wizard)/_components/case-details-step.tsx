@@ -45,10 +45,10 @@ export const TITLE_DEBOUNCE_MS = 300;
 /** How many live-region lines stay mounted. */
 const ANNOUNCEMENTS_KEPT = 5;
 
-/** Dettagli's look (owner's mock, 2026-10-21): grey filled fields inside white cards, white with a lime halo on focus (globals.css). */
-const FILLED = "field-filled border-transparent bg-field hover:border-transparent";
+/** Dettagli's look (owner's mock, 2026-10-21): grey filled fields inside white cards, white with a lime halo on focus (globals.css); 14 px text, as the mock. */
+const FILLED = "field-filled border-transparent bg-field py-2 text-sm hover:border-transparent";
 const INPUT = cn(FIELD, FILLED);
-const TEXT_INPUT = cn(TEXTAREA, FILLED);
+const TEXT_INPUT = cn(TEXTAREA, FILLED, "min-h-[100px]");
 
 /** One field in its own white card, headed "01 — LABEL" (the number is decorative), the field under it. */
 function FieldCard({ number, label, children }: { number: number; label: ReactNode; children: ReactNode }) {
