@@ -4,8 +4,8 @@ import { wizardHref } from "@/app/_lib/routes";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
-/** The wizard's steps, in order: Dettagli, Materiale, Genera (Story 2.17). */
-export const WIZARD_STEPS = [it.wizard.steps.details, it.wizard.steps.material, it.wizard.steps.generate] as const;
+/** The wizard's steps, in order: Materiale, Dettagli, Genera (material first, owner 2026-10-21). */
+export const WIZARD_STEPS = [it.wizard.steps.material, it.wizard.steps.details, it.wizard.steps.generate] as const;
 
 /** A wizard step number: the stepper segments 1–3. */
 export type WizardStep = 1 | 2 | 3;
@@ -81,21 +81,5 @@ export function Stepper({ current, caseId, reachable = false, steps = WIZARD_STE
         );
       })}
     </ol>
-  );
-}
-
-/** The footer's step dots: decorative, they mirror the stepper (the current one is wide). */
-export function StepDots({ current, steps = WIZARD_STEPS }: { current: WizardStep; steps?: readonly string[] }) {
-  return (
-    <div aria-hidden="true" className="flex justify-center gap-1.5">
-      {steps.map((label, index) => (
-        <span
-          key={label}
-          data-dot={index + 1}
-          data-active={index + 1 === current ? "" : undefined}
-          className={cn("h-1.5 w-1.5 rounded-full bg-border-strong", index + 1 === current && "w-5 bg-foreground")}
-        />
-      ))}
-    </div>
   );
 }

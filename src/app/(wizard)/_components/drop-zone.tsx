@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp } from "lucide-react";
+import { Upload } from "lucide-react";
 import { useId, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -85,20 +85,21 @@ export function DropZone({ accept, maxFiles, maxFileMegabytes, compact, disabled
         }}
         onDrop={onDrop}
         className={cn(
-          "cursor-pointer rounded-xl border-[1.5px] border-dashed border-border-strong bg-surface-raised text-center font-body text-[15px] text-foreground transition-[border-color,background-color] duration-200 ease-out hover:border-foreground-muted/60",
-          compact ? "p-6" : "px-6 py-12",
+          "cursor-pointer rounded-xl border border-border-strong bg-surface-control text-center font-body text-[15px] text-foreground transition-[border-color,background-color] duration-200 ease-out hover:border-foreground-muted/60",
+          compact ? "px-6 py-7" : "px-6 py-12",
           over && "border-accent bg-accent/5",
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
-        {!compact && (
-          <div
-            aria-hidden="true"
-            className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-primary text-primary-foreground"
-          >
-            <ArrowUp className="size-5" />
-          </div>
-        )}
+        <div
+          aria-hidden="true"
+          className={cn(
+            "mx-auto grid place-items-center rounded-lg bg-surface-raised text-foreground-strong shadow-control",
+            compact ? "mb-3 size-10" : "mb-4 size-12",
+          )}
+        >
+          <Upload className={compact ? "size-4" : "size-5"} />
+        </div>
         <p>
           {copy.lead} <span className="font-medium text-foreground-strong underline decoration-primary decoration-2 underline-offset-[4px]">{copy.browse}</span>
         </p>

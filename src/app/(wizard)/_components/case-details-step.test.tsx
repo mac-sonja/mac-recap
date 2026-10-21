@@ -31,8 +31,9 @@ const TORINO: ClientRef = { id: "cccccccc-0000-4000-8000-000000000002", name: "C
 const CLIENTS: ClientRef[] = [TORINO, LUMEN];
 const BUSINESS_LINES: BusinessLine[] = ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"];
 const EMPTY: DetailsForm = { context: "", solution: "", results: "" };
-const STEP_1 = `/case-studies/new?caseId=${ID}&step=1`;
-const STEP_2 = `/case-studies/new?caseId=${ID}&step=2`;
+// Dettagli is step 2 and Avanti opens step 3 Genera (material first, owner 2026-10-21).
+const DETAILS = `/case-studies/new?caseId=${ID}&step=2`;
+const GENERATE = `/case-studies/new?caseId=${ID}&step=3`;
 
 const created = (over: Partial<CaseStudy> = {}): CaseStudy => ({
   id: ID,
@@ -241,7 +242,7 @@ describe("CaseDetailsStep, a new case", () => {
     expect(avanti().hasAttribute("aria-describedby")).toBe(false);
   });
 
-  it("creates the case with trimmed values and the business line, names it in the URL, saves the texts, then opens step 2", async () => {
+  it("creates the case with trimmed values and the business line, names it in the URL, saves the texts, then opens step 3", async () => {
     createCaseStudy.mockResolvedValue({ ok: true, value: created({ businessLine: "social_media" }) });
     const user = userEvent.setup();
     renderNew();
@@ -258,9 +259,9 @@ describe("CaseDetailsStep, a new case", () => {
       locale: "it",
       businessLine: "social_media",
     });
-    expect(replaceState).toHaveBeenCalledWith(null, "", STEP_1);
+    expect(replaceState).toHaveBeenCalledWith(null, "", DETAILS);
     expect(saveDetailsField).toHaveBeenCalledExactlyOnceWith({ caseId: ID, field: "context", text: "Tre marchi" });
-    expect(push).toHaveBeenCalledExactlyOnceWith(STEP_2);
+    expect(push).toHaveBeenCalledExactlyOnceWith(GENERATE);
     expect(updateCaseStudyDetails).not.toHaveBeenCalled();
     // Stays busy while the wizard moves on.
     expect(avanti().getAttribute("aria-busy")).toBe("true");
@@ -470,7 +471,7 @@ describe("CaseDetailsStep, a new case", () => {
     fireEvent.change(textarea("Risultati"), { target: { value: "+30%" } });
     await user.click(avanti());
     expect(createCaseStudy).toHaveBeenCalledOnce();
-    expect(replaceState).toHaveBeenCalledWith(null, "", STEP_1);
+    expect(replaceState).toHaveBeenCalledWith(null, "", DETAILS);
     expect(push).not.toHaveBeenCalled();
     expect(describedText(textarea("Risultati"))).toBe("Non salvato. Modifica il testo per riprovare.");
     expect(document.activeElement).toBe(textarea("Risultati"));
@@ -483,7 +484,7 @@ describe("CaseDetailsStep, a new case", () => {
     expect(updateCaseStudyDetails).not.toHaveBeenCalled();
     expect(saveDetailsField).toHaveBeenCalledTimes(2);
     expect(saveDetailsField).toHaveBeenLastCalledWith({ caseId: ID, field: "results", text: "+30%" });
-    expect(push).toHaveBeenCalledExactlyOnceWith(STEP_2);
+    expect(push).toHaveBeenCalledExactlyOnceWith(GENERATE);
   });
 });
 
@@ -576,16 +577,16 @@ describe("CaseDetailsStep, an existing draft", () => {
     expect(screen.getByText("1 di 3 compilati")).toBeTruthy();
   });
 
-  it("Avanti with nothing changed saves nothing and goes to step 2", async () => {
+  it("Avanti with nothing changed saves nothing and goes to step 3", async () => {
     renderExisting();
     fireEvent.click(avanti());
     await flush();
     expect(updateCaseStudyDetails).not.toHaveBeenCalled();
     expect(saveDetailsField).not.toHaveBeenCalled();
-    expect(push).toHaveBeenCalledExactlyOnceWith(STEP_2);
+    expect(push).toHaveBeenCalledExactlyOnceWith(GENERATE);
   });
 
-  it("Avanti saves changed name, year and business line with the stored language unchanged (never the client), then goes to step 2", async () => {
+  it("Avanti saves changed name, year and business line with the stored language unchanged (never the client), then goes to step 3", async () => {
     updateCaseStudyDetails.mockResolvedValue({ ok: true, value: created() });
     const user = userEvent.setup();
     renderExisting({ locale: "en" });
@@ -603,7 +604,7 @@ describe("CaseDetailsStep, an existing draft", () => {
       businessLine: "web_design",
     });
     expect(createCaseStudy).not.toHaveBeenCalled();
-    expect(push).toHaveBeenCalledExactlyOnceWith(STEP_2);
+    expect(push).toHaveBeenCalledExactlyOnceWith(GENERATE);
   });
 
   it("a legacy draft without a business line keeps Avanti inactive until one is picked", async () => {
@@ -618,7 +619,7 @@ describe("CaseDetailsStep, an existing draft", () => {
     await user.click(pill("Branding"));
     await user.click(avanti());
     expect(updateCaseStudyDetails).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ caseId: ID, businessLine: "branding" }));
-    expect(push).toHaveBeenCalledExactlyOnceWith(STEP_2);
+    expect(push).toHaveBeenCalledExactlyOnceWith(GENERATE);
   });
 
   it.each([
@@ -731,14 +732,14 @@ describe("CaseDetailsStep, an existing draft", () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it("a year change that leaves the step goes on to step 2, which loads the new code", async () => {
+  it("a year change that leaves the step goes on to step 3, which loads the new code", async () => {
     updateCaseStudyDetails.mockResolvedValue({ ok: true, value: created({ year: 2025, code: "LUM-2025-02", number: 2 }) });
     const user = userEvent.setup();
     renderExisting();
     await user.clear(field("Anno"));
     await user.type(field("Anno"), "2025");
     await user.click(avanti());
-    expect(push).toHaveBeenCalledExactlyOnceWith(STEP_2);
+    expect(push).toHaveBeenCalledExactlyOnceWith(GENERATE);
     expect(refresh).not.toHaveBeenCalled();
   });
 
@@ -845,7 +846,7 @@ describe("CaseDetailsStep, an existing draft", () => {
       expect(push).not.toHaveBeenCalled();
       await act(async () => pending.resolve({ ok: true, value: { field: "context", text: "c" } }));
       await flush();
-      expect(push).toHaveBeenCalledExactlyOnceWith(STEP_2);
+      expect(push).toHaveBeenCalledExactlyOnceWith(GENERATE);
     });
 
     it("a stepper link clicked with unsaved text waits for the save, then navigates", async () => {
@@ -853,7 +854,7 @@ describe("CaseDetailsStep, an existing draft", () => {
       saveDetailsField.mockImplementationOnce(() => pending.promise);
       render(
         <>
-          <a href={`/case-studies/new?caseId=${ID}&step=2`}>Materiale</a>
+          <a href={`/case-studies/new?caseId=${ID}&step=1`}>Materiale</a>
           <CaseDetailsStep
             caseStudy={EXISTING}
             clients={[]}
@@ -876,7 +877,7 @@ describe("CaseDetailsStep, an existing draft", () => {
       expect(push).not.toHaveBeenCalled();
       await act(async () => pending.resolve({ ok: true, value: { field: "context", text: "c" } }));
       await flush();
-      expect(push).toHaveBeenCalledExactlyOnceWith(STEP_2);
+      expect(push).toHaveBeenCalledExactlyOnceWith(`/case-studies/new?caseId=${ID}&step=1`);
       expect(updateCaseStudyDetails).not.toHaveBeenCalled();
     });
 

@@ -11,6 +11,7 @@ import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { CaseDetailsStep } from "../../_components/case-details-step";
 import { MaterialStep } from "../../_components/material-step";
+import { NewCaseDialog } from "../../_components/new-case-dialog";
 import { WizardFooter, WizardFrame } from "../../_components/wizard-frame";
 
 /** The step 3 placeholder line; it is also the reason the inactive Avanti gives. */
@@ -21,21 +22,21 @@ export interface NewCaseStudyPageProps {
 }
 
 /**
- * The new-case-study wizard (Story 2.5; steps renumbered by Story 2.17:
- * 1 Dettagli · 2 Materiale · 3 Genera). Owner/designer only (`create case`).
- * Without `?caseId=` it shows step 1 Dettagli for a new case, with the client
- * picker (Story 2.12): it authorizes `list clients` (denied → the actor's landing)
- * and loads every client; a failed load throws into the error boundary. `?clientId=`
- * preselects that client when it is one of the loaded clients (Story 2.13); an
- * unknown, malformed or repeated one is ignored. With `?caseId=` it loads that case
- * server-side; an unknown, malformed or deleted id (`NOT_FOUND`) or a case that is
- * no longer a draft goes back to Case studies, and any other lookup failure throws
- * into the error boundary. The details are complete once the case has a business
- * line (cases created before 2.17 have none); its material is checked once. With
- * no `step` (or an unknown one) the wizard opens the first incomplete step:
- * Dettagli without a business line, else Materiale without a file, else Genera.
- * `step=2` needs the business line and `step=3` a file too; otherwise they redirect
- * to the first step they lack. Materiale and Genera are stepper links on the same terms.
+ * The new-case-study wizard (Story 2.5; steps reordered material first, owner
+ * 2026-10-21: 1 Materiale · 2 Dettagli · 3 Genera). Owner/designer only (`create case`).
+ * Without `?caseId=` it shows the new-case dialog over the wizard, which asks for the
+ * client only (Story 2.12's picker): it authorizes `list clients` (denied → the
+ * actor's landing) and loads every client; a failed load throws into the error
+ * boundary. `?clientId=` preselects that client when it is one of the loaded clients
+ * (Story 2.13); an unknown, malformed or repeated one is ignored. The dialog creates
+ * the draft (title *Nome progetto*, no business line) and opens Materiale.
+ * With `?caseId=` it loads that case server-side; an unknown, malformed or deleted id
+ * (`NOT_FOUND`) or a case that is no longer a draft goes back to Case studies, and
+ * any other lookup failure throws into the error boundary. The details are complete
+ * once the case has a business line; its material is checked once. With no `step`
+ * (or an unknown one) the wizard opens the first incomplete step: Materiale without a
+ * file, else Dettagli without a business line, else Genera. Materiale and Dettagli are
+ * always open; `step=3` needs both, otherwise it redirects to the first step it lacks.
  */
 export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPageProps) {
   const shell = await requireSurface("create case");
@@ -51,17 +52,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
       typeof clientId === "string" && clients.value.some((client) => client.id === clientId) ? clientId : undefined;
     return (
       <WizardFrame caseStudy={null} current={1}>
-        <CaseDetailsStep
-          caseStudy={null}
-          clients={clients.value}
-          initialClientId={initialClientId}
-          defaultYear={currentYear()}
-          yearMin={caseStudy.YEAR_MIN}
-          yearMax={caseStudy.YEAR_MAX}
-          businessLines={caseStudy.BUSINESS_LINES}
-          initialDetails={{ context: "", solution: "", results: "" }}
-          maxChars={material.MAX_FORM_FIELD_CHARS}
-        />
+        <NewCaseDialog clients={clients.value} initialClientId={initialClientId} year={currentYear()} />
       </WizardFrame>
     );
   }
@@ -75,24 +66,24 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   // The wizard edits drafts only; any other status goes back to Case studies.
   if (found.value.status !== "draft") redirect("/case-studies");
   const { id, code, name, status, year, locale, businessLine, client } = found.value;
-  const wizardCase = { id, code, name, status };
+  const wizardCase = { id, code, name, status, clientName: client.name };
 
-  // The opening step, the gates on steps 2 and 3, and the stepper links.
+  // The opening step, the gate on step 3, and the stepper links.
   // A failed material check counts as no material.
   const detailsComplete = businessLine !== null;
   const has = await material.hasMaterial(id);
   const hasMaterial = has.ok && has.value;
-  const firstIncomplete = !detailsComplete ? 1 : !hasMaterial ? 2 : 3;
-  const reachable = (target: 1 | 2 | 3) => target === 1 || (target === 2 ? detailsComplete : detailsComplete && hasMaterial);
+  const firstIncomplete = !hasMaterial ? 1 : !detailsComplete ? 2 : 3;
+  const reachable = (target: 1 | 2 | 3) => target !== 3 || (detailsComplete && hasMaterial);
   const requested = step === "1" ? 1 : step === "2" ? 2 : step === "3" ? 3 : null;
   if (requested === null) redirect(wizardHref(id, firstIncomplete));
   if (!reachable(requested)) redirect(wizardHref(id, firstIncomplete));
 
-  if (requested === 1) {
+  if (requested === 2) {
     const form = await material.getDetailsForm({ caseId: id });
     if (!form.ok) throw new Error(`Details could not be loaded: ${form.error.code}`);
     return (
-      <WizardFrame caseStudy={wizardCase} current={1} reachable={reachable}>
+      <WizardFrame caseStudy={wizardCase} current={2} reachable={reachable}>
         <CaseDetailsStep
           key={id}
           caseStudy={{ id, code, name, year, locale, businessLine, client }}
@@ -117,7 +108,6 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
         </p>
         {/* Step 3 content arrives with Epic 3. */}
         <WizardFooter
-          current={3}
           action={
             <button
               type="button"
@@ -137,7 +127,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   if (!assets.ok) throw new Error(`Material could not be loaded: ${assets.error.code}`);
 
   return (
-    <WizardFrame caseStudy={wizardCase} current={2} reachable={reachable}>
+    <WizardFrame caseStudy={wizardCase} current={1} reachable={reachable}>
       <MaterialStep
         caseId={id}
         initialAssets={assets.value}

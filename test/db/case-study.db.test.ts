@@ -226,7 +226,6 @@ describe("invalid input writes nothing", () => {
     ["year below 1900", { year: 1899 }, ["year"]],
     ["year above 2100", { year: 2101 }, ["year"]],
     ["unknown locale", { locale: "de" }, ["locale"]],
-    ["no business line", { businessLine: undefined }, ["businessLine"]],
     ["an unknown business line", { businessLine: "moda" }, ["businessLine"]],
   ])("%s → INVALID_INPUT naming %j", async (_label, over, fields) => {
     const { create } = await loadCaseStudy();
@@ -238,6 +237,13 @@ describe("invalid input writes nothing", () => {
       expect((result.error.details as { fields: string[] }).fields).toEqual(fields);
     }
     expect(await counts()).toEqual(before);
+  });
+
+  it("creates a case without a business line (the new-case dialog: client only)", async () => {
+    const { create } = await loadCaseStudy();
+    const result = await create(await devActor(), { name: "R", clientId: acme.id, year: 2026 });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.businessLine).toBeNull();
   });
 
   const INSERT = "insert into public.case_study (name, client_id, number, code, year, locale, created_by)";

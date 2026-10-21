@@ -176,7 +176,7 @@ describe("MaterialStep: empty", () => {
 });
 
 describe("MaterialStep: uploads", () => {
-  it("uploads 3 files in parallel with per-file progress, then lists them; count 3 / 20; Avanti goes to step 2", async () => {
+  it("uploads 3 files in parallel with per-file progress, then lists them; count 3 / 20; Avanti goes to step 2 Dettagli", async () => {
     const gates = [deferred(), deferred(), deferred()];
     let call = 0;
     uploadFile.mockImplementation((_target, _file, onProgress) => {
@@ -216,7 +216,7 @@ describe("MaterialStep: uploads", () => {
     expect(screen.getByText("3 / 20 file")).toBeTruthy();
     const link = avanti();
     expect(link.tagName).toBe("A");
-    expect(link.getAttribute("href")).toBe(`/case-studies/new?caseId=${CASE_ID}&step=3`);
+    expect(link.getAttribute("href")).toBe(`/case-studies/new?caseId=${CASE_ID}&step=2`);
     expect(screen.queryByText(/I preferiti sono facoltativi/)).toBeNull();
     expect(liveRegion().textContent).toContain("key.png caricato.");
     // The image's thumbnail is refreshed from the listing.

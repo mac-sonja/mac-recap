@@ -34,7 +34,6 @@ const TRANSITION_REFUSALS: Refusals = {
 /** `create_case_study` raises these (AD-21); nothing is written then. */
 const CREATE_REFUSALS: Refusals = {
   CLIENT_NOT_FOUND: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
-  INVALID_INPUT: { code: "INVALID_INPUT", message: "businessLine: Required." },
 };
 /** `update_case_study_details` raises these (Story 2.17); nothing is written then. */
 const UPDATE_DETAILS_REFUSALS: Refusals = {
@@ -124,12 +123,12 @@ export function createSupabaseCaseStudyRepository(
         p_client_id: input.clientId,
         p_year: input.year,
         p_locale: input.locale,
-        p_business_line: input.businessLine,
+        // The function takes null (a case created before its details); the generated types can't say so.
+        p_business_line: input.businessLine as string,
         p_actor_id: actorId,
       });
       if (error) {
         const refused = refusalOf(error, CREATE_REFUSALS);
-        if (refused?.code === "INVALID_INPUT") return err({ ...refused, details: { fields: ["businessLine"] } });
         if (refused) return err({ ...refused, details: { clientId: input.clientId } });
         if (isBusinessLineCheck(error)) return businessLineRefused();
         log.error(`case_study create failed: ${error.code}`, { actorId });
