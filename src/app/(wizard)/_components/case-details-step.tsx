@@ -45,8 +45,8 @@ export const TITLE_DEBOUNCE_MS = 300;
 /** How many live-region lines stay mounted. */
 const ANNOUNCEMENTS_KEPT = 5;
 
-/** Dettagli's look (owner's mock, 2026-10-21): grey filled fields inside white cards. */
-const FILLED = "border-transparent bg-surface-control hover:border-transparent focus-visible:bg-surface-raised";
+/** Dettagli's look (owner's mock, 2026-10-21): grey filled fields inside white cards, white with a lime halo on focus (globals.css). */
+const FILLED = "field-filled border-transparent bg-field hover:border-transparent";
 const INPUT = cn(FIELD, FILLED);
 const TEXT_INPUT = cn(TEXTAREA, FILLED);
 

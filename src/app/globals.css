@@ -22,6 +22,8 @@
   --color-surface-sidebar: #f9f8f5;
   --color-surface-raised: #ffffff;
   --color-surface-control: #ebeae5;
+  /* A filled field inside a white card (wizard, owner's mock 2026-10-21). */
+  --color-field: #f5f5f4;
   --color-surface-hover: #f1f0ec;
   --color-surface-selected: #e5e4de;
   --color-border: #e6e5e0;
@@ -163,6 +165,7 @@
     --color-surface-sidebar: #0a0a0a;
     --color-surface-raised: #141414;
     --color-surface-control: #1e1e1e;
+    --color-field: #1e1e1e;
     --color-surface-hover: #1a1a1a;
     --color-surface-selected: #282828;
     --color-border: #232323;
@@ -204,6 +207,7 @@
       --color-surface-sidebar: #0a0a0a;
       --color-surface-raised: #141414;
       --color-surface-control: #1e1e1e;
+      --color-field: #1e1e1e;
       --color-surface-hover: #1a1a1a;
       --color-surface-selected: #282828;
       --color-border: #232323;
@@ -306,4 +310,15 @@
   outline-offset: 0;
   border-color: var(--color-focus-ring);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-focus-ring) 22%, transparent);
+}
+
+/*
+ * The wizard's filled fields (`FILLED_FIELD`): focus turns them white with a grey
+ * hairline and a soft lime halo (owner's mock, 2026-10-21) instead of the blue ring.
+ * After the rule above, with one more class, so it wins.
+ */
+.field-filled:is(input, textarea, select):focus-visible {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-raised);
+  box-shadow: 0 0 0 4px var(--color-primary-tint);
 }
