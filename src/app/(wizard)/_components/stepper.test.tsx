@@ -12,7 +12,8 @@ describe("Stepper", () => {
     const html = renderToStaticMarkup(<Stepper current={1} />);
     expect(html).toContain('<ol aria-label="Passaggi"');
     const items = segments(html);
-    expect(items.map((m) => m[4].replace(/<[^>]+>[^<]*<\/[^>]+>/g, "").replace(/<\/?span[^>]*>/g, ""))).toEqual([
+    // Labels only: no step numbers (owner, 2026-10-21).
+    expect(items.map((m) => m[4].replace(/<[^>]+>/g, ""))).toEqual([
       "Dettagli",
       "Materiale",
       "Genera",
@@ -33,7 +34,7 @@ describe("Stepper", () => {
     expect(second[2]).toBe(' aria-current="step"');
     expect(second[3]).toContain("bg-surface-raised");
     expect(second[3]).toContain("shadow-control");
-    expect(second[4]).toContain('<span aria-hidden="true" class="font-mono text-xs">2</span>');
+    expect(second[4].replace(/<[^>]+>/g, "")).toBe("Materiale");
     expect(third[3]).toContain("text-foreground-muted");
     expect(third[3]).not.toMatch(/\btext-foreground\b(?!-)/);
     // No case: nothing is a link.

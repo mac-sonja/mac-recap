@@ -4,7 +4,7 @@ import { wizardHref } from "@/app/_lib/routes";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
-/** The wizard's steps, in order: 1 Dettagli, 2 Materiale, 3 Genera (Story 2.17). */
+/** The wizard's steps, in order: Dettagli, Materiale, Genera (Story 2.17). */
 export const WIZARD_STEPS = [it.wizard.steps.details, it.wizard.steps.material, it.wizard.steps.generate] as const;
 
 /** A wizard step number: the stepper segments 1–3. */
@@ -32,7 +32,8 @@ export interface StepperProps {
 /**
  * The segmented stepper (DESIGN.md segmented control): a grey track with a 3px
  * inset; the current step is `surface-selected` with `aria-current="step"`; steps
- * before it are done, marked ✓ in `foreground`; the rest are muted. Once a case
+ * before it are done, marked ✓ in `foreground`; the rest are muted. Labels only, no
+ * step numbers (owner, 2026-10-21). Once a case
  * exists, a step other than the current one is a link to it when it is done, when
  * it is step 1, or when `reachable` allows it; links read "vai a {step}" plus its
  * state to screen readers.
@@ -49,13 +50,7 @@ export function Stepper({ current, caseId, reachable = false, steps = WIZARD_STE
         const isLink = linkTo !== undefined && !isCurrent && (isDone || step === 1 || canReach);
         const content = (
           <>
-            {isDone ? (
-              <Check aria-hidden="true" className="size-3.5" />
-            ) : (
-              <span aria-hidden="true" className="font-mono text-xs">
-                {step}
-              </span>
-            )}
+            {isDone && <Check aria-hidden="true" className="size-3.5" />}
             {isLink && <span className="sr-only">{`${it.wizard.stepper.goTo} `}</span>}
             {label}
             {isDone && <span className="sr-only">{`, ${it.wizard.stepper.done}`}</span>}
