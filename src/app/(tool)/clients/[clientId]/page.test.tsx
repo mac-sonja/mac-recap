@@ -51,7 +51,7 @@ const caseStudy = (over: Partial<CaseStudy> = {}): CaseStudy => ({
   client: { id: LUMEN.id, name: LUMEN.name, code: LUMEN.code },
   year: 2026,
   locale: "it",
-  businessLine: "branding",
+  businessLines: ["branding"],
   status: "draft",
   projectOrderRef: null,
   headRevisionId: null,

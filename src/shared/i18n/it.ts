@@ -279,8 +279,8 @@ export const it = {
         solution: "Cosa avete fatto, e con quale idea?",
         results: "Cosa è cambiato dopo? I numeri, se li hai, fanno la differenza.",
       },
-      /** `{n}` filled fields of 3. */
-      counter: "{n} di 3 compilati",
+      /** `{n}` filled fields of `{total}`. */
+      counter: "{n} di {total} compilati",
       errors: {
         saveFailed: "Non salvato. Modifica il testo per riprovare.",
         /** `{max}` is the per-field limit in characters. */

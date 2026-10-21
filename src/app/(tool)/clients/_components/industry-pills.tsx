@@ -14,8 +14,6 @@ export const PILL_GAP = "gap-2";
 const PILL_READ_ONLY =
   "inline-flex items-center rounded-full bg-surface-control px-2.5 py-1 font-label text-xs font-medium text-foreground";
 const PILL_PRESSED = "aria-pressed:border-foreground-strong aria-pressed:bg-foreground-strong aria-pressed:text-surface";
-/** The same selected look for a single-select pill (`role="radio"`, `aria-checked`): the case business line. */
-export const PILL_CHECKED = "aria-checked:border-foreground-strong aria-checked:bg-foreground-strong aria-checked:text-surface";
 
 export interface IndustryPillsProps {
   /** `CLIENT_INDUSTRIES`, in display order (the module's index is server-only). */

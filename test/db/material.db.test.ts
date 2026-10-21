@@ -79,7 +79,7 @@ async function devActor() {
 
 async function createCase() {
   const { create } = await loadCaseStudy();
-  const result = await create(await devActor(), { name: "Material", clientId, year: 2026, businessLine: "branding" });
+  const result = await create(await devActor(), { name: "Material", clientId, year: 2026, businessLines: ["branding"] });
   if (!result.ok) throw new Error(`setup create failed: ${result.error.code}`);
   return result.value;
 }

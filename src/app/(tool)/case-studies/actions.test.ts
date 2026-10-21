@@ -70,7 +70,7 @@ const created: CaseStudy = {
   client: { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
   year: 2026,
   locale: "it",
-  businessLine: "branding",
+  businessLines: ["branding"],
   status: "draft",
   projectOrderRef: null,
   headRevisionId: null,
@@ -82,7 +82,7 @@ const created: CaseStudy = {
   deletedAt: null,
 };
 
-const input = { name: "Rebrand", clientId: "cccccccc-0000-4000-8000-000000000001", year: 2026, businessLine: "branding" };
+const input = { name: "Rebrand", clientId: "cccccccc-0000-4000-8000-000000000001", year: 2026, businessLines: ["branding"] };
 
 beforeEach(() => {
   for (const fn of [
@@ -101,7 +101,7 @@ beforeEach(() => {
 });
 
 describe("updateCaseStudyDetails", () => {
-  const details = { caseId: created.id, name: "Rebrand 2", year: 2025, locale: "en", businessLine: "video" };
+  const details = { caseId: created.id, name: "Rebrand 2", year: 2025, locale: "en", businessLines: ["video"] };
 
   it("saves the details for an owner/designer", async () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
@@ -118,7 +118,7 @@ describe("updateCaseStudyDetails", () => {
   });
 
   it.each([
-    ["INVALID_INPUT", 400, { fields: ["businessLine"] }],
+    ["INVALID_INPUT", 400, { fields: ["businessLines"] }],
     ["NOT_FOUND", 404, { id: created.id }],
     ["STALE_STATUS", 409, { id: created.id }],
   ] as const)("maps %s to %i", async (code, status, details) => {
@@ -128,7 +128,7 @@ describe("updateCaseStudyDetails", () => {
     expect(result).toEqual({
       ok: false,
       status,
-      error: { code, message: "m", ...(code === "INVALID_INPUT" ? { fields: ["businessLine"] } : {}) },
+      error: { code, message: "m", ...(code === "INVALID_INPUT" ? { fields: ["businessLines"] } : {}) },
     });
   });
 });

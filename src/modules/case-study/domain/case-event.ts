@@ -11,9 +11,10 @@ export const CASE_CREATED = "case_created";
 export const CASE_DELETED = "case_deleted";
 
 /**
- * The event written when a draft's name, year, language or business line change
- * (Story 2.17), in the same transaction; `data` is `{ name, year, locale, businessLine }`, plus
- * `{ previousYear, previousCode, code }` when a year change renumbered the draft.
+ * The event written when a draft's name, client, year, language or business lines change
+ * (Story 2.17; client and multi-select 2026-10-21), in the same transaction; `data` is
+ * `{ name, clientId, year, locale, businessLines }`, plus `previousClientId` on a client
+ * change and `{ previousYear, previousCode, code }` when the draft was renumbered.
  */
 export const CASE_DETAILS_UPDATED = "case_details_updated";
 

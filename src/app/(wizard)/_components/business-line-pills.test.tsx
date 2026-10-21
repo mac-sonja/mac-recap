@@ -8,87 +8,79 @@ import { BusinessLinePills } from "./business-line-pills";
 
 const OPTIONS: BusinessLine[] = ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"];
 
-function Harness({ initial = null, onSelect }: { initial?: BusinessLine | null; onSelect?: (value: BusinessLine) => void }) {
-  const [selected, setSelected] = useState<BusinessLine | null>(initial);
+function Harness({ initial = [], disabled, onToggle }: { initial?: BusinessLine[]; disabled?: boolean; onToggle?: (value: BusinessLine) => void }) {
+  const [selected, setSelected] = useState<readonly BusinessLine[]>(initial);
   return (
     <>
-      <span id="label">Area</span>
+      <span id="label">Servizi</span>
       <BusinessLinePills
         options={OPTIONS}
         selected={selected}
-        onSelect={(value) => {
-          onSelect?.(value);
-          setSelected(value);
+        onToggle={(value) => {
+          onToggle?.(value);
+          setSelected((current) => (current.includes(value) ? current.filter((line) => line !== value) : [...current, value]));
         }}
         labelledBy="label"
+        disabled={disabled}
       />
     </>
   );
 }
 
-const radios = () => screen.getAllByRole("radio");
-const checked = () => radios().filter((r) => r.getAttribute("aria-checked") === "true").map((r) => r.textContent);
+const pills = () => screen.getAllByRole("button");
+const pressed = () => pills().filter((p) => p.getAttribute("aria-pressed") === "true").map((p) => p.textContent);
 
 afterEach(cleanup);
 
 describe("BusinessLinePills", () => {
   it("uses grey filled chips (owner's mock, 2026-10-21), about 8px apart", () => {
     render(<Harness />);
-    for (const radio of radios()) {
-      expect(radio.className.split(" ")).toEqual(expect.arrayContaining(["min-h-9", "bg-surface-control", "border-transparent", "text-[13px]"]));
+    for (const pill of pills()) {
+      expect(pill.className.split(" ")).toEqual(expect.arrayContaining(["min-h-9", "bg-surface-control", "border-transparent", "text-[13px]"]));
     }
-    expect(screen.getByRole("radiogroup").className).toBe("flex flex-wrap gap-2");
+    expect(screen.getByRole("group").className).toBe("flex flex-wrap gap-2");
   });
 
-  it("is a named radiogroup of the seven business lines, none checked, the first in the tab order", () => {
+  it("is a named group of the seven Servizi as toggle buttons, none pressed, each in the tab order", () => {
     render(<Harness />);
-    expect(screen.getByRole("radiogroup", { name: "Area" })).toBeTruthy();
-    expect(radios().map((r) => r.textContent)).toEqual(["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi", "Sviluppo"]);
-    expect(checked()).toEqual([]);
-    expect(radios().map((r) => r.tabIndex)).toEqual([0, -1, -1, -1, -1, -1, -1]);
-    // The client industry pill look, with the checked state.
-    expect(radios()[0].className).toContain("rounded-full");
-    expect(radios()[0].className).toContain("aria-checked:bg-foreground-strong");
+    expect(screen.getByRole("group", { name: "Servizi" })).toBeTruthy();
+    expect(pills().map((p) => p.textContent)).toEqual(["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi", "Sviluppo"]);
+    expect(pressed()).toEqual([]);
+    expect(pills().every((p) => p.tabIndex === 0)).toBe(true);
   });
 
-  it("picks one on click (single choice); the picked one becomes the tab stop", async () => {
+  it("switches several on (multi-select) and one off again", async () => {
+    const user = userEvent.setup();
+    render(<Harness initial={["video"]} />);
+    expect(pressed()).toEqual(["Video"]);
+    await user.click(screen.getByRole("button", { name: "Branding" }));
+    await user.click(screen.getByRole("button", { name: "Eventi" }));
+    expect(pressed()).toEqual(["Branding", "Video", "Eventi"]);
+    await user.click(screen.getByRole("button", { name: "Video" }));
+    expect(pressed()).toEqual(["Branding", "Eventi"]);
+  });
+
+  it("switches with Space and Enter from the keyboard", async () => {
     const user = userEvent.setup();
     render(<Harness />);
-    await user.click(screen.getByRole("radio", { name: "Video" }));
-    await user.click(screen.getByRole("radio", { name: "Eventi" }));
-    expect(checked()).toEqual(["Eventi"]);
-    expect(radios().map((r) => r.tabIndex)).toEqual([-1, -1, -1, -1, -1, 0, -1]);
+    await user.tab();
+    await user.keyboard(" ");
+    await user.tab();
+    await user.keyboard("{Enter}");
+    expect(pressed()).toEqual(["Branding", "Social media"]);
   });
 
-  it("moves and picks with the arrow keys, wrapping, and with Home and End", async () => {
+  it("switches nothing while disabled", async () => {
+    const onToggle = vi.fn();
     const user = userEvent.setup();
-    render(<Harness initial="branding" />);
-    radios()[0].focus();
-    await user.keyboard("{ArrowRight}");
-    expect(checked()).toEqual(["Social media"]);
-    expect(document.activeElement).toBe(radios()[1]);
-    await user.keyboard("{ArrowUp}{ArrowUp}");
-    expect(checked()).toEqual(["Sviluppo"]);
-    await user.keyboard("{ArrowDown}");
-    expect(checked()).toEqual(["Branding"]);
-    await user.keyboard("{End}");
-    expect(checked()).toEqual(["Sviluppo"]);
-    await user.keyboard("{Home}");
-    expect(checked()).toEqual(["Branding"]);
-  });
-
-  it("picks nothing while disabled", async () => {
-    const onSelect = vi.fn();
-    const user = userEvent.setup();
-    render(<BusinessLinePills options={OPTIONS} selected={null} onSelect={onSelect} labelledBy="x" disabled />);
-    await user.click(screen.getByRole("radio", { name: "Video" }));
-    expect(onSelect).not.toHaveBeenCalled();
-    expect(radios().every((r) => r.getAttribute("aria-disabled") === "true")).toBe(true);
-    expect(radios()[0].className).toContain("aria-disabled:opacity-60");
+    render(<Harness disabled onToggle={onToggle} />);
+    await user.click(screen.getByRole("button", { name: "Video" }));
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(pills().every((p) => p.getAttribute("aria-disabled") === "true")).toBe(true);
   });
 
   it("has no aria-disabled while enabled", () => {
     render(<Harness />);
-    expect(radios().some((r) => r.hasAttribute("aria-disabled"))).toBe(false);
+    expect(pills().some((p) => p.hasAttribute("aria-disabled"))).toBe(false);
   });
 });

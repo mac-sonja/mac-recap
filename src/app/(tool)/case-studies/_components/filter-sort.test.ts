@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  businessLineLabel,
   DEFAULT_SORT,
   filterRows,
   nextSort,
@@ -15,18 +16,30 @@ const row = (over: Partial<CaseStudyRow> & Pick<CaseStudyRow, "id">): CaseStudyR
   clientCode: "ACM",
   year: 2026,
   status: "draft",
-  businessLine: null,
+  businessLines: [],
   updatedAt: "2026-10-01T10:00:00+00:00",
   updatedLabel: "01/10/2026, 12:00",
   ...over,
 });
 
 const rows: CaseStudyRow[] = [
-  row({ id: "aaaaaaaa-0000-4000-8000-000000000001", code: "CIT-2024-10", name: "Zeta", clientName: "Città di Roma", clientCode: "CIT", year: 2024, status: "approved", businessLine: "video", updatedAt: "2026-10-02T10:00:00+00:00" }),
-  row({ id: "bbbbbbbb-0000-4000-8000-000000000002", code: "ACM-2026-01", name: "alfa", clientName: "Acme", clientCode: "ACM", year: 2026, status: "draft", businessLine: "social_media", updatedAt: "2026-10-12T10:00:00.123456+00:00" }),
+  row({ id: "aaaaaaaa-0000-4000-8000-000000000001", code: "CIT-2024-10", name: "Zeta", clientName: "Città di Roma", clientCode: "CIT", year: 2024, status: "approved", businessLines: ["video"], updatedAt: "2026-10-02T10:00:00+00:00" }),
+  row({ id: "bbbbbbbb-0000-4000-8000-000000000002", code: "ACM-2026-01", name: "alfa", clientName: "Acme", clientCode: "ACM", year: 2026, status: "draft", businessLines: ["social_media"], updatedAt: "2026-10-12T10:00:00.123456+00:00" }),
   row({ id: "cccccccc-0000-4000-8000-000000000003", code: "CIT-2024-9", name: "Émile", clientName: "Beta", clientCode: "BET", year: 2025, status: "in_review", updatedAt: "2026-10-05T10:00:00+00:00" }),
 ];
 const ids = (list: CaseStudyRow[]) => list.map((r) => r.id.slice(0, 1));
+
+describe("businessLineLabel (Servizi, multi-select)", () => {
+  it("joins the labels in display order, and is empty without any", () => {
+    expect(businessLineLabel({ businessLines: ["branding", "eventi"] })).toBe("Branding, Eventi");
+    expect(businessLineLabel({ businessLines: [] })).toBe("");
+  });
+
+  it("lets the search find a case by any of its Servizi", () => {
+    const both = row({ id: "dddddddd-0000-4000-8000-000000000004", businessLines: ["branding", "eventi"] });
+    expect(filterRows([both], "eventi")).toEqual([both]);
+  });
+});
 
 describe("normalizeForSearch", () => {
   it("strips diacritics and lower-cases", () => {

@@ -22,13 +22,16 @@ import { useLiveWizardTitle } from "./wizard-title";
 
 const copy = it.wizard.details;
 
-/** The details-form fields in `FORM_FIELDS` order (the material module's index is server-only). */
-const TEXT_FIELDS = ["context", "solution", "results"] as const satisfies readonly FormField[];
+/**
+ * The details-form fields shown, in `FORM_FIELDS` order (the material module's index is
+ * server-only). Risultati is not asked any more (owner, 2026-10-21); what was saved stays.
+ */
+const TEXT_FIELDS = ["context", "solution"] as const satisfies readonly FormField[];
 
 /** The fields saved on **Avanti**, named as the server's `INVALID_INPUT` names them. */
-type Field = "name" | "clientId" | "year" | "businessLine";
+type Field = "name" | "clientId" | "year" | "businessLines";
 type FieldErrors = Partial<Record<Field, string>>;
-const FIELDS: readonly Field[] = ["name", "clientId", "year", "businessLine"];
+const FIELDS: readonly Field[] = ["name", "clientId", "year", "businessLines"];
 
 /**
  * A new case's narrative language. The Lingua field is gone (Story 2.18): multilingual
@@ -71,7 +74,7 @@ interface Info {
   clientId: string;
   year: number;
   locale: Locale;
-  businessLine: BusinessLine | null;
+  businessLines: readonly BusinessLine[];
 }
 
 const sameInfo = (a: Info | null, b: Info) =>
@@ -80,7 +83,7 @@ const sameInfo = (a: Info | null, b: Info) =>
   a.clientId === b.clientId &&
   a.year === b.year &&
   a.locale === b.locale &&
-  a.businessLine === b.businessLine;
+  a.businessLines.join() === b.businessLines.join();
 
 /** The case being edited, as the page loaded it. */
 export interface CaseDetailsCase {
@@ -91,7 +94,7 @@ export interface CaseDetailsCase {
   year: number;
   locale: Locale;
   /** Null for a case created before Story 2.17: **Avanti** then needs one. */
-  businessLine: BusinessLine | null;
+  businessLines: readonly BusinessLine[];
   client: ClientRef;
 }
 
@@ -162,7 +165,7 @@ export function CaseDetailsStep({
   defaultYear,
   yearMin,
   yearMax,
-  businessLines,
+  businessLines: businessLineOptions,
   initialDetails,
   maxChars,
 }: CaseDetailsStepProps) {
@@ -172,7 +175,7 @@ export function CaseDetailsStep({
     name: `${baseId}-name`,
     clientId: `${baseId}-client`,
     year: `${baseId}-year`,
-    businessLine: `${baseId}-business-line`,
+    businessLines: `${baseId}-business-lines`,
     noClients: `${baseId}-no-clients`,
     reason: `${baseId}-reason`,
   };
@@ -187,7 +190,7 @@ export function CaseDetailsStep({
   const savedInfo = useRef<Info | null>(
     caseStudy === null
       ? null
-      : { name: caseStudy.name, clientId: caseStudy.client.id, year: caseStudy.year, locale: caseStudy.locale, businessLine: caseStudy.businessLine },
+      : { name: caseStudy.name, clientId: caseStudy.client.id, year: caseStudy.year, locale: caseStudy.locale, businessLines: caseStudy.businessLines },
   );
   const busy = useRef(false);
   const unmounted = useRef(false);
@@ -203,7 +206,7 @@ export function CaseDetailsStep({
   const [year, setYear] = useState(String(caseStudy?.year ?? defaultYear));
   // Not editable (Story 2.18): sent back as stored, so a save never changes it.
   const locale: Locale = caseStudy?.locale ?? NEW_CASE_LOCALE;
-  const [businessLine, setBusinessLine] = useState<BusinessLine | null>(caseStudy?.businessLine ?? null);
+  const [businessLines, setBusinessLines] = useState<readonly BusinessLine[]>(caseStudy?.businessLines ?? []);
   /** The name the large title shows: follows Nome on blur, or once typing pauses. */
   const [titleName, setTitleName] = useState(name.trim());
   useLiveWizardTitle(titleName);
@@ -236,7 +239,7 @@ export function CaseDetailsStep({
   }
 
   const parsedYear = () => (/^\d+$/.test(year.trim()) ? Number(year.trim()) : Number.NaN);
-  const currentInfo = (): Info => ({ name: name.trim(), clientId, year: parsedYear(), locale, businessLine });
+  const currentInfo = (): Info => ({ name: name.trim(), clientId, year: parsedYear(), locale, businessLines });
   const yearValid = (value: number) => Number.isInteger(value) && value >= yearMin && value <= yearMax;
   const initialClient = useRef(clientId);
 
@@ -244,7 +247,7 @@ export function CaseDetailsStep({
   const hasUnsavedNewCase = () =>
     caseRef.current === null &&
     (name.trim() !== "" ||
-      businessLine !== null ||
+      businessLines.length > 0 ||
       clientId !== initialClient.current ||
       year !== String(defaultYear) ||
       TEXT_FIELDS.some((field) => texts.current()[field] !== ""));
@@ -299,14 +302,14 @@ export function CaseDetailsStep({
     name: it.wizard.errors.name,
     clientId: it.wizard.errors.client,
     year: fill(it.wizard.errors.year, { min: yearMin, max: yearMax }),
-    businessLine: it.wizard.errors.businessLine,
+    businessLines: it.wizard.errors.businessLine,
   };
 
   function show(next: FieldErrors) {
     // Commit the messages (aria-invalid, aria-describedby) before focus moves, so they are announced.
     flushSync(() => setErrors(next));
     const first = FIELDS.find((field) => next[field] !== undefined);
-    if (first === "businessLine") pillsRef.current?.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
+    if (first === "businessLines") pillsRef.current?.querySelector<HTMLElement>("button")?.focus();
     else if (first !== undefined) document.getElementById(ids[first])?.focus();
   }
 
@@ -326,7 +329,7 @@ export function CaseDetailsStep({
     // With no clients there is no field to name: the note already says why.
     if (clientId === "" && hasClients) missing.clientId = messageFor.clientId;
     if (year.trim() === "") missing.year = messageFor.year;
-    if (businessLine === null) missing.businessLine = messageFor.businessLine;
+    if (businessLines.length === 0) missing.businessLines = messageFor.businessLines;
     return missing;
   }
 
@@ -387,8 +390,8 @@ export function CaseDetailsStep({
       let id = caseRef.current;
       if (id === null) {
         // 1. A new case: create it with its code and business line.
-        if (info.businessLine === null) return;
-        const created = await createCaseStudy({ ...info, businessLine: info.businessLine, clientId });
+        if (info.businessLines.length === 0) return;
+        const created = await createCaseStudy({ ...info, clientId });
         // Left meanwhile: the URL now belongs to another page.
         if (unmounted.current) return;
         if (!created.ok) {
@@ -457,7 +460,7 @@ export function CaseDetailsStep({
     ...(clientId === "" ? [it.wizard.fields.client] : []),
     // Empty or outside the accepted years: pressing Avanti then names the range on the field.
     ...(!yearValid(parsedYear()) ? [it.wizard.fields.year] : []),
-    ...(businessLine === null ? [it.wizard.fields.businessLine] : []),
+    ...(businessLines.length === 0 ? [it.wizard.fields.businessLine] : []),
   ];
   const ready = missingLabels.length === 0 && hasClients;
   const values = texts.values;
@@ -474,7 +477,7 @@ export function CaseDetailsStep({
   const reasonStart = !hasClients ? undefined : !ready ? (
     <span id={ids.reason}>{fill(it.wizard.nextReason, { fields: missingLabels.join(it.wizard.listSeparator) })}</span>
   ) : (
-    <span className="font-mono">{fill(copy.counter, { n: filled })}</span>
+    <span className="font-mono">{fill(copy.counter, { n: filled, total: TEXT_FIELDS.length })}</span>
   );
 
   return (
@@ -580,7 +583,7 @@ export function CaseDetailsStep({
         <FieldCard number={4}
           label={
             <RequiredLabel>
-              <span id={ids.businessLine} className={CARD_LABEL}>
+              <span id={ids.businessLines} className={CARD_LABEL}>
                 {it.wizard.fields.businessLine}
               </span>
             </RequiredLabel>
@@ -588,19 +591,22 @@ export function CaseDetailsStep({
         >
           <div ref={pillsRef}>
             <BusinessLinePills
-              options={businessLines}
-              selected={businessLine}
-              onSelect={(picked) => {
-                setBusinessLine(picked);
-                clearError("businessLine");
+              options={businessLineOptions}
+              selected={businessLines}
+              onToggle={(line) => {
+                // Kept in display order, so an unchanged choice compares equal to the saved one.
+                setBusinessLines((current) =>
+                  businessLineOptions.filter((option) => (option === line ? !current.includes(option) : current.includes(option))),
+                );
+                clearError("businessLines");
               }}
-              labelledBy={ids.businessLine}
-              describedBy={describedBy(errorOf("businessLine"))}
-              invalid={errors.businessLine !== undefined}
+              labelledBy={ids.businessLines}
+              describedBy={describedBy(errorOf("businessLines"))}
+              invalid={errors.businessLines !== undefined}
               disabled={pending}
             />
           </div>
-          {fieldError("businessLine")}
+          {fieldError("businessLines")}
         </FieldCard>
       </div>
 

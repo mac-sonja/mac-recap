@@ -174,7 +174,7 @@ describe("wizard details copy", () => {
       solution: "Cosa avete fatto, e con quale idea?",
       results: "Cosa è cambiato dopo? I numeri, se li hai, fanno la differenza.",
     });
-    expect(fill(t("wizard.details.counter"), { n: 2 })).toBe("2 di 3 compilati");
+    expect(fill(t("wizard.details.counter"), { n: 2, total: 2 })).toBe("2 di 2 compilati");
     expect(t("wizard.details.errors.saveFailed")).toBe("Non salvato. Modifica il testo per riprovare.");
     expect(fill(t("wizard.details.errors.tooLong"), { max: 5000 })).toBe("Al massimo 5000 caratteri.");
   });

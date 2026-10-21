@@ -31,9 +31,10 @@ export function isClientIndustry(value: unknown): value is ClientIndustry {
 }
 
 /**
- * The fixed business line list (owner, 2026-10-20; Sviluppo added at the 2.18 review), in display order. The
- * `case_study_business_line_check` lists exactly these; the Italian labels live in
- * `it.businessLines`. Every new case has one; cases created before Story 2.17 have none.
+ * The fixed business line list ("Servizi"; owner, 2026-10-20; Sviluppo added at the 2.18 review), in display
+ * order. The `case_study_business_lines_check` lists exactly these; the Italian labels live in
+ * `it.businessLines`. A case has any number of them (multi-select, owner 2026-10-21); a new
+ * one has none until Dettagli.
  */
 export const BUSINESS_LINES = ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"] as const;
 export type BusinessLine = (typeof BUSINESS_LINES)[number];
@@ -42,6 +43,16 @@ export const businessLineSchema = z.enum(BUSINESS_LINES);
 export function isBusinessLine(value: unknown): value is BusinessLine {
   return typeof value === "string" && (BUSINESS_LINES as readonly string[]).includes(value);
 }
+
+/**
+ * A case's business lines: each one of `BUSINESS_LINES`, kept in display order without
+ * repeats, so equal choices always compare equal. A value outside the list fails the
+ * whole field (`businessLines`), not one item.
+ */
+export const businessLinesSchema = z
+  .array(z.string())
+  .refine((lines) => lines.every(isBusinessLine), "Invalid option.")
+  .transform((lines) => BUSINESS_LINES.filter((line) => lines.includes(line)));
 
 /** The client brief's fields, in display order (the `client_brief` columns and `save_client_brief_field` match). */
 export const CLIENT_BRIEF_FIELDS = ["context", "solution", "results"] as const;
@@ -326,8 +337,8 @@ export const caseStudySchema = z.object({
   client: clientRefSchema,
   year: z.number().int(),
   locale: localeSchema,
-  /** Null only for cases created before Story 2.17. */
-  businessLine: businessLineSchema.nullable(),
+  /** Empty until Dettagli (a case from the new-case dialog). */
+  businessLines: businessLinesSchema,
   status: z.enum(CASE_STATUSES),
   projectOrderRef: z.string().nullable(),
   headRevisionId: z.uuid().nullable(),
@@ -347,8 +358,8 @@ const yearSchema = z.number().int("Must be a whole number.").min(YEAR_MIN).max(Y
 /**
  * What a person supplies to create a case (the wizard's new-case dialog). Name is trimmed and
  * required; `clientId` is a picked client's id; year is an integer in 1900–2100;
- * locale defaults to `it`; `businessLine` is one of `BUSINESS_LINES`, or null (the
- * default) for a case that starts on Materiale and gets it in Dettagli (owner, 2026-10-21).
+ * locale defaults to `it`; `businessLines` are from `BUSINESS_LINES`, none by default: a
+ * case starts on Materiale and gets them in Dettagli (owner, 2026-10-21).
  * Any other key (status, code, project_order_ref, …) is dropped.
  */
 export const createCaseStudyInputSchema = z.object({
@@ -356,7 +367,7 @@ export const createCaseStudyInputSchema = z.object({
   clientId: z.uuid("Required."),
   year: yearSchema,
   locale: localeSchema.default(DEFAULT_LOCALE),
-  businessLine: businessLineSchema.nullable().default(null),
+  businessLines: businessLinesSchema.default([]),
 });
 export type CreateCaseStudyInput = z.infer<typeof createCaseStudyInputSchema>;
 
@@ -371,7 +382,8 @@ export const updateCaseStudyDetailsInputSchema = z.object({
   clientId: z.uuid("Required."),
   year: yearSchema,
   locale: localeSchema,
-  businessLine: businessLineSchema,
+  /** At least one (multi-select, owner 2026-10-21). */
+  businessLines: businessLinesSchema.refine((lines) => lines.length > 0, "Required."),
 });
 export type UpdateCaseStudyDetailsInput = z.infer<typeof updateCaseStudyDetailsInputSchema>;
 
