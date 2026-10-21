@@ -123,7 +123,7 @@ function setup(initialAssets: ListedAsset[] = [], { maxAssets = 20, maxFileBytes
   return { user, input, ...view };
 }
 
-const dropZone = () => screen.getByRole("button", { name: "Trascina qui i file oppure sceglili dal computer" });
+const dropZone = () => screen.getByRole("button", { name: "Trascina qui i file o sfoglia" });
 const rowOf = (name: string) => {
   const row = screen.getByText(name).closest("li");
   if (row === null) throw new Error(`no row for ${name}`);
@@ -149,7 +149,7 @@ describe("MaterialStep: empty", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Porta qui il materiale del progetto" })).toBeTruthy();
     expect(screen.queryByText(/Carica il materiale già verificato/)).toBeNull();
     expect(dropZone().getAttribute("tabindex")).toBe("0");
-    expect(screen.getByText("sceglili dal computer").className).toContain("decoration-primary");
+    expect(screen.getByText("sfoglia").className).toContain("decoration-primary");
     expect(screen.getByText(fill(dict.wizard.material.drop.hint, { max: 20, size: 50 }))).toBeTruthy();
     for (const chip of ["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]) expect(screen.getByText(chip)).toBeTruthy();
     const button = avanti();
@@ -241,7 +241,7 @@ describe("MaterialStep: uploads", () => {
 
   it("keeps the drag highlight while moving onto a child, and clears it on leaving the zone", () => {
     setup();
-    const child = screen.getByText("sceglili dal computer");
+    const child = screen.getByText("sfoglia");
     fireEvent.dragEnter(dropZone());
     fireEvent.dragOver(dropZone(), { dataTransfer: { files: [], dropEffect: "none" } });
     // Moving onto the link: enter on the child, then leave from the zone (both bubble to it).

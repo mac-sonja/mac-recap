@@ -220,8 +220,8 @@ export const it = {
       heading: "Porta qui il materiale del progetto",
       drop: {
         /** Followed by the lime `browse` link. */
-        lead: "Trascina qui i file oppure",
-        browse: "sceglili dal computer",
+        lead: "Trascina qui i file o",
+        browse: "sfoglia",
         /** `{max}` files, `{size}` MB each. */
         hint: "Fino a {max} file, massimo {size} MB l’uno.",
         /** Accepted-type chips, in display order. */

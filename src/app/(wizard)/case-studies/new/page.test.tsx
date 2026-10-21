@@ -298,7 +298,7 @@ describe("NewCaseStudyPage", () => {
       expect(listAssets).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
       expect(html).toMatch(/<li data-step="1" aria-current="step"/);
       expect(html).toContain("Porta qui il materiale del progetto");
-      expect(html).toMatch(/role="button"[^>]*aria-label="Trascina qui i file oppure sceglili dal computer"/);
+      expect(html).toMatch(/role="button"[^>]*aria-label="Trascina qui i file o sfoglia"/);
       expect(html).toContain("Fino a 20 file, massimo 50 MB l’uno.");
       for (const chip of ["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]) expect(html).toContain(`>${chip}</li>`);
       expect(html).toMatch(/<input type="file" multiple="" accept="image\/png,application\/pdf,\.png,\.pdf"/);
