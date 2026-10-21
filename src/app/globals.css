@@ -22,7 +22,7 @@
   --color-surface-sidebar: #f9f8f5;
   --color-surface-raised: #ffffff;
   --color-surface-control: #ebeae5;
-  /* A filled field inside a white card (wizard, owner's mock 2026-10-21). */
+  /* A filled form field (owner's mock, 2026-10-21). */
   --color-field: #f5f5f4;
   --color-surface-hover: #f1f0ec;
   --color-surface-selected: #e5e4de;
@@ -296,8 +296,8 @@
 
 /*
  * Form fields (text inputs, the client search, the year, textareas, selects) show
- * focus as a thin 1 px border in the focus-ring colour instead of the 2 px outline
- * (owner, 2026-10-20), plus a soft halo. Buttons, pills and links keep the outline
+ * focus by turning white with a grey hairline and a soft lime halo instead of the
+ * 2 px outline (owner's mock, 2026-10-21). Buttons, pills and links keep the outline
  * above. Unlayered on purpose, so it wins over field utilities such as
  * `border-transparent`. The transparent outline still shows in forced-colors mode.
  */
@@ -308,16 +308,6 @@
   ):focus-visible {
   outline: 1px solid transparent;
   outline-offset: 0;
-  border-color: var(--color-focus-ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-focus-ring) 22%, transparent);
-}
-
-/*
- * The wizard's filled fields (`FILLED_FIELD`): focus turns them white with a grey
- * hairline and a soft lime halo (owner's mock, 2026-10-21) instead of the blue ring.
- * After the rule above, with one more class, so it wins.
- */
-.field-filled:is(input, textarea, select):focus-visible {
   border-color: var(--color-border-strong);
   background-color: var(--color-surface-raised);
   box-shadow: 0 0 0 4px var(--color-primary-tint);

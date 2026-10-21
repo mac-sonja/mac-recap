@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { createCaseStudy, saveDetailsField, updateCaseStudyDetails } from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
-import { CARD, CARD_LABEL, FIELD, FIELD_HINT, FIELD_LABEL, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
+import { CARD_LABEL, FIELD, FIELD_HINT, FIELD_LABEL, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { wizardHref } from "@/app/_lib/routes";
 import type { BusinessLine, ClientRef, Locale } from "@/modules/case-study";
@@ -15,6 +15,7 @@ import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { BusinessLinePills } from "./business-line-pills";
 import { ClientCombobox } from "./client-combobox";
+import { FieldCard } from "./field-card";
 import { RequiredLabel } from "./required-label";
 import { useAutosaveFields } from "./use-autosave-fields";
 import { WizardFooter } from "./wizard-frame";
@@ -45,23 +46,8 @@ export const TITLE_DEBOUNCE_MS = 300;
 /** How many live-region lines stay mounted. */
 const ANNOUNCEMENTS_KEPT = 5;
 
-/** Dettagli's look (owner's mock, 2026-10-21): grey filled fields inside white cards, white with a lime halo on focus (globals.css); 14 px text, as the mock. */
-const FILLED = "field-filled border-transparent bg-field py-2 text-sm hover:border-transparent";
-const INPUT = cn(FIELD, FILLED);
-const TEXT_INPUT = cn(TEXTAREA, FILLED, "min-h-[100px]");
-
-/** One field in its own white card, headed "01 — LABEL" (the number is decorative), the field under it. */
-function FieldCard({ number, label, children }: { number: number; label: ReactNode; children: ReactNode }) {
-  return (
-    <div className={cn(CARD, "flex flex-col gap-3 p-5")}>
-      <div className="flex items-baseline gap-1.5">
-        <span aria-hidden="true" className={CARD_LABEL}>{`${String(number).padStart(2, "0")} —`}</span>
-        {label}
-      </div>
-      {children}
-    </div>
-  );
-}
+const INPUT = FIELD;
+const TEXT_INPUT = TEXTAREA;
 
 /** Characters as the server counts them: code points, so an emoji is one. */
 const codePoints = (text: string) => [...text].length;
