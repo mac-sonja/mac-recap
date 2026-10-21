@@ -15,7 +15,10 @@ import type { CaseStudyRow } from "./_components/filter-sort";
  * the policy denies is ever queried. The list loads once; search and sort run in
  * the browser. A failed load throws into Next's error boundary: no partial table.
  */
-export default async function CaseStudiesPage() {
+export default async function CaseStudiesPage({ searchParams }: { searchParams?: Promise<{ q?: string | string[] }> } = {}) {
+  const q = (await searchParams)?.q;
+  // The sidebar search lands here with `?q=`; the key restarts the table's search when it changes.
+  const initialQuery = typeof q === "string" ? q.slice(0, 200) : "";
   const shell = await requireSurface("list cases");
   if (shell === null) return null;
   const { actor, landing } = shell;
@@ -42,7 +45,13 @@ export default async function CaseStudiesPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={it.caseStudies.heading} lead={it.caseStudies.lead} />
-      <CaseStudiesTable rows={rows} canCreate={can(actor, "create case")} showCreate={can(actor, "create case")} />
+      <CaseStudiesTable
+        key={initialQuery}
+        rows={rows}
+        canCreate={can(actor, "create case")}
+        showCreate={can(actor, "create case")}
+        initialQuery={initialQuery}
+      />
     </div>
   );
 }

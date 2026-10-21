@@ -13,6 +13,7 @@ vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined })
 vi.mock("@/modules/case-study", () => ({ list: () => list(), listClients: () => listClients() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/case-studies",
+  useRouter: () => ({ push: vi.fn() }),
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT ${path}`);
   }),

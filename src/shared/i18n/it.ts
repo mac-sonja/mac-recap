@@ -15,6 +15,11 @@ export const it = {
       home: "Dashboard",
       caseStudies: "Case history",
       clients: "Clienti",
+      /** Above Nuova case history: searches the case list and opens it filtered. */
+      search: {
+        label: "Cerca progetto o cliente",
+        placeholder: "Cerca…",
+      },
       /** After Case in the sidebar: `{n}` cases waiting for a review. */
       toReview: "{n} da approvare",
     },

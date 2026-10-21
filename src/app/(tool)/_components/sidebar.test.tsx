@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const pathname = vi.hoisted(() => ({ current: "/case-studies" }));
-vi.mock("next/navigation", () => ({ usePathname: () => pathname.current }));
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ usePathname: () => pathname.current, useRouter: () => ({ push }) }));
 
 const { Sidebar } = await import("./sidebar");
 
@@ -47,6 +48,15 @@ describe("Sidebar", () => {
     expect(active).toContain("text-foreground");
   });
 
+  it("puts the search above Nuova case history, only with the case list", () => {
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true });
+    const search = html.indexOf('role="search"');
+    expect(search).toBeGreaterThan(-1);
+    expect(search).toBeLessThan(html.indexOf("Nuova case history"));
+    expect(html).toContain('placeholder="Cerca…"');
+    expect(render({ showNewCaseStudy: false, showCaseStudies: false })).not.toContain('role="search"');
+  });
+
   it("has no Templates, Users or sign-out entries", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });
     expect(html).not.toMatch(/Template|Utenti|Esci|\/users|\/templates|\/review/i);
@@ -76,7 +86,8 @@ describe("Sidebar", () => {
   it("puts Clienti right after Case when allowed", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true });
     const hrefs = [...html.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1]);
-    expect(hrefs).toEqual(["/case-studies/new", "/home", "/case-studies", "/clients"]);
+    // The first link is the collapsed search (a magnifier to the case list).
+    expect(hrefs).toEqual(["/case-studies", "/case-studies/new", "/home", "/case-studies", "/clients"]);
     expect(html).toContain("Clienti");
     expect(html.match(/sr-only xl:not-sr-only/g)?.length).toBe(4);
   });
