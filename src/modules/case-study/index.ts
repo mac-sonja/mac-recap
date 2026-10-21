@@ -182,10 +182,12 @@ export function listClients(): Promise<Result<ClientRef[]>> {
 
 /**
  * Every non-deleted client with its count of non-deleted case studies and whether every
- * required field is filled (`{ id, name, code, caseCount, complete }`), sorted by name. Call only after `authorize(actor, 'list clients')`.
+ * required field is filled (`{ id, name, code, caseCount, complete, logoUrl }`), sorted by name. `logoUrl` is a
+ * signed GET of the current logo valid 10 minutes, or null when the client has none or it
+ * could not be signed (never failing the list). Call only after `authorize(actor, 'list clients')`.
  */
 export function listClientSummaries(): Promise<Result<ClientSummary[]>> {
-  return makeListClientSummaries(createSupabaseClientRepository())();
+  return makeListClientSummaries(createSupabaseClientRepository(), logoStorage())();
 }
 
 /** One logo storage adapter, built on first use and reused across requests. */

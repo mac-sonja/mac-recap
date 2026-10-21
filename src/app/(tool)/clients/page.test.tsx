@@ -29,8 +29,8 @@ const shell = (role: Role, landing = "/case-studies"): ShellActor => ({
   landing,
 });
 
-const LUMEN: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM", caseCount: 2, complete: true };
-const ACME: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000002", name: "Acme", code: "ACM", caseCount: 0, complete: false };
+const LUMEN: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM", caseCount: 2, complete: true, logoUrl: null };
+const ACME: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000002", name: "Acme", code: "ACM", caseCount: 0, complete: false, logoUrl: null };
 
 const renderPage = async () => renderToStaticMarkup(await ClientsPage());
 
@@ -53,6 +53,16 @@ describe("ClientsPage", () => {
     expect(html).toContain(`href="/clients/${LUMEN.id}"`);
     expect(html).toMatch(new RegExp(`<span class="[^"]*tabular-nums[^"]*">${fill(dict.clients.caseCount, { n: 2 })}</span>`));
     expect(html).not.toMatch(new RegExp(`>${LUMEN.id}<`));
+  });
+
+  it("carries each client's signed logo URL to its card; a client without one keeps the monogram", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    const url = "https://storage.example/clients/lumen/logo.svg?token=a&amp=b";
+    listClientSummaries.mockResolvedValue(ok([ACME, { ...LUMEN, logoUrl: url }]));
+    const html = await renderPage();
+    expect(html.match(/<img /g)).toHaveLength(1);
+    expect(html).toContain(`<img src="https://storage.example/clients/lumen/logo.svg?token=a&amp;amp=b" alt=""`);
+    expect(html).toMatch(/aria-hidden="true"[^>]*>A<\/span>/);
   });
 
   it("offers Aggiungi cliente as a link to the client wizard, hidden below 1024 px", async () => {

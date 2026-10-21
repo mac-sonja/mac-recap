@@ -6,11 +6,11 @@ import { err, ok, type Result } from "@/shared/result";
 const getActor = vi.fn<() => Promise<Result<Actor>>>();
 
 const list = vi.fn();
-const listClientSummaries = vi.fn();
+const listClients = vi.fn();
 
 vi.mock("next/server", () => ({ connection: vi.fn(async () => undefined) }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
-vi.mock("@/modules/case-study", () => ({ list: () => list(), listClientSummaries: () => listClientSummaries() }));
+vi.mock("@/modules/case-study", () => ({ list: () => list(), listClients: () => listClients() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/case-studies",
   redirect: vi.fn((path: string) => {
@@ -40,7 +40,7 @@ const renderLayout = async () => renderToStaticMarkup(await ToolLayout({ childre
 beforeEach(() => {
   getActor.mockReset();
   list.mockReset().mockResolvedValue(ok([{ status: "in_review" }, { status: "in_review" }, { status: "draft" }]));
-  listClientSummaries.mockReset().mockResolvedValue(ok([{}, {}, {}]));
+  listClients.mockReset().mockResolvedValue(ok([{}, {}, {}]));
 });
 
 describe("ToolLayout", () => {
@@ -78,7 +78,7 @@ describe("ToolLayout", () => {
   it("keeps the shell when the counts can't be read", async () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     list.mockResolvedValue(err({ code: "CASE_STUDY_READ_FAILED", message: "m" }));
-    listClientSummaries.mockResolvedValue(err({ code: "CLIENT_READ_FAILED", message: "m" }));
+    listClients.mockResolvedValue(err({ code: "CLIENT_READ_FAILED", message: "m" }));
     const html = await renderLayout();
     expect(html).toContain("<nav");
     expect(html).not.toContain("da approvare");

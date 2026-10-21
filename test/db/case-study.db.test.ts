@@ -286,8 +286,8 @@ describe("clients page (Story 2.13)", () => {
     const deletedOnly = await createCase({ name: "Count deleted only", clientId: onlyDeleted.id });
     await pool.query("update public.case_study set deleted_at = now() where id = any($1::uuid[])", [[deleted.id, deletedOnly.id]]);
 
-    expect(await summaryOf(client.id)).toEqual({ ...client, caseCount: 2, complete: false });
-    expect(await summaryOf(onlyDeleted.id)).toEqual({ ...onlyDeleted, caseCount: 0, complete: false });
+    expect(await summaryOf(client.id)).toEqual({ ...client, caseCount: 2, complete: false, logoUrl: null });
+    expect(await summaryOf(onlyDeleted.id)).toEqual({ ...onlyDeleted, caseCount: 0, complete: false, logoUrl: null });
   });
 
   it("lists one client's non-deleted cases when the scope names it", async () => {

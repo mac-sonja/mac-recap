@@ -22,7 +22,14 @@ export default async function ClientsPage() {
   const listed = await caseStudy.listClientSummaries();
   if (!listed.ok) throw new Error(`Clients could not be listed: ${listed.error.code}`);
 
-  const rows: ClientRow[] = listed.value.map(({ id, code, name, caseCount, complete }) => ({ id, code, name, caseCount, complete }));
+  const rows: ClientRow[] = listed.value.map(({ id, code, name, caseCount, complete, logoUrl }) => ({
+    id,
+    code,
+    name,
+    caseCount,
+    complete,
+    logoUrl,
+  }));
 
   return (
     <div className="flex flex-col gap-8">

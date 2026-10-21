@@ -301,7 +301,17 @@ export type ConfirmClientLogoUploadInput = z.infer<typeof confirmClientLogoUploa
  * whether every required field is filled (`isClientComplete`): an unfinished
  * client's row opens its wizard.
  */
-export type ClientSummary = ClientRef & { caseCount: number; complete: boolean };
+export type ClientSummary = ClientRef & {
+  caseCount: number;
+  complete: boolean;
+  /** A signed GET of the client's current logo, or null when it has none or it could not be signed. */
+  logoUrl: string | null;
+};
+
+/** A client summary as the repository reads it: the current logo's id and type instead of a URL. */
+export type StoredClientSummary = Omit<ClientSummary, "logoUrl"> & {
+  logo: { id: string; contentType: LogoContentType } | null;
+};
 
 /**
  * A `case_study` row with its client, as the case-study module sees it.

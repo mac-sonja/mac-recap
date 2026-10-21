@@ -9,7 +9,7 @@ import { makeCreateCaseStudy } from "./create-case-study";
 import { makeCreateClient } from "./create-client";
 import { makeDeleteClient } from "./delete-client";
 import { makeGetCaseStudy } from "./get-case-study";
-import { makeGetClient } from "./get-client";
+import { LOGO_URL_TTL_SECONDS, makeGetClient } from "./get-client";
 import { makeListCaseStudies } from "./list-case-studies";
 import { makeListClientSummaries } from "./list-client-summaries";
 import { makeListClients } from "./list-clients";
@@ -338,7 +338,19 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
   const repo = {
     list: vi.fn<ClientRepository["list"]>(async () => ok([...clients.values()].map(({ id, name, code }) => ({ id, name, code })))),
     listWithCaseCounts: vi.fn<ClientRepository["listWithCaseCounts"]>(async () =>
-      ok([...clients.values()].map((c) => ({ id: c.id, name: c.name, code: c.code, caseCount: c.caseCount, complete: isClientComplete(c, c.brief) }))),
+      ok(
+        [...clients.values()].map((c) => {
+          const logo = c.logoId === null ? undefined : logos.get(c.logoId);
+          return {
+            id: c.id,
+            name: c.name,
+            code: c.code,
+            caseCount: c.caseCount,
+            complete: isClientComplete(c, c.brief),
+            logo: logo === undefined ? null : { id: logo.id, contentType: logo.contentType },
+          };
+        }),
+      ),
     ),
     findById: vi.fn<ClientRepository["findById"]>(async (id) => {
       const found = clients.get(id);
@@ -437,7 +449,7 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
 
 const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
 const OTHER_LOGO_ID = "eeeeeeee-0000-4000-8000-000000000002";
-const LUMEN: ClientSummary = { id: "cccccccc-0000-4000-8000-000000000010", name: "Lumen Srl", code: "LUM", caseCount: 2, complete: false };
+const LUMEN: Omit<ClientSummary, "logoUrl"> = { id: "cccccccc-0000-4000-8000-000000000010", name: "Lumen Srl", code: "LUM", caseCount: 2, complete: false };
 const LUMEN_CLIENT: Client = { id: LUMEN.id, name: LUMEN.name, code: LUMEN.code, industries: [], description: null, logoId: null };
 const INFO = { industries: ["lusso"], description: "Brand." };
 
@@ -450,6 +462,7 @@ function fakeLogoStorage() {
       ok({ url: `https://storage/${keyOf(t)}`, method: "PUT" as const, headers: { "content-type": t.contentType, "x-upsert": "false" } }),
     ),
     presignDownload: vi.fn<LogoStorage["presignDownload"]>(async (t) => ok(`https://storage/${keyOf(t)}?sig`)),
+    presignDownloads: vi.fn<LogoStorage["presignDownloads"]>(async (targets) => ok(targets.map((t) => `https://storage/${keyOf(t)}?sig`))),
     head: vi.fn<LogoStorage["head"]>(async (t) => ok(objects.get(keyOf(t))?.stored ?? null)),
     read: vi.fn<LogoStorage["read"]>(async (t) => {
       const found = objects.get(keyOf(t));
@@ -1038,16 +1051,82 @@ describe("listClientSummaries", () => {
       { id: "cccccccc-0000-4000-8000-000000000002", name: "città di Torino", code: "CIT", caseCount: 4 },
       { id: "cccccccc-0000-4000-8000-000000000003", name: "Acme", code: "ACM", caseCount: 1 },
     ];
-    const result = await makeListClientSummaries(fakeClientRepository(rows).repo)();
+    const { storage } = fakeLogoStorage();
+    const result = await makeListClientSummaries(fakeClientRepository(rows).repo, storage)();
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.map((c) => [c.code, c.caseCount])).toEqual([["ACM", 1], ["CIT", 4], ["ZET", 0]]);
+    if (result.ok) expect(result.value.map((c) => [c.code, c.caseCount, c.logoUrl])).toEqual([["ACM", 1, null], ["CIT", 4, null], ["ZET", 0, null]]);
+    // No logo to sign: no storage call.
+    expect(storage.presignDownloads).not.toHaveBeenCalled();
+  });
+
+  /** Lumen and Acme with a logo each (Acme's an SVG), Zeta without. */
+  async function withLogos() {
+    const acme = { id: "cccccccc-0000-4000-8000-000000000003", name: "Acme", code: "ACM", caseCount: 1, logoId: OTHER_LOGO_ID };
+    const zeta = { id: "cccccccc-0000-4000-8000-000000000001", name: "Zeta", code: "ZET", caseCount: 0 };
+    const fake = fakeClientRepository([{ ...LUMEN, logoId: LOGO_ID }, acme, zeta]);
+    await fake.repo.insertLogo({ id: LOGO_ID, clientId: LUMEN.id, contentType: "image/png", sizeBytes: 2048, createdBy: actor.id });
+    await fake.repo.insertLogo({ id: OTHER_LOGO_ID, clientId: acme.id, contentType: "image/svg+xml", sizeBytes: 900, createdBy: actor.id });
+    return { repo: fake.repo, acme, zeta, ...fakeLogoStorage() };
+  }
+
+  it("signs every client's current logo in one storage call within the logo TTL; a client without a logo gets null", async () => {
+    const { repo, acme, zeta, storage, keyOf } = await withLogos();
+    const result = await makeListClientSummaries(repo, storage)();
+    expect(storage.presignDownloads).toHaveBeenCalledTimes(1);
+    const [targets, ttl] = storage.presignDownloads.mock.calls[0];
+    expect(ttl).toBe(LOGO_URL_TTL_SECONDS);
+    expect(ttl).toBeLessThanOrEqual(15 * 60);
+    expect(targets).toEqual([
+      { clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/png" },
+      { clientId: acme.id, logoId: OTHER_LOGO_ID, contentType: "image/svg+xml" },
+    ]);
+    expect(storage.presignDownload).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      ok([
+        { id: acme.id, name: "Acme", code: "ACM", caseCount: 1, complete: false, logoUrl: `https://storage/${keyOf({ clientId: acme.id, logoId: OTHER_LOGO_ID })}?sig` },
+        { ...LUMEN, logoUrl: `https://storage/${keyOf({ clientId: LUMEN.id, logoId: LOGO_ID })}?sig` },
+        { id: zeta.id, name: "Zeta", code: "ZET", caseCount: 0, complete: false, logoUrl: null },
+      ]),
+    );
+  });
+
+  it("an unsigned logo gets null and a warning with the client id only, never failing the list", async () => {
+    const { repo, acme, storage } = await withLogos();
+    storage.presignDownloads.mockResolvedValueOnce(ok(["https://storage/lumen?sig", null]));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const result = await makeListClientSummaries(repo, storage)();
+      expect(result.ok && result.value.map((c) => [c.code, c.logoUrl])).toEqual([["ACM", null], ["LUM", "https://storage/lumen?sig"], ["ZET", null]]);
+      const lines = write.mock.calls.map(([line]) => JSON.parse(String(line)));
+      expect(lines).toEqual([expect.objectContaining({ level: "warn", msg: "client logo could not be signed", clientId: acme.id })]);
+      expect(Object.keys(lines[0]).sort()).toEqual(["clientId", "level", "msg", "time"]);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("a failed signing call leaves every logoUrl null, warns per client and still lists", async () => {
+    const { repo, acme, storage } = await withLogos();
+    storage.presignDownloads.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "down" }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const result = await makeListClientSummaries(repo, storage)();
+      expect(result.ok && result.value.map((c) => [c.code, c.logoUrl])).toEqual([["ACM", null], ["LUM", null], ["ZET", null]]);
+      const lines = write.mock.calls.map(([line]) => JSON.parse(String(line)));
+      expect(lines.map((l) => [l.level, l.clientId])).toEqual([
+        ["warn", LUMEN.id],
+        ["warn", acme.id],
+      ]);
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it("passes a repository failure through", async () => {
     const failure = err({ code: "CLIENT_LOOKUP_FAILED", message: "down" });
     const { repo } = fakeClientRepository();
     repo.listWithCaseCounts.mockResolvedValueOnce(failure);
-    expect(await makeListClientSummaries(repo)()).toEqual(failure);
+    expect(await makeListClientSummaries(repo, fakeLogoStorage().storage)()).toEqual(failure);
   });
 });
 

@@ -11,6 +11,8 @@ export interface ClientRow {
   caseCount: number;
   /** Every required field is filled; an unfinished client's row opens its wizard. */
   complete: boolean;
+  /** A signed URL of the client's logo (valid minutes), or null: the card then shows the monogram. */
+  logoUrl: string | null;
 }
 
 export const CLIENT_SORT_KEYS = ["code", "name", "caseCount"] as const;
