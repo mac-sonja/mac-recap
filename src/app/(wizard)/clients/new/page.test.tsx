@@ -131,8 +131,8 @@ describe("NewClientPage", () => {
     expect(html).toMatch(/<h1 [^>]*>Nuovo cliente<\/h1>/);
     expect(html).not.toContain("data-status");
     expect(segments(html)).toEqual([
-      { step: 1, current: true, href: null, text: "1Dettagli" },
-      { step: 2, current: false, href: null, text: "2Materiale" },
+      { step: 1, current: true, href: null, text: "Dettagli" },
+      { step: 2, current: false, href: null, text: "Materiale" },
     ]);
     expect(html).not.toContain("Introduzione");
     expect(html).toContain("Presentaci il cliente");
@@ -155,7 +155,7 @@ describe("NewClientPage", () => {
     const html = await renderPage({ clientId: ID, step: "2" });
     expect(segments(html)).toEqual([
       { step: 1, current: false, href: `/clients/new?clientId=${ID}&step=1`, text: "vai a Dettagli, completato" },
-      { step: 2, current: true, href: null, text: "2Materiale" },
+      { step: 2, current: true, href: null, text: "Materiale" },
     ]);
     expect(html).toContain("Carica fino a 3 file, di cui almeno 2 immagini: ci servono per le pagine di presentazione.");
     expect(html).toContain("Fino a 3 file, massimo 50 MB l’uno.");
