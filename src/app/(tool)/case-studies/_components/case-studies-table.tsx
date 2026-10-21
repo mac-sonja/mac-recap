@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, FolderOpen, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, FolderOpen, Link2, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
@@ -329,7 +329,20 @@ export function CaseStudiesTable({
                     <td className="whitespace-nowrap px-4 py-3.5 text-foreground-muted tabular-nums">
                       <time dateTime={row.updatedAt}>{row.updatedLabel}</time>
                     </td>
-                    <td className="px-4 py-3.5" />
+                    <td className="px-4 py-2">
+                      {row.publicUrl != null && (
+                        <a
+                          href={row.publicUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={fill(it.caseStudies.table.openLink, { name: row.name })}
+                          title={fill(it.caseStudies.table.openLink, { name: row.name })}
+                          className="inline-flex size-8 items-center justify-center rounded-md text-foreground-muted transition-colors duration-150 hover:bg-surface-hover hover:text-foreground-strong"
+                        >
+                          <Link2 aria-hidden="true" className="size-4" />
+                        </a>
+                      )}
+                    </td>
                   </tr>
                 );
               })}

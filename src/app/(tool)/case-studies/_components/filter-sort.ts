@@ -20,6 +20,11 @@ export interface CaseStudyRow {
   updatedAt: string;
   /** `updatedAt` already formatted for display (Europe/Rome, Italian). */
   updatedLabel: string;
+  /**
+   * The case's public link, when it has one: the Link column shows an icon that opens it
+   * in a new tab. Shareable links come with Story 5.5; until then no row sets it.
+   */
+  publicUrl?: string | null;
 }
 
 export const SORT_KEYS = ["id", "name", "client", "year", "status", "businessLine", "updated"] as const;
