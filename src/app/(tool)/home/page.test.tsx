@@ -76,10 +76,10 @@ describe("HomePage", () => {
     const html = await renderPage();
     const stats = [...html.matchAll(/<li [^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span><span[^>]*>(\d+)<\/span><\/li>/g)].map((m) => [m[1], m[2]]);
     expect(stats).toEqual([
-      ["Da rivedere", "2"],
+      ["Da approvare", "2"],
       ["Bozze aperte", "1"],
       ["Pronte da condividere", "1"],
-      ["Case in archivio", "5"],
+      ["Case history in archivio", "5"],
     ]);
   });
 
@@ -96,7 +96,7 @@ describe("HomePage", () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     list.mockResolvedValue(ok([]));
     const html = await renderPage();
-    expect(html).toContain("Niente da rivedere. Goditi il momento.");
+    expect(html).toContain("Niente da approvare. Goditi il momento.");
     expect(html).toContain("Nessuna bozza in sospeso.");
     expect(html).not.toContain("Vedi tutte");
   });

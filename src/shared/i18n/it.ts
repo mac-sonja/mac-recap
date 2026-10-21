@@ -11,12 +11,12 @@ export const it = {
   shell: {
     nav: {
       label: "Navigazione principale",
-      newCaseStudy: "Nuova case",
+      newCaseStudy: "Nuova case history",
       home: "Home",
-      caseStudies: "Case",
+      caseStudies: "Case history",
       clients: "Clienti",
       /** After Case in the sidebar: `{n}` cases waiting for a review. */
-      toReview: "{n} da rivedere",
+      toReview: "{n} da approvare",
     },
     userMenu: {
       button: "Il tuo profilo",
@@ -37,15 +37,15 @@ export const it = {
     lead: "Ecco a che punto sono i racconti dei vostri progetti.",
     stats: {
       label: "In sintesi",
-      total: "Case in archivio",
-      toReview: "Da rivedere",
+      total: "Case history in archivio",
+      toReview: "Da approvare",
       drafts: "Bozze aperte",
       approved: "Pronte da condividere",
       clients: "Clienti",
     },
     review: {
       heading: "Ti aspettano",
-      empty: "Niente da rivedere. Goditi il momento.",
+      empty: "Niente da approvare. Goditi il momento.",
     },
     drafts: {
       heading: "Da riprendere",
@@ -53,7 +53,7 @@ export const it = {
     },
     recent: {
       heading: "Movimenti recenti",
-      empty: "Ancora nessuna case. La prima è a un clic.",
+      empty: "Ancora nessuna case history. La prima è a un clic.",
     },
     seeAll: "Vedi tutte",
     start: {
@@ -63,49 +63,49 @@ export const it = {
     },
   },
   caseStudies: {
-    heading: "Case",
+    heading: "Case history",
     lead: "Tutti i progetti che vale la pena raccontare, dalla prima bozza alla versione approvata.",
     table: {
       /** Read by screen readers only. */
-      caption: "Elenco delle case",
+      caption: "Elenco delle case history",
       columns: {
-        id: "Codice",
-        name: "Case",
+        id: "ID",
+        name: "Case history",
         client: "Cliente",
         year: "Anno",
         status: "Stato",
-        businessLine: "Area",
+        businessLine: "Business line",
         updated: "Aggiornata",
         links: "Link",
       },
     },
     search: {
-      label: "Cerca per nome, cliente o codice",
-      placeholder: "Nome, cliente o codice",
+      label: "Cerca progetto o cliente",
+      placeholder: "Cerca progetto o cliente…",
     },
-    /** The status filter (Story 2.17): one segment per status after *Tutte*. */
+    /** The status filter (Story 2.17): one segment per status after *Tutti*. */
     filter: {
       label: "Filtra per stato",
-      all: "Tutte",
+      all: "Tutti",
       /** Segment labels, plural, keyed by `CaseStatus`. */
       statuses: {
-        draft: "Bozze",
-        generating: "In creazione",
-        in_review: "Da rivedere",
-        approved: "Approvate",
+        draft: "Bozza",
+        generating: "In elaborazione",
+        in_review: "Da approvare",
+        approved: "Approvato",
       },
     },
     /** `{query}` is filled with the search text. */
-    noResults: "Nessuna case per “{query}”.",
+    noResults: "Nessuna case history per “{query}”.",
     /** No row has the filtered status (and no search text); `{status}` is its label. */
-    noResultsStatus: "Nessuna case in “{status}”.",
+    noResultsStatus: "Nessuna case history in “{status}”.",
     /** The search and a status filter leave no rows; `{query}` is the search text, `{status}` the status label. */
-    noResultsQueryStatus: "Nessuna case per “{query}” in “{status}”.",
+    noResultsQueryStatus: "Nessuna case history per “{query}” in “{status}”.",
     clearSearch: "Azzera i filtri",
     empty: "Qui raccoglierai le storie dei vostri progetti. Parti dal materiale di un lavoro appena chiuso.",
     emptyAction: "Crea la prima",
-    /** The Case page's toolbar action (the sidebar already says *Nuova case*). */
-    add: "Crea una case",
+    /** The Case history page's toolbar action (the sidebar already says *Nuova case history*). */
+    add: "Crea case history",
     narrowScreen: "Questa pagina dà il meglio su uno schermo più grande.",
     /** Read by screen readers while the table loads. */
     loading: "Un attimo…",
@@ -122,11 +122,11 @@ export const it = {
   },
   /** The new-case-study wizard (Story 2.5): frame, stepper and step 1 Dettagli (Story 2.17). */
   wizard: {
-    eyebrow: "Nuova case",
+    eyebrow: "Nuova case history",
     /** Accessible name of the top bar's back arrow. */
-    back: "Torna alle case",
+    back: "Torna alle case history",
     /** Read by screen readers before the case history code in the top bar. */
-    caseId: "Codice",
+    caseId: "ID",
     stepper: {
       label: "Passaggi",
       /** Read by screen readers after a completed step. */
@@ -141,17 +141,17 @@ export const it = {
       generate: "Genera",
     },
     fields: {
-      name: "Titolo della case",
+      name: "Titolo della case history",
       client: "Cliente",
       year: "Anno",
-      businessLine: "Area",
+      businessLine: "Business line",
     },
     /** After a required field's label (case and client wizard step 1, no legend); hidden from screen readers, which read `aria-required`. */
     requiredMark: "*",
     /** The browser tab while the case wizard's Dettagli step is open; `{title}` is the live title. */
     tabTitle: "{title} · {app}",
     /** Under the client of an existing case: it is fixed once the case exists. */
-    clientFixed: "Il cliente resta questo: il codice della case nasce da lui.",
+    clientFixed: "Il cliente resta questo: il codice della case history nasce da lui.",
     /** Asked before leaving step 1 with entries that can't be kept (a new case, or required fields missing). */
     unsavedConfirm: "Quello che hai scritto non è ancora salvato. Vuoi uscire lo stesso?",
     /** Why Avanti is inactive on step 1; `{fields}` names the missing ones. */
@@ -174,22 +174,22 @@ export const it = {
     noClientMatch: "Nessun cliente con questo nome. Aggiungilo dalla {link}.",
     noClientsLink: "pagina Clienti",
     errors: {
-      name: "Dai un titolo alla case.",
+      name: "Dai un titolo alla case history.",
       client: "Scegli per quale cliente è.",
       /** `CLIENT_NOT_FOUND`: the picked client is no longer in the list the page loaded. */
       clientNotFound: "Questo cliente non c’è più. Ricarica la pagina e sceglilo di nuovo.",
       /** `{min}` and `{max}` are filled with the accepted years. */
       year: "Scrivi un anno tra il {min} e il {max}.",
-      businessLine: "Scegli l’area del progetto.",
-      generic: "Non siamo riusciti a creare la case. Quello che hai scritto è ancora qui: riprova.",
+      businessLine: "Scegli la business line.",
+      generic: "Non siamo riusciti a creare la case history. Quello che hai scritto è ancora qui: riprova.",
       /** An existing case's details could not be saved. */
       saveFailed: "Non siamo riusciti a salvare. Quello che hai scritto è ancora qui: riprova.",
       /** `NOT_FOUND` or `STALE_STATUS`: the case was deleted or is no longer a draft. */
-      notDraft: "Questa case non è più una bozza. Torna all’elenco per vederla.",
+      notDraft: "Questa case history non è più una bozza. Torna all’elenco per vederla.",
     },
     next: "Avanti",
     /** The wizard's error boundary: the case could not be loaded. */
-    loadFailed: "Non riusciamo ad aprire questa case. Riprova tra qualche istante.",
+    loadFailed: "Non riusciamo ad aprire questa case history. Riprova tra qualche istante.",
     /** Step 1, Material (Story 2.7). */
     material: {
       heading: "Porta qui il materiale del progetto",
@@ -272,19 +272,19 @@ export const it = {
   /** The Clients page and a client's page (Story 2.13). Owner/designer only. */
   clients: {
     heading: "Clienti",
-    lead: "Le aziende con cui abbiamo lavorato. Apri un cliente per vedere il suo profilo e le sue case.",
+    lead: "Le aziende con cui abbiamo lavorato. Apri un cliente per vedere il suo profilo e le sue case history.",
     table: {
       /** Read by screen readers only. */
       caption: "Elenco dei clienti",
       columns: {
-        code: "Codice",
+        code: "ID",
         name: "Cliente",
-        caseCount: "Case",
+        caseCount: "Case history",
       },
     },
     /** A client card's case count. */
-    caseCount: "{n} case",
-    caseCountOne: "1 case",
+    caseCount: "{n} case history",
+    caseCountOne: "1 case history",
     /** A client card's profile state: every required field filled, or not yet. */
     complete: "Profilo completo",
     incomplete: "Profilo da completare",
@@ -293,7 +293,7 @@ export const it = {
       label: "Ordina per",
       nameAsc: "Nome, A–Z",
       nameDesc: "Nome, Z–A",
-      mostCases: "Più case",
+      mostCases: "Più case history",
       code: "Codice",
     },
     search: {
@@ -344,10 +344,10 @@ export const it = {
       industries: "Settore",
       /** The logo's alt text; `{name}` is the client name. */
       logoAlt: "Logo {name}",
-      casesHeading: "Le sue case",
-      noCases: "Nessuna case per questo cliente, per ora.",
-      /** The client page's own call to action (the sidebar already says *Nuova case*). */
-      newCase: "Racconta un progetto",
+      casesHeading: "Le sue case history",
+      noCases: "Nessuna case history per questo cliente, per ora.",
+      /** The client page's own call to action (the sidebar already says *Nuova case history*). */
+      newCase: "Crea nuova case history",
       back: "Clienti",
     },
   },
@@ -368,7 +368,7 @@ export const it = {
       intro: "Introduzione",
     },
     /** Step 1 on an existing client; `{code}` is the client code, which never changes. */
-    editNote: "Il codice {code} resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case.",
+    editNote: "Il codice {code} resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case history.",
     details: {
       heading: "Presentaci il cliente",
       labels: {
@@ -414,9 +414,9 @@ export const it = {
       /** `{name}` is the client name. */
       title: "Eliminare {name}?",
       /** `{n}` is the client's non-deleted case history count (1 or more). */
-      withCases: "Con lui spariscono anche le sue {n} case, approvate comprese. Non si torna indietro.",
+      withCases: "Con lui spariscono anche le sue {n} case history, approvate comprese. Non si torna indietro.",
       /** With no case histories. */
-      noCases: "Il cliente non ha case. Una volta eliminato non si torna indietro.",
+      noCases: "Il cliente non ha case history. Una volta eliminato non si torna indietro.",
       confirmLabel: "Per conferma, scrivi il nome del cliente",
       cancel: "Annulla",
       confirm: "Elimina",
@@ -446,9 +446,9 @@ export const it = {
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {
     draft: "Bozza",
-    generating: "In creazione",
-    in_review: "Da rivedere",
-    approved: "Approvata",
+    generating: "In elaborazione",
+    in_review: "Da approvare",
+    approved: "Approvato",
   },
   /** Role labels for people, keyed by `Role`; `system` is never shown. */
   role: {

@@ -23,7 +23,7 @@ describe("Sidebar", () => {
   it("shows the new-case action, Home, Case, the appearance switch and the profile", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });
     expect(html).toContain('aria-label="Navigazione principale"');
-    expect(html).toContain("Nuova case");
+    expect(html).toContain("Nuova case history");
     expect(html).toContain('href="/home"');
     expect(html.match(/<a [^>]*aria-current="page"[^>]*>/)?.[0]).toContain('href="/case-studies"');
     expect(html).toContain('role="radiogroup" aria-label="Aspetto"');
@@ -53,8 +53,8 @@ describe("Sidebar", () => {
   });
 
   it("shows the cases to review after Case only when there are some", () => {
-    expect(render({ showNewCaseStudy: true, showCaseStudies: true, toReviewCount: 2 })).toContain("2 da rivedere");
-    expect(render({ showNewCaseStudy: true, showCaseStudies: true, toReviewCount: 0 })).not.toContain("da rivedere");
+    expect(render({ showNewCaseStudy: true, showCaseStudies: true, toReviewCount: 2 })).toContain("2 da approvare");
+    expect(render({ showNewCaseStudy: true, showCaseStudies: true, toReviewCount: 0 })).not.toContain("da approvare");
   });
 
   it("marks Home active on /home", () => {

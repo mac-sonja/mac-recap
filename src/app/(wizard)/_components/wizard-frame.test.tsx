@@ -11,13 +11,13 @@ describe("WizardFrame", () => {
         <p>step</p>
       </WizardFrame>,
     );
-    expect(html).toMatch(/<a [^>]*href="\/case-studies"[^>]*aria-label="Torna alle case"|<a [^>]*aria-label="Torna alle case"[^>]*href="\/case-studies"/);
+    expect(html).toMatch(/<a [^>]*href="\/case-studies"[^>]*aria-label="Torna alle case history"|<a [^>]*aria-label="Torna alle case history"[^>]*href="\/case-studies"/);
     expect(html).toMatch(/<svg [^>]*aria-hidden="true"/);
     expect(html).not.toContain("<aside");
     expect(html).not.toContain("<nav");
-    // No case yet: no ID, no badge; eyebrow and title both read Nuova case.
+    // No case yet: no ID, no badge; eyebrow and title both read Nuova case history.
     expect(html).not.toContain("data-status");
-    expect(html.match(/Nuova case/g)).toHaveLength(2);
+    expect(html.match(/Nuova case history/g)).toHaveLength(2);
   });
 
   it("centres an 820px column both ways and lets it scroll under the fixed top bar", () => {
@@ -44,11 +44,11 @@ describe("WizardFrame", () => {
         <p>step</p>
       </WizardFrame>,
     );
-    expect(html).toContain(`<span class="shrink-0 font-mono text-xs text-foreground-muted"><span class="sr-only">Codice </span>LUM-2026-01</span>`);
+    expect(html).toContain(`<span class="shrink-0 font-mono text-xs text-foreground-muted"><span class="sr-only">ID </span>LUM-2026-01</span>`);
     expect(html).not.toContain(`>${ID}<`);
     expect(html).toMatch(/<span data-status="draft" class="[^"]*\bml-auto\b[^"]*">Bozza<\/span>/);
     expect(html).toMatch(/<h1 [^>]*>Rebrand Lumen 2026<\/h1>/);
-    expect(html).toContain('<p class="mb-2 font-label text-[13px] font-medium text-foreground-muted">Nuova case</p>');
+    expect(html).toContain('<p class="mb-2 font-label text-[13px] font-medium text-foreground-muted">Nuova case history</p>');
   });
 
   it("forwards the case id and reachable to the stepper links", () => {

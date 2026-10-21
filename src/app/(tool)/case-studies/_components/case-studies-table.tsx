@@ -35,7 +35,7 @@ export interface CaseStudiesTableProps {
   /** The empty state's call to action label. */
   emptyAction?: string;
   /**
-   * Shows **Crea una case** at the left of the toolbar (the Case page, with `create case`).
+   * Shows **Crea case history** at the left of the toolbar (the Case history page, with `create case`).
    * A client's page leaves it out: its header already has its own call to action.
    */
   showCreate?: boolean;
@@ -133,8 +133,8 @@ function isTextField(el: Element | null): boolean {
  * current name), Year, Status, Business line (empty for cases created before Story
  * 2.17), Updated and Links (blank). Default sort Updated newest first; a header
  * click sorts by it, again reverses; ID sorts codes naturally. The toolbar above the table
- * holds the status filter (*Tutte* · Bozze · In creazione · Da rivedere ·
- * Approvate, each with its count, default *Tutte*) and the search, which covers
+ * holds the status filter (*Tutti* · Bozza · In elaborazione · Da approvare ·
+ * Approvato, each with its count, default *Tutti*) and the search, which covers
  * name, client name, client code, case code and business line label (case- and
  * accent-insensitive, debounced); both apply together. `/` focuses the search unless
  * focus is already in a text field. A Bozza row opens
