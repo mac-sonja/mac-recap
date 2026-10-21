@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
+import { STEP_HEADING } from "@/app/_components/field-styles";
 import { wizardHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
 import { authorize } from "@/modules/access";
@@ -110,7 +111,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   if (requested === 3) {
     return (
       <WizardFrame caseStudy={wizardCase} current={3} reachable={reachable}>
-        <h2 className="font-heading text-xl font-medium text-foreground-strong">{it.wizard.steps.generate}</h2>
+        <h2 className={STEP_HEADING}>{it.wizard.steps.generate}</h2>
         <p id={STEP_NOTE_ID} className="mt-1.5 font-body text-sm text-foreground-muted">
           {it.wizard.generatePlaceholder}
         </p>
@@ -122,7 +123,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
               type="button"
               aria-disabled="true"
               aria-describedby={STEP_NOTE_ID}
-              className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, "cursor-not-allowed px-[18px] py-2.5")}
+              className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, "cursor-not-allowed h-10 px-5")}
             >
               {it.wizard.next}
             </button>

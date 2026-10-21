@@ -10,6 +10,7 @@ import {
   setAssetFavourite,
 } from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
+import { STEP_HEADING } from "@/app/_components/field-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { wizardHref } from "@/app/_lib/routes";
 import type { Asset, ListedAsset } from "@/modules/material";
@@ -525,13 +526,13 @@ export function MaterialStep({
 
   return (
     <div>
-      <h2 className={cn("font-heading text-xl font-medium text-foreground-strong", intro === undefined ? "mb-6" : "mb-1.5")}>
+      <h2 className={cn(STEP_HEADING, intro === undefined ? "mb-6" : "mb-1.5")}>
         {copyOverrides?.heading ?? copy.heading}
       </h2>
       {intro !== undefined && <p className="mb-6 font-body text-sm text-foreground-muted">{intro}</p>}
 
       {/* Always mounted, so screen readers announce the message when it appears. */}
-      <div role="alert" className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 font-body text-sm text-foreground empty:hidden">
+      <div role="alert" className="mb-4 rounded-md bg-danger/10 px-4 py-3 font-body text-sm text-foreground shadow-[inset_0_0_0_1px] shadow-danger/30 empty:hidden">
         {storageOff ? copy.errors.storage : null}
       </div>
 
@@ -560,7 +561,7 @@ export function MaterialStep({
               {fill(copy.list.count, { n: listed.length, max: maxAssets })}
             </span>
           </div>
-          <ul aria-labelledby={`${reasonId}-list`} className="overflow-hidden rounded-lg border">
+          <ul aria-labelledby={`${reasonId}-list`} className="overflow-hidden rounded-lg shadow-card">
             {rows.map((row) => (
               <AssetRow
                 key={row.key}
@@ -579,7 +580,7 @@ export function MaterialStep({
         start={ready ? undefined : <span id={reasonId}>{footer.reason}</span>}
         action={
           ready ? (
-            <Link href={footer.href} className={cn(PRIMARY_ACTION, "px-[18px] py-2.5")}>
+            <Link href={footer.href} className={cn(PRIMARY_ACTION, "h-10 px-5")}>
               {footer.label}
             </Link>
           ) : (
@@ -587,7 +588,7 @@ export function MaterialStep({
               type="button"
               aria-disabled="true"
               aria-describedby={reasonId}
-              className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, "cursor-not-allowed px-[18px] py-2.5")}
+              className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, "cursor-not-allowed h-10 px-5")}
             >
               {footer.label}
             </button>

@@ -2,12 +2,20 @@ import type { ClientIndustry } from "@/modules/case-study";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
-/** The pill look of the favourite toggle (asset-row.tsx): selected pills are lime-tinted. */
+/**
+ * Choice pills: a raised outline when off, solid ink when selected (light and dark).
+ * Sized for touch and reading (Story 2.18): at least 40 px tall, 14 px text.
+ */
 export const PILL =
-  "inline-flex items-center rounded-full border border-border-strong px-2.5 py-1 font-label text-xs text-foreground-muted";
-const PILL_PRESSED = "aria-pressed:border-accent/40 aria-pressed:bg-accent/10 aria-pressed:text-info";
+  "inline-flex min-h-10 items-center rounded-full border border-border-strong bg-surface-raised px-4 py-2 font-label text-sm text-foreground-muted transition-[background-color,border-color,color,transform] duration-150 active:scale-[0.97]";
+/** The gap between pills in a group (about 8 px). */
+export const PILL_GAP = "gap-2";
+/** The read-only list's smaller pill (a client's page): the size before Story 2.18. */
+const PILL_READ_ONLY =
+  "inline-flex items-center rounded-full bg-surface-control px-2.5 py-1 font-label text-xs font-medium text-foreground";
+const PILL_PRESSED = "aria-pressed:border-foreground-strong aria-pressed:bg-foreground-strong aria-pressed:text-surface";
 /** The same selected look for a single-select pill (`role="radio"`, `aria-checked`): the case business line. */
-export const PILL_CHECKED = "aria-checked:border-accent/40 aria-checked:bg-accent/10 aria-checked:text-info";
+export const PILL_CHECKED = "aria-checked:border-foreground-strong aria-checked:bg-foreground-strong aria-checked:text-surface";
 
 export interface IndustryPillsProps {
   /** `CLIENT_INDUSTRIES`, in display order (the module's index is server-only). */
@@ -34,7 +42,7 @@ export function IndustryPills({ options, selected, onToggle, labelledBy, describ
         {options
           .filter((industry) => selected.includes(industry))
           .map((industry) => (
-            <li key={industry} className={cn(PILL, "text-foreground")}>
+            <li key={industry} className={PILL_READ_ONLY}>
               {it.clients.industries[industry]}
             </li>
           ))}
@@ -46,7 +54,7 @@ export function IndustryPills({ options, selected, onToggle, labelledBy, describ
       role="group"
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      className="flex flex-wrap gap-1.5"
+      className={cn("flex flex-wrap", PILL_GAP)}
     >
       {options.map((industry) => (
         <button

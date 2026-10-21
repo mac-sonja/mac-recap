@@ -1,6 +1,6 @@
 /**
  * The Italian UI dictionary: every string the tool UI shows comes from here.
- * Plain verbs, no exclamation marks. Keys are stable; only values change.
+ * Friendly agency voice: plain verbs, short calls to action, no exclamation marks. Keys are stable; only values change.
  */
 export const it = {
   app: {
@@ -11,52 +11,104 @@ export const it = {
   shell: {
     nav: {
       label: "Navigazione principale",
-      newCaseStudy: "Nuova case history",
-      caseStudies: "Case history",
+      newCaseStudy: "Nuova case",
+      home: "Home",
+      caseStudies: "Case",
       clients: "Clienti",
+      /** After Case in the sidebar: `{n}` cases waiting for a review. */
+      toReview: "{n} da rivedere",
     },
     userMenu: {
-      button: "Account",
+      button: "Il tuo profilo",
+    },
+    /** The appearance switch at the bottom of the sidebar. */
+    theme: {
+      label: "Aspetto",
+      system: "Automatico",
+      light: "Chiaro",
+      dark: "Scuro",
     },
     noActor:
-      "Non è stato possibile identificare il tuo profilo. Ricarica la pagina; se il problema continua, contatta un amministratore.",
+      "Non riusciamo a riconoscere il tuo profilo. Prova a ricaricare la pagina: se non basta, scrivi a un amministratore.",
+  },
+  /** The Home dashboard. `{name}` is the person's first name. */
+  home: {
+    greeting: "Ciao, {name}",
+    lead: "Ecco a che punto sono i racconti dei vostri progetti.",
+    stats: {
+      label: "In sintesi",
+      total: "Case in archivio",
+      toReview: "Da rivedere",
+      drafts: "Bozze aperte",
+      approved: "Pronte da condividere",
+      clients: "Clienti",
+    },
+    review: {
+      heading: "Ti aspettano",
+      empty: "Niente da rivedere. Goditi il momento.",
+    },
+    drafts: {
+      heading: "Da riprendere",
+      empty: "Nessuna bozza in sospeso.",
+    },
+    recent: {
+      heading: "Movimenti recenti",
+      empty: "Ancora nessuna case. La prima è a un clic.",
+    },
+    seeAll: "Vedi tutte",
+    start: {
+      heading: "Hai chiuso un progetto?",
+      body: "Carica il materiale e scrivi due righe: al racconto pensiamo insieme.",
+      action: "Inizia ora",
+    },
   },
   caseStudies: {
-    heading: "Case history",
+    heading: "Case",
+    lead: "Tutti i progetti che vale la pena raccontare, dalla prima bozza alla versione approvata.",
     table: {
       /** Read by screen readers only. */
-      caption: "Elenco delle case history",
+      caption: "Elenco delle case",
       columns: {
-        id: "ID",
-        name: "Nome",
+        id: "Codice",
+        name: "Case",
         client: "Cliente",
         year: "Anno",
         status: "Stato",
-        businessLine: "Business line",
-        updated: "Aggiornato",
+        businessLine: "Area",
+        updated: "Aggiornata",
         links: "Link",
       },
     },
     search: {
-      label: "Cerca progetto o cliente",
-      placeholder: "Cerca progetto o cliente…",
+      label: "Cerca per nome, cliente o codice",
+      placeholder: "Nome, cliente o codice",
     },
-    /** The status filter (Story 2.17): one segment per status after *Tutti*. */
+    /** The status filter (Story 2.17): one segment per status after *Tutte*. */
     filter: {
       label: "Filtra per stato",
-      all: "Tutti",
+      all: "Tutte",
+      /** Segment labels, plural, keyed by `CaseStatus`. */
+      statuses: {
+        draft: "Bozze",
+        generating: "In creazione",
+        in_review: "Da rivedere",
+        approved: "Approvate",
+      },
     },
     /** `{query}` is filled with the search text. */
-    noResults: "Nessun risultato per '{query}'.",
+    noResults: "Nessuna case per “{query}”.",
     /** No row has the filtered status (and no search text); `{status}` is its label. */
-    noResultsStatus: "Nessuna case history in stato {status}.",
+    noResultsStatus: "Nessuna case in “{status}”.",
     /** The search and a status filter leave no rows; `{query}` is the search text, `{status}` the status label. */
-    noResultsQueryStatus: "Nessun risultato per “{query}” tra {status}.",
-    clearSearch: "Cancella ricerca e filtri",
-    empty: "Ancora nessuna case history. Inizia dal materiale di un progetto chiuso.",
-    narrowScreen: "Questa pagina richiede uno schermo più grande.",
+    noResultsQueryStatus: "Nessuna case per “{query}” in “{status}”.",
+    clearSearch: "Azzera i filtri",
+    empty: "Qui raccoglierai le storie dei vostri progetti. Parti dal materiale di un lavoro appena chiuso.",
+    emptyAction: "Crea la prima",
+    /** The Case page's toolbar action (the sidebar already says *Nuova case*). */
+    add: "Crea una case",
+    narrowScreen: "Questa pagina dà il meglio su uno schermo più grande.",
     /** Read by screen readers while the table loads. */
-    loading: "Caricamento…",
+    loading: "Un attimo…",
   },
   /** The fixed business lines (Story 2.17), keyed by `BusinessLine`, in display order. */
   businessLines: {
@@ -66,14 +118,15 @@ export const it = {
     web_design: "Web design",
     advertising: "Advertising",
     eventi: "Eventi",
+    sviluppo: "Sviluppo",
   },
   /** The new-case-study wizard (Story 2.5): frame, stepper and step 1 Dettagli (Story 2.17). */
   wizard: {
-    eyebrow: "Nuova case history",
+    eyebrow: "Nuova case",
     /** Accessible name of the top bar's back arrow. */
-    back: "Torna alle case history",
+    back: "Torna alle case",
     /** Read by screen readers before the case history code in the top bar. */
-    caseId: "ID",
+    caseId: "Codice",
     stepper: {
       label: "Passaggi",
       /** Read by screen readers after a completed step. */
@@ -88,58 +141,64 @@ export const it = {
       generate: "Genera",
     },
     fields: {
-      name: "Nome della case history",
+      name: "Titolo della case",
       client: "Cliente",
       year: "Anno",
-      locale: "Lingua del testo",
-      businessLine: "Business line",
+      businessLine: "Area",
     },
+    /** After a required field's label (case and client wizard step 1, no legend); hidden from screen readers, which read `aria-required`. */
+    requiredMark: "*",
+    /** The browser tab while the case wizard's Dettagli step is open; `{title}` is the live title. */
+    tabTitle: "{title} · {app}",
     /** Under the client of an existing case: it is fixed once the case exists. */
-    clientFixed: "Il cliente non cambia dopo la creazione: il codice dipende da lui.",
+    clientFixed: "Il cliente resta questo: il codice della case nasce da lui.",
     /** Asked before leaving step 1 with entries that can't be kept (a new case, or required fields missing). */
-    unsavedConfirm: "Le informazioni inserite non sono ancora salvate. Uscire comunque?",
+    unsavedConfirm: "Quello che hai scritto non è ancora salvato. Vuoi uscire lo stesso?",
     /** Why Avanti is inactive on step 1; `{fields}` names the missing ones. */
-    nextReason: "Per continuare compila: {fields}.",
+    nextReason: "Per andare avanti manca: {fields}.",
     /** Joins the `{fields}` of `nextReason`. */
     listSeparator: ", ",
-    locales: {
-      it: "Italiano",
-      en: "English",
-    },
-    /** The step 0 client select's first option (value ""), shown until a client is picked. */
-    clientPlaceholder: "Scegli un cliente",
-    /** A step 0 client option: `{name}` and its `{code}`. */
+    /** The step 1 client search's placeholder, shown until something is typed or a client is picked. */
+    clientPlaceholder: "Cerca o scegli un cliente",
+    /** A step 1 client option (and the search's text once picked): `{name}` and its `{code}`. */
     clientOption: "{name} ({code})",
-    /** Step 0 with no clients: replaces the client field; Avanti stays inactive. `{link}` is `noClientsLink`, a link to /clients. */
-    noClients: "Nessun cliente. Aggiungilo nella {link}.",
+    /** Step 1 with no clients: replaces the client field; Avanti stays inactive. `{link}` is `noClientsLink`, a link to /clients. */
+    noClients: "Non c’è ancora nessun cliente. Aggiungilo dalla {link}.",
+    /** Announced to screen readers after typing in the client search pauses: the number of matches. */
+    clientCount: "{n} clienti",
+    clientCountOne: "1 cliente",
+    clientCountNone: "Nessun cliente trovato",
+    /** Accessible name of the client search's list of options. */
+    clientList: "Clienti",
+    /** Under the client search when the typed text matches no client. `{link}` is `noClientsLink`. */
+    noClientMatch: "Nessun cliente con questo nome. Aggiungilo dalla {link}.",
     noClientsLink: "pagina Clienti",
     errors: {
-      name: "Inserisci il nome della case history.",
-      client: "Scegli il cliente.",
+      name: "Dai un titolo alla case.",
+      client: "Scegli per quale cliente è.",
       /** `CLIENT_NOT_FOUND`: the picked client is no longer in the list the page loaded. */
-      clientNotFound: "Questo cliente non è più disponibile. Ricarica la pagina e scegli di nuovo.",
+      clientNotFound: "Questo cliente non c’è più. Ricarica la pagina e sceglilo di nuovo.",
       /** `{min}` and `{max}` are filled with the accepted years. */
-      year: "Inserisci un anno tra {min} e {max}.",
-      locale: "Scegli la lingua del testo.",
-      businessLine: "Scegli la business line.",
-      generic: "Non è stato possibile creare la case history. I dati inseriti sono ancora qui: riprova.",
+      year: "Scrivi un anno tra il {min} e il {max}.",
+      businessLine: "Scegli l’area del progetto.",
+      generic: "Non siamo riusciti a creare la case. Quello che hai scritto è ancora qui: riprova.",
       /** An existing case's details could not be saved. */
-      saveFailed: "Non è stato possibile salvare i dettagli. I dati inseriti sono ancora qui: riprova.",
+      saveFailed: "Non siamo riusciti a salvare. Quello che hai scritto è ancora qui: riprova.",
       /** `NOT_FOUND` or `STALE_STATUS`: the case was deleted or is no longer a draft. */
-      notDraft: "Questa case history non è più una bozza. Torna alle case history.",
+      notDraft: "Questa case non è più una bozza. Torna all’elenco per vederla.",
     },
     next: "Avanti",
     /** The wizard's error boundary: the case could not be loaded. */
-    loadFailed: "Non è stato possibile aprire la case history. Riprova tra poco.",
+    loadFailed: "Non riusciamo ad aprire questa case. Riprova tra qualche istante.",
     /** Step 1, Material (Story 2.7). */
     material: {
-      heading: "Aggiungi il materiale del progetto",
+      heading: "Porta qui il materiale del progetto",
       drop: {
         /** Followed by the lime `browse` link. */
-        lead: "Trascina qui i file o",
-        browse: "sfoglia",
+        lead: "Trascina qui i file oppure",
+        browse: "sceglili dal computer",
         /** `{max}` files, `{size}` MB each. */
-        hint: "Fino a {max} file, {size} MB ciascuno.",
+        hint: "Fino a {max} file, massimo {size} MB l’uno.",
         /** Accepted-type chips, in display order. */
         types: {
           pdf: "PDF",
@@ -161,16 +220,16 @@ export const it = {
       },
       errors: {
         /** `{size}` is the per-file limit in MB. */
-        tooLarge: "Oltre {size} MB. Non caricato.",
-        type: "Questo tipo di file non è supportato. Usa immagini, video, testi o PDF.",
+        tooLarge: "Supera i {size} MB, non l’abbiamo caricato.",
+        type: "Questo formato non lo leggiamo. Usa immagini, video, testi o PDF.",
         /** `{max}` is the per-case file limit. */
-        limit: "Limite di {max} file raggiunto. Non caricato.",
-        rejected: "Il file caricato non corrisponde a quello scelto. Non caricato.",
+        limit: "Hai raggiunto i {max} file. Questo non è stato caricato.",
+        rejected: "Il file arrivato non è quello scelto, quindi non l’abbiamo caricato.",
         failed: "Caricamento non riuscito.",
         storage:
-          "Il caricamento dei file non è disponibile: lo spazio di archiviazione non è configurato. Contatta un amministratore.",
-        favourite: "Non è stato possibile salvare il preferito. Riprova.",
-        remove: "Non è stato possibile rimuovere il file. Riprova.",
+          "Il caricamento dei file non è ancora attivo: manca lo spazio di archiviazione. Scrivi a un amministratore.",
+        favourite: "Non siamo riusciti a segnare il preferito. Riprova.",
+        remove: "Non siamo riusciti a rimuovere il file. Riprova.",
       },
       /** Polite live-region lines; `{name}` is the file name. */
       announce: {
@@ -181,11 +240,11 @@ export const it = {
         error: "{name}: {message}",
       },
       /** Why Avanti is inactive with no file. */
-      nextReason: "Aggiungi almeno un file per continuare.",
+      nextReason: "Aggiungi almeno un file per andare avanti.",
     },
     /** Step 2, Details (Story 2.10). */
     details: {
-      heading: "Racconta il progetto",
+      heading: "Raccontaci il progetto",
       /** Keyed by the details-form field (`FORM_FIELDS`). */
       labels: {
         context: "Contesto",
@@ -193,49 +252,64 @@ export const it = {
         results: "Risultati",
       },
       placeholders: {
-        context: "Di cosa aveva bisogno il cliente, e perché?",
-        solution: "Cosa avete fatto, e come?",
-        results: "Cosa è cambiato? Indica i numeri dove li hai.",
+        context: "Da dove siete partiti? Cosa serviva al cliente, e perché?",
+        solution: "Cosa avete fatto, e con quale idea?",
+        results: "Cosa è cambiato dopo? I numeri, se li hai, fanno la differenza.",
       },
       /** `{n}` filled fields of 3. */
       counter: "{n} di 3 compilati",
       errors: {
-        saveFailed: "Non salvato. Riprova modificando il testo.",
+        saveFailed: "Non salvato. Modifica il testo per riprovare.",
         /** `{max}` is the per-field limit in characters. */
-        tooLong: "Massimo {max} caratteri.",
+        tooLong: "Al massimo {max} caratteri.",
       },
       /** Polite live-region line when a save fails; `{field}` is the field label, `{message}` its error. */
       announceError: "{field}: {message}",
     },
     /** Step 3 until Epic 3; also the reason the inactive Avanti gives. */
-    generatePlaceholder: "La generazione non è ancora disponibile in questa versione.",
+    generatePlaceholder: "La generazione arriva nella prossima versione. Ci stiamo lavorando.",
   },
   /** The Clients page and a client's page (Story 2.13). Owner/designer only. */
   clients: {
     heading: "Clienti",
+    lead: "Le aziende con cui abbiamo lavorato. Apri un cliente per vedere il suo profilo e le sue case.",
     table: {
       /** Read by screen readers only. */
       caption: "Elenco dei clienti",
       columns: {
-        code: "ID",
-        name: "Nome",
-        caseCount: "Case history",
+        code: "Codice",
+        name: "Cliente",
+        caseCount: "Case",
       },
     },
+    /** A client card's case count. */
+    caseCount: "{n} case",
+    caseCountOne: "1 case",
+    /** A client card's profile state: every required field filled, or not yet. */
+    complete: "Profilo completo",
+    incomplete: "Profilo da completare",
+    /** The sort menu of the client cards. */
+    sort: {
+      label: "Ordina per",
+      nameAsc: "Nome, A–Z",
+      nameDesc: "Nome, Z–A",
+      mostCases: "Più case",
+      code: "Codice",
+    },
     search: {
-      label: "Cerca nome o codice",
-      placeholder: "Cerca nome o codice",
+      label: "Cerca per nome o codice",
+      placeholder: "Nome o codice",
     },
     /** `{query}` is filled with the search text. */
-    noResults: "Nessun cliente per '{query}'.",
-    clearSearch: "Cancella ricerca",
-    empty: "Nessun cliente. Aggiungi il primo.",
+    noResults: "Nessun cliente per “{query}”.",
+    clearSearch: "Azzera la ricerca",
+    empty: "Ancora nessun cliente. Aggiungi il primo e partiamo.",
     /** The empty state where clients can't be added: below 1024 px, or without `manage clients`. */
-    emptyReadOnly: "Nessun cliente.",
+    emptyReadOnly: "Ancora nessun cliente.",
     /** Read by screen readers while the table loads. */
-    loading: "Caricamento…",
+    loading: "Un attimo…",
     add: "Aggiungi cliente",
-    edit: "Modifica cliente",
+    edit: "Modifica",
     /** Industry pill labels, keyed by `CLIENT_INDUSTRIES` (the fixed list, SCP 2026-10-19). */
     industries: {
       interior_design: "Interior design",
@@ -244,23 +318,23 @@ export const it = {
       lusso: "Lusso",
     },
     errors: {
-      nameRequired: "Inserisci il nome del cliente.",
+      nameRequired: "Scrivi il nome del cliente.",
       /** `{max}` is the field limit in characters. */
-      nameTooLong: "Massimo {max} caratteri.",
+      nameTooLong: "Al massimo {max} caratteri.",
       /** `{max}` is the field limit in characters (description, brief texts). */
-      fieldTooLong: "Massimo {max} caratteri.",
-      nameTaken: "Esiste già un cliente con questo nome.",
-      codeExhausted: "Non è stato possibile assegnare un codice a questo nome. Usa un nome diverso.",
-      logoType: "Formato non supportato. Usa un file PNG, JPEG, WebP o SVG.",
+      fieldTooLong: "Al massimo {max} caratteri.",
+      nameTaken: "C’è già un cliente con questo nome.",
+      codeExhausted: "Non riusciamo a creare un codice per questo nome. Prova con un nome diverso.",
+      logoType: "Questo formato non va. Usa PNG, JPEG, WebP o SVG.",
       /** `{size}` is the logo limit in MB. */
-      logoTooLarge: "Il logo supera {size} MB.",
+      logoTooLarge: "Il logo supera i {size} MB.",
       logoEmpty: "Il file è vuoto.",
       /** `{px}` is the minimum short side in pixels. */
-      logoTooSmall: "Il logo deve misurare almeno {px} px sul lato corto.",
-      logoUnsafe: "Il file SVG non è sicuro: contiene script o collegamenti esterni.",
-      logoUnreadable: "Non è stato possibile leggere l'immagine. Scegli un altro file.",
-      logoFailed: "Non è stato possibile caricare il logo. Gli altri dati sono salvati: premi Avanti per riprovare.",
-      generic: "Non è stato possibile salvare. Riprova.",
+      logoTooSmall: "Il logo è troppo piccolo: serve almeno {px} px sul lato corto.",
+      logoUnsafe: "Questo SVG contiene script o collegamenti esterni, quindi non possiamo usarlo.",
+      logoUnreadable: "Non riusciamo a leggere l’immagine. Prova con un altro file.",
+      logoFailed: "Il logo non è stato caricato, il resto è salvato. Premi Avanti per riprovare.",
+      generic: "Non siamo riusciti a salvare. Riprova.",
     },
     /** A client's page. */
     detail: {
@@ -270,9 +344,11 @@ export const it = {
       industries: "Settore",
       /** The logo's alt text; `{name}` is the client name. */
       logoAlt: "Logo {name}",
-      casesHeading: "Case history",
-      noCases: "Nessuna case history per questo cliente.",
-      back: "Tutti i clienti",
+      casesHeading: "Le sue case",
+      noCases: "Nessuna case per questo cliente, per ora.",
+      /** The client page's own call to action (the sidebar already says *Nuova case*). */
+      newCase: "Racconta un progetto",
+      back: "Clienti",
     },
   },
   /** The client wizard (Story 2.15): frame, stepper, step 1 Dettagli and the step 2 placeholder. */
@@ -292,9 +368,9 @@ export const it = {
       intro: "Introduzione",
     },
     /** Step 1 on an existing client; `{code}` is the client code, which never changes. */
-    editNote: "Il codice {code} non cambia. Le modifiche si vedono in tutte le sue case history.",
+    editNote: "Il codice {code} resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case.",
     details: {
-      heading: "I dati del cliente",
+      heading: "Presentaci il cliente",
       labels: {
         name: "Nome",
         industries: "Settore",
@@ -306,28 +382,28 @@ export const it = {
       },
       /** One-line prompts in the brief textareas, as in the case Details step. */
       placeholders: {
-        context: "Chi è il cliente, e in che situazione si trovava?",
-        solution: "Cosa avete fatto per il cliente, e come?",
-        results: "Cosa è cambiato per il cliente? Indica i numeri dove li hai.",
+        context: "Chi è il cliente e da che situazione partiva?",
+        solution: "Come lo avete aiutato, e con quale idea?",
+        results: "Cosa è cambiato per lui? I numeri, se li hai, fanno la differenza.",
       },
-      industriesHint: "Scegli uno o più settori.",
+      industriesHint: "Puoi sceglierne più di uno.",
       /** The description's live counter: `{n}` characters of `{max}`. */
       counter: "{n}/{max}",
       /** `{size}` MB and `{px}` pixels on the short side (PNG, JPEG and WebP only). */
-      logoHint: "PNG, JPEG, WebP o SVG, fino a {size} MB. PNG, JPEG e WebP almeno {px} px sul lato corto.",
-      logoChoose: "Scegli il logo",
-      logoReplace: "Sostituisci il logo",
+      logoHint: "PNG, JPEG, WebP o SVG fino a {size} MB. Per PNG, JPEG e WebP almeno {px} px sul lato corto.",
+      logoChoose: "Carica il logo",
+      logoReplace: "Cambia logo",
       /** The logo preview's alt text; `{name}` is the client name. */
       logoAlt: "Logo {name}",
       /** Why Avanti is inactive; `{fields}` lists the empty fields' labels. */
-      nextReason: "Per continuare compila: {fields}.",
+      nextReason: "Per andare avanti manca: {fields}.",
       /** Joins the `{fields}` of `nextReason`. */
       listSeparator: ", ",
       errors: {
         /** A field the server found empty or outside the list. */
-        required: "Compila questo campo.",
+        required: "Questo campo serve.",
         /** A brief text that could not be saved (also the autosave error). */
-        saveFailed: "Non salvato. Riprova modificando il testo.",
+        saveFailed: "Non salvato. Modifica il testo per riprovare.",
       },
       /** Polite live-region line when a save fails; `{field}` is the field label, `{message}` its error. */
       announceError: "{field}: {message}",
@@ -338,41 +414,41 @@ export const it = {
       /** `{name}` is the client name. */
       title: "Eliminare {name}?",
       /** `{n}` is the client's non-deleted case history count (1 or more). */
-      withCases: "Verranno eliminate anche le sue {n} case history, comprese quelle approvate. L'operazione non si può annullare.",
+      withCases: "Con lui spariscono anche le sue {n} case, approvate comprese. Non si torna indietro.",
       /** With no case histories. */
-      noCases: "Il cliente non ha case history. L'operazione non si può annullare.",
-      confirmLabel: "Scrivi il nome del cliente per confermare",
+      noCases: "Il cliente non ha case. Una volta eliminato non si torna indietro.",
+      confirmLabel: "Per conferma, scrivi il nome del cliente",
       cancel: "Annulla",
       confirm: "Elimina",
       /** Why Elimina is inactive. */
       confirmReason: "Scrivi il nome del cliente per attivare Elimina.",
       /** The name changed elsewhere since the page loaded (CLIENT_DELETE_NAME_MISMATCH). */
-      nameChanged: "Il nome del cliente è cambiato. Ricarica la pagina e riprova.",
+      nameChanged: "Nel frattempo il nome del cliente è cambiato. Ricarica la pagina e riprova.",
       /** Any other failure, a dropped connection included. */
-      failed: "Non è stato possibile eliminare il cliente. Riprova.",
+      failed: "Non siamo riusciti a eliminare il cliente. Riprova.",
     },
     /** Step 2 Materiale (Story 2.16): 2–3 files for the intro pages. */
     material: {
       heading: "Materiale",
       /** Above the drop zone. */
-      intro: "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione.",
-      createIntro: "Crea introduzione",
+      intro: "Carica fino a 3 file, di cui almeno 2 immagini: ci servono per le pagine di presentazione.",
+      createIntro: "Crea la presentazione",
       /** Why Crea introduzione is inactive with fewer than 2 images. */
-      createIntroReason: "Carica almeno 2 immagini.",
+      createIntroReason: "Servono almeno 2 immagini.",
       errors: {
         /** A 4th file. */
-        limit: "Massimo 3 file.",
+        limit: "Al massimo 3 file.",
         /** An image under `{min}` px on the short side or over `{max}` px on a side. */
-        pixels: "Immagine troppo piccola o troppo grande: serve almeno {min} px sul lato corto e al massimo {max} px per lato.",
+        pixels: "Le misure non vanno: serve almeno {min} px sul lato corto e al massimo {max} px per lato.",
       },
     },
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {
     draft: "Bozza",
-    generating: "In elaborazione",
-    in_review: "Da approvare",
-    approved: "Approvato",
+    generating: "In creazione",
+    in_review: "Da rivedere",
+    approved: "Approvata",
   },
   /** Role labels for people, keyed by `Role`; `system` is never shown. */
   role: {

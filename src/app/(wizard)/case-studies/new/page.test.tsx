@@ -24,7 +24,7 @@ vi.mock("@/modules/case-study", () => ({
   listClients: () => listClients(),
   YEAR_MIN: 1900,
   YEAR_MAX: 2100,
-  BUSINESS_LINES: ["branding", "social_media", "video", "web_design", "advertising", "eventi"],
+  BUSINESS_LINES: ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"],
 }));
 vi.mock("@/shared/i18n/format", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/shared/i18n/format")>()),
@@ -98,6 +98,8 @@ const asset: ListedAsset = {
 
 const render = async (params: { caseId?: string | string[]; step?: string | string[]; clientId?: string | string[] } = {}) =>
   renderToStaticMarkup(await NewCaseStudyPage({ searchParams: Promise.resolve(params) }));
+/** The client search box (`ClientCombobox`'s input), or "". */
+const combobox = (html: string) => html.match(/<input [^>]*role="combobox"[^>]*>/)?.[0] ?? "";
 
 beforeEach(() => {
   requireSurface.mockReset();
@@ -121,19 +123,19 @@ const plain = (step: number) => new RegExp(`<li data-step="${step}"[^>]*><span `
 const radio = (html: string, label: string) => html.match(new RegExp(`<button [^>]*role="radio"[^>]*>${label}</button>`))?.[0] ?? "";
 
 describe("NewCaseStudyPage", () => {
-  it("guards on create case and shows step 1 Dettagli for a new case: title Nuova case history, Dettagli current", async () => {
+  it("guards on create case and shows step 1 Dettagli for a new case: title Nuova case, Dettagli current", async () => {
     const html = await render();
     expect(requireSurface).toHaveBeenCalledWith("create case");
     expect(get).not.toHaveBeenCalled();
-    expect(html).toMatch(/<h1 class="[^"]*">Nuova case history<\/h1>/);
+    expect(html).toMatch(/<h1 class="[^"]*">Nuova case<\/h1>/);
     expect(html).toMatch(/<li data-step="1" aria-current="step"/);
     expect(html).not.toMatch(/<a [^>]*href="\/case-studies\/new\?caseId/);
-    expect(html).toContain("Nome della case history");
+    expect(html).toContain("Titolo della case");
     const year = html.match(/<input [^>]*name="year"[^>]*>/)?.[0] ?? "";
     expect(year).toContain('min="1900"');
     expect(year).toContain('max="2100"');
     expect(year).toContain('value="2031"');
-    // Business line pills, none picked, then the three texts.
+    // Area pills, none picked, then the three texts.
     expect(html).toContain('role="radiogroup"');
     expect([...html.matchAll(/role="radio" aria-checked="false"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1])).toEqual([
       "Branding",
@@ -142,6 +144,7 @@ describe("NewCaseStudyPage", () => {
       "Web design",
       "Advertising",
       "Eventi",
+      "Sviluppo",
     ]);
     expect(html.indexOf('role="radiogroup"')).toBeLessThan(html.indexOf('name="context"'));
     expect(html).toMatch(/<textarea [^>]*name="results"/);
@@ -150,34 +153,31 @@ describe("NewCaseStudyPage", () => {
     expect(html).not.toContain("<nav");
   });
 
-  it("a new case lists every client in a select, as given (sorted by name), with a placeholder first option", async () => {
+  it("a new case offers every client in a search box, as given (sorted by name), with a placeholder", async () => {
     const html = await render();
     expect(listClients).toHaveBeenCalledOnce();
-    const select = html.match(/<select [^>]*name="clientId"[^>]*>.*?<\/select>/)?.[0] ?? "";
-    expect([...select.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].map((m) => [m[1], m[2]])).toEqual([
-      ["", "Scegli un cliente"],
-      [clients[0].id, "Lumen Srl (LUM)"],
-      [clients[1].id, "Città di Torino (CIT)"],
-    ]);
-    expect(html).not.toMatch(/<input [^>]*name="client/);
+    expect(combobox(html)).toMatch(/placeholder="Cerca o scegli un cliente"/);
+    expect(combobox(html)).toMatch(/aria-expanded="false"/);
+    const list = html.match(/<ul [^>]*role="listbox"[^>]*>.*?<\/ul>/)?.[0] ?? "";
+    expect([...list.matchAll(/<li [^>]*role="option"[^>]*>([^<]*)<\/li>/g)].map((m) => m[1])).toEqual(["Lumen Srl (LUM)", "Città di Torino (CIT)"]);
+    expect(html).not.toContain("<select");
+    expect(html).not.toContain("Lingua del testo");
   });
 
   it("a new case with no clients shows the note instead of the select", async () => {
     listClients.mockResolvedValue(ok([]));
     const html = await render();
-    expect(html.replace(/<[^>]+>/g, "")).toContain("Nessun cliente. Aggiungilo nella pagina Clienti.");
-    expect(html).not.toContain("<select name=\"clientId\"");
+    expect(html.replace(/<[^>]+>/g, "")).toContain("Non c’è ancora nessun cliente. Aggiungilo dalla pagina Clienti.");
+    expect(html).not.toContain('role="combobox"');
     expect(html).toMatch(/<a [^>]*href="\/clients"[^>]*>pagina Clienti<\/a>/);
   });
 
-  const selected = (html: string) =>
-    [...(html.match(/<select [^>]*name="clientId"[^>]*>.*?<\/select>/)?.[0] ?? "").matchAll(/<option value="([^"]*)"[^>]*selected=""/g)].map(
-      (m) => m[1],
-    );
+  /** The client search box's text. */
+  const selected = (html: string) => combobox(html).match(/ value="([^"]*)"/)?.[1];
 
-  it("a client page's Nuova case history (?clientId=) opens step 1 with that client preselected", async () => {
+  it("a client page's Nuova case (?clientId=) opens step 1 with that client preselected", async () => {
     const html = await render({ clientId: clients[1].id });
-    expect(selected(html)).toEqual([clients[1].id]);
+    expect(selected(html)).toBe("Città di Torino (CIT)");
     expect(html).toMatch(/<li data-step="1" aria-current="step"/);
   });
 
@@ -187,8 +187,8 @@ describe("NewCaseStudyPage", () => {
     ["repeated", [clients[0].id, clients[1].id]],
   ])("a new case ignores a %s ?clientId= without an error", async (_label, clientId) => {
     const html = await render({ clientId });
-    expect(selected(html)).toEqual([""]);
-    expect(html).toContain("Nome della case history");
+    expect(selected(html)).toBe("");
+    expect(html).toContain("Titolo della case");
   });
 
   it("throws into the error boundary when the clients can't be listed", async () => {
@@ -209,7 +209,7 @@ describe("NewCaseStudyPage", () => {
 
   it("shows the larger-screen message below lg and hides the form there", async () => {
     const html = await render();
-    expect(html).toMatch(/<p class="[^"]*\blg:hidden\b[^"]*">Questa pagina richiede uno schermo più grande\.<\/p>/);
+    expect(html).toMatch(/<p class="[^"]*\blg:hidden\b[^"]*">Questa pagina dà il meglio su uno schermo più grande\.<\/p>/);
     expect(html).toMatch(/<div class="hidden lg:block">.*<form/);
     // The title shows at every width.
     expect(html.match(/<h1 class="([^"]*)">/)?.[1]).not.toMatch(/\bhidden\b/);
@@ -258,7 +258,7 @@ describe("NewCaseStudyPage", () => {
       expect(get).toHaveBeenCalledExactlyOnceWith(ID);
       expect(getDetailsForm).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
       expect(html).toMatch(/<h1 class="[^"]*">Rebrand Lumen 2026<\/h1>/);
-      expect(html).toMatch(/<span class="[^"]*font-mono[^"]*"><span class="sr-only">ID <\/span>LUM-2026-01<\/span>/);
+      expect(html).toMatch(/<span class="[^"]*font-mono[^"]*"><span class="sr-only">Codice <\/span>LUM-2026-01<\/span>/);
       expect(html).not.toContain(`>${ID}<`);
       expect(html).toContain(">Bozza</span>");
       expect(html).toMatch(/<li data-step="1" aria-current="step"/);
@@ -292,7 +292,7 @@ describe("NewCaseStudyPage", () => {
       const html = await render({ caseId: ID, step: "1" });
       expect(html).toMatch(/<input [^>]*name="name"[^>]*value="Rebrand Lumen 2026"/);
       expect(html).not.toContain('aria-checked="true"');
-      const reason = html.match(/<span id="([^"]+)">Per continuare compila: Business line\.<\/span>/)?.[1];
+      const reason = html.match(/<span id="([^"]+)">Per andare avanti manca: Area\.<\/span>/)?.[1];
       expect(reason).toBeDefined();
       expect(html).toMatch(new RegExp(`<button type="submit" aria-disabled="true" aria-describedby="${reason}"[^>]*>Avanti</button>`));
       expect(html).toMatch(plain(2));
@@ -312,12 +312,12 @@ describe("NewCaseStudyPage", () => {
       expect(html).toMatch(/<li data-step="2" aria-current="step"/);
       expect(html).toMatch(/data-dot="2" data-active=""/);
       expect(html.match(/data-active=""/g)).toHaveLength(1);
-      expect(html).toContain("Aggiungi il materiale del progetto");
-      expect(html).toMatch(/role="button"[^>]*aria-label="Trascina qui i file o sfoglia"/);
-      expect(html).toContain("Fino a 20 file, 50 MB ciascuno.");
+      expect(html).toContain("Porta qui il materiale del progetto");
+      expect(html).toMatch(/role="button"[^>]*aria-label="Trascina qui i file oppure sceglili dal computer"/);
+      expect(html).toContain("Fino a 20 file, massimo 50 MB l’uno.");
       for (const chip of ["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]) expect(html).toContain(`>${chip}</li>`);
       expect(html).toMatch(/<input type="file" multiple="" accept="image\/png,application\/pdf,\.png,\.pdf"/);
-      const reason = html.match(/<span id="([^"]+)">Aggiungi almeno un file per continuare\.<\/span>/)?.[1];
+      const reason = html.match(/<span id="([^"]+)">Aggiungi almeno un file per andare avanti\.<\/span>/)?.[1];
       expect(reason).toBeDefined();
       expect(html).toMatch(new RegExp(`<button type="button" aria-disabled="true" aria-describedby="${reason}"[^>]*>Avanti</button>`));
       expect(html).not.toContain(">Materiale</h3>");
@@ -362,7 +362,7 @@ describe("NewCaseStudyPage", () => {
       hasMaterial.mockResolvedValue(ok(true));
       const html = await render({ caseId: ID, step: "3" });
       expect(html).toMatch(/<li data-step="3" aria-current="step"/);
-      expect(html).toContain('<p id="wizard-step-note" class="mt-1.5 font-body text-sm text-foreground-muted">La generazione non è ancora disponibile in questa versione.</p>');
+      expect(html).toContain('<p id="wizard-step-note" class="mt-1.5 font-body text-sm text-foreground-muted">La generazione arriva nella prossima versione. Ci stiamo lavorando.</p>');
       expect(html).toMatch(/<button type="button" aria-disabled="true" aria-describedby="wizard-step-note"[^>]*>Avanti<\/button>/);
       expect(getDetailsForm).not.toHaveBeenCalled();
       expect(listAssets).not.toHaveBeenCalled();

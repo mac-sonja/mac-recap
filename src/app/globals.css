@@ -1,50 +1,89 @@
 @import "tailwindcss";
 
 /*
- * Tool UI theme tokens. Names and values come from DESIGN.md (2026-10-14).
- * Components use these through Tailwind theme utilities (`bg-surface`,
- * `text-foreground-muted`, `font-mono`, `rounded-md`, ...), never raw colours or
- * font stacks. Tailwind's default palette, fonts and radii are cleared so only
- * these tokens exist. Template renderers (Epic 3) never consume these tokens.
+ * Tool UI theme tokens (DESIGN.md, visual refresh 2026-10-20). Components use these
+ * through Tailwind theme utilities (`bg-surface`, `text-foreground-muted`,
+ * `shadow-card`, ...), never raw colours or font stacks. Tailwind's default
+ * palette, fonts, radii and shadows are cleared so only these tokens exist.
+ * Template renderers (Epic 3) never consume these tokens.
+ *
+ * Two themes share the same names: light (the values below) and dark (redefined
+ * further down). The theme follows the system unless the person picks one in the
+ * sidebar, which sets `data-theme` on <html>.
  */
 @theme {
   --color-*: initial;
   --font-*: initial;
   --radius-*: initial;
+  --shadow-*: initial;
 
-  /* Surfaces: black page, neutral grey ramp (DESIGN.md Colors). No navy in the tool UI. */
-  --color-surface: #000000;
-  --color-surface-raised: #151515;
-  --color-surface-control: #1e1e1e;
-  --color-surface-selected: #262626;
-  --color-border: #262626;
-  --color-border-strong: #303030;
+  /* Surfaces: a warm paper page, white cards, warm greys for controls. */
+  --color-surface: #f4f3ef;
+  --color-surface-sidebar: #f9f8f5;
+  --color-surface-raised: #ffffff;
+  --color-surface-control: #ebeae5;
+  --color-surface-hover: #f1f0ec;
+  --color-surface-selected: #e5e4de;
+  --color-border: #e6e5e0;
+  --color-border-strong: #d4d3cc;
+  /* A dark accent panel (the Home's start card): ink in light mode, a lifted grey in dark. */
+  --color-surface-inverse: #121210;
+  --color-surface-inverse-foreground: #f4f3ef;
 
-  /* Text. `foreground-muted` never sits on `surface-selected` (4.21:1). */
-  --color-foreground-strong: #ffffff;
-  --color-foreground: #f2f2f2;
-  --color-foreground-muted: #878787;
+  /* Text. Muted keeps 4.5:1 on every surface above. */
+  --color-foreground-strong: #0b0b0a;
+  --color-foreground: #1d1d1b;
+  --color-foreground-muted: #66655f;
 
   /* Brand: lime main calls to action with black labels, blue secondary emphasis. */
   --color-primary: #cbff00;
-  --color-primary-foreground: #000000;
-  --color-accent: #007bff;
-  --color-info: #b2d9ef;
-  --color-danger: #ff4d4f;
-  --color-danger-foreground: #000000;
-  /* Destructive buttons: white label (owner, 2026-10-20) on a deeper red, so the label keeps WCAG AA contrast (5.6:1; #ff4d4f with white is 3.3:1). */
+  --color-primary-hover: #bdf000;
+  --color-primary-foreground: #0b0b0a;
+  --color-accent: #0a6cff;
+  --color-info: #0a55c8;
+  --color-danger: #d92d20;
+  --color-danger-foreground: #ffffff;
+  /* Destructive buttons: white label (owner, 2026-10-20) on a deep red (5.6:1). */
   --color-danger-strong: #cf1322;
   --color-danger-strong-foreground: #ffffff;
-  --color-focus-ring: #cbff00;
+  /* Lime is invisible on white, so focus is blue in light mode and lime in dark. */
+  --color-focus-ring: #0a6cff;
+
+  /* Modal backdrop, used at reduced opacity (`backdrop:bg-scrim/40`). */
+  --color-scrim: #000000;
+
+  /*
+   * Client monograms on the Clients cards: deep, warm-to-cool fills with a white
+   * initial, the same in both themes. A client keeps its colour (picked from its code).
+   */
+  --color-monogram-foreground: #ffffff;
+  --color-monogram-1: #8a5f1c;
+  --color-monogram-2: #a3432a;
+  --color-monogram-3: #4a7f28;
+  --color-monogram-4: #1c7f63;
+  --color-monogram-5: #2a5ca3;
+  --color-monogram-6: #6a3fa3;
+  --color-monogram-7: #a33f6a;
 
   /* Client logos sit on a small white tile, so dark logos with a transparent background stay visible (owner, 2026-10-16). */
   --color-logo-tile: #ffffff;
 
-  /* Lifecycle status hues: badge text and tint source, always paired with a text label. */
-  --color-status-draft: #f2f2f2;
-  --color-status-generating: #f2f2f2;
-  --color-status-review: #007bff;
-  --color-status-approved: #cbff00;
+  /*
+   * Lifecycle status: a dot hue, a text colour and a soft tint per status. The
+   * label always shows; colour is never the only signal.
+   */
+  --color-status-draft: #9a9992;
+  --color-status-draft-foreground: #4f4e49;
+  --color-status-draft-tint: #efeee9;
+  --color-status-generating: #7c5cf5;
+  --color-status-generating-foreground: #5a3bd6;
+  --color-status-generating-tint: #f1edff;
+  --color-status-review: #f08c00;
+  --color-status-review-foreground: #a8540a;
+  --color-status-review-tint: #fff2de;
+  --color-status-approved: #22a447;
+  --color-status-approved-foreground: #1a7a36;
+  --color-status-approved-tint: #e6f6ea;
 
   /* Typography: Inter for the UI, JetBrains Mono for IDs, sizes and readouts (next/font, see layout.tsx). */
   --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
@@ -53,22 +92,163 @@
   --font-label: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, Menlo, monospace;
 
-  /* Rounding: segments sm, controls md, panels and drop zones lg, badges full. */
+  /* Rounding: segments sm, controls md, panels and drop zones lg, cards xl, badges full. */
   --radius-sm: 8px;
   --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
   --radius-full: 9999px;
 
+  /*
+   * Depth: hairline + soft shadow instead of solid borders (Emil Kowalski, "agents
+   * with taste"). Cards sit on the page, popovers float above it.
+   */
+  --shadow-card: 0 0 0 1px rgb(20 20 15 / 0.05), 0 1px 2px rgb(20 20 15 / 0.04), 0 6px 20px -8px rgb(20 20 15 / 0.06);
+  --shadow-control: 0 0 0 1px rgb(20 20 15 / 0.06), 0 1px 2px rgb(20 20 15 / 0.08);
+  --shadow-popover: 0 0 0 1px rgb(20 20 15 / 0.06), 0 8px 30px -6px rgb(20 20 15 / 0.18);
+  /* The lime button's lower edge, so it reads as pressable. */
+  --shadow-primary: inset 0 -1px 0 rgb(0 0 0 / 0.1);
+  /* A light edge inside the monogram tiles. */
+  --shadow-monogram: inset 0 0 0 1px rgb(255 255 255 / 0.14), inset 0 -12px 20px -10px rgb(0 0 0 / 0.25);
+
+  /*
+   * Motion (emilkowalski/skills): strong custom curves, never `ease-in` on UI.
+   * `ease-out` for things entering, `ease-in-out` for things moving on screen.
+   */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
   /* Badge text size (DESIGN.md typography.badge). */
-  --text-badge: 13px;
+  --text-badge: 12.5px;
+
+  /* Entrances only, all under 300 ms; exits stay instant. Never from scale(0). */
+  --animate-enter: enter 260ms var(--ease-out) both;
+  --animate-dialog-in: dialog-in 220ms var(--ease-out);
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+
+  /* Popovers grow from their trigger (set `origin-*` on the element). */
+  @keyframes popover-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97) translateY(-2px);
+    }
+  }
+
+  /* Modals stay centred: a short fade and a barely visible scale. */
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+}
+
+/*
+ * Dark theme: the original black tool UI. Applied when the person picks it, or
+ * when the system is dark and they have not picked light.
+ */
+@layer theme {
+  :root[data-theme="dark"] {
+    --color-surface: #000000;
+    --color-surface-sidebar: #0a0a0a;
+    --color-surface-raised: #141414;
+    --color-surface-control: #1e1e1e;
+    --color-surface-hover: #1a1a1a;
+    --color-surface-selected: #282828;
+    --color-border: #232323;
+    --color-border-strong: #333333;
+    --color-surface-inverse: #1c1c1a;
+    --color-surface-inverse-foreground: #f2f2f2;
+    --color-foreground-strong: #ffffff;
+    --color-foreground: #f2f2f2;
+    --color-foreground-muted: #8e8e8e;
+    --color-primary-hover: #d6ff33;
+    --color-accent: #3b8bff;
+    --color-info: #9cc8ff;
+    --color-danger: #ff5c5c;
+    --color-danger-foreground: #000000;
+    --color-focus-ring: #cbff00;
+    --color-status-draft: #8a8a8a;
+    --color-status-draft-foreground: #d6d6d6;
+    --color-status-draft-tint: rgb(255 255 255 / 0.07);
+    --color-status-generating: #a78bfa;
+    --color-status-generating-foreground: #c9b8ff;
+    --color-status-generating-tint: rgb(167 139 250 / 0.14);
+    --color-status-review: #ffa526;
+    --color-status-review-foreground: #ffc266;
+    --color-status-review-tint: rgb(255 165 38 / 0.13);
+    --color-status-approved: #cbff00;
+    --color-status-approved-foreground: #d9ff4d;
+    --color-status-approved-tint: rgb(203 255 0 / 0.1);
+    --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.06);
+    --shadow-control: 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.5);
+    --shadow-popover: 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 40px -8px rgb(0 0 0 / 0.7);
+  }
+
+  /* The same values as above, for "Automatico" on a dark system. Keep the two blocks in sync. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --color-surface: #000000;
+      --color-surface-sidebar: #0a0a0a;
+      --color-surface-raised: #141414;
+      --color-surface-control: #1e1e1e;
+      --color-surface-hover: #1a1a1a;
+      --color-surface-selected: #282828;
+      --color-border: #232323;
+      --color-border-strong: #333333;
+      --color-surface-inverse: #1c1c1a;
+      --color-surface-inverse-foreground: #f2f2f2;
+      --color-foreground-strong: #ffffff;
+      --color-foreground: #f2f2f2;
+      --color-foreground-muted: #8e8e8e;
+      --color-primary-hover: #d6ff33;
+      --color-accent: #3b8bff;
+      --color-info: #9cc8ff;
+      --color-danger: #ff5c5c;
+      --color-danger-foreground: #000000;
+      --color-focus-ring: #cbff00;
+      --color-status-draft: #8a8a8a;
+      --color-status-draft-foreground: #d6d6d6;
+      --color-status-draft-tint: rgb(255 255 255 / 0.07);
+      --color-status-generating: #a78bfa;
+      --color-status-generating-foreground: #c9b8ff;
+      --color-status-generating-tint: rgb(167 139 250 / 0.14);
+      --color-status-review: #ffa526;
+      --color-status-review-foreground: #ffc266;
+      --color-status-review-tint: rgb(255 165 38 / 0.13);
+      --color-status-approved: #cbff00;
+      --color-status-approved-foreground: #d9ff4d;
+      --color-status-approved-tint: rgb(203 255 0 / 0.1);
+      --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.06);
+      --shadow-control: 0 0 0 1px rgb(255 255 255 / 0.08), 0 1px 2px rgb(0 0 0 / 0.5);
+      --shadow-popover: 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 40px -8px rgb(0 0 0 / 0.7);
+    }
+  }
 }
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light dark;
     font-family: var(--font-body);
     color: var(--color-foreground);
     background-color: var(--color-surface);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html[data-theme="light"] {
+    color-scheme: light;
+  }
+
+  html[data-theme="dark"] {
+    color-scheme: dark;
   }
 
   *,
@@ -77,20 +257,46 @@
     border-color: var(--color-border);
   }
 
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-primary) 55%, transparent);
+    color: var(--color-foreground-strong);
+  }
+
   /* Visible focus on every control, from the focus-ring token. */
   :focus-visible {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
   }
 
+  /*
+   * Reduced motion keeps gentle fades (they aid comprehension) and shortens every
+   * animation to an instant (emilkowalski/skills, apple-design §14).
+   */
   @media (prefers-reduced-motion: reduce) {
     *,
     ::before,
     ::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
   }
+}
+
+/*
+ * Form fields (text inputs, the client search, the year, textareas, selects) show
+ * focus as a thin 1 px border in the focus-ring colour instead of the 2 px outline
+ * (owner, 2026-10-20), plus a soft halo. Buttons, pills and links keep the outline
+ * above. Unlayered on purpose, so it wins over field utilities such as
+ * `border-transparent`. The transparent outline still shows in forced-colors mode.
+ */
+:is(
+    input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
+    textarea,
+    select
+  ):focus-visible {
+  outline: 1px solid transparent;
+  outline-offset: 0;
+  border-color: var(--color-focus-ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-focus-ring) 22%, transparent);
 }

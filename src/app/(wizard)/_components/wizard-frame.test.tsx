@@ -11,13 +11,13 @@ describe("WizardFrame", () => {
         <p>step</p>
       </WizardFrame>,
     );
-    expect(html).toMatch(/<a [^>]*href="\/case-studies"[^>]*aria-label="Torna alle case history"|<a [^>]*aria-label="Torna alle case history"[^>]*href="\/case-studies"/);
+    expect(html).toMatch(/<a [^>]*href="\/case-studies"[^>]*aria-label="Torna alle case"|<a [^>]*aria-label="Torna alle case"[^>]*href="\/case-studies"/);
     expect(html).toMatch(/<svg [^>]*aria-hidden="true"/);
     expect(html).not.toContain("<aside");
     expect(html).not.toContain("<nav");
-    // No case yet: no ID, no badge; eyebrow and title both read Nuova case history.
+    // No case yet: no ID, no badge; eyebrow and title both read Nuova case.
     expect(html).not.toContain("data-status");
-    expect(html.match(/Nuova case history/g)).toHaveLength(2);
+    expect(html.match(/Nuova case/g)).toHaveLength(2);
   });
 
   it("centres an 820px column both ways and lets it scroll under the fixed top bar", () => {
@@ -28,7 +28,13 @@ describe("WizardFrame", () => {
     );
     expect(html).toContain('<div class="flex h-dvh flex-col');
     expect(html).toContain('<header class="flex h-15 shrink-0');
-    expect(html).toContain('<main class="flex flex-1 overflow-auto');
+    // `relative`: sr-only regions stay inside the scroll area instead of stretching the page.
+    expect(html).toContain('<main class="relative flex flex-1 overflow-auto');
+    // Scroll padding keeps a focused field clear of the sticky footer; no bottom padding
+    // from 1024 px, so the footer sits flush on the viewport's bottom edge (owner, 2026-10-20).
+    const main = html.match(/<main class="([^"]*)"/)?.[1].split(" ") ?? [];
+    expect(main).toEqual(expect.arrayContaining(["scroll-pb-28", "pt-10", "lg:pb-0"]));
+    expect(main).not.toContain("py-10");
     expect(html).toContain('<div class="m-auto w-full max-w-[820px]">');
   });
 
@@ -38,11 +44,11 @@ describe("WizardFrame", () => {
         <p>step</p>
       </WizardFrame>,
     );
-    expect(html).toContain(`<span class="shrink-0 font-mono text-xs text-foreground-muted"><span class="sr-only">ID </span>LUM-2026-01</span>`);
+    expect(html).toContain(`<span class="shrink-0 font-mono text-xs text-foreground-muted"><span class="sr-only">Codice </span>LUM-2026-01</span>`);
     expect(html).not.toContain(`>${ID}<`);
     expect(html).toMatch(/<span data-status="draft" class="[^"]*\bml-auto\b[^"]*">Bozza<\/span>/);
     expect(html).toMatch(/<h1 [^>]*>Rebrand Lumen 2026<\/h1>/);
-    expect(html).toContain('<p class="mb-2 font-label text-xs text-foreground-muted">Nuova case history</p>');
+    expect(html).toContain('<p class="mb-2 font-label text-[13px] font-medium text-foreground-muted">Nuova case</p>');
   });
 
   it("forwards the case id and reachable to the stepper links", () => {
@@ -76,7 +82,7 @@ describe("WizardFrame", () => {
         <p>step</p>
       </WizardFrame>,
     );
-    expect(html).toContain('lg:hidden">Questa pagina richiede uno schermo più grande.</p>');
+    expect(html).toContain('lg:hidden">Questa pagina dà il meglio su uno schermo più grande.</p>');
     expect(html).toMatch(/<div class="hidden lg:block"><div class="mb-10"><ol aria-label="Passaggi".*<p>step<\/p><\/div>/);
   });
 });
@@ -84,10 +90,30 @@ describe("WizardFrame", () => {
 describe("WizardFooter", () => {
   it("puts the dots in the centre under a divider and the action on the right", () => {
     const html = renderToStaticMarkup(<WizardFooter current={1} action={<button type="button">go</button>} />);
-    expect(html).toContain('class="mt-8 grid grid-cols-[1fr_auto_1fr] items-center border-t pt-5"');
+    expect(html).toMatch(/<div data-wizard-footer="" class="[^"]*\bgrid grid-cols-\[1fr_auto_1fr\] items-center border-t\b[^"]*"/);
     expect(html).toContain('<div aria-hidden="true" class="flex justify-center gap-1.5">');
     expect(html).toContain('<div class="justify-self-end"><button type="button">go</button></div>');
     expect(html.match(/data-active=""/g)).toHaveLength(1);
     expect(html).toMatch(/data-dot="1" data-active=""/);
+  });
+
+  it("stays at the bottom of the scrolling column with a translucent background and a top border (Story 2.18)", () => {
+    const html = renderToStaticMarkup(<WizardFooter current={2} action={<button type="button">go</button>} />);
+    const classes = html.match(/<div data-wizard-footer="" class="([^"]*)"/)?.[1].split(" ") ?? [];
+    expect(classes).toEqual(expect.arrayContaining(["sticky", "bottom-0", "z-10", "bg-surface/85", "backdrop-blur-xl", "border-t", "pt-5", "pb-6"]));
+    expect(classes).not.toContain("fixed");
+    // Flush on the viewport's bottom edge: no filler shadow below it (owner, 2026-10-20).
+    expect(classes.some((c) => c.startsWith("shadow"))).toBe(false);
+    // Start, dots, action: the DOM order (and so the focus order) is unchanged.
+    expect(html).toMatch(/^<div data-wizard-footer=""[^>]*><div class="font-label[^"]*"><\/div><div aria-hidden="true"[^>]*>.*<\/div><div class="justify-self-end"><button/);
+  });
+
+  it("sits inside the wizard column, so it lines up with it and is hidden below 1024px with the content", () => {
+    const html = renderToStaticMarkup(
+      <WizardFrame caseStudy={null} current={1}>
+        <WizardFooter current={1} action={<button type="button">go</button>} />
+      </WizardFrame>,
+    );
+    expect(html).toMatch(/<div class="m-auto w-full max-w-\[820px\]">.*<div class="hidden lg:block">.*<div data-wizard-footer=""/);
   });
 });

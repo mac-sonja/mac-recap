@@ -4,7 +4,8 @@ import { ImageUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
+import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, SECONDARY_ACTION } from "@/app/_components/button-styles";
+import { FIELD, FIELD_HINT, FIELD_LABEL, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { clientWizardHref } from "@/app/_lib/routes";
 import { createClient, saveClientBriefField, updateClient } from "@/app/(tool)/clients/actions";
@@ -13,6 +14,7 @@ import { LogoStepFailed, logoFailureOf, useClientLogo, type LogoFailure } from "
 import type { ClientLimits } from "@/app/(tool)/clients/_lib/client-limits";
 import { acceptFor } from "@/app/(wizard)/_lib/upload";
 import { useAutosaveFields } from "@/app/(wizard)/_components/use-autosave-fields";
+import { RequiredLabel, RequiredMark } from "@/app/(wizard)/_components/required-label";
 import { WizardFooter } from "@/app/(wizard)/_components/wizard-frame";
 import type { Client, ClientBrief, ClientBriefField, ClientDetail, ClientIndustry } from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
@@ -37,11 +39,9 @@ interface InfoFields {
 /** How many live-region lines stay mounted. */
 const ANNOUNCEMENTS_KEPT = 5;
 
-const INPUT =
-  "w-full rounded-md border bg-surface-control px-3 py-2 font-body text-sm text-foreground placeholder:text-foreground-muted aria-invalid:border-danger";
-const SECONDARY =
-  "inline-flex items-center gap-2 rounded-md bg-surface-control px-3 py-2 font-label text-sm text-foreground hover:bg-surface-selected";
-const LABEL = "font-label text-xs text-foreground-muted";
+const INPUT = FIELD;
+const SECONDARY = SECONDARY_ACTION;
+const LABEL = FIELD_LABEL;
 const ERROR = "font-label text-xs text-danger";
 
 /** Characters as the server counts them: code points, so an emoji is one. */
@@ -327,13 +327,15 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
       {client !== null && (
         <p className="mb-6 max-w-prose font-body text-sm text-foreground-muted">{fill(it.clientWizard.editNote, { code: client.code })}</p>
       )}
-      <h2 className="mb-6 font-heading text-xl font-medium text-foreground-strong">{copy.heading}</h2>
+      <h2 className={cn("mb-6", STEP_HEADING)}>{copy.heading}</h2>
 
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={ids.name} className={LABEL}>
-            {copy.labels.name}
-          </label>
+          <RequiredLabel>
+            <label htmlFor={ids.name} className={LABEL}>
+              {copy.labels.name}
+            </label>
+          </RequiredLabel>
           <input
             id={ids.name}
             name="name"
@@ -358,9 +360,11 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span id={ids.industriesLabel} className={LABEL}>
-            {copy.labels.industries}
-          </span>
+          <RequiredLabel>
+            <span id={ids.industriesLabel} className={LABEL}>
+              {copy.labels.industries}
+            </span>
+          </RequiredLabel>
           <div ref={firstPill}>
             <IndustryPills
               options={options}
@@ -370,7 +374,7 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
               describedBy={describedBy(ids.industriesHint, errors.industries !== undefined && ids.industriesError)}
             />
           </div>
-          <p id={ids.industriesHint} className={LABEL}>
+          <p id={ids.industriesHint} className={FIELD_HINT}>
             {copy.industriesHint}
           </p>
           {errors.industries === undefined ? null : (
@@ -382,9 +386,11 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
 
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between gap-2">
-            <label htmlFor={ids.description} className={LABEL}>
-              {copy.labels.description}
-            </label>
+            <RequiredLabel>
+              <label htmlFor={ids.description} className={LABEL}>
+                {copy.labels.description}
+              </label>
+            </RequiredLabel>
             <p
               id={ids.counter}
               aria-live="polite"
@@ -419,7 +425,10 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
         </div>
 
         <fieldset className="flex flex-col gap-1.5">
-          <legend className={cn(LABEL, "mb-1.5")}>{copy.labels.logo}</legend>
+          <legend className={cn(LABEL, "mb-1.5 flex items-baseline gap-0.5")}>
+            {copy.labels.logo}
+            <RequiredMark />
+          </legend>
           <div className="flex items-center gap-3">
             {logo.previewUrl === null ? null : (
               <LogoTile src={logo.previewUrl} alt={fill(copy.logoAlt, { name: altName })} className="size-20" />
@@ -450,7 +459,7 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
               {logo.logo.kind === "none" ? copy.logoChoose : copy.logoReplace}
             </button>
           </div>
-          <p id={ids.logoHint} className={LABEL}>
+          <p id={ids.logoHint} className={FIELD_HINT}>
             {fill(copy.logoHint, { size: limits.logoMaxBytes / (1024 * 1024), px: limits.logoMinShortSide })}
           </p>
           {logoError === null ? null : (
@@ -469,9 +478,11 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
           const message = over ? fill(it.clients.errors.fieldTooLong, { max: limits.briefMax }) : saveFailed ? copy.errors.saveFailed : null;
           return (
             <div key={field} className="flex flex-col gap-1.5">
-              <label htmlFor={id} className={LABEL}>
-                {copy.labels[field]}
-              </label>
+              <RequiredLabel>
+                <label htmlFor={id} className={LABEL}>
+                  {copy.labels[field]}
+                </label>
+              </RequiredLabel>
               <textarea
                 id={id}
                 ref={(element) => {
@@ -486,7 +497,7 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
                 aria-describedby={message === null ? undefined : errorId}
                 onChange={(event) => brief.change(field, event.target.value)}
                 onBlur={() => void brief.save(field)}
-                className="min-h-[120px] w-full resize-y rounded-md border border-transparent bg-surface-control p-3 font-body text-sm text-foreground placeholder:text-foreground-muted"
+                className={TEXTAREA}
               />
               {message !== null && (
                 <p id={errorId} className={ERROR}>
@@ -520,7 +531,7 @@ export function ClientDetailsStep({ client: initialClient, industries: options, 
             aria-describedby={ready ? undefined : ids.reason}
             aria-busy={pending || undefined}
             onClick={() => void saveAndGo((id) => clientWizardHref(id, 2), { requireReady: true })}
-            className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, !ready && "cursor-not-allowed", "px-[18px] py-2.5")}
+            className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, !ready && "cursor-not-allowed", "h-10 px-5")}
           >
             {it.wizard.next}
           </button>

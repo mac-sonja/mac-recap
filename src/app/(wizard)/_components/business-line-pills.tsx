@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, type KeyboardEvent } from "react";
-import { PILL, PILL_CHECKED } from "@/app/(tool)/clients/_components/industry-pills";
+import { PILL, PILL_CHECKED, PILL_GAP } from "@/app/(tool)/clients/_components/industry-pills";
 import type { BusinessLine } from "@/modules/case-study";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -59,7 +59,7 @@ export function BusinessLinePills({ options, selected, onSelect, labelledBy, des
       aria-describedby={describedBy}
       aria-required="true"
       aria-invalid={invalid || undefined}
-      className="flex flex-wrap gap-1.5"
+      className={cn("flex flex-wrap", PILL_GAP)}
     >
       {options.map((businessLine, index) => (
         <button

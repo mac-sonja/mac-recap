@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { Asset, ListedAsset, PresignedAssetUpload } from "@/modules/material";
+import { it as dict, fill } from "@/shared/i18n/it";
 
 const presignAssetUpload = vi.fn<(input: unknown) => Promise<ActionResult<PresignedAssetUpload>>>();
 const confirmAssetUpload = vi.fn<(input: unknown) => Promise<ActionResult<Asset>>>();
@@ -27,6 +28,12 @@ vi.mock("../_lib/upload", async (importOriginal) => ({
 
 const { MaterialStep } = await import("./material-step");
 const { UploadError } = await import("../_lib/upload");
+
+const ERR = dict.wizard.material.errors;
+/** The row line for a file over the per-file limit of `size` MB. */
+const tooLarge = (size: number) => fill(ERR.tooLarge, { size });
+/** The row line for a file past the per-case limit of `max` files. */
+const overLimit = (max: number) => fill(ERR.limit, { max });
 
 const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const MB = 1024 * 1024;
@@ -116,7 +123,7 @@ function setup(initialAssets: ListedAsset[] = [], { maxAssets = 20, maxFileBytes
   return { user, input, ...view };
 }
 
-const dropZone = () => screen.getByRole("button", { name: "Trascina qui i file o sfoglia" });
+const dropZone = () => screen.getByRole("button", { name: "Trascina qui i file oppure sceglili dal computer" });
 const rowOf = (name: string) => {
   const row = screen.getByText(name).closest("li");
   if (row === null) throw new Error(`no row for ${name}`);
@@ -139,17 +146,17 @@ function deferred<T = void>() {
 describe("MaterialStep: empty", () => {
   it("shows heading (no intro), drop zone with chips and hint; Avanti inactive with its reason; no list", () => {
     setup();
-    expect(screen.getByRole("heading", { level: 2, name: "Aggiungi il materiale del progetto" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Porta qui il materiale del progetto" })).toBeTruthy();
     expect(screen.queryByText(/Carica il materiale già verificato/)).toBeNull();
     expect(dropZone().getAttribute("tabindex")).toBe("0");
-    expect(screen.getByText("sfoglia").className).toContain("text-primary");
-    expect(screen.getByText("Fino a 20 file, 50 MB ciascuno.")).toBeTruthy();
+    expect(screen.getByText("sceglili dal computer").className).toContain("decoration-primary");
+    expect(screen.getByText(fill(dict.wizard.material.drop.hint, { max: 20, size: 50 }))).toBeTruthy();
     for (const chip of ["PDF", "DOCX", "TXT / MD", "PNG / JPG / WEBP", "MP4 / MOV"]) expect(screen.getByText(chip)).toBeTruthy();
     const button = avanti();
     expect(button.tagName).toBe("BUTTON");
     expect(button.getAttribute("aria-disabled")).toBe("true");
     expect(document.getElementById(button.getAttribute("aria-describedby") ?? "")?.textContent).toBe(
-      "Aggiungi almeno un file per continuare.",
+      "Aggiungi almeno un file per andare avanti.",
     );
     expect(screen.queryByText("Materiale")).toBeNull();
     expect(screen.queryByRole("list", { name: "Materiale" })).toBeNull();
@@ -234,7 +241,7 @@ describe("MaterialStep: uploads", () => {
 
   it("keeps the drag highlight while moving onto a child, and clears it on leaving the zone", () => {
     setup();
-    const child = screen.getByText("sfoglia");
+    const child = screen.getByText("sceglili dal computer");
     fireEvent.dragEnter(dropZone());
     fireEvent.dragOver(dropZone(), { dataTransfer: { files: [], dropEffect: "none" } });
     // Moving onto the link: enter on the child, then leave from the zone (both bubble to it).
@@ -257,8 +264,8 @@ describe("MaterialStep: uploads", () => {
   it("rejects a file over 50 MB on its row and uploads the others", async () => {
     const { user, input } = setup();
     await user.upload(input, [makeFile("backstage-raw.mov", "video/quicktime", 140 * MB), makeFile("a.pdf", "application/pdf")]);
-    expect(within(rowOf("backstage-raw.mov")).getByText("Oltre 50 MB. Non caricato.")).toBeTruthy();
-    expect(liveRegion().textContent).toContain("backstage-raw.mov: Oltre 50 MB. Non caricato.");
+    expect(within(rowOf("backstage-raw.mov")).getByText(tooLarge(50))).toBeTruthy();
+    expect(liveRegion().textContent).toContain(`backstage-raw.mov: ${tooLarge(50)}`);
     await screen.findByText("1 / 20 file");
     expect(presignAssetUpload).toHaveBeenCalledOnce();
     expect(presignAssetUpload).toHaveBeenCalledWith(expect.objectContaining({ contentType: "application/pdf" }));
@@ -267,7 +274,7 @@ describe("MaterialStep: uploads", () => {
   it("rejects an unsupported type inline and sends nothing", async () => {
     const { user, input } = setup();
     await user.upload(input, makeFile("archive.zip", "application/zip"));
-    const message = "Questo tipo di file non è supportato. Usa immagini, video, testi o PDF.";
+    const message = "Questo formato non lo leggiamo. Usa immagini, video, testi o PDF.";
     expect(within(rowOf("archive.zip")).getByText(message)).toBeTruthy();
     expect(liveRegion().textContent).toBe(`archive.zip: ${message}`);
     expect(presignAssetUpload).not.toHaveBeenCalled();
@@ -281,8 +288,8 @@ describe("MaterialStep: uploads", () => {
     await user.upload(input, ["a", "b", "c", "d"].map((n) => makeFile(`${n}.pdf`, "application/pdf")));
     await screen.findByText("20 / 20 file");
     expect(presignAssetUpload).toHaveBeenCalledTimes(2);
-    expect(within(rowOf("c.pdf")).getByText("Limite di 20 file raggiunto. Non caricato.")).toBeTruthy();
-    expect(within(rowOf("d.pdf")).getByText("Limite di 20 file raggiunto. Non caricato.")).toBeTruthy();
+    expect(within(rowOf("c.pdf")).getByText(overLimit(20))).toBeTruthy();
+    expect(within(rowOf("d.pdf")).getByText(overLimit(20))).toBeTruthy();
   });
 
   it("counts uploads in flight against the slots of a later drop", async () => {
@@ -292,17 +299,17 @@ describe("MaterialStep: uploads", () => {
     const { user, input } = setup(initial);
     await user.upload(input, makeFile("a.pdf", "application/pdf"));
     await user.upload(input, makeFile("b.pdf", "application/pdf"));
-    expect(within(rowOf("b.pdf")).getByText("Limite di 20 file raggiunto. Non caricato.")).toBeTruthy();
+    expect(within(rowOf("b.pdf")).getByText(overLimit(20))).toBeTruthy();
     await act(async () => gate.resolve());
     expect(presignAssetUpload).toHaveBeenCalledOnce();
   });
 
   it.each([
-    ["presign", "FILE_LIMIT_REACHED", "Limite di 20 file raggiunto. Non caricato."],
-    ["presign", "FILE_TOO_LARGE", "Oltre 50 MB. Non caricato."],
-    ["presign", "FILE_TYPE_NOT_ALLOWED", "Questo tipo di file non è supportato. Usa immagini, video, testi o PDF."],
-    ["confirm", "FILE_LIMIT_REACHED", "Limite di 20 file raggiunto. Non caricato."],
-    ["confirm", "UPLOAD_REJECTED", "Il file caricato non corrisponde a quello scelto. Non caricato."],
+    ["presign", "FILE_LIMIT_REACHED", overLimit(20)],
+    ["presign", "FILE_TOO_LARGE", tooLarge(50)],
+    ["presign", "FILE_TYPE_NOT_ALLOWED", "Questo formato non lo leggiamo. Usa immagini, video, testi o PDF."],
+    ["confirm", "FILE_LIMIT_REACHED", overLimit(20)],
+    ["confirm", "UPLOAD_REJECTED", "Il file arrivato non è quello scelto, quindi non l’abbiamo caricato."],
   ])("on a %s %s shows the matching message on the row, without retrying", async (step, code, message) => {
     if (step === "presign") presignAssetUpload.mockResolvedValue(fail(code, 400));
     else confirmAssetUpload.mockResolvedValue(fail(code, 409));
@@ -318,7 +325,7 @@ describe("MaterialStep: uploads", () => {
     const { user, input } = setup();
     await user.upload(input, [makeFile("a.pdf", "application/pdf"), makeFile("b.pdf", "application/pdf")]);
     await screen.findByText("1 / 20 file");
-    expect(within(rowOf("a.pdf")).getByText("Oltre 50 MB. Non caricato.")).toBeTruthy();
+    expect(within(rowOf("a.pdf")).getByText(tooLarge(50))).toBeTruthy();
     expect(rowOf("b.pdf").getAttribute("data-row-state")).toBe("listed");
   });
 
@@ -396,9 +403,9 @@ describe("MaterialStep: uploads", () => {
       makeFile("a.pdf", "application/pdf"),
       makeFile("b.pdf", "application/pdf"),
     ]);
-    expect(within(rowOf("big.pdf")).getByText("Oltre 10 MB. Non caricato.")).toBeTruthy();
-    expect(within(rowOf("b.pdf")).getByText("Limite di 1 file raggiunto. Non caricato.")).toBeTruthy();
-    expect(screen.getByText("Fino a 1 file, 10 MB ciascuno. PDF, DOCX, TXT / MD, PNG / JPG / WEBP, MP4 / MOV.")).toBeTruthy();
+    expect(within(rowOf("big.pdf")).getByText(tooLarge(10))).toBeTruthy();
+    expect(within(rowOf("b.pdf")).getByText(overLimit(1))).toBeTruthy();
+    expect(screen.getByText(`${fill(dict.wizard.material.drop.hint, { max: 1, size: 10 })} PDF, DOCX, TXT / MD, PNG / JPG / WEBP, MP4 / MOV.`)).toBeTruthy();
   });
 
   it("aborts uploads still running when the step unmounts", async () => {
@@ -447,7 +454,7 @@ describe("MaterialStep: uploads", () => {
     await waitFor(() => expect(confirmAssetUpload).toHaveBeenCalled());
     await user.click(screen.getByRole("button", { name: "Rimuovi a.pdf" }));
     await act(async () => confirmed.resolve());
-    expect(await within(rowOf("a.pdf")).findByText("Non è stato possibile rimuovere il file. Riprova.")).toBeTruthy();
+    expect(await within(rowOf("a.pdf")).findByText("Non siamo riusciti a rimuovere il file. Riprova.")).toBeTruthy();
     expect(rowOf("a.pdf").getAttribute("data-row-state")).toBe("listed");
     expect(screen.getByText("1 / 20 file")).toBeTruthy();
   });
@@ -468,7 +475,7 @@ describe("MaterialStep: uploads", () => {
     const { user, input } = setup();
     await user.upload(input, [makeFile("a.pdf", "application/pdf"), makeFile("b.pdf", "application/pdf")]);
     const alert = screen.getByRole("alert");
-    await waitFor(() => expect(alert.textContent).toContain("lo spazio di archiviazione non è configurato"));
+    await waitFor(() => expect(alert.textContent).toBe(ERR.storage));
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(alert.compareDocumentPosition(dropZone()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(dropZone().getAttribute("aria-disabled")).toBe("true");
@@ -600,7 +607,7 @@ describe("MaterialStep: listed rows", () => {
     await user.click(toggle);
     await waitFor(() => expect(toggle.getAttribute("aria-pressed")).toBe("true"));
     expect(setAssetFavourite).toHaveBeenCalledWith({ caseId: CASE_ID, assetId: video.id, isFavourite: false });
-    expect(within(rowOf("spot.mp4")).getByText("Non è stato possibile salvare il preferito. Riprova.")).toBeTruthy();
+    expect(within(rowOf("spot.mp4")).getByText("Non siamo riusciti a segnare il preferito. Riprova.")).toBeTruthy();
   });
 
   it("removes a row at once, with no undo", async () => {
@@ -621,7 +628,7 @@ describe("MaterialStep: listed rows", () => {
     removeAsset.mockResolvedValue(fail("ASSET_WRITE_FAILED"));
     const { user } = setup([image, docs[0], docs[1]]);
     await user.click(screen.getByRole("button", { name: "Rimuovi guide.pdf" }));
-    expect(await within(rowOf("guide.pdf")).findByText("Non è stato possibile rimuovere il file. Riprova.")).toBeTruthy();
+    expect(await within(rowOf("guide.pdf")).findByText("Non siamo riusciti a rimuovere il file. Riprova.")).toBeTruthy();
     const items = within(screen.getByRole("list", { name: "Materiale" })).getAllByRole("listitem");
     expect(items.map((item) => item.querySelector(".truncate")?.textContent)).toEqual([
       "lumen-keyvisual-final.png",

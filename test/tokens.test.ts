@@ -51,6 +51,20 @@ describe("theme tokens", () => {
     expect(css).toMatch(/:focus-visible\s*\{[^}]*var\(--color-focus-ring\)/);
   });
 
+  it("form fields show focus as a thin border in the focus-ring colour, not the outline", () => {
+    const rule = css.match(/:is\(\s*input:not\(([^)]*)\),\s*textarea,\s*select\s*\):focus-visible\s*\{([^}]*)\}/);
+    expect(rule).not.toBeNull();
+    const [, excluded, body] = rule!;
+    // Buttons and choice controls keep the outline ring.
+    for (const type of ["checkbox", "radio", "file", "button", "submit"]) expect(excluded).toContain(`[type="${type}"]`);
+    expect(body).toMatch(/outline:\s*1px solid transparent;/);
+    expect(body).toMatch(/outline-offset:\s*0;/);
+    expect(body).toMatch(/border-color:\s*var\(--color-focus-ring\);/);
+    // Unlayered, so field utilities such as `border-transparent` can't hide it.
+    expect(css.indexOf(rule![0])).toBeGreaterThan(css.lastIndexOf("@layer base"));
+    expect(css.slice(css.indexOf("@layer base"), css.indexOf(rule![0]))).toMatch(/\n\}\n/);
+  });
+
   it("respects prefers-reduced-motion", () => {
     expect(css).toContain("prefers-reduced-motion: reduce");
   });
@@ -78,5 +92,23 @@ describe("components read tokens only", () => {
     const source = readFileSync(file, "utf8");
     expect(source).not.toMatch(RAW_COLOR);
     expect(source).not.toMatch(FONT_STACK);
+  });
+});
+
+describe("light and dark themes", () => {
+  const darkExplicit = css.match(/:root\[data-theme="dark"\]\s*\{([^}]*)\}/)?.[1] ?? "";
+  const darkSystem = css.match(/@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\[data-theme="light"\]\)\s*\{([^}]*)\}/)?.[1] ?? "";
+
+  it("redefines the surfaces and text for a picked dark theme and for a dark system", () => {
+    for (const block of [darkExplicit, darkSystem]) {
+      for (const name of ["surface", "surface-raised", "foreground", "foreground-muted", "focus-ring"]) {
+        expect(block).toMatch(new RegExp(`--color-${name}\\s*:`));
+      }
+    }
+  });
+
+  it("keeps the two dark blocks identical", () => {
+    const norm = (block: string) => block.replace(/\s+/g, " ").trim();
+    expect(norm(darkSystem)).toBe(norm(darkExplicit));
   });
 });

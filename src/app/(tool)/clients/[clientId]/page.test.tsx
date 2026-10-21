@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
 import type { CaseStudy, ClientDetail, ListScope } from "@/modules/case-study";
+import { it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
@@ -78,18 +79,19 @@ beforeEach(() => {
 const NEW_HREF = `/case-studies/new?clientId=${LUMEN.id}`;
 
 describe("ClientPage", () => {
-  it("shows the name, the code, Modifica cliente, Nuova case history and the client's cases only", async () => {
+  it("shows the name, the code, Modifica, the new-case call to action and the client's cases only", async () => {
     const html = await renderPage();
     expect(requireSurface).toHaveBeenCalledWith("list clients");
     expect(getClient).toHaveBeenCalledWith(LUMEN.id);
     expect(list).toHaveBeenCalledExactlyOnceWith({ clientId: LUMEN.id });
     expect(html).toMatch(/<h1[^>]*>Lumen Srl<\/h1>/);
     expect(html).toMatch(/font-mono[^>]*>.*LUM<\/p>/);
-    const edit = html.match(/<a [^>]*>(?:(?!<\/a>).)*Modifica cliente<\/a>/)?.[0] ?? "";
+    const edit = html.match(new RegExp(`<a [^>]*>(?:(?!</a>).)*${dict.clients.edit}</a>`))?.[0] ?? "";
     expect(edit).toContain(`href="/clients/new?clientId=${LUMEN.id}&amp;step=1"`);
     expect(edit).toContain("hidden");
     expect(edit).toContain("lg:inline-flex");
-    expect(html).toContain(`href="${NEW_HREF}"`);
+    const newCase = html.match(new RegExp(`<a [^>]*>${dict.clients.detail.newCase}</a>`))?.[0] ?? "";
+    expect(newCase).toContain(`href="${NEW_HREF}"`);
     expect(html).toContain("LUM-2026-01");
     expect(html).toContain("Rebrand");
   });
@@ -128,10 +130,11 @@ describe("ClientPage", () => {
     expect(html).toMatch(/<h1[^>]*>Lumen Srl<\/h1>/);
   });
 
-  it("shows the no-cases line with Nuova case history preselecting the client", async () => {
+  it("shows the no-cases line with the new-case call to action preselecting the client", async () => {
     list.mockResolvedValue(ok([]));
     const html = await renderPage();
-    expect(html).toContain("Nessuna case history per questo cliente.");
+    expect(html).toContain(dict.clients.detail.noCases);
+    // The header call to action and the empty state's, both preselecting the client.
     expect(html.split(`href="${NEW_HREF}"`)).toHaveLength(3);
   });
 
@@ -178,7 +181,7 @@ describe("Loading", () => {
     expect(html.match(/data-skeleton-row/g)).toHaveLength(4);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('aria-hidden="true"');
-    expect(html).toContain('<p role="status" class="sr-only">Caricamento…</p>');
+    expect(html).toContain(`<p role="status" class="sr-only">${dict.clients.loading}</p>`);
     expect(html).toContain("motion-safe:animate-pulse");
     expect(html).not.toMatch(/(^|[\s"])animate-pulse/);
   });

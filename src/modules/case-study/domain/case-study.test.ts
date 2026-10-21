@@ -105,12 +105,13 @@ describe("createCaseStudyInputSchema", () => {
 
 describe("BUSINESS_LINES", () => {
   it("lists the business lines in display order", () => {
-    expect(BUSINESS_LINES).toEqual(["branding", "social_media", "video", "web_design", "advertising", "eventi"]);
+    expect(BUSINESS_LINES).toEqual(["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"]);
   });
 
   it.each([
     ["social_media", true],
     ["eventi", true],
+    ["sviluppo", true],
     ["moda", false],
     ["Branding", false],
     [null, false],

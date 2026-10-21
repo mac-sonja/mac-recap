@@ -1,8 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
 import type { CaseStudy, ListScope } from "@/modules/case-study";
+import { it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
@@ -52,21 +53,29 @@ beforeEach(() => {
   requireSurface.mockReset();
   list.mockReset();
 });
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("CaseStudiesPage", () => {
   it("lists every status for owner/designer and shows Updated in Europe/Rome", async () => {
+    // Same year as the case, so the date omits it.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-20T12:00:00+00:00"));
     requireSurface.mockResolvedValue(shell("owner_designer"));
     list.mockResolvedValue(ok([caseStudy({})]));
     const html = await renderPage();
     expect(requireSurface).toHaveBeenCalledWith("list cases");
     expect(list).toHaveBeenCalledExactlyOnceWith({});
-    expect(html).toContain("<h1");
-    expect(html).toContain("Elenco delle case history");
+    expect(html).toMatch(new RegExp(`<h1[^>]*>${dict.caseStudies.heading}</h1>`));
+    expect(html).toContain(dict.caseStudies.lead);
+    expect(html).toContain(dict.caseStudies.table.caption);
     expect(html).toContain("Rebrand");
-    expect(html).toContain("13/10/2026, 09:05");
+    // 07:05 UTC is 09:05 in Rome (CEST).
+    expect(html).toContain("13 ott, 09:05</time>");
     // The ID column shows the code and the Client column the client's name; the uuid is only a key.
     expect(html).toMatch(/<td class="[^"]*font-mono[^"]*">LUM-2026-01<\/td>/);
-    expect(html).toContain("<td class=\"px-3 py-2\">Lumen Srl</td>");
+    expect(html).toMatch(/<td class="[^"]*">Lumen Srl<\/td>/);
     expect(html).not.toMatch(/<td[^>]*>aaaaaaaa-0000-4000-8000-000000000001<\/td>/);
   });
 
@@ -89,12 +98,12 @@ describe("CaseStudiesPage", () => {
     expect(list).not.toHaveBeenCalled();
   });
 
-  it("shows the empty state with Nuova case history for owner/designer", async () => {
+  it("shows the empty state with its create call to action for owner/designer", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     list.mockResolvedValue(ok([]));
     const html = await renderPage();
-    expect(html).toContain("Ancora nessuna case history.");
-    expect(html).toContain('href="/case-studies/new"');
+    expect(html).toContain(dict.caseStudies.empty);
+    expect(html).toMatch(new RegExp(`<a [^>]*href="/case-studies/new"[^>]*>${dict.caseStudies.emptyAction}</a>`));
   });
 
   it("fails into the error boundary when the list fails: no partial table", async () => {
@@ -110,7 +119,7 @@ describe("Loading", () => {
     expect(html.match(/data-skeleton-row/g)).toHaveLength(6);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('aria-hidden="true"');
-    expect(html).toContain('<p role="status" class="sr-only">Caricamento…</p>');
+    expect(html).toContain(`<p role="status" class="sr-only">${dict.caseStudies.loading}</p>`);
     // Pulses only without reduced motion.
     expect(html).toContain("motion-safe:animate-pulse");
     expect(html).not.toMatch(/(^|[\s"])animate-pulse/);
