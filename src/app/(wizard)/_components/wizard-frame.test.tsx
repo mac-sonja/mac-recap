@@ -106,10 +106,12 @@ describe("WizardFooter", () => {
     expect(html).not.toContain("data-dot");
   });
 
-  it("stays at the bottom of the scrolling column with a translucent background and a top border (Story 2.18)", () => {
+  it("stays at the bottom of the scrolling column with a solid background and a top border (Story 2.18)", () => {
     const html = renderToStaticMarkup(<WizardFooter action={<button type="button">go</button>} />);
     const classes = html.match(/<div data-wizard-footer="" class="([^"]*)"/)?.[1].split(" ") ?? [];
-    expect(classes).toEqual(expect.arrayContaining(["sticky", "bottom-0", "z-10", "bg-surface/85", "backdrop-blur-xl", "border-t", "pt-4", "pb-6"]));
+    expect(classes).toEqual(expect.arrayContaining(["sticky", "bottom-0", "z-10", "bg-surface", "border-t", "pt-4", "pb-6"]));
+    // Solid, not frosted: cards scrolling under it must not show through (owner, 2026-10-21).
+    expect(classes.some((c) => c.startsWith("backdrop-") || c.startsWith("bg-surface/"))).toBe(false);
     expect(classes).not.toContain("fixed");
     // Flush on the viewport's bottom edge: no filler shadow below it (owner, 2026-10-20).
     expect(classes.some((c) => c.startsWith("shadow"))).toBe(false);
