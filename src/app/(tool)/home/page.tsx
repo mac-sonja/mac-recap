@@ -167,11 +167,12 @@ function Activity({ lines, more }: { lines: readonly ActivityLine[] | null; more
           {lines === null ? it.home.activity.failed : it.home.activity.empty}
         </p>
       ) : (
-        // Scrolls inside the card; focusable so it scrolls from the keyboard too.
+        // Three entries tall (owner, 2026-10-21; a one-line entry is 67 px), the rest
+        // scrolls inside the card; focusable so it scrolls from the keyboard too.
         <ul
           tabIndex={0}
           aria-labelledby="home-activity"
-          className="flex max-h-[22rem] flex-col overflow-y-auto overscroll-contain px-5 pb-2 focus-visible:outline-offset-[-2px]"
+          className="flex max-h-[201px] flex-col overflow-y-auto overscroll-contain px-5 pb-2 focus-visible:outline-offset-[-2px]"
         >
           {lines.map((line) => {
             const Icon = ACTIVITY_ICON[line.kind];
