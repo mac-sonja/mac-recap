@@ -387,6 +387,12 @@ export const updateCaseStudyDetailsInputSchema = z.object({
 });
 export type UpdateCaseStudyDetailsInput = z.infer<typeof updateCaseStudyDetailsInputSchema>;
 
+/** What a person supplies to delete a draft (Story 4.1 row action): only its id. */
+export const deleteCaseStudyInputSchema = z.object({
+  caseId: z.uuid("Required."),
+});
+export type DeleteCaseStudyInput = z.infer<typeof deleteCaseStudyInputSchema>;
+
 /**
  * The scope of a list, as authorized by `list cases`: `{}` is every status,
  * `{ status }` only that one; `clientId` further limits it to one client's cases.

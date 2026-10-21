@@ -42,6 +42,11 @@ const UPDATE_DETAILS_REFUSALS: Refusals = {
   INVALID_INPUT: { code: "INVALID_INPUT", message: "businessLines: Required." },
   CLIENT_NOT_FOUND: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
 };
+/** `delete_case_study` raises these (Story 4.1); nothing is written then. */
+const DELETE_REFUSALS: Refusals = {
+  NOT_FOUND: { code: "NOT_FOUND", message: "No case study with this id." },
+  CASE_NOT_DELETABLE: { code: "CASE_NOT_DELETABLE", message: "Only a draft can be deleted." },
+};
 /** Postgres check_violation, and the constraint naming a business line outside the list. */
 const CHECK_VIOLATION = "23514";
 const BUSINESS_LINE_CHECK = "case_study_business_lines_check";
@@ -254,6 +259,18 @@ export function createSupabaseCaseStudyRepository(
         return err({ code: "CASE_STUDY_WRITE_FAILED", message: "Could not change the case study status." });
       }
       return reread(data.id, { actorId: change.actorId, what: "transition" });
+    },
+
+    async softDelete(caseId, actorId) {
+      // One Postgres function checks the draft, sets `deleted_at` and appends `case_deleted` atomically.
+      const { error } = await client().rpc("delete_case_study", { p_case_id: caseId, p_actor_id: actorId });
+      if (error) {
+        const refused = refusalOf(error, DELETE_REFUSALS);
+        if (refused) return err({ ...refused, details: { id: caseId } });
+        log.error(`case_study delete failed: ${error.code}`, { caseId, actorId });
+        return err({ code: "CASE_STUDY_WRITE_FAILED", message: "Could not delete the case study.", details: { caseId } });
+      }
+      return { ok: true, value: undefined };
     },
   };
 }

@@ -4,9 +4,10 @@ import { z } from "zod";
 export const CASE_CREATED = "case_created";
 
 /**
- * The event written for every case of a deleted client (owner, 2026-10-19), in the
- * same transaction as the soft delete; `data` is `{ reason: "client_deleted", clientId,
- * clientCode, code, status }`.
+ * The event written with every soft delete, in the same transaction. For each case of
+ * a deleted client (owner, 2026-10-19) `data` is `{ reason: "client_deleted", clientId,
+ * clientCode, code, status }`; for a deleted draft (Story 4.1) it is `{ reason:
+ * "draft_deleted", clientId, code, status }`.
  */
 export const CASE_DELETED = "case_deleted";
 
