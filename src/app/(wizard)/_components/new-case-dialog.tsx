@@ -67,8 +67,9 @@ export function NewCaseDialog({ clients, initialClientId, year }: NewCaseDialogP
   const [before, after = ""] = it.wizard.noClients.split("{link}");
 
   return (
-    <Dialog open onClose={() => router.push("/case-studies")} title={it.wizard.eyebrow} closeLabel={it.download.close}>
-      <form onSubmit={submit} noValidate className="flex flex-col gap-1.5">
+    <Dialog open wide onClose={() => router.push("/case-studies")} title={it.wizard.eyebrow} closeLabel={it.download.close}>
+      {/* Tall enough for the client list (max-h-64) to open inside the dialog, which clips what overflows. */}
+      <form onSubmit={submit} noValidate className="flex min-h-[22rem] flex-col gap-1.5">
         {hasClients ? (
           <>
             <label htmlFor={fieldId} className={FIELD_LABEL}>
@@ -101,7 +102,7 @@ export function NewCaseDialog({ clients, initialClientId, year }: NewCaseDialogP
             {error}
           </p>
         )}
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-auto flex justify-end gap-3 pt-6">
           <button
             type="button"
             onClick={() => router.push("/case-studies")}
