@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CLIENT_SORT, filterClientRows, nextClientSort, sortClientRows, type ClientRow } from "./filter-sort";
 
-const row = (code: string, name: string, caseCount = 0): ClientRow => ({ id: `id-${code}`, code, name, caseCount, complete: true, logoUrl: null });
+const row = (code: string, name: string, caseCount = 0): ClientRow => ({ id: `id-${code}`, code, name, caseCount, approvedCount: 0, complete: true, logoUrl: null });
 const rows = [row("LUMA", "Lumen Arte", 1), row("CIT", "Città di Torino", 4), row("LUM", "Lumen Srl", 2), row("ACM", "acme", 0)];
 
 describe("clients filter and sort", () => {

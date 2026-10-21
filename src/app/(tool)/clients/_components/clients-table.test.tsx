@@ -8,11 +8,11 @@ const { ClientsTable } = await import("./clients-table");
 const { SEARCH_DEBOUNCE_MS } = await import("@/app/(tool)/case-studies/_components/case-studies-table");
 const { it: dict, fill } = await import("@/shared/i18n/it");
 
-const LUMEN: ClientRow = { id: "cccccccc-0000-4000-8000-000000000001", code: "LUM", name: "Lumen Srl", caseCount: 2, complete: true, logoUrl: null };
-const ACME: ClientRow = { id: "cccccccc-0000-4000-8000-000000000003", code: "ACM", name: "Acme", caseCount: 0, complete: false, logoUrl: null };
+const LUMEN: ClientRow = { id: "cccccccc-0000-4000-8000-000000000001", code: "LUM", name: "Lumen Srl", caseCount: 2, approvedCount: 0, complete: true, logoUrl: null };
+const ACME: ClientRow = { id: "cccccccc-0000-4000-8000-000000000003", code: "ACM", name: "Acme", caseCount: 0, approvedCount: 0, complete: false, logoUrl: null };
 const rows: ClientRow[] = [
   LUMEN,
-  { id: "cccccccc-0000-4000-8000-000000000002", code: "CIT", name: "Città di Torino", caseCount: 10, complete: true, logoUrl: null },
+  { id: "cccccccc-0000-4000-8000-000000000002", code: "CIT", name: "Città di Torino", caseCount: 10, approvedCount: 0, complete: true, logoUrl: null },
   ACME,
 ];
 
