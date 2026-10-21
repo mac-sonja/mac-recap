@@ -9,6 +9,8 @@ export interface ClientRow {
   name: string;
   /** Non-deleted case studies of this client. */
   caseCount: number;
+  /** Of those, the approved ones: with at least one the card offers **Scarica** (the client pack). */
+  approvedCount: number;
   /** Every required field is filled; an unfinished client's row opens its wizard. */
   complete: boolean;
   /** A signed URL of the client's logo (valid minutes), or null: the card then shows the monogram. */

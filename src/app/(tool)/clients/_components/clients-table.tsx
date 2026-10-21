@@ -4,6 +4,7 @@ import { Building2, ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
+import { DownloadButton } from "@/app/_components/download-button";
 import { CARD, SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
 import { clientHref, clientWizardHref } from "@/app/_lib/routes";
 import { SEARCH_DEBOUNCE_MS } from "@/app/(tool)/case-studies/_components/case-studies-table";
@@ -224,7 +225,7 @@ export function ClientsTable({ rows, canManage }: ClientsTableProps) {
           {visible.map((row) => {
             const href = rowHref(row);
             return (
-              <li key={row.id} data-client-id={row.id}>
+              <li key={row.id} data-client-id={row.id} className="relative">
                 <Link
                   href={href}
                   className={cn(
@@ -256,8 +257,21 @@ export function ClientsTable({ rows, canManage }: ClientsTableProps) {
                     >
                       {row.complete ? it.clients.complete : it.clients.incomplete}
                     </span>
+                    {/* Room for Scarica, which sits over the card: a button can't live inside its link. */}
+                    {row.approvedCount > 0 && <span aria-hidden="true" className="ml-auto h-7 w-24" />}
                   </span>
                 </Link>
+                {row.approvedCount > 0 && (
+                  <div className="absolute right-4 bottom-4">
+                    <DownloadButton
+                      label={fill(it.download.packLabel, { name: row.name })}
+                      title={fill(it.download.packTitle, { name: row.name })}
+                      description={
+                        row.approvedCount === 1 ? it.download.packDescriptionOne : fill(it.download.packDescription, { n: row.approvedCount })
+                      }
+                    />
+                  </div>
+                )}
               </li>
             );
           })}

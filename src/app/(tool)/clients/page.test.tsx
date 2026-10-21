@@ -8,6 +8,7 @@ import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const listClientSummaries = vi.fn<() => Promise<Result<ClientSummary[]>>>();
+const list = vi.fn<() => Promise<Result<{ status: string; client: { id: string } }[]>>>();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -18,6 +19,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
 vi.mock("@/modules/case-study", () => ({
   listClientSummaries: () => listClientSummaries(),
+  list: () => list(),
   CLIENT_INDUSTRIES: ["interior_design", "energia", "risorse_umane", "lusso"],
 }));
 
@@ -37,6 +39,8 @@ const renderPage = async () => renderToStaticMarkup(await ClientsPage());
 beforeEach(() => {
   requireSurface.mockReset();
   listClientSummaries.mockReset();
+  list.mockReset();
+  list.mockResolvedValue(ok([]));
 });
 
 describe("ClientsPage", () => {
@@ -53,6 +57,20 @@ describe("ClientsPage", () => {
     expect(html).toContain(`href="/clients/${LUMEN.id}"`);
     expect(html).toMatch(new RegExp(`<span class="[^"]*tabular-nums[^"]*">${fill(dict.clients.caseCount, { n: 2 })}</span>`));
     expect(html).not.toMatch(new RegExp(`>${LUMEN.id}<`));
+  });
+
+  it("offers Scarica (the client pack) only on cards with an approved case", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    listClientSummaries.mockResolvedValue(ok([ACME, LUMEN]));
+    list.mockResolvedValue(
+      ok([
+        { status: "approved", client: { id: LUMEN.id } },
+        { status: "draft", client: { id: LUMEN.id } },
+        { status: "draft", client: { id: ACME.id } },
+      ]),
+    );
+    const html = await renderPage();
+    expect(html.match(/aria-label="Scarica il pack di [^"]+"/g)).toEqual([`aria-label="${fill(dict.download.packLabel, { name: LUMEN.name })}"`]);
   });
 
   it("carries each client's signed logo URL to its card; a client without one keeps the monogram", async () => {
