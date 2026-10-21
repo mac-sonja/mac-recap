@@ -16,7 +16,7 @@ export type CaseStudyRow = Omit<Tables<"case_study">, "client_id"> & {
 
 // Reads embed the client; the case's own `client_id` is `client.id`.
 const CASE_STUDY_COLUMNS =
-  "id, code, number, name, year, locale, business_line, status, project_order_ref, head_revision_id, approved_revision_id, head_version, created_by, created_at, updated_at, deleted_at, client(id, name, code)";
+  "id, code, number, name, year, locale, business_lines, status, project_order_ref, head_revision_id, approved_revision_id, head_version, created_by, created_at, updated_at, deleted_at, client(id, name, code)";
 const CASE_EVENT_COLUMNS = "id, case_id, revision_id, actor_id, type, at, data";
 
 /** Postgres foreign_key_violation, and the constraint naming an unknown case. */
@@ -39,11 +39,12 @@ const CREATE_REFUSALS: Refusals = {
 const UPDATE_DETAILS_REFUSALS: Refusals = {
   NOT_FOUND: { code: "NOT_FOUND", message: "No case study with this id." },
   STALE_STATUS: { code: "STALE_STATUS", message: "The case study is no longer a draft." },
-  INVALID_INPUT: { code: "INVALID_INPUT", message: "businessLine: Required." },
+  INVALID_INPUT: { code: "INVALID_INPUT", message: "businessLines: Required." },
+  CLIENT_NOT_FOUND: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
 };
 /** Postgres check_violation, and the constraint naming a business line outside the list. */
 const CHECK_VIOLATION = "23514";
-const BUSINESS_LINE_CHECK = "case_study_business_line_check";
+const BUSINESS_LINE_CHECK = "case_study_business_lines_check";
 
 /** Whether `error` is the business line check refusing the value (any other check is a write failure). */
 const isBusinessLineCheck = (error: { code: string; message: string; details?: string | null }) =>
@@ -59,7 +60,7 @@ export function toCaseStudy(row: CaseStudyRow): Result<CaseStudy> {
     client: row.client,
     year: row.year,
     locale: row.locale,
-    businessLine: row.business_line,
+    businessLines: row.business_lines,
     status: row.status,
     projectOrderRef: row.project_order_ref,
     headRevisionId: row.head_revision_id,
@@ -95,7 +96,7 @@ export function toCaseEvent(row: CaseEventRow): Result<CaseEvent> {
 
 /** The business line check refused the value: the domain schema should have caught it first. */
 function businessLineRefused(): Result<never> {
-  return err({ code: "INVALID_INPUT", message: "businessLine: Invalid option.", details: { fields: ["businessLine"] } });
+  return err({ code: "INVALID_INPUT", message: "businessLines: Invalid option.", details: { fields: ["businessLines"] } });
 }
 
 export function createSupabaseCaseStudyRepository(
@@ -123,8 +124,7 @@ export function createSupabaseCaseStudyRepository(
         p_client_id: input.clientId,
         p_year: input.year,
         p_locale: input.locale,
-        // The function takes null (a case created before its details); the generated types can't say so.
-        p_business_line: input.businessLine as string,
+        p_business_lines: input.businessLines,
         p_actor_id: actorId,
       });
       if (error) {
@@ -146,14 +146,16 @@ export function createSupabaseCaseStudyRepository(
       const { data, error } = await client().rpc("update_case_study_details", {
         p_case_id: input.caseId,
         p_name: input.name,
+        p_client_id: input.clientId,
         p_year: input.year,
         p_locale: input.locale,
-        p_business_line: input.businessLine,
+        p_business_lines: input.businessLines,
         p_actor_id: actorId,
       });
       if (error) {
         const refused = refusalOf(error, UPDATE_DETAILS_REFUSALS);
-        if (refused?.code === "INVALID_INPUT") return err({ ...refused, details: { fields: ["businessLine"] } });
+        if (refused?.code === "INVALID_INPUT") return err({ ...refused, details: { fields: ["businessLines"] } });
+        if (refused?.code === "CLIENT_NOT_FOUND") return err({ ...refused, details: { clientId: input.clientId } });
         if (refused) return err({ ...refused, details: { id: input.caseId } });
         if (isBusinessLineCheck(error)) return businessLineRefused();
         log.error(`case_study details update failed: ${error.code}`, { caseId: input.caseId, actorId });

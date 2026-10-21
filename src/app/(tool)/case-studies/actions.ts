@@ -9,7 +9,7 @@ import type { Asset, DetailsFieldSaved, DetailsForm, ListedAsset, PresignedAsset
 
 /**
  * Creates a case study (status `draft`, permanent id, readable code such as
- * `LUM-2026-01`) with its `case_created` event. Input: `{ name, clientId, year, locale?, businessLine }`.
+ * `LUM-2026-01`) with its `case_created` event. Input: `{ name, clientId, year, locale?, businessLines? }`.
  * 403 `FORBIDDEN` when the actor's role may not `create case`; 400 `INVALID_INPUT`
  * names each field; 404 `CLIENT_NOT_FOUND` for an unknown client. Nothing is
  * written on any error.
@@ -25,7 +25,7 @@ export async function createCaseStudy(input: unknown): Promise<ActionResult<Case
 
 /**
  * Saves a draft's name, year, locale and business line (wizard step 1, Story 2.17).
- * Input: `{ caseId, name, year, locale, businessLine }`; the client never changes.
+ * Input: `{ caseId, name, clientId, year, locale, businessLines }`; a client or year change renumbers the draft.
  * 403 `FORBIDDEN` when the actor's role may not `create case`; 400 `INVALID_INPUT`
  * names each field; 404 `NOT_FOUND`; 409 `STALE_STATUS` once the case is no longer a
  * draft. Nothing is written on any error.

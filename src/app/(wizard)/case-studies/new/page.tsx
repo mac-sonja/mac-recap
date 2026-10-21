@@ -33,7 +33,7 @@ export interface NewCaseStudyPageProps {
  * With `?caseId=` it loads that case server-side; an unknown, malformed or deleted id
  * (`NOT_FOUND`) or a case that is no longer a draft goes back to Case studies, and
  * any other lookup failure throws into the error boundary. The details are complete
- * once the case has a business line; its material is checked once. With no `step`
+ * once the case has at least one business line (Servizi); its material is checked once. With no `step`
  * (or an unknown one) the wizard opens the first incomplete step: Materiale without a
  * file, else Dettagli without a business line, else Genera. Materiale and Dettagli are
  * always open; `step=3` needs both, otherwise it redirects to the first step it lacks.
@@ -65,12 +65,12 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   }
   // The wizard edits drafts only; any other status goes back to Case studies.
   if (found.value.status !== "draft") redirect("/case-studies");
-  const { id, code, name, status, year, locale, businessLine, client } = found.value;
+  const { id, code, name, status, year, locale, businessLines, client } = found.value;
   const wizardCase = { id, code, name, status, clientName: client.name };
 
   // The opening step, the gate on step 3, and the stepper links.
   // A failed material check counts as no material.
-  const detailsComplete = businessLine !== null;
+  const detailsComplete = businessLines.length > 0;
   const has = await material.hasMaterial(id);
   const hasMaterial = has.ok && has.value;
   const firstIncomplete = !hasMaterial ? 1 : !detailsComplete ? 2 : 3;
@@ -82,12 +82,16 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   if (requested === 2) {
     const form = await material.getDetailsForm({ caseId: id });
     if (!form.ok) throw new Error(`Details could not be loaded: ${form.error.code}`);
+    // The client can change while the case is a draft (owner, 2026-10-21): offer every client.
+    // Without `list clients` (or when the list fails) the field offers the case's own client only.
+    const listed = authorize(shell.actor, "list clients").ok ? await caseStudy.listClients() : null;
+    const clients = listed?.ok ? listed.value : [];
     return (
       <WizardFrame caseStudy={wizardCase} current={2} reachable={reachable}>
         <CaseDetailsStep
           key={id}
-          caseStudy={{ id, code, name, year, locale, businessLine, client }}
-          clients={[]}
+          caseStudy={{ id, code, name, year, locale, businessLines, client }}
+          clients={clients}
           defaultYear={year}
           yearMin={caseStudy.YEAR_MIN}
           yearMax={caseStudy.YEAR_MAX}

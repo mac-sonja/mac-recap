@@ -41,6 +41,7 @@ const actor: Actor = {
 
 const ACME: ClientRef = { id: "cccccccc-0000-4000-8000-000000000001", name: "Acme", code: "ACM" };
 const UNKNOWN_CLIENT_ID = "cccccccc-0000-4000-8000-00000000ffff";
+const LUMEN_REF: ClientRef = { id: "cccccccc-0000-4000-8000-000000000002", name: "Lumen", code: "LUM" };
 
 /**
  * In-memory CaseStudyRepository: mirrors the DB defaults and the create
@@ -50,7 +51,10 @@ const UNKNOWN_CLIENT_ID = "cccccccc-0000-4000-8000-00000000ffff";
 function fakeRepository() {
   const cases = new Map<string, CaseStudy>();
   const events: CaseEvent[] = [];
-  const clients = new Map<string, ClientRef>([[ACME.id, ACME]]);
+  const clients = new Map<string, ClientRef>([
+    [ACME.id, ACME],
+    [LUMEN_REF.id, LUMEN_REF],
+  ]);
   const counters = new Map<string, number>();
   let n = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
@@ -96,28 +100,34 @@ function fakeRepository() {
           code: row.code,
           year: row.year,
           locale: row.locale,
-          businessLine: row.businessLine,
+          businessLines: row.businessLines,
         },
       });
       return ok(row);
     }),
     // Mirrors update_case_study_details: a non-deleted draft; an unchanged save writes nothing.
-    updateDetails: vi.fn<CaseStudyRepository["updateDetails"]>(async ({ caseId, ...fields }, actorId) => {
+    updateDetails: vi.fn<CaseStudyRepository["updateDetails"]>(async ({ caseId, clientId, ...fields }, actorId) => {
       const row = cases.get(caseId);
       if (!row || row.deletedAt !== null) return err({ code: "NOT_FOUND", message: "No case study with this id." });
       if (row.status !== "draft") return err({ code: "STALE_STATUS", message: "No longer a draft." });
       const same =
-        row.name === fields.name && row.year === fields.year && row.locale === fields.locale && row.businessLine === fields.businessLine;
+        row.name === fields.name &&
+        row.client.id === clientId &&
+        row.year === fields.year &&
+        row.locale === fields.locale &&
+        row.businessLines.join() === fields.businessLines.join();
       if (same) return ok(row);
-      // A year change takes the next number for (client, new year), as create does.
+      const client = clients.get(clientId);
+      if (client === undefined) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
+      // A client or year change takes the next number for (client, year), as create does.
       let { number, code } = row;
-      if (fields.year !== row.year) {
-        const pair = `${row.client.id}/${fields.year}`;
+      if (clientId !== row.client.id || fields.year !== row.year) {
+        const pair = `${clientId}/${fields.year}`;
         number = (counters.get(pair) ?? 0) + 1;
         counters.set(pair, number);
-        code = `${row.client.code}-${fields.year}-${String(number).padStart(2, "0")}`;
+        code = `${client.code}-${fields.year}-${String(number).padStart(2, "0")}`;
       }
-      const updated: CaseStudy = { ...row, ...fields, number, code };
+      const updated: CaseStudy = { ...row, ...fields, client, number, code };
       cases.set(caseId, updated);
       events.push({ id: uuid(), caseId, revisionId: null, actorId, type: CASE_DETAILS_UPDATED, at: now, data: { ...fields } });
       return ok(updated);
@@ -163,7 +173,7 @@ function fakeRepository() {
 describe("create", () => {
   it("creates a draft case with its code, locale it, created_by the actor and one case_created event", async () => {
     const { repo, events } = fakeRepository();
-    const result = await makeCreateCaseStudy(repo)(actor, { name: " Rebrand ", clientId: ACME.id, year: 2026, businessLine: "branding" });
+    const result = await makeCreateCaseStudy(repo)(actor, { name: " Rebrand ", clientId: ACME.id, year: 2026, businessLines: ["branding"] });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toMatchObject({
@@ -173,11 +183,11 @@ describe("create", () => {
       number: 1,
       year: 2026,
       locale: "it",
-      businessLine: "branding",
+      businessLines: ["branding"],
       status: "draft",
       createdBy: actor.id,
     });
-    expect(repo.create).toHaveBeenCalledWith({ name: "Rebrand", clientId: ACME.id, year: 2026, locale: "it", businessLine: "branding" }, actor.id);
+    expect(repo.create).toHaveBeenCalledWith({ name: "Rebrand", clientId: ACME.id, year: 2026, locale: "it", businessLines: ["branding"] }, actor.id);
     expect(events).toEqual([
       expect.objectContaining({
         caseId: result.value.id,
@@ -190,11 +200,11 @@ describe("create", () => {
 
   it("drops a free-text client and any code the caller sends", async () => {
     const { repo } = fakeRepository();
-    await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, client: "Acme", code: "ZZZ-1999-01", year: 2026, businessLine: "branding" });
-    expect(repo.create).toHaveBeenCalledWith({ name: "R", clientId: ACME.id, year: 2026, locale: "it", businessLine: "branding" }, actor.id);
+    await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, client: "Acme", code: "ZZZ-1999-01", year: 2026, businessLines: ["branding"] });
+    expect(repo.create).toHaveBeenCalledWith({ name: "R", clientId: ACME.id, year: 2026, locale: "it", businessLines: ["branding"] }, actor.id);
   });
 
-  const BL = { businessLine: "video" };
+  const BL = { businessLines: ["video"] };
   it.each([
     ["empty name", { name: "", clientId: ACME.id, year: 2026, ...BL }, ["name"]],
     ["no client picked", { name: "Rebrand", clientId: "", year: 2026, ...BL }, ["clientId"]],
@@ -203,8 +213,8 @@ describe("create", () => {
     ["non-integer year", { name: "R", clientId: ACME.id, year: 2026.1, ...BL }, ["year"]],
     ["year out of range", { name: "R", clientId: ACME.id, year: 1850, ...BL }, ["year"]],
     ["bad locale", { name: "R", clientId: ACME.id, year: 2026, locale: "de", ...BL }, ["locale"]],
-    ["an unknown business line", { name: "R", clientId: ACME.id, year: 2026, businessLine: "moda" }, ["businessLine"]],
-    ["a business line label", { name: "R", clientId: ACME.id, year: 2026, businessLine: "Social media" }, ["businessLine"]],
+    ["an unknown business line", { name: "R", clientId: ACME.id, year: 2026, businessLines: ["moda"] }, ["businessLines"]],
+    ["a business line label", { name: "R", clientId: ACME.id, year: 2026, businessLines: ["Social media"] }, ["businessLines"]],
   ])("%s → INVALID_INPUT naming the fields; nothing written", async (_label, input, fields) => {
     const { repo, cases, events } = fakeRepository();
     const result = await makeCreateCaseStudy(repo)(actor, input);
@@ -220,7 +230,7 @@ describe("create", () => {
 
   it("an unknown client → CLIENT_NOT_FOUND; nothing written", async () => {
     const { repo, cases, events } = fakeRepository();
-    const result = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: UNKNOWN_CLIENT_ID, year: 2026, businessLine: "branding" });
+    const result = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: UNKNOWN_CLIENT_ID, year: 2026, businessLines: ["branding"] });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("CLIENT_NOT_FOUND");
     expect(cases.size).toBe(0);
@@ -231,62 +241,75 @@ describe("create", () => {
     const failure = err({ code: "CASE_STUDY_WRITE_FAILED", message: "down" });
     const { repo } = fakeRepository();
     repo.create.mockResolvedValueOnce(failure);
-    expect(await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLine: "branding" })).toEqual(failure);
+    expect(await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLines: ["branding"] })).toEqual(failure);
   });
 });
 
 describe("updateDetails", () => {
   async function seeded() {
     const fake = fakeRepository();
-    const created = await makeCreateCaseStudy(fake.repo)(actor, { name: "Rebrand", clientId: ACME.id, year: 2026, businessLine: "branding" });
+    const created = await makeCreateCaseStudy(fake.repo)(actor, { name: "Rebrand", clientId: ACME.id, year: 2026, businessLines: ["branding"] });
     if (!created.ok) throw new Error("setup");
     fake.events.length = 0;
     return { ...fake, created: created.value };
   }
 
-  it("saves trimmed name, year, locale and business line, keeps the client, renumbers on the year change, and records case_details_updated", async () => {
+  it("saves trimmed name, year, locale and business line, renumbers on the year change, drops unknown keys, and records case_details_updated", async () => {
     const { repo, events, created } = await seeded();
     const result = await makeUpdateCaseStudyDetails(repo)(actor, {
       caseId: created.id,
       name: " Rebrand 2 ",
+      clientId: ACME.id,
       year: 2025,
       locale: "en",
-      businessLine: "social_media",
-      clientId: UNKNOWN_CLIENT_ID,
+      businessLines: ["social_media"],
       code: "ZZZ-1999-01",
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(repo.updateDetails).toHaveBeenCalledExactlyOnceWith(
-      { caseId: created.id, name: "Rebrand 2", year: 2025, locale: "en", businessLine: "social_media" },
+      { caseId: created.id, name: "Rebrand 2", clientId: ACME.id, year: 2025, locale: "en", businessLines: ["social_media"] },
       actor.id,
     );
-    expect(result.value).toMatchObject({ name: "Rebrand 2", year: 2025, locale: "en", businessLine: "social_media", client: ACME, code: "ACM-2025-01" });
+    expect(result.value).toMatchObject({ name: "Rebrand 2", year: 2025, locale: "en", businessLines: ["social_media"], client: ACME, code: "ACM-2025-01" });
     expect(events).toEqual([expect.objectContaining({ caseId: created.id, type: CASE_DETAILS_UPDATED, actorId: actor.id })]);
   });
 
   it("passes a year change through; the repository renumbers the draft", async () => {
     const { repo, created } = await seeded();
-    const result = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: created.id, name: "Rebrand", year: 2025, locale: "it", businessLine: "branding" });
+    const result = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: created.id, name: "Rebrand", clientId: ACME.id, year: 2025, locale: "it", businessLines: ["branding"] });
     expect(result.ok && [result.value.code, result.value.number]).toEqual(["ACM-2025-01", 1]);
+  });
+
+  it("passes a client change through; the code follows the new client (owner, 2026-10-21)", async () => {
+    const { repo, created } = await seeded();
+    const result = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: created.id, name: "Rebrand", clientId: LUMEN_REF.id, year: 2026, locale: "it", businessLines: ["branding"] });
+    expect(result.ok && [result.value.client.id, result.value.code]).toEqual([LUMEN_REF.id, "LUM-2026-01"]);
+  });
+
+  it("an unknown client → CLIENT_NOT_FOUND; nothing written", async () => {
+    const { repo, events, created } = await seeded();
+    const result = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: created.id, name: "Rebrand", clientId: UNKNOWN_CLIENT_ID, year: 2026, locale: "it", businessLines: ["branding"] });
+    expect(result.ok ? null : result.error.code).toBe("CLIENT_NOT_FOUND");
+    expect(events).toEqual([]);
   });
 
   it("writes nothing when every field is unchanged", async () => {
     const { repo, events, created } = await seeded();
-    const result = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: created.id, name: "Rebrand", year: 2026, locale: "it", businessLine: "branding" });
+    const result = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: created.id, name: "Rebrand", clientId: ACME.id, year: 2026, locale: "it", businessLines: ["branding"] });
     expect(result).toEqual(ok(created));
     expect(events).toEqual([]);
   });
 
   it.each([
-    ["no business line", { name: "R", year: 2026, locale: "it" }, ["businessLine"]],
-    ["an unknown business line", { name: "R", year: 2026, locale: "it", businessLine: "moda" }, ["businessLine"]],
-    ["empty name", { name: " ", year: 2026, locale: "it", businessLine: "video" }, ["name"]],
-    ["no locale", { name: "R", year: 2026, businessLine: "video" }, ["locale"]],
-    ["year out of range", { name: "R", year: 2101, locale: "it", businessLine: "video" }, ["year"]],
+    ["no business line", { name: "R", year: 2026, locale: "it" }, ["businessLines"]],
+    ["an unknown business line", { name: "R", year: 2026, locale: "it", businessLines: ["moda"] }, ["businessLines"]],
+    ["empty name", { name: " ", year: 2026, locale: "it", businessLines: ["video"] }, ["name"]],
+    ["no locale", { name: "R", year: 2026, businessLines: ["video"] }, ["locale"]],
+    ["year out of range", { name: "R", year: 2101, locale: "it", businessLines: ["video"] }, ["year"]],
   ])("%s → INVALID_INPUT naming the fields; nothing written", async (_label, input, fields) => {
     const { repo, events, created } = await seeded();
-    const result = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: created.id, ...input });
+    const result = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: created.id, clientId: ACME.id, ...input });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("INVALID_INPUT");
@@ -298,7 +321,7 @@ describe("updateDetails", () => {
 
   it("a malformed case id → INVALID_INPUT; an unknown one → NOT_FOUND; a non-draft → STALE_STATUS", async () => {
     const { repo, cases, created } = await seeded();
-    const fields = { name: "R", year: 2026, locale: "it", businessLine: "video" };
+    const fields = { name: "R", clientId: ACME.id, year: 2026, locale: "it", businessLines: ["video"] };
     const malformed = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: "nope", ...fields });
     expect(malformed.ok ? null : malformed.error.code).toBe("INVALID_INPUT");
     const unknown = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: "11111111-1111-4111-8111-111111111111", ...fields });
@@ -1162,7 +1185,7 @@ describe("listClients", () => {
 describe("get", () => {
   it("returns an existing case", async () => {
     const { repo } = fakeRepository();
-    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLine: "branding" });
+    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLines: ["branding"] });
     if (!created.ok) throw new Error("setup");
     expect(await makeGetCaseStudy(repo)(created.value.id)).toEqual(ok(created.value));
   });
@@ -1175,7 +1198,7 @@ describe("get", () => {
 
   it("returns NOT_FOUND for a soft-deleted case", async () => {
     const { repo, cases } = fakeRepository();
-    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLine: "branding" });
+    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLines: ["branding"] });
     if (!created.ok) throw new Error("setup");
     cases.set(created.value.id, { ...created.value, deletedAt: "2026-10-09T11:00:00Z" });
     const result = await makeGetCaseStudy(repo)(created.value.id);
@@ -1204,7 +1227,7 @@ describe("list", () => {
   async function seeded() {
     const fake = fakeRepository();
     const make = async (name: string, status: CaseStatus, updatedAt: string, deletedAt: string | null = null) => {
-      const created = await makeCreateCaseStudy(fake.repo)(actor, { name, clientId: ACME.id, year: 2026, businessLine: "branding" });
+      const created = await makeCreateCaseStudy(fake.repo)(actor, { name, clientId: ACME.id, year: 2026, businessLines: ["branding"] });
       if (!created.ok) throw new Error("setup");
       fake.cases.set(created.value.id, { ...created.value, status, updatedAt, deletedAt });
       return created.value.id;
@@ -1267,7 +1290,7 @@ describe("list", () => {
     const { repo, ids, clients } = await seeded();
     const other: ClientRef = { id: "cccccccc-0000-4000-8000-000000000002", name: "Beta", code: "BET" };
     clients.set(other.id, other);
-    const created = await makeCreateCaseStudy(repo)(actor, { name: "Other", clientId: other.id, year: 2026, businessLine: "branding" });
+    const created = await makeCreateCaseStudy(repo)(actor, { name: "Other", clientId: other.id, year: 2026, businessLines: ["branding"] });
     if (!created.ok) throw new Error("setup");
     const result = await makeListCaseStudies(repo)({ clientId: other.id });
     expect(repo.list).toHaveBeenCalledWith({ clientId: other.id });
@@ -1288,7 +1311,7 @@ describe("list", () => {
 describe("recordEvent", () => {
   it("appends one event with the actor", async () => {
     const { repo, events } = fakeRepository();
-    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLine: "branding" });
+    const created = await makeCreateCaseStudy(repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLines: ["branding"] });
     if (!created.ok) throw new Error("setup");
     const result = await makeRecordEvent(repo)(actor, {
       caseId: created.value.id,
@@ -1322,7 +1345,7 @@ describe("transition", () => {
   /** A fake repository holding one case in `status`, with the create event cleared. */
   async function caseIn(status: CaseStatus, deletedAt: string | null = null) {
     const fake = fakeRepository();
-    const created = await makeCreateCaseStudy(fake.repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLine: "branding" });
+    const created = await makeCreateCaseStudy(fake.repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLines: ["branding"] });
     if (!created.ok) throw new Error("setup");
     fake.cases.set(created.value.id, { ...created.value, status, deletedAt });
     fake.events.length = 0;

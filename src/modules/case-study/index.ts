@@ -140,8 +140,8 @@ export type { FieldIssue } from "@/modules/case-study/domain/validation";
 /**
  * Creates a case study (status `draft`, permanent DB-generated id, and the next
  * readable code for its client and year, e.g. `LUM-2026-01`) and its
- * `case_created` event in one transaction. Input `{ name, clientId, year, locale?, businessLine }`
- * (`businessLine` one of `BUSINESS_LINES`).
+ * `case_created` event in one transaction. Input `{ name, clientId, year, locale?, businessLines? }`
+ * (`businessLines` from `BUSINESS_LINES`, none by default).
  * Call only after `authorize(actor, 'create case')`. `INVALID_INPUT` names each
  * failing field in `details.fields`; `CLIENT_NOT_FOUND` for an unknown client.
  * Nothing is written on any error.
@@ -151,7 +151,7 @@ export function create(actor: Actor, input: unknown): Promise<Result<CaseStudy>>
 }
 
 /**
- * Saves a draft's details (Story 2.17): input `{ caseId, name, year, locale, businessLine }`,
+ * Saves a draft's details (Story 2.17): input `{ caseId, name, clientId, year, locale, businessLines }`,
  * every field as it should be after the save. The client never changes; a year change renumbers the draft in the new year (next number for its client, new code; owner 2026-10-20).
  * A changed save writes one `case_details_updated` event with the actor in the same
  * transaction; an unchanged one writes nothing. Call only after

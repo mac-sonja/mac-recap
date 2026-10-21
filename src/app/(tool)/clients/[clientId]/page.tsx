@@ -56,7 +56,7 @@ export default async function ClientPage({ params }: ClientPageProps) {
     clientCode: c.client.code,
     year: c.year,
     status: c.status,
-    businessLine: c.businessLine,
+    businessLines: c.businessLines,
     updatedAt: c.updatedAt,
     updatedLabel: formatDateTime(c.updatedAt),
   }));

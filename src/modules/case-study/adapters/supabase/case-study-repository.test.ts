@@ -9,7 +9,7 @@ const row = (over: Record<string, unknown> = {}) => ({
   client: { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
   year: 2026,
   locale: "it",
-  business_line: "branding",
+  business_lines: ["branding"],
   status: "approved",
   project_order_ref: null,
   head_revision_id: null,
@@ -56,7 +56,7 @@ const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
 const ACTOR_ID = "00000000-0000-4000-8000-000000000002";
 
 describe("createSupabaseCaseStudyRepository().create", () => {
-  const input = { name: "Rebrand", clientId: CLIENT_ID, year: 2026, locale: "it" as const, businessLine: "branding" as const };
+  const input = { name: "Rebrand", clientId: CLIENT_ID, year: 2026, locale: "it" as const, businessLines: ["branding" as const] };
 
   it("calls create_case_study with the client id, then re-reads the case with its client", async () => {
     const { factory, rpc, select, eq, is } = stubClient({ data: row({ status: "draft" }), error: null }, { data: { id: row().id }, error: null });
@@ -66,7 +66,7 @@ describe("createSupabaseCaseStudyRepository().create", () => {
       p_client_id: CLIENT_ID,
       p_year: 2026,
       p_locale: "it",
-      p_business_line: "branding",
+      p_business_lines: ["branding"],
       p_actor_id: ACTOR_ID,
     });
     expect(String(select.mock.calls[0])).toContain("business_line");
@@ -78,18 +78,18 @@ describe("createSupabaseCaseStudyRepository().create", () => {
       value: expect.objectContaining({
         code: "LUM-2026-01",
         number: 1,
-        businessLine: "branding",
+        businessLines: ["branding"],
         client: { id: CLIENT_ID, name: "Lumen Srl", code: "LUM" },
       }),
     });
   });
 
   it.each([
-    ["the business line check", { code: "23514", message: 'new row for relation "case_study" violates check constraint "case_study_business_line_check"' }],
+    ["the business line check", { code: "23514", message: 'new row for relation "case_study" violates check constraint "case_study_business_lines_check"' }],
   ])("maps %s to INVALID_INPUT naming businessLine", async (_label, error) => {
     const { factory, from } = stubClient({ data: null, error: null }, { data: null, error });
     const result = await createSupabaseCaseStudyRepository(factory).create(input, ACTOR_ID);
-    expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: "INVALID_INPUT", details: { fields: ["businessLine"] } }) });
+    expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: "INVALID_INPUT", details: { fields: ["businessLines"] } }) });
     expect(from).not.toHaveBeenCalled();
   });
 
@@ -116,28 +116,29 @@ describe("createSupabaseCaseStudyRepository().create", () => {
 });
 
 describe("createSupabaseCaseStudyRepository().updateDetails", () => {
-  const input = { caseId: row().id, name: "Rebrand 2", year: 2025, locale: "en" as const, businessLine: "video" as const };
+  const input = { caseId: row().id, name: "Rebrand 2", clientId: CLIENT_ID, year: 2025, locale: "en" as const, businessLines: ["video" as const] };
 
   it("calls update_case_study_details, then re-reads the case with its client", async () => {
-    const { factory, rpc, eq } = stubClient({ data: row({ status: "draft", business_line: "video" }), error: null }, { data: { id: row().id }, error: null });
+    const { factory, rpc, eq } = stubClient({ data: row({ status: "draft", business_lines: ["video"] }), error: null }, { data: { id: row().id }, error: null });
     const result = await createSupabaseCaseStudyRepository(factory).updateDetails(input, ACTOR_ID);
     expect(rpc).toHaveBeenCalledExactlyOnceWith("update_case_study_details", {
       p_case_id: row().id,
       p_name: "Rebrand 2",
+      p_client_id: CLIENT_ID,
       p_year: 2025,
       p_locale: "en",
-      p_business_line: "video",
+      p_business_lines: ["video"],
       p_actor_id: ACTOR_ID,
     });
     expect(eq).toHaveBeenCalledWith("id", row().id);
-    expect(result).toEqual({ ok: true, value: expect.objectContaining({ businessLine: "video", client: expect.objectContaining({ code: "LUM" }) }) });
+    expect(result).toEqual({ ok: true, value: expect.objectContaining({ businessLines: ["video"], client: expect.objectContaining({ code: "LUM" }) }) });
   });
 
   it.each([
     ["NOT_FOUND", { code: "P0001", message: "NOT_FOUND" }, { code: "NOT_FOUND", details: { id: row().id } }],
     ["STALE_STATUS", { code: "P0001", message: "STALE_STATUS" }, { code: "STALE_STATUS", details: { id: row().id } }],
-    ["INVALID_INPUT", { code: "P0001", message: "INVALID_INPUT" }, { code: "INVALID_INPUT", details: { fields: ["businessLine"] } }],
-    ["the business line check", { code: "23514", message: "violates check constraint \"case_study_business_line_check\"" }, { code: "INVALID_INPUT", details: { fields: ["businessLine"] } }],
+    ["INVALID_INPUT", { code: "P0001", message: "INVALID_INPUT" }, { code: "INVALID_INPUT", details: { fields: ["businessLines"] } }],
+    ["the business line check", { code: "23514", message: "violates check constraint \"case_study_business_lines_check\"" }, { code: "INVALID_INPUT", details: { fields: ["businessLines"] } }],
   ])("maps %s", async (_label, error, expected) => {
     const { factory, from } = stubClient({ data: null, error: null }, { data: null, error });
     const result = await createSupabaseCaseStudyRepository(factory).updateDetails(input, ACTOR_ID);
@@ -168,8 +169,8 @@ describe("another check violation", () => {
       const repo = createSupabaseCaseStudyRepository(factory);
       const result =
         write === "create"
-          ? await repo.create({ name: "R", clientId: CLIENT_ID, year: 2026, locale: "it", businessLine: "video" }, ACTOR_ID)
-          : await repo.updateDetails({ caseId: row().id, name: "R", year: 2026, locale: "it", businessLine: "video" }, ACTOR_ID);
+          ? await repo.create({ name: "R", clientId: CLIENT_ID, year: 2026, locale: "it", businessLines: ["video" as const] }, ACTOR_ID)
+          : await repo.updateDetails({ caseId: row().id, name: "R", clientId: CLIENT_ID, year: 2026, locale: "it", businessLines: ["video" as const] }, ACTOR_ID);
       expect(result.ok ? null : result.error.code).toBe("CASE_STUDY_WRITE_FAILED");
       expect(String(stdout.mock.calls[0][0])).toContain("23514");
     } finally {
@@ -180,10 +181,10 @@ describe("another check violation", () => {
 
 describe("toCaseStudy", () => {
   it("maps a legacy case without a business line to null, and rejects one outside the list", async () => {
-    const legacy = stubClient({ data: [row({ business_line: null })], error: null });
+    const legacy = stubClient({ data: [row({ business_lines: [] })], error: null });
     const listed = await createSupabaseCaseStudyRepository(legacy.factory).list({});
-    expect(listed.ok && listed.value[0].businessLine).toBeNull();
-    const bad = stubClient({ data: [row({ business_line: "moda" })], error: null });
+    expect(listed.ok && listed.value[0].businessLines).toEqual([]);
+    const bad = stubClient({ data: [row({ business_lines: ["moda"] })], error: null });
     const refused = await createSupabaseCaseStudyRepository(bad.factory).list({});
     expect(refused.ok ? null : refused.error.code).toBe("CASE_STUDY_INVALID");
   });
@@ -265,7 +266,7 @@ describe("re-read after a successful write", () => {
   const ID = row().id;
   const writes = {
     create: (repo: ReturnType<typeof createSupabaseCaseStudyRepository>) =>
-      repo.create({ name: "Rebrand", clientId: CLIENT_ID, year: 2026, locale: "it", businessLine: "branding" }, ACTOR_ID),
+      repo.create({ name: "Rebrand", clientId: CLIENT_ID, year: 2026, locale: "it", businessLines: ["branding" as const] }, ACTOR_ID),
     transition: (repo: ReturnType<typeof createSupabaseCaseStudyRepository>) =>
       repo.transition({ caseId: ID, event: "generate", from: "draft", to: "generating", actorId: ACTOR_ID }),
   };

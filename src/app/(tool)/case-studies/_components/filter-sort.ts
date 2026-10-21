@@ -14,8 +14,8 @@ export interface CaseStudyRow {
   clientCode: string;
   year: number;
   status: CaseStatus;
-  /** Null for cases created before Story 2.17 (the cell stays empty). */
-  businessLine: BusinessLine | null;
+  /** Its Servizi, in display order; empty until Dettagli (the cell stays empty). */
+  businessLines: readonly BusinessLine[];
   /** ISO timestamp, used for sorting. */
   updatedAt: string;
   /** `updatedAt` already formatted for display (Europe/Rome, Italian). */
@@ -49,9 +49,9 @@ export function normalizeForSearch(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
-/** A row's business line as shown: its Italian label, or "" for a case without one. */
-export const businessLineLabel = (row: Pick<CaseStudyRow, "businessLine">) =>
-  row.businessLine === null ? "" : it.businessLines[row.businessLine];
+/** A row's Servizi as shown: their Italian labels joined by commas, or "" for a case without any. */
+export const businessLineLabel = (row: Pick<CaseStudyRow, "businessLines">) =>
+  row.businessLines.map((line) => it.businessLines[line]).join(", ");
 
 /** The status filter: every status (*Tutti*) or exactly one. */
 export type StatusFilter = CaseStatus | "all";
@@ -90,7 +90,7 @@ function compare(a: CaseStudyRow, b: CaseStudyRow, key: SortKey): number {
     case "client":
       return collator.compare(a.clientName, b.clientName);
     case "businessLine":
-      // A case without one sorts before every label.
+      // A case without any sorts before every label; then by the labels as shown.
       return collator.compare(businessLineLabel(a), businessLineLabel(b));
     default:
       return collator.compare(a[key], b[key]);

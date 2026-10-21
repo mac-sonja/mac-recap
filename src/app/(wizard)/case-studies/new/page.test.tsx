@@ -67,7 +67,7 @@ const draft: CaseStudy = {
   client: { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
   year: 2026,
   locale: "it",
-  businessLine: "branding",
+  businessLines: ["branding"],
   status: "draft",
   projectOrderRef: "PO-SECRET-42",
   headRevisionId: null,
@@ -116,11 +116,12 @@ beforeEach(() => {
   getDetailsForm.mockResolvedValue(ok({ context: "", solution: "", results: "" }));
 });
 
-const legacy: CaseStudy = { ...draft, businessLine: null };
+const legacy: CaseStudy = { ...draft, businessLines: [] };
 const stepUrl = (step: number) => `REDIRECT /case-studies/new?caseId=${ID}&step=${step}`;
 const linkTo = (step: number) => new RegExp(`<li data-step="${step}"[^>]*><a [^>]*href="/case-studies/new\\?caseId=${ID}&amp;step=${step}"`);
 const plain = (step: number) => new RegExp(`<li data-step="${step}"[^>]*><span `);
-const radio = (html: string, label: string) => html.match(new RegExp(`<button [^>]*role="radio"[^>]*>${label}</button>`))?.[0] ?? "";
+/** A Servizi pill (a toggle button), or "". */
+const pill = (html: string, label: string) => html.match(new RegExp(`<button [^>]*aria-pressed="(?:true|false)"[^>]*>${label}</button>`))?.[0] ?? "";
 
 describe("NewCaseStudyPage", () => {
   it("guards on create case and opens the new-case dialog: client only, over Materiale (material first)", async () => {
@@ -189,7 +190,7 @@ describe("NewCaseStudyPage", () => {
     expect(listClients).not.toHaveBeenCalled();
   });
 
-  it("does not list clients when reopening a case", async () => {
+  it("does not list clients when reopening a case on Materiale", async () => {
     await render({ caseId: ID, step: "1" });
     expect(listClients).not.toHaveBeenCalled();
   });
@@ -241,7 +242,7 @@ describe("NewCaseStudyPage", () => {
   });
 
   describe("step 2 Dettagli", () => {
-    it("shows the case in the top bar and the saved details prefilled; the client is fixed", async () => {
+    it("shows the case in the top bar and the saved details prefilled; the client is a search box over every client", async () => {
       getDetailsForm.mockResolvedValue(ok({ context: "Lumen voleva un'identità unica.", solution: "", results: "" }));
       const html = await render({ caseId: ID, step: "2" });
       expect(get).toHaveBeenCalledExactlyOnceWith(ID);
@@ -252,9 +253,13 @@ describe("NewCaseStudyPage", () => {
       expect(html).toContain(">Bozza</span>");
       expect(html).toMatch(/<li data-step="2" aria-current="step"/);
       expect(html).toMatch(/<input [^>]*name="name"[^>]*value="Rebrand Lumen 2026"/);
-      expect(html.match(/<input [^>]*name="client"[^>]*>/)?.[0]).toMatch(/readonly="".*value="Lumen Srl \(LUM\)"|value="Lumen Srl \(LUM\)".*readonly=""/i);
-      expect(html).not.toContain('name="clientId"');
-      expect(radio(html, "Branding")).toContain('aria-checked="true"');
+      expect(combobox(html)).toMatch(/value="Lumen Srl \(LUM\)"/);
+      expect(combobox(html)).not.toContain("readonly");
+      expect(listClients).toHaveBeenCalledOnce();
+      expect(pill(html, "Branding")).toContain('aria-pressed="true"');
+      expect(pill(html, "Video")).toContain('aria-pressed="false"');
+      // Risultati is not asked any more (owner, 2026-10-21).
+      expect(html).not.toMatch(/<textarea [^>]*name="results"/);
       expect(html).toMatch(/<textarea [^>]*name="context"[^>]*>Lumen voleva un&#x27;identità unica\.<\/textarea>/);
       expect(html).not.toContain("PO-SECRET-42");
       expect(listAssets).not.toHaveBeenCalled();
@@ -278,8 +283,8 @@ describe("NewCaseStudyPage", () => {
       hasMaterial.mockResolvedValue(ok(true));
       const html = await render({ caseId: ID, step: "2" });
       expect(html).toMatch(/<input [^>]*name="name"[^>]*value="Rebrand Lumen 2026"/);
-      expect(html).not.toContain('aria-checked="true"');
-      const reason = html.match(/<span id="([^"]+)">Per andare avanti manca: Business line\.<\/span>/)?.[1];
+      expect(html).not.toContain('aria-pressed="true"');
+      const reason = html.match(/<span id="([^"]+)">Per andare avanti manca: Servizi\.<\/span>/)?.[1];
       expect(reason).toBeDefined();
       expect(html).toMatch(new RegExp(`<button type="submit" aria-disabled="true" aria-describedby="${reason}"[^>]*>Avanti</button>`));
       expect(html).toMatch(linkTo(1));
