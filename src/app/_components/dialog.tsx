@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef } from "react";
 
 /**
@@ -32,6 +33,8 @@ export interface DialogProps {
   children?: ReactNode;
   /** The caller's Cancel/confirm controls; the Dialog adds no strings of its own. */
   actions?: ReactNode;
+  /** When given, an × at the top right closes the dialog; the string is its accessible name. */
+  closeLabel?: string;
 }
 
 /**
@@ -40,7 +43,7 @@ export interface DialogProps {
  * a second Dialog while one is open is refused with a warning. Focus moves into the
  * dialog on open and returns to the opener on close. A backdrop click does not close it.
  */
-export function Dialog({ open, onClose, title, description, children, actions }: DialogProps) {
+export function Dialog({ open, onClose, title, description, children, actions, closeLabel }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descriptionId = useId();
@@ -105,9 +108,21 @@ export function Dialog({ open, onClose, title, description, children, actions }:
       aria-describedby={description ? descriptionId : undefined}
       className="m-auto w-full max-w-md rounded-xl bg-surface-raised p-6 text-foreground shadow-popover backdrop:bg-scrim/40 backdrop:backdrop-blur-[2px] open:motion-safe:animate-dialog-in"
     >
-      <h2 id={titleId} className="font-heading text-lg font-semibold tracking-[-0.01em] text-foreground-strong">
-        {title}
-      </h2>
+      <div className="flex items-start justify-between gap-4">
+        <h2 id={titleId} className="font-heading text-lg font-semibold tracking-[-0.01em] text-foreground-strong">
+          {title}
+        </h2>
+        {closeLabel ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={closeLabel}
+            className="-mt-1 -mr-2 flex size-8 shrink-0 items-center justify-center rounded-full text-foreground-muted transition-colors duration-150 hover:bg-surface-hover hover:text-foreground-strong"
+          >
+            <X aria-hidden="true" className="size-4" />
+          </button>
+        ) : null}
+      </div>
       {description ? (
         <p id={descriptionId} className="mt-2 font-body text-sm leading-relaxed text-foreground-muted">
           {description}

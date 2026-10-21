@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
 import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { CARD, SEARCH_FIELD, SEARCH_ICON, TH } from "@/app/_components/field-styles";
+import { DownloadButton } from "@/app/_components/download-button";
 import { StatusBadge } from "@/app/_components/status-badge";
 import { wizardHref } from "@/app/_lib/routes";
 import { CASE_STATUSES } from "@/shared/case-status";
@@ -131,7 +132,8 @@ function isTextField(el: Element | null): boolean {
 /**
  * The Case studies table: ID (the case history code, mono), Name, Client (its
  * current name), Year, Status, Business line (empty for cases created before Story
- * 2.17), Updated and Links (blank). Default sort Updated newest first; a header
+ * 2.17), Link (an icon when the case has a public link), Scarica (approved cases only,
+ * no header text) and Updated, last (owner, 2026-10-21). Default sort Updated newest first; a header
  * click sorts by it, again reverses; ID sorts codes naturally. The toolbar above the table
  * holds the status filter (*Tutti* · Bozza · In elaborazione · Da approvare ·
  * Approvato, each with its count, default *Tutti*) and the search, which covers
@@ -215,11 +217,29 @@ export function CaseStudiesTable({
         : fill(it.caseStudies.noResultsQueryStatus, { query: query.trim(), status: it.caseStudies.filter.statuses[status] });
 
   function openRow(event: MouseEvent<HTMLTableRowElement>, href: string) {
-    // The name link navigates on its own; modifier or non-primary clicks and text selection (copying an ID) do not navigate.
-    if ((event.target as Element).closest("a")) return;
+    // Links and buttons (the name, Scarica) and the Scarica dialog act on their own; modifier or
+    // non-primary clicks and text selection (copying an ID) do not navigate.
+    if ((event.target as Element).closest("a, button, dialog")) return;
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if ((window.getSelection()?.toString() ?? "") !== "") return;
     router.push(href);
+  }
+
+  function sortHeader({ key, label }: (typeof COLUMNS)[number]) {
+    const active = sort.key === key;
+    const Arrow = sort.direction === "asc" ? ArrowUp : ArrowDown;
+    return (
+      <th key={key} scope="col" aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined} className={TH}>
+        <button
+          type="button"
+          onClick={() => setSort((current) => nextSort(current, key))}
+          className={cn("inline-flex items-center gap-1 rounded-sm transition-colors hover:text-foreground", active && "text-foreground")}
+        >
+          {label}
+          <Arrow aria-hidden="true" className={cn("size-3", !active && "invisible")} />
+        </button>
+      </th>
+    );
   }
 
   return (
@@ -270,30 +290,15 @@ export function CaseStudiesTable({
             <caption className="sr-only">{it.caseStudies.table.caption}</caption>
             <thead className="border-b border-border">
               <tr>
-                {COLUMNS.map(({ key, label }) => {
-                  const active = sort.key === key;
-                  const Arrow = sort.direction === "asc" ? ArrowUp : ArrowDown;
-                  return (
-                    <th
-                      key={key}
-                      scope="col"
-                      aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
-                      className={TH}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setSort((current) => nextSort(current, key))}
-                        className={cn("inline-flex items-center gap-1 rounded-sm transition-colors hover:text-foreground", active && "text-foreground")}
-                      >
-                        {label}
-                        <Arrow aria-hidden="true" className={cn("size-3", !active && "invisible")} />
-                      </button>
-                    </th>
-                  );
-                })}
+                {COLUMNS.filter(({ key }) => key !== "updated").map(sortHeader)}
                 <th scope="col" className={TH}>
                   {it.caseStudies.table.columns.links}
                 </th>
+                {/* Scarica: the buttons speak for themselves, so the header stays empty (owner, 2026-10-21). */}
+                <th scope="col" className={TH}>
+                  <span className="sr-only">{it.download.action}</span>
+                </th>
+                {COLUMNS.filter(({ key }) => key === "updated").map(sortHeader)}
               </tr>
             </thead>
             <tbody>
@@ -326,9 +331,6 @@ export function CaseStudiesTable({
                       <StatusBadge status={row.status} />
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-foreground-muted">{businessLineLabel(row)}</td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-foreground-muted tabular-nums">
-                      <time dateTime={row.updatedAt}>{row.updatedLabel}</time>
-                    </td>
                     <td className="px-4 py-2">
                       {row.publicUrl != null && (
                         <a
@@ -342,6 +344,18 @@ export function CaseStudiesTable({
                           <Link2 aria-hidden="true" className="size-4" />
                         </a>
                       )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {row.status === "approved" && (
+                        <DownloadButton
+                          label={fill(it.download.caseLabel, { name: row.name })}
+                          title={fill(it.download.caseTitle, { name: row.name })}
+                          description={it.download.caseDescription}
+                        />
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-foreground-muted tabular-nums">
+                      <time dateTime={row.updatedAt}>{row.updatedLabel}</time>
                     </td>
                   </tr>
                 );

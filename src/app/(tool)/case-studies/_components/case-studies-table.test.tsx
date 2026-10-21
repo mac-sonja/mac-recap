@@ -90,8 +90,9 @@ describe("CaseStudiesTable", () => {
       COLUMNS.year,
       COLUMNS.status,
       COLUMNS.businessLine,
-      COLUMNS.updated,
       COLUMNS.links,
+      dict.download.action, // screen readers only: the Scarica column shows no header
+      COLUMNS.updated,
     ]);
     expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
     expect(header(COLUMNS.updated).getAttribute("aria-sort")).toBe("descending");
@@ -107,9 +108,10 @@ describe("CaseStudiesTable", () => {
     expect(cells[3].textContent).toBe("2026");
     expect(cells[4].textContent).toBe(dict.status.draft);
     expect(cells[5].textContent).toBe(dict.businessLines.social_media);
-    expect(cells[6].querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-12T10:00:00+00:00");
-    expect(cells[6].textContent).toBe("12 ott, 12:00");
-    expect(cells[7].textContent).toBe("");
+    expect(cells[6].textContent).toBe(""); // Link: no public link yet
+    expect(cells[7].textContent).toBe(""); // Scarica: a draft has nothing to download
+    expect(cells[8].querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-12T10:00:00+00:00");
+    expect(cells[8].textContent).toBe("12 ott, 12:00");
     // A case created before the business line existed leaves the cell empty.
     expect(within(table).getAllByRole("row")[2].querySelectorAll("td")[5].textContent).toBe("");
   });
@@ -392,6 +394,20 @@ describe("CaseStudiesTable", () => {
     expect(links[0]?.getAttribute("aria-label")).toBe(fill(dict.caseStudies.table.openLink, { name: "Alfa" }));
     fireEvent.click(links[0]!);
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("offers Scarica on approved rows only; it opens the format picker with Deck 16:9 chosen", async () => {
+    const user = userEvent.setup();
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    const buttons = screen.getAllByRole("button", { name: /^Scarica / });
+    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([fill(dict.download.caseLabel, { name: "Zeta" })]);
+    await user.click(buttons[0]!);
+    const dialog = screen.getByRole("dialog", { hidden: true });
+    const radios = within(dialog).getAllByRole("radio", { hidden: true }) as HTMLInputElement[];
+    expect(radios.filter((r) => !r.disabled)).toHaveLength(3);
+    expect(radios[0]?.checked).toBe(true);
+    expect(dialog.textContent).toContain(dict.download.format.deck_16_9.name);
+    expect(dialog.textContent).toContain(dict.download.soon);
   });
 
   it("keeps the status region mounted and empty while there are results", () => {
