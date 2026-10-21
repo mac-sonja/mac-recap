@@ -2,11 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
-import type { CaseStudy, ListScope } from "@/modules/case-study";
+import type { CaseActivity, CaseStudy, ListScope } from "@/modules/case-study";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const list = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
+const listActivity = vi.fn<(scope: ListScope) => Promise<Result<CaseActivity[]>>>();
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((path: string) => {
@@ -14,7 +15,10 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
-vi.mock("@/modules/case-study", () => ({ list: (scope: ListScope) => list(scope) }));
+vi.mock("@/modules/case-study", () => ({
+  list: (scope: ListScope) => list(scope),
+  listActivity: (scope: ListScope) => listActivity(scope),
+}));
 
 const { default: HomePage } = await import("./page");
 
@@ -51,6 +55,8 @@ beforeEach(() => {
   n = 0;
   requireSurface.mockReset();
   list.mockReset();
+  listActivity.mockReset();
+  listActivity.mockResolvedValue(ok([]));
 });
 
 describe("HomePage", () => {
@@ -88,26 +94,53 @@ describe("HomePage", () => {
     list.mockResolvedValue(ok([draft, caseStudy({ status: "in_review" })]));
     const html = await renderPage();
     expect(html).toContain(`href="/case-studies/new?caseId=${draft.id}"`);
-    expect(html.match(/href="\/case-studies\/new\?caseId=/g)).toHaveLength(2); // in A metà strada and in Attività
+    expect(html.match(/href="\/case-studies\/new\?caseId=/g)).toHaveLength(1); // in A metà strada
   });
 
-  it("tells each case's latest change in Attività, the name in bold", async () => {
-    requireSurface.mockResolvedValue(shell("owner_designer"));
-    list.mockResolvedValue(ok([caseStudy({ status: "in_review", name: "Showroom in tasca" }), caseStudy({ status: "approved", name: "Mattoni" })]));
-    const html = await renderPage();
-    expect(html).toContain("Attività");
-    expect(html).toContain('La bozza di <strong class="font-semibold text-foreground-strong">Showroom in tasca</strong> è pronta da rivedere.');
-    expect(html).toContain('<strong class="font-semibold text-foreground-strong">Mattoni</strong> è stata approvata.');
+  const event = (over: Partial<CaseActivity>): CaseActivity => ({
+    id: `eeeeeeee-0000-4000-8000-00000000000${++n}`,
+    type: "case_created",
+    at: "2026-10-13T07:05:00+00:00",
+    data: {},
+    actorName: "Giulia Riva",
+    case: { id: "aaaaaaaa-0000-4000-8000-000000000001", name: "Showroom in tasca", code: "LUM-2026-01", status: "draft" },
+    ...over,
   });
 
-  it("lists every case in Attività (not just five), in a list that scrolls inside its card", async () => {
+  it("reads the event log in the list scope and shows who did what, with an icon and the time", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
-    list.mockResolvedValue(ok(Array.from({ length: 8 }, () => caseStudy({ status: "approved" }))));
+    list.mockResolvedValue(ok([caseStudy({})]));
+    listActivity.mockResolvedValue(
+      ok([
+        event({ type: "transition", data: { event: "approve" }, actorName: "Paolo Greco", case: { id: "aaaaaaaa-0000-4000-8000-000000000009", name: "Mattoni", code: "LUM-2026-09", status: "approved" } }),
+        event({ type: "asset_uploaded" }),
+        event({ type: "asset_uploaded" }),
+        event({ type: "case_created" }),
+      ]),
+    );
     const html = await renderPage();
+    expect(listActivity).toHaveBeenCalledWith({});
     const activity = html.match(/<ul tabindex="0" aria-labelledby="home-activity" class="([^"]*)">(.*?)<\/ul>/);
     expect(activity?.[1]).toContain("overflow-y-auto");
-    expect(activity?.[1]).toContain("max-h-[22rem]");
-    expect(activity?.[2].match(/<li /g)).toHaveLength(8);
+    const text = [...(activity?.[2] ?? "").matchAll(/<li [^>]*>(.*?)<\/li>/g)].map((m) => m[1].replace(/<time[^>]*>.*?<\/time>/, "").replace(/<[^>]+>/g, ""));
+    expect(text).toEqual([
+      "Paolo Greco ha approvato Mattoni.",
+      "Giulia Riva ha caricato 2 file in Showroom in tasca.",
+      "Giulia Riva ha creato Showroom in tasca.",
+    ]);
+    expect(html).toContain('<strong class="font-semibold text-foreground-strong">Mattoni</strong>');
+    // A draft's line opens its wizard; an approved case has no page yet.
+    expect(activity?.[2].match(/href="\/case-studies\/new\?caseId=aaaaaaaa-0000-4000-8000-000000000001"/g)).toHaveLength(2);
+    expect(activity?.[2].match(/<svg/g)).toHaveLength(3);
+  });
+
+  it("keeps the Dashboard when the log can't be read: Attività says so", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(ok([caseStudy({})]));
+    listActivity.mockResolvedValue(err({ code: "CASE_ACTIVITY_LOOKUP_FAILED", message: "down" }));
+    const html = await renderPage();
+    expect(html).toContain("Non siamo riusciti a caricare le attività. Ricarica la pagina per riprovare.");
+    expect(html).toContain("A metà strada");
   });
 
   it("shows friendly empty lines with no cases", async () => {

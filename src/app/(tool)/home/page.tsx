@@ -1,4 +1,16 @@
-import { ArrowRight, Check, ChevronRight, Hourglass, PenLine, Sparkles, type LucideIcon } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  ChevronRight,
+  CircleAlert,
+  FilePlus2,
+  NotebookPen,
+  PenLine,
+  Sparkles,
+  Trash2,
+  Upload,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -13,12 +25,10 @@ import * as caseStudy from "@/modules/case-study";
 import { formatDateTime, formatRelative } from "@/shared/i18n/format";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
+import { activityLines, type ActivityKind, type ActivityLine } from "./_lib/activity-lines";
 
 /** How many cases each list on the Dashboard shows before *Vedi tutte*. */
 const LIST_SIZE = 5;
-
-/** How many lines *Attività* holds; past about five it scrolls inside its card (owner, 2026-10-21). */
-const ACTIVITY_SIZE = 50;
 
 interface HomeCase {
   id: string;
@@ -114,11 +124,16 @@ function CaseList({
   );
 }
 
-/** The icon in front of each *Attività* line, by the case's status. */
-const ACTIVITY_ICON: Readonly<Record<CaseStatus, LucideIcon>> = {
-  draft: PenLine,
-  generating: Hourglass,
-  in_review: Sparkles,
+/** The icon in front of each *Attività* line, by what happened (owner, 2026-10-21). */
+const ACTIVITY_ICON: Readonly<Record<ActivityKind, LucideIcon>> = {
+  created: FilePlus2,
+  detailsUpdated: PenLine,
+  storyWritten: NotebookPen,
+  uploaded: Upload,
+  removed: Trash2,
+  generate: Sparkles,
+  generated: Sparkles,
+  generationFailed: CircleAlert,
   approved: Check,
 };
 
@@ -134,8 +149,11 @@ function ActivitySentence({ template, name }: { template: string; name: string }
   );
 }
 
-/** The latest change of each case as a short sentence and how long ago it happened. */
-function Activity({ cases, more }: { cases: readonly HomeCase[]; more?: ReactNode }) {
+/**
+ * The event log as short sentences: an icon by kind, who did what to which case,
+ * and how long ago. Scrolls inside its card. `lines` is null when the log could not be read.
+ */
+function Activity({ lines, more }: { lines: readonly ActivityLine[] | null; more?: ReactNode }) {
   return (
     <section aria-labelledby="home-activity" className={cn(CARD, "flex flex-col")}>
       <div className="flex items-center justify-between gap-4 px-5 pt-4 pb-2">
@@ -144,8 +162,10 @@ function Activity({ cases, more }: { cases: readonly HomeCase[]; more?: ReactNod
         </h2>
         {more}
       </div>
-      {cases.length === 0 ? (
-        <p className="px-5 pt-2 pb-6 font-body text-sm text-foreground-muted">{it.home.activity.empty}</p>
+      {lines === null || lines.length === 0 ? (
+        <p className="px-5 pt-2 pb-6 font-body text-sm text-foreground-muted">
+          {lines === null ? it.home.activity.failed : it.home.activity.empty}
+        </p>
       ) : (
         // Scrolls inside the card; focusable so it scrolls from the keyboard too.
         <ul
@@ -153,28 +173,29 @@ function Activity({ cases, more }: { cases: readonly HomeCase[]; more?: ReactNod
           aria-labelledby="home-activity"
           className="flex max-h-[22rem] flex-col overflow-y-auto overscroll-contain px-5 pb-2 focus-visible:outline-offset-[-2px]"
         >
-          {cases.map((c) => {
-            const Icon = ACTIVITY_ICON[c.status];
+          {lines.map((line) => {
+            const Icon = ACTIVITY_ICON[line.kind];
+            const href = line.caseStatus === "draft" ? wizardHref(line.caseId) : null;
             const content = (
               <>
                 <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-foreground-muted" strokeWidth={1.75} />
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="font-body text-sm text-foreground">
-                    <ActivitySentence template={it.home.activity[c.status]} name={c.name} />
+                    <ActivitySentence template={line.template} name={line.caseName} />
                   </span>
-                  <time dateTime={c.updatedAt} title={formatDateTime(c.updatedAt)} className="font-label text-xs text-foreground-muted">
-                    {formatRelative(c.updatedAt)}
+                  <time dateTime={line.at} title={formatDateTime(line.at)} className="font-label text-xs text-foreground-muted">
+                    {formatRelative(line.at)}
                   </time>
                 </span>
               </>
             );
             return (
-              <li key={c.id} className="border-b border-border last:border-b-0">
-                {c.href === null ? (
+              <li key={line.id} className="border-b border-border last:border-b-0">
+                {href === null ? (
                   <div className="flex items-start gap-3 py-3.5">{content}</div>
                 ) : (
                   <Link
-                    href={c.href}
+                    href={href}
                     className="-mx-2 flex items-start gap-3 rounded-md px-2 py-3.5 transition-colors duration-150 hover:bg-surface-hover"
                   >
                     {content}
@@ -192,9 +213,8 @@ function Activity({ cases, more }: { cases: readonly HomeCase[]; more?: ReactNod
 /**
  * The Dashboard (owner/designer landing at `/home`, 2026-10-21): a greeting,
  * three numbers (to approve, being written, open drafts), the cases waiting for
- * a review, the drafts to pick up again and the latest activity. Same scope and
- * policy as the Case page (`list cases`); nothing here is new data, it is the
- * case list seen from the point of view of "what do I do next".
+ * a review, the drafts to pick up again and the latest activity (the case event
+ * log: who did what, when). Same scope and policy as the Case page (`list cases`).
  */
 export default async function HomePage() {
   const shell = await requireSurface("list cases");
@@ -204,8 +224,10 @@ export default async function HomePage() {
   const scope = listScopeFor(actor);
   if (scope === null || !authorize(actor, "list cases", scope).ok) redirect(landing);
 
-  const listed = await caseStudy.list(scope);
+  const [listed, activity] = await Promise.all([caseStudy.list(scope), caseStudy.listActivity(scope)]);
   if (!listed.ok) throw new Error(`Case studies could not be listed: ${listed.error.code}`);
+  // A log that can't be read leaves the rest of the Dashboard working: Attività says so.
+  const lines = activity.ok ? activityLines(activity.value) : null;
 
   const cases: HomeCase[] = listed.value
     .map((c) => ({
@@ -266,7 +288,7 @@ export default async function HomePage() {
       </div>
 
       <div className={cn("grid gap-4", canCreate && "xl:grid-cols-[1fr_20rem]")}>
-        <Activity cases={cases.slice(0, ACTIVITY_SIZE)} more={cases.length > 0 ? seeAll : undefined} />
+        <Activity lines={lines} more={cases.length > 0 ? seeAll : undefined} />
         {canCreate && (
           <section
             aria-labelledby="home-start"
