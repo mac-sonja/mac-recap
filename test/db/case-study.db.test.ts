@@ -496,8 +496,13 @@ describe("recordEvent", () => {
 
   it("stores a non-null revisionId", async () => {
     const created = await createCase();
-    const revisionId = "22222222-2222-4222-8222-222222222222";
-    const { recordEvent } = await loadCaseStudy();
+    // Story 3.3: case_event.revision_id references revision, so the id must be a real revision.
+    const { createWorkingRevision, recordEvent } = await loadCaseStudy();
+    const { caseHistoryV1 } = await import("@/modules/generation");
+    const { FORMAT_IDS } = await import("@/modules/rendering");
+    const revision = await createWorkingRevision(await devActor(), { caseId: created.id, doc: caseHistoryV1(FORMAT_IDS), expectedHeadVersion: 0 });
+    if (!revision.ok) throw new Error(`setup revision failed: ${revision.error.code}`);
+    const revisionId = revision.value.id;
     const result = await recordEvent(await devActor(), { caseId: created.id, type: "text_added", revisionId });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.revisionId).toBe(revisionId);
@@ -506,6 +511,15 @@ describe("recordEvent", () => {
       [created.id],
     );
     expect(rows).toEqual([{ revision_id: revisionId }]);
+  });
+
+  it("returns REVISION_NOT_FOUND for an unknown revisionId and writes nothing", async () => {
+    const created = await createCase();
+    const { recordEvent } = await loadCaseStudy();
+    const before = await counts();
+    const result = await recordEvent(await devActor(), { caseId: created.id, type: "text_added", revisionId: UNKNOWN_ID });
+    expect(result).toMatchObject({ ok: false, error: { code: "REVISION_NOT_FOUND" } });
+    expect(await counts()).toEqual(before);
   });
 
   it("returns NOT_FOUND for an unknown case and writes nothing", async () => {

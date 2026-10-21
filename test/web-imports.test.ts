@@ -30,6 +30,9 @@ describe("worker-only module entries (Story 3.2)", () => {
   it("no web entry reaches src/modules/*/worker.ts or the sharp/ffmpeg adapters", async () => {
     const reached = await reachedSources(root, webEntries());
     expect(reached).toContain("src/modules/material/index.ts");
+    // Story 3.3: the document schema and the format registry are pure and safe for web code.
+    expect(reached).toContain("src/modules/generation/index.ts");
+    expect(reached).toContain("src/modules/rendering/index.ts");
     expect(reached.filter((file) => WORKER_ONLY.test(file))).toEqual([]);
   });
 

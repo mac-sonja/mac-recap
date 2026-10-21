@@ -31,7 +31,7 @@ export interface CaseStudyRepository {
    * `updated_at` first; `err` only when the read fails or a row fails validation.
    */
   list(scope: ListScope): Promise<Result<CaseStudy[]>>;
-  /** Appends one event; `ok(null)` when no case has `caseId`; `err` only when the write fails. */
+  /** Appends one event; `ok(null)` when no case has `caseId`; `err REVISION_NOT_FOUND` for an unknown `revisionId`; otherwise `err` only when the write fails. */
   appendEvent(event: NewCaseEvent): Promise<Result<CaseEvent | null>>;
   /**
    * Compare-and-set: moves a non-deleted case from `from` to `to` and appends its

@@ -73,6 +73,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "case_study"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "case_event_revision_id_fkey"
+      columns: ["revision_id"]
+isOneToOne: false
+      referencedRelation: "revision"
+      referencedColumns: ["id"]
     }
                   ]
                 },"case_number_counter": {
@@ -108,6 +114,12 @@ isOneToOne: false
                   }
                   Relationships: [
                     {
+      foreignKeyName: "case_study_approved_revision_id_fkey"
+      columns: ["approved_revision_id"]
+isOneToOne: false
+      referencedRelation: "revision"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "case_study_client_id_fkey"
       columns: ["client_id"]
 isOneToOne: false
@@ -118,6 +130,12 @@ isOneToOne: false
       columns: ["created_by"]
 isOneToOne: false
       referencedRelation: "profile"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "case_study_head_revision_id_fkey"
+      columns: ["head_revision_id"]
+isOneToOne: false
+      referencedRelation: "revision"
       referencedColumns: ["id"]
     }
                   ]
@@ -305,6 +323,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"revision": {
+                  Row: {
+                    "case_id": string | null,"client_intro_id": string | null,"created_at": string,"created_by": string,"doc": NonNullable<Json>,"fell_back": boolean,"generated_doc": NonNullable<Json>,"id": string,"manifest": NonNullable<Json>,"model": string | null,"prompt_version": string | null,"schema_version": number,"status": string,"updated_at": string,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "case_id"?: string | null,"client_intro_id"?: string | null,"created_at"?: string,"created_by": string,"doc": NonNullable<Json>,"fell_back"?: boolean,"generated_doc": NonNullable<Json>,"id"?: string,"manifest"?: NonNullable<Json>,"model"?: string | null,"prompt_version"?: string | null,"schema_version": number,"status"?: string,"updated_at"?: string,"version"?: number
+                  }
+                  Update: {
+                    "case_id"?: string | null,"client_intro_id"?: string | null,"created_at"?: string,"created_by"?: string,"doc"?: NonNullable<Json>,"fell_back"?: boolean,"generated_doc"?: NonNullable<Json>,"id"?: string,"manifest"?: NonNullable<Json>,"model"?: string | null,"prompt_version"?: string | null,"schema_version"?: number,"status"?: string,"updated_at"?: string,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "revision_case_id_fkey"
+      columns: ["case_id"]
+isOneToOne: false
+      referencedRelation: "case_study"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "revision_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
@@ -387,6 +431,30 @@ isOneToOne: false
                           SetofOptions: {
         from: "*"
         to: "client"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"create_working_revision":
+{ Args: { "p_actor_id": string,"p_case_id": string,"p_doc": Json,"p_expected_head_version": number,"p_manifest": Json,"p_meta": Json }; Returns: {
+              "case_id": string | null,
+"client_intro_id": string | null,
+"created_at": string,
+"created_by": string,
+"doc": NonNullable<Json>,
+"fell_back": boolean,
+"generated_doc": NonNullable<Json>,
+"id": string,
+"manifest": NonNullable<Json>,
+"model": string | null,
+"prompt_version": string | null,
+"schema_version": number,
+"status": string,
+"updated_at": string,
+"version": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "revision"
         isOneToOne: true
         isSetofReturn: false
       } },

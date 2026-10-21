@@ -22,6 +22,8 @@ const CASE_EVENT_COLUMNS = "id, case_id, revision_id, actor_id, type, at, data";
 /** Postgres foreign_key_violation, and the constraint naming an unknown case. */
 const FOREIGN_KEY_VIOLATION = "23503";
 const CASE_FK = "case_event_case_id_fkey";
+/** The constraint naming an unknown revision (Story 3.3). */
+const REVISION_FK = "case_event_revision_id_fkey";
 
 /** `transition_case_study` raises these as P0001; nothing is written then. */
 const TRANSITION_REFUSALS: Refusals = {
@@ -213,6 +215,9 @@ export function createSupabaseCaseStudyRepository(
       if (error) {
         if (error.code === FOREIGN_KEY_VIOLATION && `${error.message} ${error.details}`.includes(CASE_FK)) {
           return { ok: true, value: null };
+        }
+        if (error.code === FOREIGN_KEY_VIOLATION && `${error.message} ${error.details}`.includes(REVISION_FK)) {
+          return err({ code: "REVISION_NOT_FOUND", message: "No revision with this id.", details: { revisionId: event.revisionId } });
         }
         log.error(`case_event insert failed: ${error.code}`, { caseId: event.caseId, actorId: event.actorId });
         return err({
