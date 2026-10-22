@@ -5,17 +5,24 @@ import { authorize, can } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import { PageHeader } from "@/app/_components/page-header";
 import { it } from "@/shared/i18n/it";
+import { ClientPanel } from "./_components/client-panel";
 import { ClientsTable } from "./_components/clients-table";
 import type { ClientRow } from "./_components/filter-sort";
+import { clientLimits, clientMaterialLimits } from "./_lib/client-limits";
+
+export interface ClientsPageProps {
+  searchParams?: Promise<{ nuovo?: string | string[] }>;
+}
 
 /**
  * The Clients page (Story 2.13), owner/designer only (`list clients`; any other
  * role goes to its landing). Every client with its non-deleted case count loads
  * once; search and sort run in the browser. **Aggiungi cliente** exists only with
  * `manage clients`. A card with approved cases offers **Scarica** (the client pack).
- * A failed load throws into Next's error boundary: no partial table.
+ * A failed load throws into Next's error boundary: no partial table. With
+ * `?nuovo=1` and `manage clients`, the add panel (**Nuovo cliente**) opens over the list.
  */
-export default async function ClientsPage() {
+export default async function ClientsPage({ searchParams }: ClientsPageProps = {}) {
   const shell = await requireSurface("list clients");
   if (shell === null) return null;
   const { actor, landing } = shell;
@@ -45,10 +52,23 @@ export default async function ClientsPage() {
     logoUrl,
   }));
 
+  const canManage = can(actor, "manage clients");
+  const adding = canManage && (await searchParams)?.nuovo === "1";
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={it.clients.heading} lead={it.clients.lead} />
-      <ClientsTable rows={rows} canManage={can(actor, "manage clients")} />
+      <ClientsTable rows={rows} canManage={canManage} />
+      {adding && (
+        <ClientPanel
+          client={null}
+          assets={[]}
+          caseCount={null}
+          industries={caseStudy.CLIENT_INDUSTRIES}
+          limits={clientLimits()}
+          materialLimits={clientMaterialLimits()}
+        />
+      )}
     </div>
   );
 }

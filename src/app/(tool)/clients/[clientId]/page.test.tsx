@@ -2,13 +2,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
-import type { CaseStudy, ClientDetail, ListScope } from "@/modules/case-study";
+import type { CaseStudy, ClientDetail, ListedClientAsset, ListScope } from "@/modules/case-study";
 import { it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const getClient = vi.fn<(id: unknown) => Promise<Result<ClientDetail>>>();
 const list = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
+const listClientMaterial = vi.fn<(input: unknown) => Promise<Result<ListedClientAsset[]>>>();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -20,7 +21,16 @@ vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requi
 vi.mock("@/modules/case-study", () => ({
   getClient: (id: unknown) => getClient(id),
   list: (scope: ListScope) => list(scope),
+  listClientMaterial: (input: unknown) => listClientMaterial(input),
   CLIENT_INDUSTRIES: ["interior_design", "energia", "risorse_umane", "lusso"],
+}));
+
+vi.mock("../_lib/client-limits", () => ({ clientLimits: () => ({}), clientMaterialLimits: () => ({}) }));
+// The panel is a browser component (tested on its own): here only what the page hands it.
+vi.mock("../_components/client-panel", () => ({
+  ClientPanel: ({ client, assets, caseCount }: { client: ClientDetail; assets: ListedClientAsset[]; caseCount: number | null }) => (
+    <div data-panel={client.id} data-assets={assets.map((asset) => asset.id).join(",")} data-case-count={String(caseCount)} />
+  ),
 }));
 
 const { default: ClientPage } = await import("./page");
@@ -64,13 +74,15 @@ const caseStudy = (over: Partial<CaseStudy> = {}): CaseStudy => ({
   ...over,
 });
 
-const renderPage = async (clientId: string = LUMEN.id) =>
-  renderToStaticMarkup(await ClientPage({ params: Promise.resolve({ clientId }) }));
+const renderPage = async (clientId: string = LUMEN.id, search: { modifica?: string } = {}) =>
+  renderToStaticMarkup(await ClientPage({ params: Promise.resolve({ clientId }), searchParams: Promise.resolve(search) }));
 
 beforeEach(() => {
   requireSurface.mockReset();
   getClient.mockReset();
   list.mockReset();
+  listClientMaterial.mockReset();
+  listClientMaterial.mockResolvedValue(ok([{ id: "f1" } as ListedClientAsset, { id: "f2" } as ListedClientAsset]));
   requireSurface.mockResolvedValue(shell("owner_designer"));
   getClient.mockResolvedValue(ok(LUMEN));
   list.mockResolvedValue(ok([caseStudy()]));
@@ -87,13 +99,40 @@ describe("ClientPage", () => {
     expect(html).toMatch(/<h1[^>]*>Lumen Srl<\/h1>/);
     expect(html).toMatch(/font-mono[^>]*>.*LUM<\/p>/);
     const edit = html.match(new RegExp(`<a [^>]*>(?:(?!</a>).)*${dict.clients.edit}</a>`))?.[0] ?? "";
-    expect(edit).toContain(`href="/clients/new?clientId=${LUMEN.id}&amp;step=1"`);
+    expect(edit).toContain(`href="/clients/${LUMEN.id}?modifica=1"`);
     expect(edit).toContain("hidden");
     expect(edit).toContain("lg:inline-flex");
     const newCase = html.match(new RegExp(`<a [^>]*>${dict.clients.detail.newCase}</a>`))?.[0] ?? "";
     expect(newCase).toContain(`href="${NEW_HREF}"`);
     expect(html).toContain("LUM-2026-01");
     expect(html).toContain("Rebrand");
+  });
+
+  it("shows Modifica layout inactive, its reason linked, hidden below 1024 px; no panel without ?modifica=1", async () => {
+    const html = await renderPage();
+    const button = html.match(new RegExp(`<button [^>]*>${dict.clientPanel.layout}</button>`))?.[0] ?? "";
+    expect(button).toContain('aria-disabled="true"');
+    // The reason is read once, through aria-describedby only.
+    expect(button).not.toContain("title=");
+    const reasonId = button.match(/aria-describedby="([^"]+)"/)?.[1];
+    expect(html).toContain(`<span id="${reasonId}" class="sr-only">${dict.clientPanel.layoutReason}</span>`);
+    expect(button).toContain("hidden");
+    expect(button).toContain("lg:inline-flex");
+    expect(html).not.toContain("data-panel");
+    expect(listClientMaterial).not.toHaveBeenCalled();
+  });
+
+  it("opens the edit panel with ?modifica=1, handing it the client's files and its case count", async () => {
+    list.mockResolvedValue(ok([caseStudy(), caseStudy({ id: "aaaaaaaa-0000-4000-8000-000000000002" })]));
+    const html = await renderPage(LUMEN.id, { modifica: "1" });
+    expect(listClientMaterial).toHaveBeenCalledWith({ clientId: LUMEN.id });
+    expect(list).toHaveBeenLastCalledWith({ clientId: LUMEN.id });
+    expect(html).toContain(`<div data-panel="${LUMEN.id}" data-assets="f1,f2" data-case-count="2"></div>`);
+  });
+
+  it("throws into the error boundary when the files for the edit panel can't be read", async () => {
+    listClientMaterial.mockResolvedValue(err({ code: "CLIENT_MATERIAL_LOOKUP_FAILED", message: "down" }));
+    await expect(renderPage(LUMEN.id, { modifica: "1" })).rejects.toThrow(/CLIENT_MATERIAL_LOOKUP_FAILED/);
   });
 
   it("shows nothing for an existing client with no info: no logo, no placeholders", async () => {

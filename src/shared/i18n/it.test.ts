@@ -70,31 +70,38 @@ describe("clients copy", () => {
   });
 });
 
-describe("client wizard copy", () => {
+describe("client panel copy", () => {
   test("has the approved strings", () => {
-    expect(t("clientWizard.eyebrow")).toBe("Nuovo cliente");
-    expect(Object.values(it.clientWizard.steps)).toEqual(["Dettagli", "Materiale", "Introduzione"]);
-    expect(fill(t("clientWizard.editNote"), { code: "LUM" })).toBe(
+    expect(t("clientPanel.addTitle")).toBe("Nuovo cliente");
+    expect(t("clientPanel.editTitle")).toBe("Modifica cliente");
+    expect(t("clientPanel.addNote")).toBe("Il codice si genera da solo e non cambia mai.");
+    expect(fill(t("clientPanel.editNote"), { code: "LUM" })).toBe(
       "Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case history.",
     );
-    expect(Object.values(it.clientWizard.details.labels)).toEqual([
+    expect(Object.values(it.clientPanel.sections)).toEqual(["Dettagli", "Logo e immagini", "Racconto"]);
+    expect(Object.values(it.clientPanel.details.labels)).toEqual([
       "Nome",
       "Settore",
       "Descrizione",
       "Logo",
+      "Immagini",
       "Contesto",
       "Soluzione",
       "Risultati",
     ]);
-    expect(Object.values(it.clientWizard.details.placeholders).every((line) => line.length > 0 && !line.includes("\n"))).toBe(true);
-    expect(t("clientWizard.material.createIntro")).toBe("Crea la presentazione");
-    expect(t("clientWizard.material.intro")).toBe(
-      "Carica fino a 3 file, di cui almeno 2 immagini: ci servono per le pagine di presentazione.",
+    expect(t("clientPanel.details.namePlaceholder")).toBe("Ragione sociale o nome del brand");
+    expect(t("clientPanel.details.descriptionHint")).toBe("Da qui l’AI scrive la bozza dell’intro.");
+    expect(t("clientPanel.details.logoReplaceHint")).toBe("Se lo sostituisci, il vecchio logo viene eliminato.");
+    expect(Object.values(it.clientPanel.details.placeholders).every((line) => line.length > 0 && !line.includes("\n"))).toBe(true);
+    expect(fill(t("clientPanel.images.counter"), { n: 2, max: 3 })).toBe("2 di 3");
+    expect(fill(t("clientPanel.images.hint"), { min: 2, max: 3, px: 1600, types: "PNG, JPEG o WebP" })).toBe(
+      "Da 2 a 3, almeno 1600 px sul lato corto. PNG, JPEG o WebP.",
     );
-    expect(t("clientWizard.material.createIntroReason")).toBe("Servono almeno 2 immagini.");
-    expect(t("clientWizard.material.errors.limit")).toBe("Al massimo 3 file.");
-    expect(fill(t("clientWizard.material.errors.pixels"), { min: 1600, max: 8000 })).toContain("1600 px sul lato corto");
-    expect(fill(t("clientWizard.details.nextReason"), { fields: "Settore, Logo" })).toBe("Per andare avanti manca: Settore, Logo.");
+    expect(fill(t("clientPanel.images.errors.limit"), { max: 3 })).toBe("Al massimo 3 file.");
+    expect(fill(t("clientPanel.images.errors.pixels"), { min: 1600, max: 8000 })).toContain("1600 px sul lato corto");
+    expect(t("clientPanel.layout")).toBe("Modifica layout");
+    expect(t("clientPanel.layoutReason")).toBe("Arriva con il configuratore");
+    expect(fill(t("clientPanel.details.nextReason"), { fields: "Settore, Logo" })).toBe("Per andare avanti manca: Settore, Logo.");
   });
 });
 
@@ -194,8 +201,10 @@ describe("voice", () => {
     it.home.start.action,
     it.home.seeAll,
     it.wizard.next,
-    it.clientWizard.material.createIntro,
-    it.clientWizard.delete.button,
+    it.clientPanel.add,
+    it.clientPanel.save,
+    it.clientPanel.layout,
+    it.clientPanel.delete.button,
   ];
 
   test("calls to action are at most three words", () => {

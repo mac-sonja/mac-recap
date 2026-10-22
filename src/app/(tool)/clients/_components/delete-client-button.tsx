@@ -20,9 +20,8 @@ export interface DeleteClientButtonProps {
 
 /**
  * **Elimina cliente** (owner, 2026-10-19: clients can be deleted (soft), with their
- * cases), on step 1 of an existing client only. Rendered inside the wizard frame's
- * wide-screen area, so it is hidden below 1024 px; the page renders it only for
- * `manage clients`. It opens a Dialog that names the client and its case history
+ * cases), at the bottom of the edit panel (`ClientPanel`), which exists only for
+ * `manage clients` at 1024 px and up. It opens a Dialog that names the client and its case history
  * count; **Elimina** stays inactive, with its reason linked, until the typed name
  * (`normalizeClientConfirmName`, the SQL rule) equals the client's name exactly.
  * After the delete, or when the client is already gone, the browser goes to
@@ -30,7 +29,7 @@ export interface DeleteClientButtonProps {
  * failure, a thrown call included, shows a retry message.
  */
 export function DeleteClientButton({ clientId, name, caseCount }: DeleteClientButtonProps) {
-  const copy = it.clientWizard.delete;
+  const copy = it.clientPanel.delete;
   const router = useRouter();
   const inputId = useId();
   const reasonId = useId();

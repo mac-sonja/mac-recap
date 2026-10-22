@@ -23,6 +23,12 @@ vi.mock("@/modules/case-study", () => ({
   CLIENT_INDUSTRIES: ["interior_design", "energia", "risorse_umane", "lusso"],
 }));
 
+vi.mock("./_lib/client-limits", () => ({ clientLimits: () => ({}), clientMaterialLimits: () => ({}) }));
+// The panel is a browser component (tested on its own): here only whether the page renders it.
+vi.mock("./_components/client-panel", () => ({
+  ClientPanel: ({ client }: { client: unknown }) => <div data-panel={client === null ? "new" : "edit"} />,
+}));
+
 const { default: ClientsPage } = await import("./page");
 const { default: Loading } = await import("./loading");
 
@@ -83,24 +89,33 @@ describe("ClientsPage", () => {
     expect(html).toMatch(/aria-hidden="true"[^>]*>A<\/span>/);
   });
 
-  it("offers Aggiungi cliente as a link to the client wizard, hidden below 1024 px", async () => {
+  it("offers Aggiungi cliente as a link to the add panel, hidden below 1024 px", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([LUMEN]));
     const link = (await renderPage()).match(/<a [^>]*>(?:(?!<\/a>).)*Aggiungi cliente<\/a>/)?.[0] ?? "";
-    expect(link).toContain('href="/clients/new"');
+    expect(link).toContain('href="/clients?nuovo=1"');
     expect(link).toContain("hidden lg:inline-flex");
+  });
+
+  it("opens the add panel over the list with ?nuovo=1, with manage clients", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    listClientSummaries.mockResolvedValue(ok([LUMEN]));
+    expect(await renderPage()).not.toContain("data-panel");
+    const html = renderToStaticMarkup(await ClientsPage({ searchParams: Promise.resolve({ nuovo: "1" }) }));
+    expect(html).toContain('<div data-panel="new"></div>');
+    expect(html).toContain(LUMEN.name);
   });
 
   it("links every client's name to its page, finished or not", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([ACME, LUMEN]));
     const html = await renderPage();
-    expect(html).not.toContain("/clients/new?clientId=");
+    expect(html).not.toContain("?modifica=1");
     expect(html).toContain(`href="/clients/${ACME.id}"`);
     expect(html).toContain(`href="/clients/${LUMEN.id}"`);
   });
 
-  it("has no delete control on the list page (delete lives in the client wizard)", async () => {
+  it("has no delete control on the list page (delete lives in the edit panel)", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([LUMEN]));
     expect(await renderPage()).not.toMatch(/elimina|rimuovi|cancella cliente/i);

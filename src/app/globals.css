@@ -130,6 +130,7 @@
   /* Entrances only, all under 300 ms; exits stay instant. Never from scale(0). */
   --animate-enter: enter 260ms var(--ease-out) both;
   --animate-dialog-in: dialog-in 220ms var(--ease-out);
+  --animate-sheet-in: sheet-in 280ms var(--ease-out);
 
   @keyframes enter {
     from {
@@ -151,6 +152,13 @@
     from {
       opacity: 0;
       transform: scale(0.97);
+    }
+  }
+
+  /* Side sheets slide in from the right edge they belong to. */
+  @keyframes sheet-in {
+    from {
+      transform: translateX(100%);
     }
   }
 }
