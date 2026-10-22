@@ -688,6 +688,126 @@ describe("ClientPanel, Risultati and Testimonial", () => {
     expect(await screen.findByText(copy.errors.saveFailed)).toBeTruthy();
     expect(statusText()).toContain(`Risultati: ${copy.errors.saveFailed}`);
   });
+
+  it("shows a failed testimonial save under Testimonial", async () => {
+    saveClientTestimonial.mockResolvedValue({ ok: false, status: 500, error: { code: "CLIENT_WRITE_FAILED", message: "down" } });
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(quote(), { target: { value: "Ci hanno capiti." } });
+    fireEvent.blur(quote());
+    await waitFor(() => expect(describedText(screen.getByRole("group", { name: "Testimonial" }))).toContain(copy.errors.saveFailed));
+    expect(describedText(screen.getByRole("group", { name: "Risultati" }))).not.toContain(copy.errors.saveFailed);
+  });
+
+  it("hides the half-row message once the row is complete", async () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(2), { target: { value: "Follower" } });
+    fireEvent.blur(label(2));
+    expect(await screen.findByText(copy.results.halfRow)).toBeTruthy();
+    fireEvent.change(value(2), { target: { value: "+35%" } });
+    expect(screen.queryByText(copy.results.halfRow)).toBeNull();
+    fireEvent.change(value(2), { target: { value: "" } });
+    expect(screen.queryByText(copy.results.halfRow)).toBeNull();
+  });
+
+  it("shows the limit on a label over 80 and an author over 120 characters", () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(1), { target: { value: "x".repeat(81) } });
+    fireEvent.change(author(), { target: { value: "x".repeat(121) } });
+    expect(describedText(label(1))).toBe(fill(dict.clients.errors.fieldTooLong, { max: 80 }));
+    expect(label(1).getAttribute("aria-invalid")).toBe("true");
+    expect(describedText(author())).toBe(fill(dict.clients.errors.fieldTooLong, { max: 120 }));
+    expect(author().getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("does not let an over-long row or author block the valid rows and quote", async () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(1), { target: { value: "x".repeat(81) } });
+    fireEvent.change(value(1), { target: { value: "1" } });
+    fireEvent.change(label(2), { target: { value: "Follower" } });
+    fireEvent.change(value(2), { target: { value: "+35%" } });
+    fireEvent.blur(value(2));
+    await waitFor(() => expect(saveClientResults).toHaveBeenCalledWith({ clientId: CLIENT_ID, results: [{ label: "Follower", value: "+35%" }] }));
+
+    fireEvent.change(quote(), { target: { value: "Frase." } });
+    fireEvent.change(author(), { target: { value: "x".repeat(121) } });
+    fireEvent.blur(author());
+    await waitFor(() => expect(saveClientTestimonial).toHaveBeenCalledWith({ clientId: CLIENT_ID, quote: "Frase.", author: "" }));
+  });
+
+  it("keeps a saved row stored while one of its parts is cleared; the other rows still save", async () => {
+    const results = [
+      { label: "Visite", value: "2,4M" },
+      { label: "Follower", value: "+35%" },
+    ];
+    renderPanel({ ...EXISTING, brief: { ...EXISTING.brief, results } }, TWO_IMAGES);
+    fireEvent.change(value(1), { target: { value: "" } });
+    fireEvent.blur(value(1));
+    await new Promise((done) => setTimeout(done, 20));
+    expect(saveClientResults).not.toHaveBeenCalled();
+    fireEvent.change(value(2), { target: { value: "+40%" } });
+    fireEvent.blur(value(2));
+    await waitFor(() =>
+      expect(saveClientResults).toHaveBeenCalledWith({
+        clientId: CLIENT_ID,
+        results: [
+          { label: "Visite", value: "2,4M" },
+          { label: "Follower", value: "+40%" },
+        ],
+      }),
+    );
+    // Emptied, the row goes.
+    fireEvent.change(label(1), { target: { value: "" } });
+    fireEvent.blur(label(1));
+    await waitFor(() => expect(saveClientResults).toHaveBeenLastCalledWith({ clientId: CLIENT_ID, results: [{ label: "Follower", value: "+40%" }] }));
+  });
+
+  it("keeps the stored testimonial while its quote is cleared", async () => {
+    renderPanel({ ...EXISTING, brief: { ...EXISTING.brief, testimonialQuote: "Ci hanno capiti.", testimonialAuthor: "Ada Rossi, CEO" } }, TWO_IMAGES);
+    fireEvent.change(quote(), { target: { value: "" } });
+    fireEvent.blur(quote());
+    fireEvent.blur(author());
+    expect(await screen.findByText("Manca la frase.")).toBeTruthy();
+    await new Promise((done) => setTimeout(done, 20));
+    expect(saveClientTestimonial).not.toHaveBeenCalled();
+    fireEvent.change(author(), { target: { value: "" } });
+    fireEvent.blur(author());
+    await waitFor(() => expect(saveClientTestimonial).toHaveBeenCalledWith({ clientId: CLIENT_ID, quote: "", author: "" }));
+  });
+
+  describe("on Aggiungi", () => {
+    it("stops before createClient at a value over 20 characters and focuses it", async () => {
+      const user = setup();
+      renderPanel();
+      await fillAll(user);
+      fireEvent.change(label(1), { target: { value: "Visite" } });
+      fireEvent.change(value(1), { target: { value: "x".repeat(21) } });
+      await user.click(primary("Aggiungi"));
+      expect(document.activeElement).toBe(value(1));
+      expect(createClient).not.toHaveBeenCalled();
+    });
+
+    it("stops at a half row, focusing its empty part with the message", async () => {
+      const user = setup();
+      renderPanel();
+      await fillAll(user);
+      fireEvent.change(label(2), { target: { value: "Follower" } });
+      await user.click(primary("Aggiungi"));
+      expect(document.activeElement).toBe(value(2));
+      expect(screen.getByText(copy.results.halfRow)).toBeTruthy();
+      expect(createClient).not.toHaveBeenCalled();
+    });
+
+    it("stops at an author without a quote, focusing the quote with Manca la frase.", async () => {
+      const user = setup();
+      renderPanel();
+      await fillAll(user);
+      fireEvent.change(author(), { target: { value: "Ada Rossi" } });
+      await user.click(primary("Aggiungi"));
+      expect(document.activeElement).toBe(quote());
+      expect(screen.getByText("Manca la frase.")).toBeTruthy();
+      expect(createClient).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("ClientPanel, the image slots", () => {

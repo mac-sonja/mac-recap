@@ -8,7 +8,8 @@ import { cn } from "@/shared/utils";
 import type { ClientLimits } from "../_lib/client-limits";
 
 const copy = it.clientPanel.details;
-const ERROR = "font-label text-xs text-danger";
+/** A field's error line under it (also the panel's). */
+export const ERROR = "font-label text-xs text-danger";
 
 /** Risultati always shows 3 rows (owner's mock, 2026-10-22). */
 export const RESULT_ROWS = 3;
@@ -19,28 +20,60 @@ export interface ResultRow {
   value: string;
 }
 
-/** Characters as the server counts them: code points, so an emoji is one. */
-const charCount = (text: string) => [...text].length;
+/** Characters as the server counts them: code points, so an emoji is one (also the panel's). */
+export const charCount = (text: string) => [...text].length;
+
+type StoryLimits = Pick<ClientLimits, "resultLabelMax" | "resultValueMax" | "testimonialQuoteMax" | "testimonialAuthorMax">;
 
 /** The saved results shown in the 3 rows, top first; the rows left over are empty. */
 export function resultRowsOf(results: readonly ClientResult[]): ResultRow[] {
   return Array.from({ length: RESULT_ROWS }, (_, index) => ({ label: results[index]?.label ?? "", value: results[index]?.value ?? "" }));
 }
 
-/** What is saved: the rows with both parts filled, trimmed, top to bottom (half and empty rows are skipped). */
-export function filledResults(rows: readonly ResultRow[]): ClientResult[] {
-  return rows
-    .map((row) => ({ label: row.label.trim(), value: row.value.trim() }))
-    .filter((row) => row.label !== "" && row.value !== "");
+/** The saved results as one entry per row (null: nothing saved for that row), matching `resultRowsOf`. */
+export const savedRowsOf = (results: readonly ClientResult[]): (ClientResult | null)[] =>
+  Array.from({ length: RESULT_ROWS }, (_, index) => results[index] ?? null);
+
+/**
+ * What each row sends (null: nothing): a complete row within its limits, trimmed; an
+ * empty row, nothing. A half row or one over a limit keeps its last saved version
+ * (`saved[index]`), so finishing or fixing it never deletes what the server holds.
+ */
+export function rowsToSend(rows: readonly ResultRow[], saved: readonly (ClientResult | null)[], limits: StoryLimits): (ClientResult | null)[] {
+  return rows.map((row, index) => {
+    const label = row.label.trim();
+    const value = row.value.trim();
+    if (label === "" && value === "") return null;
+    if (label === "" || value === "" || isOver(label, limits.resultLabelMax) || isOver(value, limits.resultValueMax)) {
+      return saved[index] ?? null;
+    }
+    return { label, value };
+  });
 }
 
 /** A row with only one of its two parts: it shows a message and is not saved. */
 export const isHalfRow = (row: ResultRow) => (row.label.trim() === "") !== (row.value.trim() === "");
 
-/** What is saved of the testimonial, trimmed: an author without a quote is no testimonial (`""` and `""`). */
-export function testimonialOf(quote: string, author: string): { quote: string; author: string } {
-  const trimmedQuote = quote.trim();
-  return trimmedQuote === "" ? { quote: "", author: "" } : { quote: trimmedQuote, author: author.trim() };
+export interface Testimonial {
+  quote: string;
+  author: string;
+}
+
+/**
+ * What the testimonial sends, trimmed: both empty clears it. A part over its limit
+ * keeps its saved text; an author without a quote (typed, or left by that) keeps the
+ * whole saved pair, so it is never stored and never deletes the stored author.
+ */
+export function testimonialToSend(quote: string, author: string, saved: Testimonial, limits: StoryLimits): Testimonial {
+  const typedQuote = quote.trim();
+  const typedAuthor = author.trim();
+  if (typedQuote === "" && typedAuthor === "") return { quote: "", author: "" };
+  if (typedQuote === "") return saved;
+  const next = {
+    quote: isOver(typedQuote, limits.testimonialQuoteMax) ? saved.quote : typedQuote,
+    author: isOver(typedAuthor, limits.testimonialAuthorMax) ? saved.author : typedAuthor,
+  };
+  return next.quote === "" && next.author !== "" ? saved : next;
 }
 
 /** An author without a quote: it shows "Manca la frase." and is not saved. */
@@ -67,7 +100,7 @@ export const emptyStoryInputs = (): StoryInputs => ({
 
 export interface ClientResultsFieldsProps {
   baseId: string;
-  limits: Pick<ClientLimits, "resultLabelMax" | "resultValueMax" | "testimonialQuoteMax" | "testimonialAuthorMax">;
+  limits: StoryLimits;
   rows: readonly ResultRow[];
   quote: string;
   author: string;

@@ -432,7 +432,7 @@ export function createSupabaseClientRepository(
     async saveResults(clientId, results, actorId) {
       const { data, error } = await client().rpc("save_client_results", {
         p_client_id: clientId,
-        // Only label and value, in this order: the stored list compares equal on a re-save.
+        // Only label and value: any other key would fail client_brief_results_check.
         p_results: results.map(({ label, value }) => ({ label, value })),
         p_actor_id: actorId,
       });

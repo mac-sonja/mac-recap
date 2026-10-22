@@ -22,15 +22,19 @@ import { ClientImageSlots, useClientImages } from "./client-image-slots";
 import {
   ClientResultsFields,
   emptyStoryInputs,
-  filledResults,
+  charCount,
+  ERROR,
   isAuthorOnly,
   isHalfRow,
   isOver,
   resultRowsOf,
-  testimonialOf,
+  rowsToSend,
+  savedRowsOf,
+  testimonialToSend,
   type IncompleteKey,
   type ResultRow,
   type StoryInputs,
+  type Testimonial,
 } from "./client-results-fields";
 import { DeleteClientButton } from "./delete-client-button";
 import { IndustryPills } from "./industry-pills";
@@ -45,14 +49,12 @@ const BRIEF_FIELDS = ["context", "solution"] as const satisfies readonly ClientB
 
 /**
  * What the Racconto card autosaves: the two texts, then the results and the
- * testimonial, each held as the JSON of what would be saved (`resultsKey`,
- * `testimonialKey`), so a half row or a lone author changes nothing.
+ * testimonial, each held as the JSON of what would be sent (`rowsToSend`, one entry
+ * per row; `testimonialToSend`), so a half row, a part over its limit or a lone
+ * author changes nothing and keeps what the server holds.
  */
 type StoryField = ClientBriefField | "results" | "testimonial";
 const STORY_FIELDS = [...BRIEF_FIELDS, "results", "testimonial"] as const satisfies readonly StoryField[];
-
-const resultsKey = (rows: readonly ResultRow[]) => JSON.stringify(filledResults(rows));
-const testimonialKey = (quote: string, author: string) => JSON.stringify(testimonialOf(quote, author));
 
 /** The fields saved on Aggiungi / Salva (the brief autosaves once the client exists). */
 type InfoKey = "name" | "industries" | "description" | "logo";
@@ -65,12 +67,8 @@ interface InfoFields {
 
 /** How many live-region lines stay mounted. */
 const ANNOUNCEMENTS_KEPT = 5;
-const ERROR = "font-label text-xs text-danger";
 /** The panel is for wide screens only, like the buttons that open it. */
 const WIDE = "(min-width: 1024px)";
-
-/** Characters as the server counts them: code points, so an emoji is one. */
-const charCount = (text: string) => [...text].length;
 
 const sameInfo = (a: InfoFields | null, b: InfoFields) =>
   a !== null &&
@@ -193,6 +191,11 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
   const [quote, setQuote] = useState(initialBrief.testimonialQuote);
   const [author, setAuthor] = useState(initialBrief.testimonialAuthor);
   const testimonialRef = useRef({ quote: initialBrief.testimonialQuote, author: initialBrief.testimonialAuthor });
+  /** What the server holds, per row and for the testimonial: kept for a row or part that can't be sent yet. */
+  const savedRows = useRef(savedRowsOf(initialBrief.results));
+  const savedTestimonial = useRef<Testimonial>({ quote: initialBrief.testimonialQuote, author: initialBrief.testimonialAuthor });
+  const resultsKey = (next: readonly ResultRow[]) => JSON.stringify(rowsToSend(next, savedRows.current, limits));
+  const testimonialKey = (next: Testimonial) => JSON.stringify(testimonialToSend(next.quote, next.author, savedTestimonial.current, limits));
   /** The incomplete-entry messages shown: after focus leaves the row (or testimonial) or a save is attempted. */
   const [revealed, setRevealed] = useState<ReadonlySet<IncompleteKey>>(() => new Set());
   const storyInputs = useRef<StoryInputs>(emptyStoryInputs());
@@ -218,18 +221,8 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
     return undefined;
   }
 
-  const storyTooLong = (text: string, field: StoryField) => {
-    if (field === "results") {
-      return (JSON.parse(text) as ClientResult[]).some(
-        (result) => isOver(result.label, limits.resultLabelMax) || isOver(result.value, limits.resultValueMax),
-      );
-    }
-    if (field === "testimonial") {
-      const saved = JSON.parse(text) as { quote: string; author: string };
-      return isOver(saved.quote, limits.testimonialQuoteMax) || isOver(saved.author, limits.testimonialAuthorMax);
-    }
-    return briefTooLong(text);
-  };
+  // The results and testimonial never hold an over-long part (`rowsToSend`, `testimonialToSend`).
+  const storyTooLong = (text: string, field: StoryField) => field !== "results" && field !== "testimonial" && briefTooLong(text);
 
   const storyLabel = (field: StoryField) =>
     field === "results" ? copy.results.title : field === "testimonial" ? copy.testimonial.title : copy.labels[field];
@@ -246,17 +239,23 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
       context: initialBrief.context,
       solution: initialBrief.solution,
       results: resultsKey(rows),
-      testimonial: testimonialKey(initialBrief.testimonialQuote, initialBrief.testimonialAuthor),
+      testimonial: testimonialKey(testimonialRef.current),
     },
     save: async (field, text) => {
       const current = clientRef.current;
       if (current === null) return false;
       if (field === "results") {
-        return (await saveClientResults({ clientId: current.id, results: JSON.parse(text) as ClientResult[] })).ok;
+        const perRow = JSON.parse(text) as (ClientResult | null)[];
+        const results = perRow.filter((row) => row !== null);
+        const saved = (await saveClientResults({ clientId: current.id, results })).ok;
+        if (saved) savedRows.current = perRow;
+        return saved;
       }
       if (field === "testimonial") {
-        const saved = JSON.parse(text) as { quote: string; author: string };
-        return (await saveClientTestimonial({ clientId: current.id, quote: saved.quote, author: saved.author })).ok;
+        const next = JSON.parse(text) as Testimonial;
+        const saved = (await saveClientTestimonial({ clientId: current.id, ...next })).ok;
+        if (saved) savedTestimonial.current = next;
+        return saved;
       }
       return (await saveClientBriefField({ clientId: current.id, field, text })).ok;
     },
@@ -264,7 +263,11 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
     active: () => clientRef.current !== null && !discarding.current,
     onSaveFailed: (field) => announce(fill(copy.announceError, { field: storyLabel(field), message: copy.errors.saveFailed })),
     hasOtherUnsaved: () =>
-      logo.logo.kind === "new" || images.hasLocal || !sameInfo(savedInfo.current, currentInfo()) || firstIncomplete() !== undefined,
+      logo.logo.kind === "new" ||
+      images.hasLocal ||
+      !sameInfo(savedInfo.current, currentInfo()) ||
+      firstIncomplete() !== undefined ||
+      storyOverLong() !== undefined,
     // A link inside the panel clicked with unsaved changes: leave only once confirmed.
     onUnsavedLink: (href) => {
       if (window.confirm(it.wizard.unsavedConfirm)) router.push(href);
@@ -326,7 +329,11 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
 
   function focusUnsavedText() {
     const unsaved = brief.firstUnsaved();
-    if (unsaved === "results") storyInputs.current.rows[0]?.label?.focus();
+    if (unsaved === "results") {
+      // The first row with something typed (the save sends every filled row).
+      const index = Math.max(0, rowsRef.current.findIndex((row) => row.label.trim() !== "" || row.value.trim() !== ""));
+      storyInputs.current.rows[index]?.label?.focus();
+    }
     else if (unsaved === "testimonial") storyInputs.current.quote?.focus();
     else if (unsaved !== undefined) textareas.current[unsaved]?.focus();
   }
@@ -334,6 +341,8 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
   function changeRow(index: number, part: keyof ResultRow, text: string) {
     rowsRef.current = rowsRef.current.map((row, at) => (at === index ? { ...row, [part]: text } : row));
     setRows(rowsRef.current);
+    // Complete or emptied: its message waits for focus to leave it again.
+    if (!isHalfRow(rowsRef.current[index])) conceal(`row-${index}`);
     brief.change("results", resultsKey(rowsRef.current));
   }
 
@@ -341,11 +350,21 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
     testimonialRef.current = next;
     setQuote(next.quote);
     setAuthor(next.author);
-    brief.change("testimonial", testimonialKey(next.quote, next.author));
+    if (!isAuthorOnly(next.quote, next.author)) conceal("testimonial");
+    brief.change("testimonial", testimonialKey(next));
   }
 
   function reveal(key: IncompleteKey) {
     setRevealed((current) => (current.has(key) ? current : new Set(current).add(key)));
+  }
+
+  function conceal(key: IncompleteKey) {
+    setRevealed((current) => {
+      if (!current.has(key)) return current;
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
   }
 
   /** Shows the first half row or lone author and focuses its empty part; true when there was one. */
@@ -556,7 +575,8 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
       images.hasLocal ||
       !sameInfo(savedInfo.current, currentInfo()) ||
       brief.firstUnsaved() !== undefined ||
-      firstIncomplete() !== undefined
+      firstIncomplete() !== undefined ||
+      storyOverLong() !== undefined
     );
   }
 

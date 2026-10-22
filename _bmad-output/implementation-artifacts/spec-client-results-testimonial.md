@@ -2,7 +2,7 @@
 title: 'Client Racconto: structured Risultati and a Testimonial'
 type: 'feature'
 created: '2026-10-22'
-status: 'in-review'
+status: 'done'
 baseline_commit: '0feee957a37381b4e39780a0db4a7539f54dd756'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -77,6 +77,21 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Clearing one part of a saved result row autosaves the list without it, deleting the stored row | medium | `filledResults` drops half rows from the saved JSON (`client-results-fields.tsx`), autosaved on blur (`client-panel.tsx` changeRow) | patch |
+| 2 | Clearing a saved quote with the author kept saves an empty testimonial, deleting the stored author | medium | `testimonialOf` returns `""/""` when the quote is empty; blur saves it | patch |
+| 3 | One over-long row blocks saving the valid rows; an over-long author blocks a valid quote | medium | `storyTooLong` marks the whole results/testimonial value too long | patch |
+| 4 | Half-row/lone-author message shows again while typing once revealed | low | `revealed` only grows | patch |
+| 5 | A failed results save focuses row 1's label regardless of the failing row | low | `focusUnsavedText` | patch |
+| 6 | Tests miss: Aggiungi stopping at an over-limit value/half row/lone author before `createClient`; label > 80; author > 120; failed testimonial save; cases 1–3 | medium | grep of `client-panel.test.tsx` (verification-gap, blind) | patch |
+| 7 | Misleading adapter comment on key order; `ERROR`/`charCount` redefined in `client-results-fields.tsx` | low | adapter comment; duplicate constants | patch |
+| 8 | No migration test seeding old text `results` | medium (unverified) | no harness for testing a migration against older data; drop + re-add with default is low risk | defer |
+| 9 | No live counter on the quote; limits not shown up front | low | message shows once over; mock has none | reject |
+| 10 | Result/testimonial inputs have no visible labels, placeholders only | low | matches the owner's mock; `aria-label` on each input | reject |
+| 11 | Spec sections empty, verification should name CI for db tests | false | process notes; fix would edit the spec | reject |
+| 12 | Old migration comments outdated; `7.5rem` arbitrary width | low | applied migrations are not edited; tokens rule covers colour/type, not widths | reject |
 
 ## Verification
 
