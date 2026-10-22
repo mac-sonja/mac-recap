@@ -7,6 +7,7 @@ const {
   getActor,
   create,
   updateDetails,
+  deleteCaseStudyUseCase,
   presignUpload,
   confirmUpload,
   removeAssetUseCase,
@@ -18,6 +19,7 @@ const {
   getActor: vi.fn(),
   create: vi.fn(),
   updateDetails: vi.fn(),
+  deleteCaseStudyUseCase: vi.fn(),
   presignUpload: vi.fn(),
   confirmUpload: vi.fn(),
   removeAssetUseCase: vi.fn(),
@@ -32,7 +34,7 @@ vi.mock("@/modules/access", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/modules/access")>()),
   getActor,
 }));
-vi.mock("@/modules/case-study", () => ({ create, updateDetails }));
+vi.mock("@/modules/case-study", () => ({ create, updateDetails, deleteCaseStudy: deleteCaseStudyUseCase }));
 vi.mock("@/modules/material", () => ({
   presignUpload,
   confirmUpload,
@@ -46,6 +48,7 @@ vi.mock("@/modules/material", () => ({
 const {
   createCaseStudy,
   updateCaseStudyDetails,
+  deleteCaseStudy,
   presignAssetUpload,
   confirmAssetUpload,
   removeAsset,
@@ -89,6 +92,7 @@ beforeEach(() => {
     getActor,
     create,
     updateDetails,
+    deleteCaseStudyUseCase,
     presignUpload,
     confirmUpload,
     removeAssetUseCase,
@@ -130,6 +134,32 @@ describe("updateCaseStudyDetails", () => {
       status,
       error: { code, message: "m", ...(code === "INVALID_INPUT" ? { fields: ["businessLines"] } : {}) },
     });
+  });
+});
+
+describe("deleteCaseStudy", () => {
+  it("deletes the draft for an owner/designer, passing the input unchanged", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    deleteCaseStudyUseCase.mockResolvedValue(ok(undefined));
+    expect(await deleteCaseStudy({ caseId: created.id })).toEqual({ ok: true, value: undefined });
+    expect(deleteCaseStudyUseCase).toHaveBeenCalledWith(actor("owner_designer"), { caseId: created.id });
+  });
+
+  it.each(["account_sales_social", "admin", "system"] as const)("returns 403 FORBIDDEN for %s and never calls the use case", async (role) => {
+    getActor.mockResolvedValue(ok(actor(role)));
+    const result = await deleteCaseStudy({ caseId: created.id });
+    expect(result).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
+    expect(deleteCaseStudyUseCase).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["NOT_FOUND", 404],
+    ["CASE_NOT_DELETABLE", 409],
+    ["CASE_STUDY_WRITE_FAILED", 500],
+  ] as const)("maps %s to %i", async (code, status) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    deleteCaseStudyUseCase.mockResolvedValue(err({ code, message: "m", details: { id: created.id } }));
+    expect(await deleteCaseStudy({ caseId: created.id })).toEqual({ ok: false, status, error: { code, message: "m" } });
   });
 });
 

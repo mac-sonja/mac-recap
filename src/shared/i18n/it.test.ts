@@ -34,7 +34,9 @@ describe("fill", () => {
 
 describe("case studies table copy", () => {
   test("has the approved strings", () => {
-    expect(Object.values(it.caseStudies.table.columns)).toEqual(["ID", "Case history", "Cliente", "Anno", "Stato", "Servizi", "Aggiornata", "Link"]);
+    expect(Object.values(it.caseStudies.table.columns)).toEqual(["ID", "Case history", "Cliente", "Anno", "Stato", "Servizi", "Aggiornata", "Link", "Azioni"]);
+    expect(fill(t("caseStudies.delete.title"), { name: "Rebrand" })).toBe("Eliminare Rebrand?");
+    expect(t("caseStudies.delete.confirm")).toBe("Elimina");
     expect(t("caseStudies.search.label")).toBe("Cerca progetto o cliente");
     expect(t("caseStudies.search.placeholder")).toBe("Cerca progetto o cliente…");
     expect(t("caseStudies.filter.all")).toBe("Tutti");

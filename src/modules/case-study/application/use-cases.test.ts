@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
-import { CASE_CREATED, CASE_DETAILS_UPDATED, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
+import { CASE_CREATED, CASE_DELETED, CASE_DETAILS_UPDATED, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import type { CaseStatus } from "@/shared/case-status";
 import { isClientComplete, type CaseStudy, type Client, type ClientBrief, type ClientRef, type ClientSummary } from "@/modules/case-study/domain/case-study";
 import { normalizeClientConfirmName } from "@/shared/client-name";
 import { err, ok } from "@/shared/result";
 import { makeCreateCaseStudy } from "./create-case-study";
 import { makeCreateClient } from "./create-client";
+import { makeDeleteCaseStudy } from "./delete-case-study";
 import { makeDeleteClient } from "./delete-client";
 import { makeGetCaseStudy } from "./get-case-study";
 import { LOGO_URL_TTL_SECONDS, makeGetClient } from "./get-client";
@@ -164,6 +165,23 @@ function fakeRepository() {
       cases.set(caseId, moved);
       events.push({ id: uuid(), caseId, revisionId: null, actorId, type: TRANSITION, at: now, data: { event, from, to } });
       return ok(moved);
+    }),
+    // Mirrors delete_case_study: a non-deleted draft gets deleted_at and one `case_deleted` event.
+    softDelete: vi.fn<CaseStudyRepository["softDelete"]>(async (caseId, actorId) => {
+      const row = cases.get(caseId);
+      if (!row || row.deletedAt !== null) return err({ code: "NOT_FOUND", message: "No case study with this id." });
+      if (row.status !== "draft") return err({ code: "CASE_NOT_DELETABLE", message: "Only a draft can be deleted." });
+      cases.set(caseId, { ...row, deletedAt: now });
+      events.push({
+        id: uuid(),
+        caseId,
+        revisionId: null,
+        actorId,
+        type: CASE_DELETED,
+        at: now,
+        data: { reason: "draft_deleted", clientId: row.client.id, code: row.code, status: row.status },
+      });
+      return ok(undefined);
     }),
   } satisfies CaseStudyRepository;
 
@@ -1338,6 +1356,61 @@ describe("recordEvent", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
     expect(repo.appendEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteCaseStudy", () => {
+  /** A fake repository holding one case in `status`, with the create event cleared. */
+  async function caseIn(status: CaseStatus) {
+    const fake = fakeRepository();
+    const created = await makeCreateCaseStudy(fake.repo)(actor, { name: "R", clientId: ACME.id, year: 2026, businessLines: ["branding"] });
+    if (!created.ok) throw new Error("setup");
+    fake.cases.set(created.value.id, { ...created.value, status });
+    fake.events.length = 0;
+    return { ...fake, id: created.value.id };
+  }
+
+  it("soft-deletes a draft with one case_deleted event; it then leaves every read and list", async () => {
+    const { repo, events, cases, id } = await caseIn("draft");
+    const result = await makeDeleteCaseStudy(repo)(actor, { caseId: id, name: "ignored" });
+    expect(result).toEqual(ok(undefined));
+    expect(repo.softDelete).toHaveBeenCalledExactlyOnceWith(id, actor.id);
+    expect(cases.get(id)?.deletedAt).not.toBeNull();
+    expect(events).toEqual([
+      expect.objectContaining({ caseId: id, actorId: actor.id, type: CASE_DELETED, data: expect.objectContaining({ reason: "draft_deleted" }) }),
+    ]);
+    expect(await makeGetCaseStudy(repo)(id)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    const listed = await makeListCaseStudies(repo)({});
+    expect(listed.ok && listed.value.map((c) => c.id)).toEqual([]);
+  });
+
+  it.each(["generating", "in_review", "approved"] as const)("refuses a case in %s with CASE_NOT_DELETABLE; nothing written", async (status) => {
+    const { repo, events, cases, id } = await caseIn(status);
+    const result = await makeDeleteCaseStudy(repo)(actor, { caseId: id });
+    expect(result.ok || result.error.code).toBe("CASE_NOT_DELETABLE");
+    expect(cases.get(id)?.deletedAt).toBeNull();
+    expect(events).toEqual([]);
+  });
+
+  it("answers NOT_FOUND for an unknown or already deleted case", async () => {
+    const { repo, id } = await caseIn("draft");
+    const run = makeDeleteCaseStudy(repo);
+    expect(await run(actor, { caseId: id })).toEqual(ok(undefined));
+    const again = await run(actor, { caseId: id });
+    expect(again.ok || again.error.code).toBe("NOT_FOUND");
+    const unknown = await run(actor, { caseId: UNKNOWN_CLIENT_ID });
+    expect(unknown.ok || unknown.error.code).toBe("NOT_FOUND");
+  });
+
+  it.each([
+    ["a malformed id", { caseId: "nope" }],
+    ["no id", {}],
+    ["no input", null],
+  ])("returns INVALID_INPUT for %s and never calls the repository", async (_label, input) => {
+    const { repo } = await caseIn("draft");
+    const result = await makeDeleteCaseStudy(repo)(actor, input);
+    expect(result.ok || result.error.code).toBe("INVALID_INPUT");
+    expect(repo.softDelete).not.toHaveBeenCalled();
   });
 });
 

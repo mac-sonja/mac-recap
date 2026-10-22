@@ -6,7 +6,8 @@ import { fill, it as dict } from "@/shared/i18n/it";
 import type { CaseStudyRow } from "./filter-sort";
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh: vi.fn() }) }));
+vi.mock("@/app/(tool)/case-studies/actions", () => ({ deleteCaseStudy: vi.fn() }));
 
 const { CaseStudiesTable, SEARCH_DEBOUNCE_MS } = await import("./case-studies-table");
 
@@ -91,7 +92,7 @@ describe("CaseStudiesTable", () => {
       COLUMNS.status,
       COLUMNS.businessLine,
       COLUMNS.links,
-      dict.download.action, // screen readers only: the Scarica column shows no header
+      COLUMNS.actions, // screen readers only: the Scarica and Elimina column shows no header
       COLUMNS.updated,
     ]);
     expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
@@ -408,6 +409,21 @@ describe("CaseStudiesTable", () => {
     expect(radios[0]?.checked).toBe(true);
     expect(dialog.textContent).toContain(dict.download.format.deck_16_9.name);
     expect(dialog.textContent).toContain(dict.download.soon);
+  });
+
+  it("offers Elimina on Bozza rows only, and only with canDelete; its click opens the dialog, not the wizard", async () => {
+    const user = userEvent.setup();
+    const deleteName = new RegExp(`^${escape(fill(dict.caseStudies.delete.button, { name: "" }))}`);
+    const { unmount } = render(<CaseStudiesTable rows={rows} canCreate />);
+    expect(screen.queryAllByRole("button", { name: deleteName })).toEqual([]);
+    unmount();
+
+    render(<CaseStudiesTable rows={rows} canCreate canDelete />);
+    const buttons = screen.getAllByRole("button", { name: deleteName });
+    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([fill(dict.caseStudies.delete.button, { name: "Alfa" })]);
+    await user.click(buttons[0]!);
+    expect(screen.getByRole("dialog", { hidden: true, name: fill(dict.caseStudies.delete.title, { name: "Alfa" }) })).toBeTruthy();
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("keeps the status region mounted and empty while there are results", () => {

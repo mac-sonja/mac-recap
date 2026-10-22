@@ -40,6 +40,22 @@ export async function updateCaseStudyDetails(input: unknown): Promise<ActionResu
 }
 
 /**
+ * Deletes a draft (Story 4.1 row action): input `{ caseId }`. The case is soft-deleted
+ * with a `case_deleted` event and disappears from every list. 403 `FORBIDDEN` unless the
+ * role may `delete case` for a draft; 400 `INVALID_INPUT`; 404 `NOT_FOUND` (unknown or
+ * already deleted); 409 `CASE_NOT_DELETABLE` once the case is no longer a draft (checked
+ * in the same transaction as the delete). Nothing is written on any error.
+ */
+export async function deleteCaseStudy(input: unknown): Promise<ActionResult<void>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "delete case", { status: "draft" });
+  if (!decision.ok) return failure(decision.error);
+  const deleted = await caseStudy.deleteCaseStudy(actor.value, input);
+  return deleted.ok ? deleted : failure(deleted.error);
+}
+
+/**
  * A signed upload for one project file: `{ assetId, url, method, headers }`; the
  * browser sends the raw file straight to storage with those headers. Input `{ caseId, contentType, sizeBytes }`.
  * 403 `FORBIDDEN` unless the role may `upload`; 400 `FILE_TYPE_NOT_ALLOWED` /

@@ -23,6 +23,7 @@ import {
   type SortState,
   type StatusFilter,
 } from "./filter-sort";
+import { DeleteCaseButton } from "./delete-case-button";
 
 export interface CaseStudiesTableProps {
   /** The scoped list, loaded once by the page; search and sort run here. */
@@ -42,6 +43,8 @@ export interface CaseStudiesTableProps {
   showCreate?: boolean;
   /** The search text to start with (the sidebar search's `?q=`). */
   initialQuery?: string;
+  /** Policy decision (`delete case` on a draft): whether Bozza rows offer **Elimina**. */
+  canDelete?: boolean;
 }
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -142,7 +145,9 @@ function isTextField(el: Element | null): boolean {
  * name, client name, client code, case code and business line label (case- and
  * accent-insensitive, debounced); both apply together. `/` focuses the search unless
  * focus is already in a text field. A Bozza row opens
- * `/case-studies/new?caseId={id}`; other rows are not links yet.
+ * `/case-studies/new?caseId={id}`; other rows are not links yet. The actions column
+ * holds Scarica on approved rows and, with `canDelete`, **Elimina** (a bin icon, with
+ * confirm) on Bozza rows (Story 4.1).
  */
 export function CaseStudiesTable({
   rows,
@@ -152,6 +157,7 @@ export function CaseStudiesTable({
   emptyAction = it.caseStudies.emptyAction,
   showCreate = false,
   initialQuery = "",
+  canDelete = false,
 }: CaseStudiesTableProps) {
   const router = useRouter();
   const searchId = useId();
@@ -220,7 +226,7 @@ export function CaseStudiesTable({
         : fill(it.caseStudies.noResultsQueryStatus, { query: query.trim(), status: it.caseStudies.filter.statuses[status] });
 
   function openRow(event: MouseEvent<HTMLTableRowElement>, href: string) {
-    // Links and buttons (the name, Scarica) and the Scarica dialog act on their own; modifier or
+    // Links and buttons (the name, Scarica, Elimina) and their dialogs act on their own; modifier or
     // non-primary clicks and text selection (copying an ID) do not navigate.
     if ((event.target as Element).closest("a, button, dialog")) return;
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -297,9 +303,9 @@ export function CaseStudiesTable({
                 <th scope="col" className={TH}>
                   {it.caseStudies.table.columns.links}
                 </th>
-                {/* Scarica: the buttons speak for themselves, so the header stays empty (owner, 2026-10-21). */}
+                {/* Scarica and Elimina: the buttons speak for themselves, so the header stays empty (owner, 2026-10-21). */}
                 <th scope="col" className={TH}>
-                  <span className="sr-only">{it.download.action}</span>
+                  <span className="sr-only">{it.caseStudies.table.columns.actions}</span>
                 </th>
                 {COLUMNS.filter(({ key }) => key === "updated").map(sortHeader)}
               </tr>
@@ -356,6 +362,7 @@ export function CaseStudiesTable({
                           description={it.download.caseDescription}
                         />
                       )}
+                      {row.status === "draft" && canDelete && <DeleteCaseButton caseId={row.id} name={row.name} />}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-foreground-muted tabular-nums">
                       <time dateTime={row.updatedAt}>{row.updatedLabel}</time>

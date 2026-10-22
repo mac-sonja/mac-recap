@@ -121,9 +121,13 @@ export function WizardFrame({
  * The footer's layout: sticky at the bottom of the scrolling column, opaque, under a
  * divider. The main area has no bottom padding at this width, so the sticky edge is
  * the viewport's bottom edge: nothing shows below the footer, and no filler is needed.
+ * A solid page colour, not frosted glass: cards scrolling under a translucent footer
+ * showed through as a blurred grey box (owner, 2026-10-21). The background reaches
+ * 24 px past the column on each side (`before:`), so the cards' edges and shadows don't
+ * peek out beside it; the divider and the content stay as wide as the column.
  */
 export const WIZARD_FOOTER =
-  "sticky bottom-0 z-10 mt-8 flex items-center justify-between gap-6 border-t border-border bg-surface/85 pt-4 pb-6 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/75";
+  "sticky bottom-0 z-10 mt-8 flex items-center justify-between gap-6 border-t border-border bg-surface pt-4 pb-6 before:absolute before:inset-y-0 before:-inset-x-6 before:-z-10 before:bg-surface";
 
 /**
  * The wizard footer under a divider: an optional note on the left and the step's

@@ -49,6 +49,7 @@ import {
   type PresignedClientLogoUpload,
 } from "@/modules/case-study/application/request-client-logo-upload";
 import { makeTransition } from "@/modules/case-study/application/transition";
+import { makeDeleteCaseStudy } from "@/modules/case-study/application/delete-case-study";
 import { makeUpdateCaseStudyDetails } from "@/modules/case-study/application/update-case-study-details";
 import { makeUpdateClient } from "@/modules/case-study/application/update-client";
 import type { CaseEvent } from "@/modules/case-study/domain/case-event";
@@ -160,6 +161,18 @@ export function create(actor: Actor, input: unknown): Promise<Result<CaseStudy>>
  */
 export function updateDetails(actor: Actor, input: unknown): Promise<Result<CaseStudy>> {
   return makeUpdateCaseStudyDetails(createSupabaseCaseStudyRepository())(actor, input);
+}
+
+/**
+ * Deletes a draft (Story 4.1, AR3): input `{ caseId }`. The case gets `deleted_at` and
+ * one `case_deleted` event with the actor, in one transaction; it then disappears from
+ * every list and read. Nothing is hard-deleted: rows, material, events and its number
+ * stay. Call only after `authorize(actor, 'delete case', { status: 'draft' })`.
+ * `INVALID_INPUT`, `NOT_FOUND` (unknown or already deleted), `CASE_NOT_DELETABLE` (no
+ * longer a draft); nothing is written on any error.
+ */
+export function deleteCaseStudy(actor: Actor, input: unknown): Promise<Result<void>> {
+  return makeDeleteCaseStudy(createSupabaseCaseStudyRepository())(actor, input);
 }
 
 /** One case study by id; unknown, malformed or soft-deleted ids are `NOT_FOUND`. */

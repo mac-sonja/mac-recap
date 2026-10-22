@@ -97,6 +97,8 @@ export const it = {
         businessLine: "Servizi",
         updated: "Aggiornata",
         links: "Link",
+        /** Read by screen readers only: the column of Scarica and Elimina. */
+        actions: "Azioni",
       },
       /** The Link column's icon, read by screen readers; `{name}` is the case name. */
       openLink: "Apri il link di {name} in un’altra scheda",
@@ -131,6 +133,19 @@ export const it = {
     narrowScreen: "Questa pagina dà il meglio su uno schermo più grande.",
     /** Read by screen readers while the table loads. */
     loading: "Un attimo…",
+    /** Deleting a draft from its row (Story 4.1): only a Bozza can be deleted. */
+    delete: {
+      /** The row's bin icon, read by screen readers and shown on hover; `{name}` is the case name. */
+      button: "Elimina {name}",
+      /** `{name}` is the case name. */
+      title: "Eliminare {name}?",
+      description: "La bozza sparisce da ogni elenco, insieme al materiale caricato. Non si torna indietro.",
+      cancel: "Annulla",
+      confirm: "Elimina",
+      /** The case left Bozza since the page loaded (CASE_NOT_DELETABLE). */
+      notDraft: "Nel frattempo non è più una bozza, quindi non si può eliminare. Abbiamo aggiornato l’elenco.",
+      failed: "Non siamo riusciti a eliminarla. Riprova tra poco.",
+    },
   },
   /** The fixed business lines (Story 2.17), keyed by `BusinessLine`, in display order. */
   businessLines: {

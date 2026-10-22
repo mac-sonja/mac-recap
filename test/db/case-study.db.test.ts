@@ -984,6 +984,7 @@ describe("RLS lockout", () => {
     `public.insert_client_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'p', 'f', 'application/pdf', 1, null, null, '${DEV_ACTOR_ID}')`,
     `public.delete_client_asset('${UNKNOWN_ID}')`,
     `public.delete_client('${UNKNOWN_ID}', 'x', '${DEV_ACTOR_ID}')`,
+    `public.delete_case_study('${UNKNOWN_ID}', '${DEV_ACTOR_ID}')`,
     "public.client_code_letters('Intruder')",
     "public.client_name_key('Intruder')",
     "public.case_study_code('III', 2026, 1)",
@@ -2586,6 +2587,74 @@ describe("client delete (owner, 2026-10-19)", () => {
   it("keeps the client delete and truncate triggers: a hard delete is still refused", async () => {
     const client = await createTestClient(pool, DEV_ACTOR_ID);
     await expect(inRolledBackTx("delete from public.client where id = $1", [client.id])).rejects.toThrow(/never deleted/);
+  });
+});
+
+describe("case delete (Story 4.1)", () => {
+  const remove = (caseId: string) => pool.query("select id from public.delete_case_study($1, $2)", [caseId, DEV_ACTOR_ID]);
+  const row = async (id: string) =>
+    (await pool.query<{ deleted_at: Date | null; status: string }>("select deleted_at, status from public.case_study where id = $1", [id])).rows[0];
+  const events = async (id: string) =>
+    (
+      await pool.query<{ type: string; actor_id: string; data: Record<string, unknown> }>(
+        "select type, actor_id, data from public.case_event where case_id = $1 order by at, id",
+        [id],
+      )
+    ).rows;
+
+  it("soft-deletes a draft with one case_deleted event; the adapter no longer reads or lists it", async () => {
+    const created = await createCase({ name: "To delete" });
+    const { deleteCaseStudy, get, list } = await loadCaseStudy();
+    expect(await deleteCaseStudy(await devActor(), { caseId: created.id })).toEqual({ ok: true, value: undefined });
+    expect((await row(created.id)).deleted_at).not.toBeNull();
+    expect(await events(created.id)).toEqual([
+      expect.objectContaining({ type: "case_created" }),
+      {
+        type: CASE_DELETED,
+        actor_id: DEV_ACTOR_ID,
+        data: { reason: "draft_deleted", clientId: acme.id, code: created.code, status: "draft" },
+      },
+    ]);
+    expect(await get(created.id)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    const listed = await list({});
+    expect(listed.ok && listed.value.some((c) => c.id === created.id)).toBe(false);
+  });
+
+  it("answers NOT_FOUND for an unknown or already deleted case and writes nothing", async () => {
+    const created = await createCase({ name: "Twice" });
+    await remove(created.id);
+    await expect(remove(created.id)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+    await expect(remove(UNKNOWN_ID)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+    expect((await events(created.id)).map((e) => e.type)).toEqual(["case_created", CASE_DELETED]);
+  });
+
+  it.each(["generating", "in_review", "approved"] as const)("refuses a case in %s with CASE_NOT_DELETABLE and writes nothing", async (status) => {
+    const created = await createCase({ name: `Not a draft (${status})` });
+    const db = await pool.connect();
+    try {
+      await db.query("begin");
+      await db.query("select pg_catalog.set_config('mac_recap.status_transition', 'on', true)");
+      await db.query("update public.case_study set status = $2 where id = $1", [created.id, status]);
+      await db.query("commit");
+    } finally {
+      db.release();
+    }
+    await expect(remove(created.id)).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_DELETABLE" });
+    const { deleteCaseStudy } = await loadCaseStudy();
+    const result = await deleteCaseStudy(await devActor(), { caseId: created.id });
+    expect(result.ok || result.error.code).toBe("CASE_NOT_DELETABLE");
+    expect((await row(created.id)).deleted_at).toBeNull();
+    expect((await events(created.id)).map((e) => e.type)).toEqual(["case_created"]);
+  });
+
+  it("grants delete_case_study to service_role only", async () => {
+    const { rows } = await pool.query(
+      `select has_function_privilege('service_role', $1, 'execute') as service,
+              has_function_privilege('anon', $1, 'execute') as anon,
+              has_function_privilege('authenticated', $1, 'execute') as authenticated`,
+      ["public.delete_case_study(uuid, uuid)"],
+    );
+    expect(rows).toEqual([{ service: true, anon: false, authenticated: false }]);
   });
 });
 
