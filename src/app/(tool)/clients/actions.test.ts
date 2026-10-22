@@ -7,6 +7,8 @@ const {
   createClientUseCase,
   updateClientUseCase,
   saveBriefUseCase,
+  saveResultsUseCase,
+  saveTestimonialUseCase,
   requestLogoUseCase,
   confirmLogoUseCase,
   requestMaterialUseCase,
@@ -19,6 +21,8 @@ const {
   createClientUseCase: vi.fn(),
   updateClientUseCase: vi.fn(),
   saveBriefUseCase: vi.fn(),
+  saveResultsUseCase: vi.fn(),
+  saveTestimonialUseCase: vi.fn(),
   requestLogoUseCase: vi.fn(),
   confirmLogoUseCase: vi.fn(),
   requestMaterialUseCase: vi.fn(),
@@ -37,6 +41,8 @@ vi.mock("@/modules/case-study", () => ({
   createClient: createClientUseCase,
   updateClient: updateClientUseCase,
   saveClientBriefField: saveBriefUseCase,
+  saveClientResults: saveResultsUseCase,
+  saveClientTestimonial: saveTestimonialUseCase,
   requestClientLogoUpload: requestLogoUseCase,
   confirmClientLogoUpload: confirmLogoUseCase,
   requestClientMaterialUpload: requestMaterialUseCase,
@@ -51,6 +57,8 @@ const {
   createClient,
   updateClient,
   saveClientBriefField,
+  saveClientResults,
+  saveClientTestimonial,
   requestClientLogoUpload,
   confirmClientLogoUpload,
   requestClientMaterialUpload,
@@ -76,6 +84,8 @@ const cases = [
   ["createClient", createClient, createClientUseCase, { name: "Lumen Srl", industries: ["lusso"], description: "Brand." }],
   ["updateClient", updateClient, updateClientUseCase, EDIT],
   ["saveClientBriefField", saveClientBriefField, saveBriefUseCase, { clientId: LUMEN.id, field: "context", text: "Un marchio." }],
+  ["saveClientResults", saveClientResults, saveResultsUseCase, { clientId: LUMEN.id, results: [{ label: "Visite", value: "2,4M" }] }],
+  ["saveClientTestimonial", saveClientTestimonial, saveTestimonialUseCase, { clientId: LUMEN.id, quote: "Ci hanno capiti.", author: "" }],
   ["requestClientLogoUpload", requestClientLogoUpload, requestLogoUseCase, { clientId: LUMEN.id, contentType: "image/png", sizeBytes: 10 }],
   ["confirmClientLogoUpload", confirmClientLogoUpload, confirmLogoUseCase, { clientId: LUMEN.id, logoId: LOGO_ID, contentType: "image/png" }],
   [
@@ -103,6 +113,8 @@ beforeEach(() => {
     createClientUseCase,
     updateClientUseCase,
     saveBriefUseCase,
+    saveResultsUseCase,
+    saveTestimonialUseCase,
     requestLogoUseCase,
     confirmLogoUseCase,
     requestMaterialUseCase,
@@ -115,7 +127,7 @@ beforeEach(() => {
 });
 
 describe("client actions", () => {
-  it("exports only add, edit, delete, the brief save, the two logo steps and the client material actions", () => {
+  it("exports only add, edit, delete, the brief, results and testimonial saves, the two logo steps and the client material actions", () => {
     expect(Object.keys(actions).sort()).toEqual([
       "confirmClientLogoUpload",
       "confirmClientMaterialUpload",
@@ -126,6 +138,8 @@ describe("client actions", () => {
       "requestClientLogoUpload",
       "requestClientMaterialUpload",
       "saveClientBriefField",
+      "saveClientResults",
+      "saveClientTestimonial",
       "updateClient",
     ]);
   });

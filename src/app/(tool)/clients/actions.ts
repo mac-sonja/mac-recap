@@ -7,6 +7,8 @@ import type {
   Client,
   ClientBriefFieldSaved,
   ClientDeleted,
+  ClientResultsSaved,
+  ClientTestimonialSaved,
   ListedClientAsset,
   PresignedClientLogoUpload,
   PresignedClientMaterial,
@@ -64,8 +66,8 @@ export async function deleteClient(input: unknown): Promise<ActionResult<ClientD
 }
 
 /**
- * Saves one brief text: input `{ clientId, field, text }` (context, solution or
- * results; at most 5000 characters after trimming). 403 `FORBIDDEN` unless the role
+ * Saves one brief text: input `{ clientId, field, text }` (context or solution; at
+ * most 5000 characters after trimming). 403 `FORBIDDEN` unless the role
  * may `manage clients`; 400 `INVALID_INPUT` / `UNKNOWN_FIELD` /
  * `CLIENT_FIELD_TOO_LONG`; 404 `CLIENT_NOT_FOUND`. Nothing is written on any error.
  */
@@ -75,6 +77,38 @@ export async function saveClientBriefField(input: unknown): Promise<ActionResult
   const decision = authorize(actor.value, "manage clients");
   if (!decision.ok) return failure(decision.error);
   const saved = await caseStudy.saveClientBriefField(actor.value, input);
+  return saved.ok ? saved : failure(saved.error);
+}
+
+/**
+ * Replaces a client's results: input `{ clientId, results: [{ label, value }] }`, at
+ * most 3 filled rows (label ≤ 80, value ≤ 20 characters after trimming); `[]` clears
+ * them. 403 `FORBIDDEN` unless the role may `manage clients`; 400 `INVALID_INPUT` /
+ * `CLIENT_FIELD_INVALID` / `CLIENT_FIELD_TOO_LONG`; 404 `CLIENT_NOT_FOUND`. Nothing is
+ * written on any error.
+ */
+export async function saveClientResults(input: unknown): Promise<ActionResult<ClientResultsSaved>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage clients");
+  if (!decision.ok) return failure(decision.error);
+  const saved = await caseStudy.saveClientResults(actor.value, input);
+  return saved.ok ? saved : failure(saved.error);
+}
+
+/**
+ * Replaces a client's testimonial: input `{ clientId, quote, author }` (quote ≤ 600,
+ * author ≤ 120 characters after trimming; an author needs a quote; `""` and `""` clear
+ * it). 403 `FORBIDDEN` unless the role may `manage clients`; 400 `INVALID_INPUT` /
+ * `CLIENT_FIELD_INVALID` / `CLIENT_FIELD_TOO_LONG`; 404 `CLIENT_NOT_FOUND`. Nothing is
+ * written on any error.
+ */
+export async function saveClientTestimonial(input: unknown): Promise<ActionResult<ClientTestimonialSaved>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage clients");
+  if (!decision.ok) return failure(decision.error);
+  const saved = await caseStudy.saveClientTestimonial(actor.value, input);
   return saved.ok ? saved : failure(saved.error);
 }
 

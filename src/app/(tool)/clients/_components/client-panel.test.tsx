@@ -7,6 +7,8 @@ import type {
   Client,
   ClientBriefFieldSaved,
   ClientDetail,
+  ClientResultsSaved,
+  ClientTestimonialSaved,
   ClientIndustry,
   ListedClientAsset,
   PresignedClientLogoUpload,
@@ -22,6 +24,8 @@ const calls: string[] = [];
 const createClient = vi.fn<(input: unknown) => Promise<ActionResult<Client>>>();
 const updateClient = vi.fn<(input: unknown) => Promise<ActionResult<Client>>>();
 const saveClientBriefField = vi.fn<(input: unknown) => Promise<ActionResult<ClientBriefFieldSaved>>>();
+const saveClientResults = vi.fn<(input: unknown) => Promise<ActionResult<ClientResultsSaved>>>();
+const saveClientTestimonial = vi.fn<(input: unknown) => Promise<ActionResult<ClientTestimonialSaved>>>();
 const requestClientLogoUpload = vi.fn<(input: unknown) => Promise<ActionResult<PresignedClientLogoUpload>>>();
 const confirmClientLogoUpload = vi.fn<(input: unknown) => Promise<ActionResult<{ logoId: string }>>>();
 const requestClientMaterialUpload = vi.fn<(input: unknown) => Promise<ActionResult<PresignedClientMaterial>>>();
@@ -43,6 +47,8 @@ vi.mock("@/app/(tool)/clients/actions", () => ({
   createClient: traced("createClient", (input: unknown) => createClient(input)),
   updateClient: traced("updateClient", (input: unknown) => updateClient(input)),
   saveClientBriefField: traced("saveClientBriefField", (input: unknown) => saveClientBriefField(input)),
+  saveClientResults: traced("saveClientResults", (input: unknown) => saveClientResults(input)),
+  saveClientTestimonial: traced("saveClientTestimonial", (input: unknown) => saveClientTestimonial(input)),
   requestClientLogoUpload: traced("requestClientLogoUpload", (input: unknown) => requestClientLogoUpload(input)),
   confirmClientLogoUpload: traced("confirmClientLogoUpload", (input: unknown) => confirmClientLogoUpload(input)),
   requestClientMaterialUpload: traced("requestClientMaterialUpload", (input: unknown) => requestClientMaterialUpload(input)),
@@ -66,6 +72,10 @@ const LIMITS = {
   nameMax: 120,
   descriptionMax: 400,
   briefMax: 5000,
+  resultLabelMax: 80,
+  resultValueMax: 20,
+  testimonialQuoteMax: 600,
+  testimonialAuthorMax: 120,
   logoTypes: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"],
   logoMaxBytes: 5 * 1024 * 1024,
   logoMinShortSide: 400,
@@ -86,7 +96,7 @@ const EXISTING: ClientDetail = {
   ...CREATED,
   logoId: OLD_LOGO,
   logoUrl: "https://x/old.png?sig",
-  brief: { context: "Contesto.", solution: "Soluzione.", results: "Risultati." },
+  brief: { context: "Contesto.", solution: "Soluzione.", results: [], testimonialQuote: "", testimonialAuthor: "" },
 };
 const asset = (n: number, over: Partial<ListedClientAsset> = {}): ListedClientAsset => ({
   id: `ffffffff-0000-4000-8000-00000000000${n}`,
@@ -136,7 +146,6 @@ async function fillAll(user: ReturnType<typeof setup>) {
   await waitFor(() => expect(counter().textContent).toBe("2 di 3"));
   fireEvent.change(field("Contesto"), { target: { value: "C" } });
   fireEvent.change(field("Soluzione"), { target: { value: "S" } });
-  fireEvent.change(field("Risultati"), { target: { value: "R" } });
 }
 
 let assetSeq = 0;
@@ -151,6 +160,8 @@ beforeEach(() => {
     createClient,
     updateClient,
     saveClientBriefField,
+    saveClientResults,
+    saveClientTestimonial,
     requestClientLogoUpload,
     confirmClientLogoUpload,
     requestClientMaterialUpload,
@@ -175,6 +186,11 @@ beforeEach(() => {
   saveClientBriefField.mockImplementation(async (input) => {
     const { field: key, text } = input as ClientBriefFieldSaved;
     return { ok: true, value: { field: key, text } };
+  });
+  saveClientResults.mockImplementation(async (input) => ({ ok: true, value: { results: (input as ClientResultsSaved).results } }));
+  saveClientTestimonial.mockImplementation(async (input) => {
+    const { quote, author } = input as ClientTestimonialSaved;
+    return { ok: true, value: { quote, author } };
   });
   requestClientLogoUpload.mockResolvedValue({ ok: true, value: { logoId: NEW_LOGO, url: "https://x/logo", method: "PUT", headers: {} } });
   confirmClientLogoUpload.mockResolvedValue({ ok: true, value: { logoId: NEW_LOGO } });
@@ -211,15 +227,18 @@ describe("ClientPanel, a new client", () => {
     expect(screen.getByRole("button", { name: dict.clientPanel.images.addLabel })).toBeTruthy();
     expect(primary("Aggiungi").getAttribute("aria-disabled")).toBe("true");
     expect(describedText(primary("Aggiungi"))).toBe(
-      "Per andare avanti manca: Nome, Settore, Descrizione, Logo, Immagini, Contesto, Soluzione, Risultati.",
+      "Per andare avanti manca: Nome, Settore, Descrizione, Logo, Immagini, Contesto, Soluzione.",
     );
     expect(screen.queryByRole("button", { name: "Elimina cliente" })).toBeNull();
   });
 
-  it("keeps picked files in the browser, then on Aggiungi creates, uploads the logo, links it, saves the texts, uploads the images and opens the client page", async () => {
+  it("keeps picked files in the browser, then on Aggiungi creates, uploads the logo, links it, saves the texts, results and testimonial, uploads the images and opens the client page", async () => {
     const user = setup();
     renderPanel();
     await fillAll(user);
+    fireEvent.change(field("Risultato 1, cosa misuri"), { target: { value: "Visite" } });
+    fireEvent.change(field("Risultato 1, numero"), { target: { value: "2,4M" } });
+    fireEvent.change(field("Frase del cliente"), { target: { value: "Ci hanno capiti." } });
     expect(calls).toEqual([]);
     expect(primary("Aggiungi").hasAttribute("aria-disabled")).toBe(false);
 
@@ -232,7 +251,8 @@ describe("ClientPanel, a new client", () => {
       "updateClient",
       "saveClientBriefField",
       "saveClientBriefField",
-      "saveClientBriefField",
+      "saveClientResults",
+      "saveClientTestimonial",
       "requestClientMaterialUpload",
       "confirmClientMaterialUpload",
       "requestClientMaterialUpload",
@@ -243,6 +263,18 @@ describe("ClientPanel, a new client", () => {
     expect(requestClientMaterialUpload).toHaveBeenNthCalledWith(1, { clientId: CLIENT_ID, contentType: "image/jpeg", sizeBytes: 4096 });
     expect(confirmClientMaterialUpload.mock.calls.map(([input]) => (input as { fileName: string }).fileName)).toEqual(["uno.jpg", "due.jpg"]);
     expect(window.history.replaceState).toHaveBeenCalledWith(null, "", `/clients/${CLIENT_ID}?modifica=1`);
+    expect(saveClientResults).toHaveBeenCalledWith({ clientId: CLIENT_ID, results: [{ label: "Visite", value: "2,4M" }] });
+    expect(saveClientTestimonial).toHaveBeenCalledWith({ clientId: CLIENT_ID, quote: "Ci hanno capiti.", author: "" });
+  });
+
+  it("adds a client with no results and no testimonial without saving them", async () => {
+    const user = setup();
+    renderPanel();
+    await fillAll(user);
+    await user.click(primary("Aggiungi"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(`/clients/${CLIENT_ID}`, undefined));
+    expect(saveClientResults).not.toHaveBeenCalled();
+    expect(saveClientTestimonial).not.toHaveBeenCalled();
   });
 
   it("stays open as Modifica cliente when an image upload fails after the create, shows the error on its slot, and Salva retries it", async () => {
@@ -523,6 +555,258 @@ describe("ClientPanel, saving", () => {
     fireEvent.blur(field("Contesto"));
     await new Promise((done) => setTimeout(done, 20));
     expect(saveClientBriefField).not.toHaveBeenCalled();
+  });
+});
+
+describe("ClientPanel, Risultati and Testimonial", () => {
+  const label = (n: number) => field(`Risultato ${n}, cosa misuri`);
+  const value = (n: number) => field(`Risultato ${n}, numero`);
+  const quote = () => field("Frase del cliente");
+  const author = () => field("Autore della frase");
+  const copy = dict.clientPanel.details;
+
+  it("shows 3 rows with the mock's placeholders, the hints, and no required mark", () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    expect([1, 2, 3].map((n) => [label(n).placeholder, value(n).placeholder])).toEqual([
+      ["Candidature ricevute", "+180%"],
+      ["Visualizzazioni video", "2,4M"],
+      ["Follower su LinkedIn", "+35%"],
+    ]);
+    const results = screen.getByRole("group", { name: "Risultati" });
+    expect(describedText(results)).toBe(copy.results.hint);
+    const testimonial = screen.getByRole("group", { name: "Testimonial" });
+    expect(describedText(testimonial)).toBe(copy.testimonial.hint);
+    expect(quote().placeholder).toBe("Una frase del cliente, tra virgolette nel suo stile");
+    expect(author().placeholder).toBe("Nome Cognome, ruolo");
+    expect(label(1).hasAttribute("aria-required")).toBe(false);
+  });
+
+  it("saves a filled row when its value loses focus, and shows saved results top first", async () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(1), { target: { value: " Candidature ricevute " } });
+    fireEvent.change(value(1), { target: { value: "+180%" } });
+    fireEvent.blur(value(1));
+    await waitFor(() =>
+      expect(saveClientResults).toHaveBeenCalledWith({ clientId: CLIENT_ID, results: [{ label: "Candidature ricevute", value: "+180%" }] }),
+    );
+    cleanup();
+
+    const results = [
+      { label: "Visite", value: "2,4M" },
+      { label: "Follower", value: "+35%" },
+    ];
+    renderPanel({ ...EXISTING, brief: { ...EXISTING.brief, results } }, TWO_IMAGES);
+    expect([1, 2, 3].map((n) => [label(n).value, value(n).value])).toEqual([
+      ["Visite", "2,4M"],
+      ["Follower", "+35%"],
+      ["", ""],
+    ]);
+  });
+
+  it("saves rows 1 and 3 as two results in that order", async () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(1), { target: { value: "Visite" } });
+    fireEvent.change(value(1), { target: { value: "2,4M" } });
+    fireEvent.change(label(3), { target: { value: "Follower" } });
+    fireEvent.change(value(3), { target: { value: "+35%" } });
+    fireEvent.blur(value(3));
+    await waitFor(() =>
+      expect(saveClientResults).toHaveBeenLastCalledWith({
+        clientId: CLIENT_ID,
+        results: [
+          { label: "Visite", value: "2,4M" },
+          { label: "Follower", value: "+35%" },
+        ],
+      }),
+    );
+  });
+
+  it("does not save a half row: it shows the message once focus leaves it, and the other rows save", async () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(1), { target: { value: "Visite" } });
+    fireEvent.change(value(1), { target: { value: "2,4M" } });
+    fireEvent.change(label(2), { target: { value: "Follower" } });
+    expect(screen.queryByText(copy.results.halfRow)).toBeNull();
+    fireEvent.blur(label(2));
+    await waitFor(() => expect(saveClientResults).toHaveBeenCalledWith({ clientId: CLIENT_ID, results: [{ label: "Visite", value: "2,4M" }] }));
+    expect(saveClientResults).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(copy.results.halfRow)).toBeTruthy();
+    expect(value(2).getAttribute("aria-invalid")).toBe("true");
+    expect(describedText(value(2))).toBe(copy.results.halfRow);
+    expect(screen.queryByText(dict.clients.errors.generic)).toBeNull();
+  });
+
+  it("shows the limit on a value over 20 characters and does not save it", async () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(1), { target: { value: "Visite" } });
+    fireEvent.change(value(1), { target: { value: "x".repeat(21) } });
+    fireEvent.blur(value(1));
+    expect(screen.getByText(fill(dict.clients.errors.fieldTooLong, { max: 20 }))).toBeTruthy();
+    expect(value(1).getAttribute("aria-invalid")).toBe("true");
+    await new Promise((done) => setTimeout(done, 20));
+    expect(saveClientResults).not.toHaveBeenCalled();
+  });
+
+  it("saves a quote without an author", async () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(quote(), { target: { value: "Ci hanno capiti." } });
+    fireEvent.blur(quote());
+    await waitFor(() => expect(saveClientTestimonial).toHaveBeenCalledWith({ clientId: CLIENT_ID, quote: "Ci hanno capiti.", author: "" }));
+  });
+
+  it("does not save an author without a quote: it says Manca la frase.", async () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(author(), { target: { value: "Ada Rossi, CEO" } });
+    fireEvent.blur(author());
+    expect(await screen.findByText("Manca la frase.")).toBeTruthy();
+    expect(quote().getAttribute("aria-invalid")).toBe("true");
+    await new Promise((done) => setTimeout(done, 20));
+    expect(saveClientTestimonial).not.toHaveBeenCalled();
+  });
+
+  it("counts a half row as unsaved when closing, and Salva stops at it", async () => {
+    const user = setup();
+    window.confirm = vi.fn(() => false);
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(1), { target: { value: "Visite" } });
+    await user.click(screen.getByRole("button", { name: "Annulla" }));
+    expect(window.confirm).toHaveBeenCalledWith(dict.wizard.unsavedConfirm);
+    expect(replace).not.toHaveBeenCalled();
+
+    await user.click(primary("Salva"));
+    expect(document.activeElement).toBe(value(1));
+    expect(screen.getByText(copy.results.halfRow)).toBeTruthy();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("announces a failed results save and shows it under Risultati", async () => {
+    saveClientResults.mockResolvedValue({ ok: false, status: 500, error: { code: "CLIENT_WRITE_FAILED", message: "down" } });
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(1), { target: { value: "Visite" } });
+    fireEvent.change(value(1), { target: { value: "2,4M" } });
+    fireEvent.blur(value(1));
+    expect(await screen.findByText(copy.errors.saveFailed)).toBeTruthy();
+    expect(statusText()).toContain(`Risultati: ${copy.errors.saveFailed}`);
+  });
+
+  it("shows a failed testimonial save under Testimonial", async () => {
+    saveClientTestimonial.mockResolvedValue({ ok: false, status: 500, error: { code: "CLIENT_WRITE_FAILED", message: "down" } });
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(quote(), { target: { value: "Ci hanno capiti." } });
+    fireEvent.blur(quote());
+    await waitFor(() => expect(describedText(screen.getByRole("group", { name: "Testimonial" }))).toContain(copy.errors.saveFailed));
+    expect(describedText(screen.getByRole("group", { name: "Risultati" }))).not.toContain(copy.errors.saveFailed);
+  });
+
+  it("hides the half-row message once the row is complete", async () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(2), { target: { value: "Follower" } });
+    fireEvent.blur(label(2));
+    expect(await screen.findByText(copy.results.halfRow)).toBeTruthy();
+    fireEvent.change(value(2), { target: { value: "+35%" } });
+    expect(screen.queryByText(copy.results.halfRow)).toBeNull();
+    fireEvent.change(value(2), { target: { value: "" } });
+    expect(screen.queryByText(copy.results.halfRow)).toBeNull();
+  });
+
+  it("shows the limit on a label over 80 and an author over 120 characters", () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(1), { target: { value: "x".repeat(81) } });
+    fireEvent.change(author(), { target: { value: "x".repeat(121) } });
+    expect(describedText(label(1))).toBe(fill(dict.clients.errors.fieldTooLong, { max: 80 }));
+    expect(label(1).getAttribute("aria-invalid")).toBe("true");
+    expect(describedText(author())).toBe(fill(dict.clients.errors.fieldTooLong, { max: 120 }));
+    expect(author().getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("does not let an over-long row or author block the valid rows and quote", async () => {
+    renderPanel(EXISTING, TWO_IMAGES);
+    fireEvent.change(label(1), { target: { value: "x".repeat(81) } });
+    fireEvent.change(value(1), { target: { value: "1" } });
+    fireEvent.change(label(2), { target: { value: "Follower" } });
+    fireEvent.change(value(2), { target: { value: "+35%" } });
+    fireEvent.blur(value(2));
+    await waitFor(() => expect(saveClientResults).toHaveBeenCalledWith({ clientId: CLIENT_ID, results: [{ label: "Follower", value: "+35%" }] }));
+
+    fireEvent.change(quote(), { target: { value: "Frase." } });
+    fireEvent.change(author(), { target: { value: "x".repeat(121) } });
+    fireEvent.blur(author());
+    await waitFor(() => expect(saveClientTestimonial).toHaveBeenCalledWith({ clientId: CLIENT_ID, quote: "Frase.", author: "" }));
+  });
+
+  it("keeps a saved row stored while one of its parts is cleared; the other rows still save", async () => {
+    const results = [
+      { label: "Visite", value: "2,4M" },
+      { label: "Follower", value: "+35%" },
+    ];
+    renderPanel({ ...EXISTING, brief: { ...EXISTING.brief, results } }, TWO_IMAGES);
+    fireEvent.change(value(1), { target: { value: "" } });
+    fireEvent.blur(value(1));
+    await new Promise((done) => setTimeout(done, 20));
+    expect(saveClientResults).not.toHaveBeenCalled();
+    fireEvent.change(value(2), { target: { value: "+40%" } });
+    fireEvent.blur(value(2));
+    await waitFor(() =>
+      expect(saveClientResults).toHaveBeenCalledWith({
+        clientId: CLIENT_ID,
+        results: [
+          { label: "Visite", value: "2,4M" },
+          { label: "Follower", value: "+40%" },
+        ],
+      }),
+    );
+    // Emptied, the row goes.
+    fireEvent.change(label(1), { target: { value: "" } });
+    fireEvent.blur(label(1));
+    await waitFor(() => expect(saveClientResults).toHaveBeenLastCalledWith({ clientId: CLIENT_ID, results: [{ label: "Follower", value: "+40%" }] }));
+  });
+
+  it("keeps the stored testimonial while its quote is cleared", async () => {
+    renderPanel({ ...EXISTING, brief: { ...EXISTING.brief, testimonialQuote: "Ci hanno capiti.", testimonialAuthor: "Ada Rossi, CEO" } }, TWO_IMAGES);
+    fireEvent.change(quote(), { target: { value: "" } });
+    fireEvent.blur(quote());
+    fireEvent.blur(author());
+    expect(await screen.findByText("Manca la frase.")).toBeTruthy();
+    await new Promise((done) => setTimeout(done, 20));
+    expect(saveClientTestimonial).not.toHaveBeenCalled();
+    fireEvent.change(author(), { target: { value: "" } });
+    fireEvent.blur(author());
+    await waitFor(() => expect(saveClientTestimonial).toHaveBeenCalledWith({ clientId: CLIENT_ID, quote: "", author: "" }));
+  });
+
+  describe("on Aggiungi", () => {
+    it("stops before createClient at a value over 20 characters and focuses it", async () => {
+      const user = setup();
+      renderPanel();
+      await fillAll(user);
+      fireEvent.change(label(1), { target: { value: "Visite" } });
+      fireEvent.change(value(1), { target: { value: "x".repeat(21) } });
+      await user.click(primary("Aggiungi"));
+      expect(document.activeElement).toBe(value(1));
+      expect(createClient).not.toHaveBeenCalled();
+    });
+
+    it("stops at a half row, focusing its empty part with the message", async () => {
+      const user = setup();
+      renderPanel();
+      await fillAll(user);
+      fireEvent.change(label(2), { target: { value: "Follower" } });
+      await user.click(primary("Aggiungi"));
+      expect(document.activeElement).toBe(value(2));
+      expect(screen.getByText(copy.results.halfRow)).toBeTruthy();
+      expect(createClient).not.toHaveBeenCalled();
+    });
+
+    it("stops at an author without a quote, focusing the quote with Manca la frase.", async () => {
+      const user = setup();
+      renderPanel();
+      await fillAll(user);
+      fireEvent.change(author(), { target: { value: "Ada Rossi" } });
+      await user.click(primary("Aggiungi"));
+      expect(document.activeElement).toBe(quote());
+      expect(screen.getByText("Manca la frase.")).toBeTruthy();
+      expect(createClient).not.toHaveBeenCalled();
+    });
   });
 });
 

@@ -27,7 +27,7 @@ import { RAISE_EXCEPTION, refusalOf, type Refusals } from "./refusal";
 
 const CLIENT_REF_COLUMNS = "id, name, code";
 const CLIENT_COLUMNS = "id, name, code, industries, description, logo_id";
-const BRIEF_COLUMNS = "context, solution, results";
+const BRIEF_COLUMNS = "context, solution, results, testimonial_quote, testimonial_author";
 /**
  * The client with what `isClientComplete` reads, the count of its embedded case
  * studies (the embedded filter keeps non-deleted ones only) and its current logo,
@@ -44,7 +44,7 @@ const CREATE_REFUSALS: Refusals = {
   CLIENT_NAME_TAKEN: { code: "CLIENT_NAME_TAKEN", message: "A client with this name already exists." },
   CLIENT_CODE_EXHAUSTED: { code: "CLIENT_CODE_EXHAUSTED", message: "No free code is left for this client name." },
 };
-/** `save_client_brief_field` raises these as P0001; nothing is written then. */
+/** `save_client_brief_field` (and `save_client_results`, `save_client_testimonial`: CLIENT_NOT_FOUND) raise these as P0001; nothing is written then. */
 const BRIEF_REFUSALS: Refusals = {
   CLIENT_NOT_FOUND: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
   UNKNOWN_FIELD: { code: "UNKNOWN_FIELD", message: "Unknown field." },
@@ -92,11 +92,15 @@ const LENGTH_CHECKS: Readonly<Record<string, string>> = {
   client_description_check: "description",
   client_brief_context_check: "context",
   client_brief_solution_check: "solution",
-  client_brief_results_check: "results",
+  client_brief_testimonial_quote_check: "quote",
+  client_brief_testimonial_author_check: "author",
 };
 /** The DB value checks and the field each one guards. */
 const VALUE_CHECKS: Readonly<Record<string, string>> = {
   client_industries_check: "industries",
+  client_brief_results_check: "results",
+  // An author without a quote: the quote is what is missing.
+  client_brief_testimonial_check: "quote",
 };
 
 const fieldsOf = (message: string, checks: Readonly<Record<string, string>>) =>
@@ -106,7 +110,7 @@ const fieldsOf = (message: string, checks: Readonly<Record<string, string>>) =>
 
 /**
  * The field error when the DB refused the write: `CLIENT_FIELD_INVALID` for the
- * industries check or a P0001 `CLIENT_FIELD_INVALID` (its DETAIL names the field),
+ * industries, results or testimonial check or a P0001 `CLIENT_FIELD_INVALID` (its DETAIL names the field),
  * `CLIENT_FIELD_TOO_LONG` for a length check, each naming the field(s), so the
  * wizard can show the error on the field.
  */
@@ -118,11 +122,33 @@ function fieldErrorOf(error: { code: string; message: string; details?: string |
   if (error.code !== CHECK_VIOLATION) return undefined;
   const invalid = fieldsOf(error.message, VALUE_CHECKS);
   if (invalid.length > 0) {
-    return { code: "CLIENT_FIELD_INVALID", message: "The industries are not in the list.", details: { fields: invalid } };
+    return { code: "CLIENT_FIELD_INVALID", message: "A client field has a value outside what is allowed.", details: { fields: invalid } };
   }
   const tooLong = fieldsOf(error.message, LENGTH_CHECKS);
   if (tooLong.length === 0) return undefined;
   return { code: "CLIENT_FIELD_TOO_LONG", message: "A client field is too long.", details: { fields: tooLong } };
+}
+
+/** The result of `save_client_results` / `save_client_testimonial`: whether something changed, or the refusal. */
+function briefSaved(
+  data: unknown,
+  error: { code: string; message: string; details?: string | null } | null,
+  what: string,
+  context: { actorId: string; clientId: string },
+): Result<boolean> {
+  if (error) {
+    const refused = refusalOf(error, BRIEF_REFUSALS);
+    if (refused) return err({ ...refused, details: { clientId: context.clientId } });
+    const fieldError = fieldErrorOf(error);
+    if (fieldError) return err(fieldError);
+    log.error(`client ${what} save failed: ${error.code}`, context);
+    return err({ code: "CLIENT_WRITE_FAILED", message: `Could not save the client ${what}.`, details: { clientId: context.clientId } });
+  }
+  if (typeof data !== "boolean") {
+    log.error(`client ${what} save failed: no result returned`, context);
+    return err({ code: "CLIENT_WRITE_FAILED", message: `Could not save the client ${what}.`, details: { clientId: context.clientId } });
+  }
+  return ok(data);
 }
 
 const invalidRow = (id: string) =>
@@ -146,7 +172,10 @@ interface ClientRow {
 interface BriefRow {
   context: string;
   solution: string;
-  results: string;
+  /** jsonb: `[{ label, value }]`, checked by `client_brief_results_valid`. */
+  results: unknown;
+  testimonial_quote: string;
+  testimonial_author: string;
 }
 
 /** Maps a `client` row with its info to the domain shape, rejecting values outside the domain. */
@@ -169,7 +198,13 @@ export function toClient(row: ClientRow): Result<Client> {
 export function toClientBrief(embedded: BriefRow | BriefRow[] | null | undefined): ClientBrief | null {
   const row = Array.isArray(embedded) ? (embedded[0] ?? null) : (embedded ?? null);
   if (row === null) return emptyClientBrief();
-  const parsed = clientBriefSchema.safeParse(row);
+  const parsed = clientBriefSchema.safeParse({
+    context: row.context,
+    solution: row.solution,
+    results: row.results,
+    testimonialQuote: row.testimonial_quote,
+    testimonialAuthor: row.testimonial_author,
+  });
   return parsed.success ? parsed.data : null;
 }
 
@@ -392,6 +427,26 @@ export function createSupabaseClientRepository(
         return err({ code: "CLIENT_WRITE_FAILED", message: "Could not save the client brief.", details: { clientId } });
       }
       return ok(data);
+    },
+
+    async saveResults(clientId, results, actorId) {
+      const { data, error } = await client().rpc("save_client_results", {
+        p_client_id: clientId,
+        // Only label and value: any other key would fail client_brief_results_check.
+        p_results: results.map(({ label, value }) => ({ label, value })),
+        p_actor_id: actorId,
+      });
+      return briefSaved(data, error, "results", { actorId, clientId });
+    },
+
+    async saveTestimonial(clientId, quote, author, actorId) {
+      const { data, error } = await client().rpc("save_client_testimonial", {
+        p_client_id: clientId,
+        p_quote: quote,
+        p_author: author,
+        p_actor_id: actorId,
+      });
+      return briefSaved(data, error, "testimonial", { actorId, clientId });
     },
 
     async findLogo(id) {

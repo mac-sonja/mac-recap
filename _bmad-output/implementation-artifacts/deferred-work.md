@@ -176,3 +176,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-client-side-panel.md`
   summary: A logo picked in the edit panel and then cancelled (or replaced by a second pick) stays in storage unlinked.
   evidence: Review finding 6; the wizard behaved the same. Needs a cleanup job or a delete-on-cancel.
+- source_spec: `_bmad-output/implementation-artifacts/spec-client-results-testimonial.md`
+  summary: Add a migration test that seeds a client_brief row with the old text results, applies the results/testimonial migration and checks Risultati reads back as [].
+  evidence: Review finding 8 (unverified, medium); the db suite runs on an already-migrated schema and has no harness for one migration step against older data. The owner's manual dev check covers it for now.

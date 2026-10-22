@@ -979,6 +979,9 @@ describe("RLS lockout", () => {
     `public.create_client('Intruder', null, null, '${DEV_ACTOR_ID}')`,
     `public.update_client('${UNKNOWN_ID}', 'Intruder', null, null, null, '${DEV_ACTOR_ID}')`,
     `public.save_client_brief_field('${UNKNOWN_ID}', 'context', 'x', '${DEV_ACTOR_ID}')`,
+    `public.save_client_results('${UNKNOWN_ID}', '[]'::jsonb, '${DEV_ACTOR_ID}')`,
+    `public.save_client_testimonial('${UNKNOWN_ID}', 'q', 'a', '${DEV_ACTOR_ID}')`,
+    "public.client_brief_results_valid('[]'::jsonb)",
     "public.client_info_text(' x ')",
     `public.delete_client_logo('${UNKNOWN_ID}')`,
     `public.insert_client_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'p', 'f', 'application/pdf', 1, null, null, '${DEV_ACTOR_ID}')`,
@@ -1757,9 +1760,16 @@ describe("client info (Story 2.14, AD-22)", () => {
     const created = await createCase({ clientId: client.id });
     const { getClientInfoForCase } = await loadCaseStudy();
     // No brief row yet: the empty brief.
-    expect(await getClientInfoForCase(created.id)).toMatchObject({ ok: true, value: { brief: { context: "", solution: "", results: "" } } });
+    expect(await getClientInfoForCase(created.id)).toMatchObject({
+      ok: true,
+      value: { brief: { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" } },
+    });
     await pool.query("select public.update_client($1, $2, $3, 'Brand.', $4, $5)", [client.id, client.name, ["energia", "lusso"], logoId, DEV_ACTOR_ID]);
-    await pool.query("select public.save_client_brief_field($1, 'results', 'Più clienti.', $2)", [client.id, DEV_ACTOR_ID]);
+    await pool.query("select public.save_client_results($1, $2::jsonb, $3)", [
+      client.id,
+      JSON.stringify([{ label: "Più clienti", value: "+20%" }]),
+      DEV_ACTOR_ID,
+    ]);
     // Read live: the edit shows at once.
     expect(await getClientInfoForCase(created.id)).toEqual({
       ok: true,
@@ -1769,7 +1779,7 @@ describe("client info (Story 2.14, AD-22)", () => {
         industries: ["energia", "lusso"],
         description: "Brand.",
         logoId,
-        brief: { context: "", solution: "", results: "Più clienti." },
+        brief: { context: "", solution: "", results: [{ label: "Più clienti", value: "+20%" }], testimonialQuote: "", testimonialAuthor: "" },
       },
     });
     await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
@@ -1976,9 +1986,18 @@ describe("client wizard (Story 2.15)", () => {
     const { rows } = await pool.query<{ column_name: string }>(
       "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'client_brief' order by column_name",
     );
-    expect(rows.map((r) => r.column_name)).toEqual(["client_id", "context", "results", "solution", "updated_at", "updated_by"]);
+    expect(rows.map((r) => r.column_name)).toEqual([
+      "client_id",
+      "context",
+      "results",
+      "solution",
+      "testimonial_author",
+      "testimonial_quote",
+      "updated_at",
+      "updated_by",
+    ]);
     const client = await createTestClient(pool, DEV_ACTOR_ID);
-    for (const field of ["context", "solution", "results"]) {
+    for (const field of ["context", "solution"]) {
       const at = await inRolledBackTx(
         `insert into public.client_brief (client_id, ${field}, updated_by) values ($1, $2, $3) returning char_length(${field}) as n`,
         [client.id, ` ${"😀".repeat(5000)} `, DEV_ACTOR_ID],
@@ -1999,14 +2018,14 @@ describe("client wizard (Story 2.15)", () => {
     expect((await save(client.id, "context", "")).rows).toEqual([{ previous: "" }]);
     expect((await pool.query("select count(*)::int as n from public.client_brief where client_id = $1", [client.id])).rows[0].n).toBe(0);
     expect((await save(client.id, "context", "Primo.")).rows).toEqual([{ previous: "" }]);
-    expect((await save(client.id, "results", "Esiti.")).rows).toEqual([{ previous: "" }]);
+    expect((await save(client.id, "solution", "Esiti.")).rows).toEqual([{ previous: "" }]);
     const { rows: [first] } = await pool.query("select updated_at from public.client_brief where client_id = $1", [client.id]);
     // Saving the stored text again writes nothing.
     expect((await save(client.id, "context", "Primo.")).rows).toEqual([{ previous: "Primo." }]);
     const { rows } = await pool.query("select context, solution, results, updated_by, updated_at from public.client_brief where client_id = $1", [
       client.id,
     ]);
-    expect(rows).toEqual([{ context: "Primo.", solution: "", results: "Esiti.", updated_by: DEV_ACTOR_ID, updated_at: first.updated_at }]);
+    expect(rows).toEqual([{ context: "Primo.", solution: "Esiti.", results: [], updated_by: DEV_ACTOR_ID, updated_at: first.updated_at }]);
   });
 
   it("save_client_brief_field refuses an unknown client, an unknown field and an over-long text; nothing written", async () => {
@@ -2014,6 +2033,8 @@ describe("client wizard (Story 2.15)", () => {
     const before = await counts();
     await expect(save(UNKNOWN_ID, "context", "x")).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
     await expect(save(client.id, "sector", "x")).rejects.toMatchObject({ code: "P0001", message: "UNKNOWN_FIELD" });
+    // The old free-text results is no brief text any more.
+    await expect(save(client.id, "results", "x")).rejects.toMatchObject({ code: "P0001", message: "UNKNOWN_FIELD" });
     await expect(save(client.id, "solution", "x".repeat(5001))).rejects.toMatchObject({ code: "23514" });
     expect(await counts()).toEqual(before);
   });
@@ -2050,7 +2071,7 @@ describe("client wizard (Story 2.15)", () => {
       status: 400,
       error: { code: "CLIENT_FIELD_TOO_LONG", fields: ["context"] },
     });
-    for (const field of ["context", "solution", "results"]) {
+    for (const field of ["context", "solution"]) {
       expect(await saveClientBriefField({ clientId, field, text: `${field}.` })).toEqual({ ok: true, value: { field, text: `${field}.` } });
     }
     expect(await summary()).toMatchObject({ complete: false });
@@ -2058,9 +2079,163 @@ describe("client wizard (Story 2.15)", () => {
     expect(await updateClient({ clientId, name: added.value.name, industries: ["energia", "lusso"], description: "Brand.", logoId })).toMatchObject({
       ok: true,
     });
+    // Complete with no results and no testimonial: both are optional.
     expect(await summary()).toMatchObject({ complete: true });
     const read = await getClient(clientId);
-    expect(read.ok && read.value.brief).toEqual({ context: "context.", solution: "solution.", results: "results." });
+    expect(read.ok && read.value.brief).toEqual({ context: "context.", solution: "solution.", results: [], testimonialQuote: "", testimonialAuthor: "" });
+  });
+});
+
+describe("client results and testimonial (2026-10-22)", () => {
+  const saveResults = (clientId: string, results: unknown, db: pg.Pool | pg.PoolClient = pool) =>
+    db.query<{ changed: boolean }>("select public.save_client_results($1, $2::jsonb, $3) as changed", [clientId, JSON.stringify(results), DEV_ACTOR_ID]);
+  const saveTestimonial = (clientId: string, quote: string, author: string) =>
+    pool.query<{ changed: boolean }>("select public.save_client_testimonial($1, $2, $3, $4) as changed", [clientId, quote, author, DEV_ACTOR_ID]);
+  const brief = async (clientId: string) =>
+    (
+      await pool.query("select results, testimonial_quote, testimonial_author, updated_by from public.client_brief where client_id = $1", [clientId])
+    ).rows;
+
+  it("adds results as jsonb (default []) and the testimonial texts (default ''); the old results text is gone", async () => {
+    const { rows } = await pool.query<{ column_name: string; data_type: string; is_nullable: string; column_default: string | null }>(
+      `select column_name, data_type, is_nullable, column_default from information_schema.columns
+        where table_schema = 'public' and table_name = 'client_brief' and column_name in ('results', 'testimonial_quote', 'testimonial_author')
+        order by column_name`,
+    );
+    expect(rows).toEqual([
+      { column_name: "results", data_type: "jsonb", is_nullable: "NO", column_default: "'[]'::jsonb" },
+      { column_name: "testimonial_author", data_type: "text", is_nullable: "NO", column_default: "''::text" },
+      { column_name: "testimonial_quote", data_type: "text", is_nullable: "NO", column_default: "''::text" },
+    ]);
+  });
+
+  it("client_brief_results_check accepts at most 3 trimmed label + value pairs within 80 and 20 characters", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const insert = (results: unknown) =>
+      inRolledBackTx("insert into public.client_brief (client_id, results, updated_by) values ($1, $2::jsonb, $3)", [
+        client.id,
+        JSON.stringify(results),
+        DEV_ACTOR_ID,
+      ]);
+    const row = { label: "Visite", value: "2,4M" };
+    for (const good of [[], [row], [row, row, row], [{ label: "😀".repeat(80), value: "😀".repeat(20) }]]) {
+      await expect(insert(good)).resolves.toBeTruthy();
+    }
+    for (const bad of [
+      [row, row, row, row],
+      { label: "Visite", value: "1" },
+      "Più clienti.",
+      [{ label: "Visite" }],
+      [{ label: "Visite", value: "1", extra: "x" }],
+      [{ label: "Visite", value: 1 }],
+      [{ label: "", value: "1" }],
+      [{ label: "Visite", value: " 1" }],
+      [{ label: "x".repeat(81), value: "1" }],
+      [{ label: "Visite", value: "x".repeat(21) }],
+      ["Visite"],
+    ]) {
+      await expect(insert(bad)).rejects.toMatchObject({ code: "23514", message: expect.stringContaining("client_brief_results_check") });
+    }
+  });
+
+  it("the testimonial checks: quote ≤ 600, author ≤ 120 (trimmed), and no author without a quote", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const insert = (quote: string, author: string) =>
+      inRolledBackTx("insert into public.client_brief (client_id, testimonial_quote, testimonial_author, updated_by) values ($1, $2, $3, $4)", [
+        client.id,
+        quote,
+        author,
+        DEV_ACTOR_ID,
+      ]);
+    await expect(insert(` ${"😀".repeat(600)} `, ` ${"😀".repeat(120)} `)).resolves.toBeTruthy();
+    await expect(insert("Frase.", "")).resolves.toBeTruthy();
+    await expect(insert("x".repeat(601), "")).rejects.toMatchObject({ code: "23514", message: expect.stringContaining("client_brief_testimonial_quote_check") });
+    await expect(insert("x", "x".repeat(121))).rejects.toMatchObject({ code: "23514", message: expect.stringContaining("client_brief_testimonial_author_check") });
+    await expect(insert(" ", "Ada Rossi")).rejects.toMatchObject({ code: "23514", message: expect.stringContaining("client_brief_testimonial_check") });
+  });
+
+  it("save_client_results creates the row on the first change, replaces the list, and says whether it changed", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    expect((await saveResults(client.id, [])).rows).toEqual([{ changed: false }]);
+    expect(await brief(client.id)).toEqual([]);
+    const two = [
+      { label: "Visite", value: "2,4M" },
+      { label: "Follower", value: "+35%" },
+    ];
+    expect((await saveResults(client.id, two)).rows).toEqual([{ changed: true }]);
+    expect((await saveResults(client.id, two)).rows).toEqual([{ changed: false }]);
+    expect(await brief(client.id)).toEqual([{ results: two, testimonial_quote: "", testimonial_author: "", updated_by: DEV_ACTOR_ID }]);
+    expect((await saveResults(client.id, [])).rows).toEqual([{ changed: true }]);
+    expect(await brief(client.id)).toMatchObject([{ results: [] }]);
+  });
+
+  it("save_client_testimonial creates the row on the first change, keeps the other fields, and says whether it changed", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    expect((await saveTestimonial(client.id, "", "")).rows).toEqual([{ changed: false }]);
+    expect(await brief(client.id)).toEqual([]);
+    await pool.query("select public.save_client_brief_field($1, 'context', 'Contesto.', $2)", [client.id, DEV_ACTOR_ID]);
+    expect((await saveTestimonial(client.id, "Ci hanno capiti.", "")).rows).toEqual([{ changed: true }]);
+    expect((await saveTestimonial(client.id, "Ci hanno capiti.", "Ada Rossi, CEO")).rows).toEqual([{ changed: true }]);
+    expect((await saveTestimonial(client.id, "Ci hanno capiti.", "Ada Rossi, CEO")).rows).toEqual([{ changed: false }]);
+    const { rows } = await pool.query("select context, testimonial_quote, testimonial_author from public.client_brief where client_id = $1", [client.id]);
+    expect(rows).toEqual([{ context: "Contesto.", testimonial_quote: "Ci hanno capiti.", testimonial_author: "Ada Rossi, CEO" }]);
+  });
+
+  it("refuses an unknown or deleted client, a malformed list and a lone author; nothing written", async () => {
+    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const before = await counts();
+    await expect(saveResults(UNKNOWN_ID, [])).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
+    await expect(saveTestimonial(UNKNOWN_ID, "Frase.", "")).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
+    await expect(saveResults(client.id, [{ label: "Visite", value: "" }])).rejects.toMatchObject({ code: "23514" });
+    await expect(saveTestimonial(client.id, "", "Ada Rossi")).rejects.toMatchObject({ code: "23514" });
+    expect(await counts()).toEqual(before);
+    await pool.query("select public.delete_client($1, $2, $3)", [client.id, client.name, DEV_ACTOR_ID]);
+    await expect(saveResults(client.id, [{ label: "Visite", value: "1" }])).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
+    await expect(saveTestimonial(client.id, "Frase.", "")).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
+  });
+
+  it("through the actions: saves, reads back, and refuses a half row, a long value and a lone author as field errors", async () => {
+    const { createClient, saveClientResults, saveClientTestimonial } = await loadClientActions();
+    const { getClient } = await loadCaseStudy();
+    const added = await createClient({ name: nameWithLetters(await freshPrefix(pool)), industries: ["lusso"], description: "Brand." });
+    if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
+    const clientId = added.value.id;
+    const results = [
+      { label: " Candidature ricevute ", value: "+180%" },
+      { label: "Follower su LinkedIn", value: "+35%" },
+    ];
+    const trimmed = [
+      { label: "Candidature ricevute", value: "+180%" },
+      { label: "Follower su LinkedIn", value: "+35%" },
+    ];
+    expect(await saveClientResults({ clientId, results })).toEqual({ ok: true, value: { results: trimmed } });
+    expect(await saveClientTestimonial({ clientId, quote: "Ci hanno capiti.", author: "" })).toEqual({
+      ok: true,
+      value: { quote: "Ci hanno capiti.", author: "" },
+    });
+    expect(await saveClientResults({ clientId, results: [{ label: "Visite", value: "" }] })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_FIELD_INVALID", fields: ["results"] },
+    });
+    expect(await saveClientResults({ clientId, results: [{ label: "Visite", value: "x".repeat(21) }] })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_FIELD_TOO_LONG", fields: ["results"] },
+    });
+    expect(await saveClientTestimonial({ clientId, quote: "", author: "Ada Rossi" })).toMatchObject({
+      ok: false,
+      status: 400,
+      error: { code: "CLIENT_FIELD_INVALID", fields: ["quote"] },
+    });
+    const read = await getClient(clientId);
+    expect(read.ok && read.value.brief).toEqual({
+      context: "",
+      solution: "",
+      results: trimmed,
+      testimonialQuote: "Ci hanno capiti.",
+      testimonialAuthor: "",
+    });
   });
 });
 

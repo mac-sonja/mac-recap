@@ -199,14 +199,14 @@ isOneToOne: false
                   ]
                 },"client_brief": {
                   Row: {
-                    "client_id": string,"context": string,"results": string,"solution": string,"updated_at": string,"updated_by": string
+                    "client_id": string,"context": string,"results": NonNullable<Json>,"solution": string,"testimonial_author": string,"testimonial_quote": string,"updated_at": string,"updated_by": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "client_id": string,"context"?: string,"results"?: string,"solution"?: string,"updated_at"?: string,"updated_by": string
+                    "client_id": string,"context"?: string,"results"?: NonNullable<Json>,"solution"?: string,"testimonial_author"?: string,"testimonial_quote"?: string,"updated_at"?: string,"updated_by": string
                   }
                   Update: {
-                    "client_id"?: string,"context"?: string,"results"?: string,"solution"?: string,"updated_at"?: string,"updated_by"?: string
+                    "client_id"?: string,"context"?: string,"results"?: NonNullable<Json>,"solution"?: string,"testimonial_author"?: string,"testimonial_quote"?: string,"updated_at"?: string,"updated_by"?: string
                   }
                   Relationships: [
                     {
@@ -357,6 +357,9 @@ isOneToOne: false
           Functions: {
             "case_study_code":
 { Args: { "p_client_code": string,"p_number": number,"p_year": number }; Returns: string
+                           },
+"client_brief_results_valid":
+{ Args: { "p_results": Json }; Returns: boolean
                            },
 "client_code_letters":
 { Args: { "p_name": string }; Returns: string
@@ -596,6 +599,12 @@ isOneToOne: false
                            },
 "save_client_brief_field":
 { Args: { "p_actor_id": string,"p_client_id": string,"p_field": string,"p_text": string }; Returns: string
+                           },
+"save_client_results":
+{ Args: { "p_actor_id": string,"p_client_id": string,"p_results": Json }; Returns: boolean
+                           },
+"save_client_testimonial":
+{ Args: { "p_actor_id": string,"p_author": string,"p_client_id": string,"p_quote": string }; Returns: boolean
                            },
 "save_context_field":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_field": string,"p_text": string }; Returns: string

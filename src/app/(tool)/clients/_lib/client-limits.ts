@@ -8,6 +8,14 @@ export interface ClientLimits {
   descriptionMax: number;
   /** `CLIENT_BRIEF_MAX`, in characters (code points) after trimming. */
   briefMax: number;
+  /** `CLIENT_RESULT_LABEL_MAX`, in characters (code points) after trimming. */
+  resultLabelMax: number;
+  /** `CLIENT_RESULT_VALUE_MAX`, in characters (code points) after trimming. */
+  resultValueMax: number;
+  /** `CLIENT_TESTIMONIAL_QUOTE_MAX`, in characters (code points) after trimming. */
+  testimonialQuoteMax: number;
+  /** `CLIENT_TESTIMONIAL_AUTHOR_MAX`, in characters (code points) after trimming. */
+  testimonialAuthorMax: number;
   /** `LOGO_CONTENT_TYPES`. */
   logoTypes: readonly string[];
   /** `LOGO_MAX_BYTES`. */
@@ -22,6 +30,10 @@ export function clientLimits(): ClientLimits {
     nameMax: caseStudy.CLIENT_NAME_MAX,
     descriptionMax: caseStudy.CLIENT_DESCRIPTION_MAX,
     briefMax: caseStudy.CLIENT_BRIEF_MAX,
+    resultLabelMax: caseStudy.CLIENT_RESULT_LABEL_MAX,
+    resultValueMax: caseStudy.CLIENT_RESULT_VALUE_MAX,
+    testimonialQuoteMax: caseStudy.CLIENT_TESTIMONIAL_QUOTE_MAX,
+    testimonialAuthorMax: caseStudy.CLIENT_TESTIMONIAL_AUTHOR_MAX,
     logoTypes: caseStudy.LOGO_CONTENT_TYPES,
     logoMaxBytes: caseStudy.LOGO_MAX_BYTES,
     logoMinShortSide: caseStudy.LOGO_MIN_SHORT_SIDE_PX,
