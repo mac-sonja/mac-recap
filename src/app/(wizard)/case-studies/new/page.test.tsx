@@ -206,11 +206,11 @@ describe("NewCaseStudyPage", () => {
     expect(html.match(/<h1 class="([^"]*)">/)?.[1]).not.toMatch(/\bhidden\b/);
   });
 
-  it.each([1, 2, 3] as const)("offers Elimina bozza in the top bar of an existing draft on step %i (owner, 2026-10-22)", async (step) => {
+  it.each([1, 2, 3] as const)("offers Elimina bozza bottom left in the footer of an existing draft on step %i (owner, 2026-10-22)", async (step) => {
     hasMaterial.mockResolvedValue(ok(true));
     const html = await render({ caseId: ID, step: String(step) });
-    const header = html.match(/<header [^>]*>.*?<\/header>/)?.[0] ?? "";
-    expect(header).toMatch(/<div class="ml-auto hidden [^"]*lg:flex"><button type="button"[^>]*>Elimina bozza<\/button>/);
+    expect(html).toMatch(/<div data-wizard-footer="" class="[^"]*"><div class="shrink-0"><button type="button"[^>]*>Elimina bozza<\/button>/);
+    expect(html.match(/<header [^>]*>.*?<\/header>/)?.[0] ?? "").not.toContain("Elimina bozza");
   });
 
   it("offers no Elimina bozza before the case exists", async () => {

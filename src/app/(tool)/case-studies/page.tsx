@@ -51,7 +51,6 @@ export default async function CaseStudiesPage({ searchParams }: { searchParams?:
         canCreate={can(actor, "create case")}
         showCreate={can(actor, "create case")}
         initialQuery={initialQuery}
-        canDelete={can(actor, "delete case", { status: "draft" })}
       />
     </div>
   );

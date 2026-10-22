@@ -140,7 +140,7 @@ export const it = {
     delete: {
       /** The row's bin icon, read by screen readers and shown on hover; `{name}` is the case name. */
       button: "Elimina {name}",
-      /** The button in an opened draft's top bar. */
+      /** The button bottom left in an opened draft, opposite Avanti. */
       barButton: "Elimina bozza",
       /** `{name}` is the case name (the Case list row). */
       title: "Eliminare {name}?",

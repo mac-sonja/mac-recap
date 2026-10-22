@@ -70,8 +70,8 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   if (found.value.status !== "draft") redirect("/case-studies");
   const { id, code, name, status, year, locale, businessLines, client } = found.value;
   const wizardCase = { id, code, name, status, clientName: client.name };
-  // **Elimina bozza** in the top bar of every step (owner, 2026-10-22), for a role that may delete drafts.
-  const topActions = can(shell.actor, "delete case", { status: "draft" }) ? (
+  // **Elimina bozza** bottom left of every step, opposite Avanti (owner, 2026-10-22), for a role that may delete drafts.
+  const deleteDraft = can(shell.actor, "delete case", { status: "draft" }) ? (
     <DeleteCaseButton caseId={id} name={name} variant="bar" />
   ) : undefined;
 
@@ -94,7 +94,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
     const listed = authorize(shell.actor, "list clients").ok ? await caseStudy.listClients() : null;
     const clients = listed?.ok ? listed.value : [];
     return (
-      <WizardFrame caseStudy={wizardCase} current={2} reachable={reachable} actions={topActions}>
+      <WizardFrame caseStudy={wizardCase} current={2} reachable={reachable} footerLead={deleteDraft}>
         <CaseDetailsStep
           key={id}
           caseStudy={{ id, code, name, year, locale, businessLines, client }}
@@ -112,7 +112,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
 
   if (requested === 3) {
     return (
-      <WizardFrame caseStudy={wizardCase} current={3} reachable={reachable} actions={topActions}>
+      <WizardFrame caseStudy={wizardCase} current={3} reachable={reachable} footerLead={deleteDraft}>
         <h2 className={STEP_HEADING}>{it.wizard.steps.generate}</h2>
         <p id={STEP_NOTE_ID} className="mt-1.5 font-body text-sm text-foreground-muted">
           {it.wizard.generatePlaceholder}
@@ -138,7 +138,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   if (!assets.ok) throw new Error(`Material could not be loaded: ${assets.error.code}`);
 
   return (
-    <WizardFrame caseStudy={wizardCase} current={1} reachable={reachable} actions={topActions}>
+    <WizardFrame caseStudy={wizardCase} current={1} reachable={reachable} footerLead={deleteDraft}>
       <MaterialStep
         caseId={id}
         initialAssets={assets.value}
