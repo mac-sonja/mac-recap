@@ -385,7 +385,7 @@ export const it = {
       logoTooSmall: "Il logo è troppo piccolo: serve almeno {px} px sul lato corto.",
       logoUnsafe: "Questo SVG contiene script o collegamenti esterni, quindi non possiamo usarlo.",
       logoUnreadable: "Non riusciamo a leggere l’immagine. Prova con un altro file.",
-      logoFailed: "Il logo non è stato caricato, il resto è salvato. Premi Avanti per riprovare.",
+      logoFailed: "Il logo non è stato caricato, il resto è salvato. Premi Salva per riprovare.",
       generic: "Non siamo riusciti a salvare. Riprova.",
     },
     /** A client's page. */
@@ -403,35 +403,42 @@ export const it = {
       back: "Clienti",
     },
   },
-  /** The client wizard (Story 2.15): frame, stepper, step 1 Dettagli and the step 2 placeholder. */
-  clientWizard: {
-    eyebrow: "Nuovo cliente",
-    /** The eyebrow on an existing client. */
-    editEyebrow: "Modifica cliente",
-    /** Accessible names of the top bar's back arrow: adding, and editing a client. */
-    backToClients: "Torna ai clienti",
-    backToClient: "Torna al cliente",
-    /** Read by screen readers before the client code in the top bar. */
-    code: "Codice",
-    /** Step 3 stays hidden until it is designed with the owner (Story 4.11). */
-    steps: {
-      details: "Dettagli",
-      material: "Materiale",
-      intro: "Introduzione",
-    },
-    /** Step 1 on an existing client; `{code}` is the client code, which never changes. */
+  /**
+   * The client side panel (owner's mock, 2026-10-21): add and edit a client in one
+   * sectioned form, over the Clienti list or the client's page.
+   */
+  clientPanel: {
+    addTitle: "Nuovo cliente",
+    editTitle: "Modifica cliente",
+    /** Under the title of a new client. */
+    addNote: "Il codice si genera da solo e non cambia mai.",
+    /** Under the title of an existing client; `{code}` is the client code, which never changes. */
     editNote: "Il codice {code} resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case history.",
+    /** The ×'s accessible name. */
+    close: "Chiudi",
+    cancel: "Annulla",
+    /** The primary action on a new client. */
+    add: "Aggiungi",
+    /** The primary action on an existing client. */
+    save: "Salva",
+    sections: {
+      details: "Dettagli",
+      media: "Logo e immagini",
+      story: "Racconto",
+    },
     details: {
-      heading: "Presentaci il cliente",
       labels: {
         name: "Nome",
         industries: "Settore",
         description: "Descrizione",
         logo: "Logo",
+        images: "Immagini",
         context: "Contesto",
         solution: "Soluzione",
         results: "Risultati",
       },
+      namePlaceholder: "Ragione sociale o nome del brand",
+      descriptionHint: "Da qui l’AI scrive la bozza dell’intro.",
       /** One-line prompts in the brief textareas, as in the case Details step. */
       placeholders: {
         context: "Chi è il cliente e da che situazione partiva?",
@@ -443,11 +450,13 @@ export const it = {
       counter: "{n}/{max}",
       /** `{size}` MB and `{px}` pixels on the short side (PNG, JPEG and WebP only). */
       logoHint: "PNG, JPEG, WebP o SVG fino a {size} MB. Per PNG, JPEG e WebP almeno {px} px sul lato corto.",
+      /** Under the logo of a client that has one. */
+      logoReplaceHint: "Se lo sostituisci, il vecchio logo viene eliminato.",
       logoChoose: "Carica il logo",
       logoReplace: "Cambia logo",
       /** The logo preview's alt text; `{name}` is the client name. */
       logoAlt: "Logo {name}",
-      /** Why Avanti is inactive; `{fields}` lists the empty fields' labels. */
+      /** Why Aggiungi or Salva is inactive; `{fields}` lists what is missing. */
       nextReason: "Per andare avanti manca: {fields}.",
       /** Joins the `{fields}` of `nextReason`. */
       listSeparator: ", ",
@@ -460,7 +469,52 @@ export const it = {
       /** Polite live-region line when a save fails; `{field}` is the field label, `{message}` its error. */
       announceError: "{field}: {message}",
     },
-    /** Elimina cliente on step 1 of an existing client (owner, 2026-10-19). */
+    /** The image slots (Story 2.16's client material, images only). */
+    images: {
+      /** `{n}` images of `{max}` slots. */
+      counter: "{n} di {max}",
+      /** `{min}`–`{max}` images, `{px}` pixels on the short side, `{types}` the formats ("PNG, JPEG o WebP"). */
+      hint: "Da {min} a {max}, almeno {px} px sul lato corto. {types}.",
+      /** Joins the last two formats in `{types}`. */
+      lastSeparator: " o ",
+      /** Under a file the client has that is not an image: it holds a slot but is not counted. */
+      notCounted: "Non conta come immagine.",
+      /** The empty slot's visible label and its accessible name. */
+      add: "Aggiungi",
+      addLabel: "Aggiungi un’immagine",
+      /** `{name}` is the file name. */
+      remove: "Rimuovi {name}",
+      /** A slot's thumbnail; `{n}` is its position. */
+      alt: "Immagine {n}",
+      uploading: "Caricamento…",
+      /** Polite live-region lines; `{name}` is the file name. */
+      announce: {
+        done: "{name} caricato.",
+        removed: "{name} rimosso.",
+        error: "{name}: {message}",
+      },
+      errors: {
+        /** `{types}` lists the formats ("PNG, JPEG o WebP"). */
+        type: "Questo formato non va. Usa {types}.",
+        empty: "Il file è vuoto, non l’abbiamo aggiunto.",
+        /** `{size}` is the per-file limit in MB. */
+        tooLarge: "Supera i {size} MB, non l’abbiamo caricata.",
+        /** A file over the `{max}` on the server. */
+        limit: "Al massimo {max} file.",
+        /** An image under `{min}` px on the short side or over `{max}` px on a side. */
+        pixels: "Le misure non vanno: serve almeno {min} px sul lato corto e al massimo {max} px per lato.",
+        rejected: "Il file arrivato non è quello scelto, quindi non l’abbiamo caricato.",
+        /** Any other refusal that a retry can't fix. */
+        refused: "Questo file non possiamo caricarlo.",
+        failed: "Caricamento non riuscito. Salva per riprovare.",
+        storage: "Il caricamento dei file non è ancora attivo: manca lo spazio di archiviazione. Scrivi a un amministratore.",
+        remove: "Non siamo riusciti a rimuovere l’immagine. Riprova.",
+      },
+    },
+    /** On the client page, inactive until the configurator exists. */
+    layout: "Modifica layout",
+    layoutReason: "Arriva con il configuratore",
+    /** Elimina cliente at the bottom of the edit panel (owner, 2026-10-19). */
     delete: {
       button: "Elimina cliente",
       /** `{name}` is the client name. */
@@ -478,21 +532,6 @@ export const it = {
       nameChanged: "Nel frattempo il nome del cliente è cambiato. Ricarica la pagina e riprova.",
       /** Any other failure, a dropped connection included. */
       failed: "Non siamo riusciti a eliminare il cliente. Riprova.",
-    },
-    /** Step 2 Materiale (Story 2.16): 2–3 files for the intro pages. */
-    material: {
-      heading: "Materiale",
-      /** Above the drop zone. */
-      intro: "Carica fino a 3 file, di cui almeno 2 immagini: ci servono per le pagine di presentazione.",
-      createIntro: "Crea la presentazione",
-      /** Why Crea introduzione is inactive with fewer than 2 images. */
-      createIntroReason: "Servono almeno 2 immagini.",
-      errors: {
-        /** A 4th file. */
-        limit: "Al massimo 3 file.",
-        /** An image under `{min}` px on the short side or over `{max}` px on a side. */
-        pixels: "Le misure non vanno: serve almeno {min} px sul lato corto e al massimo {max} px per lato.",
-      },
     },
   },
   /**

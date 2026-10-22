@@ -14,12 +14,8 @@ export const newCaseForClientHref = (clientId: string) => `/case-studies/new?cli
 /** A client's page. */
 export const clientHref = (id: string) => `/clients/${encodeURIComponent(id)}`;
 
-/**
- * The client wizard (Story 2.15). Without an id it adds a client (step 1). With
- * one it edits that client: no `step` (or `1`) opens Dettagli, `2` Materiale (only
- * once every required field is filled; otherwise the page opens Dettagli).
- */
-export const clientWizardHref = (id?: string, step?: 1 | 2) =>
-  id === undefined
-    ? "/clients/new"
-    : `/clients/new?clientId=${encodeURIComponent(id)}${step === undefined ? "" : `&step=${step}`}`;
+/** The Clienti list with the add panel open (**Nuovo cliente**). */
+export const newClientPanelHref = () => "/clients?nuovo=1";
+
+/** A client's page with the edit panel open (**Modifica cliente**). */
+export const editClientPanelHref = (id: string) => `${clientHref(id)}?modifica=1`;

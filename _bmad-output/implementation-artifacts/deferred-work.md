@@ -163,3 +163,16 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-2-display-renditions-for-uploaded-media.md`
   summary: Add a real-ffmpeg test for the poster's fallback to the first frame when seeking to 1 s yields no frame.
   evidence: Story 3.2 review finding 16; no fixture reaches `video-processor.ts` line 146.
+
+- source_spec: none
+  summary: Client Settore becomes single-select with a text field that adds a new sector to a shared list (sectors table replaces the fixed CLIENT_INDUSTRIES check; existing multi-sector clients keep one).
+  evidence: Split from the client side-panel intent (owner 2026-10-21) as its own PR with its own migration; owner chose new sectors go to a shared list.
+- source_spec: none
+  summary: Client Racconto gains structured Risultati (up to 3 label + value rows, optional) and Testimonial (quote + author, optional); the old free-text results column and its data are dropped.
+  evidence: Split from the client side-panel intent (owner 2026-10-21) as its own PR with its own migration; owner chose drop old results, both sections optional, no "Del progetto / Di un deliverable" toggle.
+- source_spec: `_bmad-output/implementation-artifacts/spec-client-side-panel.md`
+  summary: In the client edit panel, removing stored images happens at once and can leave a client below the 2-image minimum with no warning on close.
+  evidence: Review finding 1; same as the old Materiale step. Fix by warning when the count drops below minImages or deferring removals to Salva.
+- source_spec: `_bmad-output/implementation-artifacts/spec-client-side-panel.md`
+  summary: A logo picked in the edit panel and then cancelled (or replaced by a second pick) stays in storage unlinked.
+  evidence: Review finding 6; the wizard behaved the same. Needs a cleanup job or a delete-on-cancel.
