@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
-import type { CaseStudy, ClientDetail, ListedClientAsset, ListScope } from "@/modules/case-study";
+import type { CaseStudy, ClientDetail, ClientSector, ListedClientAsset, ListScope } from "@/modules/case-study";
 import { it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
@@ -10,6 +10,14 @@ const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const getClient = vi.fn<(id: unknown) => Promise<Result<ClientDetail>>>();
 const list = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
 const listClientMaterial = vi.fn<(input: unknown) => Promise<Result<ListedClientAsset[]>>>();
+const listClientSectors = vi.fn<() => Promise<Result<ClientSector[]>>>();
+const SECTORS: ClientSector[] = [
+  { key: "interior_design", label: "Interior design" },
+  { key: "energia", label: "Energia" },
+  { key: "risorse_umane", label: "Risorse umane" },
+  { key: "lusso", label: "Lusso" },
+  { key: "nautica", label: "Nautica" },
+];
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -22,14 +30,29 @@ vi.mock("@/modules/case-study", () => ({
   getClient: (id: unknown) => getClient(id),
   list: (scope: ListScope) => list(scope),
   listClientMaterial: (input: unknown) => listClientMaterial(input),
-  CLIENT_INDUSTRIES: ["interior_design", "energia", "risorse_umane", "lusso"],
+  listClientSectors: () => listClientSectors(),
 }));
 
 vi.mock("../_lib/client-limits", () => ({ clientLimits: () => ({}), clientMaterialLimits: () => ({}) }));
 // The panel is a browser component (tested on its own): here only what the page hands it.
 vi.mock("../_components/client-panel", () => ({
-  ClientPanel: ({ client, assets, caseCount }: { client: ClientDetail; assets: ListedClientAsset[]; caseCount: number | null }) => (
-    <div data-panel={client.id} data-assets={assets.map((asset) => asset.id).join(",")} data-case-count={String(caseCount)} />
+  ClientPanel: ({
+    client,
+    assets,
+    caseCount,
+    sectors,
+  }: {
+    client: ClientDetail;
+    assets: ListedClientAsset[];
+    caseCount: number | null;
+    sectors: ClientSector[];
+  }) => (
+    <div
+      data-panel={client.id}
+      data-assets={assets.map((asset) => asset.id).join(",")}
+      data-case-count={String(caseCount)}
+      data-sectors={sectors.map((sector) => sector.key).join(",")}
+    />
   ),
 }));
 
@@ -45,7 +68,7 @@ const LUMEN: ClientDetail = {
   id: "cccccccc-0000-4000-8000-000000000001",
   name: "Lumen Srl",
   code: "LUM",
-  industries: [],
+  industry: null,
   description: null,
   logoId: null,
   brief: {
@@ -92,6 +115,8 @@ beforeEach(() => {
   requireSurface.mockResolvedValue(shell("owner_designer"));
   getClient.mockResolvedValue(ok(LUMEN));
   list.mockResolvedValue(ok([caseStudy()]));
+  listClientSectors.mockReset();
+  listClientSectors.mockResolvedValue(ok(SECTORS));
 });
 
 const NEW_HREF = `/case-studies/new?clientId=${LUMEN.id}`;
@@ -133,7 +158,14 @@ describe("ClientPage", () => {
     const html = await renderPage(LUMEN.id, { modifica: "1" });
     expect(listClientMaterial).toHaveBeenCalledWith({ clientId: LUMEN.id });
     expect(list).toHaveBeenLastCalledWith({ clientId: LUMEN.id });
-    expect(html).toContain(`<div data-panel="${LUMEN.id}" data-assets="f1,f2" data-case-count="2"></div>`);
+    expect(html).toContain(
+      `<div data-panel="${LUMEN.id}" data-assets="f1,f2" data-case-count="2" data-sectors="interior_design,energia,risorse_umane,lusso,nautica"></div>`,
+    );
+  });
+
+  it("throws into the error boundary when the sectors can't be read", async () => {
+    listClientSectors.mockResolvedValue(err({ code: "CLIENT_LOOKUP_FAILED", message: "down" }));
+    await expect(renderPage()).rejects.toThrow(/CLIENT_LOOKUP_FAILED/);
   });
 
   it("throws into the error boundary when the files for the edit panel can't be read", async () => {
@@ -148,11 +180,11 @@ describe("ClientPage", () => {
     expect(html).not.toContain("bg-logo-tile");
   });
 
-  it("shows the logo on a white tile, the industries as pills and the description above the cases, never the brief", async () => {
+  it("shows the logo on a white tile, the one sector as a pill and the description above the cases, never the brief", async () => {
     getClient.mockResolvedValue(
       ok({
         ...LUMEN,
-        industries: ["energia", "lusso"],
+        industry: "energia",
         description: "Brand di moda\ndal 1990.",
         logoId: "eeeeeeee-0000-4000-8000-000000000001",
         logoUrl: LOGO_URL,
@@ -161,11 +193,17 @@ describe("ClientPage", () => {
     const html = await renderPage();
     expect(html).toMatch(/<div class="[^"]*bg-logo-tile[^"]*"><img src="[^"]+" alt="Logo Lumen Srl"/);
     expect(html).toContain(`src="${LOGO_URL.replace(/&/g, "&amp;")}"`);
-    expect(html).toMatch(/<ul aria-label="Settore"[^>]*><li class="[^"]*rounded-full[^"]*">Energia<\/li><li [^>]*>Lusso<\/li><\/ul>/);
+    expect(html).toMatch(/<ul aria-label="Settore"[^>]*><li class="[^"]*rounded-full[^"]*">Energia<\/li><\/ul>/);
     expect(html).not.toContain("Interior design");
+    expect(html).not.toContain("Lusso");
     expect(html).not.toMatch(/segret[oai]/);
     expect(html).toContain("Brand di moda\ndal 1990.");
     expect(html.indexOf("Brand di moda")).toBeLessThan(html.indexOf("client-cases-heading"));
+  });
+
+  it("labels an added sector from the shared list", async () => {
+    getClient.mockResolvedValue(ok({ ...LUMEN, industry: "nautica" }));
+    expect(await renderPage()).toMatch(/<ul aria-label="Settore"[^>]*><li [^>]*>Nautica<\/li><\/ul>/);
   });
 
   it("renders without the logo when it could not be signed", async () => {

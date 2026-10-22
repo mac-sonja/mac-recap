@@ -370,7 +370,7 @@ const FULL_BRIEF: ClientBrief = {
  */
 function fakeClientRepository(rows: ClientSeed[] = []) {
   const clients = new Map<string, StoredClient>(
-    rows.map((c) => [c.id, { industries: [], description: null, logoId: null, brief: { ...EMPTY_BRIEF }, ...c }]),
+    rows.map((c) => [c.id, { industry: null, description: null, logoId: null, brief: { ...EMPTY_BRIEF }, ...c }]),
   );
   const logos = new Map<string, ClientLogo>();
   /** client_asset rows by id. */
@@ -379,7 +379,7 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
   const cases = new Map<string, string>();
   const nameKey = (name: string) =>
     name.trim().replace(/\s+/g, " ").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-  const view = ({ id, name, code, industries, description, logoId }: StoredClient): Client => ({ id, name, code, industries, description, logoId });
+  const view = ({ id, name, code, industry, description, logoId }: StoredClient): Client => ({ id, name, code, industry, description, logoId });
   let n = 0;
   const repo = {
     list: vi.fn<ClientRepository["list"]>(async () => ok([...clients.values()].map(({ id, name, code }) => ({ id, name, code })))),
@@ -416,14 +416,14 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
       clients.set(client.id, { ...client, caseCount: 0, brief: { ...EMPTY_BRIEF } });
       return ok(client);
     }),
-    update: vi.fn<ClientRepository["update"]>(async ({ id, name, industries, description, logoId }) => {
+    update: vi.fn<ClientRepository["update"]>(async ({ id, name, industry, description, logoId }) => {
       const found = clients.get(id);
       if (!found) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
       if ([...clients.values()].some((c) => c.id !== id && nameKey(c.name) === nameKey(name))) {
         return err({ code: "CLIENT_NAME_TAKEN", message: "taken" });
       }
       if (logos.get(logoId)?.clientId !== id) return err({ code: "CLIENT_LOGO_INVALID", message: "foreign" });
-      const next = { ...found, name, industries, description, logoId };
+      const next = { ...found, name, industry, description, logoId };
       clients.set(id, next);
       return ok(view(next));
     }),
@@ -500,8 +500,9 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
     findClientInfoByCaseId: vi.fn<ClientRepository["findClientInfoByCaseId"]>(async (caseId) => {
       const client = clients.get(cases.get(caseId) ?? "");
       if (!client) return ok(null);
-      const { id, name, industries, description, logoId, brief } = client;
-      return ok({ clientId: id, name, industries, description, logoId, brief: { ...brief } });
+      const { id, name, industry, description, logoId, brief } = client;
+      // The sector's label as the table holds it (here: the key's own text).
+      return ok({ clientId: id, name, industry: industry === null ? null : { key: industry, label: industry }, description, logoId, brief: { ...brief } });
     }),
   } satisfies ClientRepository;
   return { repo, clients, logos, cases, assets };
@@ -510,8 +511,8 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
 const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
 const OTHER_LOGO_ID = "eeeeeeee-0000-4000-8000-000000000002";
 const LUMEN: Omit<ClientSummary, "logoUrl"> = { id: "cccccccc-0000-4000-8000-000000000010", name: "Lumen Srl", code: "LUM", caseCount: 2, complete: false };
-const LUMEN_CLIENT: Client = { id: LUMEN.id, name: LUMEN.name, code: LUMEN.code, industries: [], description: null, logoId: null };
-const INFO = { industries: ["lusso"], description: "Brand." };
+const LUMEN_CLIENT: Client = { id: LUMEN.id, name: LUMEN.name, code: LUMEN.code, industry: null, description: null, logoId: null };
+const INFO = { industry: "lusso", description: "Brand." };
 
 /** In-memory LogoStorage: a stored object per key, as the browser's PUT left it. */
 function fakeLogoStorage() {
@@ -584,18 +585,18 @@ function fakeMaterialStorage() {
 }
 
 describe("createClient", () => {
-  it("adds the trimmed name, the industries in list order and the description with the actor", async () => {
+  it("adds the trimmed name, the one sector and the description with the actor", async () => {
     const { repo } = fakeClientRepository();
     const result = await makeCreateClient(repo)(actor, {
       name: "  Lumen Srl ",
       code: "ZZZ",
-      industries: ["lusso", "interior_design"],
+      industry: "interior_design",
       description: " Brand. ",
     });
-    expect(result.ok && result.value).toMatchObject({ industries: ["interior_design", "lusso"], description: "Brand.", logoId: null });
+    expect(result.ok && result.value).toMatchObject({ industry: "interior_design", description: "Brand.", logoId: null });
     expect(repo.create).toHaveBeenCalledExactlyOnceWith(
       "Lumen Srl",
-      { industries: ["interior_design", "lusso"], description: "Brand." },
+      { industry: "interior_design", description: "Brand." },
       actor.id,
     );
   });
@@ -609,8 +610,9 @@ describe("createClient", () => {
   });
 
   it.each([
-    ["an unknown industry", { industries: ["moda"] }, "industries"],
-    ["no industry", { industries: [] }, "industries"],
+    ["a malformed sector key", { industry: "Moda" }, "industry"],
+    ["several sectors", { industry: ["lusso", "energia"] }, "industry"],
+    ["no sector", { industry: null }, "industry"],
     ["a blank description", { description: "  " }, "description"],
     ["no description", { description: undefined }, "description"],
   ])("refuses %s as CLIENT_FIELD_INVALID without writing", async (_label, over, field) => {
@@ -661,11 +663,11 @@ describe("updateClient", () => {
     const { repo } = withLogo();
     const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(
       actor,
-      input({ name: " Lumen S.r.l. ", industries: ["energia"], description: " Brand. " }),
+      input({ name: " Lumen S.r.l. ", industry: "energia", description: " Brand. " }),
     );
-    expect(result).toEqual(ok({ ...LUMEN_CLIENT, name: "Lumen S.r.l.", industries: ["energia"], description: "Brand.", logoId: LOGO_ID }));
+    expect(result).toEqual(ok({ ...LUMEN_CLIENT, name: "Lumen S.r.l.", industry: "energia", description: "Brand.", logoId: LOGO_ID }));
     expect(repo.update).toHaveBeenCalledExactlyOnceWith(
-      { id: LUMEN.id, name: "Lumen S.r.l.", industries: ["energia"], description: "Brand.", logoId: LOGO_ID },
+      { id: LUMEN.id, name: "Lumen S.r.l.", industry: "energia", description: "Brand.", logoId: LOGO_ID },
       actor.id,
     );
   });
@@ -705,7 +707,7 @@ describe("updateClient", () => {
   it("keeping the same logo deletes nothing", async () => {
     const { repo } = withLogo();
     const { storage } = fakeLogoStorage();
-    expect((await makeUpdateClient(repo, storage)(actor, input({ industries: ["energia"] }))).ok).toBe(true);
+    expect((await makeUpdateClient(repo, storage)(actor, input({ industry: "energia" }))).ok).toBe(true);
     expect(repo.deleteLogo).not.toHaveBeenCalled();
     expect(storage.remove).not.toHaveBeenCalled();
   });
@@ -756,14 +758,14 @@ describe("updateClient", () => {
     const result = await makeUpdateClient(repo, fakeLogoStorage().storage)(actor, { clientId: "LUM", name: " " });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["industries", "description", "clientId", "name", "logoId"] } });
+      expect(result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["industry", "description", "clientId", "name", "logoId"] } });
     }
     expect(repo.update).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["an unknown industry", { industries: ["moda"] }, "industries"],
-    ["no industry", { industries: [] }, "industries"],
+    ["a malformed sector key", { industry: "Moda" }, "industry"],
+    ["no sector", { industry: null }, "industry"],
     ["a blank description", { description: "" }, "description"],
   ])("refuses %s as CLIENT_FIELD_INVALID without writing", async (_label, over, field) => {
     const { repo } = withLogo();
@@ -1073,11 +1075,18 @@ describe("getClientInfoForCase", () => {
 
   it("returns the client's current values for the case", async () => {
     const { repo, cases } = fakeClientRepository([
-      { ...LUMEN, industries: ["energia", "lusso"], description: "Brand.", logoId: LOGO_ID, brief: { ...FULL_BRIEF } },
+      { ...LUMEN, industry: "energia", description: "Brand.", logoId: LOGO_ID, brief: { ...FULL_BRIEF } },
     ]);
     cases.set(CASE_ID, LUMEN.id);
     expect(await makeGetClientInfoForCase(repo)(CASE_ID)).toEqual(
-      ok({ clientId: LUMEN.id, name: "Lumen Srl", industries: ["energia", "lusso"], description: "Brand.", logoId: LOGO_ID, brief: FULL_BRIEF }),
+      ok({
+        clientId: LUMEN.id,
+        name: "Lumen Srl",
+        industry: { key: "energia", label: "energia" },
+        description: "Brand.",
+        logoId: LOGO_ID,
+        brief: FULL_BRIEF,
+      }),
     );
   });
 

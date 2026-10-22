@@ -2,13 +2,18 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
-import type { ClientSummary } from "@/modules/case-study";
+import type { ClientSector, ClientSummary } from "@/modules/case-study";
 import { fill, it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const listClientSummaries = vi.fn<() => Promise<Result<ClientSummary[]>>>();
 const list = vi.fn<() => Promise<Result<{ status: string; client: { id: string } }[]>>>();
+const listClientSectors = vi.fn<() => Promise<Result<ClientSector[]>>>();
+const SECTORS: ClientSector[] = [
+  { key: "lusso", label: "Lusso" },
+  { key: "nautica", label: "Nautica" },
+];
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -20,13 +25,15 @@ vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requi
 vi.mock("@/modules/case-study", () => ({
   listClientSummaries: () => listClientSummaries(),
   list: () => list(),
-  CLIENT_INDUSTRIES: ["interior_design", "energia", "risorse_umane", "lusso"],
+  listClientSectors: () => listClientSectors(),
 }));
 
 vi.mock("./_lib/client-limits", () => ({ clientLimits: () => ({}), clientMaterialLimits: () => ({}) }));
 // The panel is a browser component (tested on its own): here only whether the page renders it.
 vi.mock("./_components/client-panel", () => ({
-  ClientPanel: ({ client }: { client: unknown }) => <div data-panel={client === null ? "new" : "edit"} />,
+  ClientPanel: ({ client, sectors }: { client: unknown; sectors: ClientSector[] }) => (
+    <div data-panel={client === null ? "new" : "edit"} data-sectors={sectors.map((sector) => sector.label).join(",")} />
+  ),
 }));
 
 const { default: ClientsPage } = await import("./page");
@@ -47,6 +54,8 @@ beforeEach(() => {
   listClientSummaries.mockReset();
   list.mockReset();
   list.mockResolvedValue(ok([]));
+  listClientSectors.mockReset();
+  listClientSectors.mockResolvedValue(ok(SECTORS));
 });
 
 describe("ClientsPage", () => {
@@ -101,9 +110,18 @@ describe("ClientsPage", () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([LUMEN]));
     expect(await renderPage()).not.toContain("data-panel");
+    expect(listClientSectors).not.toHaveBeenCalled();
     const html = renderToStaticMarkup(await ClientsPage({ searchParams: Promise.resolve({ nuovo: "1" }) }));
-    expect(html).toContain('<div data-panel="new"></div>');
+    // The shared sector list, read when the panel opens (an added sector included).
+    expect(html).toContain('<div data-panel="new" data-sectors="Lusso,Nautica"></div>');
     expect(html).toContain(LUMEN.name);
+  });
+
+  it("throws into the error boundary when the sectors for the add panel can't be read", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    listClientSummaries.mockResolvedValue(ok([LUMEN]));
+    listClientSectors.mockResolvedValue(err({ code: "CLIENT_LOOKUP_FAILED", message: "down" }));
+    await expect(ClientsPage({ searchParams: Promise.resolve({ nuovo: "1" }) })).rejects.toThrow(/CLIENT_LOOKUP_FAILED/);
   });
 
   it("links every client's name to its page, finished or not", async () => {

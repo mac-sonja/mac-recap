@@ -6,8 +6,8 @@ import type { ClientRepository } from "@/modules/case-study/ports/client-reposit
 const notFound = (id: unknown) => err({ code: "NOT_FOUND", message: "No case study with this id.", details: { id } });
 
 /**
- * The current client info for a case: `{ clientId, name, industries, description,
- * logoId, brief }`, always the client's current values (client info is live, owner
+ * The current client info for a case: `{ clientId, name, industry, description,
+ * logoId, brief }` (`industry` is the sector's key and label, or null), always the client's current values (client info is live, owner
  * 2026-10-16). Epic 3 reads it at render time, not at enqueue, so an edit to the
  * client shows in every case history, draft or approved. Unknown, malformed or
  * soft-deleted case ids are `NOT_FOUND`.

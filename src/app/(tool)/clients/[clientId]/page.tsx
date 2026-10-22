@@ -25,7 +25,7 @@ export interface ClientPageProps {
 
 /**
  * A client's page (Stories 2.13, 2.14), owner/designer only (`list clients`): the
- * logo (on a white tile), name, code, industries as pills and description (never
+ * logo (on a white tile), name, code, its sector as a pill and description (never
  * the brief), **Modifica** (`manage clients`, opens the edit panel, `?modifica=1`)
  * and an inactive **Modifica layout** (until the configurator; both hidden below
  * 1024 px, where the info is read-only), **Nuova
@@ -50,6 +50,10 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
     throw new Error(`Client could not be loaded: ${found.error.code}`);
   }
   const client = found.value;
+
+  // The sector labels (the pill here and the panel's Settore) come from the shared list.
+  const sectors = await caseStudy.listClientSectors();
+  if (!sectors.ok) throw new Error(`Client sectors could not be listed: ${sectors.error.code}`);
 
   const scope = listScopeFor(actor);
   if (scope === null || !authorize(actor, "list cases", scope).ok) redirect(landing);
@@ -109,8 +113,8 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
               <span className="sr-only">{it.clients.detail.code} </span>
               {client.code}
             </p>
-            {client.industries.length === 0 ? null : (
-              <IndustryPills options={caseStudy.CLIENT_INDUSTRIES} selected={client.industries} label={it.clients.detail.industries} />
+            {client.industry === null ? null : (
+              <IndustryPills options={sectors.value} selected={client.industry} label={it.clients.detail.industries} />
             )}
             {client.description === null ? null : (
               <p className="max-w-prose whitespace-pre-line font-body text-[15px] leading-relaxed text-foreground-muted">{client.description}</p>
@@ -159,7 +163,7 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
           client={client}
           assets={panel.assets}
           caseCount={panel.caseCount}
-          industries={caseStudy.CLIENT_INDUSTRIES}
+          sectors={sectors.value}
           limits={clientLimits()}
           materialLimits={clientMaterialLimits()}
         />

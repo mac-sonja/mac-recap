@@ -7,7 +7,7 @@ import type { ClientRepository } from "@/modules/case-study/ports/client-reposit
 import type { LogoStorage } from "@/modules/case-study/ports/logo-storage";
 
 /**
- * Edits a client: name, industries, description and current logo, all required and
+ * Edits a client: name, sector, description and current logo, all required and
  * as they should be after the save. Its code and every case history code stay the
  * same (AD-21). Client info is live (owner, 2026-10-16): every case history shows
  * the new values. `logoId` must be a confirmed logo of this client; a logo can be
@@ -21,13 +21,13 @@ export function makeUpdateClient(clients: ClientRepository, storage: LogoStorage
   return async function updateClient(actor: Actor, input: unknown): Promise<Result<Client>> {
     const parsed = parseClientInput(updateClientInputSchema, input, { tooLong: FIELD_TOO_LONG, invalid: FIELD_INVALID });
     if (!parsed.ok) return parsed;
-    const { clientId, name, industries, description, logoId } = parsed.value;
+    const { clientId, name, industry, description, logoId } = parsed.value;
 
     // The logo shown before this save; read first, since `update_client` returns only the new row.
     const before = await clients.findById(clientId);
     const oldLogoId = before.ok ? (before.value?.logoId ?? null) : null;
 
-    const updated = await clients.update({ id: clientId, name, industries, description, logoId }, actor.id);
+    const updated = await clients.update({ id: clientId, name, industry, description, logoId }, actor.id);
     if (!updated.ok) return updated;
     if (oldLogoId !== null && oldLogoId !== updated.value.logoId) await deleteOldLogo(clients, storage, clientId, oldLogoId);
     return ok(updated.value);

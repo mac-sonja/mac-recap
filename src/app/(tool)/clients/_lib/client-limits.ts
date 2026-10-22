@@ -16,6 +16,9 @@ export interface ClientLimits {
   testimonialQuoteMax: number;
   /** `CLIENT_TESTIMONIAL_AUTHOR_MAX`, in characters (code points) after trimming. */
   testimonialAuthorMax: number;
+  /** `CLIENT_SECTOR_LABEL_MIN` / `_MAX`: a new sector's name, in characters (code points) after trimming. */
+  sectorLabelMin: number;
+  sectorLabelMax: number;
   /** `LOGO_CONTENT_TYPES`. */
   logoTypes: readonly string[];
   /** `LOGO_MAX_BYTES`. */
@@ -34,6 +37,8 @@ export function clientLimits(): ClientLimits {
     resultValueMax: caseStudy.CLIENT_RESULT_VALUE_MAX,
     testimonialQuoteMax: caseStudy.CLIENT_TESTIMONIAL_QUOTE_MAX,
     testimonialAuthorMax: caseStudy.CLIENT_TESTIMONIAL_AUTHOR_MAX,
+    sectorLabelMin: caseStudy.CLIENT_SECTOR_LABEL_MIN,
+    sectorLabelMax: caseStudy.CLIENT_SECTOR_LABEL_MAX,
     logoTypes: caseStudy.LOGO_CONTENT_TYPES,
     logoMaxBytes: caseStudy.LOGO_MAX_BYTES,
     logoMinShortSide: caseStudy.LOGO_MIN_SHORT_SIDE_PX,

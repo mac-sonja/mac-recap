@@ -3,8 +3,11 @@ import {
   BUSINESS_LINES,
   CLIENT_BRIEF_MAX,
   CLIENT_DESCRIPTION_MAX,
-  CLIENT_INDUSTRIES,
+  addClientSectorInputSchema,
   CLIENT_NAME_MAX,
+  CLIENT_SECTOR_LABEL_MAX,
+  CLIENT_SECTOR_LABEL_MIN,
+  sectorLabelKey,
   FIELD_INVALID,
   FIELD_TOO_LONG,
   isClientComplete,
@@ -233,26 +236,54 @@ describe("recordEventInputSchema", () => {
 });
 
 const MESSAGES = { tooLong: FIELD_TOO_LONG, invalid: FIELD_INVALID };
-const info = { industries: ["lusso"], description: "Brand di moda." };
+const info = { industry: "lusso", description: "Brand di moda." };
 
-describe("CLIENT_INDUSTRIES", () => {
-  it("is the fixed list, in display order", () => {
-    expect(CLIENT_INDUSTRIES).toEqual(["interior_design", "energia", "risorse_umane", "lusso"]);
+describe("addClientSectorInputSchema", () => {
+  it("collapses whitespace and trims the label", () => {
+    expect(parseInput(addClientSectorInputSchema, { label: "  Nautica \n da   diporto " })).toEqual({
+      ok: true,
+      value: { label: "Nautica da diporto" },
+    });
+  });
+
+  it.each([
+    ["one character", "N"],
+    ["only spaces", "   "],
+    ["41 characters", "x".repeat(CLIENT_SECTOR_LABEL_MAX + 1)],
+    ["U+0000", "Nau\u0000tica"],
+    ["not a string", 7],
+  ])("refuses %s naming the label", (_label, label) => {
+    const result = parseInput(addClientSectorInputSchema, { label });
+    expect(result).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", details: { fields: ["label"] } } });
+  });
+
+  it("accepts 2 and 40 characters (an emoji is one)", () => {
+    expect(CLIENT_SECTOR_LABEL_MIN).toBe(2);
+    expect(parseInput(addClientSectorInputSchema, { label: "AI" }).ok).toBe(true);
+    expect(parseInput(addClientSectorInputSchema, { label: "😀".repeat(CLIENT_SECTOR_LABEL_MAX) }).ok).toBe(true);
+  });
+});
+
+describe("sectorLabelKey", () => {
+  it("ignores case, accents and extra spaces", () => {
+    expect(sectorLabelKey(" energia ")).toBe(sectorLabelKey("Energia"));
+    expect(sectorLabelKey("Caffè  e   tè")).toBe("caffe e te");
+    expect(sectorLabelKey("Lusso")).not.toBe(sectorLabelKey("Lussi"));
   });
 });
 
 describe("createClientInputSchema", () => {
-  it("trims the name and description, drops any code the caller sends, and keeps the industries in list order without repeats", () => {
+  it("trims the name and description, drops any code the caller sends, and keeps the one sector key", () => {
     expect(
       parseInput(createClientInputSchema, {
         name: "  Lumen Srl ",
         code: "ZZZ",
-        industries: ["lusso", "energia", "lusso"],
+        industry: "nautica_2",
         description: " Brand di moda. ",
       }),
     ).toEqual({
       ok: true,
-      value: { name: "Lumen Srl", industries: ["energia", "lusso"], description: "Brand di moda." },
+      value: { name: "Lumen Srl", industry: "nautica_2", description: "Brand di moda." },
     });
   });
 
@@ -263,11 +294,12 @@ describe("createClientInputSchema", () => {
   });
 
   it.each([
-    ["an unknown industry", { industries: ["moda"] }, ["industries"]],
-    ["no industry", { industries: [] }, ["industries"]],
-    ["industries that are not a list", { industries: "lusso" }, ["industries"]],
-    ["a non-string industry", { industries: [1] }, ["industries"]],
-    ["missing industries", { industries: undefined }, ["industries"]],
+    ["a malformed sector key", { industry: "Moda!" }, ["industry"]],
+    ["an empty sector key", { industry: "" }, ["industry"]],
+    ["a list of sectors", { industry: ["lusso"] }, ["industry"]],
+    ["a non-string sector", { industry: 1 }, ["industry"]],
+    ["a missing sector", { industry: undefined }, ["industry"]],
+    ["a null sector", { industry: null }, ["industry"]],
     ["a blank description", { description: "  \n " }, ["description"]],
     ["a missing description", { description: undefined }, ["description"]],
     ["a null description", { description: null }, ["description"]],
@@ -313,7 +345,7 @@ describe("updateClientInputSchema", () => {
       parseInput(updateClientInputSchema, { clientId: CLIENT_ID, name: " Lumen S.r.l. ", ...info, logoId: LOGO_ID }),
     ).toEqual({
       ok: true,
-      value: { clientId: CLIENT_ID, name: "Lumen S.r.l.", industries: ["lusso"], description: "Brand di moda.", logoId: LOGO_ID },
+      value: { clientId: CLIENT_ID, name: "Lumen S.r.l.", industry: "lusso", description: "Brand di moda.", logoId: LOGO_ID },
     });
   });
 
@@ -327,7 +359,7 @@ describe("updateClientInputSchema", () => {
   it("names a malformed client id, a blank name and the missing info", () => {
     const result = parseInput(updateClientInputSchema, { clientId: "LUM", name: " " });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.details).toMatchObject({ fields: ["industries", "description", "clientId", "name", "logoId"] });
+    if (!result.ok) expect(result.error.details).toMatchObject({ fields: ["industry", "description", "clientId", "name", "logoId"] });
   });
 });
 
@@ -415,13 +447,13 @@ describe("saveClientTestimonialInputSchema", () => {
 
 describe("isClientComplete", () => {
   const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
-  const client = { name: "Lumen", industries: ["lusso" as const], description: "Brand.", logoId: LOGO_ID };
+  const client = { name: "Lumen", industry: "lusso", description: "Brand.", logoId: LOGO_ID };
   const brief = { context: "C", solution: "S", results: [], testimonialQuote: "", testimonialAuthor: "" };
 
   it("is true only when every required field is filled; results and testimonial are optional", () => {
     expect(CLIENT_BRIEF_FIELDS).toEqual(["context", "solution"]);
     expect(isClientComplete(client, brief)).toBe(true);
-    expect(isClientComplete({ ...client, industries: [] }, brief)).toBe(false);
+    expect(isClientComplete({ ...client, industry: null }, brief)).toBe(false);
     expect(isClientComplete({ ...client, description: null }, brief)).toBe(false);
     expect(isClientComplete({ ...client, description: "  " }, brief)).toBe(false);
     expect(isClientComplete({ ...client, logoId: null }, brief)).toBe(false);

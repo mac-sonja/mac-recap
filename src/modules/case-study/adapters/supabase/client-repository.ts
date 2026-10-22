@@ -26,7 +26,7 @@ import { createSupabaseAdminClient } from "./admin";
 import { RAISE_EXCEPTION, refusalOf, type Refusals } from "./refusal";
 
 const CLIENT_REF_COLUMNS = "id, name, code";
-const CLIENT_COLUMNS = "id, name, code, industries, description, logo_id";
+const CLIENT_COLUMNS = "id, name, code, industry, description, logo_id";
 const BRIEF_COLUMNS = "context, solution, results, testimonial_quote, testimonial_author";
 /**
  * The client with what `isClientComplete` reads, the count of its embedded case
@@ -36,8 +36,11 @@ const BRIEF_COLUMNS = "context, solution, results, testimonial_quote, testimonia
 const CLIENT_SUMMARY_COLUMNS = `${CLIENT_COLUMNS}, client_brief(${BRIEF_COLUMNS}), case_study(count), logo:client_logo!client_logo_id_fkey(id, mime_type)`;
 const LOGO_COLUMNS = "id, client_id, mime_type, size_bytes";
 const ASSET_COLUMNS = "id, client_id, position, file_name, mime_type, size_bytes, width, height, created_at";
-/** A case's client and its brief, embedded through `case_study.client_id` (the only FK from case_study to client). */
-const CASE_CLIENT_COLUMNS = `id, client(id, name, industries, description, logo_id, client_brief(${BRIEF_COLUMNS}))`;
+/**
+ * A case's client, its sector (key and label, through `client.industry`) and its brief,
+ * embedded through `case_study.client_id` (the only FK from case_study to client).
+ */
+const CASE_CLIENT_COLUMNS = `id, client(id, name, description, logo_id, sector:client_sector(key, label), client_brief(${BRIEF_COLUMNS}))`;
 
 /** `create_client` raises these as P0001 (AD-21); nothing is written then. */
 const CREATE_REFUSALS: Refusals = {
@@ -83,7 +86,7 @@ const INSERT_ASSET_REFUSALS: Refusals = {
   ASSET_ALREADY_CONFIRMED: { code: "ASSET_ALREADY_CONFIRMED", message: "This file was already confirmed." },
 };
 
-/** Postgres check_violation; the description, brief and industries checks are the backstop. */
+/** Postgres check_violation; the description and brief checks are the backstop. */
 const CHECK_VIOLATION = "23514";
 /** Postgres unique_violation. */
 const UNIQUE_VIOLATION = "23505";
@@ -97,7 +100,6 @@ const LENGTH_CHECKS: Readonly<Record<string, string>> = {
 };
 /** The DB value checks and the field each one guards. */
 const VALUE_CHECKS: Readonly<Record<string, string>> = {
-  client_industries_check: "industries",
   client_brief_results_check: "results",
   // An author without a quote: the quote is what is missing.
   client_brief_testimonial_check: "quote",
@@ -110,7 +112,8 @@ const fieldsOf = (message: string, checks: Readonly<Record<string, string>>) =>
 
 /**
  * The field error when the DB refused the write: `CLIENT_FIELD_INVALID` for the
- * industries, results or testimonial check or a P0001 `CLIENT_FIELD_INVALID` (its DETAIL names the field),
+ * results or testimonial check or a P0001 `CLIENT_FIELD_INVALID` (its DETAIL names the field:
+ * `industry` for no or an unknown sector),
  * `CLIENT_FIELD_TOO_LONG` for a length check, each naming the field(s), so the
  * wizard can show the error on the field.
  */
@@ -164,7 +167,7 @@ interface ClientRow {
   id: string;
   name: string;
   code: string;
-  industries: string[];
+  industry: string | null;
   description: string | null;
   logo_id: string | null;
 }
@@ -184,7 +187,7 @@ export function toClient(row: ClientRow): Result<Client> {
     id: row.id,
     name: row.name,
     code: row.code,
-    industries: row.industries,
+    industry: row.industry,
     description: row.description,
     logoId: row.logo_id,
   });
@@ -334,7 +337,7 @@ export function createSupabaseClientRepository(
     async create(name, info, actorId) {
       const { data, error } = await client().rpc("create_client", {
         p_name: name,
-        p_industries: [...info.industries],
+        p_industry: info.industry,
         p_description: info.description,
         p_actor_id: actorId,
       });
@@ -355,7 +358,7 @@ export function createSupabaseClientRepository(
       const { data, error } = await client().rpc("update_client", {
         p_client_id: input.id,
         p_name: input.name,
-        p_industries: [...input.industries],
+        p_industry: input.industry,
         p_description: input.description,
         p_logo_id: input.logoId,
         p_actor_id: actorId,
@@ -569,7 +572,7 @@ export function createSupabaseClientRepository(
       const parsed = caseClientInfoSchema.safeParse({
         clientId: owner.id,
         name: owner.name,
-        industries: owner.industries,
+        industry: Array.isArray(owner.sector) ? (owner.sector[0] ?? null) : owner.sector,
         description: owner.description,
         logoId: owner.logo_id,
         brief: toClientBrief(owner.client_brief),

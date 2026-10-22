@@ -65,8 +65,6 @@ describe("clients copy", () => {
     expect(t("clients.edit")).toBe("Modifica");
     expect(t("clients.empty")).toBe("Ancora nessun cliente. Aggiungi il primo e partiamo.");
     expect(t("clients.errors.nameTaken")).toBe("C’è già un cliente con questo nome.");
-    expect(Object.values(it.clients.industries)).toEqual(["Interior design", "Energia", "Risorse umane", "Lusso"]);
-    expect(Object.keys(it.clients.industries)).toEqual(["interior_design", "energia", "risorse_umane", "lusso"]);
     expect(t("clients.detail.industries")).toBe("Settore");
     expect(t("clients.detail.noCases")).toBe("Nessuna case history per questo cliente, per ora.");
   });
@@ -103,6 +101,10 @@ describe("client panel copy", () => {
     expect(t("clientPanel.details.testimonial.quotePlaceholder")).toBe("Una frase del cliente, tra virgolette nel suo stile");
     expect(t("clientPanel.details.testimonial.authorPlaceholder")).toBe("Nome Cognome, ruolo");
     expect(t("clientPanel.details.testimonial.missingQuote")).toBe("Manca la frase.");
+    expect(t("clientPanel.details.sector.placeholder")).toBe("Per esempio: Nautica");
+    expect(t("clientPanel.details.sector.add")).toBe("Aggiungi");
+    expect(t("clientPanel.details.sector.addFailed")).toBe("Non siamo riusciti ad aggiungerlo. Riprova.");
+    expect(JSON.stringify(it)).not.toContain("Puoi sceglierne più di uno.");
     expect(t("clientPanel.details.namePlaceholder")).toBe("Ragione sociale o nome del brand");
     expect(t("clientPanel.details.descriptionHint")).toBe("Da qui l’AI scrive la bozza dell’intro.");
     expect(t("clientPanel.details.logoReplaceHint")).toBe("Se lo sostituisci, il vecchio logo viene eliminato.");

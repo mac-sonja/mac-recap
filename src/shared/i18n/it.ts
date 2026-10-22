@@ -362,13 +362,6 @@ export const it = {
     loading: "Un attimo…",
     add: "Aggiungi cliente",
     edit: "Modifica",
-    /** Industry pill labels, keyed by `CLIENT_INDUSTRIES` (the fixed list, SCP 2026-10-19). */
-    industries: {
-      interior_design: "Interior design",
-      energia: "Energia",
-      risorse_umane: "Risorse umane",
-      lusso: "Lusso",
-    },
     errors: {
       nameRequired: "Scrivi il nome del cliente.",
       /** `{max}` is the field limit in characters. */
@@ -470,7 +463,23 @@ export const it = {
         /** An author without a quote: it is not saved. */
         missingQuote: "Manca la frase.",
       },
-      industriesHint: "Puoi sceglierne più di uno.",
+      /**
+       * Settore (owner, 2026-10-22): one sector, from a shared list anyone may add to.
+       * The sector labels come from the database (`client_sector`), not from here.
+       */
+      sector: {
+        /** The add field's accessible name. */
+        newName: "Nuovo settore",
+        placeholder: "Per esempio: Nautica",
+        /** The add button: visible text, then its accessible name (the panel has other Aggiungi). */
+        add: "Aggiungi",
+        addName: "Aggiungi settore",
+        /** `{min}`–`{max}` characters. */
+        length: "Da {min} a {max} caratteri.",
+        addFailed: "Non siamo riusciti ad aggiungerlo. Riprova.",
+        /** Polite live-region line once a sector is selected from the field; `{label}` is its name. */
+        selected: "{label} selezionato.",
+      },
       /** The description's live counter: `{n}` characters of `{max}`. */
       counter: "{n}/{max}",
       /** `{size}` MB and `{px}` pixels on the short side (PNG, JPEG and WebP only). */

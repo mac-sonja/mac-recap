@@ -55,6 +55,14 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps = {
   const canManage = can(actor, "manage clients");
   const adding = canManage && (await searchParams)?.nuovo === "1";
 
+  // The panel's Settore pills: the shared list, read fresh each time it opens.
+  let sectors: caseStudy.ClientSector[] = [];
+  if (adding) {
+    const listedSectors = await caseStudy.listClientSectors();
+    if (!listedSectors.ok) throw new Error(`Client sectors could not be listed: ${listedSectors.error.code}`);
+    sectors = listedSectors.value;
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={it.clients.heading} lead={it.clients.lead} />
@@ -64,7 +72,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps = {
           client={null}
           assets={[]}
           caseCount={null}
-          industries={caseStudy.CLIENT_INDUSTRIES}
+          sectors={sectors}
           limits={clientLimits()}
           materialLimits={clientMaterialLimits()}
         />

@@ -8,6 +8,7 @@ import type {
   ClientBriefFieldSaved,
   ClientDeleted,
   ClientResultsSaved,
+  ClientSector,
   ClientTestimonialSaved,
   ListedClientAsset,
   PresignedClientLogoUpload,
@@ -19,7 +20,7 @@ import type {
 // Every action resolves the actor and authorizes `manage clients` before the use case runs.
 
 /**
- * Adds a client with an automatic code: input `{ name, industries, description }`,
+ * Adds a client with an automatic code: input `{ name, industry, description }` (one sector key),
  * all required. 403 `FORBIDDEN` unless the role may `manage clients`; 400
  * `INVALID_INPUT` / `CLIENT_FIELD_INVALID` / `CLIENT_FIELD_TOO_LONG` naming the
  * fields; 409 `CLIENT_NAME_TAKEN` / `CLIENT_CODE_EXHAUSTED`. Nothing is written on any error.
@@ -34,7 +35,7 @@ export async function createClient(input: unknown): Promise<ActionResult<Client>
 }
 
 /**
- * Edits a client: input `{ clientId, name, industries, description, logoId }`, all
+ * Edits a client: input `{ clientId, name, industry, description, logoId }`, all
  * required; its code never changes. 403 `FORBIDDEN` unless the role may `manage
  * clients`; 400 `INVALID_INPUT` / `CLIENT_FIELD_INVALID` / `CLIENT_FIELD_TOO_LONG` /
  * `CLIENT_LOGO_INVALID`; 404
@@ -47,6 +48,22 @@ export async function updateClient(input: unknown): Promise<ActionResult<Client>
   if (!decision.ok) return failure(decision.error);
   const updated = await caseStudy.updateClient(actor.value, input);
   return updated.ok ? updated : failure(updated.error);
+}
+
+/**
+ * Adds a sector to the shared list (everybody sees it from then on) and returns it:
+ * input `{ label }`, 2–40 characters after trimming. A sector with the same name (case,
+ * accents and extra spaces aside) is returned instead, with nothing written. It needs
+ * no client, so it works while adding one. 403 `FORBIDDEN` unless the role may `manage
+ * clients`; 400 `SECTOR_LABEL_INVALID` / `INVALID_INPUT`. Nothing is written on any error.
+ */
+export async function addClientSector(input: unknown): Promise<ActionResult<ClientSector>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage clients");
+  if (!decision.ok) return failure(decision.error);
+  const added = await caseStudy.addClientSector(actor.value, input);
+  return added.ok ? added : failure(added.error);
 }
 
 /**

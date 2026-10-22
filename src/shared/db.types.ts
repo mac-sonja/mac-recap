@@ -141,14 +141,14 @@ isOneToOne: false
                   ]
                 },"client": {
                   Row: {
-                    "code": string,"created_at": string,"created_by": string,"deleted_at": string | null,"deleted_by": string | null,"description": string | null,"id": string,"industries": (string)[],"logo_id": string | null,"name": string,"name_key": string,"updated_at": string
+                    "code": string,"created_at": string,"created_by": string,"deleted_at": string | null,"deleted_by": string | null,"description": string | null,"id": string,"industry": string | null,"logo_id": string | null,"name": string,"name_key": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "code": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"deleted_by"?: string | null,"description"?: string | null,"id"?: string,"industries"?: (string)[],"logo_id"?: string | null,"name": string,"name_key": string,"updated_at"?: string
+                    "code": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"deleted_by"?: string | null,"description"?: string | null,"id"?: string,"industry"?: string | null,"logo_id"?: string | null,"name": string,"name_key": string,"updated_at"?: string
                   }
                   Update: {
-                    "code"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"deleted_by"?: string | null,"description"?: string | null,"id"?: string,"industries"?: (string)[],"logo_id"?: string | null,"name"?: string,"name_key"?: string,"updated_at"?: string
+                    "code"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"deleted_by"?: string | null,"description"?: string | null,"id"?: string,"industry"?: string | null,"logo_id"?: string | null,"name"?: string,"name_key"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -163,6 +163,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "profile"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_industry_fkey"
+      columns: ["industry"]
+isOneToOne: false
+      referencedRelation: "client_sector"
+      referencedColumns: ["key"]
     },{
       foreignKeyName: "client_logo_id_fkey"
       columns: ["logo_id"]
@@ -243,6 +249,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     },{
       foreignKeyName: "client_logo_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"client_sector": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"key": string,"label": string,"label_key": string,"position": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"key": string,"label": string,"label_key": string,"position": number
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"key"?: string,"label"?: string,"label_key"?: string,"position"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_sector_created_by_fkey"
       columns: ["created_by"]
 isOneToOne: false
       referencedRelation: "profile"
@@ -355,7 +381,22 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "case_study_code":
+            "add_client_sector":
+{ Args: { "p_actor_id": string,"p_label": string }; Returns: {
+              "created_at": string,
+"created_by": string | null,
+"key": string,
+"label": string,
+"label_key": string,
+"position": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "client_sector"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"case_study_code":
 { Args: { "p_client_code": string,"p_number": number,"p_year": number }; Returns: string
                            },
 "client_brief_results_valid":
@@ -417,7 +458,7 @@ isOneToOne: false
         isSetofReturn: false
       } },
 "create_client":
-{ Args: { "p_actor_id": string,"p_description": string,"p_industries": (string)[],"p_name": string }; Returns: {
+{ Args: { "p_actor_id": string,"p_description": string,"p_industry": string,"p_name": string }; Returns: {
               "code": string,
 "created_at": string,
 "created_by": string,
@@ -425,7 +466,7 @@ isOneToOne: false
 "deleted_by": string | null,
 "description": string | null,
 "id": string,
-"industries": (string)[],
+"industry": string | null,
 "logo_id": string | null,
 "name": string,
 "name_key": string,
@@ -662,7 +703,7 @@ isOneToOne: false
         isSetofReturn: false
       } },
 "update_client":
-{ Args: { "p_actor_id": string,"p_client_id": string,"p_description": string,"p_industries": (string)[],"p_logo_id": string,"p_name": string }; Returns: {
+{ Args: { "p_actor_id": string,"p_client_id": string,"p_description": string,"p_industry": string,"p_logo_id": string,"p_name": string }; Returns: {
               "code": string,
 "created_at": string,
 "created_by": string,
@@ -670,7 +711,7 @@ isOneToOne: false
 "deleted_by": string | null,
 "description": string | null,
 "id": string,
-"industries": (string)[],
+"industry": string | null,
 "logo_id": string | null,
 "name": string,
 "name_key": string,
