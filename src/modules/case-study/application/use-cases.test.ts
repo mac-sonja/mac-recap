@@ -29,7 +29,7 @@ import { makeGetClientInfoForCase } from "./get-client-info-for-case";
 import { makeRequestClientLogoUpload } from "./request-client-logo-upload";
 import { makeUpdateClient } from "./update-client";
 import { makeRecordEvent } from "./record-event";
-import { makeSaveClientBriefField } from "./save-client-brief-field";
+import { makeSaveClientBriefField, makeSaveClientResults, makeSaveClientTestimonial } from "./save-client-brief-field";
 import { makeTransition } from "./transition";
 import { makeUpdateCaseStudyDetails } from "./update-case-study-details";
 
@@ -353,8 +353,14 @@ describe("updateDetails", () => {
 type StoredClient = Client & { caseCount: number; brief: ClientBrief };
 type ClientSeed = ClientRef & { caseCount: number } & Partial<StoredClient>;
 
-const EMPTY_BRIEF: ClientBrief = { context: "", solution: "", results: "" };
-const FULL_BRIEF: ClientBrief = { context: "C", solution: "S", results: "R" };
+const EMPTY_BRIEF: ClientBrief = { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" };
+const FULL_BRIEF: ClientBrief = {
+  context: "C",
+  solution: "S",
+  results: [{ label: "Candidature ricevute", value: "+180%" }],
+  testimonialQuote: "Ci hanno capiti.",
+  testimonialAuthor: "Ada Rossi, CEO",
+};
 
 /**
  * In-memory ClientRepository: mirrors `create_client` / `update_client` /
@@ -439,6 +445,20 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
       const previous = found.brief[field];
       found.brief = { ...found.brief, [field]: text };
       return ok(previous);
+    }),
+    saveResults: vi.fn<ClientRepository["saveResults"]>(async (clientId, results) => {
+      const found = clients.get(clientId);
+      if (!found) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
+      const changed = JSON.stringify(found.brief.results) !== JSON.stringify(results);
+      found.brief = { ...found.brief, results: [...results] };
+      return ok(changed);
+    }),
+    saveTestimonial: vi.fn<ClientRepository["saveTestimonial"]>(async (clientId, quote, author) => {
+      const found = clients.get(clientId);
+      if (!found) return err({ code: "CLIENT_NOT_FOUND", message: "No client with this id." });
+      const changed = found.brief.testimonialQuote !== quote || found.brief.testimonialAuthor !== author;
+      found.brief = { ...found.brief, testimonialQuote: quote, testimonialAuthor: author };
+      return ok(changed);
     }),
     findLogo: vi.fn<ClientRepository["findLogo"]>(async (id) => ok(logos.get(id) ?? null)),
     insertLogo: vi.fn<ClientRepository["insertLogo"]>(async ({ id, clientId, contentType, sizeBytes }) => {
@@ -776,7 +796,7 @@ describe("saveClientBriefField", () => {
     const result = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "solution", text: " Un nuovo marchio. " });
     expect(result).toEqual(ok({ field: "solution", text: " Un nuovo marchio. " }));
     expect(repo.saveBriefField).toHaveBeenCalledExactlyOnceWith(LUMEN.id, "solution", " Un nuovo marchio. ", actor.id);
-    expect(clients.get(LUMEN.id)?.brief).toEqual({ context: "", solution: " Un nuovo marchio. ", results: "" });
+    expect(clients.get(LUMEN.id)?.brief).toEqual({ ...EMPTY_BRIEF, solution: " Un nuovo marchio. " });
   });
 
   it("allows an empty text (a field cleared while editing)", async () => {
@@ -788,10 +808,13 @@ describe("saveClientBriefField", () => {
     const { repo } = fakeClientRepository([LUMEN]);
     const unknown = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "sector", text: "x" });
     expect(unknown.ok || unknown.error.code).toBe("UNKNOWN_FIELD");
-    const atLimit = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "results", text: ` ${"😀".repeat(5000)} ` });
+    // The old free-text results is no brief text any more.
+    const results = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "results", text: "Più clienti." });
+    expect(results.ok || results.error.code).toBe("UNKNOWN_FIELD");
+    const atLimit = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "solution", text: ` ${"😀".repeat(5000)} ` });
     expect(atLimit.ok).toBe(true);
-    const over = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "results", text: "x".repeat(5001) });
-    expect(over.ok || over.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["results"] } });
+    const over = await makeSaveClientBriefField(repo)(actor, { clientId: LUMEN.id, field: "solution", text: "x".repeat(5001) });
+    expect(over.ok || over.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["solution"] } });
     expect(repo.saveBriefField).toHaveBeenCalledTimes(1);
   });
 
@@ -801,6 +824,64 @@ describe("saveClientBriefField", () => {
     expect(malformed.ok || malformed.error.code).toBe("INVALID_INPUT");
     const unknown = await makeSaveClientBriefField(repo)(actor, { clientId: UNKNOWN_CLIENT_ID, field: "context", text: "x" });
     expect(unknown.ok || unknown.error.code).toBe("CLIENT_NOT_FOUND");
+  });
+});
+
+describe("saveClientResults", () => {
+  it("saves the filled rows in order, trimmed, with the actor; [] clears them", async () => {
+    const { repo, clients } = fakeClientRepository([LUMEN]);
+    const results = [
+      { label: " Candidature ricevute ", value: "+180%" },
+      { label: "Follower su LinkedIn", value: " +35% " },
+    ];
+    const trimmed = [
+      { label: "Candidature ricevute", value: "+180%" },
+      { label: "Follower su LinkedIn", value: "+35%" },
+    ];
+    expect(await makeSaveClientResults(repo)(actor, { clientId: LUMEN.id, results })).toEqual(ok({ results: trimmed }));
+    expect(repo.saveResults).toHaveBeenCalledExactlyOnceWith(LUMEN.id, trimmed, actor.id);
+    expect(clients.get(LUMEN.id)?.brief.results).toEqual(trimmed);
+    expect(await makeSaveClientResults(repo)(actor, { clientId: LUMEN.id, results: [] })).toEqual(ok({ results: [] }));
+    expect(clients.get(LUMEN.id)?.brief.results).toEqual([]);
+  });
+
+  it("refuses a half row, a value over 20 characters or a 4th row; nothing is written", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    const half = await makeSaveClientResults(repo)(actor, { clientId: LUMEN.id, results: [{ label: "Visite", value: "" }] });
+    expect(half.ok || half.error).toMatchObject({ code: "CLIENT_FIELD_INVALID", details: { fields: ["results"] } });
+    const long = await makeSaveClientResults(repo)(actor, { clientId: LUMEN.id, results: [{ label: "Visite", value: "x".repeat(21) }] });
+    expect(long.ok || long.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["results"] } });
+    const row = { label: "Visite", value: "1" };
+    const many = await makeSaveClientResults(repo)(actor, { clientId: LUMEN.id, results: [row, row, row, row] });
+    expect(many.ok || many.error.code).toBe("CLIENT_FIELD_INVALID");
+    expect(repo.saveResults).not.toHaveBeenCalled();
+  });
+
+  it("passes CLIENT_NOT_FOUND through", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    const unknown = await makeSaveClientResults(repo)(actor, { clientId: UNKNOWN_CLIENT_ID, results: [] });
+    expect(unknown.ok || unknown.error.code).toBe("CLIENT_NOT_FOUND");
+  });
+});
+
+describe("saveClientTestimonial", () => {
+  it("saves a quote with or without its author, trimmed", async () => {
+    const { repo, clients } = fakeClientRepository([LUMEN]);
+    expect(await makeSaveClientTestimonial(repo)(actor, { clientId: LUMEN.id, quote: " Ci hanno capiti. ", author: "" })).toEqual(
+      ok({ quote: "Ci hanno capiti.", author: "" }),
+    );
+    expect(repo.saveTestimonial).toHaveBeenCalledExactlyOnceWith(LUMEN.id, "Ci hanno capiti.", "", actor.id);
+    await makeSaveClientTestimonial(repo)(actor, { clientId: LUMEN.id, quote: "Ci hanno capiti.", author: "Ada Rossi, CEO" });
+    expect(clients.get(LUMEN.id)?.brief).toMatchObject({ testimonialQuote: "Ci hanno capiti.", testimonialAuthor: "Ada Rossi, CEO" });
+  });
+
+  it("refuses an author without a quote and texts over their limits; nothing is written", async () => {
+    const { repo } = fakeClientRepository([LUMEN]);
+    const lone = await makeSaveClientTestimonial(repo)(actor, { clientId: LUMEN.id, quote: " ", author: "Ada Rossi" });
+    expect(lone.ok || lone.error).toMatchObject({ code: "CLIENT_FIELD_INVALID", details: { fields: ["quote"] } });
+    const long = await makeSaveClientTestimonial(repo)(actor, { clientId: LUMEN.id, quote: "x".repeat(601), author: "" });
+    expect(long.ok || long.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["quote"] } });
+    expect(repo.saveTestimonial).not.toHaveBeenCalled();
   });
 });
 

@@ -41,7 +41,11 @@ import {
 import { createSupabaseRevisionRepository } from "@/modules/case-study/adapters/supabase/revision-repository";
 import {
   makeSaveClientBriefField,
+  makeSaveClientResults,
+  makeSaveClientTestimonial,
   type ClientBriefFieldSaved,
+  type ClientResultsSaved,
+  type ClientTestimonialSaved,
 } from "@/modules/case-study/application/save-client-brief-field";
 import type { LogoDeps } from "@/modules/case-study/application/logo-deps";
 import {
@@ -78,6 +82,11 @@ export {
   CLIENT_DESCRIPTION_MAX,
   CLIENT_INDUSTRIES,
   CLIENT_NAME_MAX,
+  CLIENT_RESULT_LABEL_MAX,
+  CLIENT_RESULT_VALUE_MAX,
+  CLIENT_RESULTS_MAX,
+  CLIENT_TESTIMONIAL_AUTHOR_MAX,
+  CLIENT_TESTIMONIAL_QUOTE_MAX,
   isClientComplete,
   LOCALES,
   LOGO_CONTENT_TYPES,
@@ -95,6 +104,7 @@ export type {
   ClientDetail,
   ClientIndustry,
   ClientRef,
+  ClientResult,
   CaseClientInfo,
   ClientSummary,
   CreateCaseStudyInput,
@@ -123,7 +133,11 @@ export type {
 } from "@/modules/case-study/domain/client-material";
 export type { PresignedClientMaterial } from "@/modules/case-study/application/request-client-material-upload";
 export type { PresignedClientLogoUpload } from "@/modules/case-study/application/request-client-logo-upload";
-export type { ClientBriefFieldSaved } from "@/modules/case-study/application/save-client-brief-field";
+export type {
+  ClientBriefFieldSaved,
+  ClientResultsSaved,
+  ClientTestimonialSaved,
+} from "@/modules/case-study/application/save-client-brief-field";
 export type { ClientDeleted } from "@/modules/case-study/application/delete-client";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
 export { REVISION_CREATED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
@@ -298,13 +312,36 @@ export function deleteClient(actor: Actor, input: unknown): Promise<Result<Clien
 
 /**
  * Saves one brief text of a client: input `{ clientId, field, text }` (`field` one of
- * context, solution, results; `text` at most 5000 characters after trimming, `""`
+ * context, solution; `text` at most 5000 characters after trimming, `""`
  * clears it). Saving the stored text again writes nothing. Call only after
  * `authorize(actor, 'manage clients')`. `INVALID_INPUT`, `UNKNOWN_FIELD`,
  * `CLIENT_FIELD_TOO_LONG`, `CLIENT_NOT_FOUND`; nothing is written on any error.
  */
 export function saveClientBriefField(actor: Actor, input: unknown): Promise<Result<ClientBriefFieldSaved>> {
   return makeSaveClientBriefField(createSupabaseClientRepository())(actor, input);
+}
+
+/**
+ * Replaces a client's results (optional): input `{ clientId, results: [{ label, value }] }`,
+ * the filled rows top to bottom, at most 3; label ≤ 80 and value ≤ 20 characters
+ * after trimming, both required in each row; `[]` clears them. Returns `{ results }`
+ * as stored (trimmed). Call only after `authorize(actor, 'manage clients')`.
+ * `INVALID_INPUT`, `CLIENT_FIELD_INVALID`, `CLIENT_FIELD_TOO_LONG` (naming `results`),
+ * `CLIENT_NOT_FOUND`; nothing is written on any error.
+ */
+export function saveClientResults(actor: Actor, input: unknown): Promise<Result<ClientResultsSaved>> {
+  return makeSaveClientResults(createSupabaseClientRepository())(actor, input);
+}
+
+/**
+ * Replaces a client's testimonial (optional): input `{ clientId, quote, author }`,
+ * trimmed; quote ≤ 600 and author ≤ 120 characters; an author needs a quote
+ * (`CLIENT_FIELD_INVALID` on `quote`); `""` and `""` clear it. Returns `{ quote, author }`
+ * as stored. Call only after `authorize(actor, 'manage clients')`. `INVALID_INPUT`,
+ * `CLIENT_FIELD_INVALID`, `CLIENT_FIELD_TOO_LONG`, `CLIENT_NOT_FOUND`; nothing is written on any error.
+ */
+export function saveClientTestimonial(actor: Actor, input: unknown): Promise<Result<ClientTestimonialSaved>> {
+  return makeSaveClientTestimonial(createSupabaseClientRepository())(actor, input);
 }
 
 /**

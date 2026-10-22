@@ -26,10 +26,10 @@ export function parseInput<S extends z.ZodType>(schema: S, input: unknown): Resu
  * The client fields whose errors are `CLIENT_FIELD_TOO_LONG` (over the limit) or
  * `CLIENT_FIELD_INVALID` (missing or outside the allowed values).
  */
-const INFO_FIELDS = new Set(["industries", "description", "logoId", "text"]);
+const INFO_FIELDS = new Set(["industries", "description", "logoId", "text", "results", "quote", "author"]);
 
 /**
- * `parseInput` for the client inputs (add, edit, brief save): when every failure is
+ * `parseInput` for the client inputs (add, edit, brief, results and testimonial saves): when every failure is
  * on an info field (industries, description, logo, brief text) with the
  * `invalidMessage` or `tooLongMessage`, the error is `CLIENT_FIELD_INVALID` (if any
  * field is missing or invalid) or `CLIENT_FIELD_TOO_LONG`, naming those fields by

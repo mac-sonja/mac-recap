@@ -23,8 +23,8 @@ export interface AutosaveFieldsOptions<F extends string> {
   initial: Readonly<Record<F, string>>;
   /** Sends one field's text; resolves true when the server now holds it. A throw counts as a failure. */
   save: (field: F, text: string) => Promise<boolean>;
-  /** Text over the limit is never sent. */
-  tooLong: (text: string) => boolean;
+  /** Text over the limit is never sent; `field` says whose limit applies. */
+  tooLong: (text: string, field: F) => boolean;
   /**
    * Whether the record exists yet, so saving is possible (default: always). While
    * false, edits only change the values: no debounce, blur, link or unmount save.
@@ -88,7 +88,7 @@ export function useAutosaveFields<F extends string>(options: AutosaveFieldsOptio
   });
 
   const isActive = () => optionsRef.current.active?.() ?? true;
-  const tooLong = (text: string) => optionsRef.current.tooLong(text);
+  const tooLong = (text: string, field: F) => optionsRef.current.tooLong(text, field);
 
   function markFailed(field: F, on: boolean) {
     if (unmounted.current) return;
@@ -117,7 +117,7 @@ export function useAutosaveFields<F extends string>(options: AutosaveFieldsOptio
     }
     const first = valuesRef.current[field];
     if (first === state.saved) markFailed(field, false);
-    if (tooLong(first) || first === state.saved) return Promise.resolve();
+    if (tooLong(first, field) || first === state.saved) return Promise.resolve();
 
     state.inFlight = (async () => {
       try {
@@ -125,7 +125,7 @@ export function useAutosaveFields<F extends string>(options: AutosaveFieldsOptio
           state.again = false;
           const text = valuesRef.current[field];
           if (text === state.saved) markFailed(field, false);
-          if (tooLong(text) || text === state.saved) break;
+          if (tooLong(text, field) || text === state.saved) break;
           let ok: boolean;
           try {
             ok = await optionsRef.current.save(field, text);
@@ -202,7 +202,7 @@ export function useAutosaveFields<F extends string>(options: AutosaveFieldsOptio
       // Leaving another way: a pending debounce, or a field still unsaved (a failed save), saves now.
       const unsaved = (field: F) => {
         const text = valuesRef.current[field];
-        return fieldSaves[field].saved !== text && !tooLongRef.current(text);
+        return fieldSaves[field].saved !== text && !tooLongRef.current(text, field);
       };
       if (fields.some((field) => fieldSaves[field].timer !== null || unsaved(field))) void flushRef.current();
     };
@@ -214,7 +214,7 @@ export function useAutosaveFields<F extends string>(options: AutosaveFieldsOptio
     valuesRef.current = { ...valuesRef.current, [field]: text };
     setValues(valuesRef.current);
     clearTimer(field);
-    if (tooLong(text) || !isActive()) return;
+    if (tooLong(text, field) || !isActive()) return;
     saves.current[field].timer = setTimeout(() => void save(field), DEBOUNCE_MS);
   }
 

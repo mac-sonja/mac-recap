@@ -48,7 +48,13 @@ const LUMEN: ClientDetail = {
   industries: [],
   description: null,
   logoId: null,
-  brief: { context: "Contesto segreto", solution: "Soluzione segreta", results: "Risultati segreti" },
+  brief: {
+    context: "Contesto segreto",
+    solution: "Soluzione segreta",
+    results: [{ label: "Risultati segreti", value: "+1%" }],
+    testimonialQuote: "Frase segreta",
+    testimonialAuthor: "Autore segreto",
+  },
   logoUrl: null,
 };
 const LOGO_URL = "https://project.supabase.co/storage/v1/object/sign/material/clients/x/logos/y.png?token=g";

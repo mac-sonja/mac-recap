@@ -12,7 +12,23 @@ const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
 const infoRow = (over: Record<string, unknown> = {}) => ({ ...client(), industries: ["lusso"], description: "Brand.", logo_id: LOGO_ID, ...over });
 /** The domain client for `infoRow()`. */
 const detail = (over: Record<string, unknown> = {}) => ({ ...client(), industries: ["lusso"], description: "Brand.", logoId: LOGO_ID, ...over });
-const BRIEF = { context: "C", solution: "S", results: "R" };
+/** A `client_brief` row as read, and the domain brief it maps to. */
+const BRIEF_ROW = {
+  context: "C",
+  solution: "S",
+  results: [{ label: "Candidature ricevute", value: "+180%" }],
+  testimonial_quote: "Ci hanno capiti.",
+  testimonial_author: "Ada Rossi, CEO",
+};
+const BRIEF = {
+  context: "C",
+  solution: "S",
+  results: [{ label: "Candidature ricevute", value: "+180%" }],
+  testimonialQuote: "Ci hanno capiti.",
+  testimonialAuthor: "Ada Rossi, CEO",
+};
+const EMPTY_BRIEF = { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" };
+const BRIEF_COLUMNS = "context, solution, results, testimonial_quote, testimonial_author";
 const INFO = { industries: ["lusso" as const], description: "Brand." };
 
 /**
@@ -97,7 +113,7 @@ describe("createSupabaseClientRepository().list", () => {
 describe("createSupabaseClientRepository().listWithCaseCounts", () => {
   it("lists non-deleted clients, counts only non-deleted cases and says whether every required field is filled, by name with an id tie-break", async () => {
     const rows = [
-      { ...infoRow(), client_brief: BRIEF, case_study: [{ count: 3 }], logo: { id: LOGO_ID, mime_type: "image/svg+xml" } },
+      { ...infoRow(), client_brief: BRIEF_ROW, case_study: [{ count: 3 }], logo: { id: LOGO_ID, mime_type: "image/svg+xml" } },
       {
         ...infoRow({ id: "cccccccc-0000-4000-8000-000000000002", industries: [], description: null, logo_id: null }),
         client_brief: null,
@@ -115,7 +131,7 @@ describe("createSupabaseClientRepository().listWithCaseCounts", () => {
     });
     expect(from).toHaveBeenCalledWith("client");
     expect(select).toHaveBeenCalledWith(
-      "id, name, code, industries, description, logo_id, client_brief(context, solution, results), case_study(count), logo:client_logo!client_logo_id_fkey(id, mime_type)",
+      `id, name, code, industries, description, logo_id, client_brief(${BRIEF_COLUMNS}), case_study(count), logo:client_logo!client_logo_id_fkey(id, mime_type)`,
     );
     expect(is.mock.calls).toEqual([
       ["deleted_at", null],
@@ -128,17 +144,32 @@ describe("createSupabaseClientRepository().listWithCaseCounts", () => {
   });
 
   it("leaves out a logo with an unknown type rather than failing the row", async () => {
-    const rows = [{ ...infoRow(), client_brief: BRIEF, case_study: [{ count: 1 }], logo: { id: LOGO_ID, mime_type: "image/gif" } }];
+    const rows = [{ ...infoRow(), client_brief: BRIEF_ROW, case_study: [{ count: 1 }], logo: { id: LOGO_ID, mime_type: "image/gif" } }];
     const { factory } = stubClient({ data: rows, error: null });
     const result = await createSupabaseClientRepository(factory).listWithCaseCounts();
     expect(result.ok && result.value[0].logo).toBeNull();
   });
 
   it("counts a client with a blank brief text as unfinished", async () => {
-    const rows = [{ ...infoRow(), client_brief: { ...BRIEF, results: "  " }, case_study: [{ count: 1 }] }];
+    const rows = [{ ...infoRow(), client_brief: { ...BRIEF_ROW, solution: "  " }, case_study: [{ count: 1 }] }];
     const { factory } = stubClient({ data: rows, error: null });
     const result = await createSupabaseClientRepository(factory).listWithCaseCounts();
     expect(result.ok && result.value[0].complete).toBe(false);
+  });
+
+  it("counts a client without results or testimonial as complete", async () => {
+    const brief = { ...BRIEF_ROW, results: [], testimonial_quote: "", testimonial_author: "" };
+    const rows = [{ ...infoRow(), client_brief: brief, case_study: [{ count: 1 }] }];
+    const { factory } = stubClient({ data: rows, error: null });
+    const result = await createSupabaseClientRepository(factory).listWithCaseCounts();
+    expect(result.ok && result.value[0].complete).toBe(true);
+  });
+
+  it("returns CLIENT_INVALID when the results are not a list of label + value", async () => {
+    const rows = [{ ...infoRow(), client_brief: { ...BRIEF_ROW, results: "Più clienti." }, case_study: [{ count: 1 }] }];
+    const { factory } = stubClient({ data: rows, error: null });
+    const result = await createSupabaseClientRepository(factory).listWithCaseCounts();
+    expect(result.ok || result.error.code).toBe("CLIENT_INVALID");
   });
 
   it("returns CLIENT_INVALID when a count is missing", async () => {
@@ -303,16 +334,13 @@ describe("createSupabaseClientRepository().update", () => {
 
 describe("createSupabaseClientRepository() brief", () => {
   it("reads the brief, or the empty one when the client has no row", async () => {
-    const found = stubClient({ data: BRIEF, error: null });
+    const found = stubClient({ data: BRIEF_ROW, error: null });
     expect(await createSupabaseClientRepository(found.factory).findBrief(client().id)).toEqual({ ok: true, value: BRIEF });
     expect(found.from).toHaveBeenCalledWith("client_brief");
-    expect(found.select).toHaveBeenCalledWith("context, solution, results");
+    expect(found.select).toHaveBeenCalledWith(BRIEF_COLUMNS);
     expect(found.eq).toHaveBeenCalledWith("client_id", client().id);
     const missing = stubClient({ data: null, error: null });
-    expect(await createSupabaseClientRepository(missing.factory).findBrief(client().id)).toEqual({
-      ok: true,
-      value: { context: "", solution: "", results: "" },
-    });
+    expect(await createSupabaseClientRepository(missing.factory).findBrief(client().id)).toEqual({ ok: true, value: EMPTY_BRIEF });
   });
 
   it("saves one field through save_client_brief_field and returns the previous text", async () => {
@@ -332,10 +360,61 @@ describe("createSupabaseClientRepository() brief", () => {
       const result = await createSupabaseClientRepository(factory).saveBriefField(client().id, "context", "x", ACTOR_ID);
       expect(result.ok || result.error.code).toBe(code);
     }
-    const error = { code: "23514", message: 'new row for relation "client_brief" violates check constraint "client_brief_results_check"' };
+    const error = { code: "23514", message: 'new row for relation "client_brief" violates check constraint "client_brief_solution_check"' };
     const { factory } = stubClient({ data: null, error: null }, { data: null, error });
-    const result = await createSupabaseClientRepository(factory).saveBriefField(client().id, "results", "x", ACTOR_ID);
-    expect(result.ok || result.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["results"] } });
+    const result = await createSupabaseClientRepository(factory).saveBriefField(client().id, "solution", "x", ACTOR_ID);
+    expect(result.ok || result.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["solution"] } });
+  });
+
+  it("saves the results through save_client_results, only label and value, and returns whether they changed", async () => {
+    const { factory, rpc } = stubClient({ data: null, error: null }, { data: true, error: null });
+    const results = [{ label: "Visite", value: "2,4M" }];
+    expect(await createSupabaseClientRepository(factory).saveResults(client().id, results, ACTOR_ID)).toEqual({ ok: true, value: true });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("save_client_results", { p_client_id: client().id, p_results: results, p_actor_id: ACTOR_ID });
+  });
+
+  it("saves the testimonial through save_client_testimonial", async () => {
+    const { factory, rpc } = stubClient({ data: null, error: null }, { data: false, error: null });
+    expect(await createSupabaseClientRepository(factory).saveTestimonial(client().id, "Frase.", "Ada", ACTOR_ID)).toEqual({ ok: true, value: false });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("save_client_testimonial", {
+      p_client_id: client().id,
+      p_quote: "Frase.",
+      p_author: "Ada",
+      p_actor_id: ACTOR_ID,
+    });
+  });
+
+  it("maps the results and testimonial refusals and checks to field errors", async () => {
+    const save = async (error: unknown, which: "results" | "testimonial") => {
+      const { factory } = stubClient({ data: null, error: null }, { data: null, error });
+      const repo = createSupabaseClientRepository(factory);
+      return which === "results" ? repo.saveResults(client().id, [], ACTOR_ID) : repo.saveTestimonial(client().id, "", "", ACTOR_ID);
+    };
+    const check = (name: string) => ({ code: "23514", message: `new row for relation "client_brief" violates check constraint "${name}"` });
+    expect(await save({ code: "P0001", message: "CLIENT_NOT_FOUND" }, "results")).toMatchObject({ ok: false, error: { code: "CLIENT_NOT_FOUND" } });
+    expect(await save(check("client_brief_results_check"), "results")).toMatchObject({
+      ok: false,
+      error: { code: "CLIENT_FIELD_INVALID", details: { fields: ["results"] } },
+    });
+    expect(await save(check("client_brief_testimonial_check"), "testimonial")).toMatchObject({
+      ok: false,
+      error: { code: "CLIENT_FIELD_INVALID", details: { fields: ["quote"] } },
+    });
+    expect(await save(check("client_brief_testimonial_quote_check"), "testimonial")).toMatchObject({
+      ok: false,
+      error: { code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["quote"] } },
+    });
+    expect(await save(check("client_brief_testimonial_author_check"), "testimonial")).toMatchObject({
+      ok: false,
+      error: { code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["author"] } },
+    });
+    const failed = await quietly(() => save({ code: "08006", message: "down" }, "testimonial"));
+    expect(failed.result).toMatchObject({ ok: false, error: { code: "CLIENT_WRITE_FAILED" } });
+    const odd = await quietly(async () => {
+      const { factory } = stubClient({ data: null, error: null }, { data: "yes", error: null });
+      return createSupabaseClientRepository(factory).saveResults(client().id, [], ACTOR_ID);
+    });
+    expect(odd.result).toMatchObject({ ok: false, error: { code: "CLIENT_WRITE_FAILED" } });
   });
 });
 
@@ -406,7 +485,7 @@ describe("createSupabaseClientRepository().findClientInfoByCaseId", () => {
   it("reads the non-deleted case's client info", async () => {
     const row = {
       id: CASE_ID,
-      client: { id: client().id, name: "Lumen Srl", industries: ["lusso"], description: "Brand.", logo_id: LOGO_ID, client_brief: BRIEF },
+      client: { id: client().id, name: "Lumen Srl", industries: ["lusso"], description: "Brand.", logo_id: LOGO_ID, client_brief: BRIEF_ROW },
     };
     const { factory, from, select, eq, is } = stubClient({ data: row, error: null });
     expect(await createSupabaseClientRepository(factory).findClientInfoByCaseId(CASE_ID)).toEqual({
@@ -414,7 +493,7 @@ describe("createSupabaseClientRepository().findClientInfoByCaseId", () => {
       value: { clientId: client().id, name: "Lumen Srl", industries: ["lusso"], description: "Brand.", logoId: LOGO_ID, brief: BRIEF },
     });
     expect(from).toHaveBeenCalledWith("case_study");
-    expect(select).toHaveBeenCalledWith("id, client(id, name, industries, description, logo_id, client_brief(context, solution, results))");
+    expect(select).toHaveBeenCalledWith(`id, client(id, name, industries, description, logo_id, client_brief(${BRIEF_COLUMNS}))`);
     expect(eq).toHaveBeenCalledWith("id", CASE_ID);
     expect(is).toHaveBeenCalledWith("deleted_at", null);
   });
@@ -424,7 +503,7 @@ describe("createSupabaseClientRepository().findClientInfoByCaseId", () => {
     const { factory } = stubClient({ data: row, error: null });
     expect(await createSupabaseClientRepository(factory).findClientInfoByCaseId(CASE_ID)).toEqual({
       ok: true,
-      value: { clientId: client().id, name: "Lumen Srl", industries: [], description: null, logoId: null, brief: { context: "", solution: "", results: "" } },
+      value: { clientId: client().id, name: "Lumen Srl", industries: [], description: null, logoId: null, brief: EMPTY_BRIEF },
     });
   });
 

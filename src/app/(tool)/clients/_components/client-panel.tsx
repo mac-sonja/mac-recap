@@ -9,16 +9,29 @@ import { CARD_LABEL, FIELD, FIELD_HINT, FIELD_LABEL, TEXTAREA } from "@/app/_com
 import { Sheet } from "@/app/_components/sheet";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { clientHref, editClientPanelHref } from "@/app/_lib/routes";
-import { createClient, saveClientBriefField, updateClient } from "@/app/(tool)/clients/actions";
+import { createClient, saveClientBriefField, saveClientResults, saveClientTestimonial, updateClient } from "@/app/(tool)/clients/actions";
 import { acceptFor } from "@/app/(wizard)/_lib/upload";
 import { useAutosaveFields } from "@/app/(wizard)/_components/use-autosave-fields";
 import { FieldCard } from "@/app/(wizard)/_components/field-card";
 import { RequiredLabel } from "@/app/(wizard)/_components/required-label";
-import type { Client, ClientBrief, ClientBriefField, ClientDetail, ClientIndustry, ListedClientAsset } from "@/modules/case-study";
+import type { Client, ClientBrief, ClientBriefField, ClientDetail, ClientIndustry, ClientResult, ListedClientAsset } from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import type { ClientLimits, ClientMaterialLimits } from "../_lib/client-limits";
 import { ClientImageSlots, useClientImages } from "./client-image-slots";
+import {
+  ClientResultsFields,
+  emptyStoryInputs,
+  filledResults,
+  isAuthorOnly,
+  isHalfRow,
+  isOver,
+  resultRowsOf,
+  testimonialOf,
+  type IncompleteKey,
+  type ResultRow,
+  type StoryInputs,
+} from "./client-results-fields";
 import { DeleteClientButton } from "./delete-client-button";
 import { IndustryPills } from "./industry-pills";
 import { LogoTile } from "./logo-tile";
@@ -27,8 +40,19 @@ import { clearPanelOpenedInApp, panelOpenedInApp } from "../_lib/panel-history";
 
 const copy = it.clientPanel.details;
 
-/** The brief fields in `CLIENT_BRIEF_FIELDS` order (the module's index is server-only). */
-const BRIEF_FIELDS = ["context", "solution", "results"] as const satisfies readonly ClientBriefField[];
+/** The brief texts in `CLIENT_BRIEF_FIELDS` order (the module's index is server-only). */
+const BRIEF_FIELDS = ["context", "solution"] as const satisfies readonly ClientBriefField[];
+
+/**
+ * What the Racconto card autosaves: the two texts, then the results and the
+ * testimonial, each held as the JSON of what would be saved (`resultsKey`,
+ * `testimonialKey`), so a half row or a lone author changes nothing.
+ */
+type StoryField = ClientBriefField | "results" | "testimonial";
+const STORY_FIELDS = [...BRIEF_FIELDS, "results", "testimonial"] as const satisfies readonly StoryField[];
+
+const resultsKey = (rows: readonly ResultRow[]) => JSON.stringify(filledResults(rows));
+const testimonialKey = (quote: string, author: string) => JSON.stringify(testimonialOf(quote, author));
 
 /** The fields saved on Aggiungi / Salva (the brief autosaves once the client exists). */
 type InfoKey = "name" | "industries" | "description" | "logo";
@@ -80,13 +104,14 @@ export interface ClientPanelProps {
  * `Sheet` over the Clienti list (**Nuovo cliente**, `?nuovo=1`) or the client's page
  * (**Modifica cliente**, `?modifica=1`), with one form in three numbered cards:
  * 01 Dettagli (Nome, Settore, Descrizione), 02 Logo e immagini (logo and image
- * slots), 03 Racconto (Contesto, Soluzione, Risultati). Every field, the logo, the
- * three texts and `minImages` images are needed: **Aggiungi** / **Salva** stays
- * inactive until then, with the reason linked by `aria-describedby`. Lengths are
- * checked here first (inline error, no request).
+ * slots), 03 Racconto (Contesto, Soluzione, then the optional Risultati and
+ * Testimonial). Every field, the logo, the two texts and `minImages` images are
+ * needed: **Aggiungi** / **Salva** stays inactive until then, with the reason linked
+ * by `aria-describedby`. Lengths are checked here first (inline error, no request);
+ * a half-filled result row or an author without a quote stops the save at that field.
  *
  * **Aggiungi**: `createClient` (the code is assigned), then the logo (presign → PUT
- * → confirm → `updateClient` links it), then the three texts, then the images that
+ * → confirm → `updateClient` links it), then the texts, results and testimonial, then the images that
  * waited in the browser; then the client's page opens. If a step after the create
  * fails, the panel stays open as **Modifica cliente** for the new id (the URL names
  * it, so a reload resumes it), the error shows, and **Salva** retries only what is
@@ -160,7 +185,54 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
   const images = useClientImages(materialLimits, assets, () => clientRef.current?.id ?? null, (text) => announce(text));
 
   const briefTooLong = (text: string) => charCount(text.trim()) > limits.briefMax;
-  const initialBrief: ClientBrief = initialClient?.brief ?? { context: "", solution: "", results: "" };
+  const initialBrief: ClientBrief = initialClient?.brief ?? { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" };
+
+  // Risultati and Testimonial as typed; the autosave holds what would be saved of them.
+  const [rows, setRows] = useState<ResultRow[]>(() => resultRowsOf(initialBrief.results));
+  const rowsRef = useRef(rows);
+  const [quote, setQuote] = useState(initialBrief.testimonialQuote);
+  const [author, setAuthor] = useState(initialBrief.testimonialAuthor);
+  const testimonialRef = useRef({ quote: initialBrief.testimonialQuote, author: initialBrief.testimonialAuthor });
+  /** The incomplete-entry messages shown: after focus leaves the row (or testimonial) or a save is attempted. */
+  const [revealed, setRevealed] = useState<ReadonlySet<IncompleteKey>>(() => new Set());
+  const storyInputs = useRef<StoryInputs>(emptyStoryInputs());
+
+  /** A half row or a lone author: it is not saved, so closing would lose it. */
+  function firstIncomplete(): IncompleteKey | undefined {
+    const row = rowsRef.current.findIndex(isHalfRow);
+    if (row !== -1) return `row-${row}`;
+    const { quote: typedQuote, author: typedAuthor } = testimonialRef.current;
+    return isAuthorOnly(typedQuote, typedAuthor) ? "testimonial" : undefined;
+  }
+
+  /** A results or testimonial part over its limit: it is never sent. */
+  function storyOverLong(): HTMLElement | null | undefined {
+    for (const [index, row] of rowsRef.current.entries()) {
+      const inputs = storyInputs.current.rows[index];
+      if (isOver(row.label, limits.resultLabelMax)) return inputs?.label;
+      if (isOver(row.value, limits.resultValueMax)) return inputs?.value;
+    }
+    const { quote: typedQuote, author: typedAuthor } = testimonialRef.current;
+    if (isOver(typedQuote, limits.testimonialQuoteMax)) return storyInputs.current.quote;
+    if (isOver(typedAuthor, limits.testimonialAuthorMax)) return storyInputs.current.author;
+    return undefined;
+  }
+
+  const storyTooLong = (text: string, field: StoryField) => {
+    if (field === "results") {
+      return (JSON.parse(text) as ClientResult[]).some(
+        (result) => isOver(result.label, limits.resultLabelMax) || isOver(result.value, limits.resultValueMax),
+      );
+    }
+    if (field === "testimonial") {
+      const saved = JSON.parse(text) as { quote: string; author: string };
+      return isOver(saved.quote, limits.testimonialQuoteMax) || isOver(saved.author, limits.testimonialAuthorMax);
+    }
+    return briefTooLong(text);
+  };
+
+  const storyLabel = (field: StoryField) =>
+    field === "results" ? copy.results.title : field === "testimonial" ? copy.testimonial.title : copy.labels[field];
 
   function announce(text: string) {
     if (unmounted.current) return;
@@ -168,18 +240,31 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
     setAnnouncements((current) => [...current, line].slice(-ANNOUNCEMENTS_KEPT));
   }
 
-  const brief = useAutosaveFields<ClientBriefField>({
-    fields: BRIEF_FIELDS,
-    initial: initialBrief,
+  const brief = useAutosaveFields<StoryField>({
+    fields: STORY_FIELDS,
+    initial: {
+      context: initialBrief.context,
+      solution: initialBrief.solution,
+      results: resultsKey(rows),
+      testimonial: testimonialKey(initialBrief.testimonialQuote, initialBrief.testimonialAuthor),
+    },
     save: async (field, text) => {
       const current = clientRef.current;
       if (current === null) return false;
+      if (field === "results") {
+        return (await saveClientResults({ clientId: current.id, results: JSON.parse(text) as ClientResult[] })).ok;
+      }
+      if (field === "testimonial") {
+        const saved = JSON.parse(text) as { quote: string; author: string };
+        return (await saveClientTestimonial({ clientId: current.id, quote: saved.quote, author: saved.author })).ok;
+      }
       return (await saveClientBriefField({ clientId: current.id, field, text })).ok;
     },
-    tooLong: briefTooLong,
+    tooLong: storyTooLong,
     active: () => clientRef.current !== null && !discarding.current,
-    onSaveFailed: (field) => announce(fill(copy.announceError, { field: copy.labels[field], message: copy.errors.saveFailed })),
-    hasOtherUnsaved: () => logo.logo.kind === "new" || images.hasLocal || !sameInfo(savedInfo.current, currentInfo()),
+    onSaveFailed: (field) => announce(fill(copy.announceError, { field: storyLabel(field), message: copy.errors.saveFailed })),
+    hasOtherUnsaved: () =>
+      logo.logo.kind === "new" || images.hasLocal || !sameInfo(savedInfo.current, currentInfo()) || firstIncomplete() !== undefined,
     // A link inside the panel clicked with unsaved changes: leave only once confirmed.
     onUnsavedLink: (href) => {
       if (window.confirm(it.wizard.unsavedConfirm)) router.push(href);
@@ -241,7 +326,41 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
 
   function focusUnsavedText() {
     const unsaved = brief.firstUnsaved();
-    if (unsaved !== undefined) textareas.current[unsaved]?.focus();
+    if (unsaved === "results") storyInputs.current.rows[0]?.label?.focus();
+    else if (unsaved === "testimonial") storyInputs.current.quote?.focus();
+    else if (unsaved !== undefined) textareas.current[unsaved]?.focus();
+  }
+
+  function changeRow(index: number, part: keyof ResultRow, text: string) {
+    rowsRef.current = rowsRef.current.map((row, at) => (at === index ? { ...row, [part]: text } : row));
+    setRows(rowsRef.current);
+    brief.change("results", resultsKey(rowsRef.current));
+  }
+
+  function changeTestimonial(next: { quote: string; author: string }) {
+    testimonialRef.current = next;
+    setQuote(next.quote);
+    setAuthor(next.author);
+    brief.change("testimonial", testimonialKey(next.quote, next.author));
+  }
+
+  function reveal(key: IncompleteKey) {
+    setRevealed((current) => (current.has(key) ? current : new Set(current).add(key)));
+  }
+
+  /** Shows the first half row or lone author and focuses its empty part; true when there was one. */
+  function stopAtIncomplete(): boolean {
+    const key = firstIncomplete();
+    if (key === undefined) return false;
+    flushSync(() => reveal(key));
+    if (key === "testimonial") {
+      storyInputs.current.quote?.focus();
+    } else {
+      const index = Number(key.slice("row-".length));
+      const inputs = storyInputs.current.rows[index];
+      (rowsRef.current[index]?.label.trim() === "" ? inputs?.label : inputs?.value)?.focus();
+    }
+    return true;
   }
 
   function clearError(key: InfoKey) {
@@ -320,6 +439,10 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
     if (Object.keys(invalid).length > 0) return showErrors(invalid);
     const overLong = BRIEF_FIELDS.find((field) => briefTooLong(brief.current()[field]));
     if (overLong !== undefined) return textareas.current[overLong]?.focus();
+    const storyOver = storyOverLong();
+    if (storyOver !== undefined) return storyOver?.focus();
+    // A half row or a lone author would be lost on leaving: ask for the missing part first.
+    if (stopAtIncomplete()) return;
 
     const adding = clientRef.current === null;
     busy.current = true;
@@ -375,7 +498,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
         adopt(current, info);
       }
 
-      // 3. The three texts (saved now on a new client; flushed on an existing one).
+      // 3. The texts, then the results and the testimonial (saved now on a new client; flushed on an existing one).
       const saved = await brief.flushAll();
       if (unmounted.current) return;
       if (!saved) {
@@ -422,10 +545,19 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
         description.trim() !== "" ||
         logo.logo.kind !== "none" ||
         images.slots.length > 0 ||
-        BRIEF_FIELDS.some((field) => brief.current()[field].trim() !== "")
+        BRIEF_FIELDS.some((field) => brief.current()[field].trim() !== "") ||
+        rowsRef.current.some((row) => row.label.trim() !== "" || row.value.trim() !== "") ||
+        testimonialRef.current.quote.trim() !== "" ||
+        testimonialRef.current.author.trim() !== ""
       );
     }
-    return logo.logo.kind === "new" || images.hasLocal || !sameInfo(savedInfo.current, currentInfo()) || brief.firstUnsaved() !== undefined;
+    return (
+      logo.logo.kind === "new" ||
+      images.hasLocal ||
+      !sameInfo(savedInfo.current, currentInfo()) ||
+      brief.firstUnsaved() !== undefined ||
+      firstIncomplete() !== undefined
+    );
   }
 
   unsavedRef.current = unsaved;
@@ -685,6 +817,23 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
               </div>
             );
           })}
+          <ClientResultsFields
+            baseId={baseId}
+            limits={limits}
+            rows={rows}
+            quote={quote}
+            author={author}
+            onRowChange={changeRow}
+            onQuoteChange={(text) => changeTestimonial({ ...testimonialRef.current, quote: text })}
+            onAuthorChange={(text) => changeTestimonial({ ...testimonialRef.current, author: text })}
+            onResultsBlur={() => void brief.save("results")}
+            onTestimonialBlur={() => void brief.save("testimonial")}
+            onLeave={reveal}
+            revealed={revealed}
+            resultsFailed={brief.failed.has("results")}
+            testimonialFailed={brief.failed.has("testimonial")}
+            inputs={storyInputs}
+          />
         </FieldCard>
       </div>
 

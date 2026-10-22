@@ -4,6 +4,7 @@ import type {
   ClientBriefField,
   ClientInfo,
   ClientRef,
+  ClientResult,
   CaseClientInfo,
   StoredClientSummary,
   LogoContentType,
@@ -97,6 +98,18 @@ export interface ClientRepository {
    * otherwise `err` only when the write fails. Nothing is written on any `err`.
    */
   saveBriefField(clientId: string, field: ClientBriefField, text: string, actorId: string): Promise<Result<string>>;
+  /**
+   * Replaces the client's results through `save_client_results` (the row is created on
+   * the first change); `ok(true)` when something changed. `err CLIENT_NOT_FOUND` /
+   * `CLIENT_FIELD_INVALID`, otherwise `err` only when the write fails. Nothing is written on any `err`.
+   */
+  saveResults(clientId: string, results: readonly ClientResult[], actorId: string): Promise<Result<boolean>>;
+  /**
+   * Replaces the client's testimonial through `save_client_testimonial`; `ok(true)` when
+   * something changed. `err CLIENT_NOT_FOUND` / `CLIENT_FIELD_INVALID` /
+   * `CLIENT_FIELD_TOO_LONG`, otherwise `err` only when the write fails. Nothing is written on any `err`.
+   */
+  saveTestimonial(clientId: string, quote: string, author: string, actorId: string): Promise<Result<boolean>>;
   /** `ok(null)` when no logo row has this id; `err` only when the lookup fails. */
   findLogo(id: string): Promise<Result<ClientLogo | null>>;
   /**

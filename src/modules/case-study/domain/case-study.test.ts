@@ -9,6 +9,10 @@ import {
   FIELD_TOO_LONG,
   isClientComplete,
   saveClientBriefFieldInputSchema,
+  saveClientResultsInputSchema,
+  saveClientTestimonialInputSchema,
+  CLIENT_BRIEF_FIELDS,
+  clientBriefSchema,
   LOGO_CONTENT_TYPES,
   LOGO_SVG_TYPE,
   LOGO_MAX_BYTES,
@@ -343,7 +347,7 @@ describe("saveClientBriefFieldInputSchema", () => {
       MESSAGES,
     );
     expect(at.ok && at.value.text).toBe(` ${"😀".repeat(CLIENT_BRIEF_MAX)} `);
-    expect(parseInput(saveClientBriefFieldInputSchema, { clientId: CLIENT_ID, field: "results", text: "" }).ok).toBe(true);
+    expect(parseInput(saveClientBriefFieldInputSchema, { clientId: CLIENT_ID, field: "solution", text: "" }).ok).toBe(true);
   });
 
   it("refuses a text over the limit as CLIENT_FIELD_TOO_LONG", () => {
@@ -356,18 +360,83 @@ describe("saveClientBriefFieldInputSchema", () => {
   });
 });
 
+describe("saveClientResultsInputSchema", () => {
+  const parse = (results: unknown) => parseClientInput(saveClientResultsInputSchema, { clientId: CLIENT_ID, results }, MESSAGES);
+
+  it("keeps the filled rows in order, trimmed, and allows none", () => {
+    const at = parse([
+      { label: " Candidature ricevute ", value: " +180% ", extra: "dropped" },
+      { label: "Follower su LinkedIn", value: "+35%" },
+    ]);
+    expect(at.ok && at.value.results).toEqual([
+      { label: "Candidature ricevute", value: "+180%" },
+      { label: "Follower su LinkedIn", value: "+35%" },
+    ]);
+    expect(parse([]).ok).toBe(true);
+  });
+
+  it("counts code points after trimming: 80 for the label, 20 for the value", () => {
+    expect(parse([{ label: ` ${"😀".repeat(80)} `, value: "😀".repeat(20) }]).ok).toBe(true);
+    expect(parse([{ label: "x".repeat(81), value: "1" }])).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["results"] } } });
+    expect(parse([{ label: "Visite", value: "x".repeat(21) }])).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["results"] } } });
+  });
+
+  it("refuses a half row, more than 3 rows or a malformed list as CLIENT_FIELD_INVALID", () => {
+    expect(parse([{ label: "Visite", value: "  " }])).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_INVALID", details: { fields: ["results"] } } });
+    expect(parse([{ label: "", value: "2,4M" }])).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_INVALID" } });
+    const row = { label: "Visite", value: "1" };
+    expect(parse([row, row, row]).ok).toBe(true);
+    expect(parse([row, row, row, row])).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_INVALID" } });
+    expect(parse("Più clienti.")).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_INVALID" } });
+  });
+});
+
+describe("saveClientTestimonialInputSchema", () => {
+  const parse = (quote: unknown, author: unknown) =>
+    parseClientInput(saveClientTestimonialInputSchema, { clientId: CLIENT_ID, quote, author }, MESSAGES);
+
+  it("trims, and saves a quote without an author or nothing at all", () => {
+    const at = parse(" “Ci hanno capiti.” ", " Ada Rossi, CEO ");
+    expect(at.ok && at.value).toEqual({ clientId: CLIENT_ID, quote: "“Ci hanno capiti.”", author: "Ada Rossi, CEO" });
+    expect(parse("Frase.", "").ok).toBe(true);
+    expect(parse("", "").ok).toBe(true);
+  });
+
+  it("refuses an author without a quote as CLIENT_FIELD_INVALID on the quote", () => {
+    expect(parse("  ", "Ada Rossi")).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_INVALID", details: { fields: ["quote"] } } });
+  });
+
+  it("allows 600 characters for the quote and 120 for the author", () => {
+    expect(parse("😀".repeat(600), "😀".repeat(120)).ok).toBe(true);
+    expect(parse("x".repeat(601), "")).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["quote"] } } });
+    expect(parse("x", "x".repeat(121))).toMatchObject({ ok: false, error: { code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["author"] } } });
+  });
+});
+
 describe("isClientComplete", () => {
   const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
   const client = { name: "Lumen", industries: ["lusso" as const], description: "Brand.", logoId: LOGO_ID };
-  const brief = { context: "C", solution: "S", results: "R" };
+  const brief = { context: "C", solution: "S", results: [], testimonialQuote: "", testimonialAuthor: "" };
 
-  it("is true only when every required field is filled", () => {
+  it("is true only when every required field is filled; results and testimonial are optional", () => {
+    expect(CLIENT_BRIEF_FIELDS).toEqual(["context", "solution"]);
     expect(isClientComplete(client, brief)).toBe(true);
     expect(isClientComplete({ ...client, industries: [] }, brief)).toBe(false);
     expect(isClientComplete({ ...client, description: null }, brief)).toBe(false);
     expect(isClientComplete({ ...client, description: "  " }, brief)).toBe(false);
     expect(isClientComplete({ ...client, logoId: null }, brief)).toBe(false);
-    expect(isClientComplete(client, { ...brief, results: " \n" })).toBe(false);
+    expect(isClientComplete(client, { ...brief, context: " \n" })).toBe(false);
+    expect(isClientComplete(client, { ...brief, solution: "" })).toBe(false);
+  });
+});
+
+describe("clientBriefSchema", () => {
+  it("holds at most 3 results", () => {
+    const row = { label: "Visite", value: "1" };
+    const brief = { context: "", solution: "", results: [row, row, row], testimonialQuote: "", testimonialAuthor: "" };
+    expect(clientBriefSchema.safeParse(brief).success).toBe(true);
+    expect(clientBriefSchema.safeParse({ ...brief, results: [row, row, row, row] }).success).toBe(false);
+    expect(clientBriefSchema.safeParse({ ...brief, results: "Più clienti." }).success).toBe(false);
   });
 });
 

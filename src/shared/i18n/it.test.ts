@@ -87,8 +87,20 @@ describe("client panel copy", () => {
       "Immagini",
       "Contesto",
       "Soluzione",
-      "Risultati",
     ]);
+    expect(t("clientPanel.details.results.title")).toBe("Risultati");
+    expect(t("clientPanel.details.results.hint")).toBe("Fino a 3 numeri. Facoltativo.");
+    expect(it.clientPanel.details.results.placeholders).toEqual([
+      { label: "Candidature ricevute", value: "+180%" },
+      { label: "Visualizzazioni video", value: "2,4M" },
+      { label: "Follower su LinkedIn", value: "+35%" },
+    ]);
+    expect(t("clientPanel.details.results.halfRow")).toBe("Scrivi sia cosa misuri sia il numero.");
+    expect(t("clientPanel.details.testimonial.title")).toBe("Testimonial");
+    expect(t("clientPanel.details.testimonial.hint")).toBe("Facoltativo.");
+    expect(t("clientPanel.details.testimonial.quotePlaceholder")).toBe("Una frase del cliente, tra virgolette nel suo stile");
+    expect(t("clientPanel.details.testimonial.authorPlaceholder")).toBe("Nome Cognome, ruolo");
+    expect(t("clientPanel.details.testimonial.missingQuote")).toBe("Manca la frase.");
     expect(t("clientPanel.details.namePlaceholder")).toBe("Ragione sociale o nome del brand");
     expect(t("clientPanel.details.descriptionHint")).toBe("Da qui l’AI scrive la bozza dell’intro.");
     expect(t("clientPanel.details.logoReplaceHint")).toBe("Se lo sostituisci, il vecchio logo viene eliminato.");

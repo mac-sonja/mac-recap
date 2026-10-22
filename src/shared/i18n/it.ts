@@ -423,7 +423,6 @@ export const it = {
         images: "Immagini",
         context: "Contesto",
         solution: "Soluzione",
-        results: "Risultati",
       },
       namePlaceholder: "Ragione sociale o nome del brand",
       descriptionHint: "Da qui l’AI scrive la bozza dell’intro.",
@@ -431,7 +430,33 @@ export const it = {
       placeholders: {
         context: "Chi è il cliente e da che situazione partiva?",
         solution: "Come lo avete aiutato, e con quale idea?",
-        results: "Cosa è cambiato per lui? I numeri, se li hai, fanno la differenza.",
+      },
+      /** Risultati in the Racconto card (owner, 2026-10-22): up to 3 rows of label + value, optional. */
+      results: {
+        title: "Risultati",
+        hint: "Fino a 3 numeri. Facoltativo.",
+        /** A row's accessible names; `{n}` is the row (1–3). */
+        labelName: "Risultato {n}, cosa misuri",
+        valueName: "Risultato {n}, numero",
+        /** Placeholders by row, as in the mock. */
+        placeholders: [
+          { label: "Candidature ricevute", value: "+180%" },
+          { label: "Visualizzazioni video", value: "2,4M" },
+          { label: "Follower su LinkedIn", value: "+35%" },
+        ],
+        /** Under a row with only one of its two parts: it is not saved. */
+        halfRow: "Scrivi sia cosa misuri sia il numero.",
+      },
+      /** The client's quote in the Racconto card (owner, 2026-10-22), optional. */
+      testimonial: {
+        title: "Testimonial",
+        hint: "Facoltativo.",
+        quoteName: "Frase del cliente",
+        authorName: "Autore della frase",
+        quotePlaceholder: "Una frase del cliente, tra virgolette nel suo stile",
+        authorPlaceholder: "Nome Cognome, ruolo",
+        /** An author without a quote: it is not saved. */
+        missingQuote: "Manca la frase.",
       },
       industriesHint: "Puoi sceglierne più di uno.",
       /** The description's live counter: `{n}` characters of `{max}`. */

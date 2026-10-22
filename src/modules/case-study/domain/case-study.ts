@@ -54,8 +54,13 @@ export const businessLinesSchema = z
   .refine((lines) => lines.every(isBusinessLine), "Invalid option.")
   .transform((lines) => BUSINESS_LINES.filter((line) => lines.includes(line)));
 
-/** The client brief's fields, in display order (the `client_brief` columns and `save_client_brief_field` match). */
-export const CLIENT_BRIEF_FIELDS = ["context", "solution", "results"] as const;
+/**
+ * The client brief's texts, in display order, saved one at a time through
+ * `saveClientBriefField` (the `client_brief` columns and `save_client_brief_field`
+ * match). Both are needed for a complete client; the results and the testimonial
+ * are optional and saved through `saveClientResults` / `saveClientTestimonial`.
+ */
+export const CLIENT_BRIEF_FIELDS = ["context", "solution"] as const;
 export type ClientBriefField = (typeof CLIENT_BRIEF_FIELDS)[number];
 
 export function isClientBriefField(value: unknown): value is ClientBriefField {
@@ -64,6 +69,17 @@ export function isClientBriefField(value: unknown): value is ClientBriefField {
 
 /** Each brief text's upper bound, in characters (code points) after trimming (the `client_brief_*_check` match). */
 export const CLIENT_BRIEF_MAX = 5000;
+
+/** A client's results: at most 3 label + value pairs (`client_brief_results_valid` checks the same limits). */
+export const CLIENT_RESULTS_MAX = 3;
+/** A result's label, in characters (code points) after trimming. */
+export const CLIENT_RESULT_LABEL_MAX = 80;
+/** A result's value ("+180%"), in characters (code points) after trimming. */
+export const CLIENT_RESULT_VALUE_MAX = 20;
+/** The testimonial's quote, in characters (code points) after trimming (`client_brief_testimonial_quote_check`). */
+export const CLIENT_TESTIMONIAL_QUOTE_MAX = 600;
+/** The testimonial's author, in characters (code points) after trimming (`client_brief_testimonial_author_check`). */
+export const CLIENT_TESTIMONIAL_AUTHOR_MAX = 120;
 
 /**
  * Logo files (AD-8, AD-22): content type → stored extension. The `client_logo.mime_type`
@@ -176,15 +192,25 @@ export const clientRefSchema = z.object({
 });
 export type ClientRef = z.infer<typeof clientRefSchema>;
 
-/** The client brief; a field never saved (or a client with no row) is `""`. */
+/** One of a client's results: what is measured ("Candidature ricevute") and the number ("+180%"), both trimmed and filled. */
+export const clientResultSchema = z.object({ label: z.string(), value: z.string() });
+export type ClientResult = z.infer<typeof clientResultSchema>;
+
+/**
+ * The client brief; a text never saved (or a client with no row) is `""`, no results
+ * is `[]`. `results` are the filled rows, top to bottom; a testimonial is a quote
+ * (and optionally its author): an author never comes without a quote.
+ */
 export const clientBriefSchema = z.object({
   context: z.string(),
   solution: z.string(),
-  results: z.string(),
+  results: z.array(clientResultSchema).max(CLIENT_RESULTS_MAX),
+  testimonialQuote: z.string(),
+  testimonialAuthor: z.string(),
 });
 export type ClientBrief = z.infer<typeof clientBriefSchema>;
 
-export const emptyClientBrief = (): ClientBrief => ({ context: "", solution: "", results: "" });
+export const emptyClientBrief = (): ClientBrief => ({ context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" });
 
 /**
  * A client with its info (AD-22). `industries` is empty and `description` and
@@ -206,8 +232,8 @@ export type ClientDetail = Client & { brief: ClientBrief; logoUrl: string | null
 
 /**
  * Whether every required client field is filled: name, at least one industry,
- * description, logo, and the three brief texts (each non-blank after trimming).
- * A client missing any of them is unfinished: its wizard reopens at step 1.
+ * description, logo, Contesto and Soluzione (each non-blank after trimming). The
+ * results and the testimonial are optional. A client missing any of them is unfinished.
  */
 export function isClientComplete(client: Pick<Client, "name" | "industries" | "description" | "logoId">, brief: ClientBrief): boolean {
   const filled = (text: string | null) => text !== null && text.trim() !== "";
@@ -260,8 +286,8 @@ export const updateClientInputSchema = clientInfoSchema.extend({
 export type UpdateClientInput = z.infer<typeof updateClientInputSchema>;
 
 /**
- * Saves one brief text (`""` clears it while editing; the wizard needs all three
- * filled to finish). The text is stored as given; at most 5000 characters after
+ * Saves one brief text, Contesto or Soluzione (`""` clears it while editing; a
+ * complete client needs both). The text is stored as given; at most 5000 characters after
  * trimming. `field` is any string here: a key other than `CLIENT_BRIEF_FIELDS` is
  * `UNKNOWN_FIELD` (checked by the use case).
  */
@@ -275,6 +301,48 @@ export const saveClientBriefFieldInputSchema = z.object({
     .refine((text) => charCount(text.trim()) <= CLIENT_BRIEF_MAX, { message: FIELD_TOO_LONG }),
 });
 export type SaveClientBriefFieldInput = z.infer<typeof saveClientBriefFieldInputSchema>;
+
+/** An optional client text (testimonial): trimmed, at most `max` characters, no U+0000 or lone surrogate. */
+const optionalClientText = (max: number) =>
+  z
+    .string({ error: FIELD_INVALID })
+    .refine(NO_NUL, { message: INVALID_CHARACTER })
+    .refine((text) => text.isWellFormed(), { message: INVALID_CHARACTER })
+    .transform((text) => text.trim())
+    .refine((text) => charCount(text) <= max, { message: FIELD_TOO_LONG });
+
+/** One result row a person supplies: label and value both filled (a half row is never sent), within their limits. */
+const resultInputSchema = z.object(
+  {
+    label: optionalClientText(CLIENT_RESULT_LABEL_MAX).refine((text) => text !== "", { message: FIELD_INVALID }),
+    value: optionalClientText(CLIENT_RESULT_VALUE_MAX).refine((text) => text !== "", { message: FIELD_INVALID }),
+  },
+  { error: FIELD_INVALID },
+);
+
+/**
+ * Replaces a client's results (`{ clientId, results }`): the filled rows, top to
+ * bottom, at most 3; `[]` clears them. Each row's label and value are trimmed and
+ * both required; any other key is dropped. A failure on a row names `results`.
+ */
+export const saveClientResultsInputSchema = z.object({
+  clientId: z.uuid("Required."),
+  results: z.array(resultInputSchema, { error: FIELD_INVALID }).max(CLIENT_RESULTS_MAX, { message: FIELD_INVALID }),
+});
+export type SaveClientResultsInput = z.infer<typeof saveClientResultsInputSchema>;
+
+/**
+ * Replaces a client's testimonial (`{ clientId, quote, author }`, both trimmed;
+ * `""` and `""` clear it). An author without a quote is `CLIENT_FIELD_INVALID` on `quote`.
+ */
+export const saveClientTestimonialInputSchema = z
+  .object({
+    clientId: z.uuid("Required."),
+    quote: optionalClientText(CLIENT_TESTIMONIAL_QUOTE_MAX),
+    author: optionalClientText(CLIENT_TESTIMONIAL_AUTHOR_MAX),
+  })
+  .refine((input) => input.quote !== "" || input.author === "", { message: FIELD_INVALID, path: ["quote"] });
+export type SaveClientTestimonialInput = z.infer<typeof saveClientTestimonialInputSchema>;
 
 /**
  * Deletes a client (owner, 2026-10-19): `confirmName` is the name the person typed;
