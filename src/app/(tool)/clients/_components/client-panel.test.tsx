@@ -1080,6 +1080,79 @@ describe("ClientPanel, Settore", () => {
     expect(checked()).toEqual([]);
   });
 
+  const cancel = () => screen.getByRole("button", { name: "Annulla" });
+  const dialogOpen = () => (document.querySelector("dialog") as HTMLDialogElement).open;
+
+  it("an existing client with only its sector changed: Annulla asks first and, cancelled, stays open", async () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    const user = setup();
+    renderPanel(EXISTING, TWO_IMAGES);
+    await user.click(pill("Lusso"));
+    await user.click(cancel());
+    expect(window.confirm).toHaveBeenCalledWith(dict.wizard.unsavedConfirm);
+    expect(replace).not.toHaveBeenCalled();
+    expect(back).not.toHaveBeenCalled();
+    expect(dialogOpen()).toBe(true);
+  });
+
+  it.each([
+    ["only a sector picked", async (user: ReturnType<typeof setup>) => user.click(pill("Lusso"))],
+    ["only text in the add field", async (user: ReturnType<typeof setup>) => user.type(sectorField(), "Nautica")],
+  ])("a new client with %s: closing asks first", async (_label, enter) => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    const user = setup();
+    renderPanel();
+    await enter(user);
+    await user.click(cancel());
+    expect(window.confirm).toHaveBeenCalledWith(dict.wizard.unsavedConfirm);
+    expect(replace).not.toHaveBeenCalled();
+    expect(dialogOpen()).toBe(true);
+  });
+
+  it("Salva with a sector typed but not added stops with a message under the field and focuses it", async () => {
+    const user = setup();
+    renderPanel(EXISTING, TWO_IMAGES);
+    await user.type(sectorField(), "Nautica");
+    await user.click(primary("Salva"));
+    const message = dict.clientPanel.details.sector.pending;
+    expect(message).toBe("Premi Aggiungi per usare questo settore.");
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(describedText(sectorField())).toBe(message);
+    expect(document.activeElement).toBe(sectorField());
+    expect(updateClient).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("keeps Salva inactive while a sector is being added", async () => {
+    const user = setup();
+    let finish: (value: ActionResult<ClientSector>) => void = () => undefined;
+    addClientSector.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    renderPanel(EXISTING, TWO_IMAGES);
+    expect(primary("Salva").getAttribute("aria-disabled")).toBeNull();
+    await user.type(sectorField(), "Nautica");
+    await user.click(addSector());
+    await waitFor(() => expect(primary("Salva").getAttribute("aria-disabled")).toBe("true"));
+    await user.click(primary("Salva"));
+    expect(updateClient).not.toHaveBeenCalled();
+    await act(async () => finish({ ok: true, value: { key: "nautica", label: "Nautica" } }));
+    await waitFor(() => expect(primary("Salva").getAttribute("aria-disabled")).toBeNull());
+    expect(checked()).toEqual(["Nautica"]);
+  });
+
+  it("a late add after a newer pick adds the pill but keeps the newer pick, announcing nothing", async () => {
+    const user = setup();
+    let finish: (value: ActionResult<ClientSector>) => void = () => undefined;
+    addClientSector.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    renderPanel();
+    await user.type(sectorField(), "Nautica");
+    await user.click(addSector());
+    await user.click(pill("Lusso"));
+    await act(async () => finish({ ok: true, value: { key: "nautica", label: "Nautica" } }));
+    await waitFor(() => expect(screen.getAllByRole("radio").map((radio) => radio.textContent).at(-1)).toBe("Nautica"));
+    expect(checked()).toEqual(["Lusso"]);
+    expect(statusText()).not.toContain(fill(dict.clientPanel.details.sector.selected, { label: "Nautica" }));
+  });
+
   it("shows the server's sector refusal on the pills and focuses the selected one", async () => {
     const user = setup();
     renderPanel(EXISTING, TWO_IMAGES);

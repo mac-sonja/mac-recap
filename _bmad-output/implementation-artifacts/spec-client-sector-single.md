@@ -2,7 +2,7 @@
 title: 'Client Settore: one sector, from a shared list anyone can add to'
 type: 'feature'
 created: '2026-10-22'
-status: 'in-review'
+status: 'done'
 baseline_commit: '9c8c078bf2b10562a80b8a2f505dbb18844ed547'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -79,6 +79,25 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Text typed in the add field but not added is lost on Salva/Aggiungi and on close, with no warning | medium | `unsaved()` and `save()` ignore `newSector` (`client-panel.tsx`) | patch |
+| 2 | Salva while a sector add is in flight saves the old sector; a late add overrides a newer pick and announces a selection that didn't happen | medium | `addingSector` not part of `busy`; `chooseSector` always selects/announces | patch |
+| 3 | Arrow keys during a save move focus to an unselected pill; modifier+arrow (Alt+Left) is swallowed | low | `industry-pills.tsx` onKeyDown | patch |
+| 4 | No test that changing only the Settore asks the unsaved confirm (existing and new client) | medium | grep of `client-panel.test.tsx` confirm tests | patch |
+| 5 | `add_client_sector` accepts a null actor; derived keys can end in `_` after the 40-char cut | low | new migration (not pushed yet) | patch |
+| 6 | Read-only pill renders an empty list when the sector is missing from the list | low | `IndustryPills` read-only branch | patch |
+| 7 | `RADIO_PILL` copies `CHOICE_PILL`; pills have no visual invalid state | low | `industry-pills.tsx` | patch |
+| 8 | `sector-label.ts` comment claims it matches SQL `client_name_key`; JS folding differs (unaccent vs NFD) | low | comment wrong; the server decides, worst case a round trip | patch (comment) |
+| 9 | Planning docs still describe multi-select `industries` (epics, architecture, PRD, EXPERIENCE, epic-3 context) | medium | grep of planning artifacts | patch |
+| 10 | A sector added by mistake can't be undone (typos stay for everyone) | medium | intent excludes rename/delete | reject (out of scope by intent; raised to the owner) |
+| 11 | DB tests add rows to the shared list without cleanup | low | CI database is fresh each run; no local db | reject |
+| 12 | Backfill silently drops unknown old values | low | the check has enforced the four keys on every write since it was added | reject |
+| 13 | Sector list not refreshed while a panel stays open | low | panel closes after create; other users' adds appear on next open | reject |
+| 14 | Add field has no visible label | low | matches the owner's mock (placeholder only), `aria-label` present | reject |
+| 15 | A label with NUL shows the length message | low | invalid characters can't be typed in the field in practice | reject |
+| 16 | Spec sections empty / manual checks unrecorded | false | process notes; manual check runs after the dev push | reject |
 
 ## Verification
 

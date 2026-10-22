@@ -477,6 +477,8 @@ export const it = {
         /** `{min}`–`{max}` characters. */
         length: "Da {min} a {max} caratteri.",
         addFailed: "Non siamo riusciti ad aggiungerlo. Riprova.",
+        /** Salva or Aggiungi with a sector typed but not added. */
+        pending: "Premi Aggiungi per usare questo settore.",
         /** Polite live-region line once a sector is selected from the field; `{label}` is its name. */
         selected: "{label} selezionato.",
       },

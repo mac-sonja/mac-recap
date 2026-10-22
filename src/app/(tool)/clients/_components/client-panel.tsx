@@ -193,6 +193,10 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
   const [newSector, setNewSector] = useState("");
   const [sectorError, setSectorError] = useState<string | null>(null);
   const [addingSector, setAddingSector] = useState(false);
+  /** The add field's text, read synchronously by the unsaved checks. */
+  const newSectorRef = useRef("");
+  /** Counts the person's pill picks, so a late add never overrides a newer one. */
+  const picks = useRef(0);
   const [description, setDescription] = useState(initialClient?.description ?? "");
 
   const logo = useClientLogo(limits, { logoId: initialClient?.logoId ?? null, logoUrl: initialClient?.logoUrl ?? null }, () => busy.current);
@@ -284,6 +288,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
       logo.logo.kind === "new" ||
       images.hasLocal ||
       !sameInfo(savedInfo.current, currentInfo()) ||
+      newSectorRef.current.trim() !== "" ||
       firstIncomplete() !== undefined ||
       storyOverLong() !== undefined,
     // A link inside the panel clicked with unsaved changes: leave only once confirmed.
@@ -424,6 +429,18 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     setIndustry(key);
   }
 
+  /** A pill the person picked (click or arrow keys). */
+  function pickIndustry(key: string) {
+    if (busy.current) return;
+    picks.current += 1;
+    selectIndustry(key);
+  }
+
+  function changeNewSector(text: string) {
+    newSectorRef.current = text;
+    setNewSector(text);
+  }
+
   /**
    * Adds the typed sector to the shared list and selects it; a sector with the same
    * name (case, accents and spaces aside) is selected instead. The field keeps the text
@@ -439,7 +456,8 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
       return;
     }
     const known = options.find((sector) => sectorLabelKey(sector.label) === sectorLabelKey(label));
-    if (known !== undefined) return chooseSector(known);
+    if (known !== undefined) return chooseSector(known, picks.current);
+    const picksBefore = picks.current;
     setAddingSector(true);
     setSectorError(null);
     try {
@@ -453,7 +471,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
         );
         return;
       }
-      chooseSector(added.value);
+      chooseSector(added.value, picksBefore);
     } catch {
       if (!unmounted.current) setSectorError(copy.sector.addFailed);
     } finally {
@@ -461,12 +479,16 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     }
   }
 
-  /** Selects `sector` from the add field (adding its pill when it is new here) and empties the field. */
-  function chooseSector(sector: ClientSector) {
+  /**
+   * Adds `sector`'s pill when it is new here and empties the field; selects it unless a
+   * save is running or the person picked another pill since the add started (`picksBefore`).
+   */
+  function chooseSector(sector: ClientSector, picksBefore: number) {
     setOptions((current) => (current.some((option) => option.key === sector.key) ? current : [...current, sector]));
-    selectIndustry(sector.key);
-    setNewSector("");
+    changeNewSector("");
     setSectorError(null);
+    if (busy.current || picks.current !== picksBefore) return;
+    selectIndustry(sector.key);
     announce(fill(copy.sector.selected, { label: sector.label }));
   }
 
@@ -510,7 +532,13 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
    * Stays with the errors shown when a step fails.
    */
   async function save() {
-    if (busy.current || !ready || images.busy) return;
+    if (busy.current || !ready || images.busy || addingSector) return;
+    // A sector typed but not added would be lost: ask for Aggiungi first.
+    if (newSectorRef.current.trim() !== "") {
+      flushSync(() => setSectorError(copy.sector.pending));
+      document.getElementById(ids.newSector)?.focus();
+      return;
+    }
     const info = currentInfo();
     const invalid: Partial<Record<InfoKey, string>> = {};
     if (info.name.length > limits.nameMax) invalid.name = fill(it.clients.errors.nameTooLong, { max: limits.nameMax });
@@ -615,7 +643,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     ...BRIEF_FIELDS.filter((field) => values[field].trim() === "").map((field) => copy.labels[field]),
   ];
   const ready = missing.length === 0;
-  const inactive = !ready || pending || images.busy;
+  const inactive = !ready || pending || images.busy || addingSector;
 
   /** Whether closing now would lose something. */
   function unsaved(): boolean {
@@ -623,6 +651,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
       return (
         name.trim() !== "" ||
         industry !== null ||
+        newSectorRef.current.trim() !== "" ||
         description.trim() !== "" ||
         logo.logo.kind !== "none" ||
         images.slots.length > 0 ||
@@ -636,6 +665,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
       logo.logo.kind === "new" ||
       images.hasLocal ||
       !sameInfo(savedInfo.current, currentInfo()) ||
+      newSectorRef.current.trim() !== "" ||
       brief.firstUnsaved() !== undefined ||
       firstIncomplete() !== undefined ||
       storyOverLong() !== undefined
@@ -748,7 +778,8 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
               <IndustryPills
                 options={options}
                 selected={industry}
-                onSelect={selectIndustry}
+                onSelect={pickIndustry}
+                disabled={pending}
                 labelledBy={ids.industryLabel}
                 describedBy={describedBy(errors.industry !== undefined && ids.industryError)}
                 invalid={errors.industry !== undefined}
@@ -771,7 +802,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
                 placeholder={copy.sector.placeholder}
                 value={newSector}
                 onChange={(event) => {
-                  setNewSector(event.target.value);
+                  changeNewSector(event.target.value);
                   setSectorError(null);
                 }}
                 onKeyDown={(event) => {

@@ -2274,6 +2274,29 @@ describe("client sector, one from a shared list (2026-10-22)", () => {
     }
   });
 
+  it("never makes a key ending in _ when the 40-character cut lands on a separator", async () => {
+    // unaccent turns ß into ss, so 19 ß + "s x" makes a 42-character key cut at its "_".
+    const db = await pool.connect();
+    try {
+      await db.query("begin");
+      const { key } = (await add(`${"ß".repeat(19)}s x`, db)).rows[0];
+      expect(key).toBe("s".repeat(39));
+    } finally {
+      await db.query("rollback").catch(() => undefined);
+      db.release();
+    }
+  });
+
+  it("add_client_sector refuses a null actor with P0001 SECTOR_ACTOR_REQUIRED; nothing written", async () => {
+    const { rows: [{ count: before }] } = await pool.query<{ count: number }>("select count(*)::int as count from public.client_sector");
+    await expect(pool.query("select public.add_client_sector($1, null)", [`Senza autore ${tag()}`])).rejects.toMatchObject({
+      code: "P0001",
+      message: "SECTOR_ACTOR_REQUIRED",
+    });
+    const { rows: [{ count: after }] } = await pool.query<{ count: number }>("select count(*)::int as count from public.client_sector");
+    expect(after).toBe(before);
+  });
+
   it.each([
     ["one character", "N"],
     ["only spaces", "   "],

@@ -153,8 +153,8 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Rule:**
   - `generate` fails with `NO_MATERIAL` before any LLM call unless the case has at least one non-deleted asset of any allowed type (image, video, text document, PDF). Typed text lives only in the details form, which never counts (NFR6). The wizard's Generate button and the worker (again, when it claims the job) use the same check through `material.index`.
   - The template's media-count rule (AD-15) then picks the layout. What a template renders with zero images or videos is a template rule the design team supplies (see Deferred).
-  - The LLM receives only the case's material snapshot, form answers and the client's current name, industries, description and brief (context, solution, results), read when the job runs (AD-18, AD-22; SCP 2026-10-19). Client info never counts as material. It gets no web or other server tools.
-  - A client intro is generated only when the client has at least 2 image rows in `client_asset` (`NO_CLIENT_IMAGES`). Its LLM input is only the client's current name, industries, description and brief, plus its material as OP 2 allows; until OP 2 is decided, only the text fields (AD-23; SCP 2026-10-19).
+  - The LLM receives only the case's material snapshot, form answers and the client's current name, sector, description and brief (context, solution, results), read when the job runs (AD-18, AD-22; SCP 2026-10-19). Client info never counts as material. It gets no web or other server tools.
+  - A client intro is generated only when the client has at least 2 image rows in `client_asset` (`NO_CLIENT_IMAGES`). Its LLM input is only the client's current name, sector, description and brief, plus its material as OP 2 allows; until OP 2 is decided, only the text fields (AD-23; SCP 2026-10-19).
   - The structured output tags each claim with `aspect`, `technical` or `graphic`. A draft without both aspects is marked `MISSING_ASPECT` and the warning is shown in the configurator. It does not block approval. `[CONFLICT A3]`
 
 ### AD-7 — One LLM port, one model setting, recorded per revision
@@ -369,13 +369,13 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Binds:** FR3 (amended), PRD Story 2.5, `case-study`, `generation`, `rendering` ([Sprint Change Proposal 2026-10-16](../../sprint-change-proposal-2026-10-16.md), as amended by the owner the same day; [Sprint Change Proposal 2026-10-19](../../sprint-change-proposal-2026-10-19.md))
 - **Prevents:** a case history showing an outdated client name, logo or text, an About block that differs between formats, the LLM rewriting the client's own words, and old logo files piling up
 - **Rule:**
-  1. `client.industries` (text array; each value one of `interior_design`, `energia`, `risorse_umane` and `lusso`; at least one, checked by the database), `client.description` (≤400, plain text) and `client.logo_id` are all required by the app (SCP 2026-10-19; `sector` is dropped). `client_brief` holds the client's `context`, `solution` and `results` (each ≤5000 after trimming), one row per client. `client.logo_id` points to the client's current `client_logo` row. Replacing or removing a logo deletes the old row and its storage object; there is no logo history.
-  2. There is no client snapshot. Nothing about the client is copied into a `generate` job, a revision's manifest or the document. `case-study.getClientInfoForCase(caseId)` (`{ clientId, name, industries, description, logoId, brief }`, SCP 2026-10-19) is a read of the client's current values, called each time they are needed.
-  3. The About block is filled at render time from the client's current info, passed to the renderer next to the document. The LLM never writes it. It shows the logo, name, industries (joined) and description. It has no rules for empty fields, because all of them are required (SCP 2026-10-19).
+  1. `client.industry` (one key of the shared `client_sector` list: seeded with `interior_design`, `energia`, `risorse_umane` and `lusso`, then the sectors owners and designers add through `add_client_sector`; it replaced the multiselect `industries` on 2026-10-22), `client.description` (≤400, plain text) and `client.logo_id` are all required by the app (SCP 2026-10-19; `sector` is dropped). `client_brief` holds the client's `context`, `solution` and `results` (each ≤5000 after trimming), one row per client. `client.logo_id` points to the client's current `client_logo` row. Replacing or removing a logo deletes the old row and its storage object; there is no logo history.
+  2. There is no client snapshot. Nothing about the client is copied into a `generate` job, a revision's manifest or the document. `case-study.getClientInfoForCase(caseId)` (`{ clientId, name, industry, description, logoId, brief }`, `industry` being `{ key, label } | null`; SCP 2026-10-19, 2026-10-22) is a read of the client's current values, called each time they are needed.
+  3. The About block is filled at render time from the client's current info, passed to the renderer next to the document. The LLM never writes it. It shows the logo, name, sector and description. It has no rules for empty fields, because all of them are required (SCP 2026-10-19).
   4. Editing the client changes the About block of every case history of that client at once, drafts and approved ones alike, with no new generation or approval. Only owner/designers can edit clients (`manage clients`).
-  5. The `generate` job reads the client's current name, industries, description and brief when it runs, for the LLM input only (AD-6). Text the LLM wrote stays as written; a later client edit doesn't rewrite it. `client_field` refs resolve against the client's current values (AD-18).
+  5. The `generate` job reads the client's current name, sector, description and brief when it runs, for the LLM input only (AD-6). Text the LLM wrote stays as written; a later client edit doesn't rewrite it. `client_field` refs resolve against the client's current values (AD-18).
   6. A downloaded export can't change after it is made. A stored export is reused only if it was rendered with the client's current info (AD-9); after a client edit, the next export renders again.
-  7. Every template fits up to four industry labels and the maximum description length in every format (SCP 2026-10-19), so the About block can never cause an overflow that blocks approval.
+  7. Every template fits one sector label (up to 40 characters) and the maximum description length in every format (SCP 2026-10-19), so the About block can never cause an overflow that blocks approval.
   8. The About block appears in every format, export and shared link, like the rest of the document. AD-21 rule 8 (no case code there) is unchanged.
 
 ### AD-23 — A client has one intro-and-outro document, reviewed like a case history
@@ -384,7 +384,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Prevents:** unreviewed AI text reaching clients through an intro or outro, a second editing model for intros, intros with stale client data
 - **Rule:**
   1. A client has one intro-and-outro document (kind `client_intro`, pages with role `intro` or `outro`; SCP 2026-10-21): one `client_intro` per client, with the case lifecycle (AD-3) and revisions of kind `client_intro`. One review and one approval cover both. Its events go to the append-only `client_event`.
-  2. Generated only with 2+ image rows in `client_asset` (`NO_CLIENT_IMAGES`). The LLM writes intro and outro text blocks only (a headline and one short paragraph each, from the client's name, industries, description and brief, plus its material as OP 2 allows); layout is `relayout` over the client's images (AD-5, AD-15; SCP 2026-10-19).
+  2. Generated only with 2+ image rows in `client_asset` (`NO_CLIENT_IMAGES`). The LLM writes intro and outro text blocks only (a headline and one short paragraph each, from the client's name, sector, description and brief, plus its material as OP 2 allows); layout is `relayout` over the client's images (AD-5, AD-15; SCP 2026-10-19).
   3. Client info and client material are read live at render time (AD-22); AI text stays as written.
   4. Checked and approved as in AD-19. Only an approved intro and outro appear in a client pack or a collection; otherwise case histories keep their own intro pages and end on their own last page.
 
@@ -497,7 +497,7 @@ supabase/migrations/        # forward-only SQL, incl. jobs_claim()
 | --- | --- | --- |
 | FR1 unique ID, readable code, client | `case-study` | AD-2, AD-21 |
 | FR2 upload (20 × 50 MB), favourites, details form | `material` | AD-8, AD-14, AD-18 |
-| FR3 generate from templates, only from material, form answers and client info (name, industries, description, brief); About the client block | `generation`, `jobs`, `case-study` | AD-4, AD-5, AD-6, AD-7, AD-10, AD-17, AD-18, AD-22 |
+| FR3 generate from templates, only from material, form answers and client info (name, sector, description, brief); About the client block | `generation`, `jobs`, `case-study` | AD-4, AD-5, AD-6, AD-7, AD-10, AD-17, AD-18, AD-22 |
 | FR4 adapt to media count | `rendering/templates` | AD-15 |
 | FR5 review dashboard and configurator, text editing | `app/(tool)`, `case-study` | AD-3, AD-4, AD-17, AD-19 |
 | FR6 approval by any owner/designer | `case-study` | AD-3, AD-19 |

@@ -46,7 +46,7 @@ describe("IndustryPills", () => {
     const classes = html.match(/<button [^>]*class="([^"]*)"/)?.[1].split(" ") ?? [];
     expect(classes).toEqual(expect.arrayContaining(["min-h-7", "px-2.5", "py-1", "text-[13px]", "bg-surface-control"]));
     expect(classes).not.toContain("text-xs");
-    expect(html).toMatch(/^<div role="radiogroup" aria-required="true" class="flex flex-wrap gap-2"/);
+    expect(html).toMatch(/^<div role="radiogroup" aria-required="true" class="flex flex-wrap gap-2 [^"]*aria-invalid:outline-danger/);
     // Nothing selected: the first pill is the one tab stop.
     expect([...html.matchAll(/tabindex="(-1|0)"/g)].map((m) => m[1])).toEqual(["0", "-1", "-1", "-1", "-1"]);
     const readOnly = renderToStaticMarkup(<IndustryPills options={OPTIONS} selected="lusso" label="Settore" />);
@@ -84,6 +84,37 @@ describe("IndustryPills", () => {
     expect(radio("Nautica").getAttribute("aria-checked")).toBe("true");
     expect(radio("Nautica").tabIndex).toBe(0);
     expect(screen.getAllByRole("radio").filter((r) => r.tabIndex === 0)).toHaveLength(1);
+  });
+
+  it("read-only, renders nothing when the client's sector isn't in the list", () => {
+    expect(renderToStaticMarkup(<IndustryPills options={OPTIONS} selected="sparito" label="Settore" />)).toBe("");
+    expect(renderToStaticMarkup(<IndustryPills options={OPTIONS} selected={null} label="Settore" />)).toBe("");
+  });
+
+  it("marks a refused group invalid", () => {
+    const html = renderToStaticMarkup(<IndustryPills options={OPTIONS} selected={null} onSelect={() => undefined} invalid />);
+    expect(html).toMatch(/^<div role="radiogroup" aria-required="true" aria-invalid="true"/);
+  });
+
+  it("leaves arrows with Alt, Ctrl, Meta or Shift to the browser", () => {
+    const onSelect = vi.fn();
+    render(<IndustryPills options={OPTIONS} selected="lusso" onSelect={onSelect} />);
+    for (const modifier of ["altKey", "ctrlKey", "metaKey", "shiftKey"]) {
+      const event = fireEvent.keyDown(screen.getByRole("radio", { name: "Lusso" }), { key: "ArrowRight", [modifier]: true });
+      expect(event).toBe(true);
+    }
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("disabled (a save running), neither keys nor clicks change the selection or move focus", () => {
+    const onSelect = vi.fn();
+    render(<IndustryPills options={OPTIONS} selected="lusso" onSelect={onSelect} disabled />);
+    const lusso = screen.getByRole("radio", { name: "Lusso" });
+    lusso.focus();
+    fireEvent.keyDown(lusso, { key: "ArrowRight" });
+    fireEvent.click(screen.getByRole("radio", { name: "Energia" }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(lusso);
   });
 
   it("ignores other keys", () => {

@@ -8,15 +8,18 @@ export const PILL_GAP = "gap-2";
 /** The read-only list's smaller pill (a client's page): the size before Story 2.18. */
 const PILL_READ_ONLY =
   "inline-flex items-center rounded-full bg-surface-control px-2.5 py-1 font-label text-xs font-medium text-foreground";
+/** The choice pill's look (owner's mock, 2026-10-21): small and grey filled. */
+const PILL_BASE =
+  "inline-flex min-h-7 items-center gap-1 rounded-full border border-transparent bg-surface-control px-2.5 py-1 font-label text-[13px] text-foreground transition-[background-color,color,transform] duration-150 hover:bg-surface-selected active:scale-[0.97]";
 /**
- * The wizards' choice pill (Servizi; owner's mock, 2026-10-21): small and grey filled;
- * selected (`aria-pressed`), a pale lime tint with olive ink and a check, so colour is not the only signal.
+ * The wizards' choice pill (Servizi): `PILL_BASE`; selected (`aria-pressed`), a pale lime
+ * tint with olive ink and a check, so colour is not the only signal.
  */
-export const CHOICE_PILL =
-  "inline-flex min-h-7 items-center gap-1 rounded-full border border-transparent bg-surface-control px-2.5 py-1 font-label text-[13px] text-foreground transition-[background-color,color,transform] duration-150 hover:bg-surface-selected active:scale-[0.97] aria-pressed:bg-primary-tint aria-pressed:text-primary-ink aria-pressed:hover:bg-primary-tint";
-/** `CHOICE_PILL` as a radio (Settore, one choice): the same look, selected by `aria-checked`. */
-const RADIO_PILL =
-  "inline-flex min-h-7 items-center gap-1 rounded-full border border-transparent bg-surface-control px-2.5 py-1 font-label text-[13px] text-foreground transition-[background-color,color,transform] duration-150 hover:bg-surface-selected active:scale-[0.97] aria-checked:bg-primary-tint aria-checked:text-primary-ink aria-checked:hover:bg-primary-tint";
+export const CHOICE_PILL = `${PILL_BASE} aria-pressed:bg-primary-tint aria-pressed:text-primary-ink aria-pressed:hover:bg-primary-tint`;
+/** The same pill as a radio (Settore, one choice), selected by `aria-checked`. */
+const RADIO_PILL = `${PILL_BASE} aria-checked:bg-primary-tint aria-checked:text-primary-ink aria-checked:hover:bg-primary-tint`;
+/** A refused group: a red outline around the pills, as a field gets a red border. */
+const GROUP_INVALID = "rounded-md aria-invalid:outline aria-invalid:outline-1 aria-invalid:outline-offset-4 aria-invalid:outline-danger";
 
 export interface IndustryPillsProps {
   /** Every sector, in display order (the shared list, from `listClientSectors`). */
@@ -31,6 +34,8 @@ export interface IndustryPillsProps {
   /** The read-only list's accessible name. */
   label?: string;
   invalid?: boolean;
+  /** While a save runs: the selection can't change, so keys move nothing. */
+  disabled?: boolean;
 }
 
 /** Arrow keys and Home/End move through a radio group (wrapping), as a native radio group does. */
@@ -49,12 +54,13 @@ const STEP: Readonly<Record<string, (index: number, count: number) => number>> =
  * radios do), as `CHOICE_PILL`s with the check on the selected one. Read-only (a
  * client's page): the selected sector only.
  */
-export function IndustryPills({ options, selected, onSelect, labelledBy, describedBy, label, invalid }: IndustryPillsProps) {
+export function IndustryPills({ options, selected, onSelect, labelledBy, describedBy, label, invalid, disabled }: IndustryPillsProps) {
   if (onSelect === undefined) {
     const shown = options.find((sector) => sector.key === selected);
+    if (shown === undefined) return null;
     return (
       <ul aria-label={label} className="flex flex-wrap gap-1.5">
-        {shown === undefined ? null : <li className={PILL_READ_ONLY}>{shown.label}</li>}
+        <li className={PILL_READ_ONLY}>{shown.label}</li>
       </ul>
     );
   }
@@ -65,7 +71,13 @@ export function IndustryPills({ options, selected, onSelect, labelledBy, describ
 
   function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const step = STEP[event.key];
-    if (step === undefined || options.length === 0 || onSelect === undefined) return;
+    if (step === undefined || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (options.length === 0 || onSelect === undefined) return;
+    // A native radio group doesn't move either while it can't change.
+    if (disabled) {
+      event.preventDefault();
+      return;
+    }
     event.preventDefault();
     const next = step(index, options.length);
     onSelect(options[next].key);
@@ -79,7 +91,8 @@ export function IndustryPills({ options, selected, onSelect, labelledBy, describ
       aria-describedby={describedBy}
       aria-required="true"
       aria-invalid={invalid || undefined}
-      className={cn("flex flex-wrap", PILL_GAP)}
+      aria-disabled={disabled || undefined}
+      className={cn("flex flex-wrap", PILL_GAP, GROUP_INVALID)}
     >
       {options.map((sector, index) => {
         const checked = sector.key === selected;
@@ -90,7 +103,9 @@ export function IndustryPills({ options, selected, onSelect, labelledBy, describ
             role="radio"
             aria-checked={checked}
             tabIndex={index === tabStop ? 0 : -1}
-            onClick={() => onSelect(sector.key)}
+            onClick={() => {
+              if (!disabled) onSelect(sector.key);
+            }}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={RADIO_PILL}
           >

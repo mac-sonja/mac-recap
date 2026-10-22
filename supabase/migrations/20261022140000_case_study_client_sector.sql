@@ -191,7 +191,8 @@ $$;
 -- Adds a sector to the shared list and returns it; when a sector with the same name
 -- already exists (ignoring case, accents and extra spaces: `client_name_key`), returns
 -- that one and writes nothing. The label is stored with whitespace collapsed and
--- trimmed; outside 2–40 characters it raises P0001 `SECTOR_LABEL_INVALID`. The key is
+-- trimmed; outside 2–40 characters it raises P0001 `SECTOR_LABEL_INVALID`, and without an
+-- actor P0001 `SECTOR_ACTOR_REQUIRED`. The key is
 -- made from the label (`a-z`, `0-9`, `_`; `settore` when nothing is left), with `_2`,
 -- `_3`… when taken; the position is the next one. The advisory lock serialises adds,
 -- so two at once can't take the same key, name or position; the unique keys are the
@@ -211,6 +212,10 @@ declare
   existing public.client_sector;
   created public.client_sector;
 begin
+  if p_actor_id is null then
+    raise exception 'SECTOR_ACTOR_REQUIRED' using errcode = 'P0001';
+  end if;
+
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('public.client_sector'));
 
   normalized := btrim(regexp_replace(coalesce(p_label, ''), '\s+', ' ', 'g'));
@@ -224,7 +229,8 @@ begin
     return existing;
   end if;
 
-  base := left(btrim(regexp_replace(v_label_key, '[^a-z0-9]+', '_', 'g'), '_'), 40);
+  -- Trimmed of `_` after the cut too, so a key never ends in one.
+  base := btrim(left(btrim(regexp_replace(v_label_key, '[^a-z0-9]+', '_', 'g'), '_'), 40), '_');
   if base = '' then
     base := 'settore';
   end if;

@@ -1,6 +1,8 @@
 /**
  * Client sector names (owner, 2026-10-22), shared by the case-study domain and the
- * client panel, so both compare names as `add_client_sector` does in SQL.
+ * client panel. The server decides what counts as the same sector (`add_client_sector`
+ * compares `client_name_key`, which folds with `unaccent`); these helpers are only a
+ * shortcut and may fold some characters differently.
  */
 
 /** A sector label as stored: whitespace runs collapsed to one space, trimmed. */
@@ -9,8 +11,9 @@ export function normalizeSectorLabel(label: string): string {
 }
 
 /**
- * Two sector labels name the same sector when they differ only in case, accents or
- * extra spaces (as `client_name_key` compares them in SQL).
+ * A close approximation of `client_name_key`: case, combining accents and extra spaces
+ * aside. The client panel uses it to select a sector it already lists without a request;
+ * anything it misses is still matched by the server.
  */
 export function sectorLabelKey(label: string): string {
   return normalizeSectorLabel(label)
