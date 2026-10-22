@@ -34,9 +34,9 @@ FR5: The owner/designer reviews and edits case studies through the review dashbo
 FR6: Any owner/designer approves a case study after manually checking every text block against the material and form answers. Approve stays disabled until every block has a current manual check, no block overflows in any format, and no referenced material is deleted. There is no bulk check or bulk approve. Approval makes the case available for export and sharing. Editing an approved case keeps it approved. (CAP-8, Story 4.3)
 FR7: Owner/designer and account/sales/social users export an approved case study in each MVP format (at least a 16:9 deck as PDF, a social carousel and an A4 PDF), and publish it as a shareable link to a hosted presentation. Each link shows one format of the current approved version, never a working copy, and offers no file download. The share dialog says who can open the link. A link can be turned off; a turned-off or expired link shows "no longer available". Account/sales/social users see approved case studies only; unapproved content has no view, export or share entry point. The tool does not post to social channels or the website. (CAP-9, CAP-10, Stories 5.1–5.2)
 FR8: Users sign in with one of three fixed roles (owner/designer, account/sales/social, admin). The admin adds and removes users and assigns their role, and nothing else: no case content, no permission settings, no guardrail settings. The last admin can't drop their own admin role. Every action follows the AD-11 permission matrix. Delivered in Sprint 3. (CAP-11, Stories 6.1–6.2)
-FR11 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-19): Creating a client is a wizard: details (name, industries, description, logo, context, solution and results, all required), then up to 3 files of client material with at least 2 images, then the intro in the configurator. The system drafts the client's intro pages from the client's name, industries, description, brief and material, and the owner/designer edits, checks and approves them in the configurator. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md))
-FR12 (MVP, before the demo; owner amendment 2026-10-16): Editing a client opens the client overview: the intro and every case study of the client in one preview. Editing a case study there edits that case study.
-FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro and approved case studies), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Text edits (owner/designers only) and hidden pages in a collection apply only to that collection.
+FR11 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-19): Creating a client is a wizard: details (name, industries, description, logo, context, solution and results, all required), then up to 3 files of client material with at least 2 images. Since SCP 2026-10-21 the client is added and edited in a side panel, and the intro and outro open in the configurator from the client's page. The system drafts the client's intro and outro pages from the client's name, industries, description, brief and material, and the owner/designer edits, checks and approves them in the configurator. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md); [Sprint Change Proposal 2026-10-21, client outro](sprint-change-proposal-2026-10-21-client-outro.md))
+FR12 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-21): **Modifica layout** on the client's page opens the client overview: the intro, every case study and the outro of the client in one preview. Editing a case study there edits that case study. **Modifica cliente** edits the client's data in a side panel.
+FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro, approved case studies and approved outro), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them; a single case study ends with its client's approved outro (SCP 2026-10-21). Text edits (owner/designers only) and hidden pages in a collection apply only to that collection.
 CAP-12 (SPEC; no PRD FR number): every transition, upload, save, block check, claim edit, approval, export and link change is an append-only, timestamped event with its actor, and the generated draft is kept next to the approved version. The tool does not record hands-on time. Built by each epic as it goes, not as an epic of its own.
 
 Out of MVP scope (listed for traceability only): FR9 MAC Productive via MCP (Epic 7), FR10 text-based case studies and whitepapers (Epic 8).
@@ -65,7 +65,7 @@ From the architecture spine (AD-1 to AD-21 are binding):
 - AR1 (AD-1): Modular monolith with modules `case-study`, `material`, `generation`, `rendering`, `sharing`, `access`, `jobs`; each with `domain/`, `application/`, `index.ts`, plus `ports/` and `adapters/` only at vendor seams. Cross-module imports only through `index.ts`; vendor SDKs only in adapters. Table and storage-prefix ownership per AD-1. Enforced by a lint rule.
 - AR2 (AD-2): `case_study.id` is a DB-generated uuid, immutable, never reused; `project_order_ref` nullable and unset in the MVP. `case_study.code` is a separate, unique, immutable display code (AD-21); it is never used as a key or in URLs.
 - AR3 (AD-3): `case_study.status` changes only through `case-study.transition`. Revisions have `working | approved | superseded`. `head_revision_id` and `approved_revision_id` pointers; `getLiveRevision` and `getEditableRevision` reads. Generation only from `draft`; delete only in `draft`, soft (`deleted_at`). A client intro (AD-23) has the same states and pointers on `client_intro` and changes only through `case-study.transitionIntro`. A revision belongs to exactly one subject, a case or a client intro.
-- AR4 (AD-4): `CaseStudyDocument` (zod, jsonb) stored twice per revision, `generated_doc` (immutable) and `doc` (editable). Shared part (template@version, blocks with stable `blockId`, claims and check state, media set) and per-format part (variant, slot assignments, spacing, text scale, font pairing). No canvas ratio. Schema rejects a missing challenge/approach/result. The document stores no client values; the About block is filled at render time from the client's current info (AD-22). `rendering.relayout` is the only slot-assignment code. `schemaVersion` + `upgrade(doc)` on read. `FORMAT_NOT_IN_REVISION`. The document has `kind` ∈ `case_history | client_intro`; the challenge/approach/result rule applies only to `case_history`. Every page a template defines has a stable `pageKey` and a `role` ∈ `intro | body`.
+- AR4 (AD-4): `CaseStudyDocument` (zod, jsonb) stored twice per revision, `generated_doc` (immutable) and `doc` (editable). Shared part (template@version, blocks with stable `blockId`, claims and check state, media set) and per-format part (variant, slot assignments, spacing, text scale, font pairing). No canvas ratio. Schema rejects a missing challenge/approach/result. The document stores no client values; the About block is filled at render time from the client's current info (AD-22). `rendering.relayout` is the only slot-assignment code. `schemaVersion` + `upgrade(doc)` on read. `FORMAT_NOT_IN_REVISION`. The document has `kind` ∈ `case_history | client_intro`; the challenge/approach/result rule applies only to `case_history`. Every page a template defines has a stable `pageKey` and a `role` ∈ `intro | body | outro` (`outro` added by SCP 2026-10-21).
 - AR5 (AD-5): Guardrails are code (`generation/domain/guardrails.ts`, `access/domain/policy.ts`, `case-study` preconditions), never DB/env/UI. Each guardrail is enforced in a use case and covered by an automated test, so the end-of-Sprint-2 guardrail check runs on the pre-login build.
 - AR6 (AD-6): `generate` fails with `NO_MATERIAL` before any LLM call unless there's at least one non-deleted asset; the same check backs the Generate button and the worker's claim. Claims tagged `aspect: technical | graphic`; a draft missing one is `MISSING_ASPECT`. The LLM also receives the client's current name, industries, description and brief (context, solution, results), read when the job runs (AD-22; SCP 2026-10-19).
 - AR7 (AD-7): One `NarrativeGenerator` port, worker only. Adapter uses `client.beta.messages.parse` with the zod schema, model `claude-opus-5-5` from one constant, adaptive thinking, `effort: "high"`, server-side refusal fallbacks; `refusal` → `LLM_REFUSAL`. Versioned prompt files. Each revision records `response.model`, `fellBack`, `promptVersion`, `schemaVersion`.
@@ -86,7 +86,7 @@ From the architecture spine (AD-1 to AD-21 are binding):
 - AR22 (deployment): One Docker image on the Playwright base, two processes (`node server.js`, `node dist/worker.js`). Environments `local`, `staging` (demo, gated), `prod` (from Epic 6), each with its own Supabase project and storage bucket. EU container host chosen by end of Sprint 1.
 - AR23 (AD-21): `client` (uuid id, unique `name_key`, unique immutable `code`) owned by `case-study`; every case has `client_id`. Case code `{clientCode}-{year}-{nn}` is assigned inside `create_case_study` from `case_number_counter`, fixed once created, never reused.
 - AR24 (AD-22): `client` gains `description` (≤400), `industries` (text array from a fixed list, at least one; it replaces the free-text `sector`, SCP 2026-10-19) and `logo_id`, which points to the client's current `client_logo` row under `clients/{clientId}/logos/`. A `client_brief` row holds the client's context, solution and results (≤5000 each). Name, industries, description, logo and brief are all required by the app (SCP 2026-10-19). Replacing or removing a logo deletes the old row and its object; there is no logo history. Client info is live: nothing about the client is snapshotted into a job, revision or document. Renderers fill the About block at render time from the client's current info, so a client edit shows at once in every case history of that client, drafts and approved ones alike, in every format, the case study view, new exports and shared links (SCP 2026-10-16, amendment).
-- AR25 (AD-23): A client has one client intro: a document of kind `client_intro` with the case lifecycle, generated from the client's name, industries, description and brief, plus its material as OP 2 allows, and laid out with 2–3 of its images (image rows in `client_asset`; SCP 2026-10-19). It is checked and approved like a case history. Client info and client material are read live at render time. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
+- AR25 (AD-23): A client has one intro-and-outro document (kind `client_intro`, pages with role `intro` or `outro`; SCP 2026-10-21) with the case lifecycle, generated from the client's name, industries, description and brief, plus its material as OP 2 allows, and laid out with 2–3 of its images (image rows in `client_asset`; SCP 2026-10-19). It is checked and approved like a case history. Client info and client material are read live at render time. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 - AR26 (AD-24): A collection is a named, ordered list of approved case histories owned by the `collection` module. It references live approved revisions and stores only its own text edits (per block) and hidden pages (per format and page key). It never writes a revision. Combined files come from `rendering.composeParts`.
 
 ### UX Design Requirements
@@ -102,7 +102,7 @@ UX-DR8: Wizard step 2 Material, in the focused wizard (per `mockups/material-ste
 UX-DR9: The details form (Context, Solution, Results textareas with one-line prompts, a "{n} of 3" counter, all optional) is part of wizard step 1 **Dettagli** (UX-DR7). Amended (owner, 2026-10-20, Story 2.17): it was step 2.
 UX-DR10: Wizard step 3 Generate. Summary "{n} files, {m} of 3 details filled."; Generate disabled without material, with the visible reason linked via `aria-describedby`; processing state with leave-page copy and Back to case studies; no ETA or percentage; failure banner "Generation didn't finish. Your material and details are saved." with Try again. (owner, 2026-10-20, Story 2.17: still step 3; it needs the business line and at least one file.)
 UX-DR11: Draft-ready toast anywhere in the app: "{Name} is ready to review." with Open (C3).
-UX-DR12: Configurator frame. Top bar (back, name, status badge, save state, Approve or Update approved version); left Formats pane (one entry per registry format: name, ratio, pixel size, looked-at check mark); centre canvas at fit-to-pane zoom with page strip for multi-page formats; right pane Edit and Check tabs. At 1024–1279 px the panes narrow and the right pane can collapse. Below 1024 px: "The configurator needs a larger screen." Client intro and collections (SCP 2026-10-16): three modes share the frame: *case history* (as today), *client intro* (same panes, intro blocks), *client overview* (left pane lists the intro and the client's case histories; the format switch moves to the top bar). The collection configurator (UX-DR39) reuses the frame with fewer controls.
+UX-DR12: Configurator frame. Top bar (back, name, status badge, save state, Approve or Update approved version); left Formats pane (one entry per registry format: name, ratio, pixel size, looked-at check mark); centre canvas at fit-to-pane zoom with page strip for multi-page formats; right pane Edit and Check tabs. At 1024–1279 px the panes narrow and the right pane can collapse. Below 1024 px: "The configurator needs a larger screen." Client intro and collections (SCP 2026-10-16): three modes share the frame: *case history* (as today), *client intro* (same panes, intro and outro blocks), *client overview* (left pane lists the intro, the client's case histories and the outro; the format switch moves to the top bar; outro per SCP 2026-10-21). The collection configurator (UX-DR39) reuses the frame with fewer controls.
 UX-DR34: Adding material after generation. To add material to a case in Da approvare or Approvato, the owner/designer goes back to the wizard's Material step; the case keeps its status, and the new material is available to Replace media (EXPERIENCE `[ASSUMPTION]`, spine *Deferred: Regenerate*).
 UX-DR13: Configurator text editing. Click to edit in place, Esc or click outside to finish, autosave. Plain text and line breaks only. Section headings can be reworded, sections can't be deleted or reordered. Overflow marker; no silent shrink below template minimum. Edited blocks are marked "edited" and need re-checking.
 UX-DR14: Configurator layout. Variant thumbnail grid from the template's designed variants for the format; Shuffle layout steps to the next designed variant that fits the media count, with undo; spacing sliders bounded by template range; Reset to generated default per format.
@@ -125,11 +125,11 @@ UX-DR30: Responsive rules. Case studies / Users / Templates: sidebar collapses t
 UX-DR31: Design tokens (DESIGN.md). Implement the fixed token names (colours, typography roles incl. mono, rounded, components button-primary, status-badge, focus-indicator) as theme variables with placeholder values, so values can be filled later without code changes. Tool chrome tokens never style template output.
 UX-DR32: Templates surface (conditional on C4). Browse templates and their variants per format with sample content; turn variants on and off (at least one per format stays on); see usage counts.
 UX-DR33: `MISSING_ASPECT` warning shown in the configurator (spine AD-6; placement and blocking are conflict A3).
-UX-DR35: Clients (owner/designer). Table of clients (ID: the client code, mono; Name; Case histories count; owner 2026-10-19), search over name and code, default sort Name A–Z. SCP 2026-10-19 (replacing the dialogs of SCP 2026-10-16): **Aggiungi cliente** opens the client wizard (full-page, like a case history): **Dettagli** (Nome, Settore pills multiselect, Descrizione, Logo, Contesto, Soluzione, Risultati; all required), **Materiale** (up to 3 files, at least 2 images; **Crea introduzione**), **Introduzione** (the configurator in client intro mode; designed with the owner, hidden until then). Every row opens the client page, finished or not; an unfinished client is completed through **Modifica cliente** (owner, 2026-10-19). **Modifica cliente** opens the wizard at step 1 until Story 4.12, stating that the code stays the same and that changes apply to all the client's case histories, approved ones included; from Story 4.12 it opens the client overview (UX-DR38), where **Dati cliente** holds the same fields and the client material. Account/sales/social get a read-only Clients list of clients with an approved case history, with **Scarica** per row and no add or edit; row click opens the client page: logo, client name and code, industries as pills (SCP 2026-10-19), description, **Edit client**, and the Case history table limited to that client, with **New case history** preselecting the client. **Elimina cliente** on wizard step 1 of an existing client (owner, 2026-10-19: clients can be deleted (soft), with their cases): a dialog where the user types the client's name; the client and all its case histories, approved ones included, are soft-deleted. Not on the Clients list. Below 1024 px read-only.
+UX-DR35: Clients (owner/designer). Table of clients (ID: the client code, mono; Name; Case histories count; owner 2026-10-19), search over name and code, default sort Name A–Z. SCP 2026-10-21 (EXPERIENCE.md C22, replacing the client wizard of SCP 2026-10-19): **Aggiungi cliente** opens the client side panel over the Clients list, one form in sections: **01 Dettagli** (Nome, Settore pills multiselect, Descrizione), **02 Logo e immagini** (Logo, 2–3 images), **03 Racconto** (Contesto, Soluzione, Risultati); all required; **Annulla** and **Aggiungi**. Every row opens the client page, finished or not; an unfinished client is completed through **Modifica cliente** (owner, 2026-10-19). **Modifica cliente** opens the same side panel with the client's data and **Salva**, stating that the code stays the same and that changes apply to all the client's case histories, approved ones included. **Modifica layout** on the client page opens the client overview (UX-DR38); until Story 4.12 it is inactive with "Arriva con il configuratore". Account/sales/social get a read-only Clients list of clients with an approved case history, with **Scarica** per row and no add or edit; row click opens the client page: logo, client name and code, industries as pills (SCP 2026-10-19), description, **Edit client**, and the Case history table limited to that client, with **New case history** preselecting the client. **Elimina cliente** at the bottom of the **Modifica cliente** panel (SCP 2026-10-21; owner, 2026-10-19: clients can be deleted (soft), with their cases): a dialog where the user types the client's name; the client and all its case histories, approved ones included, are soft-deleted. Not on the Clients list. Below 1024 px read-only.
 UX-DR36: About the client block. Shown in every format of a case study: logo, client name, industries (SCP 2026-10-19), description, always the client's current info (drafts and approved case studies alike). Read-only in the configurator, with the hint "Modifica i dati nella pagina del cliente. Le modifiche si vedono in tutte le sue case history." Not in the Check tab list. Parts without a value are hidden; the block is hidden when the client has no description, industries or logo (since SCP 2026-10-19 all are required, so this only covers a client whose wizard isn't finished).
 UX-DR37: Client material (was Client images; SCP 2026-10-19). Up to 3 files per client, at least 2 images, in wizard step 2 **Materiale** and in **Dati cliente**: drop zone, file rows in order, **Rimuovi**; in **Dati cliente** also **Sostituisci** and drag or menu to reorder, and an image can't be removed when only 2 remain. Images PNG, JPEG or WebP ≥1600 px on the short side; other files as case material (Story 2.7 types, ≤50 MB). Copy: "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione."; a 4th file: "Massimo 3 file."
-UX-DR38: Client overview. Left pane: **Introduzione** (with its status badge), then every case history of the client that has a document, newest first, each with code, name and status badge. A Bozza case history is listed greyed with "Non ancora generata". Centre: one continuous preview of the selected format, every part in that order, with a divider per part. Clicking a part in the list scrolls to it. Editing a block edits that part (status and save state shown for that part). Right pane: Edit and Check for the selected part. The top bar has the format switch, **Dati cliente** and, for the selected part, its **Approve** or **Update approved version**.
-UX-DR39: Collections. Library cards get a checkbox. With one or more selected, a bar shows "{n} selezionate" and **Crea raccolta**, which asks for a name and opens the collection configurator. Left pane: the parts in order, a client's case histories grouped under its computed intro (shown locked). Reorder groups and case histories within a group by drag handle or by the menu "Sposta su / giù". Centre: continuous preview per format. Right pane: **Testo** (edit the selected block, owner/designers only, IR-COLL-EDIT), **Pagine** (hide or show the selected page). Edited blocks show "Modificato in questa raccolta". Hidden pages show as a collapsed strip with **Mostra**. Top bar: name (editable), save state, **Esporta** and **Esporta tutto** (Deck 16:9 and PDF A4). No layout, media or typography controls. A sidebar item **Raccolte** lists collections (name, parts, updated, created by) with open, rename and delete (with confirm).
+UX-DR38: Client overview, opened by **Modifica layout** (SCP 2026-10-21). Left pane: **Introduzione** (with its status badge), then every case history of the client that has a document, newest first, each with code, name and status badge, then **Chiusura** (the outro; same document and status badge as **Introduzione**). A Bozza case history is listed greyed with "Non ancora generata". Centre: one continuous preview of the selected format, every part in that order, with a divider per part. Clicking a part in the list scrolls to it. Editing a block edits that part (status and save state shown for that part). Right pane: Edit and Check for the selected part. The top bar has the format switch, **Dati cliente** and, for the selected part, its **Approve** or **Update approved version**.
+UX-DR39: Collections. Library cards get a checkbox. With one or more selected, a bar shows "{n} selezionate" and **Crea raccolta**, which asks for a name and opens the collection configurator. Left pane: the parts in order, a client's case histories grouped under its computed intro and followed by its outro (both shown locked; outro per SCP 2026-10-21). Reorder groups and case histories within a group by drag handle or by the menu "Sposta su / giù". Centre: continuous preview per format. Right pane: **Testo** (edit the selected block, owner/designers only, IR-COLL-EDIT), **Pagine** (hide or show the selected page). Edited blocks show "Modificato in questa raccolta". Hidden pages show as a collapsed strip with **Mostra**. Top bar: name (editable), save state, **Esporta** and **Esporta tutto** (Deck 16:9 and PDF A4). No layout, media or typography controls. A sidebar item **Raccolte** lists collections (name, parts, updated, created by) with open, rename and delete (with confirm).
 UX-DR40: Combined download copy. The client pack and collection exports show progress and then the browser download, like UX-DR21. When a client's intro isn't approved: "L'introduzione di {client} non è ancora approvata: le sue case history usano la propria introduzione."
 
 ### Interim Rules Register
@@ -853,7 +853,7 @@ Order: after 2.12, before Epic 3.
 **When** I press it
 **Then**, until Story 4.12 lands, the client wizard opens at step 1 with the client's data, saying "Il codice {code} non cambia. Le modifiche si vedono in tutte le sue case history." (SCP 2026-10-19)
 **And** the name rules are unchanged: a new name changes everywhere it is shown, including its case histories; the code and every case code stay the same; a duplicate name is rejected as on add
-**And** (delivered by Story 4.12; SCP 2026-10-16 client intro and collections) **Modifica cliente** opens the client overview, and the data is edited in its **Dati cliente** panel, with the same name rules
+~~**And** (delivered by Story 4.12; SCP 2026-10-16 client intro and collections) **Modifica cliente** opens the client overview, and the data is edited in its **Dati cliente** panel, with the same name rules~~ *(superseded by SCP 2026-10-21, EXPERIENCE.md C22: **Modifica cliente** opens the client side panel; the client overview opens from **Modifica layout**, Story 4.12)*
 
 **Given** a client row (any client, finished or not; owner, 2026-10-19)
 **When** I click it
@@ -1055,7 +1055,7 @@ Order: MVP, Sprint 2: after 2.15, before 3.2 (owner, 2026-10-19).
 
 The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
 
-Epic prerequisites (non-dev): graphic template layouts and final case study templates (Sprint 2, decided 2026-10-09), each with an About the client area in every format (logo, name, industries (up to four labels; they replace the sector, SCP 2026-10-19) and a description up to 400 characters, all required, so no rules for a missing field; SCP 2026-10-16), every page of every format named (`pageKey`) with the pages that introduce the case history (for example the cover and About the client) marked as intro pages (SCP 2026-10-16 client intro and collections), a client intro template in every format for 2–3 images (the client's image files; SCP 2026-10-19), a headline and one short paragraph (needed by 2026-10-20, before Story 3.9 closes; owner amendment 2026-10-16: before the demo), narrative structure and quality criteria (NFR5, Sprint 2), and data processing logic (OP 2, Sprint 1). Stories 3.4–3.7 can't close before their prerequisites land; when in Sprint 2 the templates arrive is the schedule risk.
+Epic prerequisites (non-dev): graphic template layouts and final case study templates (Sprint 2, decided 2026-10-09), each with an About the client area in every format (logo, name, industries (up to four labels; they replace the sector, SCP 2026-10-19) and a description up to 400 characters, all required, so no rules for a missing field; SCP 2026-10-16), every page of every format named (`pageKey`) with the pages that introduce the case history (for example the cover and About the client) marked as intro pages (SCP 2026-10-16 client intro and collections), a client template in every format for 2–3 images, with intro and outro pages (the client's image files; SCP 2026-10-19; outro per SCP 2026-10-21), a headline and one short paragraph (needed by 2026-10-20, before Story 3.9 closes; owner amendment 2026-10-16: before the demo), narrative structure and quality criteria (NFR5, Sprint 2), and data processing logic (OP 2, Sprint 1). Stories 3.4–3.7 can't close before their prerequisites land; when in Sprint 2 the templates arrive is the schedule risk.
 
 ### Story 3.1: Background job queue and worker loop
 
@@ -1216,7 +1216,7 @@ Covers: FR4, CAP-4 (slot mapping per media count), AR4 (`relayout`), AR15, NFR1 
 
 **Given** a template format
 **When** it is coded
-**Then** every page it can produce has a stable `pageKey` and a `role` (`intro` or `body`) from the design team's spec, and the keys never change within a published version (SCP 2026-10-16 client intro and collections)
+**Then** every page it can produce has a stable `pageKey` and a `role` (`intro`, `body` or `outro`; `outro` per SCP 2026-10-21) from the design team's spec, and the keys never change within a published version (SCP 2026-10-16 client intro and collections)
 
 ### Story 3.5: One renderer per format
 
@@ -1252,6 +1252,10 @@ Note (2026-10-19, owner): a client logo may be an SVG ([spec](../implementation-
 **Given** a renderer
 **When** it paginates
 **Then** each page carries its `pageKey` and `role`, and the renderer accepts a starting page number, so chained documents number their pages continuously (SCP 2026-10-16 client intro and collections)
+
+**Given** `composeParts` and a client with an approved outro
+**When** it composes that client's parts
+**Then** it places the client's outro once after its last part, and after a single case history exported on its own (SCP 2026-10-21)
 
 ### Story 3.6: Narrative generator port and Anthropic adapter
 
@@ -1382,10 +1386,10 @@ Covers: UX-DR11, SPEC assumption (in-app toast)
 **When** a draft is ready
 **Then** no email, Slack or other external notification is sent
 
-### Story 3.9: Client intro template and draft
+### Story 3.9: Client intro and outro template and draft
 
 As an owner/designer,
-I want the AI to draft the client's intro pages from the client's data, brief and material,
+I want the AI to draft the client's intro and outro pages from the client's data, brief and material,
 So that I only refine them instead of laying them out by hand.
 
 Covers: FR11, AR25 (AD-23), AR3, AR4, AR6 (gate), AR7, AR10, NFR1, NFR2, NFR6 (as amended) ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md))
@@ -1405,8 +1409,8 @@ Order: MVP, Sprint 2: after 2.15, 2.16 and 3.3–3.8, before Epic 4 (owner amend
 
 **Given** the worker runs the intro job
 **When** it calls the LLM
-**Then** the input is the client's current name, industries, description and brief (the intro is a headline and one short paragraph; owner decision 2026-10-16), plus its material as OP 2 allows (until then, nothing but the text fields; SCP 2026-10-19); the output schema has only intro text blocks (headline and short paragraph) with claims and `client_field` refs, and no layout, asset or `about` field
-**And** `rendering.relayout` places 2–3 of the client's images (image rows in `client_asset`) in the intro template's slots for every format
+**Then** the input is the client's current name, industries, description and brief (the intro is a headline and one short paragraph; owner decision 2026-10-16), plus its material as OP 2 allows (until then, nothing but the text fields; SCP 2026-10-19); the output schema has only intro and outro text blocks (headline and short paragraph each; outro per SCP 2026-10-21) with claims and `client_field` refs, and no layout, asset or `about` field
+**And** `rendering.relayout` places 2–3 of the client's images (image rows in `client_asset`) in the template's intro and outro slots for every format
 **And** a new `working` revision of kind `client_intro` is created and the intro moves to `in_review`
 
 **Given** the job fails after its attempts
@@ -1798,21 +1802,21 @@ Covers: UX-DR32, AR15 (conditional `template_variant_state`), AR11 (`manage temp
 **When** I look for design controls
 **Then** there is no upload, design editing or versioning; template design is never stored in the database
 
-### Story 4.11: Client intro in the configurator
+### Story 4.11: Client intro and outro in the configurator
 
 As an owner/designer,
-I want to edit, check and approve the client intro like a case history,
-So that the intro that reaches clients has been reviewed by a person.
+I want to edit, check and approve the client intro and outro like a case history,
+So that the intro and outro that reach clients has been reviewed by a person.
 
-Covers: FR11, AR25, AR19, NFR2, NFR7, UX-DR12 (client intro mode), UX-DR35 (wizard step 3) ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md))
+Covers: FR11, AR25, AR19, NFR2, NFR7, UX-DR12 (client intro mode), UX-DR35 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md))
 Order: MVP, Sprint 2: after 3.9 and 4.8, before 4.9 (owner amendment 2026-10-16). Its approved-intro editing criterion closes with 4.9, which covers intros too.
-⛔ Blocked on: a design session with the owner for step 3 (owner, 2026-10-19). Until then, step 3 isn't shown and the wizard ends on step 2.
+⛔ Blocked on: a design session with the owner for the client intro mode (owner, 2026-10-19; it was wizard step 3, which the side panel replaces per SCP 2026-10-21).
 
 **Acceptance Criteria:**
 
-**Given** the client wizard (Stories 2.15 and 2.16)
-**When** the intro draft is ready after step 2
-**Then** the configurator in client intro mode is step 3 **Introduzione** of the client wizard; the stepper stays visible (SCP 2026-10-19)
+**Given** a client whose intro and outro draft is ready
+**When** I open it
+**Then** the configurator in client intro mode is opened from the client's page; the left pane lists **Introduzione** and **Chiusura** (SCP 2026-10-21; replaces wizard step 3 of SCP 2026-10-19)
 
 **Given** an intro in Da approvare or Approvato
 **When** I open it (from the client page, the overview or the toast)
@@ -1820,7 +1824,7 @@ Order: MVP, Sprint 2: after 3.9 and 4.8, before 4.9 (owner amendment 2026-10-16)
 
 **Given** the Check tab
 **When** it opens
-**Then** it lists the intro's text blocks; the material drawer shows the client's data, brief and client material (SCP 2026-10-19)
+**Then** it lists the intro's and outro's text blocks; the material drawer shows the client's data, brief and client material (SCP 2026-10-19)
 **And** **Approve** follows Story 4.8 (every block checked, no overflow), and editing an approved intro follows Story 4.9 (working copy, **Update approved version**, **Discard changes**)
 
 **Given** an intro that isn't approved
@@ -1830,7 +1834,7 @@ Order: MVP, Sprint 2: after 3.9 and 4.8, before 4.9 (owner amendment 2026-10-16)
 ### Story 4.12: Client overview configurator
 
 As an owner/designer,
-I want **Modifica cliente** to open the client's intro and all its case histories as one file,
+I want **Modifica layout** to open the client's intro, all its case histories and its outro as one file (SCP 2026-10-21),
 So that I see the client's whole story and fix any part of it in place.
 
 Covers: FR12, UX-DR38, AR3, AR17, AR19, IR-A1 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
@@ -1838,9 +1842,13 @@ Order: MVP, Sprint 2, last in Epic 4: after 4.9 and 4.11 (owner amendment 2026-1
 
 **Acceptance Criteria:**
 
+**Given** a client page before Story 4.12 ships
+**When** it renders
+**Then** **Modifica layout** shows inactive with "Arriva con il configuratore" (SCP 2026-10-21)
+
 **Given** a client page
-**When** I press **Modifica cliente**
-**Then** the client overview opens full-screen: the left pane lists **Introduzione** and every case history of the client, newest first, each with code, name and status badge; the centre shows the selected format with every part in that order as one continuous, paginated preview
+**When** I press **Modifica layout**
+**Then** the client overview opens full-screen: the left pane lists **Introduzione**, every case history of the client, newest first, each with code, name and status badge, then **Chiusura**; the centre shows the selected format with every part in that order as one continuous, paginated preview
 
 **Given** a case history in Bozza or In elaborazione
 **When** the overview loads
@@ -2136,7 +2144,7 @@ Covers: AR5, NFR1, NFR3, NFR6, NFR7, Sprint 2 non-dev "first guardrail check"
 ### Story 5.9: Combined export and client pack download
 
 As an account/sales/social user or owner/designer,
-I want to download a client's intro and its approved case histories as one file,
+I want to download a client's intro, its approved case histories and its outro as one file,
 So that I can send a client's whole track record in one go.
 
 Covers: FR13, AR9 (combined export), AR11 (`list clients` read-only, `download client pack`), NFR7, UX-DR35 (amended), UX-DR40 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
@@ -2157,8 +2165,8 @@ Order: MVP, Sprint 3: after 5.1–5.8 (needs 5.3, 5.4 and 4.11) (owner amendment
 
 **Given** **Scarica** on a client
 **When** I pick a format (Deck 16:9 or PDF A4 only; owner decision 2026-10-16) and confirm
-**Then** the server builds the parts: the client's approved intro (if any), then its approved case histories newest first, using the intro rule (2+ case histories → the client intro replaces their own intro pages; 1 → its own intro), and enqueues one `export` job
-**And** if the intro isn't approved, every case history keeps its own intro and the dialog says so (UX-DR40)
+**Then** the server builds the parts: the client's approved intro (if any), then its approved case histories newest first, using the intro rule (2+ case histories → the client intro replaces their own intro pages; 1 → its own intro), then the client's approved outro once after the last of them, also when there is only one (SCP 2026-10-21), and enqueues one `export` job
+**And** if the intro and outro aren't approved, every case history keeps its own intro, the file ends on the last case history's own last page, and the dialog says so (UX-DR40)
 **And** a client with no approved case history has no **Scarica**, and a direct call fails with `NOT_APPROVED`
 
 **Given** the same client, revisions, client info and format
@@ -2190,7 +2198,7 @@ Order: MVP, Sprint 3: after 5.9 (owner amendment 2026-10-16)
 
 **Given** the collection configurator
 **When** it loads
-**Then** the left pane lists the parts in order: for each client with 2 or more case histories in the collection, its approved intro comes before the first of them, shown locked, and that client's case histories are kept together as a group, and I reorder groups and case histories within a group (owner decision 2026-10-16); the centre shows the continuous preview per format through `composeParts`
+**Then** the left pane lists the parts in order: for each client with 2 or more case histories in the collection, its approved intro comes before the first of them, shown locked, each client's approved outro comes once after its last case history, shown locked (SCP 2026-10-21), and that client's case histories are kept together as a group, and I reorder groups and case histories within a group (owner decision 2026-10-16); the centre shows the continuous preview per format through `composeParts`
 
 **Given** I move a case history (drag handle, or the menu "Sposta su / giù")
 **When** the move is saved
@@ -2246,7 +2254,7 @@ Order: MVP, Sprint 3, last in Epic 5: after 5.10 (owner amendment 2026-10-16)
 **Given** any user who can manage collections
 **When** they choose **Nascondi pagina** on a page
 **Then** a `collection_hidden_page` row (part, format, `pageKey`) is stored, the page leaves the preview and the exports for that format, and **Mostra** brings it back
-**And** a client intro page can be hidden like any other
+**And** a client intro or outro page can be hidden like any other
 
 **Given** the original block's text changed after it was edited in the collection
 **When** the collection opens
