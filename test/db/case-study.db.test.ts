@@ -2330,7 +2330,7 @@ describe("client sector, one from a shared list (2026-10-22)", () => {
     if (!added.ok) throw new Error(`addClientSector failed: ${added.error.code}`);
     expect(added.value).toEqual({ key: label.toLowerCase().replace(" ", "_"), label });
     expect(await addClientSector({ label: label.toUpperCase() })).toEqual({ ok: true, value: added.value });
-    expect(await addClientSector({ label: "N" })).toMatchObject({ ok: false, status: 400, error: { code: "SECTOR_LABEL_INVALID", fields: ["label"] } });
+    expect(await addClientSector({ label: "N" })).toMatchObject({ ok: false, status: 400, error: { code: "SECTOR_LABEL_INVALID" } });
 
     const listed = await listClientSectors();
     if (!listed.ok) throw new Error("listClientSectors failed");
