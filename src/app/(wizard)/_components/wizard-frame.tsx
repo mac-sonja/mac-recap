@@ -39,6 +39,11 @@ export interface WizardFrameProps {
   steps?: readonly string[];
   /** The stepper's links (default: the case wizard's, from the case id). */
   hrefFor?: (step: 1 | 2 | 3) => string;
+  /**
+   * The top bar's right end, e.g. the case wizard's **Elimina bozza** (owner, 2026-10-22).
+   * Hidden below 1024px with the step content: the wizard is read-only there.
+   */
+  actions?: ReactNode;
 }
 
 /**
@@ -62,6 +67,7 @@ export function WizardFrame({
   header,
   steps,
   hrefFor,
+  actions,
 }: WizardFrameProps) {
   return (
     <WizardTitleProvider>
@@ -87,6 +93,7 @@ export function WizardFrame({
               <StatusBadge status={caseStudy.status} className="shrink-0" />
             </>
           )}
+          {actions !== undefined && <div className="ml-auto hidden shrink-0 items-center gap-2 lg:flex">{actions}</div>}
         </header>
         {/*
           No bottom padding from 1024 px, so the sticky footer sits flush on the viewport's

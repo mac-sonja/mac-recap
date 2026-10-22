@@ -37,6 +37,8 @@ describe("case studies table copy", () => {
     expect(Object.values(it.caseStudies.table.columns)).toEqual(["ID", "Case history", "Cliente", "Anno", "Stato", "Servizi", "Aggiornata", "Link", "Azioni"]);
     expect(fill(t("caseStudies.delete.title"), { name: "Rebrand" })).toBe("Eliminare Rebrand?");
     expect(t("caseStudies.delete.confirm")).toBe("Elimina");
+    expect(t("caseStudies.delete.barButton")).toBe("Elimina bozza");
+    expect(t("caseStudies.delete.word")).toBe("elimina");
     expect(t("caseStudies.search.label")).toBe("Cerca progetto o cliente");
     expect(t("caseStudies.search.placeholder")).toBe("Cerca progetto o cliente…");
     expect(t("caseStudies.filter.all")).toBe("Tutti");
@@ -205,6 +207,7 @@ describe("voice", () => {
     it.clientPanel.save,
     it.clientPanel.layout,
     it.clientPanel.delete.button,
+    it.caseStudies.delete.barButton,
   ];
 
   test("calls to action are at most three words", () => {
