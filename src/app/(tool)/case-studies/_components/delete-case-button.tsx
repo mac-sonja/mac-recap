@@ -16,7 +16,7 @@ export interface DeleteCaseButtonProps {
   name: string;
   /**
    * `row` (default): a quiet bin icon in the Case list; after the delete the list reloads.
-   * `bar`: **Elimina bozza** in the opened draft's top bar (owner, 2026-10-22); after the
+   * `bar`: **Elimina bozza** bottom left in the opened draft's footer (owner, 2026-10-22); after the
    * delete the browser goes to the Case list.
    */
   variant?: "row" | "bar";

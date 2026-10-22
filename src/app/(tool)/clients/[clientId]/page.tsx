@@ -151,7 +151,6 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
           emptyMessage={it.clients.detail.noCases}
           emptyAction={it.clients.detail.newCase}
           newHref={newHref}
-          canDelete={can(actor, "delete case", { status: "draft" })}
         />
       </section>
       {panel !== null && (

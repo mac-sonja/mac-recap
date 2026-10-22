@@ -5,7 +5,10 @@ import { StatusBadge } from "@/app/_components/status-badge";
 import type { CaseStatus } from "@/modules/access";
 import { it } from "@/shared/i18n/it";
 import { Stepper, type Reachable, type WizardStep } from "./stepper";
+import { WizardFooterLeadProvider } from "./wizard-footer";
 import { WizardTitleProvider, WizardTitleText } from "./wizard-title";
+
+export { WIZARD_FOOTER, WizardFooter } from "./wizard-footer";
 
 /** The case the wizard is on; absent on step 1 until the case is created. */
 export interface WizardCase {
@@ -40,10 +43,11 @@ export interface WizardFrameProps {
   /** The stepper's links (default: the case wizard's, from the case id). */
   hrefFor?: (step: 1 | 2 | 3) => string;
   /**
-   * The top bar's right end, e.g. the case wizard's **Elimina bozza** (owner, 2026-10-22).
-   * Hidden below 1024px with the step content: the wizard is read-only there.
+   * The footer's bottom-left slot on every step, e.g. the case wizard's **Elimina bozza**
+   * (owner, 2026-10-22: bottom left, opposite **Avanti**). Hidden below 1024px with the
+   * step content: the wizard is read-only there.
    */
-  actions?: ReactNode;
+  footerLead?: ReactNode;
 }
 
 /**
@@ -67,7 +71,7 @@ export function WizardFrame({
   header,
   steps,
   hrefFor,
-  actions,
+  footerLead,
 }: WizardFrameProps) {
   return (
     <WizardTitleProvider>
@@ -93,7 +97,6 @@ export function WizardFrame({
               <StatusBadge status={caseStudy.status} className="shrink-0" />
             </>
           )}
-          {actions !== undefined && <div className="ml-auto hidden shrink-0 items-center gap-2 lg:flex">{actions}</div>}
         </header>
         {/*
           No bottom padding from 1024 px, so the sticky footer sits flush on the viewport's
@@ -115,7 +118,7 @@ export function WizardFrame({
               <div className="mb-10">
                 <Stepper current={current} caseId={caseStudy?.id} reachable={reachable} steps={steps} hrefFor={hrefFor} />
               </div>
-              {children}
+              <WizardFooterLeadProvider lead={footerLead}>{children}</WizardFooterLeadProvider>
             </div>
           </div>
         </main>
@@ -124,31 +127,3 @@ export function WizardFrame({
   );
 }
 
-/**
- * The footer's layout: sticky at the bottom of the scrolling column, opaque, under a
- * divider. The main area has no bottom padding at this width, so the sticky edge is
- * the viewport's bottom edge: nothing shows below the footer, and no filler is needed.
- * A solid page colour, not frosted glass: cards scrolling under a translucent footer
- * showed through as a blurred grey box (owner, 2026-10-21). The background reaches
- * 24 px past the column on each side (`before:`), so the cards' edges and shadows don't
- * peek out beside it; the divider and the content stay as wide as the column.
- */
-export const WIZARD_FOOTER =
-  "sticky bottom-0 z-10 mt-8 flex items-center justify-between gap-6 border-t border-border bg-surface pt-4 pb-6 before:absolute before:inset-y-0 before:-inset-x-6 before:-z-10 before:bg-surface";
-
-/**
- * The wizard footer under a divider: an optional note on the left and the step's
- * action (**Avanti**) on the right (no step dots, owner 2026-10-21). It sticks to the bottom of
- * the scrolling wizard column (Story 2.18) with a solid background, so it stays in
- * view on a long step; as it keeps its place in the flow, the content above it is
- * never hidden once scrolled to the end, and focus order is unchanged. Below 1024 px
- * the step content (footer included) is hidden by the frame.
- */
-export function WizardFooter({ start, action }: { start?: ReactNode; action: ReactNode }) {
-  return (
-    <div data-wizard-footer="" className={WIZARD_FOOTER}>
-      <div className="font-label text-xs text-foreground-muted">{start}</div>
-      <div className="shrink-0">{action}</div>
-    </div>
-  );
-}

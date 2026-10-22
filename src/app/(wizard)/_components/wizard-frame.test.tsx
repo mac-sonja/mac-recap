@@ -97,15 +97,15 @@ describe("WizardFrame", () => {
   });
 });
 
-describe("WizardFrame actions", () => {
-  it("puts the actions at the top bar's right end, hidden below 1024px, and nothing without them", () => {
+describe("WizardFrame footerLead", () => {
+  it("puts the lead at the footer's bottom left, opposite the action, with the note beside the action; nothing in the top bar", () => {
     const html = renderToStaticMarkup(
-      <WizardFrame caseStudy={null} current={1} actions={<button type="button">act</button>}>
-        x
+      <WizardFrame caseStudy={null} current={1} footerLead={<button type="button">del</button>}>
+        <WizardFooter start="note" action={<button type="button">go</button>} />
       </WizardFrame>,
     );
-    expect(html).toMatch(/<header [^>]*>.*<div class="ml-auto hidden shrink-0 items-center gap-2 lg:flex"><button type="button">act<\/button><\/div><\/header>/);
-    expect(renderToStaticMarkup(<WizardFrame caseStudy={null} current={1}>x</WizardFrame>)).not.toContain("ml-auto");
+    expect(html).toMatch(/<div data-wizard-footer="" class="[^"]*"><div class="shrink-0"><button type="button">del<\/button><\/div><div class="[^"]*"><div class="[^"]*">note<\/div><div class="shrink-0"><button type="button">go<\/button><\/div><\/div><\/div>/);
+    expect(html).not.toMatch(/<header [^>]*>.*del.*<\/header>/);
   });
 });
 

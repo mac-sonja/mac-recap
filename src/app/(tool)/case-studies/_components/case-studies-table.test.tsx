@@ -411,19 +411,10 @@ describe("CaseStudiesTable", () => {
     expect(dialog.textContent).toContain(dict.download.soon);
   });
 
-  it("offers Elimina on Bozza rows only, and only with canDelete; its click opens the dialog, not the wizard", async () => {
-    const user = userEvent.setup();
+  it("offers no Elimina in the list: a draft is deleted from inside it (owner, 2026-10-22)", () => {
+    render(<CaseStudiesTable rows={rows} canCreate />);
     const deleteName = new RegExp(`^${escape(fill(dict.caseStudies.delete.button, { name: "" }))}`);
-    const { unmount } = render(<CaseStudiesTable rows={rows} canCreate />);
     expect(screen.queryAllByRole("button", { name: deleteName })).toEqual([]);
-    unmount();
-
-    render(<CaseStudiesTable rows={rows} canCreate canDelete />);
-    const buttons = screen.getAllByRole("button", { name: deleteName });
-    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([fill(dict.caseStudies.delete.button, { name: "Alfa" })]);
-    await user.click(buttons[0]!);
-    expect(screen.getByRole("dialog", { hidden: true, name: fill(dict.caseStudies.delete.title, { name: "Alfa" }) })).toBeTruthy();
-    expect(push).not.toHaveBeenCalled();
   });
 
   it("keeps the status region mounted and empty while there are results", () => {
