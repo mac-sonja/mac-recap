@@ -6,7 +6,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { DownloadButton } from "@/app/_components/download-button";
 import { CARD, SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
-import { clientHref, clientWizardHref } from "@/app/_lib/routes";
+import { clientHref, newClientPanelHref } from "@/app/_lib/routes";
+import { markPanelOpenedInApp } from "../_lib/panel-history";
 import { SEARCH_DEBOUNCE_MS } from "@/app/(tool)/case-studies/_components/case-studies-table";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -134,7 +135,7 @@ export function ClientsTable({ rows, canManage }: ClientsTableProps) {
   const visible = useMemo(() => sortClientRows(filterClientRows(rows, query), sort), [rows, query, sort]);
 
   const addButton = canManage ? (
-    <Link href={clientWizardHref()} className={cn(PRIMARY_ACTION, "hidden lg:inline-flex")}>
+    <Link href={newClientPanelHref()} scroll={false} onClick={markPanelOpenedInApp} className={cn(PRIMARY_ACTION, "hidden lg:inline-flex")}>
       {it.clients.add}
     </Link>
   ) : null;

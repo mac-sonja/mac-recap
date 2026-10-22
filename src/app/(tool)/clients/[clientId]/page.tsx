@@ -1,7 +1,7 @@
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PRIMARY_ACTION } from "@/app/_components/button-styles";
+import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { listScopeFor } from "@/app/_lib/list-scope";
 import { newCaseForClientHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
@@ -11,25 +11,33 @@ import { formatDateTime } from "@/shared/i18n/format";
 import { fill, it } from "@/shared/i18n/it";
 import { CaseStudiesTable } from "../../case-studies/_components/case-studies-table";
 import type { CaseStudyRow } from "../../case-studies/_components/filter-sort";
+import { cn } from "@/shared/utils";
+import { ClientPanel } from "../_components/client-panel";
 import { IndustryPills } from "../_components/industry-pills";
 import { EditClientButton } from "../_components/edit-client-button";
 import { LogoTile } from "../_components/logo-tile";
+import { clientLimits, clientMaterialLimits } from "../_lib/client-limits";
 
 export interface ClientPageProps {
   params: Promise<{ clientId: string }>;
+  searchParams?: Promise<{ modifica?: string | string[] }>;
 }
 
 /**
  * A client's page (Stories 2.13, 2.14), owner/designer only (`list clients`): the
  * logo (on a white tile), name, code, industries as pills and description (never
- * the brief), **Modifica cliente** (`manage clients`, opens the client wizard at
- * step 1; hidden below 1024 px, where the info is read-only), **Nuova
+ * the brief), **Modifica** (`manage clients`, opens the edit panel, `?modifica=1`)
+ * and an inactive **Modifica layout** (until the configurator; both hidden below
+ * 1024 px, where the info is read-only), **Nuova
  * case history** with the client preselected, and the Case history table limited
  * to this client. An empty field shows nothing; a logo that can't be signed is
  * left out. A malformed or unknown id goes back to `/clients`; any other failure
  * throws into the error boundary. The uuid is only in the URL; the code is shown.
+ * With `?modifica=1` and `manage clients`, the edit panel opens over the page with
+ * the client's data, files and brief, and **Elimina cliente** (which needs the
+ * case history count); a failed read throws into the error boundary.
  */
-export default async function ClientPage({ params }: ClientPageProps) {
+export default async function ClientPage({ params, searchParams }: ClientPageProps) {
   const shell = await requireSurface("list clients");
   if (shell === null) return null;
   const { actor, landing } = shell;
@@ -63,6 +71,21 @@ export default async function ClientPage({ params }: ClientPageProps) {
 
   const canCreate = can(actor, "create case");
   const newHref = newCaseForClientHref(client.id);
+  const canManage = can(actor, "manage clients");
+
+  // The edit panel: the client's files (with signed thumbnails) and, for Elimina cliente, its case count.
+  let panel: { assets: caseStudy.ListedClientAsset[]; caseCount: number | null } | null = null;
+  if (canManage && (await searchParams)?.modifica === "1") {
+    const material = await caseStudy.listClientMaterial({ clientId: client.id });
+    if (!material.ok) throw new Error(`Client material could not be loaded: ${material.error.code}`);
+    let caseCount: number | null = null;
+    if (can(actor, "list cases", {})) {
+      const cases = await caseStudy.list({ clientId: client.id });
+      if (!cases.ok) throw new Error(`Case studies could not be listed: ${cases.error.code}`);
+      caseCount = cases.value.length;
+    }
+    panel = { assets: material.value, caseCount };
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -95,7 +118,22 @@ export default async function ClientPage({ params }: ClientPageProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {can(actor, "manage clients") && <EditClientButton clientId={client.id} />}
+          {canManage && (
+            <>
+              <button
+                type="button"
+                aria-disabled="true"
+                aria-describedby="client-layout-reason"
+                className={cn(SECONDARY_ACTION, "hidden cursor-not-allowed text-foreground-muted lg:inline-flex")}
+              >
+                {it.clientPanel.layout}
+              </button>
+              <span id="client-layout-reason" className="sr-only">
+                {it.clientPanel.layoutReason}
+              </span>
+              <EditClientButton clientId={client.id} />
+            </>
+          )}
           {canCreate && (
             <Link href={newHref} className={PRIMARY_ACTION}>
               {it.clients.detail.newCase}
@@ -115,6 +153,17 @@ export default async function ClientPage({ params }: ClientPageProps) {
           newHref={newHref}
         />
       </section>
+      {panel !== null && (
+        <ClientPanel
+          key={client.id}
+          client={client}
+          assets={panel.assets}
+          caseCount={panel.caseCount}
+          industries={caseStudy.CLIENT_INDUSTRIES}
+          limits={clientLimits()}
+          materialLimits={clientMaterialLimits()}
+        />
+      )}
     </div>
   );
 }

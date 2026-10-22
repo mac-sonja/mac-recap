@@ -39,14 +39,14 @@ describe("DeleteClientButton", () => {
     const { dialog } = await open(2);
     expect(dialog.hasAttribute("aria-describedby")).toBe(true);
     expect(dialog.textContent).toContain(
-      fill(dict.clientWizard.delete.withCases, { n: 2 }),
+      fill(dict.clientPanel.delete.withCases, { n: 2 }),
     );
     expect(screen.getByRole("button", { name: "Annulla" })).toBeTruthy();
   });
 
   it("says the client has no case histories when the count is 0", async () => {
     const { dialog } = await open(0);
-    expect(dialog.textContent).toContain(dict.clientWizard.delete.noCases);
+    expect(dialog.textContent).toContain(dict.clientPanel.delete.noCases);
     expect(dialog.textContent).not.toContain("Con lui spariscono");
   });
 

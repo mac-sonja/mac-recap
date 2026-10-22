@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClientRow } from "./filter-sort";
 
 const { ClientsTable } = await import("./clients-table");
+const { clearPanelOpenedInApp, panelOpenedInApp } = await import("../_lib/panel-history");
 const { SEARCH_DEBOUNCE_MS } = await import("@/app/(tool)/case-studies/_components/case-studies-table");
 const { it: dict, fill } = await import("@/shared/i18n/it");
 
@@ -134,10 +135,15 @@ describe("ClientsTable", () => {
     expect(within(card("Acme")).getByRole("link").getAttribute("href")).toBe(`/clients/${ACME.id}`);
   });
 
-  it("links Aggiungi cliente to the client wizard, hides it below 1024 px and omits it without manage clients; search still works", () => {
+  it("links Aggiungi cliente to the add panel, hides it below 1024 px and omits it without manage clients; search still works", () => {
     const { unmount } = render(<ClientsTable rows={rows} canManage />);
-    expect(addLink().getAttribute("href")).toBe("/clients/new");
+    expect(addLink().getAttribute("href")).toBe("/clients?nuovo=1");
     expect(addLink().className).toContain("hidden lg:inline-flex");
+    // Opening from the list marks the panel as opened in the app, so closing goes back.
+    addLink().addEventListener("click", (event) => event.preventDefault());
+    fireEvent.click(addLink());
+    expect(panelOpenedInApp()).toBe(true);
+    clearPanelOpenedInApp();
     unmount();
     render(<ClientsTable rows={rows} canManage={false} />);
     expect(screen.queryByRole("link", { name: dict.clients.add })).toBeNull();
