@@ -92,7 +92,7 @@ export function Sheet({ open, onClose, title, description, closeLabel, children,
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       aria-busy={busy || undefined}
-      className="m-0 ml-auto h-dvh max-h-dvh w-[500px] max-w-full flex-col bg-surface text-foreground shadow-popover backdrop:bg-scrim/40 backdrop:backdrop-blur-[2px] open:flex open:motion-safe:animate-sheet-in"
+      className="m-0 ml-auto h-dvh max-h-dvh w-[500px] max-w-full flex-col overflow-hidden bg-surface text-foreground shadow-popover backdrop:bg-scrim/40 backdrop:backdrop-blur-[2px] open:flex open:motion-safe:animate-sheet-in"
     >
       <header className="flex items-start justify-between gap-4 bg-surface-raised px-6 pt-6 pb-5 shadow-card">
         <div className="flex min-w-0 flex-col gap-1.5">
@@ -114,7 +114,8 @@ export function Sheet({ open, onClose, title, description, closeLabel, children,
           <X aria-hidden="true" className="size-4" />
         </button>
       </header>
-      <div data-sheet-body="" className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+      {/* Only the body scrolls: `relative` keeps visually hidden text (live regions) inside it, and the sheet clips. */}
+      <div data-sheet-body="" className="relative min-h-0 flex-1 overflow-y-auto px-6 py-6">
         {children}
       </div>
       {footer ? (
