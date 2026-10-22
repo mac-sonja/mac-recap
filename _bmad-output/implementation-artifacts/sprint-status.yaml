@@ -61,12 +61,12 @@ development_status:
   3-1-background-job-queue-and-worker-loop: done  # #45; migration applied to mac-recap-dev 2026-10-16 (not staging/prod)
   3-2-display-renditions-for-uploaded-media: done  # #62; migration applied to mac-recap-dev 2026-10-20 (not staging/prod); renditions backfilled on dev
   3-3-the-case-study-document-revisions-and-the-format-registry: review  # About block per SCP 2026-10-16; client info read live, no snapshot (owner amendment); after 2.14; amendment per SCP 2026-10-16 client intro and collections (document kind, revision subject)
-  3-4-templates-as-versioned-code-with-media-count-rules: backlog  # About the client area per SCP 2026-10-16; amendment per SCP 2026-10-16 client intro and collections (pageKey and intro/body role)
-  3-5-one-renderer-per-format: backlog  # amendment per SCP 2026-10-16 client intro and collections (page keys, starting page number)
+  3-4-templates-as-versioned-code-with-media-count-rules: backlog  # About the client area per SCP 2026-10-16; amendment per SCP 2026-10-16 client intro and collections (pageKey and intro/body role); outro + Modifica layout per SCP 2026-10-21
+  3-5-one-renderer-per-format: backlog  # amendment per SCP 2026-10-16 client intro and collections (page keys, starting page number); outro + Modifica layout per SCP 2026-10-21
   3-6-narrative-generator-port-and-anthropic-adapter: backlog  # client info as LLM input per SCP 2026-10-16; runs after 4.8, when the narrative guidelines arrive (SCP 2026-10-20)
   3-7-generate-a-case-study: backlog  # no client snapshot; job reads current client info when it runs (SCP 2026-10-16 owner amendment)
   3-8-tell-me-when-the-draft-is-ready: backlog
-  3-9-client-intro-template-and-draft: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 3.8, last in Epic 3; starts from 2.16's Crea introduzione, inputs gain industries, brief and client material (SCP 2026-10-19)
+  3-9-client-intro-template-and-draft: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 3.8, last in Epic 3; starts from 2.16's Crea introduzione, inputs gain industries, brief and client material (SCP 2026-10-19); outro + Modifica layout per SCP 2026-10-21
   3-10-test-draft-without-ai: backlog  # dev only, no LLM (SCP 2026-10-20); after 3.5, before 4.1
   epic-3-retrospective: optional
 
@@ -81,8 +81,8 @@ development_status:
   4-8-approve-a-case-study: backlog
   4-9-edit-an-approved-case-and-update-the-approved-version: backlog
   4-10-conditional-not-scheduled-template-maintenance: backlog
-  4-11-client-intro-in-the-configurator: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 4.8, before 4.9; becomes client wizard step 3, blocked on a design session with the owner (SCP 2026-10-19)
-  4-12-client-overview-configurator: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 4.9, last in Epic 4; Dati cliente gets the wizard fields and client material (SCP 2026-10-19)
+  4-11-client-intro-in-the-configurator: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 4.8, before 4.9; becomes client wizard step 3, blocked on a design session with the owner (SCP 2026-10-19); outro + Modifica layout per SCP 2026-10-21
+  4-12-client-overview-configurator: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 4.9, last in Epic 4; Dati cliente gets the wizard fields and client material (SCP 2026-10-19); outro + Modifica layout per SCP 2026-10-21
   epic-4-retrospective: optional
 
   epic-5: backlog
@@ -94,8 +94,8 @@ development_status:
   5-6-the-shared-link-page: backlog
   5-7-turn-off-a-shareable-link: backlog
   5-8-guardrail-test-suite-for-the-end-of-sprint-2-check: backlog
-  5-9-combined-export-and-client-pack-download: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.8
-  5-10-collections: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.9
+  5-9-combined-export-and-client-pack-download: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.8; outro + Modifica layout per SCP 2026-10-21
+  5-10-collections: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.9; outro + Modifica layout per SCP 2026-10-21
   5-11-edit-texts-and-remove-pages-in-a-collection: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.10, last in Epic 5
   epic-5-retrospective: optional
 
