@@ -97,6 +97,18 @@ describe("WizardFrame", () => {
   });
 });
 
+describe("WizardFrame actions", () => {
+  it("puts the actions at the top bar's right end, hidden below 1024px, and nothing without them", () => {
+    const html = renderToStaticMarkup(
+      <WizardFrame caseStudy={null} current={1} actions={<button type="button">act</button>}>
+        x
+      </WizardFrame>,
+    );
+    expect(html).toMatch(/<header [^>]*>.*<div class="ml-auto hidden shrink-0 items-center gap-2 lg:flex"><button type="button">act<\/button><\/div><\/header>/);
+    expect(renderToStaticMarkup(<WizardFrame caseStudy={null} current={1}>x</WizardFrame>)).not.toContain("ml-auto");
+  });
+});
+
 describe("WizardFooter", () => {
   it("puts an optional note on the left and the action on the right under a divider, no step dots", () => {
     const html = renderToStaticMarkup(<WizardFooter start="note" action={<button type="button">go</button>} />);

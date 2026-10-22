@@ -133,17 +133,29 @@ export const it = {
     narrowScreen: "Questa pagina dà il meglio su uno schermo più grande.",
     /** Read by screen readers while the table loads. */
     loading: "Un attimo…",
-    /** Deleting a draft from its row (Story 4.1): only a Bozza can be deleted. */
+    /**
+     * Deleting a draft (Story 4.1): from its row, or from the top bar of the opened draft
+     * (owner, 2026-10-22). Only a Bozza can be deleted; the person types *elimina* first.
+     */
     delete: {
       /** The row's bin icon, read by screen readers and shown on hover; `{name}` is the case name. */
       button: "Elimina {name}",
-      /** `{name}` is the case name. */
+      /** The button in an opened draft's top bar. */
+      barButton: "Elimina bozza",
+      /** `{name}` is the case name (the Case list row). */
       title: "Eliminare {name}?",
+      /** In an opened draft, whose name may be mid-edit. */
+      titleOpen: "Eliminare questa bozza?",
       description: "La bozza sparisce da ogni elenco, insieme al materiale caricato. Non si torna indietro.",
+      /** The word to type, compared trimmed and case-insensitive. */
+      word: "elimina",
+      confirmLabel: "Per conferma, scrivi “elimina”",
+      /** Why Elimina is inactive. */
+      confirmReason: "Scrivi “elimina” per attivare il pulsante.",
       cancel: "Annulla",
       confirm: "Elimina",
       /** The case left Bozza since the page loaded (CASE_NOT_DELETABLE). */
-      notDraft: "Nel frattempo non è più una bozza, quindi non si può eliminare. Abbiamo aggiornato l’elenco.",
+      notDraft: "Nel frattempo non è più una bozza, quindi non si può eliminare.",
       failed: "Non siamo riusciti a eliminarla. Riprova tra poco.",
     },
   },

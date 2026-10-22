@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
 import { STEP_HEADING } from "@/app/_components/field-styles";
+import { DeleteCaseButton } from "@/app/(tool)/case-studies/_components/delete-case-button";
 import { wizardHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
-import { authorize } from "@/modules/access";
+import { authorize, can } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import { currentYear } from "@/shared/i18n/format";
@@ -37,6 +38,8 @@ export interface NewCaseStudyPageProps {
  * (or an unknown one) the wizard opens the first incomplete step: Materiale without a
  * file, else Dettagli without a business line, else Genera. Materiale and Dettagli are
  * always open; `step=3` needs both, otherwise it redirects to the first step it lacks.
+ * On every step of an existing draft the top bar offers **Elimina bozza** to a role that
+ * may `delete case` (owner, 2026-10-22); after the delete the browser goes to Case studies.
  */
 export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPageProps) {
   const shell = await requireSurface("create case");
@@ -67,6 +70,10 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   if (found.value.status !== "draft") redirect("/case-studies");
   const { id, code, name, status, year, locale, businessLines, client } = found.value;
   const wizardCase = { id, code, name, status, clientName: client.name };
+  // **Elimina bozza** in the top bar of every step (owner, 2026-10-22), for a role that may delete drafts.
+  const topActions = can(shell.actor, "delete case", { status: "draft" }) ? (
+    <DeleteCaseButton caseId={id} name={name} variant="bar" />
+  ) : undefined;
 
   // The opening step, the gate on step 3, and the stepper links.
   // A failed material check counts as no material.
@@ -87,7 +94,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
     const listed = authorize(shell.actor, "list clients").ok ? await caseStudy.listClients() : null;
     const clients = listed?.ok ? listed.value : [];
     return (
-      <WizardFrame caseStudy={wizardCase} current={2} reachable={reachable}>
+      <WizardFrame caseStudy={wizardCase} current={2} reachable={reachable} actions={topActions}>
         <CaseDetailsStep
           key={id}
           caseStudy={{ id, code, name, year, locale, businessLines, client }}
@@ -105,7 +112,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
 
   if (requested === 3) {
     return (
-      <WizardFrame caseStudy={wizardCase} current={3} reachable={reachable}>
+      <WizardFrame caseStudy={wizardCase} current={3} reachable={reachable} actions={topActions}>
         <h2 className={STEP_HEADING}>{it.wizard.steps.generate}</h2>
         <p id={STEP_NOTE_ID} className="mt-1.5 font-body text-sm text-foreground-muted">
           {it.wizard.generatePlaceholder}
@@ -131,7 +138,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   if (!assets.ok) throw new Error(`Material could not be loaded: ${assets.error.code}`);
 
   return (
-    <WizardFrame caseStudy={wizardCase} current={1} reachable={reachable}>
+    <WizardFrame caseStudy={wizardCase} current={1} reachable={reachable} actions={topActions}>
       <MaterialStep
         caseId={id}
         initialAssets={assets.value}
