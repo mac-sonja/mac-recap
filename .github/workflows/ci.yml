@@ -20,20 +20,53 @@ jobs:
           cache: npm
       - run: npm ci
       # The video rendition test (Story 3.2) runs ffmpeg/ffprobe; it is skipped only where they are missing locally.
-      # It hung for 20+ minutes on 2026-10-26: each attempt is time-limited (apt lock and network
-      # timeouts, plus `timeout`), and it retries 3 times before failing fast.
+      # The Ubuntu mirror is often too slow (2026-10-26: 20+ minute hang, then failed attempts on #94 and #96),
+      # so the .deb files are cached and installed offline. On a miss, or when the cached files no longer
+      # install on the runner image, they are downloaded (time-limited, 3 attempts, then from Ubuntu's
+      # main archive) and saved again.
+      # To force a fresh download, bump the v1 in both cache keys.
+      - name: Restore ffmpeg packages
+        id: ffmpeg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/ffmpeg-debs
+          # Never an exact hit: the newest saved cache with this prefix is restored.
+          key: ffmpeg-debs-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
+          restore-keys: ffmpeg-debs-v1-${{ runner.os }}-${{ runner.arch }}-
       - name: Install ffmpeg
+        id: ffmpeg
         timeout-minutes: 12
         run: |
+          if compgen -G ~/ffmpeg-debs/'*.deb' >/dev/null && sudo dpkg -i ~/ffmpeg-debs/*.deb && ffmpeg -version >/dev/null; then
+            echo "ffmpeg installed from the cache"
+            exit 0
+          fi
+          echo "no usable cached packages; downloading"
           APT="-o DPkg::Lock::Timeout=60 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo rm -f /var/cache/apt/archives/*.deb
           for attempt in 1 2 3; do
-            if timeout 180 sudo apt-get $APT update && timeout 180 sudo apt-get $APT install -y --no-install-recommends ffmpeg; then
+            if timeout 180 sudo apt-get $APT update && timeout 180 sudo apt-get $APT install -f -y --no-install-recommends ffmpeg; then
+              if compgen -G '/var/cache/apt/archives/*.deb' >/dev/null; then
+                rm -rf ~/ffmpeg-debs && mkdir -p ~/ffmpeg-debs && cp /var/cache/apt/archives/*.deb ~/ffmpeg-debs/
+                echo "downloaded=true" >> "$GITHUB_OUTPUT"
+              fi
               exit 0
             fi
-            echo "ffmpeg install attempt $attempt failed; retrying in 10 s"
+            echo "ffmpeg install attempt $attempt failed; retrying in 10 s from archive.ubuntu.com"
+            # The runner's Azure mirror was the slow part (about 55 kB/s on 2026-10-26); the packages
+            # already fetched are kept, and the next attempts use Ubuntu's main archive instead.
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+              /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
             sleep 10
           done
           exit 1
+      # Saved only after a download, under a new key, so a cache that stopped installing is replaced.
+      - name: Save ffmpeg packages
+        if: steps.ffmpeg.outputs.downloaded == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/ffmpeg-debs
+          key: ffmpeg-debs-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
