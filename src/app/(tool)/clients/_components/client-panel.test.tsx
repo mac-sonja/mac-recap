@@ -228,7 +228,7 @@ describe("ClientPanel, a new client", () => {
     renderPanel();
     const sheet = screen.getByRole("dialog", { name: dict.clientPanel.addTitle });
     expect(describedText(sheet)).toBe(dict.clientPanel.addNote);
-    expect(within(sheet).getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Dettagli", "Logo e immagini", "Racconto"]);
+    expect(within(sheet).getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Dettagli", "Logo e immagini"]);
     expect(field("Nome").getAttribute("placeholder")).toBe(dict.clientPanel.details.namePlaceholder);
     expect(document.activeElement).toBe(field("Nome"));
     expect(describedText(field("Descrizione"))).toContain(dict.clientPanel.details.descriptionHint);

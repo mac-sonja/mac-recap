@@ -78,7 +78,7 @@ describe("client panel copy", () => {
     expect(fill(t("clientPanel.editNote"), { code: "LUM" })).toBe(
       "Il codice LUM resta lo stesso. Quello che cambi qui si aggiorna in tutte le sue case history.",
     );
-    expect(Object.values(it.clientPanel.sections)).toEqual(["Dettagli", "Logo e immagini", "Racconto"]);
+    expect(Object.values(it.clientPanel.sections)).toEqual(["Dettagli", "Logo e immagini"]);
     expect(Object.values(it.clientPanel.details.labels)).toEqual([
       "Nome",
       "Settore",

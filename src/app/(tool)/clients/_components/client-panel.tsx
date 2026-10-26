@@ -2,10 +2,27 @@
 
 import { ImageUp } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { flushSync } from "react-dom";
-import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, SECONDARY_ACTION } from "@/app/_components/button-styles";
-import { CARD_LABEL, FIELD, FIELD_HINT, FIELD_LABEL, TEXTAREA } from "@/app/_components/field-styles";
+import {
+  PRIMARY_ACTION,
+  PRIMARY_ACTION_INACTIVE,
+  SECONDARY_ACTION,
+} from "@/app/_components/button-styles";
+import {
+  CARD_LABEL,
+  FIELD,
+  FIELD_HINT,
+  FIELD_LABEL,
+  TEXTAREA,
+} from "@/app/_components/field-styles";
 import { Sheet } from "@/app/_components/sheet";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { clientHref, editClientPanelHref } from "@/app/_lib/routes";
@@ -21,7 +38,15 @@ import { acceptFor } from "@/app/(wizard)/_lib/upload";
 import { useAutosaveFields } from "@/app/(wizard)/_components/use-autosave-fields";
 import { FieldCard } from "@/app/(wizard)/_components/field-card";
 import { RequiredLabel } from "@/app/(wizard)/_components/required-label";
-import type { Client, ClientBrief, ClientBriefField, ClientDetail, ClientResult, ClientSector, ListedClientAsset } from "@/modules/case-study";
+import type {
+  Client,
+  ClientBrief,
+  ClientBriefField,
+  ClientDetail,
+  ClientResult,
+  ClientSector,
+  ListedClientAsset,
+} from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
 import { normalizeSectorLabel, sectorLabelKey } from "@/shared/sector-label";
 import { cn } from "@/shared/utils";
@@ -47,22 +72,34 @@ import {
 import { DeleteClientButton } from "./delete-client-button";
 import { IndustryPills } from "./industry-pills";
 import { LogoTile } from "./logo-tile";
-import { LogoStepFailed, logoFailureOf, useClientLogo, type LogoFailure } from "./use-client-logo";
+import {
+  LogoStepFailed,
+  logoFailureOf,
+  useClientLogo,
+  type LogoFailure,
+} from "./use-client-logo";
 import { clearPanelOpenedInApp, panelOpenedInApp } from "../_lib/panel-history";
 
 const copy = it.clientPanel.details;
 
 /** The brief texts in `CLIENT_BRIEF_FIELDS` order (the module's index is server-only). */
-const BRIEF_FIELDS = ["context", "solution"] as const satisfies readonly ClientBriefField[];
+const BRIEF_FIELDS = [
+  "context",
+  "solution",
+] as const satisfies readonly ClientBriefField[];
 
 /**
- * What the Racconto card autosaves: the two texts, then the results and the
+ * What the story cards autosave: the two texts, then the results and the
  * testimonial, each held as the JSON of what would be sent (`rowsToSend`, one entry
  * per row; `testimonialToSend`), so a half row, a part over its limit or a lone
  * author changes nothing and keeps what the server holds.
  */
 type StoryField = ClientBriefField | "results" | "testimonial";
-const STORY_FIELDS = [...BRIEF_FIELDS, "results", "testimonial"] as const satisfies readonly StoryField[];
+const STORY_FIELDS = [
+  ...BRIEF_FIELDS,
+  "results",
+  "testimonial",
+] as const satisfies readonly StoryField[];
 
 /** The fields saved on Aggiungi / Salva (the brief autosaves once the client exists). */
 type InfoKey = "name" | "industry" | "description" | "logo";
@@ -110,8 +147,8 @@ export interface ClientPanelProps {
  * `Sheet` over the Clienti list (**Nuovo cliente**, `?nuovo=1`) or the client's page
  * (**Modifica cliente**, `?modifica=1`), with one form in three numbered cards:
  * 01 Dettagli (Nome, Settore, Descrizione), 02 Logo e immagini (logo and image
- * slots), 03 Racconto (Contesto, Soluzione, then the optional Risultati and
- * Testimonial). Every field, the logo, the two texts and `minImages` images are
+ * slots), then the story one field per card as in the case Details step (owner,
+ * 2026-10-26): 03 Contesto, 04 Soluzione, 05 Risultati and 06 Testimonial (optional). Every field, the logo, the two texts and `minImages` images are
  * needed: **Aggiungi** / **Salva** stays inactive until then, with the reason linked
  * by `aria-describedby`. Lengths are checked here first (inline error, no request);
  * a half-filled result row or an author without a quote stops the save at that field.
@@ -134,7 +171,14 @@ export interface ClientPanelProps {
  * sector to that list at once (`addClientSector`, also before the client exists) and
  * selects it, or selects the existing one with the same name.
  */
-export function ClientPanel({ client: initialClient, assets, caseCount, sectors, limits, materialLimits }: ClientPanelProps) {
+export function ClientPanel({
+  client: initialClient,
+  assets,
+  caseCount,
+  sectors,
+  limits,
+  materialLimits,
+}: ClientPanelProps) {
   const router = useRouter();
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
   const baseId = useId();
@@ -163,17 +207,25 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
   const savedInfo = useRef<InfoFields | null>(
     initialClient === null
       ? null
-      : { name: initialClient.name, industry: initialClient.industry, description: initialClient.description ?? "" },
+      : {
+          name: initialClient.name,
+          industry: initialClient.industry,
+          description: initialClient.description ?? "",
+        },
   );
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
   const [closing, setClosing] = useState(false);
   const [failed, setFailed] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<InfoKey, string>>>({});
-  const [announcements, setAnnouncements] = useState<ReadonlyArray<{ id: number; text: string }>>([]);
+  const [announcements, setAnnouncements] = useState<
+    ReadonlyArray<{ id: number; text: string }>
+  >([]);
   const nextAnnouncement = useRef(0);
   const unmounted = useRef(false);
-  const textareas = useRef<Partial<Record<ClientBriefField, HTMLTextAreaElement | null>>>({});
+  const textareas = useRef<
+    Partial<Record<ClientBriefField, HTMLTextAreaElement | null>>
+  >({});
   const firstPill = useRef<HTMLDivElement>(null);
   /** Opened by a link in the app (a pushed history entry): closing goes back instead of replacing. */
   const [openedInApp] = useState(panelOpenedInApp);
@@ -187,7 +239,9 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
   const panelEntry = useRef<{ href: string; state: unknown } | null>(null);
 
   const [name, setName] = useState(initialClient?.name ?? "");
-  const [industry, setIndustry] = useState<string | null>(initialClient?.industry ?? null);
+  const [industry, setIndustry] = useState<string | null>(
+    initialClient?.industry ?? null,
+  );
   /** The shared list as loaded, plus the sectors added from this panel. */
   const [options, setOptions] = useState<readonly ClientSector[]>(sectors);
   const [newSector, setNewSector] = useState("");
@@ -197,29 +251,69 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
   const newSectorRef = useRef("");
   /** Counts the person's pill picks, so a late add never overrides a newer one. */
   const picks = useRef(0);
-  const [description, setDescription] = useState(initialClient?.description ?? "");
+  const [description, setDescription] = useState(
+    initialClient?.description ?? "",
+  );
 
-  const logo = useClientLogo(limits, { logoId: initialClient?.logoId ?? null, logoUrl: initialClient?.logoUrl ?? null }, () => busy.current);
+  const logo = useClientLogo(
+    limits,
+    {
+      logoId: initialClient?.logoId ?? null,
+      logoUrl: initialClient?.logoUrl ?? null,
+    },
+    () => busy.current,
+  );
   /** The running or finished upload of the picked logo, so a save waits for it instead of uploading again. */
   const logoJob = useRef<{ file: File; promise: Promise<string> } | null>(null);
-  const images = useClientImages(materialLimits, assets, () => clientRef.current?.id ?? null, (text) => announce(text));
+  const images = useClientImages(
+    materialLimits,
+    assets,
+    () => clientRef.current?.id ?? null,
+    (text) => announce(text),
+  );
 
-  const briefTooLong = (text: string) => charCount(text.trim()) > limits.briefMax;
-  const initialBrief: ClientBrief = initialClient?.brief ?? { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" };
+  const briefTooLong = (text: string) =>
+    charCount(text.trim()) > limits.briefMax;
+  const initialBrief: ClientBrief = initialClient?.brief ?? {
+    context: "",
+    solution: "",
+    results: [],
+    testimonialQuote: "",
+    testimonialAuthor: "",
+  };
 
   // Risultati and Testimonial as typed; the autosave holds what would be saved of them.
-  const [rows, setRows] = useState<ResultRow[]>(() => resultRowsOf(initialBrief.results));
+  const [rows, setRows] = useState<ResultRow[]>(() =>
+    resultRowsOf(initialBrief.results),
+  );
   const rowsRef = useRef(rows);
   const [quote, setQuote] = useState(initialBrief.testimonialQuote);
   const [author, setAuthor] = useState(initialBrief.testimonialAuthor);
-  const testimonialRef = useRef({ quote: initialBrief.testimonialQuote, author: initialBrief.testimonialAuthor });
+  const testimonialRef = useRef({
+    quote: initialBrief.testimonialQuote,
+    author: initialBrief.testimonialAuthor,
+  });
   /** What the server holds, per row and for the testimonial: kept for a row or part that can't be sent yet. */
   const savedRows = useRef(savedRowsOf(initialBrief.results));
-  const savedTestimonial = useRef<Testimonial>({ quote: initialBrief.testimonialQuote, author: initialBrief.testimonialAuthor });
-  const resultsKey = (next: readonly ResultRow[]) => JSON.stringify(rowsToSend(next, savedRows.current, limits));
-  const testimonialKey = (next: Testimonial) => JSON.stringify(testimonialToSend(next.quote, next.author, savedTestimonial.current, limits));
+  const savedTestimonial = useRef<Testimonial>({
+    quote: initialBrief.testimonialQuote,
+    author: initialBrief.testimonialAuthor,
+  });
+  const resultsKey = (next: readonly ResultRow[]) =>
+    JSON.stringify(rowsToSend(next, savedRows.current, limits));
+  const testimonialKey = (next: Testimonial) =>
+    JSON.stringify(
+      testimonialToSend(
+        next.quote,
+        next.author,
+        savedTestimonial.current,
+        limits,
+      ),
+    );
   /** The incomplete-entry messages shown: after focus leaves the row (or testimonial) or a save is attempted. */
-  const [revealed, setRevealed] = useState<ReadonlySet<IncompleteKey>>(() => new Set());
+  const [revealed, setRevealed] = useState<ReadonlySet<IncompleteKey>>(
+    () => new Set(),
+  );
   const storyInputs = useRef<StoryInputs>(emptyStoryInputs());
 
   /** A half row or a lone author: it is not saved, so closing would lose it. */
@@ -238,21 +332,30 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
       if (isOver(row.value, limits.resultValueMax)) return inputs?.value;
     }
     const { quote: typedQuote, author: typedAuthor } = testimonialRef.current;
-    if (isOver(typedQuote, limits.testimonialQuoteMax)) return storyInputs.current.quote;
-    if (isOver(typedAuthor, limits.testimonialAuthorMax)) return storyInputs.current.author;
+    if (isOver(typedQuote, limits.testimonialQuoteMax))
+      return storyInputs.current.quote;
+    if (isOver(typedAuthor, limits.testimonialAuthorMax))
+      return storyInputs.current.author;
     return undefined;
   }
 
   // The results and testimonial never hold an over-long part (`rowsToSend`, `testimonialToSend`).
-  const storyTooLong = (text: string, field: StoryField) => field !== "results" && field !== "testimonial" && briefTooLong(text);
+  const storyTooLong = (text: string, field: StoryField) =>
+    field !== "results" && field !== "testimonial" && briefTooLong(text);
 
   const storyLabel = (field: StoryField) =>
-    field === "results" ? copy.results.title : field === "testimonial" ? copy.testimonial.title : copy.labels[field];
+    field === "results"
+      ? copy.results.title
+      : field === "testimonial"
+        ? copy.testimonial.title
+        : copy.labels[field];
 
   function announce(text: string) {
     if (unmounted.current) return;
     const line = { id: nextAnnouncement.current++, text };
-    setAnnouncements((current) => [...current, line].slice(-ANNOUNCEMENTS_KEPT));
+    setAnnouncements((current) =>
+      [...current, line].slice(-ANNOUNCEMENTS_KEPT),
+    );
   }
 
   const brief = useAutosaveFields<StoryField>({
@@ -269,21 +372,32 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
       if (field === "results") {
         const perRow = JSON.parse(text) as (ClientResult | null)[];
         const results = perRow.filter((row) => row !== null);
-        const saved = (await saveClientResults({ clientId: current.id, results })).ok;
+        const saved = (
+          await saveClientResults({ clientId: current.id, results })
+        ).ok;
         if (saved) savedRows.current = perRow;
         return saved;
       }
       if (field === "testimonial") {
         const next = JSON.parse(text) as Testimonial;
-        const saved = (await saveClientTestimonial({ clientId: current.id, ...next })).ok;
+        const saved = (
+          await saveClientTestimonial({ clientId: current.id, ...next })
+        ).ok;
         if (saved) savedTestimonial.current = next;
         return saved;
       }
-      return (await saveClientBriefField({ clientId: current.id, field, text })).ok;
+      return (await saveClientBriefField({ clientId: current.id, field, text }))
+        .ok;
     },
     tooLong: storyTooLong,
     active: () => clientRef.current !== null && !discarding.current,
-    onSaveFailed: (field) => announce(fill(copy.announceError, { field: storyLabel(field), message: copy.errors.saveFailed })),
+    onSaveFailed: (field) =>
+      announce(
+        fill(copy.announceError, {
+          field: storyLabel(field),
+          message: copy.errors.saveFailed,
+        }),
+      ),
     hasOtherUnsaved: () =>
       logo.logo.kind === "new" ||
       images.hasLocal ||
@@ -300,7 +414,10 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
   useEffect(() => {
     unmounted.current = false;
     clearPanelOpenedInApp();
-    panelEntry.current = { href: window.location.href, state: window.history.state };
+    panelEntry.current = {
+      href: window.location.href,
+      state: window.history.state,
+    };
     return () => {
       unmounted.current = true;
     };
@@ -312,7 +429,12 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
   useEffect(() => {
     function onPopState(event: PopStateEvent) {
       const entry = panelEntry.current;
-      if (leaving.current || entry === null || window.location.href === entry.href) return;
+      if (
+        leaving.current ||
+        entry === null ||
+        window.location.href === entry.href
+      )
+        return;
       if (!unsavedRef.current() || window.confirm(it.wizard.unsavedConfirm)) {
         discarding.current = true;
         leaving.current = true;
@@ -328,7 +450,8 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
   /** Presign → PUT → confirm the picked logo once; a second call for the same file waits for the first. */
   function uploadLogo(clientId: string): Promise<string> {
     const current = logo.logo;
-    if (current.kind !== "new") return Promise.reject(new LogoStepFailed("fatal"));
+    if (current.kind !== "new")
+      return Promise.reject(new LogoStepFailed("fatal"));
     if (logoJob.current?.file === current.file) return logoJob.current.promise;
     const promise = logo.upload(clientId);
     logoJob.current = { file: current.file, promise };
@@ -344,7 +467,8 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     const current = clientRef.current;
     if (pickedLogo === null || current === null) return;
     uploadLogo(current.id).catch((error: unknown) => {
-      if (!unmounted.current && !busy.current) showLogoFailure(error instanceof LogoStepFailed ? error.kind : "retry");
+      if (!unmounted.current && !busy.current)
+        showLogoFailure(error instanceof LogoStepFailed ? error.kind : "retry");
     });
     // Only a new pick starts an upload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -354,15 +478,21 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     const unsaved = brief.firstUnsaved();
     if (unsaved === "results") {
       // The first row with something typed (the save sends every filled row).
-      const index = Math.max(0, rowsRef.current.findIndex((row) => row.label.trim() !== "" || row.value.trim() !== ""));
+      const index = Math.max(
+        0,
+        rowsRef.current.findIndex(
+          (row) => row.label.trim() !== "" || row.value.trim() !== "",
+        ),
+      );
       storyInputs.current.rows[index]?.label?.focus();
-    }
-    else if (unsaved === "testimonial") storyInputs.current.quote?.focus();
+    } else if (unsaved === "testimonial") storyInputs.current.quote?.focus();
     else if (unsaved !== undefined) textareas.current[unsaved]?.focus();
   }
 
   function changeRow(index: number, part: keyof ResultRow, text: string) {
-    rowsRef.current = rowsRef.current.map((row, at) => (at === index ? { ...row, [part]: text } : row));
+    rowsRef.current = rowsRef.current.map((row, at) =>
+      at === index ? { ...row, [part]: text } : row,
+    );
     setRows(rowsRef.current);
     // Complete or emptied: its message waits for focus to leave it again.
     if (!isHalfRow(rowsRef.current[index])) conceal(`row-${index}`);
@@ -378,7 +508,9 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
   }
 
   function reveal(key: IncompleteKey) {
-    setRevealed((current) => (current.has(key) ? current : new Set(current).add(key)));
+    setRevealed((current) =>
+      current.has(key) ? current : new Set(current).add(key),
+    );
   }
 
   function conceal(key: IncompleteKey) {
@@ -400,7 +532,10 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     } else {
       const index = Number(key.slice("row-".length));
       const inputs = storyInputs.current.rows[index];
-      (rowsRef.current[index]?.label.trim() === "" ? inputs?.label : inputs?.value)?.focus();
+      (rowsRef.current[index]?.label.trim() === ""
+        ? inputs?.label
+        : inputs?.value
+      )?.focus();
     }
     return true;
   }
@@ -417,10 +552,18 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
   function showErrors(next: Partial<Record<InfoKey, string>>) {
     // Commit aria-invalid and the messages before focus moves, so they are announced.
     flushSync(() => setErrors(next));
-    const first = (["name", "industry", "description", "logo"] as const).find((key) => next[key] !== undefined);
-    if (first === "industry") firstPill.current?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]')?.focus();
+    const first = (["name", "industry", "description", "logo"] as const).find(
+      (key) => next[key] !== undefined,
+    );
+    if (first === "industry")
+      firstPill.current
+        ?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]')
+        ?.focus();
     else if (first === "logo") logo.chooseRef.current?.focus();
-    else if (first !== undefined) document.getElementById(first === "name" ? ids.name : ids.description)?.focus();
+    else if (first !== undefined)
+      document
+        .getElementById(first === "name" ? ids.name : ids.description)
+        ?.focus();
   }
 
   function selectIndustry(key: string) {
@@ -452,10 +595,17 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     if (label === "") return;
     const length = charCount(label);
     if (length < limits.sectorLabelMin || length > limits.sectorLabelMax) {
-      setSectorError(fill(copy.sector.length, { min: limits.sectorLabelMin, max: limits.sectorLabelMax }));
+      setSectorError(
+        fill(copy.sector.length, {
+          min: limits.sectorLabelMin,
+          max: limits.sectorLabelMax,
+        }),
+      );
       return;
     }
-    const known = options.find((sector) => sectorLabelKey(sector.label) === sectorLabelKey(label));
+    const known = options.find(
+      (sector) => sectorLabelKey(sector.label) === sectorLabelKey(label),
+    );
     if (known !== undefined) return chooseSector(known, picks.current);
     const picksBefore = picks.current;
     setAddingSector(true);
@@ -466,7 +616,10 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
       if (!added.ok) {
         setSectorError(
           added.error.code === "SECTOR_LABEL_INVALID"
-            ? fill(copy.sector.length, { min: limits.sectorLabelMin, max: limits.sectorLabelMax })
+            ? fill(copy.sector.length, {
+                min: limits.sectorLabelMin,
+                max: limits.sectorLabelMax,
+              })
             : copy.sector.addFailed,
         );
         return;
@@ -484,7 +637,11 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
    * save is running or the person picked another pill since the add started (`picksBefore`).
    */
   function chooseSector(sector: ClientSector, picksBefore: number) {
-    setOptions((current) => (current.some((option) => option.key === sector.key) ? current : [...current, sector]));
+    setOptions((current) =>
+      current.some((option) => option.key === sector.key)
+        ? current
+        : [...current, sector],
+    );
     changeNewSector("");
     setSectorError(null);
     if (busy.current || picks.current !== picksBefore) return;
@@ -493,19 +650,34 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
   }
 
   /** Field errors from a refusal; true when the refusal was shown on a field. */
-  function showRefusal(result: Extract<ActionResult<unknown>, { ok: false }>): boolean {
+  function showRefusal(
+    result: Extract<ActionResult<unknown>, { ok: false }>,
+  ): boolean {
     const { code, fields = [] } = result.error;
     const next: Partial<Record<InfoKey, string>> = {};
     if (code === "CLIENT_NAME_TAKEN") next.name = it.clients.errors.nameTaken;
-    else if (code === "CLIENT_CODE_EXHAUSTED") next.name = it.clients.errors.codeExhausted;
-    else if (code === "INVALID_INPUT" && fields.length === 1 && fields[0] === "name") next.name = it.clients.errors.nameRequired;
-    else if (code === "CLIENT_LOGO_INVALID") next.logo = it.clients.errors.logoUnreadable;
+    else if (code === "CLIENT_CODE_EXHAUSTED")
+      next.name = it.clients.errors.codeExhausted;
+    else if (
+      code === "INVALID_INPUT" &&
+      fields.length === 1 &&
+      fields[0] === "name"
+    )
+      next.name = it.clients.errors.nameRequired;
+    else if (code === "CLIENT_LOGO_INVALID")
+      next.logo = it.clients.errors.logoUnreadable;
     else if (code === "CLIENT_FIELD_INVALID") {
       if (fields.includes("industry")) next.industry = copy.errors.required;
-      if (fields.includes("description")) next.description = copy.errors.required;
+      if (fields.includes("description"))
+        next.description = copy.errors.required;
       if (fields.includes("logoId")) next.logo = copy.errors.required;
-    } else if (code === "CLIENT_FIELD_TOO_LONG" && fields.includes("description")) {
-      next.description = fill(it.clients.errors.fieldTooLong, { max: limits.descriptionMax });
+    } else if (
+      code === "CLIENT_FIELD_TOO_LONG" &&
+      fields.includes("description")
+    ) {
+      next.description = fill(it.clients.errors.fieldTooLong, {
+        max: limits.descriptionMax,
+      });
     }
     if (Object.keys(next).length === 0) return false;
     showErrors(next);
@@ -518,12 +690,21 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     if (!unmounted.current) setClient(saved);
   }
 
-  const currentInfo = (): InfoFields => ({ name: name.trim(), industry, description: description.trim() });
+  const currentInfo = (): InfoFields => ({
+    name: name.trim(),
+    industry,
+    description: description.trim(),
+  });
 
   function showLogoFailure(kind: LogoFailure) {
     if (kind === "fatal") setFailed(true);
     else if (kind === "unsafe") logo.showError(it.clients.errors.logoUnsafe);
-    else logo.showError(kind === "invalid" ? it.clients.errors.logoUnreadable : it.clients.errors.logoFailed);
+    else
+      logo.showError(
+        kind === "invalid"
+          ? it.clients.errors.logoUnreadable
+          : it.clients.errors.logoFailed,
+      );
   }
 
   /**
@@ -541,12 +722,19 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     }
     const info = currentInfo();
     const invalid: Partial<Record<InfoKey, string>> = {};
-    if (info.name.length > limits.nameMax) invalid.name = fill(it.clients.errors.nameTooLong, { max: limits.nameMax });
+    if (info.name.length > limits.nameMax)
+      invalid.name = fill(it.clients.errors.nameTooLong, {
+        max: limits.nameMax,
+      });
     if (charCount(info.description) > limits.descriptionMax) {
-      invalid.description = fill(it.clients.errors.fieldTooLong, { max: limits.descriptionMax });
+      invalid.description = fill(it.clients.errors.fieldTooLong, {
+        max: limits.descriptionMax,
+      });
     }
     if (Object.keys(invalid).length > 0) return showErrors(invalid);
-    const overLong = BRIEF_FIELDS.find((field) => briefTooLong(brief.current()[field]));
+    const overLong = BRIEF_FIELDS.find((field) =>
+      briefTooLong(brief.current()[field]),
+    );
     if (overLong !== undefined) return textareas.current[overLong]?.focus();
     const storyOver = storyOverLong();
     if (storyOver !== undefined) return storyOver?.focus();
@@ -574,7 +762,10 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
         createdHere.current = true;
         // The URL names the client from now on, so a reload resumes it in the edit panel.
         window.history.replaceState(null, "", editClientPanelHref(current.id));
-        panelEntry.current = { href: window.location.href, state: window.history.state };
+        panelEntry.current = {
+          href: window.location.href,
+          state: window.history.state,
+        };
         // The list behind the panel shows the new client even if a later step fails.
         router.refresh();
       }
@@ -585,10 +776,16 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
         try {
           logoId = await uploadLogo(current.id);
         } catch (error) {
-          showLogoFailure(error instanceof LogoStepFailed ? error.kind : "retry");
+          showLogoFailure(
+            error instanceof LogoStepFailed ? error.kind : "retry",
+          );
           return;
         }
-        const linked = await updateClient({ clientId: current.id, ...info, logoId });
+        const linked = await updateClient({
+          clientId: current.id,
+          ...info,
+          logoId,
+        });
         if (!linked.ok) {
           if (!showRefusal(linked)) showLogoFailure(logoFailureOf(linked));
           return;
@@ -598,7 +795,11 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
         logo.linked(logoId);
       } else if (!sameInfo(savedInfo.current, info)) {
         // No logo (a legacy client) is refused by the server as CLIENT_FIELD_INVALID on the logo.
-        const updated = await updateClient({ clientId: current.id, ...info, logoId: logo.logo.kind === "current" ? logo.logo.id : null });
+        const updated = await updateClient({
+          clientId: current.id,
+          ...info,
+          logoId: logo.logo.kind === "current" ? logo.logo.id : null,
+        });
         if (!updated.ok) {
           if (!showRefusal(updated)) setFailed(true);
           return;
@@ -622,7 +823,10 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
       leavingPage = true;
       leaving.current = true;
       // Replace: the history entry named the panel (or, after a create, the new client's edit panel).
-      router.replace(clientHref(current.id), adding ? undefined : { scroll: false });
+      router.replace(
+        clientHref(current.id),
+        adding ? undefined : { scroll: false },
+      );
     } catch {
       setFailed(true);
     } finally {
@@ -639,8 +843,12 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     ...(industry === null ? [copy.labels.industries] : []),
     ...(description.trim() === "" ? [copy.labels.description] : []),
     ...(logo.logo.kind === "none" ? [copy.labels.logo] : []),
-    ...(images.imageCount < materialLimits.minImages ? [copy.labels.images] : []),
-    ...BRIEF_FIELDS.filter((field) => values[field].trim() === "").map((field) => copy.labels[field]),
+    ...(images.imageCount < materialLimits.minImages
+      ? [copy.labels.images]
+      : []),
+    ...BRIEF_FIELDS.filter((field) => values[field].trim() === "").map(
+      (field) => copy.labels[field],
+    ),
   ];
   const ready = missing.length === 0;
   const inactive = !ready || pending || images.busy || addingSector;
@@ -656,7 +864,9 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
         logo.logo.kind !== "none" ||
         images.slots.length > 0 ||
         BRIEF_FIELDS.some((field) => brief.current()[field].trim() !== "") ||
-        rowsRef.current.some((row) => row.label.trim() !== "" || row.value.trim() !== "") ||
+        rowsRef.current.some(
+          (row) => row.label.trim() !== "" || row.value.trim() !== "",
+        ) ||
         testimonialRef.current.quote.trim() !== "" ||
         testimonialRef.current.author.trim() !== ""
       );
@@ -684,13 +894,17 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
     const current = clientRef.current;
     // Opened by a link: go back to the entry it came from, so no duplicate is left behind.
     if (openedInApp && !createdHere.current) router.back();
-    else router.replace(current === null ? "/clients" : clientHref(current.id), { scroll: false });
+    else
+      router.replace(current === null ? "/clients" : clientHref(current.id), {
+        scroll: false,
+      });
   }
 
   const editing = client !== null;
   const descriptionCount = charCount(description.trim());
   const altName = name.trim() || client?.name || "";
-  const describedBy = (...list: (string | false)[]) => list.filter(Boolean).join(" ") || undefined;
+  const describedBy = (...list: (string | false)[]) =>
+    list.filter(Boolean).join(" ") || undefined;
   const logoError = errors.logo ?? logo.error;
   const disabled = pending;
 
@@ -715,7 +929,12 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
           aria-describedby={ready ? undefined : ids.reason}
           aria-busy={pending || undefined}
           onClick={() => void save()}
-          className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, !ready && "cursor-not-allowed", "px-5")}
+          className={cn(
+            PRIMARY_ACTION,
+            PRIMARY_ACTION_INACTIVE,
+            !ready && "cursor-not-allowed",
+            "px-5",
+          )}
         >
           {editing ? it.clientPanel.save : it.clientPanel.add}
         </button>
@@ -730,13 +949,20 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
       open={!closing}
       onClose={close}
       title={editing ? it.clientPanel.editTitle : it.clientPanel.addTitle}
-      description={client === null ? it.clientPanel.addNote : fill(it.clientPanel.editNote, { code: client.code })}
+      description={
+        client === null
+          ? it.clientPanel.addNote
+          : fill(it.clientPanel.editNote, { code: client.code })
+      }
       closeLabel={it.clientPanel.close}
       footer={footer}
       busy={pending}
     >
       <div className="flex flex-col gap-3">
-        <FieldCard number={1} label={<SectionTitle>{it.clientPanel.sections.details}</SectionTitle>}>
+        <FieldCard
+          number={1}
+          label={<SectionTitle>{it.clientPanel.sections.details}</SectionTitle>}
+        >
           <div className="flex flex-col gap-2">
             <RequiredLabel>
               <label htmlFor={ids.name} className={FIELD_LABEL}>
@@ -752,7 +978,9 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
               data-autofocus
               aria-required="true"
               aria-invalid={errors.name !== undefined || undefined}
-              aria-describedby={describedBy(errors.name !== undefined && ids.nameError)}
+              aria-describedby={describedBy(
+                errors.name !== undefined && ids.nameError,
+              )}
               placeholder={copy.namePlaceholder}
               value={name}
               onChange={(event) => {
@@ -781,7 +1009,9 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
                 onSelect={pickIndustry}
                 disabled={pending}
                 labelledBy={ids.industryLabel}
-                describedBy={describedBy(errors.industry !== undefined && ids.industryError)}
+                describedBy={describedBy(
+                  errors.industry !== undefined && ids.industryError,
+                )}
                 invalid={errors.industry !== undefined}
               />
             </div>
@@ -798,7 +1028,9 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
                 autoComplete="off"
                 aria-label={copy.sector.newName}
                 aria-invalid={sectorError !== null || undefined}
-                aria-describedby={describedBy(sectorError !== null && ids.newSectorError)}
+                aria-describedby={describedBy(
+                  sectorError !== null && ids.newSectorError,
+                )}
                 placeholder={copy.sector.placeholder}
                 value={newSector}
                 onChange={(event) => {
@@ -806,7 +1038,8 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
                   setSectorError(null);
                 }}
                 onKeyDown={(event) => {
-                  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                  if (event.key !== "Enter" || event.nativeEvent.isComposing)
+                    return;
                   event.preventDefault();
                   void addSector();
                 }}
@@ -815,10 +1048,18 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
               <button
                 type="button"
                 aria-label={copy.sector.addName}
-                aria-disabled={newSector.trim() === "" || addingSector || disabled || undefined}
+                aria-disabled={
+                  newSector.trim() === "" ||
+                  addingSector ||
+                  disabled ||
+                  undefined
+                }
                 aria-busy={addingSector || undefined}
                 onClick={() => void addSector()}
-                className={cn(SECONDARY_ACTION, "shrink-0 aria-disabled:cursor-not-allowed aria-disabled:text-foreground-muted")}
+                className={cn(
+                  SECONDARY_ACTION,
+                  "shrink-0 aria-disabled:cursor-not-allowed aria-disabled:text-foreground-muted",
+                )}
               >
                 {copy.sector.add}
               </button>
@@ -842,10 +1083,15 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
                 aria-live="polite"
                 className={cn(
                   "ml-auto font-mono text-xs tabular-nums",
-                  descriptionCount > limits.descriptionMax ? "text-danger" : "text-foreground-muted",
+                  descriptionCount > limits.descriptionMax
+                    ? "text-danger"
+                    : "text-foreground-muted",
                 )}
               >
-                {fill(copy.counter, { n: descriptionCount, max: limits.descriptionMax })}
+                {fill(copy.counter, {
+                  n: descriptionCount,
+                  max: limits.descriptionMax,
+                })}
               </p>
             </div>
             <textarea
@@ -855,7 +1101,11 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
               required
               aria-required="true"
               aria-invalid={errors.description !== undefined || undefined}
-              aria-describedby={describedBy(ids.descriptionHint, ids.counter, errors.description !== undefined && ids.descriptionError)}
+              aria-describedby={describedBy(
+                ids.descriptionHint,
+                ids.counter,
+                errors.description !== undefined && ids.descriptionError,
+              )}
               value={description}
               onChange={(event) => {
                 setDescription(event.target.value);
@@ -874,8 +1124,15 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
           </div>
         </FieldCard>
 
-        <FieldCard number={2} label={<SectionTitle>{it.clientPanel.sections.media}</SectionTitle>}>
-          <div role="group" aria-labelledby={ids.logoLabel} className="flex flex-col gap-2">
+        <FieldCard
+          number={2}
+          label={<SectionTitle>{it.clientPanel.sections.media}</SectionTitle>}
+        >
+          <div
+            role="group"
+            aria-labelledby={ids.logoLabel}
+            className="flex flex-col gap-2"
+          >
             <RequiredLabel>
               <span id={ids.logoLabel} className={FIELD_LABEL}>
                 {copy.labels.logo}
@@ -883,7 +1140,11 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
             </RequiredLabel>
             <div className="flex items-center gap-3">
               {logo.previewUrl === null ? null : (
-                <LogoTile src={logo.previewUrl} alt={fill(copy.logoAlt, { name: altName })} className="size-16" />
+                <LogoTile
+                  src={logo.previewUrl}
+                  alt={fill(copy.logoAlt, { name: altName })}
+                  className="size-16"
+                />
               )}
               <input
                 ref={logo.inputRef}
@@ -903,7 +1164,11 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
                 type="button"
                 onClick={logo.choose}
                 aria-disabled={disabled || undefined}
-                aria-describedby={describedBy(ids.logoHint, ids.logoReplaceHint, logoError !== null && ids.logoError)}
+                aria-describedby={describedBy(
+                  ids.logoHint,
+                  ids.logoReplaceHint,
+                  logoError !== null && ids.logoError,
+                )}
                 className={SECONDARY_ACTION}
               >
                 <ImageUp aria-hidden="true" className="size-4" />
@@ -911,7 +1176,10 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
               </button>
             </div>
             <p id={ids.logoHint} className={FIELD_HINT}>
-              {fill(copy.logoHint, { size: Math.round(limits.logoMaxBytes / (1024 * 1024)), px: limits.logoMinShortSide })}
+              {fill(copy.logoHint, {
+                size: Math.round(limits.logoMaxBytes / (1024 * 1024)),
+                px: limits.logoMinShortSide,
+              })}
             </p>
             <p id={ids.logoReplaceHint} className={FIELD_HINT}>
               {copy.logoReplaceHint}
@@ -923,76 +1191,103 @@ export function ClientPanel({ client: initialClient, assets, caseCount, sectors,
             )}
           </div>
           <div className="mt-2">
-            <ClientImageSlots images={images} limits={materialLimits} disabled={disabled} />
+            <ClientImageSlots
+              images={images}
+              limits={materialLimits}
+              disabled={disabled}
+            />
           </div>
         </FieldCard>
 
-        <FieldCard number={3} label={<SectionTitle>{it.clientPanel.sections.story}</SectionTitle>}>
-          {BRIEF_FIELDS.map((field, index) => {
-            const id = `${baseId}-${field}`;
-            const errorId = `${id}-error`;
-            const text = values[field];
-            const over = briefTooLong(text);
-            const saveFailed = brief.failed.has(field);
-            const message = over ? fill(it.clients.errors.fieldTooLong, { max: limits.briefMax }) : saveFailed ? copy.errors.saveFailed : null;
-            return (
-              <div key={field} className={cn("flex flex-col gap-2", index > 0 && "mt-2")}>
+        {BRIEF_FIELDS.map((field, index) => {
+          const id = `${baseId}-${field}`;
+          const errorId = `${id}-error`;
+          const text = values[field];
+          const over = briefTooLong(text);
+          const saveFailed = brief.failed.has(field);
+          const message = over
+            ? fill(it.clients.errors.fieldTooLong, { max: limits.briefMax })
+            : saveFailed
+              ? copy.errors.saveFailed
+              : null;
+          return (
+            <FieldCard
+              key={field}
+              number={3 + index}
+              label={
                 <RequiredLabel>
-                  <label htmlFor={id} className={FIELD_LABEL}>
+                  <label htmlFor={id} className={CARD_LABEL}>
                     {copy.labels[field]}
                   </label>
                 </RequiredLabel>
-                <textarea
-                  id={id}
-                  ref={(element) => {
-                    textareas.current[field] = element;
-                  }}
-                  name={field}
-                  value={text}
-                  required
-                  aria-required="true"
-                  placeholder={copy.placeholders[field]}
-                  aria-invalid={over || saveFailed || undefined}
-                  aria-describedby={message === null ? undefined : errorId}
-                  onChange={(event) => brief.change(field, event.target.value)}
-                  onBlur={() => void brief.save(field)}
-                  className={TEXTAREA}
-                />
-                {message !== null && (
-                  <p id={errorId} className={ERROR}>
-                    {message}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-          <ClientResultsFields
-            baseId={baseId}
-            limits={limits}
-            rows={rows}
-            quote={quote}
-            author={author}
-            onRowChange={changeRow}
-            onQuoteChange={(text) => changeTestimonial({ ...testimonialRef.current, quote: text })}
-            onAuthorChange={(text) => changeTestimonial({ ...testimonialRef.current, author: text })}
-            onResultsBlur={() => void brief.save("results")}
-            onTestimonialBlur={() => void brief.save("testimonial")}
-            onLeave={reveal}
-            revealed={revealed}
-            resultsFailed={brief.failed.has("results")}
-            testimonialFailed={brief.failed.has("testimonial")}
-            inputs={storyInputs}
-          />
-        </FieldCard>
+              }
+            >
+              <textarea
+                id={id}
+                ref={(element) => {
+                  textareas.current[field] = element;
+                }}
+                name={field}
+                value={text}
+                required
+                aria-required="true"
+                placeholder={copy.placeholders[field]}
+                aria-invalid={over || saveFailed || undefined}
+                aria-describedby={message === null ? undefined : errorId}
+                onChange={(event) => brief.change(field, event.target.value)}
+                onBlur={() => void brief.save(field)}
+                className={TEXTAREA}
+              />
+              {message !== null && (
+                <p id={errorId} className={ERROR}>
+                  {message}
+                </p>
+              )}
+            </FieldCard>
+          );
+        })}
+        <ClientResultsFields
+          firstNumber={3 + BRIEF_FIELDS.length}
+          baseId={baseId}
+          limits={limits}
+          rows={rows}
+          quote={quote}
+          author={author}
+          onRowChange={changeRow}
+          onQuoteChange={(text) =>
+            changeTestimonial({ ...testimonialRef.current, quote: text })
+          }
+          onAuthorChange={(text) =>
+            changeTestimonial({ ...testimonialRef.current, author: text })
+          }
+          onResultsBlur={() => void brief.save("results")}
+          onTestimonialBlur={() => void brief.save("testimonial")}
+          onLeave={reveal}
+          revealed={revealed}
+          resultsFailed={brief.failed.has("results")}
+          testimonialFailed={brief.failed.has("testimonial")}
+          inputs={storyInputs}
+        />
       </div>
 
-      <div role="status" aria-live="polite" aria-relevant="additions" className="sr-only">
+      <div
+        role="status"
+        aria-live="polite"
+        aria-relevant="additions"
+        className="sr-only"
+      >
         {announcements.map((line) => (
           <p key={line.id}>{line.text}</p>
         ))}
       </div>
 
-      {client !== null && caseCount !== null && <DeleteClientButton clientId={client.id} name={client.name} caseCount={caseCount} />}
+      {client !== null && caseCount !== null && (
+        <DeleteClientButton
+          clientId={client.id}
+          name={client.name}
+          caseCount={caseCount}
+        />
+      )}
     </Sheet>
   );
 }
