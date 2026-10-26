@@ -64,6 +64,9 @@ export function imageTypeNames(types: readonly string[]): string {
 let nextKey = 0;
 const newKey = () => `slot-${nextKey++}`;
 
+/** Images held or waiting: what counts toward `minImages`. */
+const imageCountOf = (slots: readonly ImageSlot[]) => slots.filter((slot) => slot.state === "local" || slot.asset.kind === "image").length;
+
 /**
  * The client's images (Story 2.16's client material, images only in the panel):
  * up to `maxFiles` slots. A pick is checked first (an image type, 1 B–50 MB, and the
@@ -221,6 +224,9 @@ export function useClientImages(
     }
     const id = clientId();
     if (slot.removing || id === null) return;
+    // A stored removal is immediate and can't be undone: ask first when it leaves too few images (owner, 2026-10-26).
+    const imagesAfter = imageCountOf(slotsRef.current) - (slot.asset.kind === "image" ? 1 : 0);
+    if (slot.asset.kind === "image" && imagesAfter < limits.minImages && !window.confirm(fill(copy.belowMin, { min: limits.minImages }))) return;
     patch(key, (current) => (current.state === "stored" ? { ...current, removing: true, error: null } : current));
     let ok: boolean;
     try {
@@ -248,7 +254,7 @@ export function useClientImages(
     return all && slotsRef.current.every((slot) => slot.state === "stored");
   }
 
-  const imageCount = slots.filter((slot) => slot.state === "local" || slot.asset.kind === "image").length;
+  const imageCount = imageCountOf(slots);
   return {
     slots,
     imageCount,
