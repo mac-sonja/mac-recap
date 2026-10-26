@@ -277,14 +277,14 @@ isOneToOne: false
                   ]
                 },"context_form": {
                   Row: {
-                    "case_id": string,"context": string,"created_at": string,"results": string,"solution": string,"updated_at": string,"updated_by": string
+                    "case_id": string,"context": string,"created_at": string,"results": NonNullable<Json>,"solution": string,"testimonial_author": string,"testimonial_quote": string,"updated_at": string,"updated_by": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "case_id": string,"context"?: string,"created_at"?: string,"results"?: string,"solution"?: string,"updated_at"?: string,"updated_by": string
+                    "case_id": string,"context"?: string,"created_at"?: string,"results"?: NonNullable<Json>,"solution"?: string,"testimonial_author"?: string,"testimonial_quote"?: string,"updated_at"?: string,"updated_by": string
                   }
                   Update: {
-                    "case_id"?: string,"context"?: string,"created_at"?: string,"results"?: string,"solution"?: string,"updated_at"?: string,"updated_by"?: string
+                    "case_id"?: string,"context"?: string,"created_at"?: string,"results"?: NonNullable<Json>,"solution"?: string,"testimonial_author"?: string,"testimonial_quote"?: string,"updated_at"?: string,"updated_by"?: string
                   }
                   Relationships: [
                     {
@@ -637,6 +637,12 @@ isOneToOne: false
                            },
 "restore_asset":
 { Args: { "p_asset_id": string,"p_case_id": string }; Returns: boolean
+                           },
+"save_case_results":
+{ Args: { "p_actor_id": string,"p_case_id": string,"p_results": Json }; Returns: Json
+                           },
+"save_case_testimonial":
+{ Args: { "p_actor_id": string,"p_author": string,"p_case_id": string,"p_quote": string }; Returns: Json
                            },
 "save_client_brief_field":
 { Args: { "p_actor_id": string,"p_client_id": string,"p_field": string,"p_text": string }; Returns: string

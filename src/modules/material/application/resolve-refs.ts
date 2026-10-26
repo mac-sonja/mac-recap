@@ -5,7 +5,7 @@ import type { MaterialDeps } from "./deps";
 
 /**
  * Resolves material refs of a live case to their current text, in the order
- * given. Only `form_field` refs (`id` = `context` | `solution` | `results`)
+ * given. Only `form_field` refs (`id` = `context` | `solution`)
  * resolve so far; an `asset` ref or an unknown form key is `UNKNOWN_REF` naming
  * it, and nothing is resolved. Any other kind (including the retired `text`) fails
  * the schema as `INVALID_INPUT` at `refs.N.kind`. Errors: `INVALID_INPUT`,

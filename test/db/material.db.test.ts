@@ -827,7 +827,8 @@ describe("restore_asset after Story 2.8", () => {
   });
 });
 
-// Story 2.10: context_form and save_context_field.
+// Story 2.10: context_form and save_context_field (Story 2.21: Risultati and Testimonial
+// are structured and save through save_case_results / save_case_testimonial).
 
 describe("details form (context_form)", () => {
   const browser = () =>
@@ -851,15 +852,38 @@ describe("details form (context_form)", () => {
     return makeSaveDetailsField(await formDeps())(await devActor(), input);
   }
 
+  /** The client's limits, as index.ts passes them (Story 2.21). */
+  async function storyLimits() {
+    const caseStudy = await loadCaseStudy();
+    return {
+      resultsMax: caseStudy.CLIENT_RESULTS_MAX,
+      resultLabelMax: caseStudy.CLIENT_RESULT_LABEL_MAX,
+      resultValueMax: caseStudy.CLIENT_RESULT_VALUE_MAX,
+      testimonialQuoteMax: caseStudy.CLIENT_TESTIMONIAL_QUOTE_MAX,
+      testimonialAuthorMax: caseStudy.CLIENT_TESTIMONIAL_AUTHOR_MAX,
+    };
+  }
+
+  async function saveResults(input: Record<string, unknown>) {
+    const { makeSaveCaseResults } = await import("@/modules/material/application/save-case-results");
+    return makeSaveCaseResults(await formDeps(), await storyLimits())(await devActor(), input);
+  }
+
+  async function saveTestimonial(input: Record<string, unknown>) {
+    const { makeSaveCaseTestimonial } = await import("@/modules/material/application/save-case-testimonial");
+    return makeSaveCaseTestimonial(await formDeps(), await storyLimits())(await devActor(), input);
+  }
+
   async function readForm(caseId: string) {
     const { makeGetDetailsForm } = await import("@/modules/material/application/get-details-form");
     return makeGetDetailsForm(await formDeps())({ caseId });
   }
 
   async function formRow(caseId: string) {
-    const { rows } = await pool.query("select context, solution, results, updated_by from public.context_form where case_id = $1", [
-      caseId,
-    ]);
+    const { rows } = await pool.query(
+      "select context, solution, results, testimonial_quote, testimonial_author, updated_by from public.context_form where case_id = $1",
+      [caseId],
+    );
     return rows;
   }
 
@@ -878,26 +902,29 @@ describe("details form (context_form)", () => {
     const created = await createCase();
     const caseId = created.id;
 
-    expect(await readForm(caseId)).toEqual({ ok: true, value: { context: "", solution: "", results: "" } });
+    const empty = { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" };
+    expect(await readForm(caseId)).toEqual({ ok: true, value: empty });
     expect(await formRow(caseId)).toEqual([]);
 
     expect(codeOf(await saveField({ caseId, field: "context", text: "Bando PNRR" }))).toBe("OK");
-    expect(await formRow(caseId)).toEqual([{ context: "Bando PNRR", solution: "", results: "", updated_by: actor.id }]);
+    expect(await formRow(caseId)).toEqual([
+      { context: "Bando PNRR", solution: "", results: [], testimonial_quote: "", testimonial_author: "", updated_by: actor.id },
+    ]);
 
-    expect(codeOf(await saveField({ caseId, field: "results", text: "+30% iscritti" }))).toBe("OK");
-    expect(await readForm(caseId)).toEqual({ ok: true, value: { context: "Bando PNRR", solution: "", results: "+30% iscritti" } });
+    expect(codeOf(await saveField({ caseId, field: "solution", text: "App" }))).toBe("OK");
+    expect(await readForm(caseId)).toEqual({ ok: true, value: { ...empty, context: "Bando PNRR", solution: "App" } });
 
     const { rows: before } = await pool.query("select updated_at from public.context_form where case_id = $1", [caseId]);
-    expect(codeOf(await saveField({ caseId, field: "results", text: "+30% iscritti" }))).toBe("OK");
+    expect(codeOf(await saveField({ caseId, field: "solution", text: "App" }))).toBe("OK");
     const { rows: after } = await pool.query("select updated_at from public.context_form where case_id = $1", [caseId]);
     expect(after).toEqual(before);
 
     expect(codeOf(await saveField({ caseId, field: "context", text: "" }))).toBe("OK");
-    expect(await readForm(caseId)).toEqual({ ok: true, value: { context: "", solution: "", results: "+30% iscritti" } });
+    expect(await readForm(caseId)).toEqual({ ok: true, value: { ...empty, solution: "App" } });
 
     expect(await detailsEvents(caseId)).toEqual([
       { type: "details_saved", actor_id: actor.id, data: { field: "context" } },
-      { type: "details_saved", actor_id: actor.id, data: { field: "results" } },
+      { type: "details_saved", actor_id: actor.id, data: { field: "solution" } },
       { type: "details_saved", actor_id: actor.id, data: { field: "context" } },
     ]);
     const { rows: status } = await pool.query("select status from public.case_study where id = $1", [caseId]);
@@ -922,6 +949,15 @@ describe("details form (context_form)", () => {
     expect(await formRow(created.id)).toEqual([]);
   });
 
+  it("the old free-text results is no text field any more (Story 2.21) → UNKNOWN_FIELD", async () => {
+    const created = await createCase();
+    expect(codeOf(await saveField({ caseId: created.id, field: "results", text: "x" }))).toBe("UNKNOWN_FIELD");
+    await expect(
+      pool.query("select public.save_context_field($1, 'results', 'x', $2)", [created.id, DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "P0001", message: "UNKNOWN_FIELD" });
+    expect(await formRow(created.id)).toEqual([]);
+  });
+
   it("5,000 characters are stored; 5,001 are refused by the use case and the table check", async () => {
     const created = await createCase();
     expect(codeOf(await saveField({ caseId: created.id, field: "context", text: "è".repeat(5_000) }))).toBe("OK");
@@ -932,9 +968,9 @@ describe("details form (context_form)", () => {
       inRolledBackTx("select public.save_context_field($1, 'context', $2, $3)", [created.id, "x".repeat(5_001), DEV_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "23514" });
     const repo = createSupabaseDetailsFormRepository();
-    const viaAdapter = await repo.saveField(created.id, "results", "x".repeat(5_001), DEV_ACTOR_ID);
+    const viaAdapter = await repo.saveField(created.id, "solution", "x".repeat(5_001), DEV_ACTOR_ID);
     expect(codeOf(viaAdapter)).toBe("INVALID_INPUT");
-    expect((await formRow(created.id))[0]).toMatchObject({ context: "è".repeat(5_000), results: "" });
+    expect((await formRow(created.id))[0]).toMatchObject({ context: "è".repeat(5_000), solution: "" });
   });
 
   it("a soft-deleted case → NOT_FOUND; nothing written or read", async () => {
@@ -959,7 +995,7 @@ describe("details form (context_form)", () => {
     await saveField({ caseId: created.id, field: "context", text: "Bando PNRR" });
     const refs = [
       { kind: "form_field", id: "context" },
-      { kind: "form_field", id: "results" },
+      { kind: "form_field", id: "solution" },
     ];
     expect(await makeResolveRefs(await formDeps())(created.id, refs)).toEqual({
       ok: true,
@@ -972,11 +1008,178 @@ describe("details form (context_form)", () => {
 
   it("the form is not material: a filled form with no assets → has_material false", async () => {
     const created = await createCase();
-    for (const field of ["context", "solution", "results"]) {
+    for (const field of ["context", "solution"]) {
       expect(codeOf(await saveField({ caseId: created.id, field, text: "Compilato" }))).toBe("OK");
     }
+    expect(codeOf(await saveResults({ caseId: created.id, results: [{ label: "Iscritti", value: "+30%" }] }))).toBe("OK");
+    expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "Sì.", author: "Anna" }))).toBe("OK");
     expect(await hasMaterialSql(created.id)).toBe(false);
     expect(await createSupabaseAssetRepository().hasMaterial(created.id)).toEqual({ ok: true, value: false });
+  });
+
+  // Story 2.21: Risultati and Testimonial.
+
+  const TWO = [
+    { label: "Candidature ricevute", value: "+180%" },
+    { label: "Follower su LinkedIn", value: "+35%" },
+  ];
+  const resultsSql = (caseId: string, results: unknown) =>
+    pool.query<{ previous: unknown }>("select public.save_case_results($1, $2::jsonb, $3) as previous", [
+      caseId,
+      JSON.stringify(results),
+      DEV_ACTOR_ID,
+    ]);
+
+  it("the old results text column is gone; results is jsonb with the client's check, and the testimonial columns exist", async () => {
+    const { rows } = await pool.query<{ column_name: string; data_type: string; column_default: string }>(
+      `select column_name, data_type, column_default from information_schema.columns
+       where table_schema = 'public' and table_name = 'context_form' and column_name in ('results', 'testimonial_quote', 'testimonial_author')
+       order by column_name`,
+    );
+    expect(rows).toEqual([
+      { column_name: "results", data_type: "jsonb", column_default: "'[]'::jsonb" },
+      { column_name: "testimonial_author", data_type: "text", column_default: "''::text" },
+      { column_name: "testimonial_quote", data_type: "text", column_default: "''::text" },
+    ]);
+  });
+
+  it("save_case_results: 2 complete rows stored in order, one details_saved { field: 'results' }; the same list again writes nothing", async () => {
+    const actor = await devActor();
+    const created = await createCase();
+    expect(await saveResults({ caseId: created.id, results: TWO })).toEqual({ ok: true, value: { results: TWO } });
+    expect((await formRow(created.id))[0]).toMatchObject({ results: TWO, updated_by: actor.id });
+    const { rows: before } = await pool.query("select updated_at from public.context_form where case_id = $1", [created.id]);
+    expect(codeOf(await saveResults({ caseId: created.id, results: TWO }))).toBe("OK");
+    const { rows: after } = await pool.query("select updated_at from public.context_form where case_id = $1", [created.id]);
+    expect(after).toEqual(before);
+    expect(await detailsEvents(created.id)).toEqual([{ type: "details_saved", actor_id: actor.id, data: { field: "results" } }]);
+    expect(JSON.stringify(await detailsEvents(created.id))).not.toContain("Candidature");
+    expect(await readForm(created.id)).toMatchObject({ ok: true, value: { results: TWO } });
+  });
+
+  it("save_case_results returns the previous list; [] on a case with no row creates none", async () => {
+    const created = await createCase();
+    expect((await resultsSql(created.id, [])).rows).toEqual([{ previous: [] }]);
+    expect(await formRow(created.id)).toEqual([]);
+    expect((await resultsSql(created.id, TWO)).rows).toEqual([{ previous: [] }]);
+    expect((await resultsSql(created.id, [TWO[1]])).rows).toEqual([{ previous: TWO }]);
+    expect((await resultsSql(created.id, [TWO[1]])).rows).toEqual([{ previous: [TWO[1]] }]);
+  });
+
+  it.each([
+    ["4 rows", Array.from({ length: 4 }, () => ({ label: "a", value: "1" }))],
+    ["a value of 21 characters", [{ label: "a", value: "x".repeat(21) }]],
+    ["a label of 81 characters", [{ label: "x".repeat(81), value: "1" }]],
+    ["a half row", [{ label: "a", value: "" }]],
+    ["an untrimmed label", [{ label: " a", value: "1" }]],
+    ["an extra key", [{ label: "a", value: "1", note: "x" }]],
+    ["not an array", { label: "a", value: "1" }],
+  ])("context_form_results_check refuses %s; nothing written", async (_label, results) => {
+    const created = await createCase();
+    await expect(inRolledBackTx("select public.save_case_results($1, $2::jsonb, $3)", [created.id, JSON.stringify(results), DEV_ACTOR_ID])).rejects.toMatchObject({
+      code: "23514",
+      message: expect.stringContaining("context_form_results_check"),
+    });
+  });
+
+  it("over the limit: the use case refuses with INVALID_INPUT; the adapter maps the check to INVALID_INPUT naming results", async () => {
+    const created = await createCase();
+    expect(codeOf(await saveResults({ caseId: created.id, results: [{ label: "a", value: "x".repeat(21) }] }))).toBe("INVALID_INPUT");
+    const viaAdapter = await createSupabaseDetailsFormRepository().saveResults(created.id, [{ label: "a", value: "x".repeat(21) }], DEV_ACTOR_ID);
+    expect(viaAdapter).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", details: { fields: ["results"] } } });
+    expect(await formRow(created.id)).toEqual([]);
+    expect(await detailsEvents(created.id)).toEqual([]);
+  });
+
+  it("save_case_testimonial: stores the pair, returns the previous one, one details_saved { field: 'testimonial' }", async () => {
+    const actor = await devActor();
+    const created = await createCase();
+    expect(await saveTestimonial({ caseId: created.id, quote: " Un lavoro chiaro. ", author: "Anna Rossi, CMO" })).toEqual({
+      ok: true,
+      value: { quote: "Un lavoro chiaro.", author: "Anna Rossi, CMO" },
+    });
+    expect((await formRow(created.id))[0]).toMatchObject({ testimonial_quote: "Un lavoro chiaro.", testimonial_author: "Anna Rossi, CMO" });
+    expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "Un lavoro chiaro.", author: "Anna Rossi, CMO" }))).toBe("OK");
+    expect(await detailsEvents(created.id)).toEqual([{ type: "details_saved", actor_id: actor.id, data: { field: "testimonial" } }]);
+    const { rows } = await pool.query("select public.save_case_testimonial($1, '', '', $2) as previous", [created.id, DEV_ACTOR_ID]);
+    expect(rows).toEqual([{ previous: { quote: "Un lavoro chiaro.", author: "Anna Rossi, CMO" } }]);
+    expect(await readForm(created.id)).toMatchObject({ ok: true, value: { testimonialQuote: "", testimonialAuthor: "" } });
+  });
+
+  it("save_case_testimonial('', '') on a case with no row returns the empty pair and inserts nothing", async () => {
+    const created = await createCase();
+    const { rows } = await pool.query("select public.save_case_testimonial($1, '', '', $2) as previous", [created.id, DEV_ACTOR_ID]);
+    expect(rows).toEqual([{ previous: { quote: "", author: "" } }]);
+    expect(await formRow(created.id)).toEqual([]);
+    expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "", author: "" }))).toBe("OK");
+    expect(await formRow(created.id)).toEqual([]);
+    expect(await detailsEvents(created.id)).toEqual([]);
+  });
+
+  it("an author without a quote is refused by the use case and by context_form_testimonial_check", async () => {
+    const created = await createCase();
+    expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "", author: "Anna" }))).toBe("INVALID_INPUT");
+    await expect(inRolledBackTx("select public.save_case_testimonial($1, '', 'Anna', $2)", [created.id, DEV_ACTOR_ID])).rejects.toMatchObject({
+      code: "23514",
+      message: expect.stringContaining("context_form_testimonial_check"),
+    });
+    const viaAdapter = await createSupabaseDetailsFormRepository().saveTestimonial(created.id, "", "Anna", DEV_ACTOR_ID);
+    expect(viaAdapter).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", details: { fields: ["quote"] } } });
+    expect(await formRow(created.id)).toEqual([]);
+  });
+
+  it("600 and 120 characters fit; 601 and 121 are refused by the table checks", async () => {
+    const created = await createCase();
+    expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "è".repeat(600), author: "a".repeat(120) }))).toBe("OK");
+    await expect(
+      inRolledBackTx("select public.save_case_testimonial($1, $2, '', $3)", [created.id, "x".repeat(601), DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "23514", message: expect.stringContaining("context_form_testimonial_quote_check") });
+    await expect(
+      inRolledBackTx("select public.save_case_testimonial($1, 'Sì.', $2, $3)", [created.id, "x".repeat(121), DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "23514", message: expect.stringContaining("context_form_testimonial_author_check") });
+  });
+
+  it("a soft-deleted case → NOT_FOUND from both functions; nothing written", async () => {
+    const created = await createCase();
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
+    expect(codeOf(await saveResults({ caseId: created.id, results: TWO }))).toBe("NOT_FOUND");
+    expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "Sì.", author: "" }))).toBe("NOT_FOUND");
+    await expect(resultsSql(created.id, TWO)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+    await expect(
+      pool.query("select public.save_case_testimonial($1, 'Sì.', '', $2)", [created.id, DEV_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+    expect(await createSupabaseDetailsFormRepository().saveResults(created.id, TWO, DEV_ACTOR_ID)).toMatchObject({
+      ok: false,
+      error: { code: "NOT_FOUND" },
+    });
+    expect(await formRow(created.id)).toEqual([]);
+    expect(await detailsEvents(created.id)).toEqual([]);
+  });
+
+  it("the texts, results and testimonial save independently: each leaves the others untouched", async () => {
+    const created = await createCase();
+    await saveField({ caseId: created.id, field: "context", text: "Bando PNRR" });
+    await saveResults({ caseId: created.id, results: TWO });
+    await saveTestimonial({ caseId: created.id, quote: "Sì.", author: "Anna" });
+    await saveField({ caseId: created.id, field: "solution", text: "App" });
+    expect(await readForm(created.id)).toEqual({
+      ok: true,
+      value: { context: "Bando PNRR", solution: "App", results: TWO, testimonialQuote: "Sì.", testimonialAuthor: "Anna" },
+    });
+  });
+
+  it("the browser key is refused calling save_case_results and save_case_testimonial", async () => {
+    const results = await browser().rpc("save_case_results", { p_case_id: UNKNOWN_ID, p_results: [], p_actor_id: DEV_ACTOR_ID });
+    expect(results.data).toBeNull();
+    expect(["42501", "PGRST202"]).toContain(results.error?.code);
+    const testimonial = await browser().rpc("save_case_testimonial", {
+      p_case_id: UNKNOWN_ID,
+      p_quote: "",
+      p_author: "",
+      p_actor_id: DEV_ACTOR_ID,
+    });
+    expect(testimonial.data).toBeNull();
+    expect(["42501", "PGRST202"]).toContain(testimonial.error?.code);
   });
 
   it("deleting or truncating context_form is rejected", async () => {
@@ -1018,6 +1221,8 @@ describe("details form (context_form)", () => {
     update: "update public.context_form set context = 'x'",
     delete: "delete from public.context_form",
     save_context_field: `select public.save_context_field('${UNKNOWN_ID}', 'context', 'x', '${DEV_ACTOR_ID}')`,
+    save_case_results: `select public.save_case_results('${UNKNOWN_ID}', '[]'::jsonb, '${DEV_ACTOR_ID}')`,
+    save_case_testimonial: `select public.save_case_testimonial('${UNKNOWN_ID}', '', '', '${DEV_ACTOR_ID}')`,
   };
   const roleCases = (["anon", "authenticated"] as const).flatMap((role) =>
     Object.entries(statements).map(([verb, sql]) => [role, verb, sql] as const),

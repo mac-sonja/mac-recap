@@ -19,6 +19,8 @@ const m = vi.hoisted(() => ({
   },
   form: {
     saveField: vi.fn(),
+    saveResults: vi.fn(),
+    saveTestimonial: vi.fn(),
     read: vi.fn(),
   },
   storage: {
@@ -35,7 +37,16 @@ const m = vi.hoisted(() => ({
   liveSubjects: vi.fn(),
 }));
 
-vi.mock("@/modules/case-study", () => ({ get: m.get, recordEvent: m.recordEvent }));
+vi.mock("@/modules/case-study", () => ({
+  get: m.get,
+  recordEvent: m.recordEvent,
+  // A case's Risultati and Testimonial take the client's limits (Story 2.21).
+  CLIENT_RESULTS_MAX: 3,
+  CLIENT_RESULT_LABEL_MAX: 80,
+  CLIENT_RESULT_VALUE_MAX: 20,
+  CLIENT_TESTIMONIAL_QUOTE_MAX: 600,
+  CLIENT_TESTIMONIAL_AUTHOR_MAX: 120,
+}));
 vi.mock("@/modules/jobs", () => ({ enqueue: m.enqueue, liveSubjects: m.liveSubjects }));
 vi.mock("@/modules/material/adapters/supabase/rendition-repository", () => ({
   createSupabaseRenditionRepository: () => m.renditions,
@@ -88,7 +99,9 @@ beforeEach(async () => {
   m.enqueue.mockImplementation(async (input) => ok({ id: "job", ...input }));
   m.liveSubjects.mockImplementation(async ({ subjectIds }) => ok(subjectIds));
   m.form.saveField.mockResolvedValue(ok(""));
-  m.form.read.mockResolvedValue(ok({ context: "Bando PNRR", solution: "", results: "" }));
+  m.form.saveResults.mockResolvedValue(ok([]));
+  m.form.saveTestimonial.mockResolvedValue(ok({ quote: "", author: "" }));
+  m.form.read.mockResolvedValue(ok({ context: "Bando PNRR", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" }));
 });
 
 describe("material index wiring", () => {
@@ -171,8 +184,40 @@ describe("material index wiring", () => {
     expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "details_saved", data: { field: "context" } });
   });
 
+  it("saveCaseResults saves through the details form repository and records details_saved { field: 'results' }", async () => {
+    const results = [{ label: "Iscritti", value: "+30%" }];
+    expect(await material.saveCaseResults(actor, { caseId: CASE_ID, results })).toEqual(ok({ results }));
+    expect(m.form.saveResults).toHaveBeenCalledWith(CASE_ID, results, actor.id);
+    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "details_saved", data: { field: "results" } });
+  });
+
+  it("saveCaseResults applies the client's limits: a value of 21 characters is INVALID_INPUT", async () => {
+    const result = await material.saveCaseResults(actor, { caseId: CASE_ID, results: [{ label: "Iscritti", value: "x".repeat(21) }] });
+    expect(result.ok ? "OK" : result.error.code).toBe("INVALID_INPUT");
+    expect(m.form.saveResults).not.toHaveBeenCalled();
+  });
+
+  it("saveCaseTestimonial saves through the details form repository and records details_saved { field: 'testimonial' }", async () => {
+    expect(await material.saveCaseTestimonial(actor, { caseId: CASE_ID, quote: "Sì.", author: "Anna" })).toEqual(
+      ok({ quote: "Sì.", author: "Anna" }),
+    );
+    expect(m.form.saveTestimonial).toHaveBeenCalledWith(CASE_ID, "Sì.", "Anna", actor.id);
+    expect(m.recordEvent).toHaveBeenCalledWith(actor, { caseId: CASE_ID, type: "details_saved", data: { field: "testimonial" } });
+  });
+
+  it.each([
+    ["a quote of 601 characters", { quote: "x".repeat(601), author: "" }],
+    ["an author of 121 characters", { quote: "Sì.", author: "x".repeat(121) }],
+  ])("saveCaseTestimonial applies the client's limits: %s is INVALID_INPUT", async (_label, input) => {
+    const result = await material.saveCaseTestimonial(actor, { caseId: CASE_ID, ...input });
+    expect(result.ok ? "OK" : result.error.code).toBe("INVALID_INPUT");
+    expect(m.form.saveTestimonial).not.toHaveBeenCalled();
+  });
+
   it("getDetailsForm reads the details form repository", async () => {
-    expect(await material.getDetailsForm({ caseId: CASE_ID })).toEqual(ok({ context: "Bando PNRR", solution: "", results: "" }));
+    expect(await material.getDetailsForm({ caseId: CASE_ID })).toEqual(
+      ok({ context: "Bando PNRR", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" }),
+    );
     expect(m.form.read).toHaveBeenCalledWith(CASE_ID);
   });
 
@@ -204,7 +249,9 @@ describe("material index wiring", () => {
     ["hasMaterial", () => material.hasMaterial(CASE_ID)],
     ["saveDetailsField", () => material.saveDetailsField(actor, detailsInput)],
     ["getDetailsForm", () => material.getDetailsForm({ caseId: CASE_ID })],
-    ["resolveRefs", () => material.resolveRefs(CASE_ID, [{ kind: "form_field", id: "results" }])],
+    ["resolveRefs", () => material.resolveRefs(CASE_ID, [{ kind: "form_field", id: "solution" }])],
+    ["saveCaseResults", () => material.saveCaseResults(actor, { caseId: CASE_ID, results: [] })],
+    ["saveCaseTestimonial", () => material.saveCaseTestimonial(actor, { caseId: CASE_ID, quote: "", author: "" })],
     ["setFavourite", () => material.setFavourite(actor, { ...ref, isFavourite: true })],
   ])("%s never touches storage", async (_name, call) => {
     expect((await call()).ok).toBe(true);

@@ -25,6 +25,10 @@ vi.mock("@/modules/case-study", () => ({
   YEAR_MIN: 1900,
   YEAR_MAX: 2100,
   BUSINESS_LINES: ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"],
+  CLIENT_RESULT_LABEL_MAX: 80,
+  CLIENT_RESULT_VALUE_MAX: 20,
+  CLIENT_TESTIMONIAL_QUOTE_MAX: 600,
+  CLIENT_TESTIMONIAL_AUTHOR_MAX: 120,
 }));
 vi.mock("@/shared/i18n/format", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/shared/i18n/format")>()),
@@ -48,6 +52,8 @@ vi.mock("@/app/(tool)/case-studies/actions", () => ({
   removeAsset: vi.fn(),
   setAssetFavourite: vi.fn(),
   saveDetailsField: vi.fn(),
+  saveCaseResults: vi.fn(),
+  saveCaseTestimonial: vi.fn(),
   deleteCaseStudy: vi.fn(),
 }));
 
@@ -114,7 +120,7 @@ beforeEach(() => {
   get.mockResolvedValue(ok(draft));
   listAssets.mockResolvedValue(ok([]));
   hasMaterial.mockResolvedValue(ok(false));
-  getDetailsForm.mockResolvedValue(ok({ context: "", solution: "", results: "" }));
+  getDetailsForm.mockResolvedValue(ok({ context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" }));
 });
 
 const legacy: CaseStudy = { ...draft, businessLines: [] };
@@ -257,7 +263,15 @@ describe("NewCaseStudyPage", () => {
 
   describe("step 2 Dettagli", () => {
     it("shows the case in the top bar and the saved details prefilled; the client is a search box over every client", async () => {
-      getDetailsForm.mockResolvedValue(ok({ context: "Lumen voleva un'identità unica.", solution: "", results: "" }));
+      getDetailsForm.mockResolvedValue(
+        ok({
+          context: "Lumen voleva un'identità unica.",
+          solution: "",
+          results: [{ label: "Candidature ricevute", value: "+180%" }],
+          testimonialQuote: "Un lavoro chiaro.",
+          testimonialAuthor: "Anna Rossi",
+        }),
+      );
       const html = await render({ caseId: ID, step: "2" });
       expect(get).toHaveBeenCalledExactlyOnceWith(ID);
       expect(getDetailsForm).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
@@ -272,8 +286,12 @@ describe("NewCaseStudyPage", () => {
       expect(listClients).toHaveBeenCalledOnce();
       expect(pill(html, "Branding")).toContain('aria-pressed="true"');
       expect(pill(html, "Video")).toContain('aria-pressed="false"');
-      // Risultati is not asked any more (owner, 2026-10-21).
+      // Risultati and Testimonial come back as saved (Story 2.21); the old free-text Risultati is gone.
       expect(html).not.toMatch(/<textarea [^>]*name="results"/);
+      expect(html).toMatch(/<input [^>]*name="results\.0\.label"[^>]*value="Candidature ricevute"/);
+      expect(html).toMatch(/<input [^>]*name="results\.0\.value"[^>]*value="\+180%"/);
+      expect(html).toMatch(/<textarea [^>]*name="testimonialQuote"[^>]*>Un lavoro chiaro\.<\/textarea>/);
+      expect(html).toMatch(/<input [^>]*name="testimonialAuthor"[^>]*value="Anna Rossi"/);
       expect(html).toMatch(/<textarea [^>]*name="context"[^>]*>Lumen voleva un&#x27;identità unica\.<\/textarea>/);
       expect(html).not.toContain("PO-SECRET-42");
       expect(listAssets).not.toHaveBeenCalled();

@@ -583,9 +583,9 @@ describe("ClientPanel, Risultati and Testimonial", () => {
       ["Follower su LinkedIn", "+35%"],
     ]);
     const results = screen.getByRole("group", { name: "Risultati" });
-    expect(describedText(results)).toBe(copy.results.hint);
+    expect(describedText(results)).toBe(dict.story.results.hint);
     const testimonial = screen.getByRole("group", { name: "Testimonial" });
-    expect(describedText(testimonial)).toBe(copy.testimonial.hint);
+    expect(describedText(testimonial)).toBe(dict.story.testimonial.hint);
     expect(quote().placeholder).toBe("Una frase del cliente, tra virgolette nel suo stile");
     expect(author().placeholder).toBe("Nome Cognome, ruolo");
     expect(label(1).hasAttribute("aria-required")).toBe(false);
@@ -636,13 +636,13 @@ describe("ClientPanel, Risultati and Testimonial", () => {
     fireEvent.change(label(1), { target: { value: "Visite" } });
     fireEvent.change(value(1), { target: { value: "2,4M" } });
     fireEvent.change(label(2), { target: { value: "Follower" } });
-    expect(screen.queryByText(copy.results.halfRow)).toBeNull();
+    expect(screen.queryByText(dict.story.results.halfRow)).toBeNull();
     fireEvent.blur(label(2));
     await waitFor(() => expect(saveClientResults).toHaveBeenCalledWith({ clientId: CLIENT_ID, results: [{ label: "Visite", value: "2,4M" }] }));
     expect(saveClientResults).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(copy.results.halfRow)).toBeTruthy();
+    expect(screen.getByText(dict.story.results.halfRow)).toBeTruthy();
     expect(value(2).getAttribute("aria-invalid")).toBe("true");
-    expect(describedText(value(2))).toBe(copy.results.halfRow);
+    expect(describedText(value(2))).toBe(dict.story.results.halfRow);
     expect(screen.queryByText(dict.clients.errors.generic)).toBeNull();
   });
 
@@ -685,7 +685,7 @@ describe("ClientPanel, Risultati and Testimonial", () => {
 
     await user.click(primary("Salva"));
     expect(document.activeElement).toBe(value(1));
-    expect(screen.getByText(copy.results.halfRow)).toBeTruthy();
+    expect(screen.getByText(dict.story.results.halfRow)).toBeTruthy();
     expect(replace).not.toHaveBeenCalled();
   });
 
@@ -712,11 +712,11 @@ describe("ClientPanel, Risultati and Testimonial", () => {
     renderPanel(EXISTING, TWO_IMAGES);
     fireEvent.change(label(2), { target: { value: "Follower" } });
     fireEvent.blur(label(2));
-    expect(await screen.findByText(copy.results.halfRow)).toBeTruthy();
+    expect(await screen.findByText(dict.story.results.halfRow)).toBeTruthy();
     fireEvent.change(value(2), { target: { value: "+35%" } });
-    expect(screen.queryByText(copy.results.halfRow)).toBeNull();
+    expect(screen.queryByText(dict.story.results.halfRow)).toBeNull();
     fireEvent.change(value(2), { target: { value: "" } });
-    expect(screen.queryByText(copy.results.halfRow)).toBeNull();
+    expect(screen.queryByText(dict.story.results.halfRow)).toBeNull();
   });
 
   it("shows the limit on a label over 80 and an author over 120 characters", () => {
@@ -803,7 +803,7 @@ describe("ClientPanel, Risultati and Testimonial", () => {
       fireEvent.change(label(2), { target: { value: "Follower" } });
       await user.click(primary("Aggiungi"));
       expect(document.activeElement).toBe(value(2));
-      expect(screen.getByText(copy.results.halfRow)).toBeTruthy();
+      expect(screen.getByText(dict.story.results.halfRow)).toBeTruthy();
       expect(createClient).not.toHaveBeenCalled();
     });
 

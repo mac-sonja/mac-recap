@@ -4,8 +4,8 @@ import type { Result } from "@/shared/result";
 import type { MaterialDeps } from "./deps";
 
 /**
- * The details form of a case (`{ caseId }`): `{ context, solution, results }`,
- * each `""` when never saved (all `""` for a case with no row). Errors:
+ * The details form of a case (`{ caseId }`): `{ context, solution, results, testimonialQuote, testimonialAuthor }`,
+ * each text `""` and `results` `[]` when never saved (also for a case with no row). Errors:
  * `INVALID_INPUT`, `NOT_FOUND`. Needs no storage. The caller has already authorized `fill details`.
  */
 export function makeGetDetailsForm({ form, cases }: Pick<MaterialDeps, "form" | "cases">) {

@@ -4,9 +4,32 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
-import { createCaseStudy, saveDetailsField, updateCaseStudyDetails } from "@/app/(tool)/case-studies/actions";
+import {
+  createCaseStudy,
+  saveCaseResults,
+  saveCaseTestimonial,
+  saveDetailsField,
+  updateCaseStudyDetails,
+} from "@/app/(tool)/case-studies/actions";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
 import { CARD_LABEL, FIELD, FIELD_HINT, FIELD_LABEL, STEP_HEADING, TEXTAREA } from "@/app/_components/field-styles";
+import {
+  emptyStoryInputs,
+  isAuthorOnly,
+  isHalfRow,
+  isOver,
+  resultRowsOf,
+  ResultsFields,
+  rowsToSend,
+  savedRowsOf,
+  testimonialToSend,
+  type IncompleteKey,
+  type ResultRow,
+  type SavedResult,
+  type StoryInputs,
+  type StoryLimits,
+  type Testimonial,
+} from "@/app/_components/results-fields";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { wizardHref } from "@/app/_lib/routes";
 import type { BusinessLine, ClientRef, Locale } from "@/modules/case-study";
@@ -23,11 +46,20 @@ import { useLiveWizardTitle } from "./wizard-title";
 
 const copy = it.wizard.details;
 
-/**
- * The details-form fields shown, in `FORM_FIELDS` order (the material module's index is
- * server-only). Risultati is not asked any more (owner, 2026-10-21); what was saved stays.
- */
+/** The details-form texts, in `FORM_FIELDS` order (the material module's index is server-only). */
 const TEXT_FIELDS = ["context", "solution"] as const satisfies readonly FormField[];
+
+/**
+ * What the step autosaves: the two texts, then Risultati and Testimonial (Story 2.21),
+ * each held as the JSON of what would be sent (`rowsToSend`, one entry per row;
+ * `testimonialToSend`), so a half row, a part over its limit or a lone author changes
+ * nothing and keeps what the server holds, as in the client panel.
+ */
+type StoryField = FormField | "results" | "testimonial";
+
+/** Contesto's card number: cards 01–03 (Dettagli, Cliente, Servizi) come before it. */
+const FIRST_TEXT_CARD = 4;
+const STORY_FIELDS = [...TEXT_FIELDS, "results", "testimonial"] as const satisfies readonly StoryField[];
 
 /** The fields saved on **Avanti**, named as the server's `INVALID_INPUT` names them. */
 type Field = "name" | "clientId" | "year" | "businessLines";
@@ -100,6 +132,8 @@ export interface CaseDetailsStepProps {
   initialDetails: DetailsForm;
   /** `MAX_FORM_FIELD_CHARS`, counted in code points like the server. */
   maxChars: number;
+  /** Risultati and Testimonial limits: the client's (`CLIENT_RESULT_*`, `CLIENT_TESTIMONIAL_*`). */
+  storyLimits: StoryLimits;
 }
 
 /** "Nessun cliente. Aggiungilo nella pagina Clienti.", with "pagina Clienti" a link to the Clients page. */
@@ -120,7 +154,8 @@ function noClientsNote() {
  * Case wizard step 1, Dettagli (Story 2.17; it replaces step 0 and the old step 2):
  * Nome, Cliente (a search box over the existing clients, `ClientCombobox`; fixed once
  * the case exists, since its code depends on it), Anno, Business
- * line (single-select pills) and the optional Contesto, Soluzione and Risultati; the four
+ * line (single-select pills) and the optional Contesto, Soluzione, Risultati and
+ * Testimonial (cards 04–07; Story 2.21: the client panel's fields, limits and messages); the four
  * required ones carry a "*" marker, explained by a legend at the top. There
  * is no Lingua field (Story 2.18): a new case is created in Italian and a draft keeps
  * its stored language. The large title and the browser tab follow Nome, on blur or
@@ -129,9 +164,11 @@ function noClientsNote() {
  * `aria-describedby`; pressing it then names each missing field and sends nothing.
  *
  * **Avanti** on a new case: `createCaseStudy` once (not idempotent: busy until the
- * request ends), then the URL names the case (`replaceState`), then the three texts
- * are saved, then step 2 opens. If a text save fails, the case stays, the field shows
- * its error, and **Avanti** retries only the texts. On an existing draft the texts
+ * request ends), then the URL names the case (`replaceState`), then the texts, results and
+ * testimonial are saved, then step 3 opens. A half result row, an author without a quote
+ * or a part over its limit stops **Avanti** at that field, as in the client panel. If a
+ * save fails, the case stays, the field shows its error, and **Avanti** retries only the
+ * unsaved texts, results and testimonial (never the create). On an existing draft they
  * autosave (`useAutosaveFields`, 800 ms and on blur), and name, year and business
  * line save on **Avanti** (the stored language is sent back unchanged) (`updateCaseStudyDetails`, only when changed; a
  * year change renumbers the draft, and the next page load shows its new code); a
@@ -152,6 +189,7 @@ export function CaseDetailsStep({
   businessLines: businessLineOptions,
   initialDetails,
   maxChars,
+  storyLimits,
 }: CaseDetailsStepProps) {
   const router = useRouter();
   const baseId = useId();
@@ -180,6 +218,7 @@ export function CaseDetailsStep({
   const unmounted = useRef(false);
   const pillsRef = useRef<HTMLDivElement>(null);
   const textareas = useRef<Partial<Record<FormField, HTMLTextAreaElement | null>>>({});
+  const storyInputs = useRef<StoryInputs>(emptyStoryInputs());
   const nextAnnouncement = useRef(0);
 
   const [name, setName] = useState(caseStudy?.name ?? "");
@@ -202,6 +241,45 @@ export function CaseDetailsStep({
   const [failed, setFailed] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [announcements, setAnnouncements] = useState<ReadonlyArray<{ id: number; text: string }>>([]);
+
+  // Risultati and Testimonial as typed; the autosave holds what would be saved of them.
+  const [rows, setRows] = useState<ResultRow[]>(() => resultRowsOf(initialDetails.results));
+  const rowsRef = useRef(rows);
+  const [quote, setQuote] = useState(initialDetails.testimonialQuote);
+  const [author, setAuthor] = useState(initialDetails.testimonialAuthor);
+  const testimonialRef = useRef<Testimonial>({ quote: initialDetails.testimonialQuote, author: initialDetails.testimonialAuthor });
+  /** What the server holds, per row and for the testimonial: kept for a row or part that can't be sent yet. */
+  const savedRows = useRef(savedRowsOf(initialDetails.results));
+  const savedTestimonial = useRef<Testimonial>({ quote: initialDetails.testimonialQuote, author: initialDetails.testimonialAuthor });
+  const resultsKey = (next: readonly ResultRow[]) => JSON.stringify(rowsToSend(next, savedRows.current, storyLimits));
+  const testimonialKey = (next: Testimonial) =>
+    JSON.stringify(testimonialToSend(next.quote, next.author, savedTestimonial.current, storyLimits));
+  /** The incomplete-entry messages shown: after focus leaves the row (or testimonial) or Avanti is pressed. */
+  const [revealed, setRevealed] = useState<ReadonlySet<IncompleteKey>>(() => new Set());
+
+  /** A half row or a lone author: it is not saved. */
+  function firstIncomplete(): IncompleteKey | undefined {
+    const row = rowsRef.current.findIndex(isHalfRow);
+    if (row !== -1) return `row-${row}`;
+    const { quote: typedQuote, author: typedAuthor } = testimonialRef.current;
+    return isAuthorOnly(typedQuote, typedAuthor) ? "testimonial" : undefined;
+  }
+
+  /** A results or testimonial part over its limit (it is never sent): its input. */
+  function storyOverLong(): HTMLElement | null | undefined {
+    for (const [index, row] of rowsRef.current.entries()) {
+      const inputs = storyInputs.current.rows[index];
+      if (isOver(row.label, storyLimits.resultLabelMax)) return inputs?.label;
+      if (isOver(row.value, storyLimits.resultValueMax)) return inputs?.value;
+    }
+    const { quote: typedQuote, author: typedAuthor } = testimonialRef.current;
+    if (isOver(typedQuote, storyLimits.testimonialQuoteMax)) return storyInputs.current.quote;
+    if (isOver(typedAuthor, storyLimits.testimonialAuthorMax)) return storyInputs.current.author;
+    return undefined;
+  }
+
+  const storyLabel = (field: StoryField) =>
+    field === "results" ? it.story.results.title : field === "testimonial" ? it.story.testimonial.title : copy.labels[field];
 
   useEffect(() => {
     unmounted.current = false;
@@ -234,7 +312,10 @@ export function CaseDetailsStep({
       businessLines.length > 0 ||
       clientId !== initialClient.current ||
       year !== String(defaultYear) ||
-      TEXT_FIELDS.some((field) => texts.current()[field] !== ""));
+      TEXT_FIELDS.some((field) => texts.current()[field] !== "") ||
+      rowsRef.current.some((row) => row.label.trim() !== "" || row.value.trim() !== "") ||
+      testimonialRef.current.quote.trim() !== "" ||
+      testimonialRef.current.author.trim() !== "");
   const unsavedNewCaseRef = useRef(hasUnsavedNewCase);
   useEffect(() => {
     unsavedNewCaseRef.current = hasUnsavedNewCase;
@@ -266,19 +347,40 @@ export function CaseDetailsStep({
     };
   }, []);
 
-  const texts = useAutosaveFields<FormField>({
-    fields: TEXT_FIELDS,
-    initial: initialDetails,
+  const texts = useAutosaveFields<StoryField>({
+    fields: STORY_FIELDS,
+    initial: {
+      context: initialDetails.context,
+      solution: initialDetails.solution,
+      results: resultsKey(rows),
+      testimonial: testimonialKey(testimonialRef.current),
+    },
     save: async (field, text) => {
       const id = caseRef.current;
       if (id === null) return false;
+      if (field === "results") {
+        const perRow = JSON.parse(text) as (SavedResult | null)[];
+        const results = perRow.filter((row) => row !== null);
+        const saved = (await saveCaseResults({ caseId: id, results })).ok;
+        if (saved) savedRows.current = perRow;
+        return saved;
+      }
+      if (field === "testimonial") {
+        const next = JSON.parse(text) as Testimonial;
+        const saved = (await saveCaseTestimonial({ caseId: id, ...next })).ok;
+        if (saved) savedTestimonial.current = next;
+        return saved;
+      }
       return (await saveDetailsField({ caseId: id, field, text })).ok;
     },
-    tooLong,
+    // The results and testimonial never hold an over-long part (`rowsToSend`, `testimonialToSend`).
+    tooLong: (text, field) => field !== "results" && field !== "testimonial" && tooLong(text),
     active: () => caseRef.current !== null,
-    onSaveFailed: (field) => announce(fill(copy.announceError, { field: copy.labels[field], message: copy.errors.saveFailed })),
-    // Name, year or business line not saved yet also hold a link back.
-    hasOtherUnsaved: () => !sameInfo(savedInfo.current, currentInfo()),
+    onSaveFailed: (field) => announce(fill(copy.announceError, { field: storyLabel(field), message: copy.errors.saveFailed })),
+    // Name, year or business line not saved yet also hold a link back; so does a half row,
+    // a lone author or a part over its limit, which never saves.
+    hasOtherUnsaved: () =>
+      !sameInfo(savedInfo.current, currentInfo()) || firstIncomplete() !== undefined || storyOverLong() !== undefined,
     onUnsavedLink: (href) => void saveAndGo(href, { requireReady: false }),
   });
 
@@ -304,6 +406,64 @@ export function CaseDetailsStep({
       delete next[field];
       return next;
     });
+  }
+
+  function reveal(key: IncompleteKey) {
+    setRevealed((current) => (current.has(key) ? current : new Set(current).add(key)));
+  }
+
+  function conceal(key: IncompleteKey) {
+    setRevealed((current) => {
+      if (!current.has(key)) return current;
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
+  }
+
+  function changeRow(index: number, part: keyof ResultRow, text: string) {
+    rowsRef.current = rowsRef.current.map((row, at) => (at === index ? { ...row, [part]: text } : row));
+    setRows(rowsRef.current);
+    // Complete or emptied: its message waits for focus to leave it again.
+    if (!isHalfRow(rowsRef.current[index])) conceal(`row-${index}`);
+    texts.change("results", resultsKey(rowsRef.current));
+  }
+
+  function changeTestimonial(next: Testimonial) {
+    testimonialRef.current = next;
+    setQuote(next.quote);
+    setAuthor(next.author);
+    if (!isAuthorOnly(next.quote, next.author)) conceal("testimonial");
+    texts.change("testimonial", testimonialKey(next));
+  }
+
+  /** Shows the first half row or lone author and focuses its empty part; true when there was one. */
+  function stopAtIncomplete(): boolean {
+    const key = firstIncomplete();
+    if (key === undefined) return false;
+    flushSync(() => reveal(key));
+    if (key === "testimonial") {
+      storyInputs.current.quote?.focus();
+    } else {
+      const index = Number(key.slice("row-".length));
+      const inputs = storyInputs.current.rows[index];
+      (rowsRef.current[index]?.label.trim() === "" ? inputs?.label : inputs?.value)?.focus();
+    }
+    return true;
+  }
+
+  /** Focuses the first field whose save failed. */
+  function focusUnsaved() {
+    const unsaved = texts.firstUnsaved();
+    if (unsaved === "results") {
+      // The first row with something typed (the save sends every filled row).
+      const index = Math.max(
+        0,
+        rowsRef.current.findIndex((row) => row.label.trim() !== "" || row.value.trim() !== ""),
+      );
+      storyInputs.current.rows[index]?.label?.focus();
+    } else if (unsaved === "testimonial") storyInputs.current.quote?.focus();
+    else if (unsaved !== undefined) textareas.current[unsaved]?.focus();
   }
 
   /** The fields **Avanti** needs that are still empty. */
@@ -362,6 +522,18 @@ export function CaseDetailsStep({
       textareas.current[overLong]?.focus();
       return;
     }
+    // Risultati and Testimonial are optional, but a half entry or a part over its limit is
+    // never saved: **Avanti** stops there; a link asks, then leaves without it.
+    if (requireReady) {
+      const storyOver = storyOverLong();
+      if (storyOver !== undefined) {
+        storyOver?.focus();
+        return;
+      }
+      if (stopAtIncomplete()) return;
+    } else if (!discardInfo && (storyOverLong() !== undefined || firstIncomplete() !== undefined)) {
+      if (!window.confirm(it.wizard.unsavedConfirm)) return;
+    }
 
     busy.current = true;
     setPending(true);
@@ -410,12 +582,11 @@ export function CaseDetailsStep({
         code.current = updated.value.code;
       }
 
-      // 2. The three texts (saved now on a new case; flushed on an existing one).
+      // 2. The texts, results and testimonial (saved now on a new case; flushed on an existing one).
       const saved = await texts.flushAll();
       if (unmounted.current) return;
       if (!saved) {
-        const unsaved = texts.firstUnsaved();
-        if (unsaved !== undefined) textareas.current[unsaved]?.focus();
+        focusUnsaved();
         return;
       }
 
@@ -604,7 +775,7 @@ export function CaseDetailsStep({
           return (
             <FieldCard
               key={field}
-              number={4 + index}
+              number={FIRST_TEXT_CARD + index}
               label={
                 <label htmlFor={id} className={CARD_LABEL}>
                   {copy.labels[field]}
@@ -633,6 +804,24 @@ export function CaseDetailsStep({
             </FieldCard>
           );
         })}
+        <ResultsFields
+          firstNumber={FIRST_TEXT_CARD + TEXT_FIELDS.length}
+          baseId={baseId}
+          limits={storyLimits}
+          rows={rows}
+          quote={quote}
+          author={author}
+          onRowChange={changeRow}
+          onQuoteChange={(text) => changeTestimonial({ ...testimonialRef.current, quote: text })}
+          onAuthorChange={(text) => changeTestimonial({ ...testimonialRef.current, author: text })}
+          onResultsBlur={() => void texts.save("results")}
+          onTestimonialBlur={() => void texts.save("testimonial")}
+          onLeave={reveal}
+          revealed={revealed}
+          resultsFailed={texts.failed.has("results")}
+          testimonialFailed={texts.failed.has("testimonial")}
+          inputs={storyInputs}
+        />
       </div>
 
       {/* Always mounted, so screen readers announce the error line when it appears. */}

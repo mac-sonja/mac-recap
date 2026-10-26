@@ -1,8 +1,12 @@
 import { z } from "zod";
 import { hasNoNul, NUL_MESSAGE, withinCodePoints } from "@/modules/material/domain/validation";
 
-/** The details form's stable field keys (the `save_context_field` check and the `context_form` columns match). */
-export const FORM_FIELDS = ["context", "solution", "results"] as const;
+/**
+ * The details form's text field keys (the `save_context_field` check and the `context_form`
+ * text columns match). Risultati and Testimonial are structured and save through their
+ * own calls (`saveCaseResults`, `saveCaseTestimonial`; Story 2.21).
+ */
+export const FORM_FIELDS = ["context", "solution"] as const;
 export type FormField = (typeof FORM_FIELDS)[number];
 
 /** Each field's upper bound in characters (code points, like Postgres `char_length`; the `context_form_*_check` match). */
@@ -19,17 +23,106 @@ export const FIELD_TOO_LONG_MESSAGE = `Must be at most ${MAX_FORM_FIELD_CHARS.to
 export const isFormField = (key: unknown): key is FormField =>
   typeof key === "string" && (FORM_FIELDS as readonly string[]).includes(key);
 
-/** The whole form; a field never saved (or a case with no row) is `""`. */
-export type DetailsForm = Record<FormField, string>;
+/** One of a case's results: what is measured ("Candidature ricevute") and the number ("+180%"), both trimmed and filled. */
+export const caseResultSchema = z.object({ label: z.string(), value: z.string() });
+export type CaseResult = z.infer<typeof caseResultSchema>;
 
-export const emptyDetailsForm = (): DetailsForm => ({ context: "", solution: "", results: "" });
+/** A case's testimonial: a quote and its author (an author never comes without a quote). */
+export interface CaseTestimonial {
+  quote: string;
+  author: string;
+}
 
-/** A `context_form` row's fields as the material module sees them. */
+/**
+ * The whole form; a text never saved (or a case with no row) is `""`, no results is
+ * `[]`. `results` are the filled rows, top to bottom (Story 2.21).
+ */
 export const detailsFormSchema = z.object({
   context: z.string(),
   solution: z.string(),
-  results: z.string(),
+  results: z.array(caseResultSchema),
+  testimonialQuote: z.string(),
+  testimonialAuthor: z.string(),
 });
+export type DetailsForm = z.infer<typeof detailsFormSchema>;
+
+export const emptyDetailsForm = (): DetailsForm => ({
+  context: "",
+  solution: "",
+  results: [],
+  testimonialQuote: "",
+  testimonialAuthor: "",
+});
+
+/**
+ * The limits of a case's results and testimonial: the client's (the same SQL checks,
+ * `client_brief_results_valid`). index.ts passes the case-study module's constants;
+ * the domain stays pure, so it takes them as a value.
+ */
+export interface CaseStoryLimits {
+  /** Rows, at most. */
+  resultsMax: number;
+  /** A result's label, in characters (code points) after trimming. */
+  resultLabelMax: number;
+  /** A result's value, in characters (code points) after trimming. */
+  resultValueMax: number;
+  /** The testimonial's quote, in characters (code points) after trimming. */
+  testimonialQuoteMax: number;
+  /** The testimonial's author, in characters (code points) after trimming. */
+  testimonialAuthorMax: number;
+}
+
+/** The length message for a story text over `max` characters. */
+export const storyTooLongMessage = (max: number) => `Must be at most ${max.toLocaleString("en")} characters.`;
+
+/** An optional story text (result part, testimonial): trimmed, at most `max` code points, no U+0000 or lone surrogate. */
+const storyTextSchema = (max: number) =>
+  z
+    .string()
+    .refine(hasNoNul, NUL_MESSAGE)
+    .refine((text) => text.isWellFormed(), "Must be well-formed Unicode (no lone surrogates).")
+    .transform((text) => text.trim())
+    .refine((text) => withinCodePoints(text, max), storyTooLongMessage(max));
+
+const REQUIRED_PART = "Required: a result needs both its label and its value.";
+
+/**
+ * Replaces a case's results (`{ caseId, results }`): the filled rows, top to bottom, at
+ * most `resultsMax`; `[]` clears them. Each row's label and value are trimmed and both
+ * required (a half row is never sent); any other key is dropped.
+ */
+export const saveCaseResultsInputSchema = (limits: CaseStoryLimits) =>
+  z.object({
+    caseId: z.uuid(),
+    results: z
+      .array(
+        z.object({
+          label: storyTextSchema(limits.resultLabelMax).refine((text) => text !== "", REQUIRED_PART),
+          value: storyTextSchema(limits.resultValueMax).refine((text) => text !== "", REQUIRED_PART),
+        }),
+      )
+      .max(limits.resultsMax, `At most ${limits.resultsMax} results.`),
+  });
+
+/** The message when an author comes without a quote. */
+export const AUTHOR_WITHOUT_QUOTE = "Required: an author needs a quote.";
+
+/**
+ * Replaces a case's testimonial (`{ caseId, quote, author }`, both trimmed; `""` and
+ * `""` clear it). An author without a quote fails on `quote`.
+ */
+export const saveCaseTestimonialInputSchema = (limits: CaseStoryLimits) =>
+  z
+    .object({
+      caseId: z.uuid(),
+      quote: storyTextSchema(limits.testimonialQuoteMax),
+      author: storyTextSchema(limits.testimonialAuthorMax),
+    })
+    .refine((input) => input.quote !== "" || input.author === "", { message: AUTHOR_WITHOUT_QUOTE, path: ["quote"] });
+
+/** Whether two results lists hold the same rows in the same order. */
+export const sameResults = (a: readonly CaseResult[], b: readonly CaseResult[]) =>
+  a.length === b.length && a.every((row, index) => row.label === b[index]?.label && row.value === b[index]?.value);
 
 /** Optional plain text stored as given; `""` clears the field. */
 const fieldTextSchema = z
@@ -57,7 +150,18 @@ export interface DetailsFieldSaved {
   text: string;
 }
 
-/** Recorded through `case-study.recordEvent` with `{ field }` only (never the text). */
+/** What `saveCaseResults` stored: the case's results now, the filled rows top to bottom. */
+export interface CaseResultsSaved {
+  results: CaseResult[];
+}
+
+/** What `saveCaseTestimonial` stored: the quote and its author now, trimmed. */
+export type CaseTestimonialSaved = CaseTestimonial;
+
+/**
+ * Recorded through `case-study.recordEvent` with `{ field }` only (never the text):
+ * a FORM_FIELDS key, `results` or `testimonial`.
+ */
 export const DETAILS_SAVED = "details_saved";
 
 /** Cut by code points, so an astral character is never split. */

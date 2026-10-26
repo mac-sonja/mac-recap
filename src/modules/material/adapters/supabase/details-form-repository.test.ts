@@ -48,7 +48,7 @@ describe("createSupabaseDetailsFormRepository", () => {
 
   it("saveField returns '' as the previous text of a first save", async () => {
     const stub = stubClient({ data: "", error: null });
-    expect(await createSupabaseDetailsFormRepository(stub.factory).saveField(CASE_ID, "results", "R", ACTOR_ID)).toEqual({
+    expect(await createSupabaseDetailsFormRepository(stub.factory).saveField(CASE_ID, "solution", "R", ACTOR_ID)).toEqual({
       ok: true,
       value: "",
     });
@@ -115,27 +115,98 @@ describe("createSupabaseDetailsFormRepository", () => {
     if (!result.ok) expect(result.error.code).toBe("DETAILS_INVALID");
   });
 
-  it("read selects the three fields of the case's row", async () => {
-    const stub = stubClient({ data: { context: "C", solution: "", results: "R" }, error: null });
+  it("read selects the fields of the case's row", async () => {
+    const stub = stubClient({
+      data: { context: "C", solution: "", results: [{ label: "Iscritti", value: "+30%" }], testimonial_quote: "Sì.", testimonial_author: "" },
+      error: null,
+    });
     expect(await createSupabaseDetailsFormRepository(stub.factory).read(CASE_ID)).toEqual({
       ok: true,
-      value: { context: "C", solution: "", results: "R" },
+      value: { context: "C", solution: "", results: [{ label: "Iscritti", value: "+30%" }], testimonialQuote: "Sì.", testimonialAuthor: "" },
     });
     expect(stub.from).toHaveBeenCalledWith("context_form");
-    expect(stub.select).toHaveBeenCalledWith("context, solution, results");
+    expect(stub.select).toHaveBeenCalledWith("context, solution, results, testimonial_quote, testimonial_author");
     expect(stub.eq).toHaveBeenCalledWith("case_id", CASE_ID);
   });
 
-  it("read with no row → all three fields ''", async () => {
+  it("read with no row → every text '' and no results", async () => {
     const stub = stubClient({ data: null, error: null });
     expect(await createSupabaseDetailsFormRepository(stub.factory).read(CASE_ID)).toEqual({
       ok: true,
-      value: { context: "", solution: "", results: "" },
+      value: { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" },
     });
   });
 
+  it("saveResults calls save_case_results with label and value only and returns the previous list", async () => {
+    const stub = stubClient({ data: [{ label: "Vecchio", value: "1" }], error: null });
+    const repo = createSupabaseDetailsFormRepository(stub.factory);
+    const results = [{ label: "Iscritti", value: "+30%", extra: "x" } as { label: string; value: string }];
+    expect(await repo.saveResults(CASE_ID, results, ACTOR_ID)).toEqual({ ok: true, value: [{ label: "Vecchio", value: "1" }] });
+    expect(stub.rpc).toHaveBeenCalledWith("save_case_results", {
+      p_case_id: CASE_ID,
+      p_results: [{ label: "Iscritti", value: "+30%" }],
+      p_actor_id: ACTOR_ID,
+    });
+  });
+
+  it("saveTestimonial calls save_case_testimonial and returns the previous pair", async () => {
+    const stub = stubClient({ data: { quote: "", author: "" }, error: null });
+    const repo = createSupabaseDetailsFormRepository(stub.factory);
+    expect(await repo.saveTestimonial(CASE_ID, "Sì.", "Anna", ACTOR_ID)).toEqual({ ok: true, value: { quote: "", author: "" } });
+    expect(stub.rpc).toHaveBeenCalledWith("save_case_testimonial", {
+      p_case_id: CASE_ID,
+      p_quote: "Sì.",
+      p_author: "Anna",
+      p_actor_id: ACTOR_ID,
+    });
+  });
+
+  it.each([
+    ["context_form_results_check", "results"],
+    ["context_form_testimonial_quote_check", "quote"],
+    ["context_form_testimonial_author_check", "author"],
+    ["context_form_testimonial_check", "quote"],
+  ])("a %s violation → INVALID_INPUT naming %s", async (check, field) => {
+    const stub = stubClient({ data: null, error: { code: "23514", message: `new row violates check constraint "${check}"` } });
+    const repo = createSupabaseDetailsFormRepository(stub.factory);
+    const result = check.includes("results")
+      ? await repo.saveResults(CASE_ID, [], ACTOR_ID)
+      : await repo.saveTestimonial(CASE_ID, "", "x", ACTOR_ID);
+    expect(result).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", details: { fields: [field] } } });
+  });
+
+  it("saveResults and saveTestimonial map NOT_FOUND", async () => {
+    const stub = stubClient({ data: null, error: { code: "P0001", message: "NOT_FOUND" } });
+    const repo = createSupabaseDetailsFormRepository(stub.factory);
+    expect(await repo.saveResults(CASE_ID, [], ACTOR_ID)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect(await repo.saveTestimonial(CASE_ID, "", "", ACTOR_ID)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+  });
+
+  it("saveResults maps any other failure to DETAILS_WRITE_FAILED, logging no text", async () => {
+    const stub = stubClient({ data: null, error: { code: "40001", message: "SECRET" } });
+    const result = await createSupabaseDetailsFormRepository(stub.factory).saveResults(CASE_ID, [{ label: "SECRET", value: "1" }], ACTOR_ID);
+    expect(result).toMatchObject({ ok: false, error: { code: "DETAILS_WRITE_FAILED" } });
+    expect(logLines().join("")).toContain("save_case_results failed: 40001");
+    expect(logLines().join("")).not.toContain("SECRET");
+  });
+
+  it("saveTestimonial maps any other failure to DETAILS_WRITE_FAILED, logging no text", async () => {
+    const stub = stubClient({ data: null, error: { code: "40001", message: "SECRET" } });
+    const result = await createSupabaseDetailsFormRepository(stub.factory).saveTestimonial(CASE_ID, "SECRET-QUOTE", "SECRET-AUTHOR", ACTOR_ID);
+    expect(result).toMatchObject({ ok: false, error: { code: "DETAILS_WRITE_FAILED" } });
+    expect(logLines().join("")).toContain("save_case_testimonial failed: 40001");
+    expect(logLines().join("")).not.toContain("SECRET");
+  });
+
+  it("saveResults and saveTestimonial reject a malformed previous value", async () => {
+    const stub = stubClient({ data: "nope", error: null });
+    const repo = createSupabaseDetailsFormRepository(stub.factory);
+    expect(await repo.saveResults(CASE_ID, [], ACTOR_ID)).toMatchObject({ ok: false, error: { code: "DETAILS_INVALID" } });
+    expect(await repo.saveTestimonial(CASE_ID, "", "", ACTOR_ID)).toMatchObject({ ok: false, error: { code: "DETAILS_INVALID" } });
+  });
+
   it("read rejects a malformed row and logs without the text", async () => {
-    const stub = stubClient({ data: { context: "SECRET", solution: null, results: "" }, error: null });
+    const stub = stubClient({ data: { context: "SECRET", solution: null, results: [], testimonial_quote: "", testimonial_author: "" }, error: null });
     const result = await createSupabaseDetailsFormRepository(stub.factory).read(CASE_ID);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("DETAILS_INVALID");
