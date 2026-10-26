@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-26-2026 14:00
+last_updated: 10-26-2026 16:00
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -56,7 +56,7 @@ development_status:
   2-18-case-wizard-polish: done  # #65; owner 2026-10-20: live title, client search, no Lingua (new cases it; multilingual later creates both languages at once), required year, bigger pills, sticky footer; UI only, no migration
   2-19-visual-refresh: done  # #66; owner 2026-10-20, outside the epic plan: light/dark themes (Automatico/Chiaro/Scuro), Home dashboard as owner/designer landing (/home), restyled sidebar, Case, Clienti (card grid) and wizards, copy rewritten in agency voice, motion per emilkowalski/skills (.claude/skills, mac-recap-ui rules); UI only, no migration
   2-20-client-panel-and-delete-draft: done  # owner 2026-10-21/22, outside the epic plan: client add/edit side panel #86 (replaces the client wizard; Modifica layout inactive until 4.12), delete a draft #83/#87/#89 (inside the draft, type elimina; migration applied to mac-recap-dev 2026-10-21), Risultati + Testimonial #88 (migration applied to mac-recap-dev 2026-10-22), single Settore from a shared list #90; story cards #94; field look #81, Attività #82
-  2-21-case-results-and-testimonial: backlog  # per SCP 2026-10-26: Risultati + Testimonial in the case Details step, own cards after Soluzione, optional, as in the client panel; they are the case outro page; migration; doesn't wait for the templates
+  2-21-case-results-and-testimonial: review  # #96; per SCP 2026-10-26: Risultati + Testimonial in the case Details step, own cards after Soluzione, optional, as in the client panel; they are the case outro page; migration; doesn't wait for the templates
   epic-2-retrospective: optional
 
   epic-3: in-progress
