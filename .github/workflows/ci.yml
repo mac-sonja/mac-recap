@@ -22,7 +22,8 @@ jobs:
       # The video rendition test (Story 3.2) runs ffmpeg/ffprobe; it is skipped only where they are missing locally.
       # The Ubuntu mirror is often too slow (2026-10-26: 20+ minute hang, then failed attempts on #94 and #96),
       # so the .deb files are cached and installed offline. On a miss, or when the cached files no longer
-      # install on the runner image, they are downloaded (time-limited, 3 attempts) and saved again.
+      # install on the runner image, they are downloaded (time-limited, 3 attempts, then from Ubuntu's
+      # main archive) and saved again.
       # To force a fresh download, bump the v1 in both cache keys.
       - name: Restore ffmpeg packages
         id: ffmpeg-cache
@@ -51,7 +52,11 @@ jobs:
               fi
               exit 0
             fi
-            echo "ffmpeg install attempt $attempt failed; retrying in 10 s"
+            echo "ffmpeg install attempt $attempt failed; retrying in 10 s from archive.ubuntu.com"
+            # The runner's Azure mirror was the slow part (about 55 kB/s on 2026-10-26); the packages
+            # already fetched are kept, and the next attempts use Ubuntu's main archive instead.
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+              /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
             sleep 10
           done
           exit 1
