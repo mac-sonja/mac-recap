@@ -55,12 +55,13 @@ development_status:
   2-17-case-wizard-details-first-and-table-filters: done  # #63; migration applied to mac-recap-dev 2026-10-20 (not staging/prod); owner 2026-10-20: wizard details first with business line, table status filter and Business line column; new migration 20261020140000 not yet applied anywhere
   2-18-case-wizard-polish: done  # #65; owner 2026-10-20: live title, client search, no Lingua (new cases it; multilingual later creates both languages at once), required year, bigger pills, sticky footer; UI only, no migration
   2-19-visual-refresh: done  # #66; owner 2026-10-20, outside the epic plan: light/dark themes (Automatico/Chiaro/Scuro), Home dashboard as owner/designer landing (/home), restyled sidebar, Case, Clienti (card grid) and wizards, copy rewritten in agency voice, motion per emilkowalski/skills (.claude/skills, mac-recap-ui rules); UI only, no migration
+  2-20-client-panel-and-delete-draft: done  # owner 2026-10-21/22, outside the epic plan: client add/edit side panel #86 (replaces the client wizard; Modifica layout inactive until 4.12), delete a draft #83/#87/#89 (inside the draft, type elimina; migration applied to mac-recap-dev 2026-10-21), Risultati + Testimonial #88 (migration applied to mac-recap-dev 2026-10-22), single Settore from a shared list #90 (open); field look #81, Attività #82
   epic-2-retrospective: optional
 
   epic-3: in-progress
   3-1-background-job-queue-and-worker-loop: done  # #45; migration applied to mac-recap-dev 2026-10-16 (not staging/prod)
   3-2-display-renditions-for-uploaded-media: done  # #62; migration applied to mac-recap-dev 2026-10-20 (not staging/prod); renditions backfilled on dev
-  3-3-the-case-study-document-revisions-and-the-format-registry: review  # About block per SCP 2026-10-16; client info read live, no snapshot (owner amendment); after 2.14; amendment per SCP 2026-10-16 client intro and collections (document kind, revision subject)
+  3-3-the-case-study-document-revisions-and-the-format-registry: done  # #68 merged (status fixed 2026-10-26); About block per SCP 2026-10-16; client info read live, no snapshot (owner amendment); after 2.14; amendment per SCP 2026-10-16 client intro and collections (document kind, revision subject)
   3-4-templates-as-versioned-code-with-media-count-rules: backlog  # About the client area per SCP 2026-10-16; amendment per SCP 2026-10-16 client intro and collections (pageKey and intro/body role); outro + Modifica layout per SCP 2026-10-21
   3-5-one-renderer-per-format: backlog  # amendment per SCP 2026-10-16 client intro and collections (page keys, starting page number); outro + Modifica layout per SCP 2026-10-21
   3-6-narrative-generator-port-and-anthropic-adapter: backlog  # client info as LLM input per SCP 2026-10-16; runs after 4.8, when the narrative guidelines arrive (SCP 2026-10-20)
