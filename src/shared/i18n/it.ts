@@ -417,7 +417,6 @@ export const it = {
     sections: {
       details: "Dettagli",
       media: "Logo e immagini",
-      story: "Racconto",
     },
     details: {
       labels: {
@@ -433,10 +432,10 @@ export const it = {
       descriptionHint: "Da qui l’AI scrive la bozza dell’intro.",
       /** One-line prompts in the brief textareas, as in the case Details step. */
       placeholders: {
-        context: "Chi è il cliente e da che situazione partiva?",
-        solution: "Come lo avete aiutato, e con quale idea?",
+        context: "Da dove siete partiti? Cosa serviva al cliente, e perché?",
+        solution: "Cosa avete fatto, e con quale idea?",
       },
-      /** Risultati in the Racconto card (owner, 2026-10-22): up to 3 rows of label + value, optional. */
+      /** Risultati in its own card (owner, 2026-10-22): up to 3 rows of label + value, optional. */
       results: {
         title: "Risultati",
         hint: "Fino a 3 numeri. Facoltativo.",
@@ -452,7 +451,7 @@ export const it = {
         /** Under a row with only one of its two parts: it is not saved. */
         halfRow: "Scrivi sia cosa misuri sia il numero.",
       },
-      /** The client's quote in the Racconto card (owner, 2026-10-22), optional. */
+      /** The client's quote in its own card (owner, 2026-10-22), optional. */
       testimonial: {
         title: "Testimonial",
         hint: "Facoltativo.",
