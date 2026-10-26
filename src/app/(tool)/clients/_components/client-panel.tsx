@@ -9,13 +9,21 @@ import { CARD_LABEL, FIELD, FIELD_HINT, FIELD_LABEL, TEXTAREA } from "@/app/_com
 import { Sheet } from "@/app/_components/sheet";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { clientHref, editClientPanelHref } from "@/app/_lib/routes";
-import { createClient, saveClientBriefField, saveClientResults, saveClientTestimonial, updateClient } from "@/app/(tool)/clients/actions";
+import {
+  addClientSector,
+  createClient,
+  saveClientBriefField,
+  saveClientResults,
+  saveClientTestimonial,
+  updateClient,
+} from "@/app/(tool)/clients/actions";
 import { acceptFor } from "@/app/(wizard)/_lib/upload";
 import { useAutosaveFields } from "@/app/(wizard)/_components/use-autosave-fields";
 import { FieldCard } from "@/app/(wizard)/_components/field-card";
 import { RequiredLabel } from "@/app/(wizard)/_components/required-label";
-import type { Client, ClientBrief, ClientBriefField, ClientDetail, ClientIndustry, ClientResult, ListedClientAsset } from "@/modules/case-study";
+import type { Client, ClientBrief, ClientBriefField, ClientDetail, ClientResult, ClientSector, ListedClientAsset } from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
+import { normalizeSectorLabel, sectorLabelKey } from "@/shared/sector-label";
 import { cn } from "@/shared/utils";
 import type { ClientLimits, ClientMaterialLimits } from "../_lib/client-limits";
 import { ClientImageSlots, useClientImages } from "./client-image-slots";
@@ -57,11 +65,12 @@ type StoryField = ClientBriefField | "results" | "testimonial";
 const STORY_FIELDS = [...BRIEF_FIELDS, "results", "testimonial"] as const satisfies readonly StoryField[];
 
 /** The fields saved on Aggiungi / Salva (the brief autosaves once the client exists). */
-type InfoKey = "name" | "industries" | "description" | "logo";
+type InfoKey = "name" | "industry" | "description" | "logo";
 
 interface InfoFields {
   name: string;
-  industries: ClientIndustry[];
+  /** The sector's key; null until one is chosen. */
+  industry: string | null;
   description: string;
 }
 
@@ -74,8 +83,7 @@ const sameInfo = (a: InfoFields | null, b: InfoFields) =>
   a !== null &&
   a.name === b.name &&
   a.description === b.description &&
-  a.industries.length === b.industries.length &&
-  a.industries.every((industry, index) => industry === b.industries[index]);
+  a.industry === b.industry;
 
 function subscribeWide(onChange: () => void) {
   const query = window.matchMedia?.(WIDE);
@@ -91,8 +99,8 @@ export interface ClientPanelProps {
   assets: readonly ListedClientAsset[];
   /** The client's non-deleted case history count, for **Elimina cliente**; null hides it. */
   caseCount: number | null;
-  /** `CLIENT_INDUSTRIES`, in display order. */
-  industries: readonly ClientIndustry[];
+  /** Every sector of the shared list, in display order (`listClientSectors`). */
+  sectors: readonly ClientSector[];
   limits: ClientLimits;
   materialLimits: ClientMaterialLimits;
 }
@@ -117,21 +125,26 @@ export interface ClientPanelProps {
  *
  * On an existing client the logo and the images upload as soon as they are picked
  * (the logo is linked on **Salva**, which deletes the old one), a removed image goes
- * at once, the texts autosave, and name, industries and description save on
+ * at once, the texts autosave, and name, sector and description save on
  * **Salva**, which closes the panel on the client's page. **Annulla**, the × and Esc
  * close it, asking `wizard.unsavedConfirm` first when something is not saved. Below
  * 1024 px the panel does not open (read-only there).
+ *
+ * Settore is one choice among the shared list's pills; the field under them adds a
+ * sector to that list at once (`addClientSector`, also before the client exists) and
+ * selects it, or selects the existing one with the same name.
  */
-export function ClientPanel({ client: initialClient, assets, caseCount, industries: options, limits, materialLimits }: ClientPanelProps) {
+export function ClientPanel({ client: initialClient, assets, caseCount, sectors, limits, materialLimits }: ClientPanelProps) {
   const router = useRouter();
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
   const baseId = useId();
   const ids = {
     name: `${baseId}-name`,
     nameError: `${baseId}-name-error`,
-    industriesLabel: `${baseId}-industries-label`,
-    industriesHint: `${baseId}-industries-hint`,
-    industriesError: `${baseId}-industries-error`,
+    industryLabel: `${baseId}-industry-label`,
+    industryError: `${baseId}-industry-error`,
+    newSector: `${baseId}-new-sector`,
+    newSectorError: `${baseId}-new-sector-error`,
     description: `${baseId}-description`,
     descriptionHint: `${baseId}-description-hint`,
     counter: `${baseId}-description-counter`,
@@ -150,7 +163,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
   const savedInfo = useRef<InfoFields | null>(
     initialClient === null
       ? null
-      : { name: initialClient.name, industries: [...initialClient.industries], description: initialClient.description ?? "" },
+      : { name: initialClient.name, industry: initialClient.industry, description: initialClient.description ?? "" },
   );
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
@@ -174,7 +187,16 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
   const panelEntry = useRef<{ href: string; state: unknown } | null>(null);
 
   const [name, setName] = useState(initialClient?.name ?? "");
-  const [industries, setIndustries] = useState<ClientIndustry[]>(() => [...(initialClient?.industries ?? [])]);
+  const [industry, setIndustry] = useState<string | null>(initialClient?.industry ?? null);
+  /** The shared list as loaded, plus the sectors added from this panel. */
+  const [options, setOptions] = useState<readonly ClientSector[]>(sectors);
+  const [newSector, setNewSector] = useState("");
+  const [sectorError, setSectorError] = useState<string | null>(null);
+  const [addingSector, setAddingSector] = useState(false);
+  /** The add field's text, read synchronously by the unsaved checks. */
+  const newSectorRef = useRef("");
+  /** Counts the person's pill picks, so a late add never overrides a newer one. */
+  const picks = useRef(0);
   const [description, setDescription] = useState(initialClient?.description ?? "");
 
   const logo = useClientLogo(limits, { logoId: initialClient?.logoId ?? null, logoUrl: initialClient?.logoUrl ?? null }, () => busy.current);
@@ -266,6 +288,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
       logo.logo.kind === "new" ||
       images.hasLocal ||
       !sameInfo(savedInfo.current, currentInfo()) ||
+      newSectorRef.current.trim() !== "" ||
       firstIncomplete() !== undefined ||
       storyOverLong() !== undefined,
     // A link inside the panel clicked with unsaved changes: leave only once confirmed.
@@ -394,18 +417,79 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
   function showErrors(next: Partial<Record<InfoKey, string>>) {
     // Commit aria-invalid and the messages before focus moves, so they are announced.
     flushSync(() => setErrors(next));
-    const first = (["name", "industries", "description", "logo"] as const).find((key) => next[key] !== undefined);
-    if (first === "industries") firstPill.current?.querySelector("button")?.focus();
+    const first = (["name", "industry", "description", "logo"] as const).find((key) => next[key] !== undefined);
+    if (first === "industry") firstPill.current?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]')?.focus();
     else if (first === "logo") logo.chooseRef.current?.focus();
     else if (first !== undefined) document.getElementById(first === "name" ? ids.name : ids.description)?.focus();
   }
 
-  function toggleIndustry(industry: ClientIndustry) {
+  function selectIndustry(key: string) {
     if (busy.current) return;
-    clearError("industries");
-    setIndustries((current) =>
-      current.includes(industry) ? current.filter((value) => value !== industry) : options.filter((value) => value === industry || current.includes(value)),
-    );
+    clearError("industry");
+    setIndustry(key);
+  }
+
+  /** A pill the person picked (click or arrow keys). */
+  function pickIndustry(key: string) {
+    if (busy.current) return;
+    picks.current += 1;
+    selectIndustry(key);
+  }
+
+  function changeNewSector(text: string) {
+    newSectorRef.current = text;
+    setNewSector(text);
+  }
+
+  /**
+   * Adds the typed sector to the shared list and selects it; a sector with the same
+   * name (case, accents and spaces aside) is selected instead. The field keeps the text
+   * on an error, shown under it.
+   */
+  async function addSector() {
+    if (busy.current || addingSector) return;
+    const label = normalizeSectorLabel(newSector);
+    if (label === "") return;
+    const length = charCount(label);
+    if (length < limits.sectorLabelMin || length > limits.sectorLabelMax) {
+      setSectorError(fill(copy.sector.length, { min: limits.sectorLabelMin, max: limits.sectorLabelMax }));
+      return;
+    }
+    const known = options.find((sector) => sectorLabelKey(sector.label) === sectorLabelKey(label));
+    if (known !== undefined) return chooseSector(known, picks.current);
+    const picksBefore = picks.current;
+    setAddingSector(true);
+    setSectorError(null);
+    try {
+      const added = await addClientSector({ label });
+      if (unmounted.current) return;
+      if (!added.ok) {
+        setSectorError(
+          added.error.code === "SECTOR_LABEL_INVALID"
+            ? fill(copy.sector.length, { min: limits.sectorLabelMin, max: limits.sectorLabelMax })
+            : copy.sector.addFailed,
+        );
+        return;
+      }
+      chooseSector(added.value, picksBefore);
+    } catch {
+      if (!unmounted.current) setSectorError(copy.sector.addFailed);
+    } finally {
+      if (!unmounted.current) setAddingSector(false);
+    }
+  }
+
+  /**
+   * Adds `sector`'s pill when it is new here and empties the field; selects it unless a
+   * save is running or the person picked another pill since the add started (`picksBefore`).
+   */
+  function chooseSector(sector: ClientSector, picksBefore: number) {
+    setOptions((current) => (current.some((option) => option.key === sector.key) ? current : [...current, sector]));
+    changeNewSector("");
+    setSectorError(null);
+    if (busy.current || picks.current !== picksBefore) return;
+    selectIndustry(sector.key);
+    announce(fill(copy.sector.selected, { label: sector.label }));
   }
 
   /** Field errors from a refusal; true when the refusal was shown on a field. */
@@ -417,7 +501,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
     else if (code === "INVALID_INPUT" && fields.length === 1 && fields[0] === "name") next.name = it.clients.errors.nameRequired;
     else if (code === "CLIENT_LOGO_INVALID") next.logo = it.clients.errors.logoUnreadable;
     else if (code === "CLIENT_FIELD_INVALID") {
-      if (fields.includes("industries")) next.industries = copy.errors.required;
+      if (fields.includes("industry")) next.industry = copy.errors.required;
       if (fields.includes("description")) next.description = copy.errors.required;
       if (fields.includes("logoId")) next.logo = copy.errors.required;
     } else if (code === "CLIENT_FIELD_TOO_LONG" && fields.includes("description")) {
@@ -434,7 +518,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
     if (!unmounted.current) setClient(saved);
   }
 
-  const currentInfo = (): InfoFields => ({ name: name.trim(), industries, description: description.trim() });
+  const currentInfo = (): InfoFields => ({ name: name.trim(), industry, description: description.trim() });
 
   function showLogoFailure(kind: LogoFailure) {
     if (kind === "fatal") setFailed(true);
@@ -448,7 +532,13 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
    * Stays with the errors shown when a step fails.
    */
   async function save() {
-    if (busy.current || !ready || images.busy) return;
+    if (busy.current || !ready || images.busy || addingSector) return;
+    // A sector typed but not added would be lost: ask for Aggiungi first.
+    if (newSectorRef.current.trim() !== "") {
+      flushSync(() => setSectorError(copy.sector.pending));
+      document.getElementById(ids.newSector)?.focus();
+      return;
+    }
     const info = currentInfo();
     const invalid: Partial<Record<InfoKey, string>> = {};
     if (info.name.length > limits.nameMax) invalid.name = fill(it.clients.errors.nameTooLong, { max: limits.nameMax });
@@ -546,21 +636,22 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
   const values = brief.values;
   const missing: string[] = [
     ...(name.trim() === "" ? [copy.labels.name] : []),
-    ...(industries.length === 0 ? [copy.labels.industries] : []),
+    ...(industry === null ? [copy.labels.industries] : []),
     ...(description.trim() === "" ? [copy.labels.description] : []),
     ...(logo.logo.kind === "none" ? [copy.labels.logo] : []),
     ...(images.imageCount < materialLimits.minImages ? [copy.labels.images] : []),
     ...BRIEF_FIELDS.filter((field) => values[field].trim() === "").map((field) => copy.labels[field]),
   ];
   const ready = missing.length === 0;
-  const inactive = !ready || pending || images.busy;
+  const inactive = !ready || pending || images.busy || addingSector;
 
   /** Whether closing now would lose something. */
   function unsaved(): boolean {
     if (clientRef.current === null) {
       return (
         name.trim() !== "" ||
-        industries.length > 0 ||
+        industry !== null ||
+        newSectorRef.current.trim() !== "" ||
         description.trim() !== "" ||
         logo.logo.kind !== "none" ||
         images.slots.length > 0 ||
@@ -574,6 +665,7 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
       logo.logo.kind === "new" ||
       images.hasLocal ||
       !sameInfo(savedInfo.current, currentInfo()) ||
+      newSectorRef.current.trim() !== "" ||
       brief.firstUnsaved() !== undefined ||
       firstIncomplete() !== undefined ||
       storyOverLong() !== undefined
@@ -678,25 +770,62 @@ export function ClientPanel({ client: initialClient, assets, caseCount, industri
 
           <div className="mt-2 flex flex-col gap-2">
             <RequiredLabel>
-              <span id={ids.industriesLabel} className={FIELD_LABEL}>
+              <span id={ids.industryLabel} className={FIELD_LABEL}>
                 {copy.labels.industries}
               </span>
             </RequiredLabel>
             <div ref={firstPill}>
               <IndustryPills
                 options={options}
-                selected={industries}
-                onToggle={toggleIndustry}
-                labelledBy={ids.industriesLabel}
-                describedBy={describedBy(ids.industriesHint, errors.industries !== undefined && ids.industriesError)}
+                selected={industry}
+                onSelect={pickIndustry}
+                disabled={pending}
+                labelledBy={ids.industryLabel}
+                describedBy={describedBy(errors.industry !== undefined && ids.industryError)}
+                invalid={errors.industry !== undefined}
               />
             </div>
-            <p id={ids.industriesHint} className={FIELD_HINT}>
-              {copy.industriesHint}
-            </p>
-            {errors.industries === undefined ? null : (
-              <p id={ids.industriesError} className={ERROR}>
-                {errors.industries}
+            {errors.industry === undefined ? null : (
+              <p id={ids.industryError} className={ERROR}>
+                {errors.industry}
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <input
+                id={ids.newSector}
+                name="newSector"
+                type="text"
+                autoComplete="off"
+                aria-label={copy.sector.newName}
+                aria-invalid={sectorError !== null || undefined}
+                aria-describedby={describedBy(sectorError !== null && ids.newSectorError)}
+                placeholder={copy.sector.placeholder}
+                value={newSector}
+                onChange={(event) => {
+                  changeNewSector(event.target.value);
+                  setSectorError(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  void addSector();
+                }}
+                className={cn(FIELD, "min-w-0 flex-1")}
+              />
+              <button
+                type="button"
+                aria-label={copy.sector.addName}
+                aria-disabled={newSector.trim() === "" || addingSector || disabled || undefined}
+                aria-busy={addingSector || undefined}
+                onClick={() => void addSector()}
+                className={cn(SECONDARY_ACTION, "shrink-0 aria-disabled:cursor-not-allowed aria-disabled:text-foreground-muted")}
+              >
+                {copy.sector.add}
+              </button>
+            </div>
+            {sectorError === null ? null : (
+              <p id={ids.newSectorError} className={ERROR}>
+                {sectorError}
               </p>
             )}
           </div>

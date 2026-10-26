@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { normalizeClientConfirmName } from "@/shared/client-name";
+import { normalizeSectorLabel } from "@/shared/sector-label";
 import { CASE_STATUSES } from "@/shared/case-status";
+
+export { normalizeSectorLabel, sectorLabelKey } from "@/shared/sector-label";
 
 /** Narrative locales (per case, default `it`). The `case_study.locale` check lists exactly these. */
 export const LOCALES = ["it", "en"] as const;
@@ -19,16 +22,27 @@ export const CLIENT_NAME_MAX = 120;
 export const CLIENT_DESCRIPTION_MAX = 400;
 
 /**
- * The fixed industry list (SCP 2026-10-19), in display order. The
- * `client_industries_check` lists exactly these; the Italian labels live in
- * `it.clients.industries`. A client has at least one.
+ * Client sectors ("Settore"; owner, 2026-10-21/22) are a shared list in the
+ * `client_sector` table: the four seeded ones (`interior_design`, `energia`,
+ * `risorse_umane`, `lusso`) first, then the ones people added, in the order they were
+ * added. A client has one; its key is stable, its label is what everybody sees.
  */
-export const CLIENT_INDUSTRIES = ["interior_design", "energia", "risorse_umane", "lusso"] as const;
-export type ClientIndustry = (typeof CLIENT_INDUSTRIES)[number];
-
-export function isClientIndustry(value: unknown): value is ClientIndustry {
-  return typeof value === "string" && (CLIENT_INDUSTRIES as readonly string[]).includes(value);
+export interface ClientSector {
+  key: string;
+  label: string;
 }
+
+/** A sector key as `client_sector_key_check` allows it. Whether it exists is checked in SQL. */
+export const SECTOR_KEY_PATTERN = /^[a-z0-9_]{1,48}$/;
+
+/** A new sector's label, in characters (code points) after trimming (`client_sector_label_check` matches). */
+export const CLIENT_SECTOR_LABEL_MIN = 2;
+export const CLIENT_SECTOR_LABEL_MAX = 40;
+
+export const clientSectorSchema = z.object({
+  key: z.string().regex(SECTOR_KEY_PATTERN),
+  label: z.string(),
+});
 
 /**
  * The fixed business line list ("Servizi"; owner, 2026-10-20; Sviluppo added at the 2.18 review), in display
@@ -146,8 +160,8 @@ export function charCount(text: string): number {
  */
 export const FIELD_TOO_LONG = "Too long.";
 /**
- * The message of a missing or invalid required client field (industries outside the
- * list or none, a blank description, no logo): `parseClientInput` turns those into
+ * The message of a missing or invalid required client field (no sector or a malformed
+ * key, a blank description, no logo): `parseClientInput` turns those into
  * `CLIENT_FIELD_INVALID`.
  */
 export const FIELD_INVALID = "Invalid.";
@@ -165,18 +179,12 @@ const requiredClientText = (max: number) =>
     .refine((value) => value !== "", { message: FIELD_INVALID })
     .refine((value) => charCount(value) <= max, { message: FIELD_TOO_LONG });
 
-/**
- * The client's industries: one or more values of `CLIENT_INDUSTRIES`, deduplicated
- * and put in list order. Anything else (an unknown value, none, not a list) is `FIELD_INVALID`.
- */
-export const industriesSchema = z
-  .array(z.string({ error: FIELD_INVALID }), { error: FIELD_INVALID })
-  .refine((values) => values.length > 0 && values.every(isClientIndustry), { message: FIELD_INVALID })
-  .transform((values) => CLIENT_INDUSTRIES.filter((industry) => values.includes(industry)));
+/** The client's sector: one `client_sector` key (whether it exists is checked in SQL). Anything else is `FIELD_INVALID`. */
+export const industrySchema = z.string({ error: FIELD_INVALID }).regex(SECTOR_KEY_PATTERN, { message: FIELD_INVALID });
 
-/** The client's own words: industries (≥1 from the list) and description (≤400), both required. */
+/** The client's own words: its sector (one key) and description (≤400), both required. */
 export const clientInfoSchema = z.object({
-  industries: industriesSchema,
+  industry: industrySchema,
   description: requiredClientText(CLIENT_DESCRIPTION_MAX),
 });
 export type ClientInfo = z.infer<typeof clientInfoSchema>;
@@ -213,12 +221,12 @@ export type ClientBrief = z.infer<typeof clientBriefSchema>;
 export const emptyClientBrief = (): ClientBrief => ({ context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" });
 
 /**
- * A client with its info (AD-22). `industries` is empty and `description` and
- * `logoId` are null only for a client made before every field was required
+ * A client with its info (AD-22). `industry` is its sector's key. `industry`,
+ * `description` and `logoId` are null only for a client made before every field was required
  * (Story 2.14): such a client is unfinished. `logoId` is the current `client_logo` row.
  */
 export const clientSchema = clientRefSchema.extend({
-  industries: z.array(z.enum(CLIENT_INDUSTRIES)),
+  industry: z.string().regex(SECTOR_KEY_PATTERN).nullable(),
   description: z.string().nullable(),
   logoId: z.uuid().nullable(),
 });
@@ -231,15 +239,15 @@ export type Client = z.infer<typeof clientSchema>;
 export type ClientDetail = Client & { brief: ClientBrief; logoUrl: string | null };
 
 /**
- * Whether every required client field is filled: name, at least one industry,
+ * Whether every required client field is filled: name, a sector,
  * description, logo, Contesto and Soluzione (each non-blank after trimming). The
  * results and the testimonial are optional. A client missing any of them is unfinished.
  */
-export function isClientComplete(client: Pick<Client, "name" | "industries" | "description" | "logoId">, brief: ClientBrief): boolean {
+export function isClientComplete(client: Pick<Client, "name" | "industry" | "description" | "logoId">, brief: ClientBrief): boolean {
   const filled = (text: string | null) => text !== null && text.trim() !== "";
   return (
     filled(client.name) &&
-    client.industries.length > 0 &&
+    client.industry !== null &&
     filled(client.description) &&
     client.logoId !== null &&
     CLIENT_BRIEF_FIELDS.every((field) => filled(brief[field]))
@@ -249,12 +257,13 @@ export function isClientComplete(client: Pick<Client, "name" | "industries" | "d
 /**
  * A case's client info, always the client's current values: client info is live
  * (owner, 2026-10-16), so nothing is copied per case or per revision. Epic 3 reads
- * it at render time, not at enqueue.
+ * it at render time, not at enqueue. `industry` is the client's sector (key and
+ * label), or null when it has none.
  */
 export const caseClientInfoSchema = z.object({
   clientId: z.uuid(),
   name: z.string(),
-  industries: z.array(z.enum(CLIENT_INDUSTRIES)),
+  industry: clientSectorSchema.nullable(),
   description: z.string().nullable(),
   logoId: z.uuid().nullable(),
   brief: clientBriefSchema,
@@ -265,7 +274,7 @@ export type CaseClientInfo = z.infer<typeof caseClientInfoSchema>;
 export const clientNameSchema = z.string().trim().min(1, "Required.").max(CLIENT_NAME_MAX);
 
 /**
- * What a person supplies to add a client (wizard step 1): name, industries and
+ * What a person supplies to add a client (wizard step 1): name, sector and
  * description, all required; the code is assigned in SQL, the logo is linked
  * afterwards through `updateClient` and the brief saved through
  * `saveClientBriefField`. Any other key is dropped.
@@ -284,6 +293,22 @@ export const updateClientInputSchema = clientInfoSchema.extend({
   logoId: z.uuid({ error: FIELD_INVALID }),
 });
 export type UpdateClientInput = z.infer<typeof updateClientInputSchema>;
+
+/**
+ * What a person supplies to add a sector to the shared list: `{ label }`, stored with
+ * whitespace collapsed and trimmed, 2–40 characters (code points), no U+0000 or lone surrogate.
+ */
+export const addClientSectorInputSchema = z.object({
+  label: z
+    .string()
+    .refine(NO_NUL, { message: INVALID_CHARACTER })
+    .refine((text) => text.isWellFormed(), { message: INVALID_CHARACTER })
+    .transform(normalizeSectorLabel)
+    .refine((text) => charCount(text) >= CLIENT_SECTOR_LABEL_MIN && charCount(text) <= CLIENT_SECTOR_LABEL_MAX, {
+      message: FIELD_INVALID,
+    }),
+});
+export type AddClientSectorInput = z.infer<typeof addClientSectorInputSchema>;
 
 /**
  * Saves one brief text, Contesto or Soluzione (`""` clears it while editing; a

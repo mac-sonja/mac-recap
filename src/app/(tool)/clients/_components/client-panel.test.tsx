@@ -9,7 +9,7 @@ import type {
   ClientDetail,
   ClientResultsSaved,
   ClientTestimonialSaved,
-  ClientIndustry,
+  ClientSector,
   ListedClientAsset,
   PresignedClientLogoUpload,
   PresignedClientMaterial,
@@ -32,6 +32,7 @@ const requestClientMaterialUpload = vi.fn<(input: unknown) => Promise<ActionResu
 const confirmClientMaterialUpload = vi.fn<(input: unknown) => Promise<ActionResult<ListedClientAsset>>>();
 const listClientMaterial = vi.fn<(input: unknown) => Promise<ActionResult<ListedClientAsset[]>>>();
 const removeClientMaterial = vi.fn<(input: unknown) => Promise<ActionResult<void>>>();
+const addClientSector = vi.fn<(input: unknown) => Promise<ActionResult<ClientSector>>>();
 const uploadFile = vi.fn<(target: unknown, file: Blob) => Promise<void>>();
 
 /** Records the call order across actions. */
@@ -56,6 +57,7 @@ vi.mock("@/app/(tool)/clients/actions", () => ({
   listClientMaterial: (input: unknown) => listClientMaterial(input),
   removeClientMaterial: traced("removeClientMaterial", (input: unknown) => removeClientMaterial(input)),
   deleteClient: vi.fn(),
+  addClientSector: traced("addClientSector", (input: unknown) => addClientSector(input)),
 }));
 vi.mock("@/app/(wizard)/_lib/upload", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/app/(wizard)/_lib/upload")>()),
@@ -67,7 +69,12 @@ const { markPanelOpenedInApp, clearPanelOpenedInApp } = await import("../_lib/pa
 const { UploadError } = await import("@/app/(wizard)/_lib/upload");
 const { DEBOUNCE_MS } = await import("@/app/(wizard)/_components/use-autosave-fields");
 
-const INDUSTRIES: ClientIndustry[] = ["interior_design", "energia", "risorse_umane", "lusso"];
+const SECTORS: ClientSector[] = [
+  { key: "interior_design", label: "Interior design" },
+  { key: "energia", label: "Energia" },
+  { key: "risorse_umane", label: "Risorse umane" },
+  { key: "lusso", label: "Lusso" },
+];
 const LIMITS = {
   nameMax: 120,
   descriptionMax: 400,
@@ -76,6 +83,8 @@ const LIMITS = {
   resultValueMax: 20,
   testimonialQuoteMax: 600,
   testimonialAuthorMax: 120,
+  sectorLabelMin: 2,
+  sectorLabelMax: 40,
   logoTypes: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"],
   logoMaxBytes: 5 * 1024 * 1024,
   logoMinShortSide: 400,
@@ -91,7 +100,7 @@ const MATERIAL = {
 const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
 const OLD_LOGO = "eeeeeeee-0000-4000-8000-000000000001";
 const NEW_LOGO = "eeeeeeee-0000-4000-8000-000000000002";
-const CREATED: Client = { id: CLIENT_ID, name: "Lumen Srl", code: "LUM", industries: ["energia", "lusso"], description: "Brand.", logoId: null };
+const CREATED: Client = { id: CLIENT_ID, name: "Lumen Srl", code: "LUM", industry: "energia", description: "Brand.", logoId: null };
 const EXISTING: ClientDetail = {
   ...CREATED,
   logoId: OLD_LOGO,
@@ -116,7 +125,7 @@ const asset = (n: number, over: Partial<ListedClientAsset> = {}): ListedClientAs
 const png = (name = "logo.png") => new File([new Uint8Array(2048)], name, { type: "image/png" });
 const jpg = (name: string) => new File([new Uint8Array(4096)], name, { type: "image/jpeg" });
 const field = (label: string) => screen.getByLabelText(label) as HTMLInputElement | HTMLTextAreaElement;
-const pill = (name: string) => screen.getByRole("button", { name });
+const pill = (name: string) => screen.getByRole("radio", { name });
 const primary = (name: "Aggiungi" | "Salva") => screen.getByRole("button", { name });
 const fileInputs = () => document.querySelectorAll<HTMLInputElement>("input[type=file]");
 const logoInput = () => fileInputs()[0];
@@ -130,7 +139,7 @@ const describedText = (el: Element) =>
     .join(" | ");
 
 const renderPanel = (client: ClientDetail | null = null, assets: ListedClientAsset[] = [], caseCount: number | null = null) =>
-  render(<ClientPanel client={client} assets={assets} caseCount={caseCount} industries={INDUSTRIES} limits={LIMITS} materialLimits={MATERIAL} />);
+  render(<ClientPanel client={client} assets={assets} caseCount={caseCount} sectors={SECTORS} limits={LIMITS} materialLimits={MATERIAL} />);
 
 /** Fills every field of a new client, picks a logo and two images. */
 async function fillAll(user: ReturnType<typeof setup>) {
@@ -169,6 +178,7 @@ beforeEach(() => {
     listClientMaterial,
     removeClientMaterial,
     uploadFile,
+    addClientSector,
   ]) {
     fn.mockReset();
   }
@@ -258,8 +268,8 @@ describe("ClientPanel, a new client", () => {
       "requestClientMaterialUpload",
       "confirmClientMaterialUpload",
     ]);
-    expect(createClient).toHaveBeenCalledWith({ name: "Lumen Srl", industries: ["energia", "lusso"], description: "Brand." });
-    expect(updateClient).toHaveBeenCalledWith({ clientId: CLIENT_ID, name: "Lumen Srl", industries: ["energia", "lusso"], description: "Brand.", logoId: NEW_LOGO });
+    expect(createClient).toHaveBeenCalledWith({ name: "Lumen Srl", industry: "energia", description: "Brand." });
+    expect(updateClient).toHaveBeenCalledWith({ clientId: CLIENT_ID, name: "Lumen Srl", industry: "energia", description: "Brand.", logoId: NEW_LOGO });
     expect(requestClientMaterialUpload).toHaveBeenNthCalledWith(1, { clientId: CLIENT_ID, contentType: "image/jpeg", sizeBytes: 4096 });
     expect(confirmClientMaterialUpload.mock.calls.map(([input]) => (input as { fileName: string }).fileName)).toEqual(["uno.jpg", "due.jpg"]);
     expect(window.history.replaceState).toHaveBeenCalledWith(null, "", `/clients/${CLIENT_ID}?modifica=1`);
@@ -375,7 +385,7 @@ describe("ClientPanel, an existing client", () => {
     const sheet = screen.getByRole("dialog", { name: dict.clientPanel.editTitle });
     expect(describedText(sheet)).toBe(fill(dict.clientPanel.editNote, { code: "LUM" }));
     expect(field("Nome").value).toBe("Lumen Srl");
-    expect(pill("Energia").getAttribute("aria-pressed")).toBe("true");
+    expect(pill("Energia").getAttribute("aria-checked")).toBe("true");
     expect(field("Descrizione").value).toBe("Brand.");
     expect(field("Contesto").value).toBe("Contesto.");
     expect(screen.getByRole("img", { name: "Logo Lumen Srl" }).getAttribute("src")).toBe(EXISTING.logoUrl);
@@ -408,7 +418,7 @@ describe("ClientPanel, an existing client", () => {
     await user.click(primary("Salva"));
     await waitFor(() => expect(replace).toHaveBeenCalledWith(`/clients/${CLIENT_ID}`, { scroll: false }));
     expect(requestClientLogoUpload).toHaveBeenCalledTimes(1);
-    expect(updateClient).toHaveBeenCalledWith({ clientId: CLIENT_ID, name: "Lumen Srl", industries: ["energia", "lusso"], description: "Brand.", logoId: NEW_LOGO });
+    expect(updateClient).toHaveBeenCalledWith({ clientId: CLIENT_ID, name: "Lumen Srl", industry: "energia", description: "Brand.", logoId: NEW_LOGO });
   });
 
   it("closes without asking when everything is saved, back to the client page", async () => {
@@ -477,7 +487,7 @@ describe("ClientPanel, the logo", () => {
 
   it("shows the replace line and a whole number of MB for a new client too", () => {
     render(
-      <ClientPanel client={null} assets={[]} caseCount={null} industries={INDUSTRIES} limits={{ ...LIMITS, logoMaxBytes: 5.4 * 1024 * 1024 }} materialLimits={MATERIAL} />,
+      <ClientPanel client={null} assets={[]} caseCount={null} sectors={SECTORS} limits={{ ...LIMITS, logoMaxBytes: 5.4 * 1024 * 1024 }} materialLimits={MATERIAL} />,
     );
     expect(screen.getByText(dict.clientPanel.details.logoReplaceHint)).toBeTruthy();
     expect(screen.getByText(/fino a 5 MB\./)).toBeTruthy();
@@ -539,7 +549,7 @@ describe("ClientPanel, saving", () => {
     fireEvent.change(field("Nome"), { target: { value: "Lumen Group" } });
     await user.click(primary("Salva"));
     await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(updateClient).toHaveBeenCalledWith({ clientId: CLIENT_ID, name: "Lumen Group", industries: ["energia", "lusso"], description: "Brand.", logoId: OLD_LOGO });
+    expect(updateClient).toHaveBeenCalledWith({ clientId: CLIENT_ID, name: "Lumen Group", industry: "energia", description: "Brand.", logoId: OLD_LOGO });
   });
 
   it("saves an existing client's brief on blur; a new client's brief saves nothing", async () => {
@@ -959,5 +969,199 @@ describe("ClientPanel, leaving", () => {
     unmount();
     await new Promise((done) => setTimeout(done, DEBOUNCE_MS + 100));
     expect(saveClientBriefField).not.toHaveBeenCalled();
+  });
+});
+
+describe("ClientPanel, Settore", () => {
+  const sectorField = () => field(dict.clientPanel.details.sector.newName) as HTMLInputElement;
+  const addSector = () => screen.getByRole("button", { name: dict.clientPanel.details.sector.addName });
+  const checked = () => screen.getAllByRole("radio").filter((radio) => radio.getAttribute("aria-checked") === "true").map((radio) => radio.textContent);
+
+  it("is one choice: a labelled radio group in list order, no multi-select hint, the add field and an inactive Aggiungi", () => {
+    renderPanel();
+    const group = screen.getByRole("radiogroup", { name: "Settore" });
+    expect(within(group).getAllByRole("radio").map((radio) => radio.textContent)).toEqual(["Interior design", "Energia", "Risorse umane", "Lusso"]);
+    expect(screen.queryByText("Puoi sceglierne più di uno.")).toBeNull();
+    expect(sectorField().getAttribute("placeholder")).toBe("Per esempio: Nautica");
+    expect(addSector().textContent).toBe("Aggiungi");
+    expect(addSector().getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("selecting another pill switches: only one is selected", async () => {
+    const user = setup();
+    renderPanel(EXISTING, TWO_IMAGES);
+    expect(checked()).toEqual(["Energia"]);
+    await user.click(pill("Lusso"));
+    expect(checked()).toEqual(["Lusso"]);
+  });
+
+  it("arrow keys choose a sector and the save sends that one", async () => {
+    const user = setup();
+    renderPanel(EXISTING, TWO_IMAGES);
+    pill("Energia").focus();
+    await user.keyboard("{ArrowRight}");
+    expect(checked()).toEqual(["Risorse umane"]);
+    expect(document.activeElement).toBe(pill("Risorse umane"));
+    await user.click(primary("Salva"));
+    await waitFor(() => expect(updateClient).toHaveBeenCalledWith(expect.objectContaining({ industry: "risorse_umane" })));
+  });
+
+  it("adds a new sector on a new client (no client needed), shows its pill selected and empties the field", async () => {
+    const user = setup();
+    addClientSector.mockResolvedValue({ ok: true, value: { key: "nautica", label: "Nautica" } });
+    renderPanel();
+    await user.type(sectorField(), "  Nautica ");
+    expect(addSector().getAttribute("aria-disabled")).toBeNull();
+    await user.click(addSector());
+    expect(addClientSector).toHaveBeenCalledExactlyOnceWith({ label: "Nautica" });
+    expect(createClient).not.toHaveBeenCalled();
+    await waitFor(() => expect(checked()).toEqual(["Nautica"]));
+    expect(screen.getAllByRole("radio").map((radio) => radio.textContent).at(-1)).toBe("Nautica");
+    expect(sectorField().value).toBe("");
+    expect(statusText()).toContain(fill(dict.clientPanel.details.sector.selected, { label: "Nautica" }));
+  });
+
+  it("Enter in the field adds too", async () => {
+    const user = setup();
+    addClientSector.mockResolvedValue({ ok: true, value: { key: "nautica", label: "Nautica" } });
+    renderPanel();
+    await user.type(sectorField(), "Nautica{Enter}");
+    await waitFor(() => expect(checked()).toEqual(["Nautica"]));
+  });
+
+  it("selects the existing sector for the same name (case, accents, spaces aside), with no request and no new pill", async () => {
+    const user = setup();
+    renderPanel();
+    await user.type(sectorField(), " ENERGÌA ");
+    await user.click(addSector());
+    expect(addClientSector).not.toHaveBeenCalled();
+    expect(checked()).toEqual(["Energia"]);
+    expect(screen.getAllByRole("radio")).toHaveLength(4);
+    expect(sectorField().value).toBe("");
+  });
+
+  it("selects the sector the server returns when another person added it meanwhile, without a second pill", async () => {
+    const user = setup();
+    addClientSector.mockResolvedValue({ ok: true, value: { key: "lusso", label: "Lusso" } });
+    renderPanel();
+    await user.type(sectorField(), "Lussó");
+    await user.click(addSector());
+    await waitFor(() => expect(checked()).toEqual(["Lusso"]));
+    expect(screen.getAllByRole("radio")).toHaveLength(4);
+  });
+
+  it.each([
+    ["one character", "N"],
+    ["41 characters", "x".repeat(41)],
+  ])("refuses %s under the field, saving nothing", async (_label, text) => {
+    renderPanel();
+    fireEvent.change(sectorField(), { target: { value: text } });
+    fireEvent.click(addSector());
+    const message = fill(dict.clientPanel.details.sector.length, { min: 2, max: 40 });
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(describedText(sectorField())).toBe(message);
+    expect(sectorField().getAttribute("aria-invalid")).toBe("true");
+    expect(addClientSector).not.toHaveBeenCalled();
+    expect(checked()).toEqual([]);
+  });
+
+  it.each([
+    ["a server error", { ok: false as const, status: 500, error: { code: "CLIENT_WRITE_FAILED", message: "m" } }],
+    ["a network error", null],
+  ])("on %s says so under the field and keeps the typed text", async (_label, result) => {
+    const user = setup();
+    if (result === null) addClientSector.mockRejectedValue(new Error("offline"));
+    else addClientSector.mockResolvedValue(result);
+    renderPanel();
+    await user.type(sectorField(), "Nautica");
+    await user.click(addSector());
+    expect(await screen.findByText("Non siamo riusciti ad aggiungerlo. Riprova.")).toBeTruthy();
+    expect(sectorField().value).toBe("Nautica");
+    expect(checked()).toEqual([]);
+  });
+
+  const cancel = () => screen.getByRole("button", { name: "Annulla" });
+  const dialogOpen = () => (document.querySelector("dialog") as HTMLDialogElement).open;
+
+  it("an existing client with only its sector changed: Annulla asks first and, cancelled, stays open", async () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    const user = setup();
+    renderPanel(EXISTING, TWO_IMAGES);
+    await user.click(pill("Lusso"));
+    await user.click(cancel());
+    expect(window.confirm).toHaveBeenCalledWith(dict.wizard.unsavedConfirm);
+    expect(replace).not.toHaveBeenCalled();
+    expect(back).not.toHaveBeenCalled();
+    expect(dialogOpen()).toBe(true);
+  });
+
+  it.each([
+    ["only a sector picked", async (user: ReturnType<typeof setup>) => user.click(pill("Lusso"))],
+    ["only text in the add field", async (user: ReturnType<typeof setup>) => user.type(sectorField(), "Nautica")],
+  ])("a new client with %s: closing asks first", async (_label, enter) => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    const user = setup();
+    renderPanel();
+    await enter(user);
+    await user.click(cancel());
+    expect(window.confirm).toHaveBeenCalledWith(dict.wizard.unsavedConfirm);
+    expect(replace).not.toHaveBeenCalled();
+    expect(dialogOpen()).toBe(true);
+  });
+
+  it("Salva with a sector typed but not added stops with a message under the field and focuses it", async () => {
+    const user = setup();
+    renderPanel(EXISTING, TWO_IMAGES);
+    await user.type(sectorField(), "Nautica");
+    await user.click(primary("Salva"));
+    const message = dict.clientPanel.details.sector.pending;
+    expect(message).toBe("Premi Aggiungi per usare questo settore.");
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(describedText(sectorField())).toBe(message);
+    expect(document.activeElement).toBe(sectorField());
+    expect(updateClient).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("keeps Salva inactive while a sector is being added", async () => {
+    const user = setup();
+    let finish: (value: ActionResult<ClientSector>) => void = () => undefined;
+    addClientSector.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    renderPanel(EXISTING, TWO_IMAGES);
+    expect(primary("Salva").getAttribute("aria-disabled")).toBeNull();
+    await user.type(sectorField(), "Nautica");
+    await user.click(addSector());
+    await waitFor(() => expect(primary("Salva").getAttribute("aria-disabled")).toBe("true"));
+    await user.click(primary("Salva"));
+    expect(updateClient).not.toHaveBeenCalled();
+    await act(async () => finish({ ok: true, value: { key: "nautica", label: "Nautica" } }));
+    await waitFor(() => expect(primary("Salva").getAttribute("aria-disabled")).toBeNull());
+    expect(checked()).toEqual(["Nautica"]);
+  });
+
+  it("a late add after a newer pick adds the pill but keeps the newer pick, announcing nothing", async () => {
+    const user = setup();
+    let finish: (value: ActionResult<ClientSector>) => void = () => undefined;
+    addClientSector.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    renderPanel();
+    await user.type(sectorField(), "Nautica");
+    await user.click(addSector());
+    await user.click(pill("Lusso"));
+    await act(async () => finish({ ok: true, value: { key: "nautica", label: "Nautica" } }));
+    await waitFor(() => expect(screen.getAllByRole("radio").map((radio) => radio.textContent).at(-1)).toBe("Nautica"));
+    expect(checked()).toEqual(["Lusso"]);
+    expect(statusText()).not.toContain(fill(dict.clientPanel.details.sector.selected, { label: "Nautica" }));
+  });
+
+  it("shows the server's sector refusal on the pills and focuses the selected one", async () => {
+    const user = setup();
+    renderPanel(EXISTING, TWO_IMAGES);
+    updateClient.mockResolvedValue({ ok: false, status: 400, error: { code: "CLIENT_FIELD_INVALID", message: "m", fields: ["industry"] } });
+    fireEvent.change(field("Nome"), { target: { value: "Lumen Group" } });
+    await user.click(primary("Salva"));
+    const group = await screen.findByRole("radiogroup", { name: "Settore" });
+    await waitFor(() => expect(group.getAttribute("aria-invalid")).toBe("true"));
+    expect(describedText(group)).toBe(dict.clientPanel.details.errors.required);
+    expect(document.activeElement).toBe(pill("Energia"));
   });
 });

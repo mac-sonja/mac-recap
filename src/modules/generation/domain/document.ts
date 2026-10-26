@@ -8,7 +8,7 @@ import { err, ok, type AppError, type Result } from "@/shared/result";
  * asset, spacing, text scale, font pairing).
  *
  * The document never holds a client value: the About area (logo, name,
- * industries, description) is filled at render time from the client's current
+ * sector, description) is filled at render time from the client's current
  * info. Every object is strict, so a stray `about` or `clientName` key is an
  * unknown-key error.
  *

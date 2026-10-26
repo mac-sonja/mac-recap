@@ -16,6 +16,7 @@ const {
   listMaterialUseCase,
   removeMaterialUseCase,
   deleteClientUseCase,
+  addSectorUseCase,
 } = vi.hoisted(() => ({
   getActor: vi.fn(),
   createClientUseCase: vi.fn(),
@@ -30,6 +31,7 @@ const {
   listMaterialUseCase: vi.fn(),
   removeMaterialUseCase: vi.fn(),
   deleteClientUseCase: vi.fn(),
+  addSectorUseCase: vi.fn(),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -50,6 +52,7 @@ vi.mock("@/modules/case-study", () => ({
   listClientMaterial: listMaterialUseCase,
   removeClientMaterial: removeMaterialUseCase,
   deleteClient: deleteClientUseCase,
+  addClientSector: addSectorUseCase,
 }));
 
 const actions = await import("./actions");
@@ -66,6 +69,7 @@ const {
   listClientMaterial,
   removeClientMaterial,
   deleteClient,
+  addClientSector,
 } = actions;
 
 const actor = (role: Actor["role"]): Actor => ({
@@ -77,11 +81,12 @@ const actor = (role: Actor["role"]): Actor => ({
 
 const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
 const ASSET_ID = "ffffffff-0000-4000-8000-000000000001";
-const LUMEN = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM", industries: ["lusso"], description: "Brand.", logoId: LOGO_ID };
-const EDIT = { clientId: LUMEN.id, name: "Lumen S.r.l.", industries: ["lusso"], description: "Brand.", logoId: LOGO_ID };
+const LUMEN = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM", industry: "lusso", description: "Brand.", logoId: LOGO_ID };
+const EDIT = { clientId: LUMEN.id, name: "Lumen S.r.l.", industry: "lusso", description: "Brand.", logoId: LOGO_ID };
 
 const cases = [
-  ["createClient", createClient, createClientUseCase, { name: "Lumen Srl", industries: ["lusso"], description: "Brand." }],
+  ["createClient", createClient, createClientUseCase, { name: "Lumen Srl", industry: "lusso", description: "Brand." }],
+  ["addClientSector", addClientSector, addSectorUseCase, { label: "Nautica" }],
   ["updateClient", updateClient, updateClientUseCase, EDIT],
   ["saveClientBriefField", saveClientBriefField, saveBriefUseCase, { clientId: LUMEN.id, field: "context", text: "Un marchio." }],
   ["saveClientResults", saveClientResults, saveResultsUseCase, { clientId: LUMEN.id, results: [{ label: "Visite", value: "2,4M" }] }],
@@ -122,13 +127,15 @@ beforeEach(() => {
     listMaterialUseCase,
     removeMaterialUseCase,
     deleteClientUseCase,
+    addSectorUseCase,
   ])
     fn.mockReset();
 });
 
 describe("client actions", () => {
-  it("exports only add, edit, delete, the brief, results and testimonial saves, the two logo steps and the client material actions", () => {
+  it("exports only add, edit, delete, add sector, the brief, results and testimonial saves, the two logo steps and the client material actions", () => {
     expect(Object.keys(actions).sort()).toEqual([
+      "addClientSector",
       "confirmClientLogoUpload",
       "confirmClientMaterialUpload",
       "createClient",
@@ -189,7 +196,7 @@ describe("client actions", () => {
 
   it.each([
     ["CLIENT_FIELD_TOO_LONG", "description"],
-    ["CLIENT_FIELD_INVALID", "industries"],
+    ["CLIENT_FIELD_INVALID", "industry"],
   ] as const)("maps %s to 400 with the failing field names", async (code, field) => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     updateClientUseCase.mockResolvedValue(err({ code, message: "m", details: { fields: [field] } }));
@@ -230,6 +237,8 @@ describe("client actions", () => {
     ["deleteClient", deleteClient, deleteClientUseCase, "CLIENT_DELETE_NAME_MISMATCH", 400],
     ["deleteClient", deleteClient, deleteClientUseCase, "CLIENT_NOT_FOUND", 404],
     ["deleteClient", deleteClient, deleteClientUseCase, "INVALID_INPUT", 400],
+    ["addClientSector", addClientSector, addSectorUseCase, "SECTOR_LABEL_INVALID", 400],
+    ["addClientSector", addClientSector, addSectorUseCase, "CLIENT_WRITE_FAILED", 500],
     ["listClientMaterial", listClientMaterial, listMaterialUseCase, "CLIENT_NOT_FOUND", 404],
   ] as const)("%s maps %s to %i and keeps details server-side", async (_name, action, useCase, code, status) => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));

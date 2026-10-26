@@ -1,5 +1,5 @@
 // Public surface of the case-study module. Code outside this module imports only this file.
-// The module owns `case_study`, `client`, `client_logo`, `client_brief`, `client_asset`,
+// The module owns `case_study`, `client`, `client_sector`, `client_logo`, `client_brief`, `client_asset`,
 // `case_number_counter`, `case_event` and `revision`, and the `material` bucket's
 // `clients/{clientId}/logos/**` and `clients/{clientId}/material/**` (AD-1, AD-22):
 // nobody else writes them.
@@ -11,6 +11,8 @@ import { listScopeSchema } from "@/modules/case-study/domain/case-study";
 import { parseInput } from "@/modules/case-study/domain/validation";
 import { createSupabaseCaseStudyRepository } from "@/modules/case-study/adapters/supabase/case-study-repository";
 import { createSupabaseClientRepository } from "@/modules/case-study/adapters/supabase/client-repository";
+import { createSupabaseClientSectorRepository } from "@/modules/case-study/adapters/supabase/client-sector-repository";
+import { makeAddClientSector, makeListClientSectors } from "@/modules/case-study/application/client-sectors";
 import { createSupabaseClientMaterialStorage } from "@/modules/case-study/adapters/supabase/client-material-storage";
 import { createSupabaseLogoStorage } from "@/modules/case-study/adapters/supabase/logo-storage";
 import type { ClientMaterialDeps } from "@/modules/case-study/application/client-material-deps";
@@ -62,6 +64,7 @@ import type {
   Client,
   ClientDetail,
   ClientRef,
+  ClientSector,
   CaseClientInfo,
   ClientSummary,
   ListScope,
@@ -80,15 +83,17 @@ export {
   CLIENT_BRIEF_FIELDS,
   CLIENT_BRIEF_MAX,
   CLIENT_DESCRIPTION_MAX,
-  CLIENT_INDUSTRIES,
   CLIENT_NAME_MAX,
   CLIENT_RESULT_LABEL_MAX,
   CLIENT_RESULT_VALUE_MAX,
   CLIENT_RESULTS_MAX,
+  CLIENT_SECTOR_LABEL_MAX,
+  CLIENT_SECTOR_LABEL_MIN,
   CLIENT_TESTIMONIAL_AUTHOR_MAX,
   CLIENT_TESTIMONIAL_QUOTE_MAX,
   isClientComplete,
   LOCALES,
+  sectorLabelKey,
   LOGO_CONTENT_TYPES,
   LOGO_MAX_BYTES,
   LOGO_MIN_SHORT_SIDE_PX,
@@ -102,11 +107,12 @@ export type {
   ClientBrief,
   ClientBriefField,
   ClientDetail,
-  ClientIndustry,
   ClientRef,
   ClientResult,
+  ClientSector,
   CaseClientInfo,
   ClientSummary,
+  AddClientSectorInput,
   CreateCaseStudyInput,
   CreateClientInput,
   DeleteClientInput,
@@ -270,8 +276,27 @@ export function getClient(id: unknown): Promise<Result<ClientDetail>> {
 }
 
 /**
- * Adds a client: input `{ name, industries, description }` (name 1–120, one or more
- * industries from `CLIENT_INDUSTRIES`, description 1–400 characters after trimming);
+ * Every client sector (`{ key, label }`) in display order: the four seeded ones, then
+ * the ones people added, as they were added. Call only after `authorize(actor, 'list clients')`.
+ */
+export function listClientSectors(): Promise<Result<ClientSector[]>> {
+  return makeListClientSectors(createSupabaseClientSectorRepository())();
+}
+
+/**
+ * Adds a sector to the shared list, seen by everybody from then on: input `{ label }`
+ * (whitespace collapsed and trimmed, 2–40 characters). When a sector with the same name
+ * exists (case, accents and extra spaces aside) that one is returned and nothing is
+ * written. It needs no client. Call only after `authorize(actor, 'manage clients')`.
+ * `SECTOR_LABEL_INVALID` (naming `label`), `INVALID_INPUT`; nothing is written on any error.
+ */
+export function addClientSector(actor: Actor, input: unknown): Promise<Result<ClientSector>> {
+  return makeAddClientSector(createSupabaseClientSectorRepository())(actor, input);
+}
+
+/**
+ * Adds a client: input `{ name, industry, description }` (name 1–120, `industry` one
+ * sector key from `listClientSectors`, description 1–400 characters after trimming);
  * the code is assigned automatically (AD-21). The logo is linked afterwards with
  * `updateClient` and the brief saved with `saveClientBriefField`. Call only after
  * `authorize(actor, 'manage clients')`. `INVALID_INPUT`, `CLIENT_FIELD_INVALID`,
@@ -283,7 +308,7 @@ export function createClient(actor: Actor, input: unknown): Promise<Result<Clien
 }
 
 /**
- * Edits a client: input `{ clientId, name, industries, description, logoId }`, every
+ * Edits a client: input `{ clientId, name, industry, description, logoId }`, every
  * field required and as it should be after the save (a logo is replaced, never cleared). The client
  * code and every case history code stay the same. Client info is live: every case
  * history shows the new values. A replaced or removed logo is deleted (row and
@@ -409,8 +434,8 @@ export function removeClientMaterial(actor: Actor, input: unknown): Promise<Resu
 }
 
 /**
- * The current client info for a case: `{ clientId, name, industries, description,
- * logoId, brief }`, always the client's current values (client info is live, owner
+ * The current client info for a case: `{ clientId, name, industry, description,
+ * logoId, brief }` (`industry`: the sector's `{ key, label }`, or null), always the client's current values (client info is live, owner
  * 2026-10-16). Epic 3 reads it at render time, not at enqueue. Unknown, malformed
  * or soft-deleted case ids are `NOT_FOUND`.
  */

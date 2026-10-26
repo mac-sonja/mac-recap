@@ -55,8 +55,10 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   // Client info (Story 2.14, AD-22).
   CLIENT_FIELD_TOO_LONG: 400,
   CLIENT_LOGO_INVALID: 400,
-  // Client wizard (Story 2.15): a required field missing or outside the industry list.
+  // Client wizard (Story 2.15): a required field missing, or an unknown sector.
   CLIENT_FIELD_INVALID: 400,
+  // Client Settore (owner, 2026-10-22): a new sector's name outside 2–40 characters.
+  SECTOR_LABEL_INVALID: 400,
   // Client material (Story 2.16): a 4th file.
   CLIENT_MATERIAL_LIMIT: 409,
   // Client delete (owner, 2026-10-19): the typed name does not match the client's.

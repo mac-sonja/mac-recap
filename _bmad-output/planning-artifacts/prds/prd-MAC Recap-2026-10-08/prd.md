@@ -21,6 +21,8 @@ Updated Oct 16, 2026 (second): before the October 30 demo (owner amendment the s
 
 Updated Oct 19, 2026: Add client is a three-step wizard (Dettagli, Materiale, Introduzione). Client fields: name, industries (fixed list, multiselect), description, logo, context, solution, results, all required. Client material: up to 3 files, any type, at least 2 images ([Sprint Change Proposal 2026-10-19](../../sprint-change-proposal-2026-10-19.md)).
 
+Updated Oct 22, 2026: a client has one sector, picked from a shared list that owners and designers can add to (it replaces the multiselect industries).
+
 This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR, epic, story and open-point numbers are unchanged from v1. Retired items are marked, not renumbered, and new items are added at the end.
 
 **Changes from v1**
@@ -96,8 +98,8 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 ### 2.1 Terms
 
 - **Case study.** The output for one project: graphic layouts plus text structured as challenge, approach and result. Each has a unique ID and a readable case history code, and belongs to one client. In the Italian UI a case study is called a *case history* (PR #38); "case study" stays the internal term in these documents, story keys, tables (`case_study`) and code.
-- **Client.** A company MAC worked for. Each has an automatic short code (e.g. LUM). Clients are managed on the Clients page. Each has industries, a description, a logo, a brief (context, solution, results) and up to 3 files of material (SCP 2026-10-19).
-- **About the client block.** The part of every case study that shows the client's logo, name, industries and description, always as they currently are on the client. A change to the client shows in all its case studies, drafts and approved ones alike.
+- **Client.** A company MAC worked for. Each has an automatic short code (e.g. LUM). Clients are managed on the Clients page. Each has one sector (from a shared list anyone managing clients can add to; 2026-10-22), a description, a logo, a brief (context, solution, results) and up to 3 files of material (SCP 2026-10-19).
+- **About the client block.** The part of every case study that shows the client's logo, name, sector and description, always as they currently are on the client. A change to the client shows in all its case studies, drafts and approved ones alike.
 - **Case history code.** Client code, year and a number per client and year, e.g. LUM-2026-01. Fixed once the case study is created.
 - **Material.** Uploaded files: images, videos, text documents and PDFs. The details form is not material.
 - **Asset.** A single uploaded material file. Images and videos can be marked as favourite.
@@ -119,7 +121,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 **FR2** – The owner/designer uploads material (images, videos, text documents and PDFs), can mark any number of images and videos as favourite, and fills in a short details form on context, solution and results. The details form is the only place for typed project text. Amended (owner, 2026-10-20, Story 2.17): the details form is filled in first, together with the case's name, client, year, language and business line, and the material is uploaded after it.
 - Upload is limited to 20 files of at most 50 MB each. (50 MB is the hosted Supabase plan's upload cap; it returns to 100 MB when the plan is upgraded. Owner decision 2026-10-14.)
 
-**FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material, the form answers and the client's description, industries and brief. Every case study shows the client's info in an About the client block.
+**FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material, the form answers and the client's description, sector and brief. Every case study shows the client's info in an About the client block.
 - If no material is uploaded, generation is not available (NFR6).
 
 **FR4** – Templates adapt their layout to the number of available media items.
@@ -146,7 +148,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 Added by the [Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md). By the owner's amendment of the same day, these are built before the October 30 demo, in Sprints 2 and 3, and nothing else is cut.
 
-**FR11** – Creating a client is a wizard: details (all required), then up to 3 files with at least 2 images (SCP 2026-10-19). Since SCP 2026-10-21 the client is added and edited in a side panel, and the intro and outro open in the configurator from the client's page. The system drafts the client's intro and outro pages from the client's name, industries, description, brief and material, and the owner/designer edits, checks and approves them in the configurator.
+**FR11** – Creating a client is a wizard: details (all required), then up to 3 files with at least 2 images (SCP 2026-10-19). Since SCP 2026-10-21 the client is added and edited in a side panel, and the intro and outro open in the configurator from the client's page. The system drafts the client's intro and outro pages from the client's name, sector, description, brief and material, and the owner/designer edits, checks and approves them in the configurator.
 
 **FR12** – **Modifica layout** on the client's page opens the client overview: the intro, every case study and the outro of the client in one preview. Editing a case study there edits that case study. **Modifica cliente** edits the client's data in a side panel (SCP 2026-10-21).
 
@@ -231,8 +233,8 @@ Prerequisites: tool design definition, template wireframes (asset dimensions, fo
 - I can add a client and edit its name
 - The client code is automatic and never changes
 - I can open a client to see only its case studies
-- I add a client's industries, a description, a logo, a brief (context, solution, results) and up to 3 files of material, all required
-- A change to a client's info (name, logo, industries, description, brief, material) shows in all its case studies, approved ones included
+- I add a client's sector (one, from a shared list I can add to), a description, a logo, a brief (context, solution, results) and up to 3 files of material, all required
+- A change to a client's info (name, logo, sector, description, brief, material) shows in all its case studies, approved ones included
 - Replacing or removing a logo deletes the old one
 - A client is added and edited in a side panel (**Modifica cliente**); the intro and outro open in the configurator from the client's page (SCP 2026-10-21)
 - **Modifica layout** on the client's page opens the client overview
@@ -249,7 +251,7 @@ Prerequisites: graphic template layouts, final case study templates (each with a
 - The case study is generated from the graphic templates
 - Graphic assets and template design remain unchanged
 - Texts follow the challenge, approach, result structure and use only the uploaded material, form answers and the client's info
-- The case study shows an About the client block (logo, name, industries, description)
+- The case study shows an About the client block (logo, name, sector, description)
 - Layouts are generated for the MVP export formats (open point 1)
 - If no material is uploaded, generation is not available
 
@@ -257,7 +259,7 @@ Prerequisites: graphic template layouts, final case study templates (each with a
 - The adaptation rules defined in the final template are applied
 
 **Story 3.3** – As an owner/designer, I want the AI to draft a client's intro and outro pages.
-- The draft is made from the client's name, industries, description and brief, plus its material as open point 2 allows (a headline and one short paragraph), and laid out with its 2–3 images
+- The draft is made from the client's name, sector, description and brief, plus its material as open point 2 allows (a headline and one short paragraph), and laid out with its 2–3 images
 - With fewer than 2 images, no intro is generated
 
 ### Epic 4 – Review and approval (Sprint 2)

@@ -9,9 +9,9 @@ const client = (over: Record<string, unknown> = {}) => ({
 });
 const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
 /** The `client` row with its info columns, as `findById` / the RPCs read it. */
-const infoRow = (over: Record<string, unknown> = {}) => ({ ...client(), industries: ["lusso"], description: "Brand.", logo_id: LOGO_ID, ...over });
+const infoRow = (over: Record<string, unknown> = {}) => ({ ...client(), industry: "lusso", description: "Brand.", logo_id: LOGO_ID, ...over });
 /** The domain client for `infoRow()`. */
-const detail = (over: Record<string, unknown> = {}) => ({ ...client(), industries: ["lusso"], description: "Brand.", logoId: LOGO_ID, ...over });
+const detail = (over: Record<string, unknown> = {}) => ({ ...client(), industry: "lusso", description: "Brand.", logoId: LOGO_ID, ...over });
 /** A `client_brief` row as read, and the domain brief it maps to. */
 const BRIEF_ROW = {
   context: "C",
@@ -29,7 +29,7 @@ const BRIEF = {
 };
 const EMPTY_BRIEF = { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" };
 const BRIEF_COLUMNS = "context, solution, results, testimonial_quote, testimonial_author";
-const INFO = { industries: ["lusso" as const], description: "Brand." };
+const INFO = { industry: "lusso", description: "Brand." };
 
 /**
  * Stub of `from().select().is?().eq?().order?().maybeSingle?()` and `rpc()`: every step
@@ -115,7 +115,7 @@ describe("createSupabaseClientRepository().listWithCaseCounts", () => {
     const rows = [
       { ...infoRow(), client_brief: BRIEF_ROW, case_study: [{ count: 3 }], logo: { id: LOGO_ID, mime_type: "image/svg+xml" } },
       {
-        ...infoRow({ id: "cccccccc-0000-4000-8000-000000000002", industries: [], description: null, logo_id: null }),
+        ...infoRow({ id: "cccccccc-0000-4000-8000-000000000002", industry: null, description: null, logo_id: null }),
         client_brief: null,
         case_study: [{ count: 0 }],
         logo: null,
@@ -131,7 +131,7 @@ describe("createSupabaseClientRepository().listWithCaseCounts", () => {
     });
     expect(from).toHaveBeenCalledWith("client");
     expect(select).toHaveBeenCalledWith(
-      `id, name, code, industries, description, logo_id, client_brief(${BRIEF_COLUMNS}), case_study(count), logo:client_logo!client_logo_id_fkey(id, mime_type)`,
+      `id, name, code, industry, description, logo_id, client_brief(${BRIEF_COLUMNS}), case_study(count), logo:client_logo!client_logo_id_fkey(id, mime_type)`,
     );
     expect(is.mock.calls).toEqual([
       ["deleted_at", null],
@@ -191,7 +191,7 @@ describe("createSupabaseClientRepository().findById", () => {
   it("returns the non-deleted client with its info, or null when unknown or deleted", async () => {
     const found = stubClient({ data: infoRow(), error: null });
     expect(await createSupabaseClientRepository(found.factory).findById(client().id)).toEqual({ ok: true, value: detail() });
-    expect(found.select).toHaveBeenCalledWith("id, name, code, industries, description, logo_id");
+    expect(found.select).toHaveBeenCalledWith("id, name, code, industry, description, logo_id");
     expect(found.eq).toHaveBeenCalledWith("id", client().id);
     expect(found.is).toHaveBeenCalledExactlyOnceWith("deleted_at", null);
     const missing = stubClient({ data: null, error: null });
@@ -242,7 +242,7 @@ describe("createSupabaseClientRepository().create", () => {
     });
     expect(rpc).toHaveBeenCalledExactlyOnceWith("create_client", {
       p_name: "Lumen Srl",
-      p_industries: ["lusso"],
+      p_industry: "lusso",
       p_description: "Brand.",
       p_actor_id: ACTOR_ID,
     });
@@ -262,12 +262,10 @@ describe("createSupabaseClientRepository().create", () => {
     expect(result.ok || result.error).toMatchObject({ code: "CLIENT_FIELD_TOO_LONG", details: { fields: ["description"] } });
   });
 
-  it("maps the client_industries_check violation and P0001 CLIENT_FIELD_INVALID to CLIENT_FIELD_INVALID naming the field", async () => {
-    const check = { code: "23514", message: 'new row for relation "client" violates check constraint "client_industries_check"' };
-    const raised = { code: "P0001", message: "CLIENT_FIELD_INVALID", details: "description" };
+  it("maps P0001 CLIENT_FIELD_INVALID (no or an unknown sector, a blank description) to CLIENT_FIELD_INVALID naming the field", async () => {
     for (const [error, field] of [
-      [check, "industries"],
-      [raised, "description"],
+      [{ code: "P0001", message: "CLIENT_FIELD_INVALID", details: "industry" }, "industry"],
+      [{ code: "P0001", message: "CLIENT_FIELD_INVALID", details: "description" }, "description"],
     ] as const) {
       const { factory } = stubClient({ data: null, error: null }, { data: null, error });
       const result = await createSupabaseClientRepository(factory).create("Lumen Srl", INFO, ACTOR_ID);
@@ -293,18 +291,18 @@ describe("createSupabaseClientRepository().create", () => {
 });
 
 describe("createSupabaseClientRepository().update", () => {
-  const update = { id: client().id, name: "Lumen S.r.l.", industries: ["energia" as const, "lusso" as const], description: "Brand.", logoId: LOGO_ID };
+  const update = { id: client().id, name: "Lumen S.r.l.", industry: "energia", description: "Brand.", logoId: LOGO_ID };
 
   it("calls update_client with every field and the actor", async () => {
-    const { factory, rpc } = stubClient({ data: null, error: null }, { data: dbRow({ name: "Lumen S.r.l.", industries: ["energia", "lusso"] }), error: null });
+    const { factory, rpc } = stubClient({ data: null, error: null }, { data: dbRow({ name: "Lumen S.r.l.", industry: "energia" }), error: null });
     expect(await createSupabaseClientRepository(factory).update(update, ACTOR_ID)).toEqual({
       ok: true,
-      value: detail({ name: "Lumen S.r.l.", industries: ["energia", "lusso"] }),
+      value: detail({ name: "Lumen S.r.l.", industry: "energia" }),
     });
     expect(rpc).toHaveBeenCalledExactlyOnceWith("update_client", {
       p_client_id: client().id,
       p_name: "Lumen S.r.l.",
-      p_industries: ["energia", "lusso"],
+      p_industry: "energia",
       p_description: "Brand.",
       p_logo_id: LOGO_ID,
       p_actor_id: ACTOR_ID,
@@ -485,30 +483,44 @@ describe("createSupabaseClientRepository().findClientInfoByCaseId", () => {
   it("reads the non-deleted case's client info", async () => {
     const row = {
       id: CASE_ID,
-      client: { id: client().id, name: "Lumen Srl", industries: ["lusso"], description: "Brand.", logo_id: LOGO_ID, client_brief: BRIEF_ROW },
+      client: {
+        id: client().id,
+        name: "Lumen Srl",
+        description: "Brand.",
+        logo_id: LOGO_ID,
+        sector: { key: "lusso", label: "Lusso" },
+        client_brief: BRIEF_ROW,
+      },
     };
     const { factory, from, select, eq, is } = stubClient({ data: row, error: null });
     expect(await createSupabaseClientRepository(factory).findClientInfoByCaseId(CASE_ID)).toEqual({
       ok: true,
-      value: { clientId: client().id, name: "Lumen Srl", industries: ["lusso"], description: "Brand.", logoId: LOGO_ID, brief: BRIEF },
+      value: {
+        clientId: client().id,
+        name: "Lumen Srl",
+        industry: { key: "lusso", label: "Lusso" },
+        description: "Brand.",
+        logoId: LOGO_ID,
+        brief: BRIEF,
+      },
     });
     expect(from).toHaveBeenCalledWith("case_study");
-    expect(select).toHaveBeenCalledWith(`id, client(id, name, industries, description, logo_id, client_brief(${BRIEF_COLUMNS}))`);
+    expect(select).toHaveBeenCalledWith(`id, client(id, name, description, logo_id, sector:client_sector(key, label), client_brief(${BRIEF_COLUMNS}))`);
     expect(eq).toHaveBeenCalledWith("id", CASE_ID);
     expect(is).toHaveBeenCalledWith("deleted_at", null);
   });
 
-  it("gives a legacy client with no brief row the empty brief", async () => {
-    const row = { id: CASE_ID, client: { id: client().id, name: "Lumen Srl", industries: [], description: null, logo_id: null, client_brief: null } };
+  it("gives a legacy client with no brief row the empty brief, and no sector", async () => {
+    const row = { id: CASE_ID, client: { id: client().id, name: "Lumen Srl", description: null, logo_id: null, sector: null, client_brief: null } };
     const { factory } = stubClient({ data: row, error: null });
     expect(await createSupabaseClientRepository(factory).findClientInfoByCaseId(CASE_ID)).toEqual({
       ok: true,
-      value: { clientId: client().id, name: "Lumen Srl", industries: [], description: null, logoId: null, brief: EMPTY_BRIEF },
+      value: { clientId: client().id, name: "Lumen Srl", industry: null, description: null, logoId: null, brief: EMPTY_BRIEF },
     });
   });
 
   it("returns CLIENT_INVALID for a malformed client row", async () => {
-    const row = { id: CASE_ID, client: { id: "not-a-uuid", name: "Lumen Srl", industries: ["moda"], description: null, logo_id: "x", client_brief: null } };
+    const row = { id: CASE_ID, client: { id: "not-a-uuid", name: "Lumen Srl", description: null, logo_id: "x", sector: { key: "Moda!", label: "Moda" }, client_brief: null } };
     const { factory } = stubClient({ data: row, error: null });
     const { result } = await quietly(() => createSupabaseClientRepository(factory).findClientInfoByCaseId(CASE_ID));
     expect(result.ok || result.error.code).toBe("CLIENT_INVALID");

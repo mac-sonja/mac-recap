@@ -32,20 +32,20 @@ export async function freshPrefix(db: pg.Pool | pg.ClientBase): Promise<string> 
  */
 export const nameWithLetters = (letters: string) => `${letters} ${randomInt(1_000_000_000)}`;
 
-/** The industries and description every test client gets (both required since Story 2.15). */
-export const TEST_INDUSTRIES = ["lusso"];
+/** The sector and description every test client gets (both required since Story 2.15). */
+export const TEST_INDUSTRY = "lusso";
 export const TEST_DESCRIPTION = "Cliente di prova.";
 
 /**
  * Creates (and commits, unless `db` is inside a transaction) a client through
- * `create_client`, with `TEST_INDUSTRIES` and `TEST_DESCRIPTION`. It has no logo
+ * `create_client`, with `TEST_INDUSTRY` and `TEST_DESCRIPTION`. It has no logo
  * and no brief: `addTestLogo` gives it a logo for `update_client`.
  */
 export async function createTestClient(db: pg.Pool | pg.ClientBase, actorId: string, name?: string): Promise<TestClient> {
   const clientName = name ?? nameWithLetters(await freshPrefix(db));
   const { rows } = await db.query<TestClient>("select id, name, code from public.create_client($1, $2, $3, $4)", [
     clientName,
-    TEST_INDUSTRIES,
+    TEST_INDUSTRY,
     TEST_DESCRIPTION,
     actorId,
   ]);
