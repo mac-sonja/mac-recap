@@ -36,7 +36,7 @@ FR7: Owner/designer and account/sales/social users export an approved case study
 FR8: Users sign in with one of three fixed roles (owner/designer, account/sales/social, admin). The admin adds and removes users and assigns their role, and nothing else: no case content, no permission settings, no guardrail settings. The last admin can't drop their own admin role. Every action follows the AD-11 permission matrix. Delivered in Sprint 3. (CAP-11, Stories 6.1–6.2)
 FR11 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-19): Creating a client is a wizard: details (name, sector, description, logo, context, solution and results, all required), then up to 3 files of client material with at least 2 images. Since SCP 2026-10-21 the client is added and edited in a side panel, and the intro and outro open in the configurator from the client's page. The system drafts the client's intro and outro pages from the client's name, sector, description, brief and material, and the owner/designer edits, checks and approves them in the configurator. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md); [Sprint Change Proposal 2026-10-21, client outro](sprint-change-proposal-2026-10-21-client-outro.md))
 FR12 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-21): **Modifica layout** on the client's page opens the client overview: the intro, every case study and the outro of the client in one preview. Editing a case study there edits that case study. **Modifica cliente** edits the client's data in a side panel.
-FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro, approved case studies and approved outro), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them; a single case study ends with its client's approved outro (SCP 2026-10-21). Text edits (owner/designers only) and hidden pages in a collection apply only to that collection.
+FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro, approved case studies and approved outro), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them, replacing their own outro pages; otherwise each case study keeps its own intro and outro (SCP 2026-10-26). Text edits (owner/designers only) and hidden pages in a collection apply only to that collection.
 CAP-12 (SPEC; no PRD FR number): every transition, upload, save, block check, claim edit, approval, export and link change is an append-only, timestamped event with its actor, and the generated draft is kept next to the approved version. The tool does not record hands-on time. Built by each epic as it goes, not as an epic of its own.
 
 Out of MVP scope (listed for traceability only): FR9 MAC Productive via MCP (Epic 7), FR10 text-based case studies and whitepapers (Epic 8).
@@ -304,6 +304,28 @@ Order: after 3.5, before 4.1 (owner, 2026-10-20).
 
 **And** the command refuses to run against the production project ref, and there is no UI entry point
 **And** no LLM is called
+
+#### Story 3.11: Client intro and outro with test text
+
+As an owner/designer,
+I want a client's intro and outro to be laid out as soon as I add the client, with test text,
+So that I can see and adjust them before the AI writes them.
+
+Covers: FR11 (layout part), AR25 (AD-23) ([Sprint Change Proposal 2026-10-26, client pages](sprint-change-proposal-2026-10-26-client-pages.md))
+Order: after 3.10, before 4.1. Blocked on the client template from the design team, as 3.9 is.
+
+**Acceptance Criteria:**
+
+**Given** the forward migration for this story (moved from 3.9)
+**When** it runs
+**Then** `client_intro` (one per client) and `client_event` (append-only) exist with RLS on, and `revision.client_intro_id` gets its FK
+
+**Given** **Aggiungi** in the client side panel
+**When** the client is saved
+**Then** the server checks the client has at least 2 image rows in `client_asset` (else `NO_CLIENT_IMAGES`), creates the `client_intro` and, in the background, a `working` revision of kind `client_intro` with test text marked "[bozza di prova]" built from the client's own fields, laid out by `rendering.relayout` with 2–3 of its images in every format
+**And** the client page opens at once, and the intro moves to **Da approvare** when the draft is ready
+**And** no LLM is called; Story 3.9 later replaces the test text with the AI's
+
 
 ## Epic 4: Review, edit and approve a case study (Sprint 2)
 The owner/designer works the To review queue, refines the draft in the configurator, checks every block against the material and approves; later edits to an approved case go live only through Update approved version.
@@ -1055,6 +1077,29 @@ Order: MVP, Sprint 2: after 2.15, before 3.2 (owner, 2026-10-19).
 **When** the `check`, `db` and `image` jobs run
 **Then** they pass, and `db.types.ts` matches the generated types
 
+### Story 2.21: Risultati and Testimonial in the case Details step
+
+As an owner/designer,
+I want to add the results and a client quote to a case history,
+So that it can close on its own outro page.
+
+Covers: FR2 (amended), C24 ([Sprint Change Proposal 2026-10-26, client pages](sprint-change-proposal-2026-10-26-client-pages.md))
+Order: MVP, Sprint 2, after 2.20; does not wait for the templates.
+
+**Acceptance Criteria:**
+
+**Given** the forward migration for this story
+**When** it runs
+**Then** `case_study` gets Risultati (up to 3 label + value rows) and Testimonial (quote and author), with the same limits as the client's (#88)
+
+**Given** the case Details step
+**When** it renders
+**Then** **Risultati** and **Testimonial** follow **Soluzione**, each in its own numbered card, both optional, with the same rows, limits, autosave and messages as the client panel (a half row and an author without a quote are not saved)
+
+**Given** a case with Risultati or Testimonial
+**When** it is laid out (Story 3.4)
+**Then** they fill the case outro page as typed, with no AI text; with neither, the case has no outro page
+
 ## Epic 3: Generate a graphic case study from the material
 
 The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
@@ -1222,6 +1267,10 @@ Covers: FR4, CAP-4 (slot mapping per media count), AR4 (`relayout`), AR15, NFR1 
 **When** it is coded
 **Then** every page it can produce has a stable `pageKey` and a `role` (`intro`, `body` or `outro`; `outro` per SCP 2026-10-21) from the design team's spec, and the keys never change within a published version (SCP 2026-10-16 client intro and collections)
 
+**Given** the case history template
+**When** it is coded
+**Then** every format has an `outro` page holding the case's Risultati and Testimonial as typed (Story 2.21), with no AI text; a case history with neither has no outro page (SCP 2026-10-26)
+
 ### Story 3.5: One renderer per format
 
 As an owner/designer,
@@ -1259,7 +1308,7 @@ Note (2026-10-19, owner): a client logo may be an SVG ([spec](../implementation-
 
 **Given** `composeParts` and a client with an approved outro
 **When** it composes that client's parts
-**Then** it places the client's outro once after its last part, and after a single case history exported on its own (SCP 2026-10-21)
+**Then**, with 2 or more case histories of the client, it places the client's intro before them and its outro once after the last of them, and leaves out their own `intro` and `outro` pages; with one, that case history keeps its own (SCP 2026-10-26)
 
 ### Story 3.6: Narrative generator port and Anthropic adapter
 
@@ -1406,10 +1455,11 @@ Order: MVP, Sprint 2: after 2.15, 2.16 and 3.3–3.8, before Epic 4 (owner amend
 **When** it runs
 **Then** `client_intro` (one per client) and `client_event` (append-only) exist with RLS on, and `revision.client_intro_id` gets its FK
 
-**Given** **Crea introduzione** on wizard step 2 (Story 2.16), or **Genera introduzione** on a client without an intro (SCP 2026-10-19)
-**When** it is triggered
+**Given** **Aggiungi** in the client side panel (SCP 2026-10-26; replaces **Crea introduzione** and **Genera introduzione**)
+**When** the client is saved
 **Then** the server checks the client has at least 2 image rows in `client_asset` (else `NO_CLIENT_IMAGES`, before any job or LLM call), creates or reuses the `client_intro`, enqueues one `generate` job for it and moves it to `generating`
-**And** the screen stays on "Stiamo preparando l'introduzione di {client}." and opens the intro in the configurator by itself when it's ready (until Story 4.11 lands, the client page); if I leave, the toast of Story 3.8 still shows (SCP 2026-10-19)
+**And** the draft is made in the background: the client page opens at once, with no waiting screen, and the toast of Story 3.8 opens the draft in the configurator when it's ready (until Story 4.11 lands, the client page) (SCP 2026-10-26)
+**And** the table, the trigger and the layout already exist from Story 3.11; this story replaces 3.11's test text with the AI's
 
 **Given** the worker runs the intro job
 **When** it calls the LLM
@@ -1820,7 +1870,7 @@ Order: MVP, Sprint 2: after 3.9 and 4.8, before 4.9 (owner amendment 2026-10-16)
 
 **Given** a client whose intro and outro draft is ready
 **When** I open it
-**Then** the configurator in client intro mode is opened from the client's page; the left pane lists **Introduzione** and **Chiusura** (SCP 2026-10-21; replaces wizard step 3 of SCP 2026-10-19)
+**Then** the configurator in client intro mode is opened from the client's page or the ready toast after **Aggiungi** (SCP 2026-10-26); the left pane lists **Introduzione** and **Chiusura** (SCP 2026-10-21; replaces wizard step 3 of SCP 2026-10-19)
 
 **Given** an intro in Da approvare or Approvato
 **When** I open it (from the client page, the overview or the toast)
@@ -2160,7 +2210,7 @@ Order: MVP, Sprint 3: after 5.1–5.8 (needs 5.3, 5.4 and 4.11) (owner amendment
 **When** it runs
 **Then**:
 - it renders each part with its format renderer, in order, with continuous page numbers
-- it leaves out the `intro` pages of each case history that follows its client's intro
+- it leaves out the `intro` pages of each case history that follows its client's intro, and the `outro` pages of each case history followed by its client's outro (SCP 2026-10-26)
 - it has unit tests for one part, two parts of one client, and mixed clients
 
 **Given** an account/sales/social user
@@ -2169,8 +2219,8 @@ Order: MVP, Sprint 3: after 5.1–5.8 (needs 5.3, 5.4 and 4.11) (owner amendment
 
 **Given** **Scarica** on a client
 **When** I pick a format (Deck 16:9 or PDF A4 only; owner decision 2026-10-16) and confirm
-**Then** the server builds the parts: the client's approved intro (if any), then its approved case histories newest first, using the intro rule (2+ case histories → the client intro replaces their own intro pages; 1 → its own intro), then the client's approved outro once after the last of them, also when there is only one (SCP 2026-10-21), and enqueues one `export` job
-**And** if the intro and outro aren't approved, every case history keeps its own intro, the file ends on the last case history's own last page, and the dialog says so (UX-DR40)
+**Then** the server builds the parts: the client's approved intro (if any), then its approved case histories newest first, using the intro rule (2+ case histories → the client intro replaces their own intro pages; 1 → its own intro), then, with 2 or more case histories, the client's approved outro once after the last of them, replacing their own outro pages; with one, that case history's own outro (SCP 2026-10-26), and enqueues one `export` job
+**And** if the intro and outro aren't approved, every case history keeps its own intro and outro, and the dialog says so (UX-DR40)
 **And** a client with no approved case history has no **Scarica**, and a direct call fails with `NOT_APPROVED`
 
 **Given** the same client, revisions, client info and format
@@ -2202,7 +2252,7 @@ Order: MVP, Sprint 3: after 5.9 (owner amendment 2026-10-16)
 
 **Given** the collection configurator
 **When** it loads
-**Then** the left pane lists the parts in order: for each client with 2 or more case histories in the collection, its approved intro comes before the first of them, shown locked, each client's approved outro comes once after its last case history, shown locked (SCP 2026-10-21), and that client's case histories are kept together as a group, and I reorder groups and case histories within a group (owner decision 2026-10-16); the centre shows the continuous preview per format through `composeParts`
+**Then** the left pane lists the parts in order: for each client with 2 or more case histories in the collection, its approved intro comes before the first of them, shown locked, its approved outro comes once after the last of them, shown locked, replacing their own outro pages (SCP 2026-10-21, SCP 2026-10-26), and that client's case histories are kept together as a group, and I reorder groups and case histories within a group (owner decision 2026-10-16); the centre shows the continuous preview per format through `composeParts`
 
 **Given** I move a case history (drag handle, or the menu "Sposta su / giù")
 **When** the move is saved

@@ -110,6 +110,7 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 - **Client intro and outro.** The pages that open and close a client's case histories, drafted by the AI from the client's data, brief and material, laid out with its 2–3 images, and approved together like a case study. They show the client's current info (SCP 2026-10-21).
 - **Client overview.** The configurator view of a client's intro, all its case studies and its outro as one file.
 - **Client pack.** One file with a client's approved intro, approved case studies and approved outro.
+- **Case outro.** The closing page of a case study: its Risultati and Testimonial as typed, with no AI text. A case study with neither has none (SCP 2026-10-26).
 - **Collection.** A named, saved set of approved case studies in a chosen order, with its own text edits and hidden pages.
 
 ## 3. Functional requirements
@@ -148,11 +149,11 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 Added by the [Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md). By the owner's amendment of the same day, these are built before the October 30 demo, in Sprints 2 and 3, and nothing else is cut.
 
-**FR11** – Creating a client is a wizard: details (all required), then up to 3 files with at least 2 images (SCP 2026-10-19). Since SCP 2026-10-21 the client is added and edited in a side panel, and the intro and outro open in the configurator from the client's page. The system drafts the client's intro and outro pages from the client's name, sector, description, brief and material, and the owner/designer edits, checks and approves them in the configurator.
+**FR11** – Creating a client is a wizard: details (all required), then up to 3 files with at least 2 images (SCP 2026-10-19). Since SCP 2026-10-21 the client is added and edited in a side panel, and the intro and outro open in the configurator from the client's page. The system drafts the client's intro and outro pages from the client's name, sector, description, brief and material, and the owner/designer edits, checks and approves them in the configurator. **Aggiungi** in the side panel saves the client and starts its intro and outro draft in the background (SCP 2026-10-26).
 
 **FR12** – **Modifica layout** on the client's page opens the client overview: the intro, every case study and the outro of the client in one preview. Editing a case study there edits that case study. **Modifica cliente** edits the client's data in a side panel (SCP 2026-10-21).
 
-**FR13** – Owner/designer and account/sales/social users download a client pack, or build, save and export collections of approved case studies (16:9 deck and A4 PDF). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them; a single case study ends with its client's approved outro (SCP 2026-10-21). Text edits and hidden pages in a collection apply only to that collection. Only owner/designers edit text in a collection (decided by the owner on 2026-10-16).
+**FR13** – Owner/designer and account/sales/social users download a client pack, or build, save and export collections of approved case studies (16:9 deck and A4 PDF). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them, replacing their own outro pages; otherwise each case study keeps its own intro and outro (SCP 2026-10-26). Text edits and hidden pages in a collection apply only to that collection. Only owner/designers edit text in a collection (decided by the owner on 2026-10-16).
 
 ## 4. Non-functional requirements and guardrails
 
@@ -303,12 +304,12 @@ Prerequisite: account/sales/social user journey.
 
 **Story 5.3** – As an owner/designer or account/sales/social user, I want to download a client pack from the Clients list.
 - One file with the client's approved intro and approved case studies; with only one case study, or no approved intro, each case study keeps its own intro
-- The client's approved outro comes once after the last case study, also when there is only one (SCP 2026-10-21)
+- The client's approved outro comes once after the last case study when there are 2 or more; with one, it keeps its own outro (SCP 2026-10-26)
 
 **Story 5.4** – As an owner/designer or account/sales/social user, I want to build a collection.
 - I pick approved case studies, name the collection, reorder it and export it as a 16:9 deck or A4 PDF
 - A client with 2 or more case studies gets its intro in front of them, and its case studies stay together
-- Each client's approved outro comes once after its last case study (SCP 2026-10-21)
+- A client with 2 or more case studies gets its approved outro once after the last of them (SCP 2026-10-26)
 - Collections are saved, visible to everyone who can export, and can be reopened, changed and exported again
 
 **Story 5.5** – As the person preparing a collection, I want to hide pages and, as an owner/designer, edit texts only in that collection.
