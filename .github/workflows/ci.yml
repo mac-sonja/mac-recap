@@ -11,6 +11,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,8 +20,20 @@ jobs:
           cache: npm
       - run: npm ci
       # The video rendition test (Story 3.2) runs ffmpeg/ffprobe; it is skipped only where they are missing locally.
+      # It hung for 20+ minutes on 2026-10-26: each attempt is time-limited (apt lock and network
+      # timeouts, plus `timeout`), and it retries 3 times before failing fast.
       - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+        timeout-minutes: 12
+        run: |
+          APT="-o DPkg::Lock::Timeout=60 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          for attempt in 1 2 3; do
+            if timeout 180 sudo apt-get $APT update && timeout 180 sudo apt-get $APT install -y --no-install-recommends ffmpeg; then
+              exit 0
+            fi
+            echo "ffmpeg install attempt $attempt failed; retrying in 10 s"
+            sleep 10
+          done
+          exit 1
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
