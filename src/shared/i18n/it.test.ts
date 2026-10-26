@@ -88,19 +88,19 @@ describe("client panel copy", () => {
       "Contesto",
       "Soluzione",
     ]);
-    expect(t("clientPanel.details.results.title")).toBe("Risultati");
-    expect(t("clientPanel.details.results.hint")).toBe("Fino a 3 numeri. Facoltativo.");
-    expect(it.clientPanel.details.results.placeholders).toEqual([
+    expect(t("story.results.title")).toBe("Risultati");
+    expect(t("story.results.hint")).toBe("Fino a 3 numeri. Facoltativo.");
+    expect(it.story.results.placeholders).toEqual([
       { label: "Candidature ricevute", value: "+180%" },
       { label: "Visualizzazioni video", value: "2,4M" },
       { label: "Follower su LinkedIn", value: "+35%" },
     ]);
-    expect(t("clientPanel.details.results.halfRow")).toBe("Scrivi sia cosa misuri sia il numero.");
-    expect(t("clientPanel.details.testimonial.title")).toBe("Testimonial");
-    expect(t("clientPanel.details.testimonial.hint")).toBe("Facoltativo.");
-    expect(t("clientPanel.details.testimonial.quotePlaceholder")).toBe("Una frase del cliente, tra virgolette nel suo stile");
-    expect(t("clientPanel.details.testimonial.authorPlaceholder")).toBe("Nome Cognome, ruolo");
-    expect(t("clientPanel.details.testimonial.missingQuote")).toBe("Manca la frase.");
+    expect(t("story.results.halfRow")).toBe("Scrivi sia cosa misuri sia il numero.");
+    expect(t("story.testimonial.title")).toBe("Testimonial");
+    expect(t("story.testimonial.hint")).toBe("Facoltativo.");
+    expect(t("story.testimonial.quotePlaceholder")).toBe("Una frase del cliente, tra virgolette nel suo stile");
+    expect(t("story.testimonial.authorPlaceholder")).toBe("Nome Cognome, ruolo");
+    expect(t("story.testimonial.missingQuote")).toBe("Manca la frase.");
     expect(t("clientPanel.details.sector.placeholder")).toBe("Per esempio: Nautica");
     expect(t("clientPanel.details.sector.add")).toBe("Aggiungi");
     expect(t("clientPanel.details.sector.addFailed")).toBe("Non siamo riusciti ad aggiungerlo. Riprova.");
@@ -193,12 +193,14 @@ describe("material step copy", () => {
 describe("wizard details copy", () => {
   test("has the approved strings", () => {
     expect(t("wizard.details.heading")).toBe("Raccontaci il progetto");
-    expect(it.wizard.details.labels).toEqual({ context: "Contesto", solution: "Soluzione", results: "Risultati" });
+    expect(it.wizard.details.labels).toEqual({ context: "Contesto", solution: "Soluzione" });
     expect(it.wizard.details.placeholders).toEqual({
       context: "Da dove siete partiti? Cosa serviva al cliente, e perché?",
       solution: "Cosa avete fatto, e con quale idea?",
-      results: "Cosa è cambiato dopo? I numeri, se li hai, fanno la differenza.",
     });
+    // Risultati and Testimonial share the client panel's copy (Story 2.21).
+    expect(t("story.errors.saveFailed")).toBe("Non salvato. Modifica il testo per riprovare.");
+    expect(fill(t("story.errors.tooLong"), { max: 20 })).toBe("Al massimo 20 caratteri.");
     expect(fill(t("wizard.details.counter"), { n: 2, total: 2 })).toBe("2 di 2 compilati");
     expect(t("wizard.details.errors.saveFailed")).toBe("Non salvato. Modifica il testo per riprovare.");
     expect(fill(t("wizard.details.errors.tooLong"), { max: 5000 })).toBe("Al massimo 5000 caratteri.");

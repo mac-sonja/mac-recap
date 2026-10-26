@@ -8,13 +8,11 @@ import {
   TEXTAREA,
 } from "@/app/_components/field-styles";
 import { FieldCard } from "@/app/(wizard)/_components/field-card";
-import type { ClientResult } from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import type { ClientLimits } from "../_lib/client-limits";
 
-const copy = it.clientPanel.details;
-/** A field's error line under it (also the panel's). */
+const copy = it.story;
+/** A field's error line under it (also the client panel's). */
 export const ERROR = "font-label text-xs text-danger";
 
 /** Risultati always shows 3 rows (owner's mock, 2026-10-22). */
@@ -26,19 +24,29 @@ export interface ResultRow {
   value: string;
 }
 
-/** Characters as the server counts them: code points, so an emoji is one (also the panel's). */
+/** One saved result: label and value, both trimmed and filled (a client's or a case's). */
+export interface SavedResult {
+  label: string;
+  value: string;
+}
+
+/** Characters as the server counts them: code points, so an emoji is one (also the client panel's). */
 export const charCount = (text: string) => [...text].length;
 
-type StoryLimits = Pick<
-  ClientLimits,
-  | "resultLabelMax"
-  | "resultValueMax"
-  | "testimonialQuoteMax"
-  | "testimonialAuthorMax"
->;
+/**
+ * The limits of Risultati and Testimonial, in characters (code points) after trimming:
+ * the case-study module's `CLIENT_RESULT_*` and `CLIENT_TESTIMONIAL_*`, shared by a
+ * client and a case (Story 2.21). The page passes them (the module index is server-only).
+ */
+export interface StoryLimits {
+  resultLabelMax: number;
+  resultValueMax: number;
+  testimonialQuoteMax: number;
+  testimonialAuthorMax: number;
+}
 
 /** The saved results shown in the 3 rows, top first; the rows left over are empty. */
-export function resultRowsOf(results: readonly ClientResult[]): ResultRow[] {
+export function resultRowsOf(results: readonly SavedResult[]): ResultRow[] {
   return Array.from({ length: RESULT_ROWS }, (_, index) => ({
     label: results[index]?.label ?? "",
     value: results[index]?.value ?? "",
@@ -47,8 +55,8 @@ export function resultRowsOf(results: readonly ClientResult[]): ResultRow[] {
 
 /** The saved results as one entry per row (null: nothing saved for that row), matching `resultRowsOf`. */
 export const savedRowsOf = (
-  results: readonly ClientResult[],
-): (ClientResult | null)[] =>
+  results: readonly SavedResult[],
+): (SavedResult | null)[] =>
   Array.from({ length: RESULT_ROWS }, (_, index) => results[index] ?? null);
 
 /**
@@ -58,9 +66,9 @@ export const savedRowsOf = (
  */
 export function rowsToSend(
   rows: readonly ResultRow[],
-  saved: readonly (ClientResult | null)[],
+  saved: readonly (SavedResult | null)[],
   limits: StoryLimits,
-): (ClientResult | null)[] {
+): (SavedResult | null)[] {
   return rows.map((row, index) => {
     const label = row.label.trim();
     const value = row.value.trim();
@@ -142,7 +150,7 @@ export const emptyStoryInputs = (): StoryInputs => ({
   author: null,
 });
 
-export interface ClientResultsFieldsProps {
+export interface ResultsFieldsProps {
   /** The Risultati card's number; Testimonial is the next one. */
   firstNumber: number;
   baseId: string;
@@ -167,12 +175,13 @@ export interface ClientResultsFieldsProps {
 }
 
 /**
- * Risultati and Testimonial, each in its own card (owner, 2026-10-22 and 2026-10-26), both optional.
+ * Risultati and Testimonial, each in its own card (owner, 2026-10-22 and 2026-10-26), both
+ * optional: in the client panel and in the case Details step (Story 2.21).
  * Risultati: 3 rows of label (wide) + value (narrow); a row counts only when both are
- * filled. Testimonial: a quote and its author; an author needs a quote. The panel
+ * filled. Testimonial: a quote and its author; an author needs a quote. The parent
  * owns the values and their autosave; this renders them and their messages.
  */
-export function ClientResultsFields({
+export function ResultsFields({
   firstNumber,
   baseId,
   limits,
@@ -189,7 +198,7 @@ export function ClientResultsFields({
   resultsFailed,
   testimonialFailed,
   inputs,
-}: ClientResultsFieldsProps) {
+}: ResultsFieldsProps) {
   const ids = {
     results: `${baseId}-results`,
     resultsHint: `${baseId}-results-hint`,
@@ -213,12 +222,12 @@ export function ClientResultsFields({
   const missingQuote =
     isAuthorOnly(quote, author) && revealed.has("testimonial");
   const quoteMessage = quoteOver
-    ? fill(it.clients.errors.fieldTooLong, { max: limits.testimonialQuoteMax })
+    ? fill(copy.errors.tooLong, { max: limits.testimonialQuoteMax })
     : missingQuote
       ? copy.testimonial.missingQuote
       : null;
   const authorMessage = authorOver
-    ? fill(it.clients.errors.fieldTooLong, { max: limits.testimonialAuthorMax })
+    ? fill(copy.errors.tooLong, { max: limits.testimonialAuthorMax })
     : null;
 
   return (
@@ -246,11 +255,11 @@ export function ClientResultsFields({
             const valueOver = isOver(row.value, limits.resultValueMax);
             const half = isHalfRow(row) && revealed.has(key);
             const message = labelOver
-              ? fill(it.clients.errors.fieldTooLong, {
+              ? fill(copy.errors.tooLong, {
                   max: limits.resultLabelMax,
                 })
               : valueOver
-                ? fill(it.clients.errors.fieldTooLong, {
+                ? fill(copy.errors.tooLong, {
                     max: limits.resultValueMax,
                   })
                 : half

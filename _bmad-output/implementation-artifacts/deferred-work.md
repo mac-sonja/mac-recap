@@ -179,3 +179,19 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-client-results-testimonial.md`
   summary: Add a migration test that seeds a client_brief row with the old text results, applies the results/testimonial migration and checks Risultati reads back as [].
   evidence: Review finding 8 (unverified, medium); the db suite runs on an already-migrated schema and has no harness for one migration step against older data. The owner's manual dev check covers it for now.
+
+- source_spec: `spec-2-21-case-results-and-testimonial.md`
+  summary: Results/testimonial autosave keys are computed at change time, so a half row or lone author typed while a save is in flight can send the stale saved value (client panel and case step).
+  evidence: `resultsKey`/`testimonialKey` use `savedRows.current` before the in-flight save updates it (client-panel.tsx, case-details-step.tsx); unverified in practice; would settle with a test that delays the first save.
+- source_spec: `spec-2-21-case-results-and-testimonial.md`
+  summary: Event-failure compensation in the details/results/testimonial saves can overwrite a newer concurrent save with the older value.
+  evidence: compensation re-saves `previous` unconditionally (save-details-field.ts since 2.10, save-case-results.ts, save-case-testimonial.ts); a compare-and-set would settle it.
+- source_spec: `spec-2-21-case-results-and-testimonial.md`
+  summary: Decide how generation (3.4 outro, 3.6) reads case Risultati and Testimonial, since `resolveRefs` no longer resolves `form_field:results`.
+  evidence: resolve-refs.ts returns UNKNOWN_REF for `results`; nothing resolves the new structured fields.
+- source_spec: `spec-2-21-case-results-and-testimonial.md`
+  summary: Testimonial DB checks accept untrimmed text while results require trimmed text (client_brief and context_form).
+  evidence: `*_testimonial_*_check` measure btrim length only; the use cases trim, so only a direct service-role call can store padding.
+- source_spec: `spec-2-21-case-results-and-testimonial.md`
+  summary: The case page's mapping of the client limits onto `storyLimits` has no test against the real constants.
+  evidence: page.test.tsx mocks the constants and asserts no limit-driven output.

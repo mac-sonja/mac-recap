@@ -301,12 +301,10 @@ export const it = {
       labels: {
         context: "Contesto",
         solution: "Soluzione",
-        results: "Risultati",
       },
       placeholders: {
         context: "Da dove siete partiti? Cosa serviva al cliente, e perché?",
         solution: "Cosa avete fatto, e con quale idea?",
-        results: "Cosa è cambiato dopo? I numeri, se li hai, fanno la differenza.",
       },
       /** `{n}` filled fields of `{total}`. */
       counter: "{n} di {total} compilati",
@@ -320,6 +318,45 @@ export const it = {
     },
     /** Step 3 until Epic 3; also the reason the inactive Avanti gives. */
     generatePlaceholder: "La generazione arriva nella prossima versione. Ci stiamo lavorando.",
+  },
+  /**
+   * Risultati and Testimonial, each in its own card: in the client panel and in the case
+   * Details step (owner, 2026-10-22; Story 2.21). Same fields, limits and messages.
+   */
+  story: {
+    /** Risultati in its own card (owner, 2026-10-22): up to 3 rows of label + value, optional. */
+    results: {
+      title: "Risultati",
+      hint: "Fino a 3 numeri. Facoltativo.",
+      /** A row's accessible names; `{n}` is the row (1–3). */
+      labelName: "Risultato {n}, cosa misuri",
+      valueName: "Risultato {n}, numero",
+      /** Placeholders by row, as in the mock. */
+      placeholders: [
+        { label: "Candidature ricevute", value: "+180%" },
+        { label: "Visualizzazioni video", value: "2,4M" },
+        { label: "Follower su LinkedIn", value: "+35%" },
+      ],
+      /** Under a row with only one of its two parts: it is not saved. */
+      halfRow: "Scrivi sia cosa misuri sia il numero.",
+    },
+    /** The client's quote in its own card (owner, 2026-10-22), optional. */
+    testimonial: {
+      title: "Testimonial",
+      hint: "Facoltativo.",
+      quoteName: "Frase del cliente",
+      authorName: "Autore della frase",
+      quotePlaceholder: "Una frase del cliente, tra virgolette nel suo stile",
+      authorPlaceholder: "Nome Cognome, ruolo",
+      /** An author without a quote: it is not saved. */
+      missingQuote: "Manca la frase.",
+    },
+    errors: {
+      /** A Risultati or Testimonial save that failed (the autosave error). */
+      saveFailed: "Non salvato. Modifica il testo per riprovare.",
+      /** `{max}` is the part's limit in characters. */
+      tooLong: "Al massimo {max} caratteri.",
+    },
   },
   /** The Clients page and a client's page (Story 2.13). Owner/designer only. */
   clients: {
@@ -434,33 +471,6 @@ export const it = {
       placeholders: {
         context: "Da dove siete partiti? Cosa serviva al cliente, e perché?",
         solution: "Cosa avete fatto, e con quale idea?",
-      },
-      /** Risultati in its own card (owner, 2026-10-22): up to 3 rows of label + value, optional. */
-      results: {
-        title: "Risultati",
-        hint: "Fino a 3 numeri. Facoltativo.",
-        /** A row's accessible names; `{n}` is the row (1–3). */
-        labelName: "Risultato {n}, cosa misuri",
-        valueName: "Risultato {n}, numero",
-        /** Placeholders by row, as in the mock. */
-        placeholders: [
-          { label: "Candidature ricevute", value: "+180%" },
-          { label: "Visualizzazioni video", value: "2,4M" },
-          { label: "Follower su LinkedIn", value: "+35%" },
-        ],
-        /** Under a row with only one of its two parts: it is not saved. */
-        halfRow: "Scrivi sia cosa misuri sia il numero.",
-      },
-      /** The client's quote in its own card (owner, 2026-10-22), optional. */
-      testimonial: {
-        title: "Testimonial",
-        hint: "Facoltativo.",
-        quoteName: "Frase del cliente",
-        authorName: "Autore della frase",
-        quotePlaceholder: "Una frase del cliente, tra virgolette nel suo stile",
-        authorPlaceholder: "Nome Cognome, ruolo",
-        /** An author without a quote: it is not saved. */
-        missingQuote: "Manca la frase.",
       },
       /**
        * Settore (owner, 2026-10-22): one sector, from a shared list anyone may add to.

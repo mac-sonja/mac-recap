@@ -19,10 +19,19 @@ import { makeListAssets } from "@/modules/material/application/list-assets";
 import { makePresignUpload, type PresignedAssetUpload } from "@/modules/material/application/presign-upload";
 import { makeRemoveAsset } from "@/modules/material/application/remove-asset";
 import { makeResolveRefs } from "@/modules/material/application/resolve-refs";
+import { makeSaveCaseResults } from "@/modules/material/application/save-case-results";
+import { makeSaveCaseTestimonial } from "@/modules/material/application/save-case-testimonial";
 import { makeSaveDetailsField } from "@/modules/material/application/save-details-field";
 import { makeSetFavourite } from "@/modules/material/application/set-favourite";
 import type { Asset, ListedAsset } from "@/modules/material/domain/asset";
-import type { DetailsFieldSaved, DetailsForm, ResolvedRef } from "@/modules/material/domain/details-form";
+import type {
+  CaseResultsSaved,
+  CaseStoryLimits,
+  CaseTestimonialSaved,
+  DetailsFieldSaved,
+  DetailsForm,
+  ResolvedRef,
+} from "@/modules/material/domain/details-form";
 import type { RenditionLink } from "@/modules/material/domain/rendition";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
 import type { Result } from "@/shared/result";
@@ -31,6 +40,10 @@ export { ASSET_FAVOURITED, ASSET_REMOVED, ASSET_UNFAVOURITED, ASSET_UPLOADED } f
 export type { Asset, ListedAsset } from "@/modules/material/domain/asset";
 export { DETAILS_SAVED, FORM_FIELDS, MATERIAL_REF_KINDS, MAX_FORM_FIELD_CHARS } from "@/modules/material/domain/details-form";
 export type {
+  CaseResult,
+  CaseResultsSaved,
+  CaseTestimonial,
+  CaseTestimonialSaved,
   DetailsFieldSaved,
   DetailsForm,
   FormField,
@@ -72,6 +85,15 @@ function deps({ withStorage = true }: { withStorage?: boolean } = {}): MaterialD
 
 /** Dependencies without storage, for the paths that never touch it (details form, material refs, favourites). */
 const storagelessDeps = () => deps({ withStorage: false });
+
+/** A case's Risultati and Testimonial take the client's limits (Story 2.21): one definition, in case-study. */
+const storyLimits = (): CaseStoryLimits => ({
+  resultsMax: caseStudy.CLIENT_RESULTS_MAX,
+  resultLabelMax: caseStudy.CLIENT_RESULT_LABEL_MAX,
+  resultValueMax: caseStudy.CLIENT_RESULT_VALUE_MAX,
+  testimonialQuoteMax: caseStudy.CLIENT_TESTIMONIAL_QUOTE_MAX,
+  testimonialAuthorMax: caseStudy.CLIENT_TESTIMONIAL_AUTHOR_MAX,
+});
 
 /**
  * A signed upload for one file: `{ assetId, url, method: "PUT", headers }`; the
@@ -137,7 +159,7 @@ export function hasMaterial(caseId: unknown): Promise<Result<boolean>> {
 }
 
 /**
- * Saves one details-form field: `{ caseId, field: 'context' | 'solution' | 'results', text }`
+ * Saves one details-form field: `{ caseId, field: 'context' | 'solution', text }`
  * (`""` clears it; at most 5,000 characters) and records `details_saved { field }`
  * (never the text); saving the stored text again changes nothing and records no
  * event. Authorize `fill details` first. Errors: `INVALID_INPUT` (naming `text`),
@@ -149,8 +171,31 @@ export function saveDetailsField(actor: Actor, input: unknown): Promise<Result<D
 }
 
 /**
- * The details form of a case (`{ caseId }`): `{ context, solution, results }`,
- * each `""` when never saved. Authorize `fill details` first. Errors: `INVALID_INPUT`, `NOT_FOUND`. Never touches storage.
+ * Replaces a case's results (Story 2.21): `{ caseId, results: [{ label, value }] }`, at
+ * most 3 filled rows (label ≤ 80, value ≤ 20 characters after trimming, the client's
+ * limits); `[]` clears them. Records `details_saved { field: 'results' }` (never the
+ * text); saving the stored list again changes nothing and records no event; a failed
+ * event puts the previous list back. Authorize `fill details` first. Errors:
+ * `INVALID_INPUT`, `NOT_FOUND`. Any status; status never changes; never material.
+ */
+export function saveCaseResults(actor: Actor, input: unknown): Promise<Result<CaseResultsSaved>> {
+  return makeSaveCaseResults(storagelessDeps(), storyLimits())(actor, input);
+}
+
+/**
+ * Replaces a case's testimonial (Story 2.21): `{ caseId, quote, author }` (quote ≤ 600,
+ * author ≤ 120 characters after trimming; an author needs a quote; `""` and `""` clear
+ * it). Records `details_saved { field: 'testimonial' }` (never the text), like
+ * `saveCaseResults`. Authorize `fill details` first. Errors: `INVALID_INPUT`, `NOT_FOUND`.
+ */
+export function saveCaseTestimonial(actor: Actor, input: unknown): Promise<Result<CaseTestimonialSaved>> {
+  return makeSaveCaseTestimonial(storagelessDeps(), storyLimits())(actor, input);
+}
+
+/**
+ * The details form of a case (`{ caseId }`): `{ context, solution, results,
+ * testimonialQuote, testimonialAuthor }`, each text `""` and `results` `[]` when never
+ * saved. Authorize `fill details` first. Errors: `INVALID_INPUT`, `NOT_FOUND`. Never touches storage.
  */
 export function getDetailsForm(input: unknown): Promise<Result<DetailsForm>> {
   return makeGetDetailsForm(storagelessDeps())(input);
@@ -158,7 +203,7 @@ export function getDetailsForm(input: unknown): Promise<Result<DetailsForm>> {
 
 /**
  * Resolves `MaterialRef`s of a case to their current text, in order: `[{ ref, text }]`.
- * Only `{ kind: 'form_field', id: 'context' | 'solution' | 'results' }` resolves so
+ * Only `{ kind: 'form_field', id: 'context' | 'solution' }` resolves so
  * far; anything else is `UNKNOWN_REF` naming it (nothing resolved). Errors:
  * `INVALID_INPUT`, `UNKNOWN_REF`, `NOT_FOUND`. Never touches storage. The only way
  * other modules read cited material.

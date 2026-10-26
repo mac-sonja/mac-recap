@@ -5,19 +5,23 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { BusinessLine, CaseStudy, ClientRef } from "@/modules/case-study";
-import type { DetailsFieldSaved, DetailsForm } from "@/modules/material";
+import type { CaseResultsSaved, CaseTestimonialSaved, DetailsFieldSaved, DetailsForm } from "@/modules/material";
 
 const push = vi.fn();
 const refresh = vi.fn();
 const createCaseStudy = vi.fn<(input: unknown) => Promise<ActionResult<CaseStudy>>>();
 const updateCaseStudyDetails = vi.fn<(input: unknown) => Promise<ActionResult<CaseStudy>>>();
 const saveDetailsField = vi.fn<(input: unknown) => Promise<ActionResult<DetailsFieldSaved>>>();
+const saveCaseResults = vi.fn<(input: unknown) => Promise<ActionResult<CaseResultsSaved>>>();
+const saveCaseTestimonial = vi.fn<(input: unknown) => Promise<ActionResult<CaseTestimonialSaved>>>();
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh, replace: vi.fn() }) }));
 vi.mock("@/app/(tool)/case-studies/actions", () => ({
   createCaseStudy: (input: unknown) => createCaseStudy(input),
   updateCaseStudyDetails: (input: unknown) => updateCaseStudyDetails(input),
   saveDetailsField: (input: unknown) => saveDetailsField(input),
+  saveCaseResults: (input: unknown) => saveCaseResults(input),
+  saveCaseTestimonial: (input: unknown) => saveCaseTestimonial(input),
 }));
 
 const { CaseDetailsStep } = await import("./case-details-step");
@@ -30,7 +34,9 @@ const LUMEN: ClientRef = { id: "cccccccc-0000-4000-8000-000000000001", name: "Lu
 const TORINO: ClientRef = { id: "cccccccc-0000-4000-8000-000000000002", name: "Città di Torino", code: "CIT" };
 const CLIENTS: ClientRef[] = [TORINO, LUMEN];
 const BUSINESS_LINES: BusinessLine[] = ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"];
-const EMPTY: DetailsForm = { context: "", solution: "", results: "" };
+const EMPTY: DetailsForm = { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" };
+/** The client's limits (Story 2.21: a case's Risultati and Testimonial take them). */
+const STORY_LIMITS = { resultLabelMax: 80, resultValueMax: 20, testimonialQuoteMax: 600, testimonialAuthorMax: 120 };
 // Dettagli is step 2 and Avanti opens step 3 Genera (material first, owner 2026-10-21).
 const DETAILS = `/case-studies/new?caseId=${ID}&step=2`;
 const GENERATE = `/case-studies/new?caseId=${ID}&step=3`;
@@ -84,6 +90,7 @@ function renderNew(props: { clients?: ClientRef[]; initialClientId?: string } = 
       businessLines={BUSINESS_LINES}
       initialDetails={EMPTY}
       maxChars={5000}
+      storyLimits={STORY_LIMITS}
     />,
   );
 }
@@ -99,6 +106,7 @@ function renderExisting(over: Partial<typeof EXISTING> = {}, initial: DetailsFor
       businessLines={BUSINESS_LINES}
       initialDetails={initial}
       maxChars={maxChars}
+      storyLimits={STORY_LIMITS}
     />,
   );
 }
@@ -159,6 +167,7 @@ const newStep = () => (
     businessLines={BUSINESS_LINES}
     initialDetails={EMPTY}
     maxChars={5000}
+    storyLimits={STORY_LIMITS}
   />
 );
 
@@ -172,6 +181,7 @@ const existingStep = (over: Partial<typeof EXISTING> = {}) => (
     businessLines={BUSINESS_LINES}
     initialDetails={EMPTY}
     maxChars={5000}
+    storyLimits={STORY_LIMITS}
   />
 );
 
@@ -185,6 +195,13 @@ beforeEach(() => {
   updateCaseStudyDetails.mockReset();
   saveDetailsField.mockReset();
   saveDetailsField.mockImplementation(okSave);
+  saveCaseResults.mockReset();
+  saveCaseResults.mockImplementation(async (input) => ({ ok: true, value: { results: (input as CaseResultsSaved).results } }));
+  saveCaseTestimonial.mockReset();
+  saveCaseTestimonial.mockImplementation(async (input) => {
+    const { quote, author } = input as CaseTestimonialSaved;
+    return { ok: true, value: { quote, author } };
+  });
   replaceState = vi.spyOn(window.history, "replaceState");
 });
 
@@ -214,8 +231,19 @@ describe("CaseDetailsStep, a new case", () => {
     expect(within(group).getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual(
       ["Branding", "Social media", "Video", "Web design", "Advertising", "Eventi", "Sviluppo"].map((label) => [label, "false"]),
     );
-    expect(screen.getAllByRole("textbox").map((t) => t.getAttribute("name"))).toEqual(["name", "context", "solution"]);
-    expect(screen.queryByLabelText("Risultati")).toBeNull();
+    expect(screen.getAllByRole("textbox").map((t) => t.getAttribute("name"))).toEqual([
+      "name",
+      "context",
+      "solution",
+      "results.0.label",
+      "results.0.value",
+      "results.1.label",
+      "results.1.value",
+      "results.2.label",
+      "results.2.value",
+      "testimonialQuote",
+      "testimonialAuthor",
+    ]);
     const order = [field("Titolo della case history"), field("Anno"), field("Cliente"), group, textarea("Contesto")];
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -528,6 +556,8 @@ describe("CaseDetailsStep, leaving a new case before Avanti", () => {
     ["a name", () => fireEvent.change(field("Titolo della case history"), { target: { value: "R" } })],
     ["a service", () => fireEvent.click(pill("Video"))],
     ["a text", () => fireEvent.change(textarea("Contesto"), { target: { value: "c" } })],
+    ["a result", () => fireEvent.change(screen.getByLabelText("Risultato 1, numero"), { target: { value: "+3" } })],
+    ["a quote", () => fireEvent.change(screen.getByLabelText("Frase del cliente"), { target: { value: "Sì." } })],
   ])("with %s entered, a link asks first and stays when declined", (_label, enter) => {
     renderWithLink(newStep());
     enter();
@@ -567,6 +597,14 @@ describe("CaseDetailsStep, leaving a new case before Avanti", () => {
     expect(after.defaultPrevented).toBe(true);
   });
 
+  it("asks the browser to confirm a reload with only a result row typed", () => {
+    renderNew();
+    fireEvent.change(screen.getByLabelText("Risultato 1, cosa misuri"), { target: { value: "Iscritti" } });
+    const unload = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+  });
+
   it("stops asking once the case exists", async () => {
     createCaseStudy.mockResolvedValue({ ok: true, value: created() });
     const user = userEvent.setup();
@@ -581,7 +619,7 @@ describe("CaseDetailsStep, leaving a new case before Avanti", () => {
 
 describe("CaseDetailsStep, an existing draft", () => {
   it("prefills every field; the client is a search box that can change it (owner, 2026-10-21)", () => {
-    renderExisting({ name: "Rebrand Lumen", year: 2025, locale: "en", businessLines: ["video", "eventi"] }, { context: "C", solution: "", results: "" });
+    renderExisting({ name: "Rebrand Lumen", year: 2025, locale: "en", businessLines: ["video", "eventi"] }, { ...EMPTY, context: "C", solution: "" });
     expect(screen.queryByLabelText("Lingua del testo")).toBeNull();
     expect(field("Titolo della case history").value).toBe("Rebrand Lumen");
     const client = field("Cliente");
@@ -690,6 +728,7 @@ describe("CaseDetailsStep, an existing draft", () => {
           businessLines={BUSINESS_LINES}
           initialDetails={EMPTY}
           maxChars={5000}
+          storyLimits={STORY_LIMITS}
         />
       </>,
     );
@@ -809,7 +848,7 @@ describe("CaseDetailsStep, an existing draft", () => {
     });
 
     it('saves a cleared field as "" and sends nothing for a blur without a change', async () => {
-      renderExisting({}, { context: "Testo", solution: "", results: "" });
+      renderExisting({}, { ...EMPTY, context: "Testo", solution: "" });
       fireEvent.blur(textarea("Soluzione"));
       type("Contesto", "");
       fireEvent.blur(textarea("Contesto"));
@@ -903,6 +942,7 @@ describe("CaseDetailsStep, an existing draft", () => {
             businessLines={BUSINESS_LINES}
             initialDetails={EMPTY}
             maxChars={5000}
+            storyLimits={STORY_LIMITS}
           />
         </>,
       );
@@ -933,6 +973,7 @@ describe("CaseDetailsStep, an existing draft", () => {
             businessLines={BUSINESS_LINES}
             initialDetails={EMPTY}
             maxChars={5000}
+            storyLimits={STORY_LIMITS}
           />
         </>,
       );
@@ -959,6 +1000,252 @@ describe("CaseDetailsStep, an existing draft", () => {
       await flush();
       expect(saveDetailsField).toHaveBeenLastCalledWith({ caseId: ID, field: "solution", text: "s" });
     });
+  });
+});
+
+describe("CaseDetailsStep, Risultati and Testimonial (Story 2.21)", () => {
+  const rowLabel = (n: number) => screen.getByLabelText(`Risultato ${n}, cosa misuri`) as HTMLInputElement;
+  const rowValue = (n: number) => screen.getByLabelText(`Risultato ${n}, numero`) as HTMLInputElement;
+  const quote = () => screen.getByLabelText("Frase del cliente") as HTMLTextAreaElement;
+  const author = () => screen.getByLabelText("Autore della frase") as HTMLInputElement;
+  const set = (element: HTMLElement, text: string) => fireEvent.change(element, { target: { value: text } });
+  const HALF_ROW = "Scrivi sia cosa misuri sia il numero.";
+  const SAVED: DetailsForm = {
+    ...EMPTY,
+    results: [
+      { label: "Candidature ricevute", value: "+180%" },
+      { label: "Follower su LinkedIn", value: "+35%" },
+    ],
+    testimonialQuote: "Un lavoro chiaro.",
+    testimonialAuthor: "Anna Rossi, CMO",
+  };
+
+  it("cards read 01–05 as before, then 06 Risultati and 07 Testimonial, with the client panel's placeholders and hints", () => {
+    renderExisting();
+    const numbers = [...document.querySelectorAll("[aria-hidden='true']")]
+      .map((mark) => mark.textContent ?? "")
+      .filter((text) => /^\d{2} —$/.test(text));
+    expect(numbers).toEqual(["01 —", "02 —", "03 —", "04 —", "05 —", "06 —", "07 —"]);
+    expect(numbers.length).toBe(7);
+    const results = screen.getByRole("group", { name: "Risultati" });
+    const testimonial = screen.getByRole("group", { name: "Testimonial" });
+    expect(textarea("Soluzione").compareDocumentPosition(results) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(results.compareDocumentPosition(testimonial) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect([1, 2, 3].map((n) => [rowLabel(n).placeholder, rowValue(n).placeholder])).toEqual([
+      ["Candidature ricevute", "+180%"],
+      ["Visualizzazioni video", "2,4M"],
+      ["Follower su LinkedIn", "+35%"],
+    ]);
+    expect(describedText(results)).toBe("Fino a 3 numeri. Facoltativo.");
+    expect(describedText(testimonial)).toBe("Facoltativo.");
+    expect(quote().placeholder).toBe("Una frase del cliente, tra virgolette nel suo stile");
+    expect(author().placeholder).toBe("Nome Cognome, ruolo");
+    // The counter still counts Contesto and Soluzione only.
+    expect(screen.getByText("0 di 2 compilati")).toBeTruthy();
+  });
+
+  it("shows the saved values in the same rows (a reload)", () => {
+    renderExisting({}, SAVED);
+    expect([1, 2, 3].map((n) => [rowLabel(n).value, rowValue(n).value])).toEqual([
+      ["Candidature ricevute", "+180%"],
+      ["Follower su LinkedIn", "+35%"],
+      ["", ""],
+    ]);
+    expect(quote().value).toBe("Un lavoro chiaro.");
+    expect(author().value).toBe("Anna Rossi, CMO");
+  });
+
+  it("saves the complete rows in order, trimmed, on blur; an empty row is skipped", async () => {
+    renderExisting();
+    set(rowLabel(1), " Candidature ricevute ");
+    set(rowValue(1), "+180%");
+    set(rowLabel(3), "Follower su LinkedIn");
+    set(rowValue(3), "+35%");
+    fireEvent.blur(rowValue(3));
+    await flush();
+    expect(saveCaseResults).toHaveBeenCalledExactlyOnceWith({
+      caseId: ID,
+      results: [
+        { label: "Candidature ricevute", value: "+180%" },
+        { label: "Follower su LinkedIn", value: "+35%" },
+      ],
+    });
+    expect(saveDetailsField).not.toHaveBeenCalled();
+  });
+
+  it("a half row shows its message once focus leaves it, is not sent, and keeps the saved row", async () => {
+    renderExisting({}, SAVED);
+    set(rowValue(1), "");
+    fireEvent.blur(rowValue(1));
+    await flush();
+    expect(screen.getByText(HALF_ROW)).toBeTruthy();
+    expect(describedText(rowValue(1))).toBe(HALF_ROW);
+    expect(rowValue(1).getAttribute("aria-invalid")).toBe("true");
+    expect(saveCaseResults).not.toHaveBeenCalled();
+  });
+
+  it("an author without a quote says Manca la frase. and is not sent", async () => {
+    renderExisting();
+    set(author(), "Anna Rossi");
+    fireEvent.blur(author());
+    await flush();
+    expect(describedText(quote())).toBe("Manca la frase.");
+    expect(saveCaseTestimonial).not.toHaveBeenCalled();
+  });
+
+  it("saves the testimonial trimmed on blur", async () => {
+    renderExisting();
+    set(quote(), " Un lavoro chiaro. ");
+    set(author(), "Anna Rossi, CMO ");
+    fireEvent.blur(author());
+    await flush();
+    expect(saveCaseTestimonial).toHaveBeenCalledExactlyOnceWith({ caseId: ID, quote: "Un lavoro chiaro.", author: "Anna Rossi, CMO" });
+  });
+
+  it("a value over 20 characters shows the limit inline and is not sent", async () => {
+    renderExisting();
+    set(rowLabel(1), "Candidature");
+    set(rowValue(1), "x".repeat(21));
+    fireEvent.blur(rowValue(1));
+    await flush();
+    expect(describedText(rowValue(1))).toBe("Al massimo 20 caratteri.");
+    expect(saveCaseResults).not.toHaveBeenCalled();
+  });
+
+  it("with Risultati and Testimonial empty, Avanti works as before and sends neither", async () => {
+    renderExisting();
+    await act(async () => fireEvent.click(avanti()));
+    await flush();
+    expect(push).toHaveBeenCalledExactlyOnceWith(GENERATE);
+    expect(saveCaseResults).not.toHaveBeenCalled();
+    expect(saveCaseTestimonial).not.toHaveBeenCalled();
+  });
+
+  it("Avanti stops at a half row, shows its message and focuses its empty part", async () => {
+    renderExisting();
+    set(rowLabel(2), "Visualizzazioni video");
+    await act(async () => fireEvent.click(avanti()));
+    await flush();
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByText(HALF_ROW)).toBeTruthy();
+    expect(document.activeElement).toBe(rowValue(2));
+  });
+
+  it.each([
+    ["a value of 21 characters", () => rowValue(1), () => (set(rowLabel(1), "Iscritti"), set(rowValue(1), "x".repeat(21)))],
+    ["a quote of 601 characters", () => quote(), () => set(quote(), "x".repeat(601))],
+  ])("Avanti with %s sends nothing, stays and focuses that field", async (_label, target, enter) => {
+    renderExisting();
+    enter();
+    await act(async () => fireEvent.click(avanti()));
+    await flush();
+    expect(push).not.toHaveBeenCalled();
+    expect(saveCaseResults).not.toHaveBeenCalled();
+    expect(saveCaseTestimonial).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(target());
+  });
+
+  it("Avanti with an author and no quote stops, says Manca la frase. and focuses the quote", async () => {
+    renderExisting();
+    set(author(), "Anna Rossi");
+    await act(async () => fireEvent.click(avanti()));
+    await flush();
+    expect(push).not.toHaveBeenCalled();
+    expect(saveCaseTestimonial).not.toHaveBeenCalled();
+    expect(describedText(quote())).toBe("Manca la frase.");
+    expect(document.activeElement).toBe(quote());
+  });
+
+  it("a failed testimonial save shows on its card, announces it and focuses the quote", async () => {
+    saveCaseTestimonial.mockResolvedValueOnce({ ok: false, status: 500, error: { code: "DETAILS_WRITE_FAILED", message: "down" } });
+    renderExisting();
+    set(quote(), "Un lavoro chiaro.");
+    await act(async () => fireEvent.click(avanti()));
+    await flush();
+    expect(push).not.toHaveBeenCalled();
+    const ids = screen.getByRole("group", { name: "Testimonial" }).getAttribute("aria-describedby")?.split(" ") ?? [];
+    expect(ids.map((id) => document.getElementById(id)?.textContent)).toContain("Non salvato. Modifica il testo per riprovare.");
+    expect(screen.getAllByRole("status").map((region) => region.textContent).join()).toContain(
+      "Testimonial: Non salvato. Modifica il testo per riprovare.",
+    );
+    expect(document.activeElement).toBe(quote());
+  });
+
+  it("a half row after a successful save keeps the newly saved row", async () => {
+    renderExisting();
+    set(rowLabel(1), "Iscritti");
+    set(rowValue(1), "+30%");
+    fireEvent.blur(rowValue(1));
+    await flush();
+    expect(saveCaseResults).toHaveBeenCalledExactlyOnceWith({ caseId: ID, results: [{ label: "Iscritti", value: "+30%" }] });
+    // Emptying the value leaves a half row: the saved row is kept, not deleted.
+    set(rowValue(1), "");
+    fireEvent.blur(rowValue(1));
+    set(rowLabel(2), "Follower");
+    set(rowValue(2), "+5%");
+    fireEvent.blur(rowValue(2));
+    await flush();
+    expect(saveCaseResults).toHaveBeenLastCalledWith({
+      caseId: ID,
+      results: [
+        { label: "Iscritti", value: "+30%" },
+        { label: "Follower", value: "+5%" },
+      ],
+    });
+  });
+
+  it("Avanti flushes the results and testimonial, then goes on", async () => {
+    renderExisting();
+    set(rowLabel(1), "Candidature ricevute");
+    set(rowValue(1), "+180%");
+    set(quote(), "Un lavoro chiaro.");
+    await act(async () => fireEvent.click(avanti()));
+    await flush();
+    expect(saveCaseResults).toHaveBeenCalledExactlyOnceWith({ caseId: ID, results: [{ label: "Candidature ricevute", value: "+180%" }] });
+    expect(saveCaseTestimonial).toHaveBeenCalledExactlyOnceWith({ caseId: ID, quote: "Un lavoro chiaro.", author: "" });
+    expect(push).toHaveBeenCalledExactlyOnceWith(GENERATE);
+  });
+
+  it("a failed save shows on the card, announces it, and keeps the step", async () => {
+    saveCaseResults.mockResolvedValueOnce({ ok: false, status: 500, error: { code: "DETAILS_WRITE_FAILED", message: "down" } });
+    renderExisting();
+    set(rowLabel(1), "Candidature ricevute");
+    set(rowValue(1), "+180%");
+    await act(async () => fireEvent.click(avanti()));
+    await flush();
+    expect(push).not.toHaveBeenCalled();
+    const ids = screen.getByRole("group", { name: "Risultati" }).getAttribute("aria-describedby")?.split(" ") ?? [];
+    expect(ids.map((id) => document.getElementById(id)?.textContent)).toContain("Non salvato. Modifica il testo per riprovare.");
+    expect(screen.getAllByRole("status").map((region) => region.textContent).join()).toContain(
+      "Risultati: Non salvato. Modifica il testo per riprovare.",
+    );
+    expect(document.activeElement).toBe(rowLabel(1));
+  });
+
+  it("a new case saves what was typed once Avanti has created it", async () => {
+    createCaseStudy.mockResolvedValue({ ok: true, value: created({ businessLines: ["social_media"] }) });
+    const user = userEvent.setup();
+    renderNew();
+    await fillRequired(user);
+    set(rowLabel(1), "Candidature ricevute");
+    set(rowValue(1), "+180%");
+    fireEvent.blur(rowValue(1));
+    await flush();
+    // No case yet: nothing autosaves.
+    expect(saveCaseResults).not.toHaveBeenCalled();
+    await user.click(avanti());
+    expect(saveCaseResults).toHaveBeenCalledExactlyOnceWith({ caseId: ID, results: [{ label: "Candidature ricevute", value: "+180%" }] });
+    expect(saveCaseTestimonial).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledExactlyOnceWith(GENERATE);
+  });
+
+  it("a link clicked with a half row asks first, and stays when declined", async () => {
+    renderWithLink(existingStep());
+    set(rowLabel(1), "Candidature ricevute");
+    expect(clickLink("Indietro")).toBe(false);
+    await flush();
+    expect(confirm).toHaveBeenCalledWith(CONFIRM);
+    expect(push).not.toHaveBeenCalled();
   });
 });
 

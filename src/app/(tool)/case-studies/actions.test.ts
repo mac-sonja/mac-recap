@@ -12,6 +12,8 @@ const {
   confirmUpload,
   removeAssetUseCase,
   saveDetailsUseCase,
+  saveResultsUseCase,
+  saveTestimonialUseCase,
   getDetailsUseCase,
   listAssetsUseCase,
   setFavouriteUseCase,
@@ -24,6 +26,8 @@ const {
   confirmUpload: vi.fn(),
   removeAssetUseCase: vi.fn(),
   saveDetailsUseCase: vi.fn(),
+  saveResultsUseCase: vi.fn(),
+  saveTestimonialUseCase: vi.fn(),
   getDetailsUseCase: vi.fn(),
   listAssetsUseCase: vi.fn(),
   setFavouriteUseCase: vi.fn(),
@@ -40,6 +44,8 @@ vi.mock("@/modules/material", () => ({
   confirmUpload,
   removeAsset: removeAssetUseCase,
   saveDetailsField: saveDetailsUseCase,
+  saveCaseResults: saveResultsUseCase,
+  saveCaseTestimonial: saveTestimonialUseCase,
   getDetailsForm: getDetailsUseCase,
   listAssets: listAssetsUseCase,
   setFavourite: setFavouriteUseCase,
@@ -53,6 +59,8 @@ const {
   confirmAssetUpload,
   removeAsset,
   saveDetailsField,
+  saveCaseResults,
+  saveCaseTestimonial,
   getDetailsForm,
   listAssets,
   setAssetFavourite,
@@ -302,15 +310,48 @@ describe("details form actions", () => {
 
   it("getDetailsForm passes its input unchanged", async () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
-    const value = { context: "Bando PNRR", solution: "", results: "" };
+    const value = { context: "Bando PNRR", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" };
     getDetailsUseCase.mockResolvedValue(ok(value));
     const input = { caseId };
     expect(await getDetailsForm(input)).toEqual({ ok: true, value });
     expect(getDetailsUseCase.mock.calls[0][0]).toBe(input);
   });
 
+  const resultsInput = { caseId, results: [{ label: "Iscritti", value: "+30%" }] };
+  const testimonialInput = { caseId, quote: "Sì.", author: "Anna" };
+
+  it("saveCaseResults and saveCaseTestimonial pass the actor and their input unchanged (Story 2.21)", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    saveResultsUseCase.mockResolvedValue(ok({ results: resultsInput.results }));
+    saveTestimonialUseCase.mockResolvedValue(ok({ quote: "Sì.", author: "Anna" }));
+    expect(await saveCaseResults(resultsInput)).toEqual({ ok: true, value: { results: resultsInput.results } });
+    expect(saveResultsUseCase.mock.calls[0][1]).toBe(resultsInput);
+    expect(await saveCaseTestimonial(testimonialInput)).toEqual({ ok: true, value: { quote: "Sì.", author: "Anna" } });
+    expect(saveTestimonialUseCase).toHaveBeenCalledExactlyOnceWith(actor("owner_designer"), testimonialInput);
+  });
+
+  it.each([
+    ["INVALID_INPUT", 400],
+    ["NOT_FOUND", 404],
+  ] as const)("saveCaseResults maps %s to %i", async (code, status) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    saveResultsUseCase.mockResolvedValue(err({ code, message: "m" }));
+    expect(await saveCaseResults(resultsInput)).toMatchObject({ ok: false, status, error: { code } });
+  });
+
+  it.each([
+    ["INVALID_INPUT", 400],
+    ["NOT_FOUND", 404],
+  ] as const)("saveCaseTestimonial maps %s to %i", async (code, status) => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    saveTestimonialUseCase.mockResolvedValue(err({ code, message: "m" }));
+    expect(await saveCaseTestimonial(testimonialInput)).toMatchObject({ ok: false, status, error: { code } });
+  });
+
   const actions = [
     ["saveDetailsField", () => saveDetailsField(saveInput), saveDetailsUseCase],
+    ["saveCaseResults", () => saveCaseResults(resultsInput), saveResultsUseCase],
+    ["saveCaseTestimonial", () => saveCaseTestimonial(testimonialInput), saveTestimonialUseCase],
     ["getDetailsForm", () => getDetailsForm({ caseId }), getDetailsUseCase],
   ] as const;
 

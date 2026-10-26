@@ -53,7 +53,7 @@ import { cn } from "@/shared/utils";
 import type { ClientLimits, ClientMaterialLimits } from "../_lib/client-limits";
 import { ClientImageSlots, useClientImages } from "./client-image-slots";
 import {
-  ClientResultsFields,
+  ResultsFields,
   emptyStoryInputs,
   charCount,
   ERROR,
@@ -68,7 +68,7 @@ import {
   type ResultRow,
   type StoryInputs,
   type Testimonial,
-} from "./client-results-fields";
+} from "@/app/_components/results-fields";
 import { DeleteClientButton } from "./delete-client-button";
 import { IndustryPills } from "./industry-pills";
 import { LogoTile } from "./logo-tile";
@@ -345,9 +345,9 @@ export function ClientPanel({
 
   const storyLabel = (field: StoryField) =>
     field === "results"
-      ? copy.results.title
+      ? it.story.results.title
       : field === "testimonial"
-        ? copy.testimonial.title
+        ? it.story.testimonial.title
         : copy.labels[field];
 
   function announce(text: string) {
@@ -1246,7 +1246,7 @@ export function ClientPanel({
             </FieldCard>
           );
         })}
-        <ClientResultsFields
+        <ResultsFields
           firstNumber={3 + BRIEF_FIELDS.length}
           baseId={baseId}
           limits={limits}

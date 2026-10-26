@@ -105,6 +105,12 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
           businessLines={caseStudy.BUSINESS_LINES}
           initialDetails={form.value}
           maxChars={material.MAX_FORM_FIELD_CHARS}
+          storyLimits={{
+            resultLabelMax: caseStudy.CLIENT_RESULT_LABEL_MAX,
+            resultValueMax: caseStudy.CLIENT_RESULT_VALUE_MAX,
+            testimonialQuoteMax: caseStudy.CLIENT_TESTIMONIAL_QUOTE_MAX,
+            testimonialAuthorMax: caseStudy.CLIENT_TESTIMONIAL_AUTHOR_MAX,
+          }}
         />
       </WizardFrame>
     );

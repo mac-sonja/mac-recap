@@ -5,7 +5,15 @@ import { authorize, getActor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import type { CaseStudy } from "@/modules/case-study";
 import * as material from "@/modules/material";
-import type { Asset, DetailsFieldSaved, DetailsForm, ListedAsset, PresignedAssetUpload } from "@/modules/material";
+import type {
+  Asset,
+  CaseResultsSaved,
+  CaseTestimonialSaved,
+  DetailsFieldSaved,
+  DetailsForm,
+  ListedAsset,
+  PresignedAssetUpload,
+} from "@/modules/material";
 
 /**
  * Creates a case study (status `draft`, permanent id, readable code such as
@@ -128,7 +136,7 @@ export async function setAssetFavourite(input: unknown): Promise<ActionResult<vo
 }
 
 /**
- * Saves one details-form field: `{ caseId, field: 'context' | 'solution' | 'results', text }`
+ * Saves one details-form field: `{ caseId, field: 'context' | 'solution', text }`
  * (`""` clears it; at most 5,000 characters). Saving the stored text again changes
  * nothing. 403 `FORBIDDEN` unless the role may `fill details`; 400 `UNKNOWN_FIELD`;
  * 400 `INVALID_INPUT` naming `text`; 404 `NOT_FOUND`. Status never changes.
@@ -143,8 +151,38 @@ export async function saveDetailsField(input: unknown): Promise<ActionResult<Det
 }
 
 /**
- * The details form of a case: `{ caseId }` → `{ context, solution, results }`,
- * each `""` when never saved. 403 `FORBIDDEN` unless the role may `fill details`; 404 `NOT_FOUND`.
+ * Replaces a case's Risultati (Story 2.21): `{ caseId, results: [{ label, value }] }`, at
+ * most 3 filled rows (label ≤ 80, value ≤ 20 characters after trimming, as for a client);
+ * `[]` clears them. Saving the stored list again changes nothing. 403 `FORBIDDEN` unless
+ * the role may `fill details`; 400 `INVALID_INPUT`; 404 `NOT_FOUND`. Status never changes.
+ */
+export async function saveCaseResults(input: unknown): Promise<ActionResult<CaseResultsSaved>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "fill details");
+  if (!decision.ok) return failure(decision.error);
+  const saved = await material.saveCaseResults(actor.value, input);
+  return saved.ok ? saved : failure(saved.error);
+}
+
+/**
+ * Replaces a case's Testimonial (Story 2.21): `{ caseId, quote, author }` (quote ≤ 600,
+ * author ≤ 120 characters after trimming; an author needs a quote; `""` and `""` clear
+ * it). 403 `FORBIDDEN` unless the role may `fill details`; 400 `INVALID_INPUT`; 404
+ * `NOT_FOUND`. Status never changes.
+ */
+export async function saveCaseTestimonial(input: unknown): Promise<ActionResult<CaseTestimonialSaved>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "fill details");
+  if (!decision.ok) return failure(decision.error);
+  const saved = await material.saveCaseTestimonial(actor.value, input);
+  return saved.ok ? saved : failure(saved.error);
+}
+
+/**
+ * The details form of a case: `{ caseId }` → `{ context, solution, results,
+ * testimonialQuote, testimonialAuthor }`, each text `""` and `results` `[]` when never saved. 403 `FORBIDDEN` unless the role may `fill details`; 404 `NOT_FOUND`.
  */
 export async function getDetailsForm(input: unknown): Promise<ActionResult<DetailsForm>> {
   const actor = await getActor();
