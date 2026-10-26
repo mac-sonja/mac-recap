@@ -895,6 +895,34 @@ describe("ClientPanel, the image slots", () => {
     await waitFor(() => expect(statusText()).toContain(fill(dict.clientPanel.images.announce.removed, { name: "foto-1.jpg" })));
   });
 
+  it("asks before a removal leaves fewer than 2 images; cancelling keeps the image and sends nothing", async () => {
+    const user = setup();
+    vi.mocked(window.confirm).mockReturnValueOnce(false);
+    renderPanel(EXISTING, TWO_IMAGES);
+    await user.click(screen.getByRole("button", { name: "Rimuovi foto-1.jpg" }));
+    expect(window.confirm).toHaveBeenCalledWith(fill(dict.clientPanel.images.belowMin, { min: 2 }));
+    expect(removeClientMaterial).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Rimuovi foto-1.jpg" })).toBeTruthy();
+    expect(counter().textContent).toBe("2 di 3");
+  });
+
+  it("removes once the warning is confirmed", async () => {
+    const user = setup();
+    renderPanel(EXISTING, TWO_IMAGES);
+    await user.click(screen.getByRole("button", { name: "Rimuovi foto-1.jpg" }));
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(counter().textContent).toBe("1 di 3"));
+    expect(removeClientMaterial).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes without asking while 2 images remain, or when the file isn't an image", async () => {
+    const user = setup();
+    renderPanel(EXISTING, [asset(1), asset(2), asset(3, { kind: "document", contentType: "application/pdf", fileName: "brief.pdf", thumbnailUrl: null })]);
+    await user.click(screen.getByRole("button", { name: "Rimuovi brief.pdf" }));
+    await waitFor(() => expect(removeClientMaterial).toHaveBeenCalledTimes(1));
+    expect(window.confirm).not.toHaveBeenCalled();
+  });
+
   it("refuses an empty file as a bad file, not a retry", async () => {
     const user = setup();
     renderPanel();

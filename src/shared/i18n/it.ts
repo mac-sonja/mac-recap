@@ -520,6 +520,8 @@ export const it = {
       addLabel: "Aggiungi un’immagine",
       /** `{name}` is the file name. */
       remove: "Rimuovi {name}",
+      /** Asked before removing a saved image leaves fewer than `{min}`: the removal is immediate. */
+      belowMin: "Con meno di {min} immagini il cliente resta da completare. La togliamo comunque? Non si torna indietro.",
       /** A slot's thumbnail; `{n}` is its position. */
       alt: "Immagine {n}",
       uploading: "Caricamento…",
