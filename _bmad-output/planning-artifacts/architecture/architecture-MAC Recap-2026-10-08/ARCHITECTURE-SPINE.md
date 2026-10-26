@@ -386,7 +386,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   1. A client has one intro-and-outro document (kind `client_intro`, pages with role `intro` or `outro`; SCP 2026-10-21): one `client_intro` per client, with the case lifecycle (AD-3) and revisions of kind `client_intro`. One review and one approval cover both. Its events go to the append-only `client_event`.
   2. Generated only with 2+ image rows in `client_asset` (`NO_CLIENT_IMAGES`). The LLM writes intro and outro text blocks only (a headline and one short paragraph each, from the client's name, sector, description and brief, plus its material as OP 2 allows); layout is `relayout` over the client's images (AD-5, AD-15; SCP 2026-10-19).
   3. Client info and client material are read live at render time (AD-22); AI text stays as written.
-  4. Checked and approved as in AD-19. Only an approved intro and outro appear in a client pack or a collection; otherwise case histories keep their own intro pages and end on their own last page.
+  4. Checked and approved as in AD-19. Only an approved intro and outro appear in a client pack or a collection; otherwise case histories keep their own intro and outro pages (SCP 2026-10-26).
 
 ### AD-24 — A collection is an overlay on live approved revisions
 
@@ -395,7 +395,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Rule:**
   1. A collection stores a name, an ordered list of case ids, its text edits (by part and `blockId`, with the original text's hash) and hidden pages (by part, format and `pageKey`). It never stores or writes a revision.
   2. It always reads `getLiveRevision`; a case with no approved revision is shown as unavailable and left out.
-  3. The intro rule is computed: a client with 2+ case histories in the collection gets its approved intro before them, its case histories stay together as a group, and their `intro` pages are left out. Each client's approved outro comes once after its last case history in the collection, also when it has only one (SCP 2026-10-21).
+  3. The intro rule is computed: a client with 2+ case histories in the collection gets its approved intro before them, its case histories stay together as a group, and their `intro` pages are left out. Its approved outro comes once after its last case history in the collection, and their `outro` pages are left out; a client with one case history keeps that case history's own outro (SCP 2026-10-26).
   4. Text edits apply to a copy of the document at render time. Only owner/designers can make them (`edit collection text`, IR-COLL-EDIT). Untouched text follows the live approved version; a changed original under an edit is flagged, never merged silently.
   5. Layout, media, typography, sections and the About block can't be changed in a collection.
   6. Every user who can manage collections sees and changes every collection; `created_by` is shown.
