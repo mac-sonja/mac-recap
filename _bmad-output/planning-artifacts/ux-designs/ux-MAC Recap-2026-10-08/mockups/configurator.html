@@ -92,8 +92,23 @@ body.previewing .reopen{display:none!important}
 /* Anteprima: like Webflow, the same canvas without the editing tools; the same button goes back */
 body.previewing .work{--wl:0px;--wr:0px}
 body.previewing .pane{display:none}
-body.previewing .canvas{--pw:1600px;--pw11:960px;--pw916:560px;background:var(--fill)}
+body.previewing .canvas{--pw:1600px;--pw11:680px;--pw916:440px;background:var(--fill)}
 body.previewing .canvas .page *{pointer-events:none}
+/* In Anteprima texts stay editable: click and type */
+body.previewing .canvas .page .it-txt,body.previewing .canvas .page .it-tags{pointer-events:auto;cursor:text}
+body.previewing .canvas .page .it-txt:hover,body.previewing .canvas .page .it-tags:hover{box-shadow:0 0 0 1px rgb(41 119 255 / .5)}
+body.previewing .canvas .page .it-txt:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}
+/* Anteprima of Carosello and Video: one slideshow, as on social */
+.social{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;margin-top:8px}
+.social-stage{display:flex;align-items:center;gap:16px}
+.social-frame{width:min(760px,calc(100vh - 250px),calc(100vw - 200px))} /* as big as the screen allows */
+.social-frame.f916{width:min(460px,calc((100vh - 250px) * 9 / 16))}
+.social-frame .page{max-width:none}
+.social-nav{width:40px;height:40px;border-radius:50%;font-size:20px;line-height:1}
+.social-dots{display:flex;gap:6px}
+.social-dots i{width:7px;height:7px;border-radius:50%;background:var(--border-strong)}
+.social-dots i.on{background:var(--accent)}
+.social-cap{font-size:12.5px;color:var(--fg-3)}
 body.previewing .pg-del,body.previewing .handle,body.previewing .grip,body.previewing .hl,body.previewing .add-page,body.previewing .ig-switch,body.previewing #formats{display:none}
 body.previewing .page.cur{box-shadow:var(--shadow-page)}
 body.previewing .it.sel{outline:none}
@@ -148,7 +163,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .el svg{color:var(--fg-3)}
 
 /* Canvas */
-.canvas{overflow:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 28px 80px;--pw:1280px;--pw11:780px;--pw916:470px}
+.canvas{overflow:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 28px 80px;--pw:1280px;--pw11:480px;--pw916:380px} /* editor sizes; Anteprima sizes itself */
 .canvas>*{flex-shrink:0}
 .fmt-meta{font:400 11.5px var(--mono);color:var(--fg-3);margin-bottom:4px}
 .pg-label{width:100%;max-width:var(--pw);margin-top:14px;display:flex;justify-content:space-between;font-size:12.5px;color:var(--fg-3)}
@@ -158,8 +173,9 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .pg-del:hover{background:var(--fill);color:var(--fg)}
 /* Client tab, Carosello and Video: each case is a slideshow row */
 .strip{width:100%;max-width:var(--pw);display:flex;gap:16px;overflow-x:auto;padding:4px 2px 12px;scroll-snap-type:x proximity}
-.strip>.slide{flex:0 0 auto;width:300px;scroll-snap-align:start}
-.strip.f916>.slide{width:200px}
+.strip>.slide{flex:0 0 auto;width:var(--sw11,360px);scroll-snap-align:start}
+.strip.f916>.slide{width:var(--sw916,240px)}
+body.previewing .canvas{--sw11:460px;--sw916:300px}
 .strip .pg-label{margin-top:0;margin-bottom:6px}
 .strip .page{max-width:none}
 .group-label{width:100%;max-width:var(--pw);margin-top:28px;display:flex;align-items:center;gap:10px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3)}
@@ -240,6 +256,26 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .on-photo .brand .clogo{filter:brightness(0) invert(1)}
 .brand .dv{width:1px;height:calc(var(--u)*48);display:block}
 .brand .mac{width:calc(var(--u)*89);height:calc(var(--u)*28.914);display:block}
+.blk .t-kpil{font-weight:500;font-size:calc(var(--u)*16);line-height:1.1;width:calc(var(--u)*120);flex-shrink:0}
+.blk .t-kpiv{font-weight:700;font-size:calc(var(--u)*56);line-height:1.07;color:#defe56;white-space:nowrap;text-align:right}
+.page[data-ratio="11"] .blk .t-kpiv{font-size:calc(var(--u)*75);line-height:.8}
+.blk .t-voice{font-weight:500;font-size:calc(var(--u)*39);line-height:1.1;letter-spacing:-.02em}
+.page[data-ratio="11"] .blk .t-voice{font-size:calc(var(--u)*40)}
+.blk .t-author{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24);color:#66666e}
+.blk .t-ctal{font-weight:700;font-size:calc(var(--u)*18);line-height:calc(var(--u)*15);text-align:center;text-transform:uppercase}
+.blk .t-ctat{font-weight:500;font-size:calc(var(--u)*40);line-height:1.1;letter-spacing:-.02em;text-align:center}
+.it-hr.kline{margin:0;opacity:1;background:none;height:auto}.it-hr.kline img{width:100%;height:1px;display:block}
+.it-col.kpis{gap:calc(var(--u)*24)}.page[data-ratio="11"] .it-col.kpis{gap:calc(var(--u)*40)}
+.it-col.kpi{gap:calc(var(--u)*8)}
+.it-row.kpirow{align-items:flex-start}
+.page-deco{position:absolute;pointer-events:none}
+.page-deco img{position:absolute;inset:0;width:100%;height:100%;display:block}
+.page-bg{position:absolute;inset:0}
+.page-bg img,.page-bg>span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.bg-pick{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.bg-pick button{aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;padding:0}
+.bg-pick .ph{position:absolute;inset:0}.bg-pick img{width:100%;height:100%;object-fit:cover}
+.bg-pick button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent)}
 /* Page thumbnails: the real page, drawn small */
 .mini.pv{position:relative;padding:0;display:block;overflow:hidden;container-type:inline-size}
 .mini.pv .page{position:absolute;inset:0;max-width:none;width:100%;box-shadow:none;pointer-events:none}
@@ -574,7 +610,8 @@ const frTpl=g=>g.replace(/(\d*\.?\d+)fr/g,'minmax(0,$1fr)');
 
 const STYLES = {h1:'Titolo grande',h2:'Titolo',h3:'Sottotitolo',p:'Paragrafo',kpi:'Numero',quote:'Citazione',eyebrow:'Occhiello',caption:'Didascalia',
   lab:'Etichetta',title:'Titolo copertina',sub:'Sottotitolo copertina',name:'Nome cliente',meta:'Dettagli cliente',head:'Titolo blocco',body:'Testo blocco',
-  big:'Titolo pagina',body2:'Testo grande',cols:'Testo su due colonne'};
+  big:'Titolo pagina',body2:'Testo grande',cols:'Testo su due colonne',
+  kpil:'Risultato · cosa misura',kpiv:'Risultato · numero',voice:'Citazione cliente',author:'Autore citazione',ctal:'Chiusura · occhiello',ctat:'Chiusura · testo'};
 /* Elements go inside blocks; Blocco adds a bento block to the page. */
 const ELEMENTS = [
   {block:true,label:'Blocco',icon:'grid'},
@@ -627,7 +664,8 @@ $('#undo').onclick=()=>restore(past,future); $('#redo').onclick=()=>restore(futu
 let clip=null;
 document.addEventListener('keydown',e=>{
   if(!$('#anModal').hidden||!$('#askModal').hidden) return; // dialogs handle their own keys
-  if(document.body.classList.contains('previewing')){ if(e.key==='Escape') setPreview(false); return; }
+  if(previewing()){ if(document.activeElement.isContentEditable){ if(e.key==='Escape') document.activeElement.blur(); return; } // typing in a text
+    if(e.key==='Escape') setPreview(false); if(state.fmt!=='169'&&e.key==='ArrowRight') stepSlide(1); if(state.fmt!=='169'&&e.key==='ArrowLeft') stepSlide(-1); return; }
   const a=document.activeElement, mod=e.metaKey||e.ctrlKey, k=e.key.toLowerCase();
   if(a.isContentEditable){ if(e.key==='Escape'){ a.blur(); } return; }
   if(a.matches('input,select,textarea')) return;
@@ -666,6 +704,10 @@ const parentOf=(b,path)=>{ const ps=String(path).split('.'); const last=+ps.pop(
 function renderItem(p,j,b,it,path,onPhoto,thumb){
   const d=document.createElement('div'); d.className='it it-'+it.e; d.dataset.path=j+':'+path;
   if(it.e==='txt'){ d.classList.add('t-'+it.cls); d.textContent=it.t; if(it.color) d.style.color=it.color;
+    if(!thumb&&previewing()){ // Anteprima: click and type, no selection
+      d.contentEditable='true'; d.addEventListener('click',e=>e.stopPropagation()); d.addEventListener('focus',()=>{ d._before=JSON.stringify(doc); });
+      d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.t=d.innerText; saving(); });
+      d.addEventListener('blur',()=>renderRight()); return d; }
     if(!thumb){ d.addEventListener('dblclick',e=>{ e.stopPropagation(); select(p.key,j,path,true); d.draggable=false; d.contentEditable='true'; d.focus(); d._before=JSON.stringify(doc); });
       d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.t=d.innerText; saving(); });
       d.addEventListener('blur',()=>{ d.contentEditable='false'; d.draggable=true; renderRight(); }); } }
@@ -678,7 +720,8 @@ function renderItem(p,j,b,it,path,onPhoto,thumb){
       d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.list=d.textContent.split(',').map(x=>x.trim()).filter(Boolean); saving(); });
       d.addEventListener('blur',()=>{ d.contentEditable='false'; renderAll(); }); } }
   else if(it.e==='brand') d.innerHTML=brandHTML(onPhoto);
-  else if(it.e==='row'||it.e==='col'){ if(it.wide) d.classList.add('wide'); if(it.loose) d.classList.add('loose'); if(it.top) d.classList.add('atop');
+  else if(it.e==='hr'&&it.kpi){ d.classList.add('kline'); d.innerHTML='<img src="assets/kpi-line.svg" alt="">'; }
+  else if(it.e==='row'||it.e==='col'){ if(it.wide) d.classList.add('wide'); if(it.loose) d.classList.add('loose'); if(it.top) d.classList.add('atop'); if(it.cls) d.classList.add(...it.cls.split(' '));
     it.items.forEach((c,k)=>d.appendChild(renderItem(p,j,b,c,path+'.'+k,onPhoto,thumb))); }
   if(thumb) return d;
   const s=state.sel; if(s&&s.page===p.key&&s.idx===j&&String(s.path)===String(path)) d.classList.add('sel');
@@ -709,7 +752,7 @@ function renderBlock(p,j,b,area,grid,thumb){
   const d=document.createElement('div'); d.className='slot blk'; d.dataset.name=b.n; d.style.gridArea=area;
   if(b.pad!=null){ d.style.padding=`calc(var(--u) * ${b.pad})`; d.style.setProperty('--bp',`calc(var(--u) * ${b.pad})`); }
   if(b.padTop!=null) d.style.paddingTop=`calc(var(--u) * ${b.padTop})`; // Video: room for Instagram's top bar
-  if(b.bg) d.style.background=b.bg;
+  if(b.bg) d.style.background=b.bg; if(b.ink) d.style.color=b.ink;
   const bm=b.img&&mediaOf(b.img); const onPhoto=!!bm;
   if(bm){ d.classList.add('on-photo'); d.insertAdjacentHTML('beforeend',`<div class="bgimg">${bm.src?mediaTag(bm):`<span class="${bm.g}"></span>`}</div>`); }
   if(!b.items.length&&!bm&&!thumb) d.classList.add('empty'); // the hint only in the editor, not in previews
@@ -783,7 +826,7 @@ const isCaseIntro=p=>!!p.introOf||p.key==='cover'||p.key.endsWith('-cover');
 const clientCasePages=pr=>casePagesOf(pr).filter(p=>!isCaseIntro(p));
 /* A case's pages fall in three sections: Intro, Output (the work) and Risultati. */
 const SECTIONS={intro:'Intro',output:'Output',risultati:'Risultati'};
-const sectionOf=p=>p.section||(isCaseIntro(p)?'intro':p.key==='outro'||p.key.endsWith('-outro')?'risultati':'output');
+const sectionOf=p=>p.section||(isCaseIntro(p)?'intro':p.key==='outro'||p.key.endsWith('-outro')||p.key==='end'||p.key.endsWith('-end')?'risultati':'output');
 FORMATS.forEach(f=>{ const v=doc.views[f]; applyIntro(v.case,v.case[0],f,'case'); applyIntro(v.client.intro,v.client.intro[0],f,'client'); });
 /* What Instagram lays over a Video once published (from the owner's screenshots, 2026-10-27).
    Reel: status bar and Per te / Amici at the top, actions on the right, account and caption at the bottom.
@@ -812,6 +855,8 @@ function renderPage(p,thumb=false){
   if(!thumb&&state.sel&&state.sel.page===p.key&&state.sel.idx==null) el.classList.add('cur');
   el.style.background=p.bg; el.style.setProperty('--u',`calc(100cqw / ${FRAME[state.fmt]})`);
   if(p.pad!=null) el.style.setProperty('--pad',`calc(var(--u) * ${p.pad})`); // the template's own page margin
+  if(p.deco==='star') el.insertAdjacentHTML('beforeend','<div class="page-deco" style="inset:10.9% -20.6% -24.2% 39.1%"><img src="assets/closing-star.svg" alt=""></div>'); // closing page star (Figma)
+  const pm=p.img&&mediaOf(p.img); if(pm) el.insertAdjacentHTML('beforeend',`<div class="page-bg">${pm.src?mediaTag(pm):`<span class="${pm.g}"></span>`}</div>`);
   if(animOf(p)){ el.innerHTML=`<div class="reel-anim">${animHTML(animOf(p),pageMedia(p),5)}</div>${!thumb&&state.ig!=='off'?igOverlay(state.ig):''}`; if(!thumb) el.addEventListener('click',()=>select(p.key,null)); return el; }
   const grid=document.createElement('div'); grid.className='bento';
   const L=layoutOf(p); grid.style.gridTemplate=tpl(tracksOf(p));
@@ -987,25 +1032,32 @@ function deletePage(p,confirmed){ const list=listOf(p); if(!list) return;
 function renderCanvas(){
   const c=$('#canvas'); const top=c.scrollTop; c.innerHTML='';
   const meta=document.createElement('div'); meta.className='fmt-meta';
-  meta.textContent={169:'Presentazione · 1920×1080 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28',11:'Carosello · 1080×1080 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28',916:'Video · 1080×1920 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28'}[state.fmt];
   if(state.fmt==='916'){ // Video only: show where Instagram's own interface sits once published, as a Reel or a Story
     meta.classList.add('with-switch');
     const sw=document.createElement('div'); sw.className='ig-switch'; sw.setAttribute('role','group'); sw.setAttribute('aria-label','Anteprima Instagram');
     sw.innerHTML=`<span>Anteprima</span><div class="seg">${[['off','Nessuna'],['reel','Reel'],['story','Storia']].map(([k,t])=>`<button data-ig="${k}" aria-pressed="${state.ig===k}">${t}</button>`).join('')}</div>`;
     sw.querySelectorAll('[data-ig]').forEach(b=>b.onclick=()=>{ state.ig=b.dataset.ig; renderCanvas(); });
     meta.appendChild(sw); }
-  c.appendChild(meta);
+  if(meta.childNodes.length) c.appendChild(meta); // only the Instagram preview switch, in Video
   let n=1;
-  if(state.mode==='case'){ let sec=null;
-    V().case.forEach(p=>{ if(sectionOf(p)!==sec){ sec=sectionOf(p); const g=document.createElement('div'); g.className='group-label'; g.textContent=SECTIONS[sec]; c.appendChild(g); }
-      c.appendChild(label(p,n++)); c.appendChild(renderPage(p)); }); }
+  if(previewing()&&state.fmt!=='169'){ // one slideshow of every page, as on social
+    const ps=pageEls(); state.pvI=Math.max(0,Math.min(ps.length-1,state.pvI||0)); const p=ps[state.pvI];
+    const box=document.createElement('div'); box.className='social';
+    box.innerHTML=`<div class="social-stage"><button class="btn sec press social-nav" id="sPrev" aria-label="Pagina precedente" ${state.pvI===0?'disabled':''}>‹</button>
+      <div class="social-frame f${state.fmt}"></div><button class="btn sec press social-nav" id="sNext" aria-label="Pagina successiva" ${state.pvI===ps.length-1?'disabled':''}>›</button></div>
+      <div class="social-dots">${ps.map((_,i)=>`<i class="${i===state.pvI?'on':''}"></i>`).join('')}</div><div class="social-cap">${state.pvI+1} di ${ps.length} · ${p.name}</div>`;
+    box.querySelector('.social-frame').appendChild(renderPage(p)); c.appendChild(box);
+    box.querySelector('#sPrev').onclick=()=>stepSlide(-1); box.querySelector('#sNext').onclick=()=>stepSlide(1);
+    return; }
+  if(state.mode==='case'){ let sec=null, row=null;
+    // In the editor pages go one under the other in every format; the slideshow is only in Anteprima.
+    V().case.forEach(p=>{ if(sectionOf(p)!==sec){ sec=sectionOf(p); const g=document.createElement('div'); g.className='group-label'; g.textContent=SECTIONS[sec]; c.appendChild(g); row=null; }
+      if(row){ const sl=document.createElement('div'); sl.className='slide'; sl.appendChild(label(p,n++)); sl.appendChild(renderPage(p)); row.appendChild(sl); }
+      else { c.appendChild(label(p,n++)); c.appendChild(renderPage(p)); } }); }
   else{
-    // Presentazione: pages one under the other. Carosello and Video: each group is a slideshow row.
+    // Every format: pages one under the other, grouped by case (the order of the cases follows the right panel).
     const group=(t,pages)=>{ const g=document.createElement('div'); g.className='group-label'; g.textContent=t; c.appendChild(g);
-      if(state.fmt==='169'){ pages.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));}); return; }
-      const row=document.createElement('div'); row.className='strip f'+state.fmt;
-      pages.forEach(p=>{ const sl=document.createElement('div'); sl.className='slide'; sl.appendChild(label(p,n++)); sl.appendChild(renderPage(p)); row.appendChild(sl); });
-      c.appendChild(row); };
+      pages.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));}); };
     group('Introduzione',V().client.intro);
     // Each case's own pages, editable here: they are the case's pages, so a change shows in the case too.
     V().client.projects.forEach(pr=>group(pr.code+' · '+pr.name,clientCasePages(pr)));
@@ -1026,7 +1078,8 @@ $('#canvas').addEventListener('scroll',()=>{ if(!state.sel&&pageInView().key!==i
 function findSel(){ if(!state.sel) return null; const p=pageByKey(state.sel.page); if(!p) return null;
   const s=state.sel.idx==null?null:p.slots[state.sel.idx]; if(state.sel.idx!=null&&!s) return {p,s:null,it:null};
   return {p,s,it:s&&state.sel.path!=null?itemAt(s,state.sel.path):null}; }
-function select(page,idx=null,path=null,keepFocus=false){ state.sel={page,idx,path:path==null?null:String(path)};
+const previewing=()=>document.body.classList.contains('previewing');
+function select(page,idx=null,path=null,keepFocus=false){ if(previewing()&&!keepFocus) return; // nothing is selected in Anteprima state.sel={page,idx,path:path==null?null:String(path)};
   if(keepFocus){ // don't rebuild the text the person is typing into
     document.querySelectorAll('.it.sel').forEach(x=>x.classList.remove('sel'));
     const t=document.querySelector(`#p-${page} [data-path="${idx}:${path}"]`); if(t) t.classList.add('sel');
@@ -1047,7 +1100,7 @@ const thumbOf=L=>`style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style=
 /* The layouts each format offers: one per template the owner sends (2026-10-27). Each format has its own. */
 const last=(n,k=1)=>[n,BENTO[n].length-k];
 const PRESETS_BY_FMT={
-  169:[[5,0],last(2),last(4),last(6),last(5)],   // Intro · 1, 3, 5 immagini · solo layout
+  169:[[5,0],last(2),last(4),last(6),last(5),last(3)],   // Intro · 1, 3, 5 immagini · solo layout · Risultati e testimonial
   11:[[1,0],[2,0],last(3,2),last(3),[4,0]],      // 1, 2, 3 A, 3 B, 4 immagini
   916:[[1,0]],                                   // Video: one block (plus the animated layouts)
 };
@@ -1073,10 +1126,11 @@ const DEFAULT_PAGES=[
   {k:'sfida',name:'Sfida',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Sfida',[T('lab','Sfida'),SP,T('big',I.challengeHead),T('body2',I.challengeBody)],{pad:40})]},
   {k:'idea',name:'Idea',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Idea',[T('lab','Idea'),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]},
   // Presentazione content pages: 1, 3 and 5 images with the text block (owner, 2026-10-27).
-  {k:'content1',name:'Contenuti · 1 immagine',fmt:'169',n:2,v:BENTO[2].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(1),ideaBlock(I,'06 Deliverable — Output')]},
-  {k:'content',name:'Contenuti · 3 immagini',fmt:'169',n:4,v:BENTO[4].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(3),ideaBlock(I,'06 Deliverable — Output')]},
-  {k:'content5',name:'Contenuti · 5 immagini',fmt:'169',n:6,v:BENTO[6].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(5),ideaBlock(I,'06 Deliverable — Output')]},
+  {k:'content1',name:'1 immagine',fmt:'169',n:2,v:BENTO[2].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(1),ideaBlock(I,'06 Deliverable — Output')]},
+  {k:'content',name:'3 immagini',fmt:'169',n:4,v:BENTO[4].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(3),ideaBlock(I,'06 Deliverable — Output')]},
+  {k:'content5',name:'5 immagini',fmt:'169',n:6,v:BENTO[6].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(5),ideaBlock(I,'06 Deliverable — Output')]},
   {k:'outro',name:'Risultati e testimonial'},
+  {k:'end',name:'Chiusura',fmt:'11'},
 ];
 /* The page list a page belongs to, in the format in view (case, client intro/outro, or one of the client's cases). */
 const listOf=p=>[V().case,V().client.intro,V().client.outro,...Object.values(V().others)].find(l=>l.includes(p));
@@ -1085,25 +1139,38 @@ function fillDefault(p,key,mode,media){ const D=DEFAULT_PAGES.find(d=>d.k===key)
   p.pad=null; Object.assign(p,D.page||{}); p.slots=D.slots(STORY[mode],clone(INTRO[mode])); itemsOf(p.slots.flatMap(b=>b.items)).forEach(it=>{ if(it.e==='img') it.m=imgs.shift()||null; });
   resetLayout(p); p.variant=D.v; p.anim=null; p.preset=key; }
 function applyDefaultPage(p,key){ commit();
-  if(key==='intro') applyIntro(listOf(p),p,state.fmt); else if(key==='outro') applyOutro(p,state.fmt,state.mode); else fillDefault(p,key,state.mode,state.mode==='case'?doc.media:doc.cmedia);
+  if(key==='intro') applyIntro(listOf(p),p,state.fmt); else if(key==='outro') applyOutro(p,state.fmt,state.mode); else if(key==='end'){ const c=closingPage(p.key); Object.assign(p,{...c,name:p.name,key:p.key}); } else fillDefault(p,key,state.mode,state.mode==='case'?doc.media:doc.cmedia);
   select(p.key,null); }
 /* Risultati e testimonial: the case's results (number and what it measures) and its testimonial on one page,
    in every format. Presentazione side by side; Carosello and Video one above the other. */
-function applyOutro(p,fmt,mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode), pad=fmt==='169'?28:40;
-  const rows=I.results.map(([v,l])=>COL([T('kpi',v),T('p',l)]));
-  Object.assign(p,{pad:fmt==='169'?40:24,bg:'#ffffff',anim:null,preset:'outro',tk:null,variant:fmt==='169'?0:3,slots:[
-    B('Risultati',[T('lab','Risultati'),SP,...rows],{pad}),
-    B('Testimonial',[T('lab','Testimonial'),SP,T('quote',I.quote),T('meta',I.author)],{pad})]}); }
+/* Risultati e testimonial (Figma MAC-TF-AI, 2026-10-27). Results in a blue block, one row per result
+   (what it measures, then the number in lime, a thin line above); the client's words in a grey block.
+   Presentazione adds a visual on the left; Carosello puts the two blocks side by side; Video stacks them. */
+function applyOutro(p,fmt,mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode);
+  const kpis=COL(I.results.map(([v,l])=>COL([{e:'hr',n:'Linea',kpi:true},ROW([T('kpil',l),T('kpiv',v)],{cls:'kpirow'})],{cls:'kpi'})),{cls:'kpis'});
+  const res=B('Risultati',[T('lab','06 — Risultati',{color:'rgb(255 255 255 / .65)'}),SP,kpis],{pad:28,bg:'#2977ff',ink:'#ffffff'});
+  const voice=B('Testimonianza',[T('lab','08 — Voce del cliente',{color:'rgb(1 34 52 / .65)'}),T('voice','«'+I.quote.replace(/^[“«"]|[”»"]$/g,'')+'»'),SP,T('author',I.author)],{pad:28});
+  const img=(typeof mode==='string'?(mode==='client'?CLIENT_MEDIA:MEDIA):MEDIA).find(m=>!m.video&&m.id!==I.img)||{};
+  Object.assign(p,{bg:'#ffffff',anim:null,preset:'outro',tk:null,deco:null});
+  if(fmt==='169') Object.assign(p,{pad:40,variant:BENTO[3].length-1,slots:[B('Visual',[IM(img.id||null)]),res,voice]});
+  else if(fmt==='11') Object.assign(p,{pad:24,variant:0,slots:[res,voice]});
+  else Object.assign(p,{pad:24,variant:3,slots:[res,voice]}); }
+/* Carosello closing page (Figma): the same for every carousel, its text editable per carousel. */
+function closingPage(key){ return {key,name:'Chiusura',section:'risultati',bg:'#ededf0',pad:0,deco:'star',preset:'end',variant:0,slots:[
+  B('Chiusura',[SP,T('ctal','Al prossimo progetto'),T('ctat','Non perderti i nostri progetti, continua a seguirci per scoprire tutte le novità che stiamo costruendo per voi'),SP],{bg:'transparent',pad:92})]}; }
 // Video: the results now live on Risultati e testimonial, so its old separate result page goes.
 { const vc=doc.views['916'].case; const r=vc.findIndex(p=>p.key==='result'); if(r>=0) vc.splice(r,1); }
 FORMATS.forEach(f=>{ const v=doc.views[f]; const o=v.case.find(p=>p.key==='outro'); if(o) applyOutro(o,f,'case');
   Object.entries(v.others).forEach(([code,list])=>{ const q=list.find(p=>p.key.endsWith('-outro')); if(q) applyOutro(q,f,OTHER_CASES[code]); }); });
+// Every carousel ends with the closing page, each its own copy.
+{ const v=doc.views['11']; v.case.push(closingPage('end')); Object.entries(v.others).forEach(([code,list])=>list.push(closingPage(code.toLowerCase()+'-end'))); }
 // The sample case's result page in Presentazione is the Contenuti template.
 { const pres=doc.views['169'].case.find(p=>p.key==='result'); fillDefault(pres,'content','case',MEDIA);
   // Carosello: the same three images, as the "3 immagini · A" layout, so the result has its page here too.
   const caro=doc.views['11'].case.find(p=>p.key==='result');
   Object.assign(caro,{pad:24,bg:'#ffffff',variant:BENTO[3].length-2,anim:null,preset:null,slots:pres.slots.slice(0,3).map(clone)}); }
-const dpThumb=D=>{ if(D.k==='outro'){ const L=state.fmt==='169'?BENTO[2][0]:BENTO[2][3];
+const dpThumb=D=>{ if(D.k==='end') return `<div class="dp"><button class="var press" data-dp="end" aria-label="Chiusura" style="grid-template:1fr/1fr;background:#ededf0"><span style="background:#defe56;border-radius:40% 0 0 0;margin:30% 0 0 45%"></span></button><small>Chiusura</small></div>`;
+  if(D.k==='outro'){ const L=state.fmt==='169'?BENTO[3][BENTO[3].length-1]:state.fmt==='11'?BENTO[2][0]:BENTO[2][3];
     return `<div class="dp"><button class="var press" data-dp="outro" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style="grid-area:${a}"></span>`).join('')}</button><small>${D.name}</small></div>`; }
   if(D.k==='intro'){ const L=state.fmt==='169'?BENTO[5][0]:BENTO[1][0];
     return `<div class="dp"><button class="var press" data-dp="intro" aria-label="Intro" style="grid-template:${frTpl(L.g)}">${L.a.map((a,j)=>`<span style="grid-area:${a};${j===0?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>Intro</small></div>`; }
@@ -1155,12 +1222,26 @@ function renderProps(){
   wirePageTools(el,p);
 }
 function pageTools(p){ return `<div class="fmt-${state.fmt}">${layoutsAndElements(p)}</div>
-      <div class="sec-b"><p class="eyebrow">Sfondo pagina</p>
-        <div class="seg full"><button aria-pressed="true">Tinta unita</button><button aria-pressed="false">Sfumatura</button><button aria-pressed="false">Immagine</button></div>
-        <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${p.bg}"></span><input value="${p.bg.toUpperCase()}"></div></div>
-        ${swatches(p.bg,'data-bg')}</div>
+      ${bgTools(p)}
       <div class="sec-b"><button class="btn sm sec press" id="delpage" style="width:100%">Elimina pagina</button></div>`; }
+/* Sfondo: the selected block's background, or the page's when no block is selected. Colour or image;
+   images come from the case's and the client's media. */
+const bgTarget=p=>{ const f=findSel(); return f&&f.p===p&&f.s?{o:f.s,what:'blocco',def:'#ededf0'}:{o:p,what:'pagina',def:'#ffffff'}; };
+function bgTools(p){ const {o,what,def}=bgTarget(p), c=o.bg||def, tab=o.img?'img':(state.bgTab||'color');
+  const pool=[...doc.cmedia,...doc.media].filter(m=>!m.video);
+  return `<div class="sec-b"><p class="eyebrow">Sfondo · ${what}</p>
+    <div class="seg full" id="bgtab"><button data-bgtab="color" aria-pressed="${tab==='color'}">Tinta unita</button><button data-bgtab="img" aria-pressed="${tab==='img'}">Immagine</button></div>
+    ${tab==='color'?`<div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${c}"></span><input value="${c.toUpperCase()}"></div></div>
+      ${swatches(c,'data-bgc')}`
+    :`<div class="bg-pick">${pool.map(m=>`<button class="press" data-bgimg="${m.id}" aria-pressed="${o.img===m.id}" title="${m.name}" aria-label="${m.name}"><span class="ph ${m.g}">${m.src?mediaTag(m):''}</span></button>`).join('')}</div>
+      ${o.img?`<div style="margin-top:8px"><button class="btn sm ghost press" id="bgimgoff" style="width:100%">Togli immagine</button></div>`:''}`}</div>`; }
+function wireBgTools(el,p){ const {o}=bgTarget(p), re=()=>state.sel&&state.sel.idx!=null?select(p.key,state.sel.idx,state.sel.path):select(p.key,null);
+  el.querySelectorAll('[data-bgtab]').forEach(b=>b.onclick=()=>{ state.bgTab=b.dataset.bgtab; if(b.dataset.bgtab==='color'&&o.img){ commit(); o.img=null; } re(); });
+  el.querySelectorAll('[data-bgc]').forEach(b=>b.onclick=()=>{ commit(); o.bg=b.dataset.bgc; o.img=null; if(o===p) p.dark=DARK.includes(p.bg); re(); });
+  el.querySelectorAll('[data-bgimg]').forEach(b=>b.onclick=()=>{ commit(); o.img=b.dataset.bgimg; re(); });
+  const off=el.querySelector('#bgimgoff'); if(off) off.onclick=()=>{ commit(); o.img=null; state.bgTab='color'; re(); }; }
 function wirePageTools(el,p){
+    wireBgTools(el,p);
     wireDrag(el);
     const dp=$('#delpage'); if(dp) dp.onclick=()=>deletePage(p);
     // An animated layout is the page's layout in the Video: the whole page plays the animation with its media.
@@ -1169,7 +1250,6 @@ function wirePageTools(el,p){
     el.querySelectorAll('[data-var]').forEach(b=>b.onclick=()=>{ const [n,v]=b.dataset.var.split(':').map(Number); applyPreset(p,n,v); });
     const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ const same=presets().filter(x=>x.n===p.slots.length), k=same.findIndex(x=>x.L===layoutOf(p));
       applyPreset(p,p.slots.length,same[(k+1)%same.length].v); };
-    el.querySelectorAll('[data-bg]').forEach(b=>b.onclick=()=>{ commit(); p.bg=b.dataset.bg; p.dark=DARK.includes(p.bg); select(p.key,null); });
 }
 function mediaPicker(m,id,label){ return `<div style="display:flex;gap:10px;align-items:center"><div class="${m?m.g:''}" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;overflow:hidden;background-color:var(--fill-2)">${m&&m.src?`<div class="ph" style="width:100%;height:100%;position:relative">${mediaTag(m)}</div>`:''}</div>
   <div style="min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m?m.name:'Nessuna immagine'}</div><button style="color:var(--ink);font-size:12.5px;font-weight:500" id="${id}">${label}</button></div></div>`; }
@@ -1198,18 +1278,9 @@ function renderBlockProps(el,p,b,it){
     const ae=$('#anedit'); if(ae) ae.onclick=()=>openAnim({page:p.key,idx:state.sel.idx,path:state.sel.path});
     $('#rm').onclick=()=>removeItem(p,state.sel.idx,state.sel.path);
     return; }
-  // A block: its background (colour or image).
-  const m=b.img&&mediaOf(b.img);
+  // A block: its background is set in Sfondo, below.
   el.innerHTML=`<div class="sec-b"><div class="crumb">Blocco</div><div class="sel-title">${b.n}</div></div>
-    <div class="sec-b"><p class="eyebrow">Sfondo blocco</p>
-      <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${b.bg||'#ededf0'}"></span><input value="${(b.bg||'#ededf0').toUpperCase()}"></div></div>
-      ${swatches(b.bg||'#ededf0','data-blkbg')}
-      <div style="margin-top:12px">${mediaPicker(m,'blkimg',m?'Sostituisci immagine':'Scegli immagine dai Media')}</div>
-      ${m?`<div style="margin-top:8px"><button class="btn sm ghost press" id="blkimgoff" style="width:100%">Togli immagine</button></div>`:''}</div>
     <div class="sec-b"><button class="btn sm sec press" id="rm" style="width:100%">Rimuovi blocco</button></div>`;
-  el.querySelectorAll('[data-blkbg]').forEach(x=>x.onclick=()=>{ commit(); b.bg=x.dataset.blkbg; re(); });
-  $('#blkimg').onclick=()=>{ state.pickBg=true; setTab('media'); toast('Clicca un’immagine nei Media per lo sfondo del blocco.'); };
-  const off=$('#blkimgoff'); if(off) off.onclick=()=>{ commit(); b.img=null; re(); };
   $('#rm').onclick=()=>removeBlock(p,state.sel.idx);
 }
 
@@ -1262,7 +1333,6 @@ function renderRight(){
     // Click a file: it fills the selected image, or becomes the selected block's background, or is added to the selected block.
     t.onclick=()=>{ const cur=findSel(); if(!cur||!cur.s) return; const id=t.dataset.m, m=mediaOf(id);
       if(cur.it&&cur.it.e==='img'){ commit(); cur.it.m=id; select(cur.p.key,state.sel.idx,state.sel.path); return; }
-      if(state.pickBg){ state.pickBg=false; commit(); cur.s.img=id; select(cur.p.key,state.sel.idx); return; }
       commit(); cur.s.items.push(IM(id,{video:!!m.video})); select(cur.p.key,state.sel.idx,String(cur.s.items.length-1)); }; });
 }
 
@@ -1273,7 +1343,8 @@ $('#panelL').onclick=()=>{ work.classList.add('hide-l'); $('#openL').focus(); };
 $('#panelR').onclick=()=>{ work.classList.add('hide-r'); $('#openR').focus(); };
 $('#openL').onclick=()=>{ work.classList.remove('hide-l'); $('#panelL').focus(); };
 $('#openR').onclick=()=>{ work.classList.remove('hide-r'); $('#panelR').focus(); };
-function setPreview(on){ document.body.classList.toggle('previewing',on); $('#previewBtn').textContent=on?'Torna all’editor':'Anteprima';
+function stepSlide(d){ state.pvI=(state.pvI||0)+d; renderCanvas(); }
+function setPreview(on){ if(on){ const f=findSel(); state.pvI=f?Math.max(0,pageEls().indexOf(f.p)):0; } document.body.classList.toggle('previewing',on); $('#previewBtn').textContent=on?'Torna all’editor':'Anteprima';
   $('#previewBtn').classList.toggle('pri',on); $('#previewBtn').classList.toggle('sec',!on); renderCanvas(); }
 $('#previewBtn').onclick=()=>setPreview(!document.body.classList.contains('previewing'));
 function setTab(t){ state.tab=t; document.querySelectorAll('#rtab button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===t))); renderRight(); }
