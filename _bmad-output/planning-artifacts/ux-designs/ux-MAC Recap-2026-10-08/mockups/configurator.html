@@ -111,7 +111,9 @@ body.previewing .canvas .page .it-txt:focus{outline:none;box-shadow:0 0 0 2px va
 .social-dots i{width:7px;height:7px;border-radius:50%;background:var(--border-strong)}
 .social-dots i.on{background:var(--accent)}
 .social-cap{font-size:12.5px;color:var(--fg-3)}
-body.previewing .pg-del,body.previewing .handle,body.previewing .grip,body.previewing .hl,body.previewing .add-page,body.previewing #formats{display:none}
+body.previewing .pg-del,body.previewing .handle,body.previewing .grip,body.previewing .hl,body.previewing .add-page{display:none}
+.top-c{display:flex;align-items:center;gap:8px}
+#previewBtn[aria-pressed="true"]{background:var(--pri);color:var(--pri-fg)}
 body.previewing .page.cur{box-shadow:var(--shadow-page)}
 body.previewing .it.sel{outline:none}
 .pane{background:var(--sidebar);display:flex;flex-direction:column;min-height:0}
@@ -230,7 +232,13 @@ body.previewing .canvas{--sw11:460px;--sw916:300px}
 .it-img .ph{position:absolute;inset:0}
 .it-img[data-fit="fit"] .ph{transform:scale(.78)}
 .it-img[data-fit="crop"] .ph{transform:scale(1.35) translate(8%,6%)}
-.it-anim{flex:1 1 0;min-height:calc(var(--u)*80);position:relative}
+.it-anim{flex:1 1 0;min-height:calc(var(--u)*80);position:relative;overflow:hidden}
+/* Animation fit: Adatta keeps air around the cards, Riempi lets them fill the block; Dimensione scales them */
+.it-anim>.an{transform:scale(var(--as,1));transform-origin:center}
+.page .blk .it-anim[data-fit="fill"] .an-c04{--cw:min(70cqw,calc(100cqh * 9 / 16))}
+.page .blk .it-anim[data-fit="fill"] .an-c03{--ch:min(100cqh,calc(80cqw * 16 / 9))}
+.page .blk .it-anim[data-fit="fill"] .an-c01 .ac{height:min(100cqh,calc(80cqw * 16 / 9))}
+.page .blk .it-anim[data-fit="fill"] .an-w02 .ac{width:22cqmin}
 .it-anim.bleed{margin-left:calc(-1 * var(--bp));margin-right:calc(-1 * var(--bp))}
 .it-row{display:flex;justify-content:space-between;align-items:center;gap:calc(var(--u)*20)}
 .it-row.wide{gap:calc(var(--u)*110)}
@@ -263,6 +271,11 @@ body.previewing .canvas{--sw11:460px;--sw916:300px}
 .blk .al-center{text-align:center}.blk .al-right{text-align:right}
 .blk .cols-2{columns:2;column-gap:calc(var(--u)*40)}
 .kpirow .t-text{width:calc(var(--u)*120);flex-shrink:0;font-weight:500;line-height:1.1}
+/* Video results: the block is tall, so what each result measures gets room and size, and the numbers grow */
+.page[data-ratio="916"] .kpirow .t-text{width:auto;flex:1 1 0;max-width:52%;font-size:calc(var(--u)*30);line-height:1.15}
+.page[data-ratio="916"] .kpirow .t-num{font-size:calc(var(--u)*120);line-height:.9}
+.page[data-ratio="916"] .it-col.kpis{gap:calc(var(--u)*36)}
+.page[data-ratio="916"] .it-col.kpi{gap:calc(var(--u)*16)}
 .tags{display:flex;flex-wrap:wrap;gap:calc(var(--u)*6);align-content:center}
 .it-row .tags{justify-content:flex-end}
 .tag{border-radius:999px;padding:calc(var(--u)*7) calc(var(--u)*14);font-weight:500;font-size:calc(var(--u)*14);line-height:calc(var(--u)*18.2);white-space:nowrap;background:#012234;color:#efefef}
@@ -280,6 +293,14 @@ body.previewing .canvas{--sw11:460px;--sw916:300px}
 .vin{animation:vtext 7s cubic-bezier(.22,1,.36,1) infinite both;animation-delay:calc(var(--i) * 140ms)}
 body.previewing .vin{animation-iteration-count:infinite}
 @media (prefers-reduced-motion:reduce){.vin{animation:none}}
+.no-tanim .vin{animation:none}
+.tswitch{display:inline-flex;align-items:center;gap:8px;font:500 12.5px var(--sans);color:var(--fg-2);cursor:pointer;white-space:nowrap}
+.tswitch input{position:absolute;opacity:0;width:1px;height:1px}
+.tswitch .knob{width:30px;height:18px;border-radius:999px;background:var(--fill-2);box-shadow:inset 0 0 0 1px var(--border-strong);position:relative;transition:background-color 150ms}
+.tswitch .knob::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgb(0 0 0 / .25);transition:transform 150ms var(--ease-out)}
+.tswitch input:checked+.knob{background:var(--accent)}
+.tswitch input:checked+.knob::after{transform:translateX(12px)}
+.tswitch input:focus-visible+.knob{outline:2px solid var(--focus);outline-offset:2px}
 /* Video info section (intro and results): more air between the client's lines */
 .slot.blk.vinfo{gap:calc(var(--u)*24)}
 .vinfo>.it-row:first-of-type{margin-bottom:calc(var(--u)*40)}
@@ -335,9 +356,9 @@ body.previewing .vin{animation-iteration-count:infinite}
 .an-c04{--cw:min(34cqw,calc(92cqh * 9 / 16))}
 .an-c04 .trk{gap:6cqw;margin-left:calc(50cqw - var(--cw) / 2)}
 /* Video: bigger cards in every animation slot */
-.page[data-ratio="916"] .an-c04{--cw:min(58cqw,calc(96cqh * 9 / 16))}
-.page[data-ratio="916"] .an-c03{--ch:min(86cqh,calc(66cqw * 16 / 9))}
-.page[data-ratio="916"] .an-c01 .ac{height:min(82cqh,calc(70cqw * 16 / 9))}
+.page[data-ratio="916"] .an-c04{--cw:min(58cqw,calc(84cqh * 9 / 16))} /* air above and below the cards */
+.page[data-ratio="916"] .an-c03{--ch:min(80cqh,calc(66cqw * 16 / 9))}
+.page[data-ratio="916"] .an-c01 .ac{height:min(78cqh,calc(70cqw * 16 / 9))}
 .page[data-ratio="916"] .an-w02 .ac{width:20cqmin}
 .an-c04 .ac{width:var(--cw);height:auto}
 .an-w02 .ring{position:absolute;inset:0}
@@ -481,6 +502,12 @@ body.previewing .vin{animation-iteration-count:infinite}
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
   <symbol id="i-panel-l" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9 4.5v15"/></symbol>
   <symbol id="i-panel-r" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M15 4.5v15"/></symbol>
+  <symbol id="i-al-top" viewBox="0 0 24 24"><path d="M4 4h16"/><rect x="8" y="7" width="8" height="4" rx="1"/><rect x="8" y="13" width="8" height="3" rx="1"/></symbol>
+  <symbol id="i-al-center" viewBox="0 0 24 24"><path d="M4 12h3M17 12h3"/><rect x="8" y="7" width="8" height="4" rx="1"/><rect x="8" y="13" width="8" height="4" rx="1"/></symbol>
+  <symbol id="i-al-bottom" viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="8" y="8" width="8" height="3" rx="1"/><rect x="8" y="13" width="8" height="4" rx="1"/></symbol>
+  <symbol id="i-al-between" viewBox="0 0 24 24"><path d="M4 3h16M4 21h16"/><rect x="8" y="5.5" width="8" height="3" rx="1"/><rect x="8" y="14" width="8" height="4.5" rx="1"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l1-4 11-11 3 3-11 11z"/><path d="M14 7l3 3"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
@@ -510,17 +537,19 @@ body.previewing .vin{animation-iteration-count:infinite}
     <span class="code" id="docCode">LUM-2026-01</span>
     <span class="pill"><i></i>Da rivedere</span>
   </div>
+  <div class="top-c">
   <div class="seg" id="formats" role="group" aria-label="Formato">
     <button aria-pressed="true" data-fmt="169">Presentazione<small>16:9</small></button>
     <button aria-pressed="false" data-fmt="11">Carosello<small>1:1</small></button>
     <button aria-pressed="false" data-fmt="916">Video<small>9:16</small></button>
+  </div>
+  <button class="btn icon sec press" id="previewBtn" aria-pressed="false" aria-label="Anteprima" title="Anteprima"><svg class="i"><use href="#i-eye"/></svg></button>
   </div>
   <div class="top-r">
     <span class="save" id="save">Salvato</span>
     <button class="btn icon sm ghost press" id="undo" aria-label="Annulla" title="Annulla (⌘Z)" disabled><svg class="i"><use href="#i-undo"/></svg></button>
     <button class="btn icon sm ghost press" id="redo" aria-label="Ripeti" title="Ripeti (⇧⌘Z)" disabled><svg class="i"><use href="#i-redo"/></svg></button>
     <span class="divider"></span>
-    <button class="btn sec press" id="previewBtn">Anteprima</button>
     <button class="btn pri press">Approva</button>
   </div>
 </header>
@@ -639,7 +668,7 @@ const STYLE_MAP={eyebrow:{c:'lab'},ctal:{c:'lab',align:'center'},h1:{c:'xl'},big
 /* Elements go inside blocks; Blocco adds a bento block to the page. */
 const ELEMENTS = [
   {block:true,label:'Blocco',icon:'grid'},
-  {group:true,label:'Blocco testo',icon:'text'},
+  {group:true,label:'Testi',icon:'text'},
   {cls:'title',label:'Titolo',icon:'text',t:'Nuovo titolo'},{cls:'text',label:'Testo',icon:'text',t:'Scrivi qui il testo.'},
   {cls:'num',label:'Numero',icon:'hash',t:'+00%'},{cls:'quote',label:'Citazione',icon:'quote',t:'«La citazione del cliente.»'},
   {cls:'lab',label:'Etichetta',icon:'text',t:'Etichetta'},{img:true,label:'Immagine',icon:'image'},
@@ -649,7 +678,7 @@ const ELEMENTS = [
 /* Text block: texts kept together, aligned in the block at the top, centre or bottom, or split
    ('Distanziati': the first `split` texts at the top, the rest at the bottom). It replaces the template
    spacers: in Figma they are spacing, not things to select. */
-const G=(items,dist='top',split=1)=>({e:'col',n:'Blocco testo',group:true,dist,split,items});
+const G=(items,dist='top',split=1)=>({e:'col',n:'Testi',group:true,dist,split,items});
 function fromSpacers(items){ const sp=items.map((x,i)=>x&&x.e==='sp'?i:-1).filter(i=>i>=0); if(!sp.length) return items;
   const rest=items.filter(x=>x.e!=='sp');
   if(sp.length>=2&&sp[0]===0&&sp[sp.length-1]===items.length-1) return [G(rest,'center')];
@@ -750,7 +779,7 @@ function renderItem(p,j,b,it,path,onPhoto,thumb){
       d.addEventListener('blur',()=>{ d.contentEditable='false'; d.draggable=true; renderRight(); }); } }
   else if(it.e==='img'){ const m=mediaOf(it.m); d.dataset.fit=it.fit||'fill'; if(it.imgbg) d.style.setProperty('--imgbg',it.imgbg);
     d.innerHTML=`<div class="ph ${m?m.g:''}">${m&&m.src?mediaTag(m):''}</div>${it.video?'<span class="vid-badge">▶</span>':''}`; }
-  else if(it.e==='anim'){ if(it.bleed) d.classList.add('bleed'); d.innerHTML=animHTML(it.type,it.items.map(mediaOf).filter(Boolean));
+  else if(it.e==='anim'){ if(it.bleed) d.classList.add('bleed'); d.dataset.fit=it.fit||'fit'; d.style.setProperty('--as',(it.size||100)/100); d.innerHTML=animHTML(it.type,it.items.map(mediaOf).filter(Boolean));
     if(!thumb) d.addEventListener('dblclick',e=>{ e.stopPropagation(); openAnim({page:p.key,idx:j,path}); }); }
   else if(it.e==='tags'){ d.className+=' tags'; d.innerHTML=it.list.map(t=>`<span class="tag">${esc(t)}</span>`).join('');
     if(!thumb){ d.addEventListener('dblclick',e=>{ e.stopPropagation(); d.textContent=it.list.join(', '); d.draggable=false; d.contentEditable='true'; d.focus(); d._before=JSON.stringify(doc); });
@@ -844,7 +873,7 @@ function applyIntro(list,p,fmt,mode=state.mode){ const I=clone(typeof mode==='st
   // Video: two bento blocks, the info above and the animation below; the border between them resizes both.
   Object.assign(p,{pad:24,bg:'#ffffff',variant:TL.videoIntro[1],slots:[
     B('Progetto',[head(),T('xl',I.title,{fs:56}),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true})],{pad:60,padTop:220,cls:'vinfo'}),
-    B('Animazione',[ANIMI('c04',[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5))],{pad:0})]}); }
+    B('Animazione',[ANIMI('c04',[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5),{size:105})],{pad:0})]}); } // Video intro: cards at 105%
 // The sample case and client both start from the Intro, in every format.
 // In Presentazione the Intro already holds the challenge and the idea, so the case has no separate pages for them.
 // No separate Sfida / Approccio pages in any format: the intro holds them (owner, 2026-10-27).
@@ -1088,7 +1117,14 @@ function renderCanvas(){
     sw.innerHTML=`<span>Anteprima</span><div class="seg">${[['off','Nessuna'],['reel','Reel'],['story','Storia']].map(([k,t])=>`<button data-ig="${k}" aria-pressed="${state.ig===k}">${t}</button>`).join('')}</div>`;
     sw.querySelectorAll('[data-ig]').forEach(b=>b.onclick=()=>{ state.ig=b.dataset.ig; renderCanvas(); });
     meta.appendChild(sw); }
-  if(meta.childNodes.length) c.appendChild(meta); // only the Instagram preview switch, in Video
+  if(state.fmt==='916'&&!previewing()){ // Video editor: a switch to stop the text animations while editing
+    meta.classList.add('with-switch');
+    const t=document.createElement('label'); t.className='tswitch';
+    t.innerHTML=`<input type="checkbox" ${state.textAnim!==false?'checked':''}><span class="knob" aria-hidden="true"></span>Animazione testi`;
+    t.querySelector('input').onchange=e=>{ state.textAnim=e.target.checked; c.classList.toggle('no-tanim',!state.textAnim); };
+    meta.appendChild(t); }
+  c.classList.toggle('no-tanim',state.textAnim===false&&!previewing());
+  if(meta.childNodes.length) c.appendChild(meta); // Video: the text animation switch (editor) or the Instagram preview switch (Anteprima)
   let n=1;
   if(previewing()&&state.fmt!=='169'){ // one slideshow of every page, as on social
     const ps=pageEls(); state.pvI=Math.max(0,Math.min(ps.length-1,state.pvI||0)); const p=ps[state.pvI];
@@ -1197,7 +1233,7 @@ function applyDefaultPage(p,key){ commit();
 /* Risultati e testimonial (Figma MAC-TF-AI, 2026-10-27). Results in a blue block, one row per result
    (what it measures, then the number in lime, a thin line above); the client's words in a grey block.
    Presentazione adds a visual on the left; Carosello puts the two blocks side by side; Video stacks them. */
-function applyOutro(p,fmt,mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode), m=fmt!=='169'; // m: the Carosello template's sizes
+function applyOutro(p,fmt,mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode), m=fmt==='11'; // m: the Carosello template's sizes (Video has its own)
   const kpis=COL(I.results.map(([v,l])=>COL([{e:'hr',n:'Linea',kpi:true},ROW([T('kpil',l,m?{fs:16}:{}),T('kpiv',v)],{cls:'kpirow'})],{cls:'kpi'})),{cls:'kpis'});
   const res=B('Risultati',[T('lab','06 — Risultati',{color:'rgb(255 255 255 / .65)',...(m?{fs:13}:{})}),SP,kpis],{pad:28,bg:'#2977ff',ink:'#ffffff'});
   const voice=B('Testimonianza',[T('lab','08 — Voce del cliente',{color:'rgb(1 34 52 / .65)',...(m?{fs:13}:{})}),T('voice','«'+I.quote.replace(/^[“«"]|[”»"]$/g,'')+'»'),SP,T('author',I.author,m?{fs:16}:{})],{pad:28});
@@ -1316,12 +1352,14 @@ function renderBlockProps(el,p,b,it){
     if(it.e==='img') body=`<div class="sec-b"><p class="eyebrow">${it.video?'Video':'Immagine'}</p>${mediaPicker(mediaOf(it.m),'swap',(it.m?'Sostituisci':'Scegli')+' dai Media')}</div>
       <div class="sec-b"><p class="eyebrow">Adattamento</p><div class="seg full" id="fit">${[['fill','Riempi'],['fit','Adatta'],['crop','Ritaglia']].map(([k,t])=>`<button data-fit="${k}" aria-pressed="${(it.fit||'fill')===k}">${t}</button>`).join('')}</div></div>`;
     if(it.group) body=`<div class="sec-b"><p class="eyebrow">Allineamento nel blocco</p>
-        <div class="seg full" id="dist">${[['top','Alto'],['center','Centro'],['bottom','Basso'],['between','Distanziati']].map(([k,t])=>`<button data-dist="${k}" aria-pressed="${(it.dist||'top')===k}">${t}</button>`).join('')}</div>
-        <p class="help" style="margin-top:8px">Distanziati: ${(it.split||1)===1?'il primo testo':'i primi '+it.split+' testi'} in alto, il resto in basso.</p></div>`;
+        <div class="seg full icons" id="dist">${[['top','In alto'],['center','Al centro'],['bottom','In basso'],['between',`Distanziati: ${(it.split||1)===1?'il primo testo':'i primi '+it.split+' testi'} in alto, il resto in basso`]].map(([k,t])=>`<button data-dist="${k}" aria-pressed="${(it.dist||'top')===k}" aria-label="${t}" title="${t}">${I('al-'+k)}</button>`).join('')}</div></div>`;
     if(it.e==='anim') body=`<div class="sec-b"><p class="eyebrow">Animazione</p>
         <div class="row"><label>Tipo</label><select class="field" id="antype">${ANIMS.map(a=>`<option value="${a.k}" ${a.k===it.type?'selected':''}>${a.name}</option>`).join('')}</select></div>
         <div class="row"><label>Media</label><span class="help">${it.items.length} file</span></div>
-        <div style="margin-top:10px"><button class="btn sm sec press" id="anedit" style="width:100%">Cambia animazione o media</button></div></div>`;
+        <div style="margin-top:10px"><button class="btn sm sec press" id="anedit" style="width:100%">Cambia animazione o media</button></div></div>
+      <div class="sec-b"><p class="eyebrow">Adattamento</p>
+        <div class="seg full" id="anfit">${[['fit','Adatta'],['fill','Riempi']].map(([k,t])=>`<button data-anfit="${k}" aria-pressed="${(it.fit||'fit')===k}">${t}</button>`).join('')}</div>
+        <div class="row"><label>Dimensione</label><input class="slider" type="range" min="50" max="150" step="5" value="${it.size||100}" id="ansize"><span class="readout" id="ansizeV">${it.size||100}%</span></div></div>`;
     el.innerHTML=head+body+rm;
     el.querySelectorAll('[data-color]').forEach(x=>x.onclick=()=>{ commit(); it.color=x.dataset.color; re(); });
     const st=$('#style'); if(st) st.onchange=e=>{ commit(); it.cls=e.target.value; it.n=STYLES[it.cls]; delete it.fs; re(); };
@@ -1330,6 +1368,9 @@ function renderBlockProps(el,p,b,it){
     el.querySelectorAll('#fit button').forEach(x=>x.onclick=()=>{ commit(); it.fit=x.dataset.fit; re(); });
     const sw=$('#swap'); if(sw) sw.onclick=()=>setTab('media');
     const at=$('#antype'); if(at) at.onchange=e=>{ commit(); it.type=e.target.value; re(); };
+    el.querySelectorAll('[data-anfit]').forEach(x=>x.onclick=()=>{ commit(); it.fit=x.dataset.anfit; re(); });
+    const sz=$('#ansize'); if(sz){ sz.onpointerdown=()=>commit();
+      sz.oninput=()=>{ it.size=+sz.value; $('#ansizeV').textContent=sz.value+'%'; document.querySelector(`#p-${p.key} [data-path="${state.sel.idx}:${state.sel.path}"]`)?.style.setProperty('--as',it.size/100); saving(); }; }
     const ae=$('#anedit'); if(ae) ae.onclick=()=>openAnim({page:p.key,idx:state.sel.idx,path:state.sel.path});
     $('#rm').onclick=()=>removeItem(p,state.sel.idx,state.sel.path);
     return; }
@@ -1399,8 +1440,10 @@ $('#panelR').onclick=()=>{ work.classList.add('hide-r'); $('#openR').focus(); };
 $('#openL').onclick=()=>{ work.classList.remove('hide-l'); $('#panelL').focus(); };
 $('#openR').onclick=()=>{ work.classList.remove('hide-r'); $('#panelR').focus(); };
 function stepSlide(d){ state.pvI=(state.pvI||0)+d; renderCanvas(); }
-function setPreview(on){ if(on){ const f=findSel(); state.pvI=f?Math.max(0,pageEls().indexOf(f.p)):0; } document.body.classList.toggle('previewing',on); $('#previewBtn').textContent=on?'Torna all’editor':'Anteprima';
-  $('#previewBtn').classList.toggle('pri',on); $('#previewBtn').classList.toggle('sec',!on); renderCanvas(); }
+function setPreview(on){ if(on){ const f=findSel(); state.pvI=f?Math.max(0,pageEls().indexOf(f.p)):0; } document.body.classList.toggle('previewing',on);
+  // Same button, next to the formats: an eye for Anteprima, a pencil to go back to the editor.
+  const b=$('#previewBtn'), t=on?'Torna all’editor':'Anteprima'; b.setAttribute('aria-pressed',String(on)); b.setAttribute('aria-label',t); b.title=t;
+  b.innerHTML=`<svg class="i"><use href="#i-${on?'pencil':'eye'}"/></svg>`; renderCanvas(); }
 $('#previewBtn').onclick=()=>setPreview(!document.body.classList.contains('previewing'));
 function setTab(t){ state.tab=t; document.querySelectorAll('#rtab button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===t))); renderRight(); }
 let tmr; function saving(){ $('#save').textContent='Salvataggio…'; clearTimeout(tmr); tmr=setTimeout(()=>$('#save').textContent='Salvato',600); }
