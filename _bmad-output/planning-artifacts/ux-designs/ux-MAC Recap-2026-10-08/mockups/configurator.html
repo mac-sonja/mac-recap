@@ -774,7 +774,9 @@ function renderItem(p,j,b,it,path,onPhoto,thumb){
       d.contentEditable='true'; d.addEventListener('click',e=>e.stopPropagation()); d.addEventListener('focus',()=>{ d._before=JSON.stringify(doc); });
       d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.t=d.innerText; saving(); });
       d.addEventListener('blur',()=>renderRight()); return d; }
-    if(!thumb){ d.addEventListener('dblclick',e=>{ e.stopPropagation(); select(p.key,j,path,true); d.draggable=false; d.contentEditable='true'; d.focus(); d._before=JSON.stringify(doc); });
+    if(!thumb){ d._edit=()=>{ select(p.key,j,path,true); d.draggable=false; d.contentEditable='true'; d.focus();
+        const r=document.createRange(); r.selectNodeContents(d); r.collapse(false); const sl=getSelection(); sl.removeAllRanges(); sl.addRange(r); d._before=JSON.stringify(doc); };
+      d.addEventListener('dblclick',e=>{ e.stopPropagation(); d._edit(); });
       d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.t=d.innerText; saving(); });
       d.addEventListener('blur',()=>{ d.contentEditable='false'; d.draggable=true; renderRight(); }); } }
   else if(it.e==='img'){ const m=mediaOf(it.m); d.dataset.fit=it.fit||'fill'; if(it.imgbg) d.style.setProperty('--imgbg',it.imgbg);
@@ -782,7 +784,8 @@ function renderItem(p,j,b,it,path,onPhoto,thumb){
   else if(it.e==='anim'){ if(it.bleed) d.classList.add('bleed'); d.dataset.fit=it.fit||'fit'; d.style.setProperty('--as',(it.size||100)/100); d.innerHTML=animHTML(it.type,it.items.map(mediaOf).filter(Boolean));
     if(!thumb) d.addEventListener('dblclick',e=>{ e.stopPropagation(); openAnim({page:p.key,idx:j,path}); }); }
   else if(it.e==='tags'){ d.className+=' tags'; d.innerHTML=it.list.map(t=>`<span class="tag">${esc(t)}</span>`).join('');
-    if(!thumb){ d.addEventListener('dblclick',e=>{ e.stopPropagation(); d.textContent=it.list.join(', '); d.draggable=false; d.contentEditable='true'; d.focus(); d._before=JSON.stringify(doc); });
+    if(!thumb){ d._edit=()=>{ select(p.key,j,path,true); d.textContent=it.list.join(', '); d.draggable=false; d.contentEditable='true'; d.focus(); d._before=JSON.stringify(doc); };
+      d.addEventListener('dblclick',e=>{ e.stopPropagation(); d._edit(); });
       d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.list=d.textContent.split(',').map(x=>x.trim()).filter(Boolean); saving(); });
       d.addEventListener('blur',()=>{ d.contentEditable='false'; renderAll(); }); } }
   else if(it.e==='brand') d.innerHTML=brandHTML(onPhoto);
@@ -793,7 +796,9 @@ function renderItem(p,j,b,it,path,onPhoto,thumb){
   if(thumb) return d;
   const s=state.sel; if(s&&s.page===p.key&&s.idx===j&&String(s.path)===String(path)) d.classList.add('sel');
   if((it.e!=='row'&&it.e!=='col')||it.group){
-    d.addEventListener('click',e=>{ e.stopPropagation(); select(p.key,j,path); });
+    // Click selects; a click on a text that is already selected opens it for editing (so a double click edits too).
+    d.addEventListener('click',e=>{ e.stopPropagation(); if(d.isContentEditable) return;
+      if(d._edit&&s&&s.page===p.key&&s.idx===j&&String(s.path)===String(path)){ d._edit(); return; } select(p.key,j,path); });
     // Drag any element to another block or place; texts stop being draggable while they're being edited.
     { d.draggable=true; d.addEventListener('dragstart',e=>{ if(d.isContentEditable){ e.preventDefault(); return; } e.stopPropagation();
       // A block holding just this element (e.g. a full image) moves as the block: dropped on another block, they swap.
