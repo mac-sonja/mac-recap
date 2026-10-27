@@ -824,7 +824,9 @@ FORMATS.forEach(f=>{ doc.views[f].others=Object.fromEntries(Object.keys(OTHER_CA
 const casePagesOf=pr=>pr.code==='LUM-2026-01'?V().case:V().others[pr.code];
 /* In the client file the client's introduction replaces each case's own (SCP 2026-10-26, C23): the intro pages are hidden. */
 const isCaseIntro=p=>!!p.introOf||p.key==='cover'||p.key.endsWith('-cover');
-const clientCasePages=pr=>casePagesOf(pr).filter(p=>!isCaseIntro(p));
+// …and each carousel's closing page too: the client file ends with its own, once.
+const isCaseEnd=p=>p.key==='end'||p.key.endsWith('-end');
+const clientCasePages=pr=>casePagesOf(pr).filter(p=>!isCaseIntro(p)&&!isCaseEnd(p));
 /* A case's pages fall in three sections: Intro, Output (the work) and Risultati. */
 const SECTIONS={intro:'Intro',output:'Output',risultati:'Risultati'};
 const sectionOf=p=>p.section||(isCaseIntro(p)?'intro':p.key==='outro'||p.key.endsWith('-outro')||p.key==='end'||p.key.endsWith('-end')?'risultati':'output');
@@ -1164,7 +1166,7 @@ function closingPage(key){ return {key,name:'Chiusura',section:'risultati',bg:'#
 FORMATS.forEach(f=>{ const v=doc.views[f]; const o=v.case.find(p=>p.key==='outro'); if(o) applyOutro(o,f,'case');
   Object.entries(v.others).forEach(([code,list])=>{ const q=list.find(p=>p.key.endsWith('-outro')); if(q) applyOutro(q,f,OTHER_CASES[code]); }); });
 // Every carousel ends with the closing page, each its own copy.
-{ const v=doc.views['11']; v.case.push(closingPage('end')); Object.entries(v.others).forEach(([code,list])=>list.push(closingPage(code.toLowerCase()+'-end'))); }
+{ const v=doc.views['11']; v.case.push(closingPage('end')); v.client.outro.push(closingPage('c-end')); Object.entries(v.others).forEach(([code,list])=>list.push(closingPage(code.toLowerCase()+'-end'))); }
 // The sample case's result page in Presentazione is the Contenuti template.
 { const pres=doc.views['169'].case.find(p=>p.key==='result'); fillDefault(pres,'content','case',MEDIA);
   // Carosello: the same three images, as the "3 immagini · A" layout, so the result has its page here too.
