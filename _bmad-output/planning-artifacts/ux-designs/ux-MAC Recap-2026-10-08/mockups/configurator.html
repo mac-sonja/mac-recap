@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Configurator mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* Round 3 (2026-10-27): pages are bento, blocks snap into the grid and the rest fill the space when one goes;
    images swap by dragging on the canvas; no Il cliente page; formats Presentazione and Carosello only.
@@ -202,7 +204,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .modal .help{margin-top:4px}
 .an-opts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .an-opt{padding:8px;border-radius:16px;background:var(--fill-2);display:flex;flex-direction:column;gap:8px;text-align:center;font-size:13px;font-weight:600}
-.an-opt .pv{position:relative;aspect-ratio:3/4;border-radius:12px;background:#1c1c1e;overflow:hidden}
+.an-opt .pv{position:relative;aspect-ratio:3/4;border-radius:12px;background:#ededf0;overflow:hidden}
 .an-opt[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent)}
 .up-list{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;justify-content:center}
 .up-list .ac{width:44px;height:44px;border-radius:8px;position:relative}
@@ -218,6 +220,70 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .drop label{color:var(--ink);font-weight:500;cursor:pointer}
 .modal-foot{display:flex;justify-content:flex-end;gap:8px}
 @media (max-width:640px){.an-opts{grid-template-columns:repeat(2,1fr)}}
+/* Intro template (Figma MAC-TF-AI, 2026-10-27). Sizes are Figma px times --u, the page width over the frame width. */
+.tpl{position:absolute;inset:0;font-family:Inter,var(--sans);color:#012234;letter-spacing:0}
+.tpl *{box-sizing:border-box}
+.tpl [data-f]{outline:none}.tpl [data-f][contenteditable="true"]{cursor:text;box-shadow:0 0 0 2px var(--accent);border-radius:4px}
+.tb{border-radius:calc(var(--u)*20);overflow:hidden;position:relative;background:#ededf0;display:flex;flex-direction:column;min-width:0;min-height:0}
+.tb .sp{flex:1 0 0;min-height:0}
+.t-lab{font-weight:600;font-size:calc(var(--u)*13);line-height:calc(var(--u)*18);text-transform:uppercase}
+.t-head{font-weight:600;font-size:calc(var(--u)*26);line-height:1.2;letter-spacing:-.02em}
+.t-body{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24);color:rgb(1 34 52 / .6)}
+.cov{color:#fff}
+.cov .bgimg{position:absolute;inset:0;background:#2977ff}
+.cov .bgimg img,.cov .bgimg>span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cov .bgimg::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgb(102 102 102 / 0),rgb(0 0 0 / .5))}
+.cov>*:not(.bgimg){position:relative}
+.tags{display:flex;flex-wrap:wrap;gap:calc(var(--u)*6);align-content:center}
+.tag{border-radius:999px;padding:calc(var(--u)*7) calc(var(--u)*14);font-weight:500;font-size:calc(var(--u)*14);line-height:calc(var(--u)*18.2);white-space:nowrap;background:#012234;color:#efefef}
+.cov .tag{background:rgb(255 255 255 / .15);color:#fff}
+.logo-box{width:calc(var(--u)*123.2);height:calc(var(--u)*56);border-radius:calc(var(--u)*10);background:#c7c7cc;display:grid;place-items:center;font-weight:600;font-size:calc(var(--u)*13);color:#012234;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:calc(var(--u)*20)}
+.brand .dv{width:1px;height:calc(var(--u)*48);display:block}
+.brand .mac{width:calc(var(--u)*89);height:calc(var(--u)*28.914);display:block}
+/* Presentazione 1920×1080: margin 40, gutter 24, padding 28 */
+.ti-169{display:grid;inset:calc(var(--u)*40);grid-template-columns:908fr 442fr 442fr;grid-template-rows:147fr 317fr 488fr;gap:calc(var(--u)*24)}
+.ti-169 .tb{padding:calc(var(--u)*28);gap:calc(var(--u)*12)}
+.ti-169 .cov{grid-area:1/1/4/2}
+.ti-169 .cov .t-lab{color:rgb(255 255 255 / .65)}
+.ti-169 .cov h1{margin:0;font-weight:700;font-size:calc(var(--u)*56);line-height:calc(var(--u)*62)}
+.ti-169 .cov .sub{font-size:calc(var(--u)*20);line-height:calc(var(--u)*28);color:rgb(255 255 255 / .75)}
+.ti-169 .cli{grid-area:1/2/2/4;flex-direction:row;align-items:center;gap:calc(var(--u)*110)}
+.ti-169 .cli .who{flex:1;min-width:0;display:flex;flex-direction:column;gap:calc(var(--u)*12)}
+.ti-169 .cli .name{font-weight:600;font-size:calc(var(--u)*26);line-height:1.1;letter-spacing:-.02em}
+.ti-169 .cli .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
+.ti-169 .srv{grid-area:2/2/3/3;justify-content:space-between}
+.ti-169 .sfi{grid-area:3/2/4/3}
+.ti-169 .ide{grid-area:2/3/4/4}
+/* Carosello 1000×1000 frame: margin 24; cover padding 60, story pages padding 40 */
+.ti-11{padding:calc(var(--u)*24);display:flex}
+.ti-11 .tb{flex:1}
+.ti-11 .cov{padding:calc(var(--u)*60);gap:calc(var(--u)*12)}
+.ti-11 .cov .ctop{display:flex;justify-content:space-between;align-items:center}
+.ti-11 .cov .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
+.ti-11 .cov .name{font-weight:600;font-size:calc(var(--u)*30);line-height:1.1;letter-spacing:-.02em;margin-top:calc(var(--u)*6)}
+.ti-11 .cov h1{margin:0;font-weight:700;font-size:calc(var(--u)*56);line-height:1.1;letter-spacing:-.02em}
+.ti-11 .cov .sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em;color:rgb(255 255 255 / .75)}
+.ti-11 .cov .hr{height:1px;width:100%;display:block}
+.ti-11 .cov .srow{display:flex;justify-content:space-between;align-items:flex-start;gap:calc(var(--u)*20)}
+.ti-11 .cov .srow .t-lab{font-size:calc(var(--u)*16);line-height:calc(var(--u)*18)}
+.ti-11 .cov .tags{justify-content:flex-end}
+.ti-11 .story{padding:calc(var(--u)*40);gap:calc(var(--u)*12)}
+.ti-11 .story .t-lab{font-size:calc(var(--u)*18)}
+.ti-11 .story h2{margin:0;font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
+.ti-11 .story .t-body{font-size:calc(var(--u)*22);line-height:1.3;letter-spacing:-.01em;margin-top:calc(var(--u)*6);max-width:calc(var(--u)*840)}
+.ti-11 .story.two .t-body{font-size:calc(var(--u)*18);columns:2;column-gap:calc(var(--u)*40);max-width:none}
+/* Reel 1080×1920: one grey block, title, description and services above the animation (Carousel 04) */
+.ti-916{padding:calc(var(--u)*24);display:flex}
+.ti-916 .tb{flex:1;padding:calc(var(--u)*40) 0 calc(var(--u)*40);gap:calc(var(--u)*18)}
+.ti-916 .tb>*:not(.reel-an){margin:0 calc(var(--u)*40)}
+.ti-916 .t-lab{font-size:calc(var(--u)*18)}
+.ti-916 h1{margin:0;font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
+.ti-916 .sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em;color:rgb(1 34 52 / .6)}
+.ti-916 .tag{font-size:calc(var(--u)*18);line-height:calc(var(--u)*24);padding:calc(var(--u)*9) calc(var(--u)*18)}
+.ti-916 .reel-an{flex:1;position:relative;min-height:0;margin-top:calc(var(--u)*22)}
+/* Animated Reel page: the animation sits in a background-grey block */
+.reel-anim{position:absolute;inset:var(--pad);border-radius:12px;background:#ededf0;overflow:hidden}
 /* Template text styles (placeholder; the real ones come from the templates) */
 .t-eyebrow{font:500 1.3cqw/1.2 var(--mono);text-transform:uppercase;letter-spacing:.08em;opacity:.6}
 .t-h1{font:600 5cqw/1 var(--display);letter-spacing:-.03em}
@@ -387,6 +453,7 @@ const state = { mode:'case', fmt:'169', tab:'pages', view:'grid', sel:null };
 let drag = null; // what is being dragged: {kind:'el'|'var'|'img'|'media', ...}
 
 const MEDIA = [
+  {id:'m0',g:'',name:'LUM_2026_cover.jpg',src:'assets/intro-cover.jpg',fav:true},
   {id:'m1',g:'g1',name:'LUM_2026_01.jpg',fav:true},{id:'m2',g:'g2',name:'LUM_2026_02.jpg',fav:true},
   {id:'m3',g:'g3',name:'LUM_2026_03.jpg'},{id:'m4',g:'g4',name:'LUM_2026_04.jpg'},
   {id:'m5',g:'g5',name:'LUM_2026_05.jpg'},{id:'m6',g:'g6',name:'LUM_2026_06.mp4',video:'0:24'},
@@ -408,20 +475,11 @@ const BENTO = {
 };
 const MAX_BLOCKS=6;
 const layoutsFor=n=>BENTO[Math.max(1,Math.min(MAX_BLOCKS,n))];
-/* Layout per format: Carosello and Reel start as the Presentazione's layout. The first change, in any format,
-   splits them: from then on each format keeps its own (p.fmtLayout[fmt]) and a change in one never touches another. */
-const LAYOUT_KEYS=['variant','tk','rows','cols','anim']; // anim: a Reel page laid out as an animation
-const lay=p=>state.fmt!=='169'&&p.fmtLayout&&p.fmtLayout[state.fmt]||p;
-const copyOf=p=>JSON.parse(JSON.stringify(Object.fromEntries(LAYOUT_KEYS.map(k=>[k,p[k]]))));
-function layW(p){ p.fmtLayout=p.fmtLayout||{};
-  // Before the Presentazione changes, the formats still following it keep the layout they have now.
-  ['11','916'].forEach(f=>{ if(!p.fmtLayout[f]) p.fmtLayout[f]=copyOf(p); });
-  return state.fmt==='169'?p:p.fmtLayout[state.fmt]; }
-/* Same layout as the Presentazione right now (nothing to restore). */
-const sameAsPres=p=>JSON.stringify(copyOf(lay(p)))===JSON.stringify(copyOf(p));
-const animOf=p=>state.fmt==='916'&&lay(p).anim||null;
-/* Adding or removing a block changes the page in every format, so every layout starts again from the first. */
-function resetLayout(p){ p.preset=null; p.variant=0; Object.values(p.fmtLayout||{}).forEach(l=>l.variant=0); }
+/* Every format has its own copy of the pages (doc.views[fmt]): an edit changes only the format in the canvas. */
+const lay=p=>p, layW=p=>p;
+const animOf=p=>state.fmt==='916'&&p.anim||null;
+/* Adding or removing a block: the layout starts again from the first for that number of blocks. */
+function resetLayout(p){ p.preset=null; p.variant=0; }
 const layoutOf=p=>{ const L=layoutsFor(p.slots.length); return L[(lay(p).variant||0)%L.length]; };
 const layoutKey=p=>p.slots.length+':'+((lay(p).variant||0)%layoutsFor(p.slots.length).length);
 /* Track sizes: the layout's, or the page's own after a resize (kept only while the layout is the same). */
@@ -439,7 +497,7 @@ const ELEMENTS = [
 ];
 
 function casePages(){ return [
-  {key:'cover',name:'Copertina',bg:'#ffffff',variant:1,slots:[
+  {key:'cover',name:'Intro',bg:'#ffffff',variant:1,tpl:'intro',preset:'intro',slots:[
     {k:'txt',n:'Titolo',cls:'h1',t:'Una luce nuova per Lumen',align:'end'},
     {k:'txt',n:'Occhiello',cls:'eyebrow',t:'Lumen · 2026 · Brand e digitale',align:'end'},
     {k:'img',n:'Immagine principale',m:'m1'}]},
@@ -466,7 +524,9 @@ function clientPages(){ return {
     {k:'img',n:'Immagine',m:'c2'},
     {k:'txt',n:'Chiusura',cls:'h2',t:'Grazie, Lumen. Alla prossima luce.',align:'end'}]}],
 };}
-let doc = { case: casePages(), client: clientPages(), media: MEDIA, cmedia: CLIENT_MEDIA };
+const FORMATS=['169','11','916'];
+let doc = { views:Object.fromEntries(FORMATS.map(f=>[f,{case:casePages(),client:clientPages()}])), media: MEDIA, cmedia: CLIENT_MEDIA };
+const V=()=>doc.views[state.fmt]; // the pages of the format in the canvas
 
 /* Undo / redo: a snapshot of the document before each change. */
 const past=[], future=[];
@@ -496,19 +556,65 @@ document.addEventListener('keydown',e=>{
 
 const allMedia=()=>[...doc.cmedia,...doc.media];
 const gOf=id=>(allMedia().find(m=>m.id===id)||{}).g;
-const pageEls=()=>state.mode==='case'?doc.case:doc.client.intro.concat(doc.client.outro);
+const pageEls=()=>state.mode==='case'?V().case:V().client.intro.concat(V().client.outro);
 const pageByKey=k=>pageEls().find(p=>p.key===k);
 const fmtName=()=>({169:'Presentazione',11:'Carosello',916:'Reel'}[state.fmt]);
 const clearMarks=()=>{ document.querySelectorAll('.drop-before,.drop-over').forEach(x=>x.classList.remove('drop-before','drop-over'));
   document.querySelectorAll('[data-over]').forEach(x=>delete x.dataset.over); document.querySelectorAll('.hl.drop').forEach(x=>x.remove()); };
 document.addEventListener('dragend',()=>{ drag=null; clearMarks(); });
 
+/* Intro template content, from the case. */
+const INTRO={eyebrow:'01 Progetto',title:'Una luce nuova per Lumen',sub:'Un marchio e un sito che mostrano i prodotti come li vedono i clienti: al buio.',
+  client:'Lumen S.r.l.',meta:'Illuminazione · 2026',services:['Branding','Web design','Fotografia','Art direction','Social media'],
+  challengeHead:'Un marchio forte, ma invisibile online',challengeBody:'Lumen era conosciuta dai progettisti, ma il sito non mostrava la qualità della luce e le richieste arrivavano quasi solo dalle fiere.',
+  ideaHead:'Mostrare la luce al buio',ideaBody:'Abbiamo ridisegnato il logo partendo dalla forma delle lampade e costruito un sito che mostra i prodotti al buio, come li vedono i clienti. Ogni pagina prodotto si apre con la lampada accesa, con le foto scattate nello studio di Lumen.\n\nIl nuovo marchio è nato dalla curva della lampada più venduta e ora firma packaging, cataloghi e stand.',img:'m0'};
+const FRAME={169:1920,11:1000,916:1080};
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const F=(i,f,tag='div',cls='')=>`<${tag} class="${cls}" data-f="${f}">${esc(i[f]).replace(/\n/g,'<br>')}</${tag}>`;
+const coverImg=i=>{ const m=allMedia().find(x=>x.id===i.img); return `<div class="bgimg">${m?(m.src?mediaTag(m):`<span class="${m.g}"></span>`):''}</div>`; };
+const brand=white=>`<div class="brand"><div class="logo-box">LOGO</div><img class="dv" src="assets/${white?'divider-v-white':'divider-v'}.svg" alt="" style="transform:rotate(0)"><img class="mac" src="assets/${white?'mac-logo-white':'mac-logo'}.svg" alt="MAC"></div>`;
+const tagsOf=i=>`<div class="tags">${i.services.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`;
+/* The intro's pages in the current format: one in Presentazione and Reel, three in Carosello. */
+function introViews(p){ const i=p.intro||(p.intro=JSON.parse(JSON.stringify(INTRO)));
+  if(state.fmt==='169') return [{name:p.name,html:`<div class="tpl ti-169">
+    <div class="tb cov">${coverImg(i)}${F(i,'eyebrow','div','t-lab')}<div class="sp"></div>${F(i,'title','h1')}${F(i,'sub','div','sub')}</div>
+    <div class="tb cli"><div class="who"><div class="t-lab">02 Cliente</div><div>${F(i,'client','div','name')}${F(i,'meta','div','meta')}</div></div>${brand(false)}</div>
+    <div class="tb srv"><div class="t-lab">03 Servizi</div>${tagsOf(i)}</div>
+    <div class="tb sfi"><div class="t-lab">04 Sfida</div><div class="sp"></div>${F(i,'challengeHead','div','t-head')}${F(i,'challengeBody','div','t-body')}</div>
+    <div class="tb ide"><div class="t-lab">05 Idea</div><div class="sp"></div>${F(i,'ideaHead','div','t-head')}${F(i,'ideaBody','div','t-body')}</div></div>`}];
+  if(state.fmt==='11') return [
+    {name:p.name+' · Copertina',bg:'#ededf0',html:`<div class="tpl ti-11"><div class="tb cov">${coverImg(i)}
+      <div class="ctop"><div>${F(i,'meta','div','meta')}${F(i,'client','div','name')}</div>${brand(true)}</div>
+      <div class="sp"></div>${F(i,'title','h1')}${F(i,'sub','div','sub')}<img class="hr" src="assets/divider-h-white.svg" alt="">
+      <div class="srow"><div class="t-lab">Servizi</div>${tagsOf(i)}</div></div></div>`},
+    {name:p.name+' · Sfida',html:`<div class="tpl ti-11"><div class="tb story"><div class="t-lab">Sfida</div><div class="sp"></div>${F(i,'challengeHead','h2')}${F(i,'challengeBody','div','t-body')}</div></div>`},
+    {name:p.name+' · Idea',html:`<div class="tpl ti-11"><div class="tb story two"><div class="t-lab">Idea</div><div class="sp"></div>${F(i,'ideaHead','h2')}${F(i,'ideaBody','div','t-body')}</div></div>`}];
+  return [{name:p.name,html:`<div class="tpl ti-916"><div class="tb"><div class="t-lab">Progetto</div>${F(i,'title','h1')}${F(i,'sub','div','sub')}${tagsOf(i)}
+    <div class="reel-an">${animHTML('c04',[i.img,...doc.media.filter(m=>!m.video&&m.id!==i.img).map(m=>m.id)].map(id=>allMedia().find(m=>m.id===id)).filter(Boolean).slice(0,5))}</div></div></div>`}];
+}
+function renderTplPage(p,v,k){
+  const el=document.createElement('div'); el.className='page'; el.dataset.ratio=state.fmt; if(k===0) el.id='p-'+p.key; else el.dataset.sub=p.key;
+  el.style.background=v.bg||p.bg; el.style.setProperty('--u',`calc(100cqw / ${FRAME[state.fmt]})`);
+  if(state.sel&&state.sel.page===p.key) el.classList.add('cur');
+  el.innerHTML=v.html;
+  el.addEventListener('click',()=>{ if(!(state.sel&&state.sel.page===p.key)) select(p.key,null); });
+  // Double-click a text to edit it; it is saved in the intro and shows the same in every format.
+  el.querySelectorAll('[data-f]').forEach(t=>{
+    t.addEventListener('dblclick',e=>{ e.stopPropagation(); t.contentEditable='true'; t.focus(); t._before=JSON.stringify(doc); });
+    t.addEventListener('input',()=>{ if(t._before){ past.push(t._before); future.length=0; t._before=null; syncHistory(); } p.intro[t.dataset.f]=t.innerText; saving(); });
+    t.addEventListener('blur',()=>{ t.contentEditable='false'; }); });
+  return el; }
+/* A page's views in the canvas: a template can be several pages in one format. */
+const viewsOf=p=>p.tpl==='intro'?introViews(p):[{name:p.name}];
+function appendPage(c,p,n){ const vs=viewsOf(p);
+  vs.forEach((v,k)=>{ c.appendChild(label({name:v.name},n+k)); c.appendChild(v.html?renderTplPage(p,v,k):renderPage(p)); });
+  return vs.length; }
 function renderPage(p){
   const el=document.createElement('div');
   el.className='page'; el.dataset.ratio=state.fmt; el.id='p-'+p.key;
   if(state.sel&&state.sel.page===p.key&&state.sel.idx==null) el.classList.add('cur');
   el.style.background=p.bg;
-  if(animOf(p)){ el.innerHTML=animHTML(animOf(p),pageMedia(p),5); el.addEventListener('click',()=>select(p.key,null)); return el; }
+  if(animOf(p)){ el.innerHTML=`<div class="reel-anim">${animHTML(animOf(p),pageMedia(p),5)}</div>`; el.addEventListener('click',()=>select(p.key,null)); return el; }
   const grid=document.createElement('div'); grid.className='bento';
   const L=layoutOf(p); grid.style.gridTemplate=tpl(tracksOf(p));
   p.slots.forEach((s,j)=>{
@@ -690,15 +796,15 @@ function renderCanvas(){
   meta.textContent={169:'Presentazione · 1920×1080 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28',11:'Carosello · 1080×1080 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28',916:'Reel · 1080×1920 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28'}[state.fmt];
   c.appendChild(meta);
   let n=1;
-  if(state.mode==='case'){ doc.case.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));}); }
+  if(state.mode==='case'){ V().case.forEach(p=>{ n+=appendPage(c,p,n); }); }
   else{
     const grp=t=>{const g=document.createElement('div');g.className='group-label';g.textContent=t;c.appendChild(g);};
-    grp('Introduzione'); doc.client.intro.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));});
-    doc.client.projects.forEach(pr=>{ grp(pr.code+' · '+pr.name);
+    grp('Introduzione'); V().client.intro.forEach(p=>{ n+=appendPage(c,p,n); });
+    V().client.projects.forEach(pr=>{ grp(pr.code+' · '+pr.name);
       const ghost=document.createElement('div'); ghost.className='page'; ghost.dataset.ratio=state.fmt; ghost.style.cssText='display:grid;place-items:center';
       ghost.innerHTML=`<div style="position:absolute;inset:0" class="${pr.g}"></div><div style="position:relative;color:#fff;text-align:center"><div class="t-h2">${pr.name}</div><div class="t-p" style="opacity:.8">${pr.pages} pagine · si modificano dalla sua case</div></div>`;
       c.appendChild(ghost); n+=pr.pages; });
-    grp('Chiusura'); doc.client.outro.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));});
+    grp('Chiusura'); V().client.outro.forEach(p=>{ n+=appendPage(c,p,n); });
   }
   c.querySelectorAll('.page[id]').forEach(el=>placeHandles(el,pageByKey(el.id.slice(2))));
   const add=document.createElement('button'); add.className='add-page press'; add.textContent='+ Aggiungi pagina'; c.appendChild(add);
@@ -753,6 +859,8 @@ const DEFAULT_PAGES=[
 ];
 function applyDefaultPage(p,key){
   const D=DEFAULT_PAGES.find(d=>d.k===key); commit();
+  if(key==='intro'){ p.tpl='intro'; p.preset='intro'; select(p.key,null); return; } // the Intro template: its own layout in each format
+  p.tpl=null;
   const imgs=[...p.slots.filter(x=>x.k==='img'&&x.m).map(x=>x.m),...(state.mode==='case'?doc.media:doc.cmedia).filter(m=>!m.video).map(m=>m.id)];
   p.slots=D.slots(STORY[state.mode]).map(x=>x.k==='img'?{...x,m:imgs.shift()||null}:x);
   resetLayout(p); const w=layW(p); w.variant=D.v; w.anim=null; p.preset=key; select(p.key,null); }
@@ -765,14 +873,13 @@ function applyPreset(p,n,v){
   if(n!==p.slots.length){ while(p.slots.length<n) p.slots.push({k:'img',n:'Immagine',m:null});
     for(let i=p.slots.length-1;i>=0&&p.slots.length>n;i--) if(empty(p.slots[i])) p.slots.splice(i,1);
     resetLayout(p); }
-  const w=layW(p); w.variant=v; w.anim=null; p.preset=null; select(p.key,null); }
+  const w=layW(p); w.variant=v; w.anim=null; p.preset=null; p.tpl=null; select(p.key,null); }
 function layoutsAndElements(p){
   const full=p&&p.slots.length>=MAX_BLOCKS;
   const cur=p&&p.slots.length&&!animOf(p)&&!p.preset?layoutOf(p):null;
   const layouts=p?`<div class="sec-b"><p class="eyebrow">Layout</p>
       <div class="variants">${PRESETS.map(({n,v,L})=>`<button class="var press" draggable="true" data-var="${n}:${v}" aria-pressed="${L===cur}" aria-label="Layout da ${n} ${n===1?'blocco':'blocchi'}" title="${n} ${n===1?'blocco':'blocchi'}" ${thumbOf(L)}</button>`).join('')}</div>
       ${p.slots.length&&layoutsFor(p.slots.length).length>1?`<div style="margin-top:10px"><button class="btn sm sec press" id="shuffle" style="width:100%">Mescola</button></div>`:''}
-      ${state.fmt!=='169'?`<div style="margin-top:8px"><button class="btn sm sec press" id="inherit" style="width:100%" ${sameAsPres(p)?'disabled title="È già uguale alla Presentazione"':''}>Ripristina dalla Presentazione</button></div>`:''}
       </div>
       <div class="sec-b"><p class="eyebrow">Pagine di default</p>
       <div class="variants">${DEFAULT_PAGES.map(dpThumb).join('').replace(`data-dp="${p.preset}"`,`data-dp="${p.preset}" aria-pressed="true"`)}</div>
@@ -803,11 +910,10 @@ function renderProps(){
         ${swatches(p.bg,'data-bg')}</div>`;
     wireDrag(el);
     // An animated layout is the page's layout in the Reel: the whole page plays the animation with its media.
-    el.querySelectorAll('[data-anvar]').forEach(b=>b.onclick=()=>{ commit(); layW(p).anim=b.dataset.anvar; p.preset=null; select(p.key,null); });
+    el.querySelectorAll('[data-anvar]').forEach(b=>b.onclick=()=>{ commit(); layW(p).anim=b.dataset.anvar; p.preset=null; p.tpl=null; select(p.key,null); });
     el.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>applyDefaultPage(p,b.dataset.dp));
     el.querySelectorAll('[data-var]').forEach(b=>b.onclick=()=>{ const [n,v]=b.dataset.var.split(':').map(Number); applyPreset(p,n,v); });
-    const inh=$('#inherit'); if(inh) inh.onclick=()=>{ commit(); p.fmtLayout[state.fmt]=copyOf(p); select(p.key,null); toast('Layout ripristinato dalla Presentazione.'); };
-    const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ commit(); const w=layW(p); w.variant=((w.variant||0)+1)%layoutsFor(p.slots.length).length; w.anim=null; p.preset=null; select(p.key,null); };
+    const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ commit(); const w=layW(p); w.variant=((w.variant||0)+1)%layoutsFor(p.slots.length).length; w.anim=null; p.preset=null; p.tpl=null; select(p.key,null); };
     el.querySelectorAll('[data-bg]').forEach(b=>b.onclick=()=>{ commit(); p.bg=b.dataset.bg; p.dark=DARK.includes(p.bg); select(p.key,null); });
     return; }
   const rm=`<div class="sec-b"><button class="btn sm sec press" id="rm" style="width:100%">Rimuovi dalla pagina</button></div>`;
@@ -863,9 +969,10 @@ function renderProps(){
   $('#rm').onclick=()=>removeBlock(p,state.sel.idx);
 }
 
-function miniOf(p){ if(animOf(p)) return `<div class="mini" style="background:${p.bg};position:relative;padding:0">${animHTML(animOf(p),pageMedia(p),5)}</div>`;
+function miniOf(p){ if(p.tpl){ const v=viewsOf(p)[0]; return `<div class="mini" style="position:relative;padding:0;display:block;container-type:inline-size;--u:calc(100cqw / ${FRAME[state.fmt]});--pad:0px;background:${v.bg||p.bg}">${v.html}</div>`; }
+  if(animOf(p)) return `<div class="mini" style="background:${p.bg};position:relative;padding:0">${animHTML(animOf(p),pageMedia(p),5)}</div>`;
   const L=layoutOf(p);
-  return `<div class="mini" style="background:${p.bg};grid-template:${tpl(tracksOf(p))}">${p.slots.map((s,j)=>`<span class="${s.k==='img'?gOf(s.m)||'':''}" style="grid-area:${L.a[j]};${s.k==='anim'?'background:#1c1c1e':s.k!=='img'?'background:'+(p.dark?'rgb(255 255 255 / .25)':'rgb(0 0 0 / .14)')+';height:'+(s.cls==='h1'||s.cls==='kpi'?'40%':'20%'):s.m?'':'background:rgb(0 0 0 / .08)'}"></span>`).join('')}</div>`; }
+  return `<div class="mini" style="background:${p.bg};grid-template:${tpl(tracksOf(p))}">${p.slots.map((s,j)=>`<span class="${s.k==='img'?gOf(s.m)||'':''}" style="grid-area:${L.a[j]};${s.k==='anim'?'background:#d9d9de':s.k!=='img'?'background:'+(p.dark?'rgb(255 255 255 / .25)':'rgb(0 0 0 / .14)')+';height:'+(s.cls==='h1'||s.cls==='kpi'?'40%':'20%'):s.m?'':'background:rgb(0 0 0 / .08)'}"></span>`).join('')}</div>`; }
 
 function renderRight(){
   const b=$('#rbody'); const q=$('#q').value.toLowerCase();
@@ -873,12 +980,12 @@ function renderRight(){
   if(state.tab==='pages'){
     const thumb=(p,n)=>`<button class="thumb" data-go="${p.key}" aria-current="${!!state.sel&&state.sel.page===p.key}">${miniOf(p)}<small><b>${n}</b> · ${p.name}</small></button>`;
     const cls=state.view==='list'?'thumbs list':'thumbs'; let h='',n=1;
-    if(state.mode==='case') h=`<div class="${cls}">${doc.case.filter(p=>p.name.toLowerCase().includes(q)).map(p=>thumb(p,n++)).join('')}</div>`;
+    if(state.mode==='case') h=`<div class="${cls}">${V().case.filter(p=>p.name.toLowerCase().includes(q)).map(p=>thumb(p,n++)).join('')}</div>`;
     else{
-      h+=`<div class="r-group"><p class="eyebrow">Introduzione</p><div class="${cls}">${doc.client.intro.map(p=>thumb(p,n++)).join('')}</div></div>`;
-      h+=`<div class="r-group"><p class="eyebrow">Progetti del cliente <a href="#">Riordina</a></p>${doc.client.projects.filter(pr=>(pr.name+pr.code).toLowerCase().includes(q)).map(pr=>`<button class="proj"><span class="mini ${pr.g}"></span><span><b>${pr.name}</b><small>${pr.code} · ${pr.pages} pagine</small></span></button>`).join('')}</div>`;
-      n+=doc.client.projects.reduce((a,p)=>a+p.pages,0);
-      h+=`<div class="r-group"><p class="eyebrow">Chiusura</p><div class="${cls}">${doc.client.outro.map(p=>thumb(p,n++)).join('')}</div></div>`;
+      h+=`<div class="r-group"><p class="eyebrow">Introduzione</p><div class="${cls}">${V().client.intro.map(p=>thumb(p,n++)).join('')}</div></div>`;
+      h+=`<div class="r-group"><p class="eyebrow">Progetti del cliente <a href="#">Riordina</a></p>${V().client.projects.filter(pr=>(pr.name+pr.code).toLowerCase().includes(q)).map(pr=>`<button class="proj"><span class="mini ${pr.g}"></span><span><b>${pr.name}</b><small>${pr.code} · ${pr.pages} pagine</small></span></button>`).join('')}</div>`;
+      n+=V().client.projects.reduce((a,p)=>a+p.pages,0);
+      h+=`<div class="r-group"><p class="eyebrow">Chiusura</p><div class="${cls}">${V().client.outro.map(p=>thumb(p,n++)).join('')}</div></div>`;
     }
     b.innerHTML=h;
     b.querySelectorAll('[data-go]').forEach(t=>t.onclick=()=>{ select(t.dataset.go,null); document.getElementById('p-'+t.dataset.go).scrollIntoView({behavior:'smooth',block:'center'}); });
@@ -902,7 +1009,7 @@ function setTab(t){ state.tab=t; document.querySelectorAll('#rtab button').forEa
 let tmr; function saving(){ $('#save').textContent='Salvataggio…'; clearTimeout(tmr); tmr=setTimeout(()=>$('#save').textContent='Salvato',600); }
 const press=(sel,b)=>document.querySelectorAll(sel).forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
 
-document.querySelectorAll('#formats button').forEach(b=>b.onclick=()=>{ state.fmt=b.dataset.fmt; press('#formats button',b); renderCanvas(); renderProps(); });
+document.querySelectorAll('#formats button').forEach(b=>b.onclick=()=>{ state.fmt=b.dataset.fmt; press('#formats button',b); renderAll(); });
 document.querySelectorAll('#rtab button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 document.querySelectorAll('#view button').forEach(b=>b.onclick=()=>{ state.view=b.dataset.view; press('#view button',b); renderRight(); });
 document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>{ state.mode=b.dataset.mode; state.sel=null; press('#mode button',b);
