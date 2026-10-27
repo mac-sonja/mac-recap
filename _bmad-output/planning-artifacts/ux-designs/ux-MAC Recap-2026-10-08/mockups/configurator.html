@@ -134,6 +134,15 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .fmt-meta{font:400 11.5px var(--mono);color:var(--fg-3);margin-bottom:4px}
 .pg-label{width:100%;max-width:920px;margin-top:14px;display:flex;justify-content:space-between;font-size:12.5px;color:var(--fg-3)}
 .pg-label b{color:var(--fg-2);font-weight:600}
+.pg-label{align-items:center}
+.pg-del{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;color:var(--fg-3)}
+.pg-del:hover{background:var(--fill);color:var(--fg)}
+/* Client tab, Carosello and Video: each case is a slideshow row */
+.strip{width:100%;max-width:920px;display:flex;gap:16px;overflow-x:auto;padding:4px 2px 12px;scroll-snap-type:x proximity}
+.strip>.slide{flex:0 0 auto;width:300px;scroll-snap-align:start}
+.strip.f916>.slide{width:200px}
+.strip .pg-label{margin-top:0;margin-bottom:6px}
+.strip .page{max-width:none}
 .group-label{width:100%;max-width:920px;margin-top:28px;display:flex;align-items:center;gap:10px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3)}
 .group-label::after{content:"";flex:1;height:1px;background:var(--border-strong)}
 .page{position:relative;width:100%;max-width:920px;background:#ffffff;box-shadow:var(--shadow-page);color:#012234;overflow:hidden;container-type:inline-size;transition:box-shadow 120ms}
@@ -394,6 +403,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></symbol>
   <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
   <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></symbol>
@@ -560,7 +570,8 @@ function casePages(){ return [
 ];}
 function clientPages(){ return {
   intro:[{key:'c-intro',name:'Introduzione',bg:'#ffffff',variant:1,slots:[]}],
-  projects:[{code:'LUM-2026-01',name:'Rebranding e sito',g:'g1',pages:5},{code:'LUM-2025-02',name:'Catalogo 2025',g:'g4',pages:5},{code:'LUM-2024-01',name:'Stand Euroluce',g:'g6',pages:4}],
+  // The client's cases. LUM-2026-01 is the case open in "Una case": the client tab shows those same pages.
+  projects:[{code:'LUM-2026-01',name:'Rebranding e sito'},{code:'LUM-2025-02',name:'Catalogo 2025'},{code:'LUM-2024-01',name:'Stand Euroluce'}],
   outro:[{key:'c-outro',name:'Chiusura',bg:'#ffffff',slots:[
     B('Immagine',[IM('c2')]),B('Chiusura',[SP,T('h2','Grazie, Lumen. Alla prossima luce.')])]}],
 };}
@@ -597,7 +608,7 @@ document.addEventListener('keydown',e=>{
 
 const allMedia=()=>[...doc.cmedia,...doc.media];
 const gOf=id=>(allMedia().find(m=>m.id===id)||{}).g;
-const pageEls=()=>state.mode==='case'?V().case:V().client.intro.concat(V().client.outro);
+const pageEls=()=>state.mode==='case'?V().case:[...V().client.intro,...V().client.projects.flatMap(pr=>clientCasePages(pr)),...V().client.outro];
 const pageByKey=k=>pageEls().find(p=>p.key===k);
 const fmtName=()=>({169:'Presentazione',11:'Carosello',916:'Video'}[state.fmt]);
 const clearMarks=()=>{ document.querySelectorAll('.drop-before,.drop-over').forEach(x=>x.classList.remove('drop-before','drop-over'));
@@ -685,7 +696,7 @@ const INTRO={
     challengeHead:'Un’azienda di design senza una voce sua',challengeBody:'Quando ci siamo conosciuti, Lumen vendeva bene alle fiere ma online e nei cataloghi non raccontava la qualità della sua luce.',
     ideaHead:'Un racconto unico, progetto dopo progetto',ideaBody:'Siamo partiti dal marchio e da lì abbiamo costruito il sito, i cataloghi e gli stand, sempre con la stessa idea: mostrare la luce come la vedono i clienti.',img:'c1'},
 };
-function applyIntro(list,p,fmt,mode=state.mode){ const I=clone(INTRO[mode]);
+function applyIntro(list,p,fmt,mode=state.mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode);
   const head=()=>ROW([COL([T('meta',I.meta),T('name',I.client)]),BRAND]);
   Object.assign(p,{preset:'intro',anim:null,tk:null,rows:null,cols:null,variant:0});
   // Re-applying replaces the Carosello pages the intro added before.
@@ -707,8 +718,25 @@ function applyIntro(list,p,fmt,mode=state.mode){ const I=clone(INTRO[mode]);
     ANIMI('c04',[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5),{bleed:true})],{pad:60,padTop:220})]}); }
 // The sample case and client both start from the Intro, in every format.
 // In Presentazione the Intro already holds the challenge and the idea, so the case has no separate pages for them.
-// Video keeps only the intro and the results (owner, 2026-10-27).
-['169','916'].forEach(f=>{ const ps=doc.views[f].case; for(let i=ps.length-1;i>=0;i--) if(['challenge','approach'].includes(ps[i].key)) ps.splice(i,1); });
+// No separate Sfida / Approccio pages in any format: the intro holds them (owner, 2026-10-27).
+FORMATS.forEach(f=>{ const ps=doc.views[f].case; for(let i=ps.length-1;i>=0;i--) if(['challenge','approach'].includes(ps[i].key)) ps.splice(i,1); });
+/* The client's other cases (sample content), one page list per case and format. */
+const OTHER_CASES={
+  'LUM-2025-02':{title:'Il catalogo che si accende',sub:'Un catalogo stampato e digitale che mostra ogni lampada accesa e spenta.',client:'Lumen S.r.l.',meta:'Illuminazione · 2025',
+    services:['Editoria','Fotografia','Art direction'],challengeHead:'Cento prodotti, una sola foto ciascuno',challengeBody:'Il catalogo precedente mostrava le lampade spente: i clienti non vedevano la luce.',
+    ideaHead:'Ogni lampada due volte',ideaBody:'Ogni prodotto ha due foto, accesa e spenta, scattate nello stesso punto: si sfoglia come un prima e dopo.',img:'m4'},
+  'LUM-2024-01':{title:'Uno stand al buio, a Euroluce',sub:'Uno stand senza luci di sala, illuminato solo dalle lampade Lumen.',client:'Lumen S.r.l.',meta:'Illuminazione · 2024',
+    services:['Allestimenti','Art direction','Video'],challengeHead:'Farsi notare tra mille stand',challengeBody:'A Euroluce ogni stand è pieno di luce: Lumen rischiava di sparire.',
+    ideaHead:'Spegnere tutto il resto',ideaBody:'Abbiamo costruito uno stand nero: entrando, le uniche luci erano quelle dei prodotti.',img:'m6'},
+};
+function otherCase(code,f){ const k=code.toLowerCase(); const list=[{key:k+'-cover',name:'Intro',bg:'#ffffff',slots:[]},
+    {key:k+'-outro',name:'Risultati e testimonial',bg:'#ffffff',slots:[B('Testimonial',[SP,T('quote','“Un lavoro che si vede, anche al buio.” Marco T., Lumen'),SP])]}];
+  applyIntro(list,list[0],f,OTHER_CASES[code]); return list; }
+FORMATS.forEach(f=>{ doc.views[f].others=Object.fromEntries(Object.keys(OTHER_CASES).map(c=>[c,otherCase(c,f)])); });
+const casePagesOf=pr=>pr.code==='LUM-2026-01'?V().case:V().others[pr.code];
+/* In the client file the client's introduction replaces each case's own (SCP 2026-10-26, C23): the intro pages are hidden. */
+const isCaseIntro=p=>!!p.introOf||p.key==='cover'||p.key.endsWith('-cover');
+const clientCasePages=pr=>casePagesOf(pr).filter(p=>!isCaseIntro(p));
 FORMATS.forEach(f=>{ const v=doc.views[f]; applyIntro(v.case,v.case[0],f,'case'); applyIntro(v.client.intro,v.client.intro[0],f,'client'); });
 /* What Instagram lays over a Video once published (from the owner's screenshots, 2026-10-27).
    Reel: status bar and Per te / Amici at the top, actions on the right, account and caption at the bottom.
@@ -888,7 +916,11 @@ $('#anOk').onclick=()=>{ const p=pageByKey(anim.page), b=p.slots[anim.idx]; comm
   b.items.splice(at,0,ANIMI(anim.type,anim.items)); closeAnim(); select(p.key,idx,String(at)); };
 function removeBlock(p,idx){ commit(); p.slots.splice(idx,1); resetLayout(p); select(p.key,null); }
 function label(p,n){ const l=document.createElement('div'); l.className='pg-label';
-  l.innerHTML=`<span><b>${n}</b> · ${p.name}</span>`; return l; }
+  l.innerHTML=`<span><b>${n}</b> · ${p.name}</span><button class="pg-del press" title="Elimina pagina" aria-label="Elimina la pagina ${n}">${I('trash')}</button>`;
+  l.querySelector('.pg-del').onclick=()=>deletePage(p); return l; }
+/* Delete a page (only in the format in view); ⌘Z brings it back. */
+function deletePage(p){ const list=listOf(p); if(!list) return; commit(); list.splice(list.indexOf(p),1);
+  if(state.sel&&state.sel.page===p.key) state.sel=null; renderAll(); toast('Pagina eliminata. ⌘Z per annullare.'); }
 
 function renderCanvas(){
   const c=$('#canvas'); const top=c.scrollTop; c.innerHTML='';
@@ -904,13 +936,16 @@ function renderCanvas(){
   let n=1;
   if(state.mode==='case'){ V().case.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));}); }
   else{
-    const grp=t=>{const g=document.createElement('div');g.className='group-label';g.textContent=t;c.appendChild(g);};
-    grp('Introduzione'); V().client.intro.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));});
-    V().client.projects.forEach(pr=>{ grp(pr.code+' · '+pr.name);
-      const ghost=document.createElement('div'); ghost.className='page'; ghost.dataset.ratio=state.fmt; ghost.style.cssText='display:grid;place-items:center';
-      ghost.innerHTML=`<div style="position:absolute;inset:0" class="${pr.g}"></div><div style="position:relative;color:#fff;text-align:center"><div class="t-h2">${pr.name}</div><div class="t-p" style="opacity:.8">${pr.pages} pagine · si modificano dalla sua case</div></div>`;
-      c.appendChild(ghost); n+=pr.pages; });
-    grp('Chiusura'); V().client.outro.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));});
+    // Presentazione: pages one under the other. Carosello and Video: each group is a slideshow row.
+    const group=(t,pages)=>{ const g=document.createElement('div'); g.className='group-label'; g.textContent=t; c.appendChild(g);
+      if(state.fmt==='169'){ pages.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));}); return; }
+      const row=document.createElement('div'); row.className='strip f'+state.fmt;
+      pages.forEach(p=>{ const sl=document.createElement('div'); sl.className='slide'; sl.appendChild(label(p,n++)); sl.appendChild(renderPage(p)); row.appendChild(sl); });
+      c.appendChild(row); };
+    group('Introduzione',V().client.intro);
+    // Each case's own pages, editable here: they are the case's pages, so a change shows in the case too.
+    V().client.projects.forEach(pr=>group(pr.code+' · '+pr.name,clientCasePages(pr)));
+    group('Chiusura',V().client.outro);
   }
   c.querySelectorAll('.page[id]').forEach(el=>placeHandles(el,pageByKey(el.id.slice(2))));
   const add=document.createElement('button'); add.className='add-page press'; add.textContent='+ Aggiungi pagina'; c.appendChild(add);
@@ -964,30 +999,35 @@ const STORY={
     body:'Da tre anni lavoriamo con Lumen sul marchio, il sito e i cataloghi.',
     kpi:'3',kpiText:'progetti, dal marchio allo stand.',quote:'Grazie, Lumen. Alla prossima luce.'},
 };
-/* Default pages: they lay out the page as a template, already filled from the case. `fmt` limits one to a format.
-   Content pages (Figma, 2026-10-27): images in grey blocks, and in Presentazione a text block like the intro's Idea. */
+/* Default pages are for getting a template page back if it gets lost (owner, 2026-10-27): they lay out the page
+   as that template, filled from the case. `fmt` limits one to a format. New grids go into Layout, not here.
+   Contenuti (Figma, 2026-10-27): three images in grey blocks and a text block like the intro's Idea. */
 const imgs=n=>Array.from({length:n},()=>B('Immagine',[IM(null)]));
-const ideaBlock=I=>B('Testo',[T('lab','Idea'),SP,T('head',I.ideaHead),T('body',I.ideaBody)],{pad:28});
+const ideaBlock=(I,label='Idea')=>B('Testo',[T('lab',label),SP,T('head',I.ideaHead),T('body',I.ideaBody)],{pad:28});
 const DEFAULT_PAGES=[
   {k:'intro',name:'Intro'},
   {k:'sfida',name:'Sfida',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Sfida',[T('lab','Sfida'),SP,T('big',I.challengeHead),T('body2',I.challengeBody)],{pad:40})]},
   {k:'idea',name:'Idea',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Idea',[T('lab','Idea'),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]},
-  {k:'p1',name:'1 immagine',fmt:'169',n:2,v:BENTO[2].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(1),ideaBlock(I)]},
-  {k:'p3',name:'3 immagini',fmt:'169',n:4,v:BENTO[4].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(3),ideaBlock(I)]},
-  {k:'p5',name:'5 immagini',fmt:'169',n:6,v:BENTO[6].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(5),ideaBlock(I)]},
-  {k:'c1',name:'1 immagine',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:()=>imgs(1)},
-  {k:'c2',name:'2 immagini',fmt:'11',n:2,v:0,page:{pad:24,bg:'#ffffff'},slots:()=>imgs(2)},
-  {k:'c3a',name:'3 immagini · A',fmt:'11',n:3,v:BENTO[3].length-2,page:{pad:24,bg:'#ffffff'},slots:()=>imgs(3)},
-  {k:'c3b',name:'3 immagini · B',fmt:'11',n:3,v:BENTO[3].length-1,page:{pad:24,bg:'#ffffff'},slots:()=>imgs(3)},
-  {k:'c4',name:'4 immagini',fmt:'11',n:4,v:0,page:{pad:24,bg:'#ffffff'},slots:()=>imgs(4)},
+  // Presentazione content pages: 1, 3 and 5 images with the text block (owner, 2026-10-27).
+  {k:'content1',name:'Contenuti · 1 immagine',fmt:'169',n:2,v:BENTO[2].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(1),ideaBlock(I,'06 Deliverable — Output')]},
+  {k:'content',name:'Contenuti · 3 immagini',fmt:'169',n:4,v:BENTO[4].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(3),ideaBlock(I,'06 Deliverable — Output')]},
+  {k:'content5',name:'Contenuti · 5 immagini',fmt:'169',n:6,v:BENTO[6].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(5),ideaBlock(I,'06 Deliverable — Output')]},
   {k:'outro',name:'Outro',n:3,v:3,slots:c=>[B('Citazione',[SP,T('quote',c.quote),SP]),B('Numero',[SP,T('kpi',c.kpi)]),B('Testo risultato',[SP,T('p',c.kpiText)])]},
 ];
-function applyDefaultPage(p,key){
-  const D=DEFAULT_PAGES.find(d=>d.k===key); commit();
-  if(key==='intro'){ applyIntro(V().case.includes(p)?V().case:V().client.intro.includes(p)?V().client.intro:V().client.outro,p,state.fmt); select(p.key,null); return; }
-  const imgs=[...pageMedia(p).filter(m=>!m.video).map(m=>m.id),...(state.mode==='case'?doc.media:doc.cmedia).filter(m=>!m.video).map(m=>m.id)];
-  p.pad=null; Object.assign(p,D.page||{}); p.slots=D.slots(STORY[state.mode],clone(INTRO[state.mode])); itemsOf(p.slots.flatMap(b=>b.items)).forEach(it=>{ if(it.e==='img') it.m=imgs.shift()||null; });
-  resetLayout(p); p.variant=D.v; p.anim=null; p.preset=key; select(p.key,null); }
+/* The page list a page belongs to, in the format in view (case, client intro/outro, or one of the client's cases). */
+const listOf=p=>[V().case,V().client.intro,V().client.outro,...Object.values(V().others)].find(l=>l.includes(p));
+function fillDefault(p,key,mode,media){ const D=DEFAULT_PAGES.find(d=>d.k===key);
+  const imgs=[...pageMedia(p).filter(m=>!m.video).map(m=>m.id),...media.filter(m=>!m.video).map(m=>m.id)];
+  p.pad=null; Object.assign(p,D.page||{}); p.slots=D.slots(STORY[mode],clone(INTRO[mode])); itemsOf(p.slots.flatMap(b=>b.items)).forEach(it=>{ if(it.e==='img') it.m=imgs.shift()||null; });
+  resetLayout(p); p.variant=D.v; p.anim=null; p.preset=key; }
+function applyDefaultPage(p,key){ commit();
+  if(key==='intro') applyIntro(listOf(p),p,state.fmt); else fillDefault(p,key,state.mode,state.mode==='case'?doc.media:doc.cmedia);
+  select(p.key,null); }
+// The sample case's result page in Presentazione is the Contenuti template.
+{ const pres=doc.views['169'].case.find(p=>p.key==='result'); fillDefault(pres,'content','case',MEDIA);
+  // Carosello: the same three images, as the "3 immagini · A" layout, so the result has its page here too.
+  const caro=doc.views['11'].case.find(p=>p.key==='result');
+  Object.assign(caro,{pad:24,bg:'#ffffff',variant:BENTO[3].length-2,anim:null,preset:null,slots:pres.slots.slice(0,3).map(clone)}); }
 const dpThumb=D=>{ if(D.k==='intro'){ const L=state.fmt==='169'?BENTO[5][0]:BENTO[1][0];
     return `<div class="dp"><button class="var press" data-dp="intro" aria-label="Intro" style="grid-template:${frTpl(L.g)}">${L.a.map((a,j)=>`<span style="grid-area:${a};${j===0?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>Intro</small></div>`; }
   const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case,INTRO.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.items.some(i=>i.e==='img')?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
@@ -1041,9 +1081,11 @@ function pageTools(p){ return `<div class="fmt-${state.fmt}">${layoutsAndElement
       <div class="sec-b"><p class="eyebrow">Sfondo pagina</p>
         <div class="seg full"><button aria-pressed="true">Tinta unita</button><button aria-pressed="false">Sfumatura</button><button aria-pressed="false">Immagine</button></div>
         <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${p.bg}"></span><input value="${p.bg.toUpperCase()}"></div></div>
-        ${swatches(p.bg,'data-bg')}</div>`; }
+        ${swatches(p.bg,'data-bg')}</div>
+      <div class="sec-b"><button class="btn sm sec press" id="delpage" style="width:100%">Elimina pagina</button></div>`; }
 function wirePageTools(el,p){
     wireDrag(el);
+    const dp=$('#delpage'); if(dp) dp.onclick=()=>deletePage(p);
     // An animated layout is the page's layout in the Video: the whole page plays the animation with its media.
     el.querySelectorAll('[data-anvar]').forEach(b=>b.onclick=()=>{ commit(); layW(p).anim=b.dataset.anvar; p.preset=null; select(p.key,null); });
     el.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>applyDefaultPage(p,b.dataset.dp));
@@ -1107,8 +1149,8 @@ function renderRight(){
     if(state.mode==='case') h=`<div class="${cls}">${V().case.filter(p=>p.name.toLowerCase().includes(q)).map(p=>thumb(p,n++)).join('')}</div>`;
     else{
       h+=`<div class="r-group"><p class="eyebrow">Introduzione</p><div class="${cls}">${V().client.intro.map(p=>thumb(p,n++)).join('')}</div></div>`;
-      h+=`<div class="r-group"><p class="eyebrow">Progetti del cliente <a href="#">Riordina</a></p>${V().client.projects.filter(pr=>(pr.name+pr.code).toLowerCase().includes(q)).map(pr=>`<button class="proj"><span class="mini ${pr.g}"></span><span><b>${pr.name}</b><small>${pr.code} · ${pr.pages} pagine</small></span></button>`).join('')}</div>`;
-      n+=V().client.projects.reduce((a,p)=>a+p.pages,0);
+      V().client.projects.filter(pr=>(pr.name+pr.code).toLowerCase().includes(q)).forEach(pr=>{
+        h+=`<div class="r-group"><p class="eyebrow">${pr.code} · ${pr.name}</p><div class="${cls}">${clientCasePages(pr).map(p=>thumb(p,n++)).join('')}</div></div>`; });
       h+=`<div class="r-group"><p class="eyebrow">Chiusura</p><div class="${cls}">${V().client.outro.map(p=>thumb(p,n++)).join('')}</div></div>`;
     }
     b.innerHTML=h;
