@@ -1085,7 +1085,9 @@ function findSel(){ if(!state.sel) return null; const p=pageByKey(state.sel.page
   const s=state.sel.idx==null?null:p.slots[state.sel.idx]; if(state.sel.idx!=null&&!s) return {p,s:null,it:null};
   return {p,s,it:s&&state.sel.path!=null?itemAt(s,state.sel.path):null}; }
 const previewing=()=>document.body.classList.contains('previewing');
-function select(page,idx=null,path=null,keepFocus=false){ if(previewing()&&!keepFocus) return; // nothing is selected in Anteprima state.sel={page,idx,path:path==null?null:String(path)};
+function select(page,idx=null,path=null,keepFocus=false){
+  if(previewing()&&!keepFocus) return; // nothing is selected in Anteprima
+  state.sel={page,idx,path:path==null?null:String(path)};
   if(keepFocus){ // don't rebuild the text the person is typing into
     document.querySelectorAll('.it.sel').forEach(x=>x.classList.remove('sel'));
     const t=document.querySelector(`#p-${page} [data-path="${idx}:${path}"]`); if(t) t.classList.add('sel');
