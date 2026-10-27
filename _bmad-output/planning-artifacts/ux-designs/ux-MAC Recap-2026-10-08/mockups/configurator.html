@@ -265,19 +265,51 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .page[data-ratio="11"] .c-story .t-head{margin:0;font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
 .page[data-ratio="11"] .c-story .t-body{font-size:calc(var(--u)*22);line-height:1.3;letter-spacing:-.01em;margin-top:calc(var(--u)*6);max-width:calc(var(--u)*840)}
 .page[data-ratio="11"] .c-story.two .t-body{font-size:calc(var(--u)*18);columns:2;column-gap:calc(var(--u)*40);max-width:none}
-/* Reel: the top laid out like the Carosello cover (dark on grey), then the Carousel 04 animation */
+/* Video: the top laid out like the Carosello cover (dark on grey), then the Carousel 04 animation */
 .slot.card.c-reel{gap:calc(var(--u)*12)}
 .c-reel .ctop{display:flex;justify-content:space-between;align-items:center;margin-bottom:calc(var(--u)*36)}
 .c-reel .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
 .c-reel .name{font-weight:600;font-size:calc(var(--u)*30);line-height:1.1;letter-spacing:-.02em;margin-top:calc(var(--u)*6)}
 .c-reel h1{margin:0;font-weight:700;font-size:calc(var(--u)*56);line-height:1.1;letter-spacing:-.02em}
 .c-reel .sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em;color:rgb(1 34 52 / .6)}
-.c-reel .hr{height:1px;background:rgb(1 34 52 / .2)}
+.c-reel .hr{height:1px;background:rgb(1 34 52 / .2);margin:calc(var(--u)*28) 0}
 .c-reel .srow{display:flex;justify-content:space-between;align-items:flex-start;gap:calc(var(--u)*20)}
 .c-reel .srow .t-lab{font-size:calc(var(--u)*16)}
 .c-reel .tags{justify-content:flex-end}
 .c-reel .reel-an{flex:1;position:relative;min-height:0;margin:calc(var(--u)*36) calc(var(--u)*-60) 0}
-/* Animated Reel page: the animation sits in a background-grey block */
+/* Instagram preview over a Reel (switch above the canvas) */
+.fmt-meta.with-switch{display:flex;flex-direction:column;align-items:center;gap:8px}
+.ig-switch{display:inline-flex;align-items:center;gap:8px;font:500 12.5px var(--sans);color:var(--fg-2);white-space:nowrap}
+.ig-switch .seg button{height:24px;padding:0 9px;font-size:12px}
+.ig{position:absolute;inset:0;pointer-events:none;z-index:4;color:#fff;font-family:Inter,var(--sans);font-size:calc(var(--u)*30)}
+.ig svg{width:calc(var(--u)*60);height:calc(var(--u)*60);display:block;filter:drop-shadow(0 1px 3px rgb(0 0 0 / .35))}
+.ig b{font-weight:600}
+.ig .sp{flex:1}
+.ig-status{position:absolute;left:calc(var(--u)*80);right:calc(var(--u)*70);top:calc(var(--u)*34);display:flex;justify-content:space-between;align-items:center;font-size:calc(var(--u)*34)}
+.ig-sys{display:flex;gap:calc(var(--u)*8);align-items:flex-end}
+.ig-sys i{width:calc(var(--u)*7);background:#fff;border-radius:2px}.ig-sys i:nth-child(1){height:calc(var(--u)*12)}.ig-sys i:nth-child(2){height:calc(var(--u)*18)}.ig-sys i:nth-child(3){height:calc(var(--u)*24)}
+.ig-sys em{width:calc(var(--u)*50);height:calc(var(--u)*24);border:calc(var(--u)*3) solid #fff;border-radius:calc(var(--u)*7);margin-left:calc(var(--u)*10)}
+.ig-tabs{position:absolute;left:0;right:0;top:calc(var(--u)*130);display:flex;justify-content:center;align-items:center;gap:calc(var(--u)*30);font-size:calc(var(--u)*46);text-shadow:0 1px 3px rgb(0 0 0 / .4)}
+.ig-tabs span{opacity:.6;font-weight:600}
+.ig-friends{display:flex}.ig-friends i{width:calc(var(--u)*44);height:calc(var(--u)*44);border-radius:50%;background:#9a9aa2;box-shadow:0 0 0 calc(var(--u)*3) #fff;margin-left:calc(var(--u)*-10)}
+.ig-acts{position:absolute;right:calc(var(--u)*34);bottom:calc(var(--u)*150);display:flex;flex-direction:column;gap:calc(var(--u)*40);align-items:center}
+.ig-acts>div{display:flex;flex-direction:column;align-items:center}
+.ig-n{display:block;width:calc(var(--u)*56);height:calc(var(--u)*18);border-radius:calc(var(--u)*9);background:rgb(255 255 255 / .45);margin-top:calc(var(--u)*12)}
+.ig-audio-sq{width:calc(var(--u)*62);height:calc(var(--u)*62);border-radius:calc(var(--u)*12);background:#9a9aa2;box-shadow:0 0 0 calc(var(--u)*3) #fff}
+.ig-cap{position:absolute;left:calc(var(--u)*40);right:calc(var(--u)*170);bottom:calc(var(--u)*70);display:flex;flex-direction:column;gap:calc(var(--u)*22);text-shadow:0 1px 3px rgb(0 0 0 / .4)}
+.ig-user,.ig-head{display:flex;align-items:center;gap:calc(var(--u)*20)}
+.ig-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.9}
+.ig-av{width:calc(var(--u)*90);height:calc(var(--u)*90);border-radius:50%;flex-shrink:0}
+.ig-mac{background:#012234;color:#defe56;display:grid;place-items:center;font:700 calc(var(--u)*26) Inter,var(--sans);box-shadow:0 0 0 calc(var(--u)*4) #fff}
+.ig-follow{border:calc(var(--u)*2) solid rgb(255 255 255 / .7);border-radius:calc(var(--u)*14);padding:calc(var(--u)*6) calc(var(--u)*20)}
+.ig-progress{position:absolute;left:calc(var(--u)*20);right:calc(var(--u)*20);top:calc(var(--u)*120);height:calc(var(--u)*5);border-radius:3px;background:rgb(255 255 255 / .4)}
+.ig-progress i{display:block;width:10%;height:100%;border-radius:3px;background:#fff}
+.ig-head{position:absolute;left:calc(var(--u)*30);right:calc(var(--u)*30);top:calc(var(--u)*150);font-size:calc(var(--u)*34)}
+.ig-head .ig-av{width:calc(var(--u)*76);height:calc(var(--u)*76)}
+.ig-time{opacity:.8}
+.ig-reply{position:absolute;left:calc(var(--u)*40);right:calc(var(--u)*40);bottom:calc(var(--u)*60);display:flex;align-items:center;gap:calc(var(--u)*40)}
+.ig-msg{flex:1;border:calc(var(--u)*2) solid rgb(255 255 255 / .6);border-radius:999px;padding:calc(var(--u)*26) calc(var(--u)*46)}
+/* Animated Video page: the animation sits in a background-grey block */
 .reel-anim{position:absolute;inset:var(--pad);border-radius:12px;background:#ededf0;overflow:hidden}
 /* Template text styles (placeholder; the real ones come from the templates) */
 .t-eyebrow{font:500 1.3cqw/1.2 var(--mono);text-transform:uppercase;letter-spacing:.08em;opacity:.6}
@@ -391,7 +423,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
   <div class="seg" id="formats" role="group" aria-label="Formato">
     <button aria-pressed="true" data-fmt="169">Presentazione<small>16:9</small></button>
     <button aria-pressed="false" data-fmt="11">Carosello<small>1:1</small></button>
-    <button aria-pressed="false" data-fmt="916">Reel<small>9:16</small></button>
+    <button aria-pressed="false" data-fmt="916">Video<small>9:16</small></button>
   </div>
   <div class="top-r">
     <span class="save" id="save">Salvato</span>
@@ -444,7 +476,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 </div>
 <script>
 const $ = s => document.querySelector(s);
-const state = { mode:'case', fmt:'169', tab:'pages', view:'grid', sel:null };
+const state = { mode:'case', fmt:'169', tab:'pages', view:'grid', sel:null, ig:'off' }; // ig: Instagram preview over Video pages: off | reel | story
 let drag = null; // what is being dragged: {kind:'el'|'var'|'img'|'media', ...}
 
 const MEDIA = [
@@ -554,7 +586,7 @@ const allMedia=()=>[...doc.cmedia,...doc.media];
 const gOf=id=>(allMedia().find(m=>m.id===id)||{}).g;
 const pageEls=()=>state.mode==='case'?V().case:V().client.intro.concat(V().client.outro);
 const pageByKey=k=>pageEls().find(p=>p.key===k);
-const fmtName=()=>({169:'Presentazione',11:'Carosello',916:'Reel'}[state.fmt]);
+const fmtName=()=>({169:'Presentazione',11:'Carosello',916:'Video'}[state.fmt]);
 const clearMarks=()=>{ document.querySelectorAll('.drop-before,.drop-over').forEach(x=>x.classList.remove('drop-before','drop-over'));
   document.querySelectorAll('[data-over]').forEach(x=>delete x.dataset.over); document.querySelectorAll('.hl.drop').forEach(x=>x.remove()); };
 document.addEventListener('dragend',()=>{ drag=null; clearMarks(); });
@@ -599,7 +631,7 @@ function wireCard(d,p,s){
     t.addEventListener('blur',()=>{ t.contentEditable='false'; if(list) select(p.key,state.sel?state.sel.idx:null); }); }); }
 
 /* The Intro, from the case. Applying it lays out the page with its card blocks in the format in view:
-   Presentazione one page of five blocks, Carosello three pages (cover, Sfida, Idea), Reel one block. */
+   Presentazione one page of five blocks, Carosello three pages (cover, Sfida, Idea), Video one block. */
 const INTRO={
   case:{title:'Una luce nuova per Lumen',sub:'Un marchio e un sito che mostrano i prodotti come li vedono i clienti: al buio.',
     client:'Lumen S.r.l.',meta:'Illuminazione · 2026',services:['Branding','Web design','Fotografia','Art direction','Social media'],
@@ -636,17 +668,38 @@ function applyIntro(list,p,fmt,mode=state.mode){ const I=INTRO[mode], card=(n,v,
       {key:p.key+'-sfida',name:p.name+' · Sfida',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[card('Sfida','story',{label:'Sfida',head:I.challengeHead,body:I.challengeBody,cpad:40})]},
       {key:p.key+'-idea',name:p.name+' · Idea',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[card('Idea','story',{label:'Idea',head:I.ideaHead,body:I.ideaBody,cpad:40,two:true})]});
     return; }
-  Object.assign(p,{pad:24,bg:'#ffffff',variant:0,slots:[card('Intro','reel',{title:I.title,sub:I.sub,client:I.client,meta:I.meta,services:I.services,cpad:60,
+  Object.assign(p,{pad:24,bg:'#ffffff',variant:0,slots:[card('Intro','reel',{title:I.title,sub:I.sub,client:I.client,meta:I.meta,services:I.services,cpad:60,cpadTop:220,
     items:[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5)})]}); }
 // The sample case and client both start from the Intro, in every format.
 FORMATS.forEach(f=>{ const v=doc.views[f]; applyIntro(v.case,v.case[0],f,'case'); applyIntro(v.client.intro,v.client.intro[0],f,'client'); });
+/* What Instagram lays over a Video once published (from the owner's screenshots, 2026-10-27).
+   Reel: status bar and Per te / Amici at the top, actions on the right, account and caption at the bottom.
+   Story: progress bar and account at the top, the reply bar at the bottom. Friends' photos and counts are
+   blanked out. No shading: it looks as in the app. Approximate, for checking the layout only. */
+const igIcon=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const IGI={heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',comment:'<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"/>',
+  repost:'<path d="M17 3l3 3-3 3"/><path d="M4 11V9a3 3 0 0 1 3-3h13"/><path d="M7 21l-3-3 3-3"/><path d="M20 13v2a3 3 0 0 1-3 3H4"/>',send:'<path d="M21 4 3 11l7 3 3 7z"/><path d="M10 14l11-10"/>',
+  menu:'<path d="M5 9h14M7 15h10"/>',close:'<path d="M6 6l12 12M18 6 6 18"/>'};
+const igStatus=`<div class="ig-status"><b>9:41</b><span class="ig-sys"><i></i><i></i><i></i><em></em></span></div>`;
+const igAcct='<span class="ig-av ig-mac">mac</span><b>mac.creativetech</b>';
+function igOverlay(kind){
+  if(kind==='story') return `<div class="ig ig-story" aria-hidden="true">${igStatus}
+    <div class="ig-progress"><i></i></div>
+    <div class="ig-head">${igAcct}<span class="ig-time">9 min</span><span class="sp"></span>${igIcon(IGI.menu)}${igIcon(IGI.close)}</div>
+    <div class="ig-reply"><span class="ig-msg">Invia messaggio…</span>${igIcon(IGI.heart)}${igIcon(IGI.send)}</div></div>`;
+  return `<div class="ig ig-reel" aria-hidden="true">${igStatus}
+    <div class="ig-tabs"><b>Per te ⌄</b><span>Amici</span><span class="ig-friends"><i></i><i></i><i></i></span></div>
+    <div class="ig-acts">${['heart','comment','repost','send','menu'].map(k=>`<div>${igIcon(IGI[k])}${['comment','repost'].includes(k)?'<small class="ig-n"></small>':''}</div>`).join('')}<span class="ig-audio-sq"></span></div>
+    <div class="ig-cap"><div class="ig-user">${igAcct}<span class="ig-follow">Segui</span></div>
+      <div class="ig-text">Una luce nuova per Lumen: rebranding e sito…</div></div></div>`;
+}
 function renderPage(p){
   const el=document.createElement('div');
   el.className='page'; el.dataset.ratio=state.fmt; el.id='p-'+p.key;
   if(state.sel&&state.sel.page===p.key&&state.sel.idx==null) el.classList.add('cur');
   el.style.background=p.bg; el.style.setProperty('--u',`calc(100cqw / ${FRAME[state.fmt]})`);
   if(p.pad!=null) el.style.setProperty('--pad',`calc(var(--u) * ${p.pad})`); // the template's own page margin
-  if(animOf(p)){ el.innerHTML=`<div class="reel-anim">${animHTML(animOf(p),pageMedia(p),5)}</div>`; el.addEventListener('click',()=>select(p.key,null)); return el; }
+  if(animOf(p)){ el.innerHTML=`<div class="reel-anim">${animHTML(animOf(p),pageMedia(p),5)}</div>${state.ig!=='off'?igOverlay(state.ig):''}`; el.addEventListener('click',()=>select(p.key,null)); return el; }
   const grid=document.createElement('div'); grid.className='bento';
   const L=layoutOf(p); grid.style.gridTemplate=tpl(tracksOf(p));
   p.slots.forEach((s,j)=>{
@@ -656,7 +709,7 @@ function renderPage(p){
       const m=allMedia().find(x=>x.id===s.m);
       d.innerHTML=`<div class="ph ${m?m.g:''}">${m&&m.src?mediaTag(m):''}</div>${s.video?'<span class="vid-badge">▶</span>':''}`; d.draggable=true; d.addEventListener('dragstart',startMove); }
     else if(s.k==='card'){ d.classList.add('card','c-'+s.v); if(s.two) d.classList.add('two');
-      if(s.cpad!=null) d.style.padding=`calc(var(--u) * ${s.cpad})`; if(s.bg) d.style.background=s.bg;
+      if(s.cpad!=null) d.style.padding=`calc(var(--u) * ${s.cpad})`; if(s.cpadTop!=null) d.style.paddingTop=`calc(var(--u) * ${s.cpadTop})`; // Video: room for Instagram's top bar if(s.bg) d.style.background=s.bg;
       d.innerHTML=cardHTML(s); wireCard(d,p,s); d.draggable=true; d.addEventListener('dragstart',startMove); }
     else if(s.k==='anim'){ d.classList.add('anim'); const bm=s.bgImg&&allMedia().find(x=>x.id===s.bgImg);
       d.style.background=s.bg||'#ededf0';
@@ -683,6 +736,7 @@ function renderPage(p){
     grid.appendChild(d);
   });
   el.appendChild(grid);
+  if(state.fmt==='916'&&state.ig!=='off') el.insertAdjacentHTML('beforeend',igOverlay(state.ig));
   el.addEventListener('click',()=>select(p.key,null));
   // Drop on the page itself: a layout applies; a new element, or a block from another page, goes at the end.
   const pageAccepts=()=>drag&&(drag.kind==='var'||(p.slots.length<MAX_BLOCKS&&(drag.kind==='el'||(drag.kind==='block'&&drag.page!==p.key&&pageByKey(drag.page).slots.length>1))));
@@ -706,7 +760,7 @@ function edgeBlocks(g,axis,line){ return [...g.querySelectorAll(':scope>.slot')]
   return axis==='v'?(c1===line||c2===line):(r1===line||r2===line); }); }
 const overflows=t=>t.scrollHeight>t.clientHeight+1||t.scrollWidth>t.clientWidth+1;
 function placeHandles(el,p){
-  const g=el.querySelector('.bento'); if(!g) return; // an animated Reel page has no grid
+  const g=el.querySelector('.bento'); if(!g) return; // an animated Video page has no grid
   g.querySelectorAll('.handle').forEach(h=>h.remove());
   const cs=getComputedStyle(g); const gap=parseFloat(cs.columnGap);
   const px={v:cs.gridTemplateColumns.split(' ').map(parseFloat),h:cs.gridTemplateRows.split(' ').map(parseFloat)};
@@ -828,7 +882,13 @@ function label(p,n){ const l=document.createElement('div'); l.className='pg-labe
 function renderCanvas(){
   const c=$('#canvas'); const top=c.scrollTop; c.innerHTML='';
   const meta=document.createElement('div'); meta.className='fmt-meta';
-  meta.textContent={169:'Presentazione · 1920×1080 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28',11:'Carosello · 1080×1080 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28',916:'Reel · 1080×1920 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28'}[state.fmt];
+  meta.textContent={169:'Presentazione · 1920×1080 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28',11:'Carosello · 1080×1080 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28',916:'Video · 1080×1920 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28'}[state.fmt];
+  if(state.fmt==='916'){ // Video only: show where Instagram's own interface sits once published, as a Reel or a Story
+    meta.classList.add('with-switch');
+    const sw=document.createElement('div'); sw.className='ig-switch'; sw.setAttribute('role','group'); sw.setAttribute('aria-label','Anteprima Instagram');
+    sw.innerHTML=`<span>Anteprima</span><div class="seg">${[['off','Nessuna'],['reel','Reel'],['story','Storia']].map(([k,t])=>`<button data-ig="${k}" aria-pressed="${state.ig===k}">${t}</button>`).join('')}</div>`;
+    sw.querySelectorAll('[data-ig]').forEach(b=>b.onclick=()=>{ state.ig=b.dataset.ig; renderCanvas(); });
+    meta.appendChild(sw); }
   c.appendChild(meta);
   let n=1;
   if(state.mode==='case'){ V().case.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));}); }
@@ -920,7 +980,7 @@ function layoutsAndElements(p){
       </div>${state.fmt==='916'?`
       <div class="sec-b"><p class="eyebrow">Layout animati</p>
       <div class="variants">${ANIMS.map(a=>`<button class="var an-var press" data-anvar="${a.k}" aria-pressed="${animOf(p)===a.k}" aria-label="${a.name}" title="${a.name}">${animHTML(a.k,[],5)}</button>`).join('')}</div>
-      </div>`:''}`:''; // animated layouts are for the Reel only
+      </div>`:''}`:''; // animated layouts are for the Video only
   return layouts+`<div class="sec-b"><p class="eyebrow">Elementi</p>
       <div class="els">${ELEMENTS.map((E,i)=>`<div class="el" draggable="true" data-el="${i}">${I(E.icon)}${E.label}</div>`).join('')}</div>
       </div>`;
@@ -943,7 +1003,7 @@ function renderProps(){
         <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${p.bg}"></span><input value="${p.bg.toUpperCase()}"></div></div>
         ${swatches(p.bg,'data-bg')}</div>`;
     wireDrag(el);
-    // An animated layout is the page's layout in the Reel: the whole page plays the animation with its media.
+    // An animated layout is the page's layout in the Video: the whole page plays the animation with its media.
     el.querySelectorAll('[data-anvar]').forEach(b=>b.onclick=()=>{ commit(); layW(p).anim=b.dataset.anvar; p.preset=null; select(p.key,null); });
     el.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>applyDefaultPage(p,b.dataset.dp));
     el.querySelectorAll('[data-var]').forEach(b=>b.onclick=()=>{ const [n,v]=b.dataset.var.split(':').map(Number); applyPreset(p,n,v); });
