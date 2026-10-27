@@ -322,14 +322,19 @@ body.previewing .vin{animation-iteration-count:infinite}
 .trk{display:flex;flex-shrink:0}
 .an-c01{display:flex;justify-content:center}
 .an-c01 .trk{flex-direction:column;gap:4cqh;padding-bottom:4cqh}
-.an-c01 .ac{height:min(42cqh,calc(60cqw * 16 / 9));width:auto}
+.an-c01 .ac{height:min(68cqh,calc(60cqw * 16 / 9));width:auto}
 .an-c03{display:flex;flex-direction:column;align-items:center}
-.an-c03{--ch:min(56cqh,calc(54cqw * 16 / 9))}
+.an-c03{--ch:min(76cqh,calc(54cqw * 16 / 9))} /* cards fill the block's height, with a peek of the next ones */
 .an-c03 .trk{flex-direction:column;align-items:center;gap:6cqh;margin-top:calc(50cqh - var(--ch) / 2)}
 .an-c03 .ac{height:var(--ch);width:auto}
 .an-c04{display:flex;align-items:center}
-.an-c04{--cw:min(34cqw,calc(80cqh * 9 / 16))}
+.an-c04{--cw:min(34cqw,calc(92cqh * 9 / 16))}
 .an-c04 .trk{gap:6cqw;margin-left:calc(50cqw - var(--cw) / 2)}
+/* Video: bigger cards in every animation slot */
+.page[data-ratio="916"] .an-c04{--cw:min(58cqw,calc(96cqh * 9 / 16))}
+.page[data-ratio="916"] .an-c03{--ch:min(86cqh,calc(66cqw * 16 / 9))}
+.page[data-ratio="916"] .an-c01 .ac{height:min(82cqh,calc(70cqw * 16 / 9))}
+.page[data-ratio="916"] .an-w02 .ac{width:20cqmin}
 .an-c04 .ac{width:var(--cw);height:auto}
 .an-w02 .ring{position:absolute;inset:0}
 .an-w02 .ac{position:absolute;left:50%;top:50%;width:16cqmin;height:auto;transform:translate(-50%,-50%) rotate(var(--a)) translateY(-31cqmin)}
