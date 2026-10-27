@@ -931,7 +931,8 @@ const thumbOf=L=>`style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style=
 
 /* Every preset layout, whatever the page holds now. Picking one with more cells adds empty image blocks;
    with fewer cells it drops empty blocks, and refuses when that would drop filled ones. */
-const PRESETS=[[1,0],[2,0],[2,3],[3,0],[3,3],[4,0]].map(([n,v])=>({n,v,L:BENTO[n][v]})); // the six shown
+/* The layouts shown: six base ones, then one per template the owner sends (Intro, 2026-10-27). */
+const PRESETS=[[1,0],[2,0],[2,3],[3,0],[3,3],[4,0],[5,0]].map(([n,v])=>({n,v,L:BENTO[n][v]}));
 
 /* Default pages: they work like a layout (same page, new layout) but come with their blocks already
    filled from the case (or the client). Images already on the page are kept first. */
@@ -946,15 +947,18 @@ const STORY={
 const DEFAULT_PAGES=[
   {k:'intro',name:'Intro',n:3,v:0,slots:c=>[B('Immagine principale',[IM(null)]),B('Titolo',[SP,T('h1',c.title)]),B('Occhiello',[SP,T('eyebrow',c.eyebrow)])]},
   {k:'content',name:'Pagina contenuto',n:3,v:1,slots:c=>[B('Titolo',[T('h2',c.head)]),B('Paragrafo',[SP,T('p',c.body)]),B('Immagine',[IM(null)])]},
+  // Carosello only: the intro's own Sfida and Idea pages, to lay a page out as one of them again.
+  {k:'sfida',name:'Sfida',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Sfida',[T('lab','Sfida'),SP,T('big',I.challengeHead),T('body2',I.challengeBody)],{pad:40})]},
+  {k:'idea',name:'Idea',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Idea',[T('lab','Idea'),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]},
   {k:'outro',name:'Outro',n:3,v:3,slots:c=>[B('Citazione',[SP,T('quote',c.quote),SP]),B('Numero',[SP,T('kpi',c.kpi)]),B('Testo risultato',[SP,T('p',c.kpiText)])]},
 ];
 function applyDefaultPage(p,key){
   const D=DEFAULT_PAGES.find(d=>d.k===key); commit();
   if(key==='intro'){ applyIntro(V().case.includes(p)?V().case:V().client.intro.includes(p)?V().client.intro:V().client.outro,p,state.fmt); select(p.key,null); return; }
   const imgs=[...pageMedia(p).filter(m=>!m.video).map(m=>m.id),...(state.mode==='case'?doc.media:doc.cmedia).filter(m=>!m.video).map(m=>m.id)];
-  p.pad=null; p.slots=D.slots(STORY[state.mode]); itemsOf(p.slots.flatMap(b=>b.items)).forEach(it=>{ if(it.e==='img') it.m=imgs.shift()||null; });
+  p.pad=null; Object.assign(p,D.page||{}); p.slots=D.slots(STORY[state.mode],clone(INTRO[state.mode])); itemsOf(p.slots.flatMap(b=>b.items)).forEach(it=>{ if(it.e==='img') it.m=imgs.shift()||null; });
   resetLayout(p); p.variant=D.v; p.anim=null; p.preset=key; select(p.key,null); }
-const dpThumb=D=>{ const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.items.some(i=>i.e==='img')?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
+const dpThumb=D=>{ const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case,INTRO.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.items.some(i=>i.e==='img')?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
 /* A layout with more cells adds empty blocks; with fewer it drops empty blocks, and refuses to drop filled ones. */
 function applyPreset(p,n,v){
   const empty=b=>!b.items.length&&!b.img;
@@ -973,7 +977,7 @@ function layoutsAndElements(p){
       ${p.slots.length&&layoutsFor(p.slots.length).length>1?`<div style="margin-top:10px"><button class="btn sm sec press" id="shuffle" style="width:100%">Mescola</button></div>`:''}
       </div>
       <div class="sec-b"><p class="eyebrow">Pagine di default</p>
-      <div class="variants">${DEFAULT_PAGES.map(dpThumb).join('').replace(`data-dp="${p.preset}"`,`data-dp="${p.preset}" aria-pressed="true"`)}</div>
+      <div class="variants">${DEFAULT_PAGES.filter(D=>!D.fmt||D.fmt===state.fmt).map(dpThumb).join('').replace(`data-dp="${p.preset}"`,`data-dp="${p.preset}" aria-pressed="true"`)}</div>
       </div>${state.fmt==='916'?`
       <div class="sec-b"><p class="eyebrow">Layout animati</p>
       <div class="variants">${ANIMS.map(a=>`<button class="var an-var press" data-anvar="${a.k}" aria-pressed="${animOf(p)===a.k}" aria-label="${a.name}" title="${a.name}">${animHTML(a.k,[],5)}</button>`).join('')}</div>
