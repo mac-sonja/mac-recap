@@ -104,7 +104,9 @@ body.previewing .canvas .page .it-txt:focus{outline:none;box-shadow:0 0 0 2px va
 .social-frame{width:min(760px,calc(100vh - 250px),calc(100vw - 200px))} /* as big as the screen allows */
 .social-frame.f916{width:min(460px,calc((100vh - 250px) * 9 / 16))}
 .social-frame .page{max-width:none}
-.social-nav{width:40px;height:40px;border-radius:50%;font-size:20px;line-height:1}
+.social-nav{width:52px;height:52px;border-radius:50%;font-size:26px;line-height:1;background:#012234;color:#fff;box-shadow:0 6px 18px rgb(0 0 0 / .22)}
+.social-nav:hover{background:#2977ff}
+.social-nav:disabled{background:var(--fill-2);color:var(--fg-3);box-shadow:none;opacity:1}
 .social-dots{display:flex;gap:6px}
 .social-dots i{width:7px;height:7px;border-radius:50%;background:var(--border-strong)}
 .social-dots i.on{background:var(--accent)}
@@ -133,6 +135,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .swatches{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .sw{width:22px;height:22px;border-radius:6px;box-shadow:inset 0 0 0 1px rgb(0 0 0 / .12)}
 .sw[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px}
+.sw[data-none],.chip[data-none]{background:conic-gradient(#d4d4d8 25%,#fff 0 50%,#d4d4d8 0 75%,#fff 0) 0 0/8px 8px!important}
 .slider{flex:1;accent-color:var(--fg);min-width:0}
 .readout{font:400 11.5px var(--mono);color:var(--fg-3);width:34px;text-align:right}
 
@@ -315,19 +318,21 @@ body.previewing .vin{animation-iteration-count:infinite}
 /* Animation block: its own canvas, edge to edge like an image set to Riempi. */
 .slot.anim{padding:0;overflow:hidden}
 .an{position:absolute;inset:0;overflow:hidden;container-type:size}
-.ac{flex-shrink:0;border-radius:8px;overflow:hidden;background:linear-gradient(135deg,#efeee9,#d6d5cf)}
+.ac{flex-shrink:0;border-radius:8px;overflow:hidden;background:linear-gradient(135deg,#efeee9,#d6d5cf);aspect-ratio:9/16} /* every animation card is 9:16 */
 .trk{display:flex;flex-shrink:0}
 .an-c01{display:flex;justify-content:center}
 .an-c01 .trk{flex-direction:column;gap:4cqh;padding-bottom:4cqh}
-.an-c01 .ac{width:38cqw;height:42cqh}
+.an-c01 .ac{height:min(42cqh,calc(60cqw * 16 / 9));width:auto}
 .an-c03{display:flex;flex-direction:column;align-items:center}
-.an-c03 .trk{flex-direction:column;align-items:center;gap:6cqh;margin-top:27cqh}
-.an-c03 .ac{width:50cqw;height:46cqh}
+.an-c03{--ch:min(56cqh,calc(54cqw * 16 / 9))}
+.an-c03 .trk{flex-direction:column;align-items:center;gap:6cqh;margin-top:calc(50cqh - var(--ch) / 2)}
+.an-c03 .ac{height:var(--ch);width:auto}
 .an-c04{display:flex;align-items:center}
-.an-c04 .trk{gap:6cqw;margin-left:27cqw}
-.an-c04 .ac{width:46cqw;height:62cqh}
+.an-c04{--cw:min(34cqw,calc(80cqh * 9 / 16))}
+.an-c04 .trk{gap:6cqw;margin-left:calc(50cqw - var(--cw) / 2)}
+.an-c04 .ac{width:var(--cw);height:auto}
 .an-w02 .ring{position:absolute;inset:0}
-.an-w02 .ac{position:absolute;left:50%;top:50%;width:17cqmin;height:23cqmin;transform:translate(-50%,-50%) rotate(var(--a)) translateY(-33cqmin)}
+.an-w02 .ac{position:absolute;left:50%;top:50%;width:16cqmin;height:auto;transform:translate(-50%,-50%) rotate(var(--a)) translateY(-31cqmin)}
 @keyframes an-y{to{transform:translateY(-50%)}}
 @keyframes an-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.an *{animation:none!important}}
@@ -973,8 +978,9 @@ const ANIMS=[{k:'c01',name:'Carousel 01'},{k:'c03',name:'Carousel 03'},{k:'c04',
 const mediaTag=m=>m.video?`<video src="${m.src}" muted autoplay loop playsinline></video>`:`<img src="${m.src}" alt="">`;
 const card=(m,extra='')=>`<div class="ac" ${extra}>${!m?'':m.src?mediaTag(m):`<span class="${m.g}"></span>`}</div>`;
 /* Stepped slide: hold on each item, then move one step; the copy of the first item at the end makes the loop seamless. */
-function stepKF(axis,n){ const name=`an-s${axis}-${n}`; if(document.getElementById(name)) return name;
-  const u=axis==='x'?'cqw':'cqh', T=v=>`transform:translate${axis.toUpperCase()}(-${v*52}${u})`;
+function stepKF(axis,n){ const name=`an-s2${axis}-${n}`; if(document.getElementById(name)) return name;
+  // One step = a 9:16 card plus the gap (the card size is --cw / --ch on the animation).
+  const step=axis==='x'?'(var(--cw) + 6cqw)':'(var(--ch) + 6cqh)', T=v=>`transform:translate${axis.toUpperCase()}(calc(-1 * ${v} * ${step}))`;
   let k=''; for(let i=0;i<n;i++){ const a=i*100/n, b=a+70/n; k+=`${a.toFixed(2)}%,${b.toFixed(2)}%{${T(i)};animation-timing-function:cubic-bezier(.65,0,.35,1)}`; }
   const st=document.createElement('style'); st.id=name; st.textContent=`@keyframes ${name}{${k}100%{${T(n)}}}`; document.head.appendChild(st); return name; }
 function animHTML(type,items,empty=3){
@@ -1109,10 +1115,10 @@ function renderAll(){ renderCanvas(); renderProps(); renderRight(); }
 
 /* Brand palette (owner, 2026-10-27): background-grey, white, black, accent-lime, accent-main.
    These are the defaults; any other colour can still be typed in the field. */
-const PALETTE=['#ffffff','#ededf0','#012234','#defe56','#2977ff'];
+const PALETTE=['#ffffff','#ededf0','#012234','#defe56','#2977ff','transparent']; // last: no colour
 const DARK=['#012234','#2977ff'];
 const textOf=(p,s)=>s.color||'#012234'; // text is black unless chosen, on any background
-const swatches=(cur,attr)=>`<div class="swatches">${PALETTE.map(c=>`<button class="sw" ${attr}="${c}" style="background:${c}" aria-pressed="${c===cur}" aria-label="${c}"></button>`).join('')}</div>`;
+const swatches=(cur,attr)=>`<div class="swatches">${PALETTE.map(c=>`<button class="sw" ${attr}="${c}" style="background:${c}" ${c==='transparent'?'data-none title="Trasparente"':''} aria-pressed="${c===cur}" aria-label="${c==='transparent'?'Trasparente':c}"></button>`).join('')}</div>`;
 const thumbOf=L=>`style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style="grid-area:${a}"></span>`).join('')}`;
 
 /* Every preset layout, whatever the page holds now. Picking one with more cells adds empty image blocks;
@@ -1253,7 +1259,7 @@ function bgTools(p){ const {o,what,def}=bgTarget(p), c=o.bg||def, tab=o.img?'img
   const pool=[...doc.cmedia,...doc.media].filter(m=>!m.video);
   return `<div class="sec-b"><p class="eyebrow">Sfondo · ${what}</p>
     <div class="seg full" id="bgtab"><button data-bgtab="color" aria-pressed="${tab==='color'}">Tinta unita</button><button data-bgtab="img" aria-pressed="${tab==='img'}">Immagine</button></div>
-    ${tab==='color'?`<div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${c}"></span><input value="${c.toUpperCase()}"></div></div>
+    ${tab==='color'?`<div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${c}" ${c==='transparent'?'data-none':''}></span><input value="${c==='transparent'?'Trasparente':c.toUpperCase()}"></div></div>
       ${swatches(c,'data-bgc')}`
     :`<div class="bg-pick">${pool.map(m=>`<button class="press" data-bgimg="${m.id}" aria-pressed="${o.img===m.id}" title="${m.name}" aria-label="${m.name}"><span class="ph ${m.g}">${m.src?mediaTag(m):''}</span></button>`).join('')}</div>
       ${o.img?`<div style="margin-top:8px"><button class="btn sm ghost press" id="bgimgoff" style="width:100%">Togli immagine</button></div>`:''}`}</div>`; }
@@ -1284,7 +1290,7 @@ function renderBlockProps(el,p,b,it){
       body=`<div class="sec-b"><p class="eyebrow">Testo · ${fmtName()}</p>
         <div class="row"><label>Stile</label><select class="field" id="style">${Object.entries(STYLES).map(([k,v])=>`<option value="${k}" ${k===it.cls?'selected':''}>${v}</option>`).join('')}</select></div>
         <div class="row"><label>Allinea</label><div class="seg full" style="flex:1" id="align">${[['left','Sinistra'],['center','Centro'],['right','Destra']].map(([k,t])=>`<button data-al="${k}" aria-pressed="${(it.align||'left')===k}">${t}</button>`).join('')}</div></div>
-        <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${c}"></span><input value="${c.toUpperCase()}"></div></div>
+        <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${c}" ${c==='transparent'?'data-none':''}></span><input value="${c==='transparent'?'Trasparente':c.toUpperCase()}"></div></div>
         ${swatches(c,'data-color')}</div>`; }
     if(it.e==='img') body=`<div class="sec-b"><p class="eyebrow">${it.video?'Video':'Immagine'}</p>${mediaPicker(mediaOf(it.m),'swap',(it.m?'Sostituisci':'Scegli')+' dai Media')}</div>
       <div class="sec-b"><p class="eyebrow">Adattamento</p><div class="seg full" id="fit">${[['fill','Riempi'],['fit','Adatta'],['crop','Ritaglia']].map(([k,t])=>`<button data-fit="${k}" aria-pressed="${(it.fit||'fill')===k}">${t}</button>`).join('')}</div></div>`;
