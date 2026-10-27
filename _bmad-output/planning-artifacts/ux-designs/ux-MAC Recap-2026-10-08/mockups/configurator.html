@@ -81,13 +81,20 @@ svg.i{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.75;str
 .pane-l{grid-column:1}.canvas{grid-column:2}.pane-r{grid-column:3} /* fixed columns, so hiding a panel keeps the canvas in the middle */
 .work.hide-l{--wl:0px}.work.hide-l .pane-l{display:none}
 .work.hide-r{--wr:0px}.work.hide-r .pane-r{display:none}
-.btn.icon[aria-pressed="false"]{color:var(--fg-3)}
+/* Each panel hides from its own bar; a button on the canvas edge brings it back */
+.pane-bar{display:flex;justify-content:flex-start;padding:8px 10px 0}
+.r-tabs{display:flex;align-items:center;gap:6px}.r-tabs .seg{flex:1}
+.work{position:relative}
+.reopen{display:none;position:absolute;top:12px;z-index:6;box-shadow:var(--shadow-card)}
+.reopen-l{left:12px}.reopen-r{right:12px}
+.work.hide-l .reopen-l,.work.hide-r .reopen-r{display:inline-flex}
+body.previewing .reopen{display:none!important}
 /* Anteprima: like Webflow, the same canvas without the editing tools; the same button goes back */
 body.previewing .work{--wl:0px;--wr:0px}
 body.previewing .pane{display:none}
 body.previewing .canvas{--pw:1600px;--pw11:960px;--pw916:560px;background:var(--fill)}
 body.previewing .canvas .page *{pointer-events:none}
-body.previewing .pg-del,body.previewing .handle,body.previewing .grip,body.previewing .hl,body.previewing .add-page,body.previewing .ig-switch,body.previewing #panelL,body.previewing #panelR,body.previewing #formats{display:none}
+body.previewing .pg-del,body.previewing .handle,body.previewing .grip,body.previewing .hl,body.previewing .add-page,body.previewing .ig-switch,body.previewing #formats{display:none}
 body.previewing .page.cur{box-shadow:var(--shadow-page)}
 body.previewing .it.sel{outline:none}
 .pane{background:var(--sidebar);display:flex;flex-direction:column;min-height:0}
@@ -447,7 +454,6 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 <header class="top">
   <div class="top-l">
     <button class="btn icon ghost press" aria-label="Torna alle case"><svg class="i"><use href="#i-back"/></svg></button>
-    <button class="btn icon sm ghost press" id="panelL" aria-pressed="true" aria-label="Mostra o nascondi il pannello a sinistra" title="Pannello a sinistra"><svg class="i"><use href="#i-panel-l"/></svg></button>
     <span class="title" id="docTitle">Lumen · Rebranding e sito</span>
     <span class="code" id="docCode">LUM-2026-01</span>
     <span class="pill"><i></i>Da rivedere</span>
@@ -461,7 +467,6 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
     <span class="save" id="save">Salvato</span>
     <button class="btn icon sm ghost press" id="undo" aria-label="Annulla" title="Annulla (⌘Z)" disabled><svg class="i"><use href="#i-undo"/></svg></button>
     <button class="btn icon sm ghost press" id="redo" aria-label="Ripeti" title="Ripeti (⇧⌘Z)" disabled><svg class="i"><use href="#i-redo"/></svg></button>
-    <button class="btn icon sm ghost press" id="panelR" aria-pressed="true" aria-label="Mostra o nascondi il pannello a destra" title="Pannello a destra"><svg class="i"><use href="#i-panel-r"/></svg></button>
     <span class="divider"></span>
     <button class="btn sec press" id="previewBtn">Anteprima</button>
     <button class="btn pri press">Approva</button>
@@ -470,6 +475,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 
 <main class="work">
   <aside class="pane pane-l" aria-label="Proprietà">
+    <div class="pane-bar"><button class="btn icon sm ghost press" id="panelL" aria-label="Nascondi il pannello a sinistra" title="Nascondi pannello"><svg class="i"><use href="#i-panel-l"/></svg></button></div>
     <div class="scroll" id="props"></div>
     <div class="foot">
       <div class="theme" role="radiogroup" aria-label="Aspetto" id="theme">
@@ -481,10 +487,14 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
   </aside>
 
   <section class="canvas" id="canvas" aria-label="Pagine"></section>
+  <button class="btn icon sm sec press reopen reopen-l" id="openL" aria-label="Mostra il pannello a sinistra" title="Mostra pannello"><svg class="i"><use href="#i-panel-l"/></svg></button>
+  <button class="btn icon sm sec press reopen reopen-r" id="openR" aria-label="Mostra il pannello a destra" title="Mostra pannello"><svg class="i"><use href="#i-panel-r"/></svg></button>
 
   <aside class="pane pane-r" aria-label="Pagine e media">
     <div class="r-head">
+      <div class="r-tabs">
       <div class="seg full" id="rtab"><button aria-pressed="true" data-tab="pages">Pagine</button><button aria-pressed="false" data-tab="media">Media</button></div>
+      <button class="btn icon sm ghost press" id="panelR" aria-label="Nascondi il pannello a destra" title="Nascondi pannello"><svg class="i"><use href="#i-panel-r"/></svg></button></div>
       <div class="r-tools">
         <label class="search"><svg class="i"><use href="#i-search"/></svg><input placeholder="Cerca" id="q"></label>
         <div class="seg icons" id="view"><button aria-pressed="true" data-view="grid" aria-label="Anteprime"><svg class="i"><use href="#i-grid"/></svg></button><button aria-pressed="false" data-view="list" aria-label="Elenco"><svg class="i"><use href="#i-list"/></svg></button></div>
@@ -718,11 +728,15 @@ const INTRO={
   case:{title:'Una luce nuova per Lumen',sub:'Un marchio e un sito che mostrano i prodotti come li vedono i clienti: al buio.',
     client:'Lumen S.r.l.',meta:'Illuminazione · 2026',services:['Branding','Web design','Fotografia','Art direction','Social media'],
     challengeHead:'Un marchio forte, ma invisibile online',challengeBody:'Lumen era conosciuta dai progettisti, ma il sito non mostrava la qualità della luce e le richieste arrivavano quasi solo dalle fiere.',
-    ideaHead:'Mostrare la luce al buio',ideaBody:'Abbiamo ridisegnato il logo partendo dalla forma delle lampade e costruito un sito che mostra i prodotti al buio, come li vedono i clienti. Ogni pagina prodotto si apre con la lampada accesa, con le foto scattate nello studio di Lumen.\n\nIl nuovo marchio è nato dalla curva della lampada più venduta e ora firma packaging, cataloghi e stand.',img:'m0'},
+    ideaHead:'Mostrare la luce al buio',ideaBody:'Abbiamo ridisegnato il logo partendo dalla forma delle lampade e costruito un sito che mostra i prodotti al buio, come li vedono i clienti. Ogni pagina prodotto si apre con la lampada accesa, con le foto scattate nello studio di Lumen.\n\nIl nuovo marchio è nato dalla curva della lampada più venduta e ora firma packaging, cataloghi e stand.',img:'m0',
+    results:[['+38%','richieste dal sito nei primi tre mesi'],['3×','tempo medio sulle pagine prodotto'],['120','prodotti fotografati accesi']],
+    quote:'“Finalmente il sito racconta la luce come la raccontiamo noi.”',author:'Giulia R., Lumen'},
   client:{title:'Lumen, tre anni di luce',sub:'Dal marchio al sito, dai cataloghi agli stand: il lavoro con Lumen dal 2023.',
     client:'Lumen S.r.l.',meta:'Illuminazione · dal 2023',services:['Branding','Web design','Fotografia','Art direction','Social media','Editoria','Allestimenti'],
     challengeHead:'Un’azienda di design senza una voce sua',challengeBody:'Quando ci siamo conosciuti, Lumen vendeva bene alle fiere ma online e nei cataloghi non raccontava la qualità della sua luce.',
-    ideaHead:'Un racconto unico, progetto dopo progetto',ideaBody:'Siamo partiti dal marchio e da lì abbiamo costruito il sito, i cataloghi e gli stand, sempre con la stessa idea: mostrare la luce come la vedono i clienti.',img:'c1'},
+    ideaHead:'Un racconto unico, progetto dopo progetto',ideaBody:'Siamo partiti dal marchio e da lì abbiamo costruito il sito, i cataloghi e gli stand, sempre con la stessa idea: mostrare la luce come la vedono i clienti.',img:'c1',
+    results:[['3','progetti in tre anni'],['+52%','richieste dal 2023'],['2','fiere con uno stand nostro']],
+    quote:'“Ci conoscono come pochi: sanno cosa vogliamo prima di noi.”',author:'Paolo L., Lumen'},
 };
 function applyIntro(list,p,fmt,mode=state.mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode);
   const head=()=>ROW([COL([T('meta',I.meta),T('name',I.client)]),BRAND]);
@@ -752,10 +766,12 @@ FORMATS.forEach(f=>{ const ps=doc.views[f].case; for(let i=ps.length-1;i>=0;i--)
 const OTHER_CASES={
   'LUM-2025-02':{title:'Il catalogo che si accende',sub:'Un catalogo stampato e digitale che mostra ogni lampada accesa e spenta.',client:'Lumen S.r.l.',meta:'Illuminazione · 2025',
     services:['Editoria','Fotografia','Art direction'],challengeHead:'Cento prodotti, una sola foto ciascuno',challengeBody:'Il catalogo precedente mostrava le lampade spente: i clienti non vedevano la luce.',
-    ideaHead:'Ogni lampada due volte',ideaBody:'Ogni prodotto ha due foto, accesa e spenta, scattate nello stesso punto: si sfoglia come un prima e dopo.',img:'m4'},
+    ideaHead:'Ogni lampada due volte',ideaBody:'Ogni prodotto ha due foto, accesa e spenta, scattate nello stesso punto: si sfoglia come un prima e dopo.',img:'m4',
+    results:[['240','pagine di catalogo'],['+21%','ordini dai rivenditori']],quote:'“I rivenditori lo usano come listino.”',author:'Marco T., Lumen'},
   'LUM-2024-01':{title:'Uno stand al buio, a Euroluce',sub:'Uno stand senza luci di sala, illuminato solo dalle lampade Lumen.',client:'Lumen S.r.l.',meta:'Illuminazione · 2024',
     services:['Allestimenti','Art direction','Video'],challengeHead:'Farsi notare tra mille stand',challengeBody:'A Euroluce ogni stand è pieno di luce: Lumen rischiava di sparire.',
-    ideaHead:'Spegnere tutto il resto',ideaBody:'Abbiamo costruito uno stand nero: entrando, le uniche luci erano quelle dei prodotti.',img:'m6'},
+    ideaHead:'Spegnere tutto il resto',ideaBody:'Abbiamo costruito uno stand nero: entrando, le uniche luci erano quelle dei prodotti.',img:'m6',
+    results:[['1.800','visitatori in cinque giorni']],quote:'“Lo stand di cui parlavano tutti.”',author:'Marco T., Lumen'},
 };
 function otherCase(code,f){ const k=code.toLowerCase(); const list=[{key:k+'-cover',name:'Intro',bg:'#ffffff',slots:[]},
     {key:k+'-outro',name:'Risultati e testimonial',bg:'#ffffff',slots:[B('Testimonial',[SP,T('quote','“Un lavoro che si vede, anche al buio.” Marco T., Lumen'),SP])]}];
@@ -1060,7 +1076,7 @@ const DEFAULT_PAGES=[
   {k:'content1',name:'Contenuti · 1 immagine',fmt:'169',n:2,v:BENTO[2].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(1),ideaBlock(I,'06 Deliverable — Output')]},
   {k:'content',name:'Contenuti · 3 immagini',fmt:'169',n:4,v:BENTO[4].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(3),ideaBlock(I,'06 Deliverable — Output')]},
   {k:'content5',name:'Contenuti · 5 immagini',fmt:'169',n:6,v:BENTO[6].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(5),ideaBlock(I,'06 Deliverable — Output')]},
-  {k:'outro',name:'Outro',n:3,v:3,slots:c=>[B('Citazione',[SP,T('quote',c.quote),SP]),B('Numero',[SP,T('kpi',c.kpi)]),B('Testo risultato',[SP,T('p',c.kpiText)])]},
+  {k:'outro',name:'Risultati e testimonial'},
 ];
 /* The page list a page belongs to, in the format in view (case, client intro/outro, or one of the client's cases). */
 const listOf=p=>[V().case,V().client.intro,V().client.outro,...Object.values(V().others)].find(l=>l.includes(p));
@@ -1069,14 +1085,27 @@ function fillDefault(p,key,mode,media){ const D=DEFAULT_PAGES.find(d=>d.k===key)
   p.pad=null; Object.assign(p,D.page||{}); p.slots=D.slots(STORY[mode],clone(INTRO[mode])); itemsOf(p.slots.flatMap(b=>b.items)).forEach(it=>{ if(it.e==='img') it.m=imgs.shift()||null; });
   resetLayout(p); p.variant=D.v; p.anim=null; p.preset=key; }
 function applyDefaultPage(p,key){ commit();
-  if(key==='intro') applyIntro(listOf(p),p,state.fmt); else fillDefault(p,key,state.mode,state.mode==='case'?doc.media:doc.cmedia);
+  if(key==='intro') applyIntro(listOf(p),p,state.fmt); else if(key==='outro') applyOutro(p,state.fmt,state.mode); else fillDefault(p,key,state.mode,state.mode==='case'?doc.media:doc.cmedia);
   select(p.key,null); }
+/* Risultati e testimonial: the case's results (number and what it measures) and its testimonial on one page,
+   in every format. Presentazione side by side; Carosello and Video one above the other. */
+function applyOutro(p,fmt,mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode), pad=fmt==='169'?28:40;
+  const rows=I.results.map(([v,l])=>COL([T('kpi',v),T('p',l)]));
+  Object.assign(p,{pad:fmt==='169'?40:24,bg:'#ffffff',anim:null,preset:'outro',tk:null,variant:fmt==='169'?0:3,slots:[
+    B('Risultati',[T('lab','Risultati'),SP,...rows],{pad}),
+    B('Testimonial',[T('lab','Testimonial'),SP,T('quote',I.quote),T('meta',I.author)],{pad})]}); }
+// Video: the results now live on Risultati e testimonial, so its old separate result page goes.
+{ const vc=doc.views['916'].case; const r=vc.findIndex(p=>p.key==='result'); if(r>=0) vc.splice(r,1); }
+FORMATS.forEach(f=>{ const v=doc.views[f]; const o=v.case.find(p=>p.key==='outro'); if(o) applyOutro(o,f,'case');
+  Object.entries(v.others).forEach(([code,list])=>{ const q=list.find(p=>p.key.endsWith('-outro')); if(q) applyOutro(q,f,OTHER_CASES[code]); }); });
 // The sample case's result page in Presentazione is the Contenuti template.
 { const pres=doc.views['169'].case.find(p=>p.key==='result'); fillDefault(pres,'content','case',MEDIA);
   // Carosello: the same three images, as the "3 immagini · A" layout, so the result has its page here too.
   const caro=doc.views['11'].case.find(p=>p.key==='result');
   Object.assign(caro,{pad:24,bg:'#ffffff',variant:BENTO[3].length-2,anim:null,preset:null,slots:pres.slots.slice(0,3).map(clone)}); }
-const dpThumb=D=>{ if(D.k==='intro'){ const L=state.fmt==='169'?BENTO[5][0]:BENTO[1][0];
+const dpThumb=D=>{ if(D.k==='outro'){ const L=state.fmt==='169'?BENTO[2][0]:BENTO[2][3];
+    return `<div class="dp"><button class="var press" data-dp="outro" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style="grid-area:${a}"></span>`).join('')}</button><small>${D.name}</small></div>`; }
+  if(D.k==='intro'){ const L=state.fmt==='169'?BENTO[5][0]:BENTO[1][0];
     return `<div class="dp"><button class="var press" data-dp="intro" aria-label="Intro" style="grid-template:${frTpl(L.g)}">${L.a.map((a,j)=>`<span style="grid-area:${a};${j===0?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>Intro</small></div>`; }
   const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case,INTRO.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.items.some(i=>i.e==='img')?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
 /* A layout with more cells adds empty blocks; with fewer it drops empty blocks, and refuses to drop filled ones. */
@@ -1240,8 +1269,10 @@ function renderRight(){
 /* Panels and Anteprima. Anteprima shows the pages as they will look, without the editing tools;
    the same button (now "Torna all'editor") goes back. */
 const work=$('.work');
-$('#panelL').onclick=()=>{ const on=work.classList.toggle('hide-l'); $('#panelL').setAttribute('aria-pressed',String(!on)); };
-$('#panelR').onclick=()=>{ const on=work.classList.toggle('hide-r'); $('#panelR').setAttribute('aria-pressed',String(!on)); };
+$('#panelL').onclick=()=>{ work.classList.add('hide-l'); $('#openL').focus(); };
+$('#panelR').onclick=()=>{ work.classList.add('hide-r'); $('#openR').focus(); };
+$('#openL').onclick=()=>{ work.classList.remove('hide-l'); $('#panelL').focus(); };
+$('#openR').onclick=()=>{ work.classList.remove('hide-r'); $('#panelR').focus(); };
 function setPreview(on){ document.body.classList.toggle('previewing',on); $('#previewBtn').textContent=on?'Torna all’editor':'Anteprima';
   $('#previewBtn').classList.toggle('pri',on); $('#previewBtn').classList.toggle('sec',!on); renderCanvas(); }
 $('#previewBtn').onclick=()=>setPreview(!document.body.classList.contains('previewing'));
