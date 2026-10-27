@@ -240,6 +240,8 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .tags{display:flex;flex-wrap:wrap;gap:calc(var(--u)*6);align-content:center}
 .tag{border-radius:999px;padding:calc(var(--u)*7) calc(var(--u)*14);font-weight:500;font-size:calc(var(--u)*14);line-height:calc(var(--u)*18.2);white-space:nowrap;background:#012234;color:#efefef}
 .c-cover .tag{background:rgb(255 255 255 / .15);color:#fff}
+.brand .clogo{height:calc(var(--u)*40);width:auto;max-width:calc(var(--u)*180);object-fit:contain;display:block}
+.brand .clogo.on-photo{filter:brightness(0) invert(1)}
 .logo-box{width:calc(var(--u)*123.2);height:calc(var(--u)*56);border-radius:calc(var(--u)*10);background:#c7c7cc;display:grid;place-items:center;font-weight:600;font-size:calc(var(--u)*13);color:#012234;flex-shrink:0}
 .brand{display:flex;align-items:center;gap:calc(var(--u)*20);flex-shrink:0}
 .brand .dv{width:1px;height:calc(var(--u)*48);display:block}
@@ -259,15 +261,22 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .page[data-ratio="11"] .c-cover .srow{display:flex;justify-content:space-between;align-items:flex-start;gap:calc(var(--u)*20)}
 .page[data-ratio="11"] .c-cover .srow .t-lab{font-size:calc(var(--u)*16);color:#fff}
 .page[data-ratio="11"] .c-cover .tags{justify-content:flex-end}
-.page[data-ratio="11"] .c-story .t-lab,.page[data-ratio="916"] .card .t-lab{font-size:calc(var(--u)*18)}
-.page[data-ratio="11"] .c-story .t-head,.page[data-ratio="916"] .c-reel h1{margin:0;font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
+.page[data-ratio="11"] .c-story .t-lab{font-size:calc(var(--u)*18)}
+.page[data-ratio="11"] .c-story .t-head{margin:0;font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
 .page[data-ratio="11"] .c-story .t-body{font-size:calc(var(--u)*22);line-height:1.3;letter-spacing:-.01em;margin-top:calc(var(--u)*6);max-width:calc(var(--u)*840)}
 .page[data-ratio="11"] .c-story.two .t-body{font-size:calc(var(--u)*18);columns:2;column-gap:calc(var(--u)*40);max-width:none}
-/* Reel: title, description and services above the Carousel 04 animation */
-.slot.card.c-reel{gap:calc(var(--u)*18)}
+/* Reel: the top laid out like the Carosello cover (dark on grey), then the Carousel 04 animation */
+.slot.card.c-reel{gap:calc(var(--u)*12)}
+.c-reel .ctop{display:flex;justify-content:space-between;align-items:center;margin-bottom:calc(var(--u)*36)}
+.c-reel .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
+.c-reel .name{font-weight:600;font-size:calc(var(--u)*30);line-height:1.1;letter-spacing:-.02em;margin-top:calc(var(--u)*6)}
+.c-reel h1{margin:0;font-weight:700;font-size:calc(var(--u)*56);line-height:1.1;letter-spacing:-.02em}
 .c-reel .sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em;color:rgb(1 34 52 / .6)}
-.c-reel .tag{font-size:calc(var(--u)*18);line-height:calc(var(--u)*24);padding:calc(var(--u)*9) calc(var(--u)*18)}
-.c-reel .reel-an{flex:1;position:relative;min-height:0;margin:calc(var(--u)*22) calc(var(--u)*-40) 0}
+.c-reel .hr{height:1px;background:rgb(1 34 52 / .2)}
+.c-reel .srow{display:flex;justify-content:space-between;align-items:flex-start;gap:calc(var(--u)*20)}
+.c-reel .srow .t-lab{font-size:calc(var(--u)*16)}
+.c-reel .tags{justify-content:flex-end}
+.c-reel .reel-an{flex:1;position:relative;min-height:0;margin:calc(var(--u)*36) calc(var(--u)*-60) 0}
 /* Animated Reel page: the animation sits in a background-grey block */
 .reel-anim{position:absolute;inset:var(--pad);border-radius:12px;background:#ededf0;overflow:hidden}
 /* Template text styles (placeholder; the real ones come from the templates) */
@@ -554,7 +563,9 @@ const FRAME={169:1920,11:1000,916:1080}; // Figma frame width per format
 const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
 const F=(s,f,tag='div',cls='')=>`<${tag} class="${cls}" data-f="${f}">${esc(s[f]).replace(/\n/g,'<br>')}</${tag}>`;
 const coverImg=s=>{ const m=allMedia().find(x=>x.id===s.img); return `<div class="bgimg">${m?(m.src?mediaTag(m):`<span class="${m.g}"></span>`):''}</div>`; };
-const brand=white=>`<div class="brand"><div class="logo-box">LOGO</div><img class="dv" src="assets/${white?'divider-v-white':'divider-v'}.svg" alt=""><img class="mac" src="assets/${white?'mac-logo-white':'mac-logo'}.svg" alt="MAC"></div>`;
+/* The client's logo (from the client), then MAC's. On a photo both turn white. */
+const CLIENT_LOGO='assets/lumen-logo.svg';
+const brand=white=>`<div class="brand"><img class="clogo${white?' on-photo':''}" src="${CLIENT_LOGO}" alt="Logo del cliente"><img class="dv" src="assets/${white?'divider-v-white':'divider-v'}.svg" alt=""><img class="mac" src="assets/${white?'mac-logo-white':'mac-logo'}.svg" alt="MAC"></div>`;
 const tagsOf=s=>`<div class="tags" data-f="services" data-list>${s.services.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`;
 /* Card blocks: a block with its own content (cover, client, services, story, reel). */
 function cardHTML(s){
@@ -566,14 +577,16 @@ function cardHTML(s){
   if(s.v==='client') return `<div class="who">${F(s,'label','div','t-lab')}<div>${F(s,'client','div','name')}${F(s,'meta','div','meta')}</div></div>${brand(false)}`;
   if(s.v==='services') return `${F(s,'label','div','t-lab')}${tagsOf(s)}`;
   if(s.v==='story') return `${F(s,'label','div','t-lab')}<div class="sp"></div>${F(s,'head','div','t-head')}${F(s,'body','div','t-body')}`;
-  if(s.v==='reel') return `${F(s,'label','div','t-lab')}${F(s,'title','h1')}${F(s,'sub','div','sub')}${tagsOf(s)}
+  if(s.v==='reel') return `<div class="ctop"><div>${F(s,'meta','div','meta')}${F(s,'client','div','name')}</div>${brand(false)}</div>
+    ${F(s,'title','h1')}${F(s,'sub','div','sub')}<div class="hr"></div>
+    <div class="srow"><div class="t-lab">Servizi</div>${tagsOf(s)}</div>
     <div class="reel-an">${animHTML('c04',s.items.map(id=>allMedia().find(m=>m.id===id)).filter(Boolean))}</div>`;
   return ''; }
 /* Double-click a text in a card to edit it; services are typed as a comma-separated list. */
 /* Rows "field → where it comes from" for a card, in the document open now. */
 function cardSources(s){ const S=SOURCES[state.mode], r=[];
   if(s.title!=null) r.push(['Titolo',S.title]); if(s.sub!=null) r.push(['Sottotitolo',S.sub]);
-  if(s.client!=null) r.push(['Cliente',S.client]); if(s.meta!=null) r.push(['Dettagli',S.meta]);
+  if(s.client!=null) r.push(['Cliente',S.client],['Logo','Logo del cliente']); if(s.meta!=null) r.push(['Dettagli',S.meta]);
   if(s.services) r.push(['Servizi',S.services+(state.mode==='case'?'':'')],['',COLLECTION_SERVICES]);
   if(s.v==='story') r.push(['Testo',/sfida/i.test(s.n)?S.challenge:S.idea]);
   if(s.img) r.push(['Immagine',S.img]);
@@ -623,7 +636,7 @@ function applyIntro(list,p,fmt,mode=state.mode){ const I=INTRO[mode], card=(n,v,
       {key:p.key+'-sfida',name:p.name+' · Sfida',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[card('Sfida','story',{label:'Sfida',head:I.challengeHead,body:I.challengeBody,cpad:40})]},
       {key:p.key+'-idea',name:p.name+' · Idea',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[card('Idea','story',{label:'Idea',head:I.ideaHead,body:I.ideaBody,cpad:40,two:true})]});
     return; }
-  Object.assign(p,{pad:24,bg:'#ffffff',variant:0,slots:[card('Intro','reel',{label:'Progetto',title:I.title,sub:I.sub,services:I.services,cpad:40,
+  Object.assign(p,{pad:24,bg:'#ffffff',variant:0,slots:[card('Intro','reel',{title:I.title,sub:I.sub,client:I.client,meta:I.meta,services:I.services,cpad:60,
     items:[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5)})]}); }
 // The sample case and client both start from the Intro, in every format.
 FORMATS.forEach(f=>{ const v=doc.views[f]; applyIntro(v.case,v.case[0],f,'case'); applyIntro(v.client.intro,v.client.intro[0],f,'client'); });

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40" viewBox="0 0 160 40" fill="none">
+  <!-- Sample client logo for the mockup (fictional client Lumen). -->
+  <circle cx="20" cy="20" r="13" stroke="#012234" stroke-width="3"/>
+  <path d="M20 7a13 13 0 0 1 0 26z" fill="#012234"/>
+  <text x="44" y="28" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="3" fill="#012234">LUMEN</text>
+</svg>
