@@ -104,7 +104,11 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 
 /* Layout variants (owner's reference) */
 .variants{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.var{aspect-ratio:16/10;border-radius:10px;background:var(--raised);box-shadow:var(--shadow-card);padding:5px;display:grid;gap:3px;cursor:grab}
+/* Thumbnails take the shape of the format in view */
+.fmt-11 .var{aspect-ratio:1/1}
+.fmt-916 .variants{grid-template-columns:repeat(4,1fr)}
+.fmt-916 .var{aspect-ratio:9/16}
+.var{aspect-ratio:16/9;border-radius:10px;background:var(--raised);box-shadow:var(--shadow-card);padding:5px;display:grid;gap:3px;cursor:grab}
 .var span{background:var(--fill-2);border-radius:3px}
 .dp{display:flex;flex-direction:column;gap:5px;text-align:center}
 .dp .var{width:100%}
@@ -499,6 +503,13 @@ const BENTO = {
      {g:'1fr 1fr/2fr 1fr 1fr',a:[A(1,1,3,2),A(1,2,2,3),A(1,3,2,4),A(2,2,3,3),A(2,3,3,4)]},{g:'1fr 1fr/1fr 1fr 1fr',a:[A(1,1,2,3),A(1,3,2,4),A(2,1,3,2),A(2,2,3,3),A(2,3,3,4)]}],
   6:[{g:'1fr 1fr/1fr 1fr 1fr',a:[A(1,1,2,2),A(1,2,2,3),A(1,3,2,4),A(2,1,3,2),A(2,2,3,3),A(2,3,3,4)]}],
 };
+// Content templates (Figma MAC-TF-AI, 2026-10-27), added to the lists above by block count.
+BENTO[2].push({g:'1fr/1373fr 442fr',a:[A(1,1,2,2),A(1,2,2,3)]});                                         // Presentazione · 1 immagine
+BENTO[3].push({g:'1fr 1fr/1fr 1fr',a:[A(1,1,2,2),A(2,1,3,2),A(1,2,3,3)]},                                // Carosello · 3 immagini A
+              {g:'1fr 1fr/1fr 1fr',a:[A(1,1,3,2),A(1,2,2,3),A(2,2,3,3)]});                               // Carosello · 3 immagini B
+BENTO[4].push({g:'1fr 1fr/908fr 442fr 442fr',a:[A(1,1,3,2),A(1,2,2,3),A(2,2,3,3),A(1,3,3,4)]});          // Presentazione · 3 immagini
+BENTO[5].push({g:'488fr 147fr 317fr/908fr 442fr 442fr',a:[A(1,1,3,2),A(3,1,4,2),A(1,2,4,3),A(1,3,2,4),A(2,3,4,4)]}); // Presentazione · solo layout
+BENTO[6].push({g:'488fr 147fr 317fr/442fr 442fr 442fr 442fr',a:[A(1,1,3,2),A(3,1,4,2),A(1,2,4,3),A(1,3,2,4),A(2,3,4,4),A(1,4,4,5)]}); // Presentazione · 5 immagini
 const MAX_BLOCKS=6;
 const layoutsFor=n=>BENTO[Math.max(1,Math.min(MAX_BLOCKS,n))];
 /* Every format has its own copy of the pages (doc.views[fmt]): an edit changes only the format in the canvas. */
@@ -695,6 +706,9 @@ function applyIntro(list,p,fmt,mode=state.mode){ const I=clone(INTRO[mode]);
   Object.assign(p,{pad:24,bg:'#ffffff',slots:[B('Intro',[head(),T('title',I.title),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true}),
     ANIMI('c04',[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5),{bleed:true})],{pad:60,padTop:220})]}); }
 // The sample case and client both start from the Intro, in every format.
+// In Presentazione the Intro already holds the challenge and the idea, so the case has no separate pages for them.
+// Video keeps only the intro and the results (owner, 2026-10-27).
+['169','916'].forEach(f=>{ const ps=doc.views[f].case; for(let i=ps.length-1;i>=0;i--) if(['challenge','approach'].includes(ps[i].key)) ps.splice(i,1); });
 FORMATS.forEach(f=>{ const v=doc.views[f]; applyIntro(v.case,v.case[0],f,'case'); applyIntro(v.client.intro,v.client.intro[0],f,'client'); });
 /* What Instagram lays over a Video once published (from the owner's screenshots, 2026-10-27).
    Reel: status bar and Per te / Amici at the top, actions on the right, account and caption at the bottom.
@@ -931,8 +945,14 @@ const thumbOf=L=>`style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style=
 
 /* Every preset layout, whatever the page holds now. Picking one with more cells adds empty image blocks;
    with fewer cells it drops empty blocks, and refuses when that would drop filled ones. */
-/* The layouts shown: six base ones, then one per template the owner sends (Intro, 2026-10-27). */
-const PRESETS=[[1,0],[2,0],[2,3],[3,0],[3,3],[4,0],[5,0]].map(([n,v])=>({n,v,L:BENTO[n][v]}));
+/* The layouts each format offers: one per template the owner sends (2026-10-27). Each format has its own. */
+const last=(n,k=1)=>[n,BENTO[n].length-k];
+const PRESETS_BY_FMT={
+  169:[[5,0],last(2),last(4),last(6),last(5)],   // Intro · 1, 3, 5 immagini · solo layout
+  11:[[1,0],[2,0],last(3,2),last(3),[4,0]],      // 1, 2, 3 A, 3 B, 4 immagini
+  916:[[1,0]],                                   // Video: one block (plus the animated layouts)
+};
+const presets=()=>PRESETS_BY_FMT[state.fmt].map(([n,v])=>({n,v,L:BENTO[n][v]}));
 
 /* Default pages: they work like a layout (same page, new layout) but come with their blocks already
    filled from the case (or the client). Images already on the page are kept first. */
@@ -944,12 +964,22 @@ const STORY={
     body:'Da tre anni lavoriamo con Lumen sul marchio, il sito e i cataloghi.',
     kpi:'3',kpiText:'progetti, dal marchio allo stand.',quote:'Grazie, Lumen. Alla prossima luce.'},
 };
+/* Default pages: they lay out the page as a template, already filled from the case. `fmt` limits one to a format.
+   Content pages (Figma, 2026-10-27): images in grey blocks, and in Presentazione a text block like the intro's Idea. */
+const imgs=n=>Array.from({length:n},()=>B('Immagine',[IM(null)]));
+const ideaBlock=I=>B('Testo',[T('lab','Idea'),SP,T('head',I.ideaHead),T('body',I.ideaBody)],{pad:28});
 const DEFAULT_PAGES=[
-  {k:'intro',name:'Intro',n:3,v:0,slots:c=>[B('Immagine principale',[IM(null)]),B('Titolo',[SP,T('h1',c.title)]),B('Occhiello',[SP,T('eyebrow',c.eyebrow)])]},
-  {k:'content',name:'Pagina contenuto',n:3,v:1,slots:c=>[B('Titolo',[T('h2',c.head)]),B('Paragrafo',[SP,T('p',c.body)]),B('Immagine',[IM(null)])]},
-  // Carosello only: the intro's own Sfida and Idea pages, to lay a page out as one of them again.
+  {k:'intro',name:'Intro'},
   {k:'sfida',name:'Sfida',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Sfida',[T('lab','Sfida'),SP,T('big',I.challengeHead),T('body2',I.challengeBody)],{pad:40})]},
   {k:'idea',name:'Idea',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Idea',[T('lab','Idea'),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]},
+  {k:'p1',name:'1 immagine',fmt:'169',n:2,v:BENTO[2].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(1),ideaBlock(I)]},
+  {k:'p3',name:'3 immagini',fmt:'169',n:4,v:BENTO[4].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(3),ideaBlock(I)]},
+  {k:'p5',name:'5 immagini',fmt:'169',n:6,v:BENTO[6].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(5),ideaBlock(I)]},
+  {k:'c1',name:'1 immagine',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:()=>imgs(1)},
+  {k:'c2',name:'2 immagini',fmt:'11',n:2,v:0,page:{pad:24,bg:'#ffffff'},slots:()=>imgs(2)},
+  {k:'c3a',name:'3 immagini · A',fmt:'11',n:3,v:BENTO[3].length-2,page:{pad:24,bg:'#ffffff'},slots:()=>imgs(3)},
+  {k:'c3b',name:'3 immagini · B',fmt:'11',n:3,v:BENTO[3].length-1,page:{pad:24,bg:'#ffffff'},slots:()=>imgs(3)},
+  {k:'c4',name:'4 immagini',fmt:'11',n:4,v:0,page:{pad:24,bg:'#ffffff'},slots:()=>imgs(4)},
   {k:'outro',name:'Outro',n:3,v:3,slots:c=>[B('Citazione',[SP,T('quote',c.quote),SP]),B('Numero',[SP,T('kpi',c.kpi)]),B('Testo risultato',[SP,T('p',c.kpiText)])]},
 ];
 function applyDefaultPage(p,key){
@@ -958,7 +988,9 @@ function applyDefaultPage(p,key){
   const imgs=[...pageMedia(p).filter(m=>!m.video).map(m=>m.id),...(state.mode==='case'?doc.media:doc.cmedia).filter(m=>!m.video).map(m=>m.id)];
   p.pad=null; Object.assign(p,D.page||{}); p.slots=D.slots(STORY[state.mode],clone(INTRO[state.mode])); itemsOf(p.slots.flatMap(b=>b.items)).forEach(it=>{ if(it.e==='img') it.m=imgs.shift()||null; });
   resetLayout(p); p.variant=D.v; p.anim=null; p.preset=key; select(p.key,null); }
-const dpThumb=D=>{ const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case,INTRO.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.items.some(i=>i.e==='img')?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
+const dpThumb=D=>{ if(D.k==='intro'){ const L=state.fmt==='169'?BENTO[5][0]:BENTO[1][0];
+    return `<div class="dp"><button class="var press" data-dp="intro" aria-label="Intro" style="grid-template:${frTpl(L.g)}">${L.a.map((a,j)=>`<span style="grid-area:${a};${j===0?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>Intro</small></div>`; }
+  const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case,INTRO.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.items.some(i=>i.e==='img')?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
 /* A layout with more cells adds empty blocks; with fewer it drops empty blocks, and refuses to drop filled ones. */
 function applyPreset(p,n,v){
   const empty=b=>!b.items.length&&!b.img;
@@ -973,8 +1005,8 @@ function layoutsAndElements(p){
   const full=p&&p.slots.length>=MAX_BLOCKS;
   const cur=p&&p.slots.length&&!animOf(p)&&!p.preset?layoutOf(p):null;
   const layouts=p?`<div class="sec-b"><p class="eyebrow">Layout</p>
-      <div class="variants">${PRESETS.map(({n,v,L})=>`<button class="var press" draggable="true" data-var="${n}:${v}" aria-pressed="${L===cur}" aria-label="Layout da ${n} ${n===1?'blocco':'blocchi'}" title="${n} ${n===1?'blocco':'blocchi'}" ${thumbOf(L)}</button>`).join('')}</div>
-      ${p.slots.length&&layoutsFor(p.slots.length).length>1?`<div style="margin-top:10px"><button class="btn sm sec press" id="shuffle" style="width:100%">Mescola</button></div>`:''}
+      <div class="variants">${presets().map(({n,v,L})=>`<button class="var press" draggable="true" data-var="${n}:${v}" aria-pressed="${L===cur}" aria-label="Layout da ${n} ${n===1?'blocco':'blocchi'}" title="${n} ${n===1?'blocco':'blocchi'}" ${thumbOf(L)}</button>`).join('')}</div>
+      ${presets().filter(x=>x.n===p.slots.length).length>1?`<div style="margin-top:10px"><button class="btn sm sec press" id="shuffle" style="width:100%">Mescola</button></div>`:''}
       </div>
       <div class="sec-b"><p class="eyebrow">Pagine di default</p>
       <div class="variants">${DEFAULT_PAGES.filter(D=>!D.fmt||D.fmt===state.fmt).map(dpThumb).join('').replace(`data-dp="${p.preset}"`,`data-dp="${p.preset}" aria-pressed="true"`)}</div>
@@ -1005,7 +1037,7 @@ function renderProps(){
   el.insertAdjacentHTML('beforeend',`<div class="sec-b" style="padding-bottom:4px"><div class="crumb">Pagina</div><div class="sel-title">${p.name}</div></div>${pageTools(p)}`);
   wirePageTools(el,p);
 }
-function pageTools(p){ return `${layoutsAndElements(p)}
+function pageTools(p){ return `<div class="fmt-${state.fmt}">${layoutsAndElements(p)}</div>
       <div class="sec-b"><p class="eyebrow">Sfondo pagina</p>
         <div class="seg full"><button aria-pressed="true">Tinta unita</button><button aria-pressed="false">Sfumatura</button><button aria-pressed="false">Immagine</button></div>
         <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${p.bg}"></span><input value="${p.bg.toUpperCase()}"></div></div>
@@ -1016,7 +1048,8 @@ function wirePageTools(el,p){
     el.querySelectorAll('[data-anvar]').forEach(b=>b.onclick=()=>{ commit(); layW(p).anim=b.dataset.anvar; p.preset=null; select(p.key,null); });
     el.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>applyDefaultPage(p,b.dataset.dp));
     el.querySelectorAll('[data-var]').forEach(b=>b.onclick=()=>{ const [n,v]=b.dataset.var.split(':').map(Number); applyPreset(p,n,v); });
-    const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ commit(); const w=layW(p); w.variant=((w.variant||0)+1)%layoutsFor(p.slots.length).length; w.anim=null; p.preset=null; select(p.key,null); };
+    const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ const same=presets().filter(x=>x.n===p.slots.length), k=same.findIndex(x=>x.L===layoutOf(p));
+      applyPreset(p,p.slots.length,same[(k+1)%same.length].v); };
     el.querySelectorAll('[data-bg]').forEach(b=>b.onclick=()=>{ commit(); p.bg=b.dataset.bg; p.dark=DARK.includes(p.bg); select(p.key,null); });
 }
 function mediaPicker(m,id,label){ return `<div style="display:flex;gap:10px;align-items:center"><div class="${m?m.g:''}" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;overflow:hidden;background-color:var(--fill-2)">${m&&m.src?`<div class="ph" style="width:100%;height:100%;position:relative">${mediaTag(m)}</div>`:''}</div>
