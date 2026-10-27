@@ -287,6 +287,18 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .drop.over{border-color:var(--accent);background:rgb(10 108 255 / .06)}
 .drop label{color:var(--ink);font-weight:500;cursor:pointer}
 .modal-foot{display:flex;justify-content:flex-end;gap:8px}
+.modal.ask{width:min(440px,100%)}
+/* Preview: one page at a time, full screen */
+.pv-bg{position:fixed;inset:0;z-index:30;background:#0d0d0f;display:flex;flex-direction:column;align-items:center;padding:16px;gap:12px}
+.pv-bg[hidden]{display:none}
+.pv-top{width:100%;display:flex;justify-content:space-between;align-items:center;color:#c9c9cf;font:500 13px var(--sans)}
+.pv-stage{flex:1;min-height:0;width:100%;display:grid;place-items:center}
+.pv-frame{position:relative;container-type:inline-size;box-shadow:0 20px 60px rgb(0 0 0 / .5)}
+.pv-frame .page{position:absolute;inset:0;max-width:none;width:100%;box-shadow:none}
+.pv-nav{display:flex;gap:8px}
+/* Right panel: drag a page (or a case) to reorder */
+.thumb[draggable="true"],.proj[draggable="true"]{cursor:grab}
+.thumb.drop-before,.proj.drop-before{box-shadow:0 -3px 0 var(--accent)}
 @media (max-width:640px){.an-opts{grid-template-columns:repeat(2,1fr)}}
 /* Instagram preview over a Reel (switch above the canvas) */
 .fmt-meta.with-switch{display:flex;flex-direction:column;align-items:center;gap:8px}
@@ -442,7 +454,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
     <button class="btn icon sm ghost press" id="undo" aria-label="Annulla" title="Annulla (⌘Z)" disabled><svg class="i"><use href="#i-undo"/></svg></button>
     <button class="btn icon sm ghost press" id="redo" aria-label="Ripeti" title="Ripeti (⇧⌘Z)" disabled><svg class="i"><use href="#i-redo"/></svg></button>
     <span class="divider"></span>
-    <button class="btn sec press">Anteprima</button>
+    <button class="btn sec press" id="previewBtn">Anteprima</button>
     <button class="btn pri press">Approva</button>
   </div>
 </header>
@@ -476,6 +488,17 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 
+<div class="modal-bg" id="askModal" hidden>
+  <div class="modal ask" role="alertdialog" aria-modal="true" aria-labelledby="askTitle" aria-describedby="askText">
+    <div><h2 id="askTitle"></h2><p class="help" id="askText"></p></div>
+    <div class="modal-foot"><button class="btn sec press" id="askNo">Annulla</button><button class="btn pri press" id="askYes"></button></div>
+  </div>
+</div>
+<div class="pv-bg" id="pvModal" hidden role="dialog" aria-modal="true" aria-label="Anteprima">
+  <div class="pv-top"><span id="pvCount"></span><button class="btn sm sec press" id="pvClose">Chiudi</button></div>
+  <div class="pv-stage" id="pvStage"></div>
+  <div class="pv-nav"><button class="btn sec press" id="pvPrev" aria-label="Pagina precedente">‹</button><button class="btn sec press" id="pvNext" aria-label="Pagina successiva">›</button></div>
+</div>
 <div class="modal-bg" id="anModal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="anTitle">
     <div><h2 id="anTitle">Animazione</h2><p class="help">Scegli come scorrono i media. L’anteprima si adatta a quanti ne carichi.</p></div>
@@ -589,7 +612,8 @@ $('#undo').onclick=()=>restore(past,future); $('#redo').onclick=()=>restore(futu
    ⌘/Ctrl+C, X, V copy, cut and paste blocks; Enter edits a selected text; Escape steps out. */
 let clip=null;
 document.addEventListener('keydown',e=>{
-  if(!$('#anModal').hidden) return; // the picker handles its own keys
+  if(!$('#anModal').hidden||!$('#askModal').hidden) return; // dialogs handle their own keys
+  if(!$('#pvModal').hidden){ if(e.key==='Escape') closePreview(); if(e.key==='ArrowRight') stepPreview(1); if(e.key==='ArrowLeft') stepPreview(-1); return; }
   const a=document.activeElement, mod=e.metaKey||e.ctrlKey, k=e.key.toLowerCase();
   if(a.isContentEditable){ if(e.key==='Escape'){ a.blur(); } return; }
   if(a.matches('input,select,textarea')) return;
@@ -674,7 +698,7 @@ function renderBlock(p,j,b,area,grid,thumb){
   if(b.bg) d.style.background=b.bg;
   const bm=b.img&&mediaOf(b.img); const onPhoto=!!bm;
   if(bm){ d.classList.add('on-photo'); d.insertAdjacentHTML('beforeend',`<div class="bgimg">${bm.src?mediaTag(bm):`<span class="${bm.g}"></span>`}</div>`); }
-  if(!b.items.length&&!bm) d.classList.add('empty');
+  if(!b.items.length&&!bm&&!thumb) d.classList.add('empty'); // the hint only in the editor, not in previews
   if(b.items.length===1&&b.items[0].e==='img'&&(b.items[0].fit||'fill')==='fill') d.classList.add('bleed'); // Riempi: edge to edge
   b.items.forEach((it,k)=>d.appendChild(renderItem(p,j,b,it,String(k),onPhoto,thumb)));
   if(thumb) return d;
@@ -918,8 +942,23 @@ function removeBlock(p,idx){ commit(); p.slots.splice(idx,1); resetLayout(p); se
 function label(p,n){ const l=document.createElement('div'); l.className='pg-label';
   l.innerHTML=`<span><b>${n}</b> · ${p.name}</span><button class="pg-del press" title="Elimina pagina" aria-label="Elimina la pagina ${n}">${I('trash')}</button>`;
   l.querySelector('.pg-del').onclick=()=>deletePage(p); return l; }
+/* Add an empty page (one empty block) after the selected page, or at the end of the case. */
+let pageN=0;
+function addPage(){ const f=findSel(); const list=f?listOf(f.p):state.mode==='case'?V().case:V().client.outro;
+  commit(); const p={key:'new-'+(++pageN)+'-'+Date.now().toString(36),name:'Nuova pagina',bg:'#ffffff',variant:0,slots:[B('Blocco',[])]};
+  list.splice(f?list.indexOf(f.p)+1:list.length,0,p); select(p.key,null);
+  document.getElementById('p-'+p.key)?.scrollIntoView({behavior:'smooth',block:'center'}); }
+/* A case page is also in the client's file (and the other way round): say so before deleting it. */
+function sharedNote(p){ if(V().case.includes(p)) return state.mode==='case'?'Questa pagina è anche nelle pagine del cliente Lumen: eliminandola qui sparisce anche lì.':'Questa pagina fa parte della case LUM-2026-01 · Rebranding e sito: eliminandola qui sparisce anche dalla case.';
+  const code=Object.keys(V().others).find(c=>V().others[c].includes(p)); if(code){ const pr=V().client.projects.find(x=>x.code===code); return `Questa pagina fa parte della case ${code} · ${pr.name}: eliminandola qui sparisce anche dalla case.`; }
+  return null; }
+function ask(title,text,yes,onYes){ $('#askTitle').textContent=title; $('#askText').textContent=text; $('#askYes').textContent=yes; $('#askModal').hidden=false; $('#askNo').focus();
+  const close=()=>{ $('#askModal').hidden=true; }; $('#askNo').onclick=close; $('#askYes').onclick=()=>{ close(); onYes(); };
+  $('#askModal').onkeydown=e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } }; }
 /* Delete a page (only in the format in view); ⌘Z brings it back. */
-function deletePage(p){ const list=listOf(p); if(!list) return; commit(); list.splice(list.indexOf(p),1);
+function deletePage(p,confirmed){ const list=listOf(p); if(!list) return;
+  const note=!confirmed&&sharedNote(p); if(note){ ask('Eliminare la pagina?',note+' Puoi annullare con ⌘Z.','Elimina',()=>deletePage(p,true)); return; }
+  commit(); list.splice(list.indexOf(p),1);
   if(state.sel&&state.sel.page===p.key) state.sel=null; renderAll(); toast('Pagina eliminata. ⌘Z per annullare.'); }
 
 function renderCanvas(){
@@ -948,7 +987,7 @@ function renderCanvas(){
     group('Chiusura',V().client.outro);
   }
   c.querySelectorAll('.page[id]').forEach(el=>placeHandles(el,pageByKey(el.id.slice(2))));
-  const add=document.createElement('button'); add.className='add-page press'; add.textContent='+ Aggiungi pagina'; c.appendChild(add);
+  const add=document.createElement('button'); add.className='add-page press'; add.textContent='+ Aggiungi pagina'; add.onclick=addPage; c.appendChild(add);
   c.scrollTop=top;
 }
 
@@ -1144,17 +1183,32 @@ function renderRight(){
   const b=$('#rbody'); const q=$('#q').value.toLowerCase();
   $('#dropFoot').hidden=state.tab!=='media';
   if(state.tab==='pages'){
-    const thumb=(p,n)=>`<button class="thumb" data-go="${p.key}" aria-current="${!!state.sel&&state.sel.page===p.key}">${miniOf(p)}<small><b>${n}</b> · ${p.name}</small></button>`;
+    const thumb=(p,n)=>`<button class="thumb" draggable="true" data-go="${p.key}" aria-current="${!!state.sel&&state.sel.page===p.key}">${miniOf(p)}<small><b>${n}</b> · ${p.name}</small></button>`;
     const cls=state.view==='list'?'thumbs list':'thumbs'; let h='',n=1;
     if(state.mode==='case') h=`<div class="${cls}">${V().case.filter(p=>p.name.toLowerCase().includes(q)).map(p=>thumb(p,n++)).join('')}</div>`;
     else{
       h+=`<div class="r-group"><p class="eyebrow">Introduzione</p><div class="${cls}">${V().client.intro.map(p=>thumb(p,n++)).join('')}</div></div>`;
-      V().client.projects.filter(pr=>(pr.name+pr.code).toLowerCase().includes(q)).forEach(pr=>{
-        h+=`<div class="r-group"><p class="eyebrow">${pr.code} · ${pr.name}</p><div class="${cls}">${clientCasePages(pr).map(p=>thumb(p,n++)).join('')}</div></div>`; });
+      // The client's cases as project rows (the case's own pages are in the canvas); drag a row to reorder.
+      h+=`<div class="r-group"><p class="eyebrow">Progetti del cliente</p>${V().client.projects.filter(pr=>(pr.name+pr.code).toLowerCase().includes(q)).map(pr=>{ const ps=clientCasePages(pr); n+=ps.length;
+        return `<button class="proj" draggable="true" data-proj="${pr.code}">${ps[0]?miniOf(ps[0]).replace('class="mini pv"','class="mini pv" style="width:52px;flex-shrink:0;border-radius:6px"'):'<span class="mini"></span>'}<span><b>${pr.name}</b><small>${pr.code} · ${ps.length} ${ps.length===1?'pagina':'pagine'}</small></span></button>`; }).join('')}</div>`;
       h+=`<div class="r-group"><p class="eyebrow">Chiusura</p><div class="${cls}">${V().client.outro.map(p=>thumb(p,n++)).join('')}</div></div>`;
     }
     b.innerHTML=h;
     b.querySelectorAll('[data-go]').forEach(t=>t.onclick=()=>{ select(t.dataset.go,null); document.getElementById('p-'+t.dataset.go).scrollIntoView({behavior:'smooth',block:'center'}); });
+    // Reorder: drop a page on another page of the same list, or a case on another case.
+    let rd=null; const mark=x=>{ b.querySelectorAll('.drop-before').forEach(y=>y.classList.remove('drop-before')); if(x) x.classList.add('drop-before'); };
+    b.querySelectorAll('[data-go]').forEach(t=>{ const p=pageByKey(t.dataset.go);
+      t.addEventListener('dragstart',e=>{ rd={page:p}; e.dataTransfer.setData('text/plain','page'); });
+      t.addEventListener('dragover',e=>{ if(!rd||!rd.page||listOf(rd.page)!==listOf(p)) return; e.preventDefault(); mark(t); });
+      t.addEventListener('drop',e=>{ if(!rd||!rd.page) return; e.preventDefault(); mark(null); const list=listOf(p), from=list.indexOf(rd.page);
+        commit(); list.splice(from,1); list.splice(list.indexOf(p),0,rd.page); rd=null; renderAll(); }); });
+    b.querySelectorAll('[data-proj]').forEach(t=>{ const prs=V().client.projects, pr=prs.find(x=>x.code===t.dataset.proj);
+      t.onclick=()=>{ const g=[...document.querySelectorAll('.group-label')].find(x=>x.textContent.startsWith(pr.code)); g&&g.scrollIntoView({behavior:'smooth',block:'start'}); };
+      t.addEventListener('dragstart',e=>{ rd={proj:pr}; e.dataTransfer.setData('text/plain','proj'); });
+      t.addEventListener('dragover',e=>{ if(!rd||!rd.proj) return; e.preventDefault(); mark(t); });
+      t.addEventListener('drop',e=>{ if(!rd||!rd.proj) return; e.preventDefault(); mark(null);
+        commit(); prs.splice(prs.indexOf(rd.proj),1); prs.splice(prs.indexOf(pr),0,rd.proj); rd=null; renderAll(); }); });
+    b.addEventListener('dragend',()=>{ rd=null; mark(null); });
     return; }
   const inUse=new Set(pageEls().flatMap(p=>pageMedia(p).map(m=>m.id)));
   const tiles=list=>`<div class="media ${state.view==='list'?'list':''}">${list.filter(m=>m.name.toLowerCase().includes(q)).map(m=>`<div class="mtile ${inUse.has(m.id)?'in-use':''}" data-m="${m.id}" role="button" tabindex="0" draggable="true"><span class="ph ${m.g}">${m.src?mediaTag(m):''}${m.video?`<span class="vid">▶ ${m.video}</span>`:''}</span><small>${m.name}</small><button class="star" data-star="${m.id}" aria-pressed="${!!m.fav}" aria-label="${m.fav?'Togli dai preferiti':'Aggiungi ai preferiti'}" title="${m.fav?'Togli dai preferiti':'Aggiungi ai preferiti'}"><svg class="i"><use href="#i-star"/></svg></button></div>`).join('')}</div>`;
@@ -1173,6 +1227,18 @@ function renderRight(){
       commit(); cur.s.items.push(IM(id,{video:!!m.video})); select(cur.p.key,state.sel.idx,String(cur.s.items.length-1)); }; });
 }
 
+/* Anteprima: the pages of the format in view, one at a time, full screen (arrows or ← → to move, Esc to close). */
+let pvI=0;
+function drawPreview(){ const ps=pageEls(); pvI=Math.max(0,Math.min(ps.length-1,pvI));
+  const ratio={169:16/9,11:1,916:9/16}[state.fmt], st=$('#pvStage'), W=st.clientWidth, H=st.clientHeight, w=Math.min(W,H*ratio);
+  const fr=document.createElement('div'); fr.className='pv-frame'; fr.style.width=w+'px'; fr.style.height=w/ratio+'px'; fr.appendChild(renderPage(ps[pvI],true));
+  st.innerHTML=''; st.appendChild(fr); $('#pvCount').textContent=`${fmtName()} · ${pvI+1} di ${ps.length} · ${ps[pvI].name}`;
+  $('#pvPrev').disabled=pvI===0; $('#pvNext').disabled=pvI===ps.length-1; }
+function stepPreview(d){ pvI+=d; drawPreview(); }
+function closePreview(){ $('#pvModal').hidden=true; $('#previewBtn').focus(); }
+$('#previewBtn').onclick=()=>{ const f=findSel(); pvI=f?pageEls().indexOf(f.p):0; $('#pvModal').hidden=false; drawPreview(); $('#pvNext').focus(); };
+$('#pvPrev').onclick=()=>stepPreview(-1); $('#pvNext').onclick=()=>stepPreview(1); $('#pvClose').onclick=closePreview;
+window.addEventListener('resize',()=>{ if(!$('#pvModal').hidden) drawPreview(); });
 function setTab(t){ state.tab=t; document.querySelectorAll('#rtab button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===t))); renderRight(); }
 let tmr; function saving(){ $('#save').textContent='Salvataggio…'; clearTimeout(tmr); tmr=setTimeout(()=>$('#save').textContent='Salvato',600); }
 const press=(sel,b)=>document.querySelectorAll(sel).forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
