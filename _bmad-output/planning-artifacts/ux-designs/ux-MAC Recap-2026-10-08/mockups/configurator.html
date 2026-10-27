@@ -729,7 +729,10 @@ function renderItem(p,j,b,it,path,onPhoto,thumb){
   if(it.e!=='row'&&it.e!=='col'){
     d.addEventListener('click',e=>{ e.stopPropagation(); select(p.key,j,path); });
     // Drag any element to another block or place; texts stop being draggable while they're being edited.
-    { d.draggable=true; d.addEventListener('dragstart',e=>{ if(d.isContentEditable){ e.preventDefault(); return; } e.stopPropagation(); drag={kind:'item',page:p.key,idx:j,path}; e.dataTransfer.setData('text/plain','item'); }); } }
+    { d.draggable=true; d.addEventListener('dragstart',e=>{ if(d.isContentEditable){ e.preventDefault(); return; } e.stopPropagation();
+      // A block holding just this element (e.g. a full image) moves as the block: dropped on another block, they swap.
+      if(b.items.length===1&&!String(path).includes('.')){ drag={kind:'block',page:p.key,idx:j}; e.dataTransfer.setData('text/plain','block'); return; }
+      drag={kind:'item',page:p.key,idx:j,path}; e.dataTransfer.setData('text/plain','item'); }); } }
   return d; }
 
 /* Drop on a block: a new element or a moved one goes before the element under the pointer (or at the end);
