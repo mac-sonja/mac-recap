@@ -588,6 +588,7 @@ const BENTO = {
 };
 // Content templates (Figma MAC-TF-AI, 2026-10-27), added to the lists above by block count.
 BENTO[2].push({g:'1fr/1373fr 442fr',a:[A(1,1,2,2),A(1,2,2,3)]});                                         // Presentazione · 1 immagine
+BENTO[2].push({g:'468fr 460fr/1fr',a:[A(1,1,2,2),A(2,1,3,2)]});                                          // Carosello · Risultati e testimonial, uno sopra l'altro
 BENTO[3].push({g:'1fr 1fr/1fr 1fr',a:[A(1,1,2,2),A(2,1,3,2),A(1,2,3,3)]},                                // Carosello · 3 immagini A
               {g:'1fr 1fr/1fr 1fr',a:[A(1,1,3,2),A(1,2,2,3),A(2,2,3,3)]});                               // Carosello · 3 immagini B
 BENTO[4].push({g:'1fr 1fr/908fr 442fr 442fr',a:[A(1,1,3,2),A(1,2,2,3),A(2,2,3,3),A(1,3,3,4)]});          // Presentazione · 3 immagini
@@ -1100,8 +1101,8 @@ const thumbOf=L=>`style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style=
 /* The layouts each format offers: one per template the owner sends (2026-10-27). Each format has its own. */
 const last=(n,k=1)=>[n,BENTO[n].length-k];
 const PRESETS_BY_FMT={
-  169:[[5,0],last(2),last(4),last(6),last(5),last(3)],   // Intro · 1, 3, 5 immagini · solo layout · Risultati e testimonial
-  11:[[1,0],[2,0],last(3,2),last(3),[4,0]],      // 1, 2, 3 A, 3 B, 4 immagini
+  169:[[5,0],last(2,2),last(4),last(6),last(5),last(3)],   // Intro · 1, 3, 5 immagini · solo layout · Risultati e testimonial
+  11:[[1,0],[2,0],last(3,2),last(3),[4,0],last(2)],   // 1, 2, 3 A, 3 B, 4 immagini · due blocchi uno sopra l'altro
   916:[[1,0]],                                   // Video: one block (plus the animated layouts)
 };
 const presets=()=>PRESETS_BY_FMT[state.fmt].map(([n,v])=>({n,v,L:BENTO[n][v]}));
@@ -1126,7 +1127,7 @@ const DEFAULT_PAGES=[
   {k:'sfida',name:'Sfida',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Sfida',[T('lab','Sfida'),SP,T('big',I.challengeHead),T('body2',I.challengeBody)],{pad:40})]},
   {k:'idea',name:'Idea',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Idea',[T('lab','Idea'),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]},
   // Presentazione content pages: 1, 3 and 5 images with the text block (owner, 2026-10-27).
-  {k:'content1',name:'1 immagine',fmt:'169',n:2,v:BENTO[2].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(1),ideaBlock(I,'06 Deliverable — Output')]},
+  {k:'content1',name:'1 immagine',fmt:'169',n:2,v:BENTO[2].length-2,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(1),ideaBlock(I,'06 Deliverable — Output')]},
   {k:'content',name:'3 immagini',fmt:'169',n:4,v:BENTO[4].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(3),ideaBlock(I,'06 Deliverable — Output')]},
   {k:'content5',name:'5 immagini',fmt:'169',n:6,v:BENTO[6].length-1,page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(5),ideaBlock(I,'06 Deliverable — Output')]},
   {k:'outro',name:'Risultati e testimonial'},
@@ -1179,7 +1180,8 @@ const dpThumb=D=>{ if(D.k==='end') return `<div class="dp"><button class="var pr
 function applyPreset(p,n,v){
   const empty=b=>!b.items.length&&!b.img;
   const extra=p.slots.length-n, emptyCount=p.slots.filter(empty).length;
-  if(extra>emptyCount){ toast(`Questo layout ha ${n} ${n===1?'blocco':'blocchi'}: togli prima ${extra-emptyCount} ${extra-emptyCount===1?'blocco':'blocchi'}.`); return; }
+  if(extra>emptyCount){ const k=extra-emptyCount;
+    toast(k===1?'La pagina ha 1 blocco in più di questo layout: toglilo prima.':`La pagina ha ${k} blocchi in più di questo layout: toglili prima.`); return; }
   commit();
   if(n!==p.slots.length){ while(p.slots.length<n) p.slots.push(B('Blocco',[]));
     for(let i=p.slots.length-1;i>=0&&p.slots.length>n;i--) if(empty(p.slots[i])) p.slots.splice(i,1);
