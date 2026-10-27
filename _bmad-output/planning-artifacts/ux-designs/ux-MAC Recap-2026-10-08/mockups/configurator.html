@@ -157,6 +157,61 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 /* A text block fills its whole area, so a click anywhere in it selects it; the text sits at the top,
    centre or bottom inside. */
 .txt{overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start}
+/* Blocks hold elements, top to bottom; a spacer pushes what follows down. */
+.slot.blk{display:flex;flex-direction:column;gap:calc(var(--u)*12);overflow:hidden;border-radius:calc(var(--u)*20);font-family:Inter,var(--sans);color:#012234;letter-spacing:0;--bp:var(--bpad)}
+.slot.blk.empty::after{content:"Trascina qui un elemento";margin:auto;font:500 12px var(--sans);color:var(--fg-3)}
+.slot.blk.bleed{padding:0!important}
+.blk>.bgimg{position:absolute;inset:0;z-index:0}
+.blk>.bgimg img,.blk>.bgimg>span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.blk>.bgimg::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgb(102 102 102 / 0),rgb(0 0 0 / .5))}
+.blk>*:not(.bgimg){position:relative;z-index:1}
+.blk.on-photo{color:#fff}
+.it{min-width:0;border-radius:4px}
+.it.sel{outline:2px solid var(--accent);outline-offset:2px}
+.it.drop-before{box-shadow:0 -3px 0 var(--accent)}
+.it-sp{flex:1 0 0;min-height:0}
+.it-img{flex:1 1 0;min-height:calc(var(--u)*40);position:relative;overflow:hidden;border-radius:calc(var(--u)*12);background:var(--imgbg,#dcdce1)}
+.blk.bleed .it-img{border-radius:0}
+.it-img .ph{position:absolute;inset:0}
+.it-img[data-fit="fit"] .ph{transform:scale(.78)}
+.it-img[data-fit="crop"] .ph{transform:scale(1.35) translate(8%,6%)}
+.it-anim{flex:1 1 0;min-height:calc(var(--u)*80);position:relative}
+.it-anim.bleed{margin-left:calc(-1 * var(--bp));margin-right:calc(-1 * var(--bp))}
+.it-row{display:flex;justify-content:space-between;align-items:center;gap:calc(var(--u)*20)}
+.it-row.wide{gap:calc(var(--u)*110)}
+.it-row.atop{align-items:flex-start}
+.it-col{display:flex;flex-direction:column;gap:calc(var(--u)*6);flex:1;min-width:0}
+.it-col.loose{gap:calc(var(--u)*12)}
+.it-hr{height:1px;background:currentColor;opacity:.2;margin:calc(var(--u)*16) 0}
+.blk .t-lab{font-weight:600;font-size:calc(var(--u)*13);line-height:calc(var(--u)*18);text-transform:uppercase}
+.blk.on-photo .t-lab{color:rgb(255 255 255 / .65)}
+.blk .t-title{font-weight:700;font-size:calc(var(--u)*56);line-height:1.1;letter-spacing:-.02em}
+.blk .t-sub{font-size:calc(var(--u)*20);line-height:1.4;color:rgb(1 34 52 / .6)}
+.blk.on-photo .t-sub{color:rgb(255 255 255 / .75)}
+.blk .t-name{font-weight:600;font-size:calc(var(--u)*26);line-height:1.1;letter-spacing:-.02em}
+.blk .t-meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
+.blk .t-head{font-weight:600;font-size:calc(var(--u)*26);line-height:1.2;letter-spacing:-.02em}
+.blk .t-body{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24);color:rgb(1 34 52 / .6);white-space:pre-line}
+.blk .t-big{font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
+.blk .t-body2{font-size:calc(var(--u)*22);line-height:1.3;letter-spacing:-.01em;color:rgb(1 34 52 / .6);max-width:calc(var(--u)*840);white-space:pre-line}
+.blk .t-cols{font-size:calc(var(--u)*18);line-height:1.3;letter-spacing:-.01em;color:rgb(1 34 52 / .6);columns:2;column-gap:calc(var(--u)*40);white-space:pre-line}
+.blk.on-photo .t-body,.blk.on-photo .t-body2,.blk.on-photo .t-cols{color:rgb(255 255 255 / .75)}
+.page[data-ratio="11"] .blk .t-lab,.page[data-ratio="916"] .blk .t-lab{font-size:calc(var(--u)*16)}
+.page[data-ratio="11"] .blk .t-sub,.page[data-ratio="916"] .blk .t-sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em}
+.page[data-ratio="11"] .blk .t-name,.page[data-ratio="916"] .blk .t-name{font-size:calc(var(--u)*30)}
+.tags{display:flex;flex-wrap:wrap;gap:calc(var(--u)*6);align-content:center}
+.it-row .tags{justify-content:flex-end}
+.tag{border-radius:999px;padding:calc(var(--u)*7) calc(var(--u)*14);font-weight:500;font-size:calc(var(--u)*14);line-height:calc(var(--u)*18.2);white-space:nowrap;background:#012234;color:#efefef}
+.on-photo .tag{background:rgb(255 255 255 / .15);color:#fff}
+.brand{display:flex;align-items:center;gap:calc(var(--u)*20);flex-shrink:0}
+.brand .clogo{height:calc(var(--u)*40);width:auto;max-width:calc(var(--u)*180);object-fit:contain;display:block}
+.on-photo .brand .clogo{filter:brightness(0) invert(1)}
+.brand .dv{width:1px;height:calc(var(--u)*48);display:block}
+.brand .mac{width:calc(var(--u)*89);height:calc(var(--u)*28.914);display:block}
+/* Page thumbnails: the real page, drawn small */
+.mini.pv{position:relative;padding:0;display:block;overflow:hidden;container-type:inline-size}
+.mini.pv .page{position:absolute;inset:0;max-width:none;width:100%;box-shadow:none;pointer-events:none}
+.list .thumb .mini.pv{height:auto}
 .txt[contenteditable="true"]{outline:none}
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,8px);opacity:0;background:var(--fg);color:var(--surface);font-size:13px;font-weight:500;padding:9px 16px;border-radius:14px;pointer-events:none;transition:opacity 150ms,transform 200ms var(--ease-out);z-index:10}
 .toast.on{opacity:1;transform:translate(-50%,0)}
@@ -220,63 +275,6 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .drop label{color:var(--ink);font-weight:500;cursor:pointer}
 .modal-foot{display:flex;justify-content:flex-end;gap:8px}
 @media (max-width:640px){.an-opts{grid-template-columns:repeat(2,1fr)}}
-/* Intro cards (Figma MAC-TF-AI, 2026-10-27): blocks like any other, with their own content.
-   Sizes are Figma px times --u (the page width over the Figma frame width). */
-.slot.card{display:flex;flex-direction:column;overflow:hidden;border-radius:calc(var(--u)*20);font-family:Inter,var(--sans);color:#012234;letter-spacing:0}
-.card [data-f]{outline:none}.card [data-f][contenteditable="true"]{cursor:text;box-shadow:0 0 0 2px var(--accent);border-radius:4px}
-.card .sp{flex:1 0 0;min-height:0}
-.card .t-lab{font-weight:600;font-size:calc(var(--u)*13);line-height:calc(var(--u)*18);text-transform:uppercase}
-.card .t-head{margin:0;font-weight:600;font-size:calc(var(--u)*26);line-height:1.2;letter-spacing:-.02em}
-.card .t-body{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24);color:rgb(1 34 52 / .6)}
-.slot.card{gap:calc(var(--u)*12)}
-.slot.c-cover{color:#fff}
-.c-cover .bgimg{position:absolute;inset:0;background:#2977ff}
-.c-cover .bgimg img,.c-cover .bgimg>span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
-.c-cover .bgimg::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgb(102 102 102 / 0),rgb(0 0 0 / .5))}
-.c-cover>*:not(.bgimg){position:relative}
-.c-cover .t-lab{color:rgb(255 255 255 / .65)}
-.c-cover h1{margin:0;font-weight:700;font-size:calc(var(--u)*56);line-height:calc(var(--u)*62)}
-.c-cover .sub{font-size:calc(var(--u)*20);line-height:calc(var(--u)*28);color:rgb(255 255 255 / .75)}
-.tags{display:flex;flex-wrap:wrap;gap:calc(var(--u)*6);align-content:center}
-.tag{border-radius:999px;padding:calc(var(--u)*7) calc(var(--u)*14);font-weight:500;font-size:calc(var(--u)*14);line-height:calc(var(--u)*18.2);white-space:nowrap;background:#012234;color:#efefef}
-.c-cover .tag{background:rgb(255 255 255 / .15);color:#fff}
-.brand .clogo{height:calc(var(--u)*40);width:auto;max-width:calc(var(--u)*180);object-fit:contain;display:block}
-.brand .clogo.on-photo{filter:brightness(0) invert(1)}
-.logo-box{width:calc(var(--u)*123.2);height:calc(var(--u)*56);border-radius:calc(var(--u)*10);background:#c7c7cc;display:grid;place-items:center;font-weight:600;font-size:calc(var(--u)*13);color:#012234;flex-shrink:0}
-.brand{display:flex;align-items:center;gap:calc(var(--u)*20);flex-shrink:0}
-.brand .dv{width:1px;height:calc(var(--u)*48);display:block}
-.brand .mac{width:calc(var(--u)*89);height:calc(var(--u)*28.914);display:block}
-.slot.card.c-client{flex-direction:row;align-items:center;gap:calc(var(--u)*110)}
-.c-client .who{flex:1;min-width:0;display:flex;flex-direction:column;gap:calc(var(--u)*12)}
-.c-client .name{font-weight:600;font-size:calc(var(--u)*26);line-height:1.1;letter-spacing:-.02em}
-.c-client .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
-.slot.c-services{justify-content:space-between}
-/* Carosello: the cover carries the client and the services; the story pages have big headings */
-.page[data-ratio="11"] .c-cover .ctop{display:flex;justify-content:space-between;align-items:center}
-.page[data-ratio="11"] .c-cover .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
-.page[data-ratio="11"] .c-cover .name{font-weight:600;font-size:calc(var(--u)*30);line-height:1.1;letter-spacing:-.02em;margin-top:calc(var(--u)*6)}
-.page[data-ratio="11"] .c-cover h1{line-height:1.1;letter-spacing:-.02em}
-.page[data-ratio="11"] .c-cover .sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em}
-.page[data-ratio="11"] .c-cover .hr{height:1px;width:100%;display:block}
-.page[data-ratio="11"] .c-cover .srow{display:flex;justify-content:space-between;align-items:flex-start;gap:calc(var(--u)*20)}
-.page[data-ratio="11"] .c-cover .srow .t-lab{font-size:calc(var(--u)*16);color:#fff}
-.page[data-ratio="11"] .c-cover .tags{justify-content:flex-end}
-.page[data-ratio="11"] .c-story .t-lab{font-size:calc(var(--u)*18)}
-.page[data-ratio="11"] .c-story .t-head{margin:0;font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
-.page[data-ratio="11"] .c-story .t-body{font-size:calc(var(--u)*22);line-height:1.3;letter-spacing:-.01em;margin-top:calc(var(--u)*6);max-width:calc(var(--u)*840)}
-.page[data-ratio="11"] .c-story.two .t-body{font-size:calc(var(--u)*18);columns:2;column-gap:calc(var(--u)*40);max-width:none}
-/* Video: the top laid out like the Carosello cover (dark on grey), then the Carousel 04 animation */
-.slot.card.c-reel{gap:calc(var(--u)*12)}
-.c-reel .ctop{display:flex;justify-content:space-between;align-items:center;margin-bottom:calc(var(--u)*36)}
-.c-reel .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
-.c-reel .name{font-weight:600;font-size:calc(var(--u)*30);line-height:1.1;letter-spacing:-.02em;margin-top:calc(var(--u)*6)}
-.c-reel h1{margin:0;font-weight:700;font-size:calc(var(--u)*56);line-height:1.1;letter-spacing:-.02em}
-.c-reel .sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em;color:rgb(1 34 52 / .6)}
-.c-reel .hr{height:1px;background:rgb(1 34 52 / .2);margin:calc(var(--u)*28) 0}
-.c-reel .srow{display:flex;justify-content:space-between;align-items:flex-start;gap:calc(var(--u)*20)}
-.c-reel .srow .t-lab{font-size:calc(var(--u)*16)}
-.c-reel .tags{justify-content:flex-end}
-.c-reel .reel-an{flex:1;position:relative;min-height:0;margin:calc(var(--u)*36) calc(var(--u)*-60) 0}
 /* Instagram preview over a Reel (switch above the canvas) */
 .fmt-meta.with-switch{display:flex;flex-direction:column;align-items:center;gap:8px}
 .ig-switch{display:inline-flex;align-items:center;gap:8px;font:500 12.5px var(--sans);color:var(--fg-2);white-space:nowrap}
@@ -516,41 +514,44 @@ function tracksOf(p){ const [r,c]=layoutOf(p).g.split('/').map(x=>x.trim().split
 const tpl=t=>t.rows.map(v=>`minmax(0,${v}fr)`).join(' ')+' / '+t.cols.map(v=>`minmax(0,${v}fr)`).join(' ');
 const frTpl=g=>g.replace(/(\d*\.?\d+)fr/g,'minmax(0,$1fr)');
 
-const STYLES = {h1:'Titolo grande',h2:'Titolo',h3:'Sottotitolo',p:'Paragrafo',kpi:'Numero',quote:'Citazione',eyebrow:'Occhiello',caption:'Didascalia'};
+const STYLES = {h1:'Titolo grande',h2:'Titolo',h3:'Sottotitolo',p:'Paragrafo',kpi:'Numero',quote:'Citazione',eyebrow:'Occhiello',caption:'Didascalia',
+  lab:'Etichetta',title:'Titolo copertina',sub:'Sottotitolo copertina',name:'Nome cliente',meta:'Dettagli cliente',head:'Titolo blocco',body:'Testo blocco',
+  big:'Titolo pagina',body2:'Testo grande',cols:'Testo su due colonne'};
+/* Elements go inside blocks; Blocco adds a bento block to the page. */
 const ELEMENTS = [
+  {block:true,label:'Blocco',icon:'grid'},
   {cls:'h2',label:'Titolo',icon:'text',t:'Nuovo titolo'},{cls:'p',label:'Paragrafo',icon:'text',t:'Scrivi qui il testo.'},
   {cls:'kpi',label:'Numero',icon:'hash',t:'+00%'},{cls:'quote',label:'Citazione',icon:'quote',t:'“La citazione del cliente.”'},
   {cls:'eyebrow',label:'Occhiello',icon:'text',t:'Occhiello'},{img:true,label:'Immagine',icon:'image'},
   {img:true,video:true,label:'Video',icon:'video'},{anim:true,label:'Animazione',icon:'anim'},
 ];
+/* Builders: a block and its elements. */
+const B=(n,items,x={})=>({k:'block',n,items,...x});
+const T=(cls,t,x={})=>({e:'txt',n:STYLES[cls],cls,t,...x});
+const IM=(m,x={})=>({e:'img',n:x.video?'Video':'Immagine',m,fit:'fill',...x});
+const SP={e:'sp',n:'Spazio'}, HR={e:'hr',n:'Linea'}, BRAND={e:'brand',n:'Loghi'};
+const ROW=(items,x={})=>({e:'row',n:'Riga',items,...x}), COL=(items,x={})=>({e:'col',n:'Colonna',items,...x});
+const TAGS=list=>({e:'tags',n:'Servizi',list});
+const ANIMI=(type,items,x={})=>({e:'anim',n:'Animazione',type,items,...x});
+const clone=x=>JSON.parse(JSON.stringify(x));
 
 function casePages(){ return [
-  {key:'cover',name:'Intro',bg:'#ffffff',variant:1,slots:[
-    {k:'txt',n:'Titolo',cls:'h1',t:'Una luce nuova per Lumen',align:'end'},
-    {k:'txt',n:'Occhiello',cls:'eyebrow',t:'Lumen · 2026 · Brand e digitale',align:'end'},
-    {k:'img',n:'Immagine principale',m:'m1'}]},
+  {key:'cover',name:'Intro',bg:'#ffffff',variant:1,slots:[]},
   {key:'challenge',name:'La sfida',bg:'#ffffff',slots:[
-    {k:'txt',n:'Sfida',cls:'h2',t:'Un marchio forte, ma invisibile online'},
-    {k:'img',n:'Immagine',m:'m2'}]},
+    B('Sfida',[T('h2','Un marchio forte, ma invisibile online')]),B('Immagine',[IM('m2')])]},
   {key:'approach',name:'L’approccio',bg:'#ffffff',slots:[
-    {k:'img',n:'Immagine',m:'m3'},{k:'img',n:'Immagine',m:'m4'},
-    {k:'txt',n:'Approccio',cls:'p',t:'Abbiamo ridisegnato il logo partendo dalla forma delle lampade e costruito un sito che mostra i prodotti al buio, come li vedono i clienti.',align:'end'}]},
+    B('Immagine',[IM('m3')]),B('Immagine',[IM('m4')]),
+    B('Approccio',[SP,T('p','Abbiamo ridisegnato il logo partendo dalla forma delle lampade e costruito un sito che mostra i prodotti al buio, come li vedono i clienti.')])]},
   {key:'result',name:'Il risultato',bg:'#defe56',variant:1,slots:[
-    {k:'txt',n:'Risultato',cls:'kpi',t:'+38%'},
-    {k:'txt',n:'Testo risultato',cls:'p',t:'di richieste dal sito nei primi tre mesi.',align:'end'},
-    {k:'img',n:'Immagine',m:'m5'}]},
+    B('Risultato',[T('kpi','+38%')]),B('Testo risultato',[SP,T('p','di richieste dal sito nei primi tre mesi.')]),B('Immagine',[IM('m5')])]},
   {key:'outro',name:'Risultati e testimonial',bg:'#ffffff',slots:[
-    {k:'txt',n:'Testimonial',cls:'quote',t:'“Finalmente il sito racconta la luce come la raccontiamo noi.” Giulia R., Lumen',align:'center'}]},
+    B('Testimonial',[SP,T('quote','“Finalmente il sito racconta la luce come la raccontiamo noi.” Giulia R., Lumen'),SP])]},
 ];}
 function clientPages(){ return {
-  intro:[{key:'c-intro',name:'Introduzione',bg:'#ffffff',variant:1,slots:[
-    {k:'txt',n:'Titolo',cls:'h1',t:'Lumen',align:'end'},
-    {k:'txt',n:'Paragrafo',cls:'p',t:'Da tre anni lavoriamo con Lumen sul marchio, il sito e i cataloghi.'},
-    {k:'img',n:'Immagine',m:'c1'}]}],
+  intro:[{key:'c-intro',name:'Introduzione',bg:'#ffffff',variant:1,slots:[]}],
   projects:[{code:'LUM-2026-01',name:'Rebranding e sito',g:'g1',pages:5},{code:'LUM-2025-02',name:'Catalogo 2025',g:'g4',pages:5},{code:'LUM-2024-01',name:'Stand Euroluce',g:'g6',pages:4}],
   outro:[{key:'c-outro',name:'Chiusura',bg:'#ffffff',slots:[
-    {k:'img',n:'Immagine',m:'c2'},
-    {k:'txt',n:'Chiusura',cls:'h2',t:'Grazie, Lumen. Alla prossima luce.',align:'end'}]}],
+    B('Immagine',[IM('c2')]),B('Chiusura',[SP,T('h2','Grazie, Lumen. Alla prossima luce.')])]}],
 };}
 const FORMATS=['169','11','916'];
 let doc = { views:Object.fromEntries(FORMATS.map(f=>[f,{case:casePages(),client:clientPages()}])), media: MEDIA, cmedia: CLIENT_MEDIA };
@@ -562,8 +563,8 @@ function commit(){ past.push(JSON.stringify(doc)); future.length=0; syncHistory(
 function restore(from,to){ if(!from.length) return; to.push(JSON.stringify(doc)); doc=JSON.parse(from.pop()); syncHistory(); saving(); renderAll(); }
 function syncHistory(){ $('#undo').disabled=!past.length; $('#redo').disabled=!future.length; }
 $('#undo').onclick=()=>restore(past,future); $('#redo').onclick=()=>restore(future,past);
-/* Keyboard on a selected block (not while typing in it): Backspace/Delete removes it, ⌘/Ctrl+C copies,
-   ⌘/Ctrl+X cuts, ⌘/Ctrl+V pastes after the selected block (or at the end of the selected page). */
+/* Keyboard (not while typing): Backspace/Delete removes the selected element, or the block;
+   ⌘/Ctrl+C, X, V copy, cut and paste blocks; Enter edits a selected text; Escape steps out. */
 let clip=null;
 document.addEventListener('keydown',e=>{
   if(!$('#anModal').hidden) return; // the picker handles its own keys
@@ -572,14 +573,15 @@ document.addEventListener('keydown',e=>{
   if(a.matches('input,select,textarea')) return;
   if(mod&&k==='z'){ e.preventDefault(); e.shiftKey?restore(future,past):restore(past,future); return; }
   const f=findSel(); if(!f) return;
+  if(f.it&&(e.key==='Backspace'||e.key==='Delete')){ e.preventDefault(); removeItem(f.p,state.sel.idx,state.sel.path); toast('Elemento eliminato. ⌘Z per annullare.'); return; }
   if(f.s&&(e.key==='Backspace'||e.key==='Delete')){ e.preventDefault(); removeBlock(f.p,state.sel.idx); toast('Blocco eliminato. ⌘Z per annullare.'); return; }
-  if(f.s&&mod&&(k==='c'||k==='x')){ e.preventDefault(); clip=JSON.stringify(f.s);
+  if(f.s&&!f.it&&mod&&(k==='c'||k==='x')){ e.preventDefault(); clip=JSON.stringify(f.s);
     if(k==='x'){ removeBlock(f.p,state.sel.idx); toast('Blocco tagliato.'); } else toast('Blocco copiato.'); return; }
   if(mod&&k==='v'&&clip){ e.preventDefault();
     if(f.p.slots.length>=MAX_BLOCKS){ toast('Questa pagina ha già 6 blocchi.'); return; }
     commit(); const at=f.s?state.sel.idx+1:f.p.slots.length; f.p.slots.splice(at,0,JSON.parse(clip)); resetLayout(f.p); select(f.p.key,at); return; }
-  if(f.s&&f.s.k==='txt'&&e.key==='Enter'){ e.preventDefault(); editText(state.sel.page,state.sel.idx); return; }
-  if(e.key==='Escape'){ state.sel.idx!=null?select(f.p.key,null):(state.sel=null,renderAll()); }
+  if(f.it&&f.it.e==='txt'&&e.key==='Enter'){ e.preventDefault(); const t=document.querySelector(`#p-${f.p.key} [data-path="${state.sel.idx}:${state.sel.path}"]`); if(t) t.dispatchEvent(new MouseEvent('dblclick')); return; }
+  if(e.key==='Escape'){ state.sel.path!=null?select(f.p.key,state.sel.idx):state.sel.idx!=null?select(f.p.key,null):(state.sel=null,renderAll()); }
 });
 
 const allMedia=()=>[...doc.cmedia,...doc.media];
@@ -593,37 +595,75 @@ document.addEventListener('dragend',()=>{ drag=null; clearMarks(); });
 
 const FRAME={169:1920,11:1000,916:1080}; // Figma frame width per format
 const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-const F=(s,f,tag='div',cls='')=>`<${tag} class="${cls}" data-f="${f}">${esc(s[f]).replace(/\n/g,'<br>')}</${tag}>`;
-const coverImg=s=>{ const m=allMedia().find(x=>x.id===s.img); return `<div class="bgimg">${m?(m.src?mediaTag(m):`<span class="${m.g}"></span>`):''}</div>`; };
 /* The client's logo (from the client), then MAC's. On a photo both turn white. */
 const CLIENT_LOGO='assets/lumen-logo.svg';
-const brand=white=>`<div class="brand"><img class="clogo${white?' on-photo':''}" src="${CLIENT_LOGO}" alt="Logo del cliente"><img class="dv" src="assets/${white?'divider-v-white':'divider-v'}.svg" alt=""><img class="mac" src="assets/${white?'mac-logo-white':'mac-logo'}.svg" alt="MAC"></div>`;
-const tagsOf=s=>`<div class="tags" data-f="services" data-list>${s.services.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`;
-/* Card blocks: a block with its own content (cover, client, services, story, reel). */
-function cardHTML(s){
-  const fmt=state.fmt;
-  if(s.v==='cover'&&fmt==='11') return `${coverImg(s)}<div class="ctop"><div>${F(s,'meta','div','meta')}${F(s,'client','div','name')}</div>${brand(true)}</div>
-    <div class="sp"></div>${F(s,'title','h1')}${F(s,'sub','div','sub')}<img class="hr" src="assets/divider-h-white.svg" alt="">
-    <div class="srow"><div class="t-lab">Servizi</div>${tagsOf(s)}</div>`;
-  if(s.v==='cover') return `${coverImg(s)}${F(s,'label','div','t-lab')}<div class="sp"></div>${F(s,'title','h1')}${F(s,'sub','div','sub')}`;
-  if(s.v==='client') return `<div class="who">${F(s,'label','div','t-lab')}<div>${F(s,'client','div','name')}${F(s,'meta','div','meta')}</div></div>${brand(false)}`;
-  if(s.v==='services') return `${F(s,'label','div','t-lab')}${tagsOf(s)}`;
-  if(s.v==='story') return `${F(s,'label','div','t-lab')}<div class="sp"></div>${F(s,'head','div','t-head')}${F(s,'body','div','t-body')}`;
-  if(s.v==='reel') return `<div class="ctop"><div>${F(s,'meta','div','meta')}${F(s,'client','div','name')}</div>${brand(false)}</div>
-    ${F(s,'title','h1')}${F(s,'sub','div','sub')}<div class="hr"></div>
-    <div class="srow"><div class="t-lab">Servizi</div>${tagsOf(s)}</div>
-    <div class="reel-an">${animHTML('c04',s.items.map(id=>allMedia().find(m=>m.id===id)).filter(Boolean))}</div>`;
-  return ''; }
-/* Double-click a text in a card to edit it; services are typed as a comma-separated list. */
-function wireCard(d,p,s){
-  d.querySelectorAll('[data-f]').forEach(t=>{ const f=t.dataset.f, list=t.hasAttribute('data-list');
-    t.addEventListener('dblclick',e=>{ e.stopPropagation(); if(list) t.textContent=s[f].join(', '); t.contentEditable='true'; t.focus(); t._before=JSON.stringify(doc); });
-    t.addEventListener('input',()=>{ if(t._before){ past.push(t._before); future.length=0; t._before=null; syncHistory(); }
-      s[f]=list?t.textContent.split(',').map(x=>x.trim()).filter(Boolean):t.innerText; saving(); });
-    t.addEventListener('blur',()=>{ t.contentEditable='false'; if(list) select(p.key,state.sel?state.sel.idx:null); }); }); }
+const brandHTML=white=>`<div class="brand"><img class="clogo" src="${CLIENT_LOGO}" alt="Logo del cliente"><img class="dv" src="assets/${white?'divider-v-white':'divider-v'}.svg" alt=""><img class="mac" src="assets/${white?'mac-logo-white':'mac-logo'}.svg" alt="MAC"></div>`;
+const mediaOf=id=>allMedia().find(x=>x.id===id);
+/* Elements live at a path inside a block: "2" is the third element, "0.1" the second inside the first row. */
+const itemAt=(b,path)=>String(path).split('.').reduce((o,i)=>o&&o.items&&o.items[+i],b);
+const parentOf=(b,path)=>{ const ps=String(path).split('.'); const last=+ps.pop(); return {list:ps.length?itemAt(b,ps.join('.')).items:b.items,i:last}; };
 
-/* The Intro, from the case. Applying it lays out the page with its card blocks in the format in view:
-   Presentazione one page of five blocks, Carosello three pages (cover, Sfida, Idea), Video one block. */
+function renderItem(p,j,b,it,path,onPhoto,thumb){
+  const d=document.createElement('div'); d.className='it it-'+it.e; d.dataset.path=j+':'+path;
+  if(it.e==='txt'){ d.classList.add('t-'+it.cls); d.textContent=it.t; if(it.color) d.style.color=it.color;
+    if(!thumb){ d.addEventListener('dblclick',e=>{ e.stopPropagation(); select(p.key,j,path,true); d.draggable=false; d.contentEditable='true'; d.focus(); d._before=JSON.stringify(doc); });
+      d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.t=d.innerText; saving(); });
+      d.addEventListener('blur',()=>{ d.contentEditable='false'; d.draggable=true; renderRight(); }); } }
+  else if(it.e==='img'){ const m=mediaOf(it.m); d.dataset.fit=it.fit||'fill'; if(it.imgbg) d.style.setProperty('--imgbg',it.imgbg);
+    d.innerHTML=`<div class="ph ${m?m.g:''}">${m&&m.src?mediaTag(m):''}</div>${it.video?'<span class="vid-badge">▶</span>':''}`; }
+  else if(it.e==='anim'){ if(it.bleed) d.classList.add('bleed'); d.innerHTML=animHTML(it.type,it.items.map(mediaOf).filter(Boolean));
+    if(!thumb) d.addEventListener('dblclick',e=>{ e.stopPropagation(); openAnim({page:p.key,idx:j,path}); }); }
+  else if(it.e==='tags'){ d.className+=' tags'; d.innerHTML=it.list.map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+    if(!thumb){ d.addEventListener('dblclick',e=>{ e.stopPropagation(); d.textContent=it.list.join(', '); d.draggable=false; d.contentEditable='true'; d.focus(); d._before=JSON.stringify(doc); });
+      d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.list=d.textContent.split(',').map(x=>x.trim()).filter(Boolean); saving(); });
+      d.addEventListener('blur',()=>{ d.contentEditable='false'; renderAll(); }); } }
+  else if(it.e==='brand') d.innerHTML=brandHTML(onPhoto);
+  else if(it.e==='row'||it.e==='col'){ if(it.wide) d.classList.add('wide'); if(it.loose) d.classList.add('loose'); if(it.top) d.classList.add('atop');
+    it.items.forEach((c,k)=>d.appendChild(renderItem(p,j,b,c,path+'.'+k,onPhoto,thumb))); }
+  if(thumb) return d;
+  const s=state.sel; if(s&&s.page===p.key&&s.idx===j&&String(s.path)===String(path)) d.classList.add('sel');
+  if(it.e!=='row'&&it.e!=='col'){
+    d.addEventListener('click',e=>{ e.stopPropagation(); select(p.key,j,path); });
+    // Drag any element to another block or place; texts stop being draggable while they're being edited.
+    { d.draggable=true; d.addEventListener('dragstart',e=>{ if(d.isContentEditable){ e.preventDefault(); return; } e.stopPropagation(); drag={kind:'item',page:p.key,idx:j,path}; e.dataTransfer.setData('text/plain','item'); }); } }
+  return d; }
+
+/* Drop on a block: a new element or a moved one goes before the element under the pointer (or at the end);
+   a Media file fills the image under the pointer, or comes in as a new image; a block swaps places. */
+function wireBlock(d,p,j,b,grid){
+  const target=e=>{ const t=e.target.closest('.blk>.it'); return t&&t.parentNode===d?+t.dataset.path.split(':')[1]:null; };
+  const accepts=()=>drag&&((drag.kind==='block'&&!(drag.page===p.key&&drag.idx===j))||drag.kind==='media'||drag.kind==='item'||(drag.kind==='el'&&!ELEMENTS[drag.i].block));
+  d.addEventListener('dragover',e=>{ if(!accepts()) return; e.preventDefault(); e.stopPropagation(); clearMarks();
+    if(drag.kind==='block'){ grid.appendChild(hl(d.style.gridArea,'drop')); return; }
+    grid.appendChild(hl(d.style.gridArea,'drop')); const at=target(e); if(at!=null) d.children[at+(d.querySelector(':scope>.bgimg')?1:0)]?.classList.add('drop-before'); });
+  d.addEventListener('drop',e=>{ if(!accepts()) return; e.preventDefault(); e.stopPropagation(); clearMarks(); const at=target(e); const dr=drag; drag=null;
+    if(dr.kind==='block'){ commit(); const src=pageByKey(dr.page); [src.slots[dr.idx],p.slots[j]]=[p.slots[j],src.slots[dr.idx]]; select(p.key,j); return; }
+    if(dr.kind==='media'){ commit(); const m=mediaOf(dr.id); const under=at!=null&&b.items[at];
+      if(under&&under.e==='img'){ under.m=dr.id; select(p.key,j,String(at)); return; }
+      const pos=at??b.items.length; b.items.splice(pos,0,IM(dr.id,{video:!!(m&&m.video)})); select(p.key,j,String(pos)); return; }
+    if(dr.kind==='item'){ const src=pageByKey(dr.page).slots[dr.idx]; const {list,i}=parentOf(src,dr.path);
+      commit(); const [moved]=list.splice(i,1); let pos=at??b.items.length; if(src===b&&list===b.items&&i<pos) pos--; b.items.splice(pos,0,moved); select(p.key,j,String(pos)); return; }
+    addElement(p,dr.i,j,at??b.items.length); }); }
+
+function renderBlock(p,j,b,area,grid,thumb){
+  const d=document.createElement('div'); d.className='slot blk'; d.dataset.name=b.n; d.style.gridArea=area;
+  if(b.pad!=null){ d.style.padding=`calc(var(--u) * ${b.pad})`; d.style.setProperty('--bp',`calc(var(--u) * ${b.pad})`); }
+  if(b.padTop!=null) d.style.paddingTop=`calc(var(--u) * ${b.padTop})`; // Video: room for Instagram's top bar
+  if(b.bg) d.style.background=b.bg;
+  const bm=b.img&&mediaOf(b.img); const onPhoto=!!bm;
+  if(bm){ d.classList.add('on-photo'); d.insertAdjacentHTML('beforeend',`<div class="bgimg">${bm.src?mediaTag(bm):`<span class="${bm.g}"></span>`}</div>`); }
+  if(!b.items.length&&!bm) d.classList.add('empty');
+  if(b.items.length===1&&b.items[0].e==='img'&&(b.items[0].fit||'fill')==='fill') d.classList.add('bleed'); // Riempi: edge to edge
+  b.items.forEach((it,k)=>d.appendChild(renderItem(p,j,b,it,String(k),onPhoto,thumb)));
+  if(thumb) return d;
+  const startMove=e=>{ drag={kind:'block',page:p.key,idx:j}; e.dataTransfer.setData('text/plain','block'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setDragImage(d,24,24); };
+  const s=state.sel; if(s&&s.page===p.key&&s.idx===j&&s.path==null){ d.classList.add('sel'); grid.appendChild(hl(area,'sel')); grid.appendChild(grip(area,startMove)); }
+  d.addEventListener('click',e=>{ e.stopPropagation(); select(p.key,j); });
+  wireBlock(d,p,j,b,grid);
+  return d; }
+
+/* The Intro, from the case (or the client). Applying it lays out the page with blocks and elements in the
+   format in view: Presentazione one page of five blocks, Carosello three pages (cover, Sfida, Idea), Video one block. */
 const INTRO={
   case:{title:'Una luce nuova per Lumen',sub:'Un marchio e un sito che mostrano i prodotti come li vedono i clienti: al buio.',
     client:'Lumen S.r.l.',meta:'Illuminazione · 2026',services:['Branding','Web design','Fotografia','Art direction','Social media'],
@@ -634,25 +674,26 @@ const INTRO={
     challengeHead:'Un’azienda di design senza una voce sua',challengeBody:'Quando ci siamo conosciuti, Lumen vendeva bene alle fiere ma online e nei cataloghi non raccontava la qualità della sua luce.',
     ideaHead:'Un racconto unico, progetto dopo progetto',ideaBody:'Siamo partiti dal marchio e da lì abbiamo costruito il sito, i cataloghi e gli stand, sempre con la stessa idea: mostrare la luce come la vedono i clienti.',img:'c1'},
 };
-function applyIntro(list,p,fmt,mode=state.mode){ const I=INTRO[mode], card=(n,v,x)=>({k:'card',n,v,...JSON.parse(JSON.stringify(x))});
-  Object.assign(p,{preset:'intro',anim:null,tk:null,rows:null,cols:null});
+function applyIntro(list,p,fmt,mode=state.mode){ const I=clone(INTRO[mode]);
+  const head=()=>ROW([COL([T('meta',I.meta),T('name',I.client)]),BRAND]);
+  Object.assign(p,{preset:'intro',anim:null,tk:null,rows:null,cols:null,variant:0});
   // Re-applying replaces the Carosello pages the intro added before.
   for(let i=list.length-1;i>=0;i--) if(list[i].introOf===p.key) list.splice(i,1);
-  if(fmt==='169'){ Object.assign(p,{pad:40,bg:'#ffffff',variant:0,slots:[
-      card('Progetto','cover',{label:mode==='client'?'01 Cliente':'01 Progetto',title:I.title,sub:I.sub,img:I.img}),
-      card('Cliente','client',{label:'02 Cliente',client:I.client,meta:I.meta}),
-      card('Servizi','services',{label:'03 Servizi',services:I.services}),
-      card('Sfida','story',{label:'04 Sfida',head:I.challengeHead,body:I.challengeBody}),
-      card('Idea','story',{label:'05 Idea',head:I.ideaHead,body:I.ideaBody})]}); return; }
-  if(fmt==='11'){ Object.assign(p,{pad:24,bg:'#ededf0',variant:0,slots:[
-      card('Progetto','cover',{title:I.title,sub:I.sub,img:I.img,client:I.client,meta:I.meta,services:I.services,cpad:60})]});
+  if(fmt==='169'){ Object.assign(p,{pad:40,bg:'#ffffff',slots:[
+      B('Progetto',[T('lab',mode==='client'?'01 Cliente':'01 Progetto'),SP,T('title',I.title),T('sub',I.sub)],{img:I.img,pad:28}),
+      B('Cliente',[ROW([COL([T('lab','02 Cliente'),COL([T('name',I.client),T('meta',I.meta)],{})],{loose:true}),BRAND],{wide:true})],{pad:28}),
+      B('Servizi',[T('lab','03 Servizi'),SP,TAGS(I.services)],{pad:28}),
+      B('Sfida',[T('lab','04 Sfida'),SP,T('head',I.challengeHead),T('body',I.challengeBody)],{pad:28}),
+      B('Idea',[T('lab','05 Idea'),SP,T('head',I.ideaHead),T('body',I.ideaBody)],{pad:28})]}); return; }
+  if(fmt==='11'){ Object.assign(p,{pad:24,bg:'#ededf0',slots:[
+      B('Progetto',[head(),SP,T('title',I.title),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true})],{img:I.img,pad:60})]});
     const at=list.indexOf(p)+1;
     list.splice(at,0,
-      {key:p.key+'-sfida',name:p.name+' · Sfida',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[card('Sfida','story',{label:'Sfida',head:I.challengeHead,body:I.challengeBody,cpad:40})]},
-      {key:p.key+'-idea',name:p.name+' · Idea',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[card('Idea','story',{label:'Idea',head:I.ideaHead,body:I.ideaBody,cpad:40,two:true})]});
+      {key:p.key+'-sfida',name:p.name+' · Sfida',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[B('Sfida',[T('lab','Sfida'),SP,T('big',I.challengeHead),T('body2',I.challengeBody)],{pad:40})]},
+      {key:p.key+'-idea',name:p.name+' · Idea',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[B('Idea',[T('lab','Idea'),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]});
     return; }
-  Object.assign(p,{pad:24,bg:'#ffffff',variant:0,slots:[card('Intro','reel',{title:I.title,sub:I.sub,client:I.client,meta:I.meta,services:I.services,cpad:60,cpadTop:220,
-    items:[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5)})]}); }
+  Object.assign(p,{pad:24,bg:'#ffffff',slots:[B('Intro',[head(),T('title',I.title),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true}),
+    ANIMI('c04',[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5),{bleed:true})],{pad:60,padTop:220})]}); }
 // The sample case and client both start from the Intro, in every format.
 FORMATS.forEach(f=>{ const v=doc.views[f]; applyIntro(v.case,v.case[0],f,'case'); applyIntro(v.client.intro,v.client.intro[0],f,'client'); });
 /* What Instagram lays over a Video once published (from the owner's screenshots, 2026-10-27).
@@ -676,66 +717,35 @@ function igOverlay(kind){
     <div class="ig-cap"><div class="ig-user">${igAcct}<span class="ig-follow">Segui</span></div>
       <div class="ig-text">Una luce nuova per Lumen: rebranding e sito…</div></div></div>`;
 }
-function renderPage(p){
+function renderPage(p,thumb=false){
   const el=document.createElement('div');
-  el.className='page'; el.dataset.ratio=state.fmt; el.id='p-'+p.key;
-  if(state.sel&&state.sel.page===p.key&&state.sel.idx==null) el.classList.add('cur');
+  el.className='page'; el.dataset.ratio=state.fmt; if(!thumb) el.id='p-'+p.key;
+  if(!thumb&&state.sel&&state.sel.page===p.key&&state.sel.idx==null) el.classList.add('cur');
   el.style.background=p.bg; el.style.setProperty('--u',`calc(100cqw / ${FRAME[state.fmt]})`);
   if(p.pad!=null) el.style.setProperty('--pad',`calc(var(--u) * ${p.pad})`); // the template's own page margin
-  if(animOf(p)){ el.innerHTML=`<div class="reel-anim">${animHTML(animOf(p),pageMedia(p),5)}</div>${state.ig!=='off'?igOverlay(state.ig):''}`; el.addEventListener('click',()=>select(p.key,null)); return el; }
+  if(animOf(p)){ el.innerHTML=`<div class="reel-anim">${animHTML(animOf(p),pageMedia(p),5)}</div>${!thumb&&state.ig!=='off'?igOverlay(state.ig):''}`; if(!thumb) el.addEventListener('click',()=>select(p.key,null)); return el; }
   const grid=document.createElement('div'); grid.className='bento';
   const L=layoutOf(p); grid.style.gridTemplate=tpl(tracksOf(p));
-  p.slots.forEach((s,j)=>{
-    const d=document.createElement('div'); d.className='slot'; d.dataset.name=s.n; d.style.gridArea=L.a[j];
-    const startMove=e=>{ drag={kind:'block',page:p.key,idx:j}; e.dataTransfer.setData('text/plain','block'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setDragImage(d,24,24); };
-    if(s.k==='img'){ d.classList.add('img'); d.dataset.fit=s.fit||'fill'; if(s.imgbg) d.style.setProperty('--imgbg',s.imgbg);
-      const m=allMedia().find(x=>x.id===s.m);
-      d.innerHTML=`<div class="ph ${m?m.g:''}">${m&&m.src?mediaTag(m):''}</div>${s.video?'<span class="vid-badge">▶</span>':''}`; d.draggable=true; d.addEventListener('dragstart',startMove); }
-    else if(s.k==='card'){ d.classList.add('card','c-'+s.v); if(s.two) d.classList.add('two');
-      if(s.cpad!=null) d.style.padding=`calc(var(--u) * ${s.cpad})`; if(s.cpadTop!=null) d.style.paddingTop=`calc(var(--u) * ${s.cpadTop})`; // Video: room for Instagram's top bar if(s.bg) d.style.background=s.bg;
-      d.innerHTML=cardHTML(s); wireCard(d,p,s); d.draggable=true; d.addEventListener('dragstart',startMove); }
-    else if(s.k==='anim'){ d.classList.add('anim'); const bm=s.bgImg&&allMedia().find(x=>x.id===s.bgImg);
-      d.style.background=s.bg||'#ededf0';
-      d.innerHTML=(s.bgMode==='img'&&bm?`<div class="ph ${bm.g}" style="position:absolute;inset:0">${bm.src?mediaTag(bm):''}</div>`:'')+animHTML(s.type,s.items.map(id=>allMedia().find(x=>x.id===id)).filter(Boolean));
-      d.draggable=true; d.addEventListener('dragstart',startMove);
-      d.addEventListener('dblclick',e=>{ e.stopPropagation(); openAnim({page:p.key,idx:j}); }); }
-    else { d.classList.add('txt','t-'+s.cls); d.textContent=s.t; if(s.color) d.style.color=s.color; if(s.align) d.style.justifyContent={end:'flex-end',center:'center'}[s.align]||'flex-start';
-      d.addEventListener('dblclick',e=>{ e.stopPropagation(); editText(p.key,j); });
-      d.addEventListener('blur',()=>{ d.contentEditable='false'; });
-      d.addEventListener('focus',()=>{ d._before=JSON.stringify(doc); });
-      d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } s.t=d.textContent; saving(); renderRight(); }); }
-    if(state.sel&&state.sel.page===p.key&&state.sel.idx===j){ d.classList.add('sel'); grid.appendChild(hl(L.a[j],'sel')); grid.appendChild(grip(L.a[j],startMove)); }
-    d.addEventListener('click',e=>{ e.stopPropagation(); if(!(state.sel&&state.sel.page===p.key&&state.sel.idx===j)) select(p.key,j); });
-    // Drop on a block: a moved block swaps places with it (on this page or another); a Media file goes into
-    // an image block; a new element goes in before it.
-    const accepts=()=>drag&&((drag.kind==='block'&&!(drag.page===p.key&&drag.idx===j))||(drag.kind==='media'&&s.k==='img')||(drag.kind==='el'&&p.slots.length<MAX_BLOCKS));
-    d.addEventListener('dragover',e=>{ if(!accepts()) return; e.preventDefault(); e.stopPropagation();
-      if(d.dataset.over) return; clearMarks(); d.dataset.over='1';
-      if(drag.kind==='el') d.classList.add('drop-before'); else grid.appendChild(hl(d.style.gridArea,'drop')); });
-    d.addEventListener('drop',e=>{ if(!accepts()) return; e.preventDefault(); e.stopPropagation(); clearMarks();
-      if(drag.kind==='block'){ commit(); const src=pageByKey(drag.page); [src.slots[drag.idx],p.slots[j]]=[p.slots[j],src.slots[drag.idx]]; drag=null; select(p.key,j); return; }
-      if(drag.kind==='media'){ commit(); s.m=drag.id; drag=null; select(p.key,j); return; }
-      addElement(p,drag.i,j); });
-    grid.appendChild(d);
-  });
+  p.slots.forEach((b,j)=>grid.appendChild(renderBlock(p,j,b,L.a[j],grid,thumb)));
   el.appendChild(grid);
+  if(thumb) return el;
   if(state.fmt==='916'&&state.ig!=='off') el.insertAdjacentHTML('beforeend',igOverlay(state.ig));
   el.addEventListener('click',()=>select(p.key,null));
-  // Drop on the page itself: a layout applies; a new element, or a block from another page, goes at the end.
-  const pageAccepts=()=>drag&&(drag.kind==='var'||(p.slots.length<MAX_BLOCKS&&(drag.kind==='el'||(drag.kind==='block'&&drag.page!==p.key&&pageByKey(drag.page).slots.length>1))));
+  // Drop on the page itself: a layout applies; a new block, or a block from another page, goes at the end.
+  const isBlockEl=()=>drag&&drag.kind==='el'&&ELEMENTS[drag.i].block;
+  const pageAccepts=()=>drag&&(drag.kind==='var'||isBlockEl()||drag.kind==='el'||(p.slots.length<MAX_BLOCKS&&drag.kind==='block'&&drag.page!==p.key&&pageByKey(drag.page).slots.length>1));
   el.addEventListener('dragover',e=>{ if(!pageAccepts()) return; e.preventDefault(); if(el.classList.contains('drop-over')) return; clearMarks(); el.classList.add('drop-over'); });
-  el.addEventListener('drop',e=>{ if(!pageAccepts()) return; e.preventDefault(); clearMarks();
-    if(drag.kind==='var'){ const {n,v}=drag; drag=null; applyPreset(p,n,v); return; }
-    if(drag.kind==='block'){ commit(); const src=pageByKey(drag.page); p.slots.push(src.slots.splice(drag.idx,1)[0]); resetLayout(src); resetLayout(p); drag=null; select(p.key,p.slots.length-1); return; }
-    addElement(p,drag.i,p.slots.length); });
+  el.addEventListener('drop',e=>{ if(!pageAccepts()) return; e.preventDefault(); clearMarks(); const dr=drag; drag=null;
+    if(dr.kind==='var'){ applyPreset(p,dr.n,dr.v); return; }
+    if(dr.kind==='block'){ commit(); const src=pageByKey(dr.page); p.slots.push(src.slots.splice(dr.idx,1)[0]); resetLayout(src); resetLayout(p); select(p.key,p.slots.length-1); return; }
+    if(ELEMENTS[dr.i].block){ addElement(p,dr.i,null); return; }
+    toast('Trascina l’elemento dentro un blocco.'); });
   return el;
 }
 /* Resize: drag the gutter between two tracks. The neighbours give or take the space; a move that
    would make text overflow its block (or a track smaller than 12%) is refused and the handle turns orange. */
 function grip(area,onStart){ const x=document.createElement('div'); x.className='grip'; x.draggable=true; x.style.gridArea=area; x.innerHTML='⠿ Sposta'; x.title='Trascina su un altro blocco per scambiarli';
   x.addEventListener('dragstart',onStart); x.addEventListener('click',e=>e.stopPropagation()); return x; }
-function editText(page,idx){ const d=document.querySelectorAll('#p-'+page+' .bento>.slot')[idx]; if(!d) return;
-  d.contentEditable='true'; d.focus(); const r=document.createRange(); r.selectNodeContents(d); r.collapse(false); const sl=getSelection(); sl.removeAllRanges(); sl.addRange(r); }
 let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),2200); }
 function hl(area,cls){ const x=document.createElement('div'); x.className='hl '+cls; x.style.gridArea=area; return x; }
 /* The blocks touching grid line `line` on an axis. */
@@ -773,7 +783,7 @@ function placeHandles(el,p){
         e.preventDefault(); e.stopPropagation(); h.setPointerCapture(e.pointerId); h.classList.add('on');
         const start=axis==='v'?e.clientX:e.clientY, base=t.slice(), before=JSON.stringify(doc);
         const min=(axis==='v'?g.clientWidth:g.clientHeight)*0.12;
-        const texts=[...g.querySelectorAll('.txt')], was=texts.map(overflows);
+        const texts=[...g.querySelectorAll(':scope>.slot')], was=texts.map(overflows);
         const apply=arr=>{ const o={v:px.v,h:px.h}; o[axis]=arr; g.style.gridTemplate=tpl({rows:o.h,cols:o.v}); };
         let moved=false;
         const move=ev=>{ let d=(axis==='v'?ev.clientX:ev.clientY)-start;
@@ -795,14 +805,17 @@ function placeHandles(el,p){
   });
 }
 window.addEventListener('resize',()=>document.querySelectorAll('.page[id]').forEach(el=>placeHandles(el,pageByKey(el.id.slice(2)))));
-function addElement(p,i,at){
+/* Add an element: Blocco adds a block to the page; anything else goes into block `j` at position `at`. */
+function addElement(p,i,j,at){
   const E=ELEMENTS[i]; drag=null;
-  if(p.slots.length>=MAX_BLOCKS){ toast('Questa pagina ha già 6 blocchi.'); return; }
-  if(E.anim){ openAnim({page:p.key,at}); return; } // the block is added once a style is picked
-  commit();
-  p.slots.splice(at,0,E.video?{k:'img',n:'Video',m:null,video:true}:E.img?{k:'img',n:'Immagine',m:null}:{k:'txt',n:E.label,cls:E.cls,t:E.t});
-  resetLayout(p); drag=null; select(p.key,at);
+  if(E.block){ if(p.slots.length>=MAX_BLOCKS){ toast('Questa pagina ha già 6 blocchi.'); return; }
+    commit(); const pos=j==null?p.slots.length:j+1; p.slots.splice(pos,0,B('Blocco',[])); resetLayout(p); select(p.key,pos); return; }
+  if(j==null){ toast('Seleziona un blocco, oppure trascina l’elemento dentro un blocco.'); return; }
+  const b=p.slots[j]; at=at??b.items.length;
+  if(E.anim){ openAnim({page:p.key,idx:j,at}); return; } // added once a style is picked
+  commit(); b.items.splice(at,0,E.img?IM(null,{video:!!E.video}):T(E.cls,E.t,{n:E.label})); select(p.key,j,String(at));
 }
+function removeItem(p,j,path){ commit(); const {list,i}=parentOf(p.slots[j],path); list.splice(i,1); select(p.key,j); }
 /* Animations (names from the owner's references, 2026-10-27). Each one adapts to the number of media. */
 const ANIMS=[{k:'c01',name:'Carousel 01'},{k:'c03',name:'Carousel 03'},{k:'c04',name:'Carousel 04'},{k:'w02',name:'Wheel 02'}];
 const mediaTag=m=>m.video?`<video src="${m.src}" muted autoplay loop playsinline></video>`:`<img src="${m.src}" alt="">`;
@@ -821,11 +834,12 @@ function animHTML(type,items,empty=3){
   return `<div class="an an-${type}"><div class="trk" style="${n>1?`animation:${stepKF(axis,n)} ${n*2.2}s infinite`:''}">${cards}${n>1?card(list[0]):''}</div></div>`;
 }
 /* The media already on a page, used to preview animated layouts. */
-const pageMedia=p=>p.slots.filter(x=>x.k==='img'&&x.m).map(x=>allMedia().find(m=>m.id===x.m)).filter(Boolean);
-/* Picker: {page,at} adds a new block; {page,idx} changes an existing one. */
+const itemsOf=list=>list.flatMap(it=>[it,...(it.items&&it.e!=='anim'?itemsOf(it.items):[])]);
+const pageMedia=p=>[...new Set(p.slots.flatMap(b=>[b.img,...itemsOf(b.items).filter(x=>x.e==='img'&&x.m).map(x=>x.m)]).filter(Boolean))].map(mediaOf).filter(Boolean);
+/* Picker: {page,idx,at} adds an animation to block idx; {page,idx,path} changes an existing one. */
 let anim=null, upN=0;
 function openAnim(target){
-  const p=pageByKey(target.page), s=target.idx!=null?p.slots[target.idx]:null;
+  const p=pageByKey(target.page), s=target.path!=null?itemAt(p.slots[target.idx],target.path):null;
   anim={...target,type:s?s.type:target.type||'c01',items:s?[...s.items]:[...(target.items||[])]};
   $('#anOk').textContent=s?'Salva':'Inserisci';
   $('#anModal').hidden=false; drawAnim(); $('#anOk').focus(); }
@@ -855,9 +869,9 @@ $('#anDrop').addEventListener('drop',e=>{ e.preventDefault(); $('#anDrop').class
 $('#anCancel').onclick=closeAnim;
 $('#anModal').addEventListener('click',e=>{ if(e.target.id==='anModal') closeAnim(); });
 $('#anModal').addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.stopPropagation(); closeAnim(); } });
-$('#anOk').onclick=()=>{ const p=pageByKey(anim.page); commit();
-  if(anim.idx!=null){ Object.assign(p.slots[anim.idx],{type:anim.type,items:anim.items}); const i=anim.idx; closeAnim(); select(p.key,i); return; }
-  p.slots.splice(anim.at,0,{k:'anim',n:'Animazione',type:anim.type,items:anim.items}); resetLayout(p); const at=anim.at; closeAnim(); select(p.key,at); };
+$('#anOk').onclick=()=>{ const p=pageByKey(anim.page), b=p.slots[anim.idx]; commit(); const {idx,path,at}=anim;
+  if(path!=null){ Object.assign(itemAt(b,path),{type:anim.type,items:anim.items}); closeAnim(); select(p.key,idx,path); return; }
+  b.items.splice(at,0,ANIMI(anim.type,anim.items)); closeAnim(); select(p.key,idx,String(at)); };
 function removeBlock(p,idx){ commit(); p.slots.splice(idx,1); resetLayout(p); select(p.key,null); }
 function label(p,n){ const l=document.createElement('div'); l.className='pg-label';
   l.innerHTML=`<span><b>${n}</b> · ${p.name}</span>`; return l; }
@@ -896,14 +910,13 @@ function pageInView(){ const c=$('#canvas').getBoundingClientRect(), mid=c.top+c
   return best; }
 let inView=null;
 $('#canvas').addEventListener('scroll',()=>{ if(!state.sel&&pageInView().key!==inView) renderProps(); },{passive:true});
-function findSel(){ if(!state.sel) return null; const p=pageByKey(state.sel.page); if(!p) return null; return {p,s:state.sel.idx==null?null:p.slots[state.sel.idx]}; }
-function select(page,idx,keepFocus){ state.sel={page,idx};
+function findSel(){ if(!state.sel) return null; const p=pageByKey(state.sel.page); if(!p) return null;
+  const s=state.sel.idx==null?null:p.slots[state.sel.idx]; if(state.sel.idx!=null&&!s) return {p,s:null,it:null};
+  return {p,s,it:s&&state.sel.path!=null?itemAt(s,state.sel.path):null}; }
+function select(page,idx=null,path=null,keepFocus=false){ state.sel={page,idx,path:path==null?null:String(path)};
   if(keepFocus){ // don't rebuild the text the person is typing into
-    document.querySelectorAll('.slot.sel,.page.cur').forEach(x=>x.classList.remove('sel','cur'));
-    document.querySelectorAll('.hl.sel,.grip').forEach(x=>x.remove());
-    const b=document.querySelectorAll('#p-'+page+' .bento>.slot')[idx];
-    if(b){ b.classList.add('sel'); b.parentNode.appendChild(hl(b.style.gridArea,'sel'));
-      b.parentNode.appendChild(grip(b.style.gridArea,e=>{ drag={kind:'block',page,idx}; e.dataTransfer.setData('text/plain','block'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setDragImage(b,24,24); })); }
+    document.querySelectorAll('.it.sel').forEach(x=>x.classList.remove('sel'));
+    const t=document.querySelector(`#p-${page} [data-path="${idx}:${path}"]`); if(t) t.classList.add('sel');
   } else renderCanvas();
   renderProps(); renderRight(); }
 function renderAll(){ renderCanvas(); renderProps(); renderRight(); }
@@ -931,26 +944,27 @@ const STORY={
     kpi:'3',kpiText:'progetti, dal marchio allo stand.',quote:'Grazie, Lumen. Alla prossima luce.'},
 };
 const DEFAULT_PAGES=[
-  {k:'intro',name:'Intro',n:3,v:0,slots:c=>[{k:'img',n:'Immagine principale'},{k:'txt',n:'Titolo',cls:'h1',t:c.title,align:'end'},{k:'txt',n:'Occhiello',cls:'eyebrow',t:c.eyebrow,align:'end'}]},
-  {k:'content',name:'Pagina contenuto',n:3,v:1,slots:c=>[{k:'txt',n:'Titolo',cls:'h2',t:c.head},{k:'txt',n:'Paragrafo',cls:'p',t:c.body,align:'end'},{k:'img',n:'Immagine'}]},
-  {k:'outro',name:'Outro',n:3,v:3,slots:c=>[{k:'txt',n:'Citazione',cls:'quote',t:c.quote,align:'center'},{k:'txt',n:'Numero',cls:'kpi',t:c.kpi,align:'end'},{k:'txt',n:'Testo risultato',cls:'p',t:c.kpiText,align:'end'}]},
+  {k:'intro',name:'Intro',n:3,v:0,slots:c=>[B('Immagine principale',[IM(null)]),B('Titolo',[SP,T('h1',c.title)]),B('Occhiello',[SP,T('eyebrow',c.eyebrow)])]},
+  {k:'content',name:'Pagina contenuto',n:3,v:1,slots:c=>[B('Titolo',[T('h2',c.head)]),B('Paragrafo',[SP,T('p',c.body)]),B('Immagine',[IM(null)])]},
+  {k:'outro',name:'Outro',n:3,v:3,slots:c=>[B('Citazione',[SP,T('quote',c.quote),SP]),B('Numero',[SP,T('kpi',c.kpi)]),B('Testo risultato',[SP,T('p',c.kpiText)])]},
 ];
 function applyDefaultPage(p,key){
   const D=DEFAULT_PAGES.find(d=>d.k===key); commit();
   if(key==='intro'){ applyIntro(V().case.includes(p)?V().case:V().client.intro.includes(p)?V().client.intro:V().client.outro,p,state.fmt); select(p.key,null); return; }
-  const imgs=[...p.slots.filter(x=>x.k==='img'&&x.m).map(x=>x.m),...(state.mode==='case'?doc.media:doc.cmedia).filter(m=>!m.video).map(m=>m.id)];
-  p.pad=null; p.slots=D.slots(STORY[state.mode]).map(x=>x.k==='img'?{...x,m:imgs.shift()||null}:x);
-  resetLayout(p); const w=layW(p); w.variant=D.v; w.anim=null; p.preset=key; select(p.key,null); }
-const dpThumb=D=>{ const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.k==='img'?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
+  const imgs=[...pageMedia(p).filter(m=>!m.video).map(m=>m.id),...(state.mode==='case'?doc.media:doc.cmedia).filter(m=>!m.video).map(m=>m.id)];
+  p.pad=null; p.slots=D.slots(STORY[state.mode]); itemsOf(p.slots.flatMap(b=>b.items)).forEach(it=>{ if(it.e==='img') it.m=imgs.shift()||null; });
+  resetLayout(p); p.variant=D.v; p.anim=null; p.preset=key; select(p.key,null); }
+const dpThumb=D=>{ const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.items.some(i=>i.e==='img')?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
+/* A layout with more cells adds empty blocks; with fewer it drops empty blocks, and refuses to drop filled ones. */
 function applyPreset(p,n,v){
-  const empty=s=>s.k==='img'&&!s.m;
+  const empty=b=>!b.items.length&&!b.img;
   const extra=p.slots.length-n, emptyCount=p.slots.filter(empty).length;
   if(extra>emptyCount){ toast(`Questo layout ha ${n} ${n===1?'blocco':'blocchi'}: togli prima ${extra-emptyCount} ${extra-emptyCount===1?'blocco':'blocchi'}.`); return; }
   commit();
-  if(n!==p.slots.length){ while(p.slots.length<n) p.slots.push({k:'img',n:'Immagine',m:null});
+  if(n!==p.slots.length){ while(p.slots.length<n) p.slots.push(B('Blocco',[]));
     for(let i=p.slots.length-1;i>=0&&p.slots.length>n;i--) if(empty(p.slots[i])) p.slots.splice(i,1);
     resetLayout(p); }
-  const w=layW(p); w.variant=v; w.anim=null; p.preset=null; select(p.key,null); }
+  p.variant=v; p.anim=null; p.preset=null; select(p.key,null); }
 function layoutsAndElements(p){
   const full=p&&p.slots.length>=MAX_BLOCKS;
   const cur=p&&p.slots.length&&!animOf(p)&&!p.preset?layoutOf(p):null;
@@ -971,17 +985,18 @@ function layoutsAndElements(p){
 function wireDrag(el){
   el.querySelectorAll('[data-var]').forEach(b=>b.addEventListener('dragstart',e=>{ { const [n,v]=b.dataset.var.split(':').map(Number); drag={kind:'var',n,v}; } e.dataTransfer.setData('text/plain','var'); }));
   el.querySelectorAll('[data-el]').forEach(b=>{ b.addEventListener('dragstart',e=>{ drag={kind:'el',i:+b.dataset.el}; e.dataTransfer.setData('text/plain','el'); });
-    b.addEventListener('click',()=>{ const f=findSel(), p=f?f.p:pageInView(); addElement(p,+b.dataset.el,p.slots.length); }); });
+    // Click: Blocco adds a block; an element goes into the selected block.
+    b.addEventListener('click',()=>{ const f=findSel(), p=f?f.p:pageInView(); addElement(p,+b.dataset.el,f&&f.s?state.sel.idx:null); }); });
 }
 
 function renderProps(){
   const el=$('#props'); const f=findSel();
   // Nothing selected: the page controls act on the page in view, so every control shows from the start.
-  const {p,s}=f||{p:pageInView(),s:null}; inView=f?null:p.key;
+  const {p,s,it}=f||{p:pageInView(),s:null,it:null}; inView=f?null:p.key;
   if(!s){
     el.innerHTML=`<div class="sec-b" style="padding-bottom:4px"><div class="crumb">Pagina</div><div class="sel-title">${p.name}</div></div>${pageTools(p)}`;
     wirePageTools(el,p); return; }
-  renderBlockProps(el,p,s);
+  renderBlockProps(el,p,s,it);
   // The page's tools stay under the block's own settings, so the toolbar never goes away.
   el.insertAdjacentHTML('beforeend',`<div class="sec-b" style="padding-bottom:4px"><div class="crumb">Pagina</div><div class="sel-title">${p.name}</div></div>${pageTools(p)}`);
   wirePageTools(el,p);
@@ -1000,77 +1015,51 @@ function wirePageTools(el,p){
     const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ commit(); const w=layW(p); w.variant=((w.variant||0)+1)%layoutsFor(p.slots.length).length; w.anim=null; p.preset=null; select(p.key,null); };
     el.querySelectorAll('[data-bg]').forEach(b=>b.onclick=()=>{ commit(); p.bg=b.dataset.bg; p.dark=DARK.includes(p.bg); select(p.key,null); });
 }
-function renderBlockProps(el,p,s){
-  const rm=`<div class="sec-b"><button class="btn sm sec press" id="rm" style="width:100%">Rimuovi dalla pagina</button></div>`;
-  if(s.k==='card'){ const m=s.v==='cover'&&allMedia().find(x=>x.id===s.img);
-    el.innerHTML=`<div class="sec-b"><div class="crumb">${p.name}</div><div class="sel-title">${s.n}</div>
-</div>
-      ${s.v==='cover'?`<div class="sec-b"><p class="eyebrow">Immagine</p>
-        <div style="display:flex;gap:10px;align-items:center"><div class="${m?m.g:''}" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;overflow:hidden;background-color:var(--fill-2)">${m&&m.src?`<div class="ph" style="width:100%;height:100%">${mediaTag(m)}</div>`:''}</div>
-        <div style="min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m?m.name:'Nessuna immagine'}</div><button style="color:var(--ink);font-size:12.5px;font-weight:500" id="cardimg">Sostituisci dai Media</button></div></div></div>`
-      :`<div class="sec-b"><p class="eyebrow">Sfondo blocco</p>
-        <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${s.bg||'#ededf0'}"></span><input value="${(s.bg||'#ededf0').toUpperCase()}"></div></div>
-        ${swatches(s.bg||'#ededf0','data-cardbg')}</div>`}${rm}`;
-    el.querySelectorAll('[data-cardbg]').forEach(b=>b.onclick=()=>{ commit(); s.bg=b.dataset.cardbg; select(p.key,state.sel.idx); });
-    const ci=$('#cardimg'); if(ci) ci.onclick=()=>setTab('media');
-    $('#rm').onclick=()=>removeBlock(p,state.sel.idx);
+function mediaPicker(m,id,label){ return `<div style="display:flex;gap:10px;align-items:center"><div class="${m?m.g:''}" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;overflow:hidden;background-color:var(--fill-2)">${m&&m.src?`<div class="ph" style="width:100%;height:100%;position:relative">${mediaTag(m)}</div>`:''}</div>
+  <div style="min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m?m.name:'Nessuna immagine'}</div><button style="color:var(--ink);font-size:12.5px;font-weight:500" id="${id}">${label}</button></div></div>`; }
+function renderBlockProps(el,p,b,it){
+  const re=()=>select(p.key,state.sel.idx,state.sel.path);
+  if(it){ const head=`<div class="sec-b"><div class="crumb">${b.n}</div><div class="sel-title">${it.n||'Elemento'}</div></div>`;
+    const rm=`<div class="sec-b"><button class="btn sm sec press" id="rm" style="width:100%">Rimuovi elemento</button></div>`;
+    let body='';
+    if(it.e==='txt'){ const c=it.color||(b.img?'#ffffff':'#012234');
+      body=`<div class="sec-b"><p class="eyebrow">Testo · ${fmtName()}</p>
+        <div class="row"><label>Stile</label><select class="field" id="style">${Object.entries(STYLES).map(([k,v])=>`<option value="${k}" ${k===it.cls?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${c}"></span><input value="${c.toUpperCase()}"></div></div>
+        ${swatches(c,'data-color')}</div>`; }
+    if(it.e==='img') body=`<div class="sec-b"><p class="eyebrow">${it.video?'Video':'Immagine'}</p>${mediaPicker(mediaOf(it.m),'swap',(it.m?'Sostituisci':'Scegli')+' dai Media')}</div>
+      <div class="sec-b"><p class="eyebrow">Adattamento</p><div class="seg full" id="fit">${[['fill','Riempi'],['fit','Adatta'],['crop','Ritaglia']].map(([k,t])=>`<button data-fit="${k}" aria-pressed="${(it.fit||'fill')===k}">${t}</button>`).join('')}</div></div>`;
+    if(it.e==='anim') body=`<div class="sec-b"><p class="eyebrow">Animazione</p>
+        <div class="row"><label>Tipo</label><select class="field" id="antype">${ANIMS.map(a=>`<option value="${a.k}" ${a.k===it.type?'selected':''}>${a.name}</option>`).join('')}</select></div>
+        <div class="row"><label>Media</label><span class="help">${it.items.length} file</span></div>
+        <div style="margin-top:10px"><button class="btn sm sec press" id="anedit" style="width:100%">Cambia animazione o media</button></div></div>`;
+    el.innerHTML=head+body+rm;
+    el.querySelectorAll('[data-color]').forEach(x=>x.onclick=()=>{ commit(); it.color=x.dataset.color; re(); });
+    const st=$('#style'); if(st) st.onchange=e=>{ commit(); it.cls=e.target.value; it.n=STYLES[it.cls]; re(); };
+    el.querySelectorAll('#fit button').forEach(x=>x.onclick=()=>{ commit(); it.fit=x.dataset.fit; re(); });
+    const sw=$('#swap'); if(sw) sw.onclick=()=>setTab('media');
+    const at=$('#antype'); if(at) at.onchange=e=>{ commit(); it.type=e.target.value; re(); };
+    const ae=$('#anedit'); if(ae) ae.onclick=()=>openAnim({page:p.key,idx:state.sel.idx,path:state.sel.path});
+    $('#rm').onclick=()=>removeItem(p,state.sel.idx,state.sel.path);
     return; }
-  if(s.k==='anim'){
-    el.innerHTML=`<div class="sec-b"><div class="crumb">${p.name}</div><div class="sel-title">${s.n}</div></div>
-      <div class="sec-b"><p class="eyebrow">Animazione</p>
-        <div class="row"><label>Tipo</label><select class="field" id="antype">${ANIMS.map(a=>`<option value="${a.k}" ${a.k===s.type?'selected':''}>${a.name}</option>`).join('')}</select></div>
-        <div class="row"><label>Media</label><span class="help">${s.items.length} ${s.items.length===1?'file':'file'}</span></div>
-        <div style="margin-top:10px"><button class="btn sm sec press" id="anedit" style="width:100%">Cambia animazione o media</button></div></div>
-      <div class="sec-b"><p class="eyebrow">Sfondo blocco</p>
-        <div class="seg full" id="anbg"><button data-bgm="color" aria-pressed="${s.bgMode!=='img'}">Colore</button><button data-bgm="img" aria-pressed="${s.bgMode==='img'}">Immagine</button></div>
-        ${s.bgMode==='img'?(()=>{ const m=s.bgImg&&allMedia().find(x=>x.id===s.bgImg);
-          return `<div style="display:flex;gap:10px;align-items:center;margin-top:10px"><div class="${m?m.g:''}" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;overflow:hidden;background-color:var(--fill-2)">${m&&m.src?`<div class="ph" style="width:100%;height:100%">${mediaTag(m)}</div>`:''}</div>
-            <div style="min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m?m.name:'Nessuna immagine'}</div><button style="color:var(--ink);font-size:12.5px;font-weight:500" id="anbgpick">${m?'Sostituisci':'Scegli'} dai Media</button></div></div>`; })()
-        :`<div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${s.bg||'#ededf0'}"></span><input value="${(s.bg||'#ededf0').toUpperCase()}"></div></div>
-        ${swatches(s.bg||'#ededf0','data-anbgc')}`}</div>${rm}`;
-    el.querySelectorAll('[data-bgm]').forEach(b=>b.onclick=()=>{ commit(); s.bgMode=b.dataset.bgm; select(p.key,state.sel.idx); });
-    el.querySelectorAll('[data-anbgc]').forEach(b=>b.onclick=()=>{ commit(); s.bg=b.dataset.anbgc; select(p.key,state.sel.idx); });
-    const pick=$('#anbgpick'); if(pick) pick.onclick=()=>setTab('media');
-    $('#antype').onchange=e=>{ commit(); s.type=e.target.value; select(p.key,state.sel.idx); };
-    $('#anedit').onclick=()=>openAnim({page:p.key,idx:state.sel.idx});
-    $('#rm').onclick=()=>removeBlock(p,state.sel.idx);
-    return; }
-  if(s.k==='img'){ const m=allMedia().find(x=>x.id===s.m);
-    el.innerHTML=`<div class="sec-b"><div class="crumb">${p.name}</div><div class="sel-title">${s.n}</div>
-      <div style="display:flex;gap:10px;align-items:center"><div class="${m?m.g:''}" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;background-color:var(--fill-2)"></div>
-      <div style="min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m?m.name:'Blocco vuoto'}</div><button style="color:var(--ink);font-size:12.5px;font-weight:500" id="swap">${m?'Sostituisci':'Scegli'} dai Media</button></div></div>
-      </div>
-    <div class="sec-b"><p class="eyebrow">Adattamento</p>
-      <div class="seg full" id="fit"><button data-fit="fill" aria-pressed="${!s.fit||s.fit==='fill'}">Riempi</button><button data-fit="fit" aria-pressed="${s.fit==='fit'}">Adatta</button><button data-fit="crop" aria-pressed="${s.fit==='crop'}">Ritaglia</button></div>
-      
-      ${s.fit==='crop'?`<div class="row"><label>Zoom</label><input class="slider" type="range" min="100" max="300" value="135"><span class="readout">135%</span></div>`:''}</div>
-    <div class="sec-b"><p class="eyebrow">Colore immagine</p>
-      ${['Esposizione','Contrasto','Saturazione','Temperatura'].map(x=>`<div class="row"><label>${x}</label><input class="slider" type="range" value="50"><span class="readout">0</span></div>`).join('')}
-      <div class="row"><label>Filtro</label><select class="field"><option>Nessuno</option><option>Bianco e nero</option><option>Duotono</option></select></div></div>
+  // A block: its background (colour or image).
+  const m=b.img&&mediaOf(b.img);
+  el.innerHTML=`<div class="sec-b"><div class="crumb">Blocco</div><div class="sel-title">${b.n}</div></div>
     <div class="sec-b"><p class="eyebrow">Sfondo blocco</p>
-      <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${s.imgbg||'#ededf0'}"></span><input value="${(s.imgbg||'#ededf0').toUpperCase()}"></div></div>
-      ${swatches(s.imgbg||'#ededf0','data-imgbg')}</div>${rm}`;
-    el.querySelectorAll('#fit button').forEach(b=>b.onclick=()=>{ commit(); s.fit=b.dataset.fit; select(p.key,state.sel.idx); });
-    el.querySelectorAll('[data-imgbg]').forEach(b=>b.onclick=()=>{ commit(); s.imgbg=b.dataset.imgbg; s.fit='fit'; select(p.key,state.sel.idx); });
-    $('#swap').onclick=()=>setTab('media');
-    $('#rm').onclick=()=>removeBlock(p,state.sel.idx);
-    return; }
-  el.innerHTML=`<div class="sec-b"><div class="crumb">${p.name}</div><div class="sel-title">${s.n}</div></div>
-    <div class="sec-b"><p class="eyebrow">Testo · ${fmtName()}</p>
-      <div class="row"><label>Stile</label><select class="field" id="style">${Object.entries(STYLES).map(([k,v])=>`<option value="${k}" ${k===s.cls?'selected':''}>${v}</option>`).join('')}</select></div>
-      
-      <div class="row"><label>Allinea</label><div class="seg full" style="flex:1"><button aria-pressed="true">Sinistra</button><button aria-pressed="false">Centro</button></div></div>
-      <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${textOf(p,s)}"></span><input value="${textOf(p,s).toUpperCase()}"></div></div>
-      ${swatches(textOf(p,s),'data-color')}</div>${rm}`;
-  el.querySelectorAll('[data-color]').forEach(b=>b.onclick=()=>{ commit(); s.color=b.dataset.color; select(p.key,state.sel.idx); });
-  $('#style').onchange=e=>{ commit(); s.cls=e.target.value; select(p.key,state.sel.idx); };
+      <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${b.bg||'#ededf0'}"></span><input value="${(b.bg||'#ededf0').toUpperCase()}"></div></div>
+      ${swatches(b.bg||'#ededf0','data-blkbg')}
+      <div style="margin-top:12px">${mediaPicker(m,'blkimg',m?'Sostituisci immagine':'Scegli immagine dai Media')}</div>
+      ${m?`<div style="margin-top:8px"><button class="btn sm ghost press" id="blkimgoff" style="width:100%">Togli immagine</button></div>`:''}</div>
+    <div class="sec-b"><button class="btn sm sec press" id="rm" style="width:100%">Rimuovi blocco</button></div>`;
+  el.querySelectorAll('[data-blkbg]').forEach(x=>x.onclick=()=>{ commit(); b.bg=x.dataset.blkbg; re(); });
+  $('#blkimg').onclick=()=>{ state.pickBg=true; setTab('media'); toast('Clicca un’immagine nei Media per lo sfondo del blocco.'); };
+  const off=$('#blkimgoff'); if(off) off.onclick=()=>{ commit(); b.img=null; re(); };
   $('#rm').onclick=()=>removeBlock(p,state.sel.idx);
 }
 
-function miniOf(p){
-  if(animOf(p)) return `<div class="mini" style="background:${p.bg};position:relative;padding:0">${animHTML(animOf(p),pageMedia(p),5)}</div>`;
-  const L=layoutOf(p);
-  return `<div class="mini" style="background:${p.bg};grid-template:${tpl(tracksOf(p))}">${p.slots.map((s,j)=>`<span class="${s.k==='img'?gOf(s.m)||'':''}" style="grid-area:${L.a[j]};${s.k==='card'?(s.v==='cover'?'background:#4a4038':'background:#ededf0')+';border-radius:3px':s.k==='anim'?'background:#d9d9de':s.k!=='img'?'background:'+(p.dark?'rgb(255 255 255 / .25)':'rgb(0 0 0 / .14)')+';height:'+(s.cls==='h1'||s.cls==='kpi'?'40%':'20%'):s.m?'':'background:rgb(0 0 0 / .08)'}"></span>`).join('')}</div>`; }
+/* Page thumbnail: the page itself, drawn small (same units, so it scales exactly). */
+function miniOf(p){ const box=document.createElement('div'); box.className='mini pv'; box.style.aspectRatio={169:'16/9',11:'1/1',916:'9/16'}[state.fmt];
+  box.appendChild(renderPage(p,true)); return box.outerHTML; }
 
 function renderRight(){
   const b=$('#rbody'); const q=$('#q').value.toLowerCase();
@@ -1088,8 +1077,7 @@ function renderRight(){
     b.innerHTML=h;
     b.querySelectorAll('[data-go]').forEach(t=>t.onclick=()=>{ select(t.dataset.go,null); document.getElementById('p-'+t.dataset.go).scrollIntoView({behavior:'smooth',block:'center'}); });
     return; }
-  const f=findSel(); const imgSel=f&&f.s&&f.s.k==='img';
-  const inUse=new Set(pageEls().flatMap(p=>p.slots.filter(s=>s.k==='img').map(s=>s.m)));
+  const inUse=new Set(pageEls().flatMap(p=>pageMedia(p).map(m=>m.id)));
   const tiles=list=>`<div class="media ${state.view==='list'?'list':''}">${list.filter(m=>m.name.toLowerCase().includes(q)).map(m=>`<div class="mtile ${inUse.has(m.id)?'in-use':''}" data-m="${m.id}" role="button" tabindex="0" draggable="true"><span class="ph ${m.g}">${m.src?mediaTag(m):''}${m.video?`<span class="vid">▶ ${m.video}</span>`:''}</span><small>${m.name}</small><button class="star" data-star="${m.id}" aria-pressed="${!!m.fav}" aria-label="${m.fav?'Togli dai preferiti':'Aggiungi ai preferiti'}" title="${m.fav?'Togli dai preferiti':'Aggiungi ai preferiti'}"><svg class="i"><use href="#i-star"/></svg></button></div>`).join('')}</div>`;
   let h=``;
   if(state.mode==='client') h+=`<div class="r-group"><p class="eyebrow">Del cliente</p>${tiles(doc.cmedia)}</div><div class="r-group"><p class="eyebrow">Dalle sue case</p>${tiles(doc.media)}</div>`;
@@ -1099,9 +1087,11 @@ function renderRight(){
   b.querySelectorAll('[data-star]').forEach(s=>s.onclick=e=>{ e.stopPropagation(); commit(); const m=allMedia().find(x=>x.id===s.dataset.star); m.fav=!m.fav; renderRight(); });
   b.querySelectorAll('[data-m]').forEach(t=>{
     t.addEventListener('dragstart',e=>{ drag={kind:'media',id:t.dataset.m}; e.dataTransfer.setData('text/plain','media'); });
-    t.onclick=()=>{ const cur=findSel(); if(cur&&cur.s&&cur.s.k==='img'){ commit(); cur.s.m=t.dataset.m; select(cur.p.key,state.sel.idx); }
-      else if(cur&&cur.s&&cur.s.k==='card'&&cur.s.v==='cover'){ commit(); cur.s.img=t.dataset.m; select(cur.p.key,state.sel.idx); }
-      else if(cur&&cur.s&&cur.s.k==='anim'&&cur.s.bgMode==='img'){ commit(); cur.s.bgImg=t.dataset.m; select(cur.p.key,state.sel.idx); } }; });
+    // Click a file: it fills the selected image, or becomes the selected block's background, or is added to the selected block.
+    t.onclick=()=>{ const cur=findSel(); if(!cur||!cur.s) return; const id=t.dataset.m, m=mediaOf(id);
+      if(cur.it&&cur.it.e==='img'){ commit(); cur.it.m=id; select(cur.p.key,state.sel.idx,state.sel.path); return; }
+      if(state.pickBg){ state.pickBg=false; commit(); cur.s.img=id; select(cur.p.key,state.sel.idx); return; }
+      commit(); cur.s.items.push(IM(id,{video:!!m.video})); select(cur.p.key,state.sel.idx,String(cur.s.items.length-1)); }; });
 }
 
 function setTab(t){ state.tab=t; document.querySelectorAll('#rtab button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===t))); renderRight(); }
