@@ -615,14 +615,6 @@ function cardHTML(s){
     <div class="reel-an">${animHTML('c04',s.items.map(id=>allMedia().find(m=>m.id===id)).filter(Boolean))}</div>`;
   return ''; }
 /* Double-click a text in a card to edit it; services are typed as a comma-separated list. */
-/* Rows "field → where it comes from" for a card, in the document open now. */
-function cardSources(s){ const S=SOURCES[state.mode], r=[];
-  if(s.title!=null) r.push(['Titolo',S.title]); if(s.sub!=null) r.push(['Sottotitolo',S.sub]);
-  if(s.client!=null) r.push(['Cliente',S.client],['Logo','Logo del cliente']); if(s.meta!=null) r.push(['Dettagli',S.meta]);
-  if(s.services) r.push(['Servizi',S.services+(state.mode==='case'?'':'')],['',COLLECTION_SERVICES]);
-  if(s.v==='story') r.push(['Testo',/sfida/i.test(s.n)?S.challenge:S.idea]);
-  if(s.img) r.push(['Immagine',S.img]);
-  return r; }
 function wireCard(d,p,s){
   d.querySelectorAll('[data-f]').forEach(t=>{ const f=t.dataset.f, list=t.hasAttribute('data-list');
     t.addEventListener('dblclick',e=>{ e.stopPropagation(); if(list) t.textContent=s[f].join(', '); t.contentEditable='true'; t.focus(); t._before=JSON.stringify(doc); });
@@ -642,15 +634,6 @@ const INTRO={
     challengeHead:'Un’azienda di design senza una voce sua',challengeBody:'Quando ci siamo conosciuti, Lumen vendeva bene alle fiere ma online e nei cataloghi non raccontava la qualità della sua luce.',
     ideaHead:'Un racconto unico, progetto dopo progetto',ideaBody:'Siamo partiti dal marchio e da lì abbiamo costruito il sito, i cataloghi e gli stand, sempre con la stessa idea: mostrare la luce come la vedono i clienti.',img:'c1'},
 };
-/* Where each Intro content comes from in the real tool (shown in the side panel). Services are dynamic:
-   a case shows its own, a client all the services of its cases, a collection those of the cases picked. */
-const SOURCES={
-  case:{title:'Titolo della case',sub:'Sottotitolo della case',client:'Nome del cliente',meta:'Settore del cliente · anno della case',services:'Servizi della case',
-    challenge:'Sfida della case (Contesto)',idea:'Idea della case (Soluzione)',img:'Immagine principale della case'},
-  client:{title:'Titolo del cliente',sub:'Sottotitolo del cliente',client:'Nome del cliente',meta:'Settore · cliente dal',services:'Tutti i servizi delle sue case',
-    challenge:'Contesto del cliente',idea:'Soluzione del cliente',img:'Immagine del cliente'},
-};
-const COLLECTION_SERVICES='Raccolta: i servizi delle case scelte';
 function applyIntro(list,p,fmt,mode=state.mode){ const I=INTRO[mode], card=(n,v,x)=>({k:'card',n,v,...JSON.parse(JSON.stringify(x))});
   Object.assign(p,{preset:'intro',anim:null,tk:null,rows:null,cols:null});
   // Re-applying replaces the Carosello pages the intro added before.
@@ -996,12 +979,19 @@ function renderProps(){
   // Nothing selected: the page controls act on the page in view, so every control shows from the start.
   const {p,s}=f||{p:pageInView(),s:null}; inView=f?null:p.key;
   if(!s){
-    el.innerHTML=`<div class="sec-b" style="padding-bottom:4px"><div class="crumb">Pagina</div><div class="sel-title">${p.name}</div></div>
-      ${layoutsAndElements(p)}
+    el.innerHTML=`<div class="sec-b" style="padding-bottom:4px"><div class="crumb">Pagina</div><div class="sel-title">${p.name}</div></div>${pageTools(p)}`;
+    wirePageTools(el,p); return; }
+  renderBlockProps(el,p,s);
+  // The page's tools stay under the block's own settings, so the toolbar never goes away.
+  el.insertAdjacentHTML('beforeend',`<div class="sec-b" style="padding-bottom:4px"><div class="crumb">Pagina</div><div class="sel-title">${p.name}</div></div>${pageTools(p)}`);
+  wirePageTools(el,p);
+}
+function pageTools(p){ return `${layoutsAndElements(p)}
       <div class="sec-b"><p class="eyebrow">Sfondo pagina</p>
         <div class="seg full"><button aria-pressed="true">Tinta unita</button><button aria-pressed="false">Sfumatura</button><button aria-pressed="false">Immagine</button></div>
         <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${p.bg}"></span><input value="${p.bg.toUpperCase()}"></div></div>
-        ${swatches(p.bg,'data-bg')}</div>`;
+        ${swatches(p.bg,'data-bg')}</div>`; }
+function wirePageTools(el,p){
     wireDrag(el);
     // An animated layout is the page's layout in the Video: the whole page plays the animation with its media.
     el.querySelectorAll('[data-anvar]').forEach(b=>b.onclick=()=>{ commit(); layW(p).anim=b.dataset.anvar; p.preset=null; select(p.key,null); });
@@ -1009,12 +999,12 @@ function renderProps(){
     el.querySelectorAll('[data-var]').forEach(b=>b.onclick=()=>{ const [n,v]=b.dataset.var.split(':').map(Number); applyPreset(p,n,v); });
     const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ commit(); const w=layW(p); w.variant=((w.variant||0)+1)%layoutsFor(p.slots.length).length; w.anim=null; p.preset=null; select(p.key,null); };
     el.querySelectorAll('[data-bg]').forEach(b=>b.onclick=()=>{ commit(); p.bg=b.dataset.bg; p.dark=DARK.includes(p.bg); select(p.key,null); });
-    return; }
+}
+function renderBlockProps(el,p,s){
   const rm=`<div class="sec-b"><button class="btn sm sec press" id="rm" style="width:100%">Rimuovi dalla pagina</button></div>`;
   if(s.k==='card'){ const m=s.v==='cover'&&allMedia().find(x=>x.id===s.img);
     el.innerHTML=`<div class="sec-b"><div class="crumb">${p.name}</div><div class="sel-title">${s.n}</div>
-        <p class="help">Doppio clic su un testo per modificarlo.${s.services?' I servizi si scrivono separati da virgole.':''}</p></div>
-      <div class="sec-b"><p class="eyebrow">Contenuti</p>${cardSources(s).map(([k,v])=>`<div class="row" style="align-items:flex-start"><label>${k}</label><span class="help" style="flex:1">${v}</span></div>`).join('')}</div>
+</div>
       ${s.v==='cover'?`<div class="sec-b"><p class="eyebrow">Immagine</p>
         <div style="display:flex;gap:10px;align-items:center"><div class="${m?m.g:''}" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;overflow:hidden;background-color:var(--fill-2)">${m&&m.src?`<div class="ph" style="width:100%;height:100%">${mediaTag(m)}</div>`:''}</div>
         <div style="min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m?m.name:'Nessuna immagine'}</div><button style="color:var(--ink);font-size:12.5px;font-weight:500" id="cardimg">Sostituisci dai Media</button></div></div></div>`
