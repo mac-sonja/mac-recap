@@ -231,22 +231,31 @@ body.previewing .canvas{--sw11:460px;--sw916:300px}
 .it-col{display:flex;flex-direction:column;gap:calc(var(--u)*6);flex:1;min-width:0}
 .it-col.loose{gap:calc(var(--u)*12)}
 .it-hr{height:1px;background:currentColor;opacity:.2;margin:calc(var(--u)*16) 0}
+/* The seven text styles (owner, 2026-10-27). Desktop = Presentazione; mobile = Carosello and Video.
+   Colour, alignment and columns are settings of each text, not styles. */
 .blk .t-lab{font-weight:600;font-size:calc(var(--u)*13);line-height:calc(var(--u)*18);text-transform:uppercase}
+.blk .t-xl{font-weight:700;font-size:calc(var(--u)*56);line-height:1.1;letter-spacing:-.02em}
+.blk .t-title{font-weight:600;font-size:calc(var(--u)*26);line-height:1.2;letter-spacing:-.02em}
+.blk .t-sub{font-size:calc(var(--u)*20);line-height:1.4}
+.blk .t-text{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24);white-space:pre-line}
+.blk .t-num{font-weight:700;font-size:calc(var(--u)*56);line-height:1.07}
+/* Texts wrap to the block's width and grow in height (like Figma's hug); only a result's number stays on one line */
+.blk .it-txt{max-width:100%;overflow-wrap:break-word}
+.kpirow .t-num{white-space:nowrap}
+.blk .t-quote{font-weight:500;font-size:calc(var(--u)*39);line-height:1.1;letter-spacing:-.02em}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-lab{font-size:calc(var(--u)*16)}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-xl{font-size:calc(var(--u)*68)}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-title{font-size:calc(var(--u)*30)}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-text{font-size:calc(var(--u)*18);line-height:1.3}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-num{font-size:calc(var(--u)*75);line-height:.9}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-quote{font-size:calc(var(--u)*40)}
+.blk .tone-muted{color:rgb(1 34 52 / .6)}
 .blk.on-photo .t-lab{color:rgb(255 255 255 / .65)}
-.blk .t-title{font-weight:700;font-size:calc(var(--u)*56);line-height:1.1;letter-spacing:-.02em}
-.blk .t-sub{font-size:calc(var(--u)*20);line-height:1.4;color:rgb(1 34 52 / .6)}
-.blk.on-photo .t-sub{color:rgb(255 255 255 / .75)}
-.blk .t-name{font-weight:600;font-size:calc(var(--u)*26);line-height:1.1;letter-spacing:-.02em}
-.blk .t-meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
-.blk .t-head{font-weight:600;font-size:calc(var(--u)*26);line-height:1.2;letter-spacing:-.02em}
-.blk .t-body{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24);color:rgb(1 34 52 / .6);white-space:pre-line}
-.blk .t-big{font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
-.blk .t-body2{font-size:calc(var(--u)*22);line-height:1.3;letter-spacing:-.01em;color:rgb(1 34 52 / .6);max-width:calc(var(--u)*840);white-space:pre-line}
-.blk .t-cols{font-size:calc(var(--u)*18);line-height:1.3;letter-spacing:-.01em;color:rgb(1 34 52 / .6);columns:2;column-gap:calc(var(--u)*40);white-space:pre-line}
-.blk.on-photo .t-body,.blk.on-photo .t-body2,.blk.on-photo .t-cols{color:rgb(255 255 255 / .75)}
-.page[data-ratio="11"] .blk .t-lab,.page[data-ratio="916"] .blk .t-lab{font-size:calc(var(--u)*16)}
-.page[data-ratio="11"] .blk .t-sub,.page[data-ratio="916"] .blk .t-sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em}
-.page[data-ratio="11"] .blk .t-name,.page[data-ratio="916"] .blk .t-name{font-size:calc(var(--u)*30)}
+.blk.on-photo .tone-muted{color:rgb(255 255 255 / .75)}
+.blk .al-center{text-align:center}.blk .al-right{text-align:right}
+.blk .cols-2{columns:2;column-gap:calc(var(--u)*40)}
+.kpirow .t-text{width:calc(var(--u)*120);flex-shrink:0;font-weight:500;line-height:1.1}
 .tags{display:flex;flex-wrap:wrap;gap:calc(var(--u)*6);align-content:center}
 .it-row .tags{justify-content:flex-end}
 .tag{border-radius:999px;padding:calc(var(--u)*7) calc(var(--u)*14);font-weight:500;font-size:calc(var(--u)*14);line-height:calc(var(--u)*18.2);white-space:nowrap;background:#012234;color:#efefef}
@@ -256,14 +265,6 @@ body.previewing .canvas{--sw11:460px;--sw916:300px}
 .on-photo .brand .clogo{filter:brightness(0) invert(1)}
 .brand .dv{width:1px;height:calc(var(--u)*48);display:block}
 .brand .mac{width:calc(var(--u)*89);height:calc(var(--u)*28.914);display:block}
-.blk .t-kpil{font-weight:500;font-size:calc(var(--u)*16);line-height:1.1;width:calc(var(--u)*120);flex-shrink:0}
-.blk .t-kpiv{font-weight:700;font-size:calc(var(--u)*56);line-height:1.07;color:#defe56;white-space:nowrap;text-align:right}
-.page[data-ratio="11"] .blk .t-kpiv{font-size:calc(var(--u)*75);line-height:.8}
-.blk .t-voice{font-weight:500;font-size:calc(var(--u)*39);line-height:1.1;letter-spacing:-.02em}
-.page[data-ratio="11"] .blk .t-voice{font-size:calc(var(--u)*40)}
-.blk .t-author{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24);color:#66666e}
-.blk .t-ctal{font-weight:700;font-size:calc(var(--u)*18);line-height:calc(var(--u)*15);text-align:center;text-transform:uppercase}
-.blk .t-ctat{font-weight:500;font-size:calc(var(--u)*40);line-height:1.1;letter-spacing:-.02em;text-align:center}
 .it-hr.kline{margin:0;opacity:1;background:none;height:auto}.it-hr.kline img{width:100%;height:1px;display:block}
 .it-col.kpis{gap:calc(var(--u)*24)}.page[data-ratio="11"] .it-col.kpis{gap:calc(var(--u)*40)}
 .it-col.kpi{gap:calc(var(--u)*8)}
@@ -392,15 +393,6 @@ body.previewing .vin{animation-iteration-count:infinite}
 .ig-msg{flex:1;border:calc(var(--u)*2) solid rgb(255 255 255 / .6);border-radius:999px;padding:calc(var(--u)*26) calc(var(--u)*46)}
 /* Animated Video page: the animation sits in a background-grey block */
 .reel-anim{position:absolute;inset:var(--pad);border-radius:12px;background:#ededf0;overflow:hidden}
-/* Template text styles (placeholder; the real ones come from the templates) */
-.t-eyebrow{font:500 1.3cqw/1.2 var(--mono);text-transform:uppercase;letter-spacing:.08em;opacity:.6}
-.t-h1{font:600 5cqw/1 var(--display);letter-spacing:-.03em}
-.t-h2{font:600 2.9cqw/1.05 var(--display);letter-spacing:-.02em}
-.t-h3{font:600 1.9cqw/1.15 var(--display);letter-spacing:-.01em}
-.t-p{font:400 1.4cqw/1.45 var(--sans)}
-.t-kpi{font:600 5.8cqw/1 var(--display);letter-spacing:-.03em}
-.t-quote{font:italic 400 2.4cqw/1.2 Georgia,serif}
-.t-caption{font:400 1.05cqw/1.3 var(--sans);opacity:.7}
 .logo{background:#012234;color:#ffffff;display:grid;place-items:center;font:700 2.4cqw var(--display);border-radius:6px;aspect-ratio:1;width:8cqw;align-self:start}
 .add-page{width:100%;max-width:var(--pw);margin-top:14px;height:42px;border-radius:14px;border:1px dashed var(--border-strong);color:var(--fg-3);font-size:13.5px;font-weight:600}
 .add-page:hover{background:var(--fill);color:var(--fg)}
@@ -623,21 +615,23 @@ function tracksOf(p){ const [r,c]=layoutOf(p).g.split('/').map(x=>x.trim().split
 const tpl=t=>t.rows.map(v=>`minmax(0,${v}fr)`).join(' ')+' / '+t.cols.map(v=>`minmax(0,${v}fr)`).join(' ');
 const frTpl=g=>g.replace(/(\d*\.?\d+)fr/g,'minmax(0,$1fr)');
 
-const STYLES = {h1:'Titolo grande',h2:'Titolo',h3:'Sottotitolo',p:'Paragrafo',kpi:'Numero',quote:'Citazione',eyebrow:'Occhiello',caption:'Didascalia',
-  lab:'Etichetta',title:'Titolo copertina',sub:'Sottotitolo copertina',name:'Nome cliente',meta:'Dettagli cliente',head:'Titolo blocco',body:'Testo blocco',
-  big:'Titolo pagina',body2:'Testo grande',cols:'Testo su due colonne',
-  kpil:'Risultato · cosa misura',kpiv:'Risultato · numero',voice:'Citazione cliente',author:'Autore citazione',ctal:'Chiusura · occhiello',ctat:'Chiusura · testo'};
+const STYLES = {lab:'Etichetta',xl:'Titolo XL',title:'Titolo',sub:'Sottotitolo',text:'Testo',num:'Numero',quote:'Citazione'};
+/* Old style names used by the templates, mapped to the seven styles and the per-text settings they had. */
+const STYLE_MAP={eyebrow:{c:'lab'},ctal:{c:'lab',align:'center'},h1:{c:'xl'},big:{c:'xl'},h2:{c:'title'},head:{c:'title'},name:{c:'title'},
+  h3:{c:'sub'},body2:{c:'sub',tone:'muted'},p:{c:'text'},body:{c:'text',tone:'muted'},cols:{c:'text',tone:'muted',cols:2},meta:{c:'text'},
+  author:{c:'text',tone:'muted'},caption:{c:'text',tone:'muted'},kpil:{c:'text'},kpi:{c:'num'},kpiv:{c:'num',color:'#defe56',align:'right'},
+  voice:{c:'quote'},ctat:{c:'quote',align:'center'},sub:{c:'sub',tone:'muted'}};
 /* Elements go inside blocks; Blocco adds a bento block to the page. */
 const ELEMENTS = [
   {block:true,label:'Blocco',icon:'grid'},
-  {cls:'h2',label:'Titolo',icon:'text',t:'Nuovo titolo'},{cls:'p',label:'Paragrafo',icon:'text',t:'Scrivi qui il testo.'},
-  {cls:'kpi',label:'Numero',icon:'hash',t:'+00%'},{cls:'quote',label:'Citazione',icon:'quote',t:'“La citazione del cliente.”'},
-  {cls:'eyebrow',label:'Occhiello',icon:'text',t:'Occhiello'},{img:true,label:'Immagine',icon:'image'},
+  {cls:'title',label:'Titolo',icon:'text',t:'Nuovo titolo'},{cls:'text',label:'Testo',icon:'text',t:'Scrivi qui il testo.'},
+  {cls:'num',label:'Numero',icon:'hash',t:'+00%'},{cls:'quote',label:'Citazione',icon:'quote',t:'«La citazione del cliente.»'},
+  {cls:'lab',label:'Etichetta',icon:'text',t:'Etichetta'},{img:true,label:'Immagine',icon:'image'},
   {img:true,video:true,label:'Video',icon:'video'},{anim:true,label:'Animazione',icon:'anim'},
 ];
 /* Builders: a block and its elements. */
 const B=(n,items,x={})=>({k:'block',n,items,...x});
-const T=(cls,t,x={})=>({e:'txt',n:STYLES[cls],cls,t,...x});
+const T=(cls,t,x={})=>{ const m=STYLE_MAP[cls]||{c:cls}, {c,...extra}=m; return {e:'txt',n:STYLES[c],cls:c,t,...extra,...x}; };
 const IM=(m,x={})=>({e:'img',n:x.video?'Video':'Immagine',m,fit:'fill',...x});
 const SP={e:'sp',n:'Spazio'}, HR={e:'hr',n:'Linea'}, BRAND={e:'brand',n:'Loghi'};
 const ROW=(items,x={})=>({e:'row',n:'Riga',items,...x}), COL=(items,x={})=>({e:'col',n:'Colonna',items,...x});
@@ -718,7 +712,9 @@ const parentOf=(b,path)=>{ const ps=String(path).split('.'); const last=+ps.pop(
 
 function renderItem(p,j,b,it,path,onPhoto,thumb){
   const d=document.createElement('div'); d.className='it it-'+it.e; d.dataset.path=j+':'+path;
-  if(it.e==='txt'){ d.classList.add('t-'+it.cls); d.textContent=it.t; if(it.color) d.style.color=it.color;
+  if(it.e==='txt'){ d.classList.add('t-'+it.cls); if(it.tone) d.classList.add('tone-'+it.tone); if(it.align) d.classList.add('al-'+it.align); if(it.cols) d.classList.add('cols-'+it.cols);
+    d.textContent=it.t; if(it.color) d.style.color=it.color;
+    if(it.fs) d.style.fontSize=`calc(var(--u) * ${it.fs})`; // the template's own size (Figma), where it differs from the style
     if(!thumb&&previewing()){ // Anteprima: click and type, no selection
       d.contentEditable='true'; d.addEventListener('click',e=>e.stopPropagation()); d.addEventListener('focus',()=>{ d._before=JSON.stringify(doc); });
       d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.t=d.innerText; saving(); });
@@ -800,24 +796,24 @@ const INTRO={
     quote:'“Ci conoscono come pochi: sanno cosa vogliamo prima di noi.”',author:'Paolo L., Lumen'},
 };
 function applyIntro(list,p,fmt,mode=state.mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode);
-  const head=()=>ROW([COL([T('meta',I.meta),T('name',I.client)]),BRAND]);
+  const head=()=>ROW([COL([T('meta',I.meta,{fs:16}),T('name',I.client)]),BRAND]);
   Object.assign(p,{preset:'intro',anim:null,tk:null,rows:null,cols:null,variant:0});
   // Re-applying replaces the Carosello pages the intro added before.
   for(let i=list.length-1;i>=0;i--) if(list[i].introOf===p.key) list.splice(i,1);
   if(fmt==='169'){ Object.assign(p,{pad:40,bg:'#ffffff',slots:[
-      B('Progetto',[T('lab',mode==='client'?'01 Cliente':'01 Progetto'),SP,T('title',I.title),T('sub',I.sub)],{img:I.img,pad:28}),
+      B('Progetto',[T('lab',mode==='client'?'01 Cliente':'01 Progetto'),SP,T('xl',I.title),T('sub',I.sub)],{img:I.img,pad:28}),
       B('Cliente',[ROW([COL([T('lab','02 Cliente'),COL([T('name',I.client),T('meta',I.meta)],{})],{loose:true}),BRAND],{wide:true})],{pad:28}),
       B('Servizi',[T('lab','03 Servizi'),SP,TAGS(I.services)],{pad:28}),
       B('Sfida',[T('lab','04 Sfida'),SP,T('head',I.challengeHead),T('body',I.challengeBody)],{pad:28}),
       B('Idea',[T('lab','05 Idea'),SP,T('head',I.ideaHead),T('body',I.ideaBody)],{pad:28})]}); return; }
   if(fmt==='11'){ Object.assign(p,{pad:24,bg:'#ededf0',slots:[
-      B('Progetto',[head(),SP,T('title',I.title),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true})],{img:I.img,pad:60})]});
+      B('Progetto',[head(),SP,T('xl',I.title,{fs:56}),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true})],{img:I.img,pad:60})]});
     const at=list.indexOf(p)+1;
     list.splice(at,0,
-      {key:p.key+'-sfida',name:p.name+' · Sfida',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[B('Sfida',[T('lab','Sfida'),SP,T('big',I.challengeHead),T('body2',I.challengeBody)],{pad:40})]},
-      {key:p.key+'-idea',name:p.name+' · Idea',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[B('Idea',[T('lab','Idea'),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]});
+      {key:p.key+'-sfida',name:p.name+' · Sfida',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[B('Sfida',[T('lab','Sfida',{fs:18}),SP,T('big',I.challengeHead),T('body2',I.challengeBody,{fs:22})],{pad:40})]},
+      {key:p.key+'-idea',name:p.name+' · Idea',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[B('Idea',[T('lab','Idea',{fs:18}),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]});
     return; }
-  Object.assign(p,{pad:24,bg:'#ffffff',slots:[B('Intro',[head(),T('title',I.title),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true}),
+  Object.assign(p,{pad:24,bg:'#ffffff',slots:[B('Intro',[head(),T('xl',I.title,{fs:56}),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true}),
     ANIMI('c04',[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5),{bleed:true})],{pad:60,padTop:220,cls:'vinfo'})]}); }
 // The sample case and client both start from the Intro, in every format.
 // In Presentazione the Intro already holds the challenge and the idea, so the case has no separate pages for them.
@@ -1146,8 +1142,8 @@ const imgs=n=>Array.from({length:n},()=>B('Immagine',[IM(null)]));
 const ideaBlock=(I,label='Idea')=>B('Testo',[T('lab',label),SP,T('head',I.ideaHead),T('body',I.ideaBody)],{pad:28});
 const DEFAULT_PAGES=[
   {k:'intro',name:'Intro'},
-  {k:'sfida',name:'Sfida',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Sfida',[T('lab','Sfida'),SP,T('big',I.challengeHead),T('body2',I.challengeBody)],{pad:40})]},
-  {k:'idea',name:'Idea',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Idea',[T('lab','Idea'),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]},
+  {k:'sfida',name:'Sfida',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Sfida',[T('lab','Sfida',{fs:18}),SP,T('big',I.challengeHead),T('body2',I.challengeBody,{fs:22})],{pad:40})]},
+  {k:'idea',name:'Idea',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Idea',[T('lab','Idea',{fs:18}),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]},
   // Presentazione content pages: 1, 3 and 5 images with the text block (owner, 2026-10-27).
   {k:'content1',name:'1 immagine',fmt:'169',n:TL.pres1[0],v:TL.pres1[1],page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(1),ideaBlock(I,'06 Deliverable — Output')]},
   {k:'content',name:'3 immagini',fmt:'169',n:TL.pres3[0],v:TL.pres3[1],page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(3),ideaBlock(I,'06 Deliverable — Output')]},
@@ -1169,20 +1165,20 @@ function applyDefaultPage(p,key){ commit();
 /* Risultati e testimonial (Figma MAC-TF-AI, 2026-10-27). Results in a blue block, one row per result
    (what it measures, then the number in lime, a thin line above); the client's words in a grey block.
    Presentazione adds a visual on the left; Carosello puts the two blocks side by side; Video stacks them. */
-function applyOutro(p,fmt,mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode);
-  const kpis=COL(I.results.map(([v,l])=>COL([{e:'hr',n:'Linea',kpi:true},ROW([T('kpil',l),T('kpiv',v)],{cls:'kpirow'})],{cls:'kpi'})),{cls:'kpis'});
-  const res=B('Risultati',[T('lab','06 — Risultati',{color:'rgb(255 255 255 / .65)'}),SP,kpis],{pad:28,bg:'#2977ff',ink:'#ffffff'});
-  const voice=B('Testimonianza',[T('lab','08 — Voce del cliente',{color:'rgb(1 34 52 / .65)'}),T('voice','«'+I.quote.replace(/^[“«"]|[”»"]$/g,'')+'»'),SP,T('author',I.author)],{pad:28});
+function applyOutro(p,fmt,mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode), m=fmt!=='169'; // m: the Carosello template's sizes
+  const kpis=COL(I.results.map(([v,l])=>COL([{e:'hr',n:'Linea',kpi:true},ROW([T('kpil',l,m?{fs:16}:{}),T('kpiv',v)],{cls:'kpirow'})],{cls:'kpi'})),{cls:'kpis'});
+  const res=B('Risultati',[T('lab','06 — Risultati',{color:'rgb(255 255 255 / .65)',...(m?{fs:13}:{})}),SP,kpis],{pad:28,bg:'#2977ff',ink:'#ffffff'});
+  const voice=B('Testimonianza',[T('lab','08 — Voce del cliente',{color:'rgb(1 34 52 / .65)',...(m?{fs:13}:{})}),T('voice','«'+I.quote.replace(/^[“«"]|[”»"]$/g,'')+'»'),SP,T('author',I.author,m?{fs:16}:{})],{pad:28});
   const img=(typeof mode==='string'?(mode==='client'?CLIENT_MEDIA:MEDIA):MEDIA).find(m=>!m.video&&m.id!==I.img)||{};
   Object.assign(p,{bg:'#ffffff',anim:null,preset:'outro',tk:null,deco:null});
   if(fmt==='169') Object.assign(p,{pad:40,variant:TL.caro3b[1],slots:[B('Visual',[IM(img.id||null)]),res,voice]});
   else if(fmt==='11') Object.assign(p,{pad:24,variant:0,slots:[res,voice]});
   else { // Video: the same info section as the Video intro first, then results and testimonial
-    const info=B('Progetto',[ROW([COL([T('meta',I.meta),T('name',I.client)]),BRAND]),T('title',I.title),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true})],{pad:60,padTop:220,cls:'vinfo'});
+    const info=B('Progetto',[ROW([COL([T('meta',I.meta,{fs:16}),T('name',I.client)]),BRAND]),T('xl',I.title,{fs:56}),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true})],{pad:60,padTop:220,cls:'vinfo'});
     Object.assign(p,{pad:24,variant:TL.videoOutro[1],slots:[info,res,voice]}); } }
 /* Carosello closing page (Figma): the same for every carousel, its text editable per carousel. */
 function closingPage(key){ return {key,name:'Chiusura',section:'risultati',bg:'#ededf0',pad:0,deco:'star',preset:'end',variant:0,slots:[
-  B('Chiusura',[SP,T('ctal','Al prossimo progetto'),T('ctat','Non perderti i nostri progetti, continua a seguirci per scoprire tutte le novità che stiamo costruendo per voi'),SP],{bg:'transparent',pad:92})]}; }
+  B('Chiusura',[SP,T('ctal','Al prossimo progetto',{fs:18}),T('ctat','Non perderti i nostri progetti, continua a seguirci per scoprire tutte le novità che stiamo costruendo per voi'),SP],{bg:'transparent',pad:92})]}; }
 // Video: the results now live on Risultati e testimonial, so its old separate result page goes.
 { const vc=doc.views['916'].case; const r=vc.findIndex(p=>p.key==='result'); if(r>=0) vc.splice(r,1); }
 FORMATS.forEach(f=>{ const v=doc.views[f]; const o=v.case.find(p=>p.key==='outro'); if(o) applyOutro(o,f,'case');
@@ -1287,6 +1283,7 @@ function renderBlockProps(el,p,b,it){
     if(it.e==='txt'){ const c=it.color||(b.img?'#ffffff':'#012234');
       body=`<div class="sec-b"><p class="eyebrow">Testo · ${fmtName()}</p>
         <div class="row"><label>Stile</label><select class="field" id="style">${Object.entries(STYLES).map(([k,v])=>`<option value="${k}" ${k===it.cls?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="row"><label>Allinea</label><div class="seg full" style="flex:1" id="align">${[['left','Sinistra'],['center','Centro'],['right','Destra']].map(([k,t])=>`<button data-al="${k}" aria-pressed="${(it.align||'left')===k}">${t}</button>`).join('')}</div></div>
         <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${c}"></span><input value="${c.toUpperCase()}"></div></div>
         ${swatches(c,'data-color')}</div>`; }
     if(it.e==='img') body=`<div class="sec-b"><p class="eyebrow">${it.video?'Video':'Immagine'}</p>${mediaPicker(mediaOf(it.m),'swap',(it.m?'Sostituisci':'Scegli')+' dai Media')}</div>
@@ -1297,7 +1294,8 @@ function renderBlockProps(el,p,b,it){
         <div style="margin-top:10px"><button class="btn sm sec press" id="anedit" style="width:100%">Cambia animazione o media</button></div></div>`;
     el.innerHTML=head+body+rm;
     el.querySelectorAll('[data-color]').forEach(x=>x.onclick=()=>{ commit(); it.color=x.dataset.color; re(); });
-    const st=$('#style'); if(st) st.onchange=e=>{ commit(); it.cls=e.target.value; it.n=STYLES[it.cls]; re(); };
+    const st=$('#style'); if(st) st.onchange=e=>{ commit(); it.cls=e.target.value; it.n=STYLES[it.cls]; delete it.fs; re(); };
+    el.querySelectorAll('[data-al]').forEach(x=>x.onclick=()=>{ commit(); it.align=x.dataset.al==='left'?null:x.dataset.al; re(); });
     el.querySelectorAll('#fit button').forEach(x=>x.onclick=()=>{ commit(); it.fit=x.dataset.fit; re(); });
     const sw=$('#swap'); if(sw) sw.onclick=()=>setTab('media');
     const at=$('#antype'); if(at) at.onchange=e=>{ commit(); it.type=e.target.value; re(); };
