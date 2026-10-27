@@ -77,7 +77,19 @@ svg.i{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.75;str
 .divider{width:1px;height:20px;background:var(--border-strong);margin:0 4px}
 
 /* Panes */
-.work{flex:1;display:grid;grid-template-columns:272px 1fr 304px;min-height:0}
+.work{flex:1;display:grid;grid-template-columns:var(--wl,272px) minmax(0,1fr) var(--wr,304px);min-height:0}
+.pane-l{grid-column:1}.canvas{grid-column:2}.pane-r{grid-column:3} /* fixed columns, so hiding a panel keeps the canvas in the middle */
+.work.hide-l{--wl:0px}.work.hide-l .pane-l{display:none}
+.work.hide-r{--wr:0px}.work.hide-r .pane-r{display:none}
+.btn.icon[aria-pressed="false"]{color:var(--fg-3)}
+/* Anteprima: like Webflow, the same canvas without the editing tools; the same button goes back */
+body.previewing .work{--wl:0px;--wr:0px}
+body.previewing .pane{display:none}
+body.previewing .canvas{--pw:1600px;--pw11:960px;--pw916:560px;background:var(--fill)}
+body.previewing .canvas .page *{pointer-events:none}
+body.previewing .pg-del,body.previewing .handle,body.previewing .grip,body.previewing .hl,body.previewing .add-page,body.previewing .ig-switch,body.previewing #panelL,body.previewing #panelR,body.previewing #formats{display:none}
+body.previewing .page.cur{box-shadow:var(--shadow-page)}
+body.previewing .it.sel{outline:none}
 .pane{background:var(--sidebar);display:flex;flex-direction:column;min-height:0}
 .pane-l{border-right:1px solid var(--border)}
 .pane-r{border-left:1px solid var(--border)}
@@ -129,31 +141,31 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .el svg{color:var(--fg-3)}
 
 /* Canvas */
-.canvas{overflow:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 40px 80px}
+.canvas{overflow:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 28px 80px;--pw:1280px;--pw11:780px;--pw916:470px}
 .canvas>*{flex-shrink:0}
 .fmt-meta{font:400 11.5px var(--mono);color:var(--fg-3);margin-bottom:4px}
-.pg-label{width:100%;max-width:920px;margin-top:14px;display:flex;justify-content:space-between;font-size:12.5px;color:var(--fg-3)}
+.pg-label{width:100%;max-width:var(--pw);margin-top:14px;display:flex;justify-content:space-between;font-size:12.5px;color:var(--fg-3)}
 .pg-label b{color:var(--fg-2);font-weight:600}
 .pg-label{align-items:center}
 .pg-del{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;color:var(--fg-3)}
 .pg-del:hover{background:var(--fill);color:var(--fg)}
 /* Client tab, Carosello and Video: each case is a slideshow row */
-.strip{width:100%;max-width:920px;display:flex;gap:16px;overflow-x:auto;padding:4px 2px 12px;scroll-snap-type:x proximity}
+.strip{width:100%;max-width:var(--pw);display:flex;gap:16px;overflow-x:auto;padding:4px 2px 12px;scroll-snap-type:x proximity}
 .strip>.slide{flex:0 0 auto;width:300px;scroll-snap-align:start}
 .strip.f916>.slide{width:200px}
 .strip .pg-label{margin-top:0;margin-bottom:6px}
 .strip .page{max-width:none}
-.group-label{width:100%;max-width:920px;margin-top:28px;display:flex;align-items:center;gap:10px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3)}
+.group-label{width:100%;max-width:var(--pw);margin-top:28px;display:flex;align-items:center;gap:10px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3)}
 .group-label::after{content:"";flex:1;height:1px;background:var(--border-strong)}
-.page{position:relative;width:100%;max-width:920px;background:#ffffff;box-shadow:var(--shadow-page);color:#012234;overflow:hidden;container-type:inline-size;transition:box-shadow 120ms}
+.page{position:relative;width:100%;max-width:var(--pw);background:#ffffff;box-shadow:var(--shadow-page);color:#012234;overflow:hidden;container-type:inline-size;transition:box-shadow 120ms}
 /* Bento: blocks sit in the grid; 24 px gutter, 64 px margin and 28 px padding inside each block
    at the export size (1920 or 1080 wide). */
 .page[data-ratio="169"]{--pad:3.333cqw;--gut:1.25cqw;--bpad:1.458cqw}
 .page[data-ratio="11"],.page[data-ratio="916"]{--pad:5.926cqw;--gut:2.222cqw;--bpad:2.593cqw}
 .bento{position:absolute;inset:var(--pad);display:grid;gap:var(--gut)}
 .page[data-ratio="169"]{aspect-ratio:16/9}
-.page[data-ratio="11"]{aspect-ratio:1/1;max-width:540px}
-.page[data-ratio="916"]{aspect-ratio:9/16;max-width:380px}
+.page[data-ratio="11"]{aspect-ratio:1/1;max-width:var(--pw11)}
+.page[data-ratio="916"]{aspect-ratio:9/16;max-width:var(--pw916)}
 .page.drop-over{box-shadow:0 0 0 3px var(--accent),var(--shadow-page)}
 .page.cur{box-shadow:0 0 0 2px var(--accent),var(--shadow-page)}
 .slot{position:relative;background:#ededf0;box-sizing:border-box;padding:var(--bpad);outline:1px dashed transparent;outline-offset:2px;cursor:pointer;min-height:0;min-width:0}
@@ -226,7 +238,8 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .mini.pv .page{position:absolute;inset:0;max-width:none;width:100%;box-shadow:none;pointer-events:none}
 .list .thumb .mini.pv{height:auto}
 .txt[contenteditable="true"]{outline:none}
-.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,8px);opacity:0;background:var(--fg);color:var(--surface);font-size:13px;font-weight:500;padding:9px 16px;border-radius:14px;pointer-events:none;transition:opacity 150ms,transform 200ms var(--ease-out);z-index:10}
+/* Messages show at the top of the canvas, over the page, where the eye already is */
+.toast{position:fixed;left:50%;top:112px;transform:translate(-50%,-8px);opacity:0;background:#012234;color:#fff;font-size:14px;font-weight:600;padding:12px 20px;border-radius:14px;box-shadow:0 10px 30px rgb(0 0 0 / .25),0 0 0 2px #defe56;pointer-events:none;transition:opacity 150ms,transform 200ms var(--ease-out);z-index:25;max-width:min(560px,calc(100vw - 32px));text-align:center}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 /* Resize handles sit in the gutters between tracks. */
 .handle{position:absolute;z-index:2;display:grid;place-items:center}
@@ -288,14 +301,6 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .drop label{color:var(--ink);font-weight:500;cursor:pointer}
 .modal-foot{display:flex;justify-content:flex-end;gap:8px}
 .modal.ask{width:min(440px,100%)}
-/* Preview: one page at a time, full screen */
-.pv-bg{position:fixed;inset:0;z-index:30;background:#0d0d0f;display:flex;flex-direction:column;align-items:center;padding:16px;gap:12px}
-.pv-bg[hidden]{display:none}
-.pv-top{width:100%;display:flex;justify-content:space-between;align-items:center;color:#c9c9cf;font:500 13px var(--sans)}
-.pv-stage{flex:1;min-height:0;width:100%;display:grid;place-items:center}
-.pv-frame{position:relative;container-type:inline-size;box-shadow:0 20px 60px rgb(0 0 0 / .5)}
-.pv-frame .page{position:absolute;inset:0;max-width:none;width:100%;box-shadow:none}
-.pv-nav{display:flex;gap:8px}
 /* Right panel: drag a page (or a case) to reorder */
 .thumb[draggable="true"],.proj[draggable="true"]{cursor:grab}
 .thumb.drop-before,.proj.drop-before{box-shadow:0 -3px 0 var(--accent)}
@@ -344,7 +349,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .t-quote{font:italic 400 2.4cqw/1.2 Georgia,serif}
 .t-caption{font:400 1.05cqw/1.3 var(--sans);opacity:.7}
 .logo{background:#012234;color:#ffffff;display:grid;place-items:center;font:700 2.4cqw var(--display);border-radius:6px;aspect-ratio:1;width:8cqw;align-self:start}
-.add-page{width:100%;max-width:920px;margin-top:14px;height:42px;border-radius:14px;border:1px dashed var(--border-strong);color:var(--fg-3);font-size:13.5px;font-weight:600}
+.add-page{width:100%;max-width:var(--pw);margin-top:14px;height:42px;border-radius:14px;border:1px dashed var(--border-strong);color:var(--fg-3);font-size:13.5px;font-weight:600}
 .add-page:hover{background:var(--fill);color:var(--fg)}
 
 /* Right pane */
@@ -415,6 +420,8 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></symbol>
   <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+  <symbol id="i-panel-l" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9 4.5v15"/></symbol>
+  <symbol id="i-panel-r" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M15 4.5v15"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
@@ -440,6 +447,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 <header class="top">
   <div class="top-l">
     <button class="btn icon ghost press" aria-label="Torna alle case"><svg class="i"><use href="#i-back"/></svg></button>
+    <button class="btn icon sm ghost press" id="panelL" aria-pressed="true" aria-label="Mostra o nascondi il pannello a sinistra" title="Pannello a sinistra"><svg class="i"><use href="#i-panel-l"/></svg></button>
     <span class="title" id="docTitle">Lumen · Rebranding e sito</span>
     <span class="code" id="docCode">LUM-2026-01</span>
     <span class="pill"><i></i>Da rivedere</span>
@@ -453,6 +461,7 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
     <span class="save" id="save">Salvato</span>
     <button class="btn icon sm ghost press" id="undo" aria-label="Annulla" title="Annulla (⌘Z)" disabled><svg class="i"><use href="#i-undo"/></svg></button>
     <button class="btn icon sm ghost press" id="redo" aria-label="Ripeti" title="Ripeti (⇧⌘Z)" disabled><svg class="i"><use href="#i-redo"/></svg></button>
+    <button class="btn icon sm ghost press" id="panelR" aria-pressed="true" aria-label="Mostra o nascondi il pannello a destra" title="Pannello a destra"><svg class="i"><use href="#i-panel-r"/></svg></button>
     <span class="divider"></span>
     <button class="btn sec press" id="previewBtn">Anteprima</button>
     <button class="btn pri press">Approva</button>
@@ -493,11 +502,6 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
     <div><h2 id="askTitle"></h2><p class="help" id="askText"></p></div>
     <div class="modal-foot"><button class="btn sec press" id="askNo">Annulla</button><button class="btn pri press" id="askYes"></button></div>
   </div>
-</div>
-<div class="pv-bg" id="pvModal" hidden role="dialog" aria-modal="true" aria-label="Anteprima">
-  <div class="pv-top"><span id="pvCount"></span><button class="btn sm sec press" id="pvClose">Chiudi</button></div>
-  <div class="pv-stage" id="pvStage"></div>
-  <div class="pv-nav"><button class="btn sec press" id="pvPrev" aria-label="Pagina precedente">‹</button><button class="btn sec press" id="pvNext" aria-label="Pagina successiva">›</button></div>
 </div>
 <div class="modal-bg" id="anModal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="anTitle">
@@ -613,7 +617,7 @@ $('#undo').onclick=()=>restore(past,future); $('#redo').onclick=()=>restore(futu
 let clip=null;
 document.addEventListener('keydown',e=>{
   if(!$('#anModal').hidden||!$('#askModal').hidden) return; // dialogs handle their own keys
-  if(!$('#pvModal').hidden){ if(e.key==='Escape') closePreview(); if(e.key==='ArrowRight') stepPreview(1); if(e.key==='ArrowLeft') stepPreview(-1); return; }
+  if(document.body.classList.contains('previewing')){ if(e.key==='Escape') setPreview(false); return; }
   const a=document.activeElement, mod=e.metaKey||e.ctrlKey, k=e.key.toLowerCase();
   if(a.isContentEditable){ if(e.key==='Escape'){ a.blur(); } return; }
   if(a.matches('input,select,textarea')) return;
@@ -761,6 +765,9 @@ const casePagesOf=pr=>pr.code==='LUM-2026-01'?V().case:V().others[pr.code];
 /* In the client file the client's introduction replaces each case's own (SCP 2026-10-26, C23): the intro pages are hidden. */
 const isCaseIntro=p=>!!p.introOf||p.key==='cover'||p.key.endsWith('-cover');
 const clientCasePages=pr=>casePagesOf(pr).filter(p=>!isCaseIntro(p));
+/* A case's pages fall in three sections: Intro, Output (the work) and Risultati. */
+const SECTIONS={intro:'Intro',output:'Output',risultati:'Risultati'};
+const sectionOf=p=>p.section||(isCaseIntro(p)?'intro':p.key==='outro'||p.key.endsWith('-outro')?'risultati':'output');
 FORMATS.forEach(f=>{ const v=doc.views[f]; applyIntro(v.case,v.case[0],f,'case'); applyIntro(v.client.intro,v.client.intro[0],f,'client'); });
 /* What Instagram lays over a Video once published (from the owner's screenshots, 2026-10-27).
    Reel: status bar and Per te / Amici at the top, actions on the right, account and caption at the bottom.
@@ -812,7 +819,7 @@ function renderPage(p,thumb=false){
    would make text overflow its block (or a track smaller than 12%) is refused and the handle turns orange. */
 function grip(area,onStart){ const x=document.createElement('div'); x.className='grip'; x.draggable=true; x.style.gridArea=area; x.innerHTML='⠿ Sposta'; x.title='Trascina su un altro blocco per scambiarli';
   x.addEventListener('dragstart',onStart); x.addEventListener('click',e=>e.stopPropagation()); return x; }
-let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),2200); }
+let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),3500); }
 function hl(area,cls){ const x=document.createElement('div'); x.className='hl '+cls; x.style.gridArea=area; return x; }
 /* The blocks touching grid line `line` on an axis. */
 function edgeBlocks(g,axis,line){ return [...g.querySelectorAll(':scope>.slot')].filter(s=>{ const [r1,c1,r2,c2]=s.style.gridArea.split('/').map(v=>parseInt(v));
@@ -945,7 +952,7 @@ function label(p,n){ const l=document.createElement('div'); l.className='pg-labe
 /* Add an empty page (one empty block) after the selected page, or at the end of the case. */
 let pageN=0;
 function addPage(){ const f=findSel(); const list=f?listOf(f.p):state.mode==='case'?V().case:V().client.outro;
-  commit(); const p={key:'new-'+(++pageN)+'-'+Date.now().toString(36),name:'Nuova pagina',bg:'#ffffff',variant:0,slots:[B('Blocco',[])]};
+  commit(); const p={key:'new-'+(++pageN)+'-'+Date.now().toString(36),name:'Nuova pagina',bg:'#ffffff',variant:0,slots:[B('Blocco',[])],section:f?sectionOf(f.p):'output'};
   list.splice(f?list.indexOf(f.p)+1:list.length,0,p); select(p.key,null);
   document.getElementById('p-'+p.key)?.scrollIntoView({behavior:'smooth',block:'center'}); }
 /* A case page is also in the client's file (and the other way round): say so before deleting it. */
@@ -973,7 +980,9 @@ function renderCanvas(){
     meta.appendChild(sw); }
   c.appendChild(meta);
   let n=1;
-  if(state.mode==='case'){ V().case.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));}); }
+  if(state.mode==='case'){ let sec=null;
+    V().case.forEach(p=>{ if(sectionOf(p)!==sec){ sec=sectionOf(p); const g=document.createElement('div'); g.className='group-label'; g.textContent=SECTIONS[sec]; c.appendChild(g); }
+      c.appendChild(label(p,n++)); c.appendChild(renderPage(p)); }); }
   else{
     // Presentazione: pages one under the other. Carosello and Video: each group is a slideshow row.
     const group=(t,pages)=>{ const g=document.createElement('div'); g.className='group-label'; g.textContent=t; c.appendChild(g);
@@ -1185,7 +1194,8 @@ function renderRight(){
   if(state.tab==='pages'){
     const thumb=(p,n)=>`<button class="thumb" draggable="true" data-go="${p.key}" aria-current="${!!state.sel&&state.sel.page===p.key}">${miniOf(p)}<small><b>${n}</b> · ${p.name}</small></button>`;
     const cls=state.view==='list'?'thumbs list':'thumbs'; let h='',n=1;
-    if(state.mode==='case') h=`<div class="${cls}">${V().case.filter(p=>p.name.toLowerCase().includes(q)).map(p=>thumb(p,n++)).join('')}</div>`;
+    if(state.mode==='case') Object.keys(SECTIONS).forEach(sec=>{ const ps=V().case.filter(p=>sectionOf(p)===sec);
+      if(ps.length) h+=`<div class="r-group"><p class="eyebrow">${SECTIONS[sec]}</p><div class="${cls}">${ps.map(p=>p.name.toLowerCase().includes(q)?thumb(p,V().case.indexOf(p)+1):'').join('')}</div></div>`; });
     else{
       h+=`<div class="r-group"><p class="eyebrow">Introduzione</p><div class="${cls}">${V().client.intro.map(p=>thumb(p,n++)).join('')}</div></div>`;
       // The client's cases as project rows (the case's own pages are in the canvas); drag a row to reorder.
@@ -1227,18 +1237,14 @@ function renderRight(){
       commit(); cur.s.items.push(IM(id,{video:!!m.video})); select(cur.p.key,state.sel.idx,String(cur.s.items.length-1)); }; });
 }
 
-/* Anteprima: the pages of the format in view, one at a time, full screen (arrows or ← → to move, Esc to close). */
-let pvI=0;
-function drawPreview(){ const ps=pageEls(); pvI=Math.max(0,Math.min(ps.length-1,pvI));
-  const ratio={169:16/9,11:1,916:9/16}[state.fmt], st=$('#pvStage'), W=st.clientWidth, H=st.clientHeight, w=Math.min(W,H*ratio);
-  const fr=document.createElement('div'); fr.className='pv-frame'; fr.style.width=w+'px'; fr.style.height=w/ratio+'px'; fr.appendChild(renderPage(ps[pvI],true));
-  st.innerHTML=''; st.appendChild(fr); $('#pvCount').textContent=`${fmtName()} · ${pvI+1} di ${ps.length} · ${ps[pvI].name}`;
-  $('#pvPrev').disabled=pvI===0; $('#pvNext').disabled=pvI===ps.length-1; }
-function stepPreview(d){ pvI+=d; drawPreview(); }
-function closePreview(){ $('#pvModal').hidden=true; $('#previewBtn').focus(); }
-$('#previewBtn').onclick=()=>{ const f=findSel(); pvI=f?pageEls().indexOf(f.p):0; $('#pvModal').hidden=false; drawPreview(); $('#pvNext').focus(); };
-$('#pvPrev').onclick=()=>stepPreview(-1); $('#pvNext').onclick=()=>stepPreview(1); $('#pvClose').onclick=closePreview;
-window.addEventListener('resize',()=>{ if(!$('#pvModal').hidden) drawPreview(); });
+/* Panels and Anteprima. Anteprima shows the pages as they will look, without the editing tools;
+   the same button (now "Torna all'editor") goes back. */
+const work=$('.work');
+$('#panelL').onclick=()=>{ const on=work.classList.toggle('hide-l'); $('#panelL').setAttribute('aria-pressed',String(!on)); };
+$('#panelR').onclick=()=>{ const on=work.classList.toggle('hide-r'); $('#panelR').setAttribute('aria-pressed',String(!on)); };
+function setPreview(on){ document.body.classList.toggle('previewing',on); $('#previewBtn').textContent=on?'Torna all’editor':'Anteprima';
+  $('#previewBtn').classList.toggle('pri',on); $('#previewBtn').classList.toggle('sec',!on); renderCanvas(); }
+$('#previewBtn').onclick=()=>setPreview(!document.body.classList.contains('previewing'));
 function setTab(t){ state.tab=t; document.querySelectorAll('#rtab button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===t))); renderRight(); }
 let tmr; function saving(){ $('#save').textContent='Salvataggio…'; clearTimeout(tmr); tmr=setTimeout(()=>$('#save').textContent='Salvato',600); }
 const press=(sel,b)=>document.querySelectorAll(sel).forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
