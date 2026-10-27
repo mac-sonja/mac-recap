@@ -220,68 +220,54 @@ select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45d
 .drop label{color:var(--ink);font-weight:500;cursor:pointer}
 .modal-foot{display:flex;justify-content:flex-end;gap:8px}
 @media (max-width:640px){.an-opts{grid-template-columns:repeat(2,1fr)}}
-/* Intro template (Figma MAC-TF-AI, 2026-10-27). Sizes are Figma px times --u, the page width over the frame width. */
-.tpl{position:absolute;inset:0;font-family:Inter,var(--sans);color:#012234;letter-spacing:0}
-.tpl *{box-sizing:border-box}
-.tpl [data-f]{outline:none}.tpl [data-f][contenteditable="true"]{cursor:text;box-shadow:0 0 0 2px var(--accent);border-radius:4px}
-.tb{border-radius:calc(var(--u)*20);overflow:hidden;position:relative;background:#ededf0;display:flex;flex-direction:column;min-width:0;min-height:0}
-.tb .sp{flex:1 0 0;min-height:0}
-.t-lab{font-weight:600;font-size:calc(var(--u)*13);line-height:calc(var(--u)*18);text-transform:uppercase}
-.t-head{font-weight:600;font-size:calc(var(--u)*26);line-height:1.2;letter-spacing:-.02em}
-.t-body{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24);color:rgb(1 34 52 / .6)}
-.cov{color:#fff}
-.cov .bgimg{position:absolute;inset:0;background:#2977ff}
-.cov .bgimg img,.cov .bgimg>span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.cov .bgimg::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgb(102 102 102 / 0),rgb(0 0 0 / .5))}
-.cov>*:not(.bgimg){position:relative}
+/* Intro cards (Figma MAC-TF-AI, 2026-10-27): blocks like any other, with their own content.
+   Sizes are Figma px times --u (the page width over the Figma frame width). */
+.slot.card{display:flex;flex-direction:column;overflow:hidden;border-radius:calc(var(--u)*20);font-family:Inter,var(--sans);color:#012234;letter-spacing:0}
+.card [data-f]{outline:none}.card [data-f][contenteditable="true"]{cursor:text;box-shadow:0 0 0 2px var(--accent);border-radius:4px}
+.card .sp{flex:1 0 0;min-height:0}
+.card .t-lab{font-weight:600;font-size:calc(var(--u)*13);line-height:calc(var(--u)*18);text-transform:uppercase}
+.card .t-head{margin:0;font-weight:600;font-size:calc(var(--u)*26);line-height:1.2;letter-spacing:-.02em}
+.card .t-body{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24);color:rgb(1 34 52 / .6)}
+.slot.card{gap:calc(var(--u)*12)}
+.slot.c-cover{color:#fff}
+.c-cover .bgimg{position:absolute;inset:0;background:#2977ff}
+.c-cover .bgimg img,.c-cover .bgimg>span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.c-cover .bgimg::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgb(102 102 102 / 0),rgb(0 0 0 / .5))}
+.c-cover>*:not(.bgimg){position:relative}
+.c-cover .t-lab{color:rgb(255 255 255 / .65)}
+.c-cover h1{margin:0;font-weight:700;font-size:calc(var(--u)*56);line-height:calc(var(--u)*62)}
+.c-cover .sub{font-size:calc(var(--u)*20);line-height:calc(var(--u)*28);color:rgb(255 255 255 / .75)}
 .tags{display:flex;flex-wrap:wrap;gap:calc(var(--u)*6);align-content:center}
 .tag{border-radius:999px;padding:calc(var(--u)*7) calc(var(--u)*14);font-weight:500;font-size:calc(var(--u)*14);line-height:calc(var(--u)*18.2);white-space:nowrap;background:#012234;color:#efefef}
-.cov .tag{background:rgb(255 255 255 / .15);color:#fff}
+.c-cover .tag{background:rgb(255 255 255 / .15);color:#fff}
 .logo-box{width:calc(var(--u)*123.2);height:calc(var(--u)*56);border-radius:calc(var(--u)*10);background:#c7c7cc;display:grid;place-items:center;font-weight:600;font-size:calc(var(--u)*13);color:#012234;flex-shrink:0}
-.brand{display:flex;align-items:center;gap:calc(var(--u)*20)}
+.brand{display:flex;align-items:center;gap:calc(var(--u)*20);flex-shrink:0}
 .brand .dv{width:1px;height:calc(var(--u)*48);display:block}
 .brand .mac{width:calc(var(--u)*89);height:calc(var(--u)*28.914);display:block}
-/* Presentazione 1920×1080: margin 40, gutter 24, padding 28 */
-.ti-169{display:grid;inset:calc(var(--u)*40);grid-template-columns:908fr 442fr 442fr;grid-template-rows:147fr 317fr 488fr;gap:calc(var(--u)*24)}
-.ti-169 .tb{padding:calc(var(--u)*28);gap:calc(var(--u)*12)}
-.ti-169 .cov{grid-area:1/1/4/2}
-.ti-169 .cov .t-lab{color:rgb(255 255 255 / .65)}
-.ti-169 .cov h1{margin:0;font-weight:700;font-size:calc(var(--u)*56);line-height:calc(var(--u)*62)}
-.ti-169 .cov .sub{font-size:calc(var(--u)*20);line-height:calc(var(--u)*28);color:rgb(255 255 255 / .75)}
-.ti-169 .cli{grid-area:1/2/2/4;flex-direction:row;align-items:center;gap:calc(var(--u)*110)}
-.ti-169 .cli .who{flex:1;min-width:0;display:flex;flex-direction:column;gap:calc(var(--u)*12)}
-.ti-169 .cli .name{font-weight:600;font-size:calc(var(--u)*26);line-height:1.1;letter-spacing:-.02em}
-.ti-169 .cli .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
-.ti-169 .srv{grid-area:2/2/3/3;justify-content:space-between}
-.ti-169 .sfi{grid-area:3/2/4/3}
-.ti-169 .ide{grid-area:2/3/4/4}
-/* Carosello 1000×1000 frame: margin 24; cover padding 60, story pages padding 40 */
-.ti-11{padding:calc(var(--u)*24);display:flex}
-.ti-11 .tb{flex:1}
-.ti-11 .cov{padding:calc(var(--u)*60);gap:calc(var(--u)*12)}
-.ti-11 .cov .ctop{display:flex;justify-content:space-between;align-items:center}
-.ti-11 .cov .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
-.ti-11 .cov .name{font-weight:600;font-size:calc(var(--u)*30);line-height:1.1;letter-spacing:-.02em;margin-top:calc(var(--u)*6)}
-.ti-11 .cov h1{margin:0;font-weight:700;font-size:calc(var(--u)*56);line-height:1.1;letter-spacing:-.02em}
-.ti-11 .cov .sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em;color:rgb(255 255 255 / .75)}
-.ti-11 .cov .hr{height:1px;width:100%;display:block}
-.ti-11 .cov .srow{display:flex;justify-content:space-between;align-items:flex-start;gap:calc(var(--u)*20)}
-.ti-11 .cov .srow .t-lab{font-size:calc(var(--u)*16);line-height:calc(var(--u)*18)}
-.ti-11 .cov .tags{justify-content:flex-end}
-.ti-11 .story{padding:calc(var(--u)*40);gap:calc(var(--u)*12)}
-.ti-11 .story .t-lab{font-size:calc(var(--u)*18)}
-.ti-11 .story h2{margin:0;font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
-.ti-11 .story .t-body{font-size:calc(var(--u)*22);line-height:1.3;letter-spacing:-.01em;margin-top:calc(var(--u)*6);max-width:calc(var(--u)*840)}
-.ti-11 .story.two .t-body{font-size:calc(var(--u)*18);columns:2;column-gap:calc(var(--u)*40);max-width:none}
-/* Reel 1080×1920: one grey block, title, description and services above the animation (Carousel 04) */
-.ti-916{padding:calc(var(--u)*24);display:flex}
-.ti-916 .tb{flex:1;padding:calc(var(--u)*40) 0 calc(var(--u)*40);gap:calc(var(--u)*18)}
-.ti-916 .tb>*:not(.reel-an){margin:0 calc(var(--u)*40)}
-.ti-916 .t-lab{font-size:calc(var(--u)*18)}
-.ti-916 h1{margin:0;font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
-.ti-916 .sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em;color:rgb(1 34 52 / .6)}
-.ti-916 .tag{font-size:calc(var(--u)*18);line-height:calc(var(--u)*24);padding:calc(var(--u)*9) calc(var(--u)*18)}
-.ti-916 .reel-an{flex:1;position:relative;min-height:0;margin-top:calc(var(--u)*22)}
+.slot.card.c-client{flex-direction:row;align-items:center;gap:calc(var(--u)*110)}
+.c-client .who{flex:1;min-width:0;display:flex;flex-direction:column;gap:calc(var(--u)*12)}
+.c-client .name{font-weight:600;font-size:calc(var(--u)*26);line-height:1.1;letter-spacing:-.02em}
+.c-client .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
+.slot.c-services{justify-content:space-between}
+/* Carosello: the cover carries the client and the services; the story pages have big headings */
+.page[data-ratio="11"] .c-cover .ctop{display:flex;justify-content:space-between;align-items:center}
+.page[data-ratio="11"] .c-cover .meta{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24)}
+.page[data-ratio="11"] .c-cover .name{font-weight:600;font-size:calc(var(--u)*30);line-height:1.1;letter-spacing:-.02em;margin-top:calc(var(--u)*6)}
+.page[data-ratio="11"] .c-cover h1{line-height:1.1;letter-spacing:-.02em}
+.page[data-ratio="11"] .c-cover .sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em}
+.page[data-ratio="11"] .c-cover .hr{height:1px;width:100%;display:block}
+.page[data-ratio="11"] .c-cover .srow{display:flex;justify-content:space-between;align-items:flex-start;gap:calc(var(--u)*20)}
+.page[data-ratio="11"] .c-cover .srow .t-lab{font-size:calc(var(--u)*16);color:#fff}
+.page[data-ratio="11"] .c-cover .tags{justify-content:flex-end}
+.page[data-ratio="11"] .c-story .t-lab,.page[data-ratio="916"] .card .t-lab{font-size:calc(var(--u)*18)}
+.page[data-ratio="11"] .c-story .t-head,.page[data-ratio="916"] .c-reel h1{margin:0;font-weight:700;font-size:calc(var(--u)*68);line-height:1.1;letter-spacing:-.02em}
+.page[data-ratio="11"] .c-story .t-body{font-size:calc(var(--u)*22);line-height:1.3;letter-spacing:-.01em;margin-top:calc(var(--u)*6);max-width:calc(var(--u)*840)}
+.page[data-ratio="11"] .c-story.two .t-body{font-size:calc(var(--u)*18);columns:2;column-gap:calc(var(--u)*40);max-width:none}
+/* Reel: title, description and services above the Carousel 04 animation */
+.slot.card.c-reel{gap:calc(var(--u)*18)}
+.c-reel .sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em;color:rgb(1 34 52 / .6)}
+.c-reel .tag{font-size:calc(var(--u)*18);line-height:calc(var(--u)*24);padding:calc(var(--u)*9) calc(var(--u)*18)}
+.c-reel .reel-an{flex:1;position:relative;min-height:0;margin:calc(var(--u)*22) calc(var(--u)*-40) 0}
 /* Animated Reel page: the animation sits in a background-grey block */
 .reel-anim{position:absolute;inset:var(--pad);border-radius:12px;background:#ededf0;overflow:hidden}
 /* Template text styles (placeholder; the real ones come from the templates) */
@@ -470,7 +456,8 @@ const BENTO = {
   2:[{g:'1fr/1fr 1fr',a:[A(1,1,2,2),A(1,2,2,3)]},{g:'1fr/2fr 1fr',a:[A(1,1,2,2),A(1,2,2,3)]},{g:'1fr/1fr 2fr',a:[A(1,1,2,2),A(1,2,2,3)]},{g:'2fr 1fr/1fr',a:[A(1,1,2,2),A(2,1,3,2)]}],
   3:[{g:'1fr 1fr/2fr 1fr',a:[A(1,1,3,2),A(1,2,2,3),A(2,2,3,3)]},{g:'1fr 1fr/1fr 2fr',a:[A(1,1,2,2),A(2,1,3,2),A(1,2,3,3)]},{g:'1fr/1fr 1fr 1fr',a:[A(1,1,2,2),A(1,2,2,3),A(1,3,2,4)]},{g:'2fr 1fr/1fr 1fr',a:[A(1,1,2,3),A(2,1,3,2),A(2,2,3,3)]}],
   4:[{g:'1fr 1fr/1fr 1fr',a:[A(1,1,2,2),A(1,2,2,3),A(2,1,3,2),A(2,2,3,3)]},{g:'1fr 1fr 1fr/2fr 1fr',a:[A(1,1,4,2),A(1,2,2,3),A(2,2,3,3),A(3,2,4,3)]},{g:'2fr 1fr/1fr 1fr 1fr',a:[A(1,1,2,4),A(2,1,3,2),A(2,2,3,3),A(2,3,3,4)]}],
-  5:[{g:'1fr 1fr/2fr 1fr 1fr',a:[A(1,1,3,2),A(1,2,2,3),A(1,3,2,4),A(2,2,3,3),A(2,3,3,4)]},{g:'1fr 1fr/1fr 1fr 1fr',a:[A(1,1,2,3),A(1,3,2,4),A(2,1,3,2),A(2,2,3,3),A(2,3,3,4)]}],
+  5:[{g:'147fr 317fr 488fr/908fr 442fr 442fr',a:[A(1,1,4,2),A(1,2,2,4),A(2,2,3,3),A(3,2,4,3),A(2,3,4,4)]}, // Intro (Figma)
+     {g:'1fr 1fr/2fr 1fr 1fr',a:[A(1,1,3,2),A(1,2,2,3),A(1,3,2,4),A(2,2,3,3),A(2,3,3,4)]},{g:'1fr 1fr/1fr 1fr 1fr',a:[A(1,1,2,3),A(1,3,2,4),A(2,1,3,2),A(2,2,3,3),A(2,3,3,4)]}],
   6:[{g:'1fr 1fr/1fr 1fr 1fr',a:[A(1,1,2,2),A(1,2,2,3),A(1,3,2,4),A(2,1,3,2),A(2,2,3,3),A(2,3,3,4)]}],
 };
 const MAX_BLOCKS=6;
@@ -497,7 +484,7 @@ const ELEMENTS = [
 ];
 
 function casePages(){ return [
-  {key:'cover',name:'Intro',bg:'#ffffff',variant:1,tpl:'intro',preset:'intro',slots:[
+  {key:'cover',name:'Intro',bg:'#ffffff',variant:1,slots:[
     {k:'txt',n:'Titolo',cls:'h1',t:'Una luce nuova per Lumen',align:'end'},
     {k:'txt',n:'Occhiello',cls:'eyebrow',t:'Lumen · 2026 · Brand e digitale',align:'end'},
     {k:'img',n:'Immagine principale',m:'m1'}]},
@@ -563,57 +550,89 @@ const clearMarks=()=>{ document.querySelectorAll('.drop-before,.drop-over').forE
   document.querySelectorAll('[data-over]').forEach(x=>delete x.dataset.over); document.querySelectorAll('.hl.drop').forEach(x=>x.remove()); };
 document.addEventListener('dragend',()=>{ drag=null; clearMarks(); });
 
-/* Intro template content, from the case. */
-const INTRO={eyebrow:'01 Progetto',title:'Una luce nuova per Lumen',sub:'Un marchio e un sito che mostrano i prodotti come li vedono i clienti: al buio.',
-  client:'Lumen S.r.l.',meta:'Illuminazione · 2026',services:['Branding','Web design','Fotografia','Art direction','Social media'],
-  challengeHead:'Un marchio forte, ma invisibile online',challengeBody:'Lumen era conosciuta dai progettisti, ma il sito non mostrava la qualità della luce e le richieste arrivavano quasi solo dalle fiere.',
-  ideaHead:'Mostrare la luce al buio',ideaBody:'Abbiamo ridisegnato il logo partendo dalla forma delle lampade e costruito un sito che mostra i prodotti al buio, come li vedono i clienti. Ogni pagina prodotto si apre con la lampada accesa, con le foto scattate nello studio di Lumen.\n\nIl nuovo marchio è nato dalla curva della lampada più venduta e ora firma packaging, cataloghi e stand.',img:'m0'};
-const FRAME={169:1920,11:1000,916:1080};
+const FRAME={169:1920,11:1000,916:1080}; // Figma frame width per format
 const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-const F=(i,f,tag='div',cls='')=>`<${tag} class="${cls}" data-f="${f}">${esc(i[f]).replace(/\n/g,'<br>')}</${tag}>`;
-const coverImg=i=>{ const m=allMedia().find(x=>x.id===i.img); return `<div class="bgimg">${m?(m.src?mediaTag(m):`<span class="${m.g}"></span>`):''}</div>`; };
-const brand=white=>`<div class="brand"><div class="logo-box">LOGO</div><img class="dv" src="assets/${white?'divider-v-white':'divider-v'}.svg" alt="" style="transform:rotate(0)"><img class="mac" src="assets/${white?'mac-logo-white':'mac-logo'}.svg" alt="MAC"></div>`;
-const tagsOf=i=>`<div class="tags">${i.services.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`;
-/* The intro's pages in the current format: one in Presentazione and Reel, three in Carosello. */
-function introViews(p){ const i=p.intro||(p.intro=JSON.parse(JSON.stringify(INTRO)));
-  if(state.fmt==='169') return [{name:p.name,html:`<div class="tpl ti-169">
-    <div class="tb cov">${coverImg(i)}${F(i,'eyebrow','div','t-lab')}<div class="sp"></div>${F(i,'title','h1')}${F(i,'sub','div','sub')}</div>
-    <div class="tb cli"><div class="who"><div class="t-lab">02 Cliente</div><div>${F(i,'client','div','name')}${F(i,'meta','div','meta')}</div></div>${brand(false)}</div>
-    <div class="tb srv"><div class="t-lab">03 Servizi</div>${tagsOf(i)}</div>
-    <div class="tb sfi"><div class="t-lab">04 Sfida</div><div class="sp"></div>${F(i,'challengeHead','div','t-head')}${F(i,'challengeBody','div','t-body')}</div>
-    <div class="tb ide"><div class="t-lab">05 Idea</div><div class="sp"></div>${F(i,'ideaHead','div','t-head')}${F(i,'ideaBody','div','t-body')}</div></div>`}];
-  if(state.fmt==='11') return [
-    {name:p.name+' · Copertina',bg:'#ededf0',html:`<div class="tpl ti-11"><div class="tb cov">${coverImg(i)}
-      <div class="ctop"><div>${F(i,'meta','div','meta')}${F(i,'client','div','name')}</div>${brand(true)}</div>
-      <div class="sp"></div>${F(i,'title','h1')}${F(i,'sub','div','sub')}<img class="hr" src="assets/divider-h-white.svg" alt="">
-      <div class="srow"><div class="t-lab">Servizi</div>${tagsOf(i)}</div></div></div>`},
-    {name:p.name+' · Sfida',html:`<div class="tpl ti-11"><div class="tb story"><div class="t-lab">Sfida</div><div class="sp"></div>${F(i,'challengeHead','h2')}${F(i,'challengeBody','div','t-body')}</div></div>`},
-    {name:p.name+' · Idea',html:`<div class="tpl ti-11"><div class="tb story two"><div class="t-lab">Idea</div><div class="sp"></div>${F(i,'ideaHead','h2')}${F(i,'ideaBody','div','t-body')}</div></div>`}];
-  return [{name:p.name,html:`<div class="tpl ti-916"><div class="tb"><div class="t-lab">Progetto</div>${F(i,'title','h1')}${F(i,'sub','div','sub')}${tagsOf(i)}
-    <div class="reel-an">${animHTML('c04',[i.img,...doc.media.filter(m=>!m.video&&m.id!==i.img).map(m=>m.id)].map(id=>allMedia().find(m=>m.id===id)).filter(Boolean).slice(0,5))}</div></div></div>`}];
-}
-function renderTplPage(p,v,k){
-  const el=document.createElement('div'); el.className='page'; el.dataset.ratio=state.fmt; if(k===0) el.id='p-'+p.key; else el.dataset.sub=p.key;
-  el.style.background=v.bg||p.bg; el.style.setProperty('--u',`calc(100cqw / ${FRAME[state.fmt]})`);
-  if(state.sel&&state.sel.page===p.key) el.classList.add('cur');
-  el.innerHTML=v.html;
-  el.addEventListener('click',()=>{ if(!(state.sel&&state.sel.page===p.key)) select(p.key,null); });
-  // Double-click a text to edit it; it is saved in the intro and shows the same in every format.
-  el.querySelectorAll('[data-f]').forEach(t=>{
-    t.addEventListener('dblclick',e=>{ e.stopPropagation(); t.contentEditable='true'; t.focus(); t._before=JSON.stringify(doc); });
-    t.addEventListener('input',()=>{ if(t._before){ past.push(t._before); future.length=0; t._before=null; syncHistory(); } p.intro[t.dataset.f]=t.innerText; saving(); });
-    t.addEventListener('blur',()=>{ t.contentEditable='false'; }); });
-  return el; }
-/* A page's views in the canvas: a template can be several pages in one format. */
-const viewsOf=p=>p.tpl==='intro'?introViews(p):[{name:p.name}];
-function appendPage(c,p,n){ const vs=viewsOf(p);
-  vs.forEach((v,k)=>{ c.appendChild(label({name:v.name},n+k)); c.appendChild(v.html?renderTplPage(p,v,k):renderPage(p)); });
-  return vs.length; }
+const F=(s,f,tag='div',cls='')=>`<${tag} class="${cls}" data-f="${f}">${esc(s[f]).replace(/\n/g,'<br>')}</${tag}>`;
+const coverImg=s=>{ const m=allMedia().find(x=>x.id===s.img); return `<div class="bgimg">${m?(m.src?mediaTag(m):`<span class="${m.g}"></span>`):''}</div>`; };
+const brand=white=>`<div class="brand"><div class="logo-box">LOGO</div><img class="dv" src="assets/${white?'divider-v-white':'divider-v'}.svg" alt=""><img class="mac" src="assets/${white?'mac-logo-white':'mac-logo'}.svg" alt="MAC"></div>`;
+const tagsOf=s=>`<div class="tags" data-f="services" data-list>${s.services.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`;
+/* Card blocks: a block with its own content (cover, client, services, story, reel). */
+function cardHTML(s){
+  const fmt=state.fmt;
+  if(s.v==='cover'&&fmt==='11') return `${coverImg(s)}<div class="ctop"><div>${F(s,'meta','div','meta')}${F(s,'client','div','name')}</div>${brand(true)}</div>
+    <div class="sp"></div>${F(s,'title','h1')}${F(s,'sub','div','sub')}<img class="hr" src="assets/divider-h-white.svg" alt="">
+    <div class="srow"><div class="t-lab">Servizi</div>${tagsOf(s)}</div>`;
+  if(s.v==='cover') return `${coverImg(s)}${F(s,'label','div','t-lab')}<div class="sp"></div>${F(s,'title','h1')}${F(s,'sub','div','sub')}`;
+  if(s.v==='client') return `<div class="who">${F(s,'label','div','t-lab')}<div>${F(s,'client','div','name')}${F(s,'meta','div','meta')}</div></div>${brand(false)}`;
+  if(s.v==='services') return `${F(s,'label','div','t-lab')}${tagsOf(s)}`;
+  if(s.v==='story') return `${F(s,'label','div','t-lab')}<div class="sp"></div>${F(s,'head','div','t-head')}${F(s,'body','div','t-body')}`;
+  if(s.v==='reel') return `${F(s,'label','div','t-lab')}${F(s,'title','h1')}${F(s,'sub','div','sub')}${tagsOf(s)}
+    <div class="reel-an">${animHTML('c04',s.items.map(id=>allMedia().find(m=>m.id===id)).filter(Boolean))}</div>`;
+  return ''; }
+/* Double-click a text in a card to edit it; services are typed as a comma-separated list. */
+/* Rows "field → where it comes from" for a card, in the document open now. */
+function cardSources(s){ const S=SOURCES[state.mode], r=[];
+  if(s.title!=null) r.push(['Titolo',S.title]); if(s.sub!=null) r.push(['Sottotitolo',S.sub]);
+  if(s.client!=null) r.push(['Cliente',S.client]); if(s.meta!=null) r.push(['Dettagli',S.meta]);
+  if(s.services) r.push(['Servizi',S.services+(state.mode==='case'?'':'')],['',COLLECTION_SERVICES]);
+  if(s.v==='story') r.push(['Testo',/sfida/i.test(s.n)?S.challenge:S.idea]);
+  if(s.img) r.push(['Immagine',S.img]);
+  return r; }
+function wireCard(d,p,s){
+  d.querySelectorAll('[data-f]').forEach(t=>{ const f=t.dataset.f, list=t.hasAttribute('data-list');
+    t.addEventListener('dblclick',e=>{ e.stopPropagation(); if(list) t.textContent=s[f].join(', '); t.contentEditable='true'; t.focus(); t._before=JSON.stringify(doc); });
+    t.addEventListener('input',()=>{ if(t._before){ past.push(t._before); future.length=0; t._before=null; syncHistory(); }
+      s[f]=list?t.textContent.split(',').map(x=>x.trim()).filter(Boolean):t.innerText; saving(); });
+    t.addEventListener('blur',()=>{ t.contentEditable='false'; if(list) select(p.key,state.sel?state.sel.idx:null); }); }); }
+
+/* The Intro, from the case. Applying it lays out the page with its card blocks in the format in view:
+   Presentazione one page of five blocks, Carosello three pages (cover, Sfida, Idea), Reel one block. */
+const INTRO={
+  case:{title:'Una luce nuova per Lumen',sub:'Un marchio e un sito che mostrano i prodotti come li vedono i clienti: al buio.',
+    client:'Lumen S.r.l.',meta:'Illuminazione · 2026',services:['Branding','Web design','Fotografia','Art direction','Social media'],
+    challengeHead:'Un marchio forte, ma invisibile online',challengeBody:'Lumen era conosciuta dai progettisti, ma il sito non mostrava la qualità della luce e le richieste arrivavano quasi solo dalle fiere.',
+    ideaHead:'Mostrare la luce al buio',ideaBody:'Abbiamo ridisegnato il logo partendo dalla forma delle lampade e costruito un sito che mostra i prodotti al buio, come li vedono i clienti. Ogni pagina prodotto si apre con la lampada accesa, con le foto scattate nello studio di Lumen.\n\nIl nuovo marchio è nato dalla curva della lampada più venduta e ora firma packaging, cataloghi e stand.',img:'m0'},
+  client:{title:'Lumen, tre anni di luce',sub:'Dal marchio al sito, dai cataloghi agli stand: il lavoro con Lumen dal 2023.',
+    client:'Lumen S.r.l.',meta:'Illuminazione · dal 2023',services:['Branding','Web design','Fotografia','Art direction','Social media','Editoria','Allestimenti'],
+    challengeHead:'Un’azienda di design senza una voce sua',challengeBody:'Quando ci siamo conosciuti, Lumen vendeva bene alle fiere ma online e nei cataloghi non raccontava la qualità della sua luce.',
+    ideaHead:'Un racconto unico, progetto dopo progetto',ideaBody:'Siamo partiti dal marchio e da lì abbiamo costruito il sito, i cataloghi e gli stand, sempre con la stessa idea: mostrare la luce come la vedono i clienti.',img:'c1'},
+};
+/* Where each Intro content comes from in the real tool (shown in the side panel). Services are dynamic:
+   a case shows its own, a client all the services of its cases, a collection those of the cases picked. */
+const SOURCES={
+  case:{title:'Titolo della case',sub:'Sottotitolo della case',client:'Nome del cliente',meta:'Settore del cliente · anno della case',services:'Servizi della case',
+    challenge:'Sfida della case (Contesto)',idea:'Idea della case (Soluzione)',img:'Immagine principale della case'},
+  client:{title:'Titolo del cliente',sub:'Sottotitolo del cliente',client:'Nome del cliente',meta:'Settore · cliente dal',services:'Tutti i servizi delle sue case',
+    challenge:'Contesto del cliente',idea:'Soluzione del cliente',img:'Immagine del cliente'},
+};
+const COLLECTION_SERVICES='Raccolta: i servizi delle case scelte';
+function applyIntro(list,p,fmt,mode=state.mode){ const I=INTRO[mode], card=(n,v,x)=>({k:'card',n,v,...JSON.parse(JSON.stringify(x))});
+  Object.assign(p,{preset:'intro',anim:null,tk:null,rows:null,cols:null});
+  // Re-applying replaces the Carosello pages the intro added before.
+  for(let i=list.length-1;i>=0;i--) if(list[i].introOf===p.key) list.splice(i,1);
+  if(fmt==='169'){ Object.assign(p,{pad:40,bg:'#ffffff',variant:0,slots:[
+      card('Progetto','cover',{label:mode==='client'?'01 Cliente':'01 Progetto',title:I.title,sub:I.sub,img:I.img}),
+      card('Cliente','client',{label:'02 Cliente',client:I.client,meta:I.meta}),
+      card('Servizi','services',{label:'03 Servizi',services:I.services}),
+      card('Sfida','story',{label:'04 Sfida',head:I.challengeHead,body:I.challengeBody}),
+      card('Idea','story',{label:'05 Idea',head:I.ideaHead,body:I.ideaBody})]}); return; }
+  if(fmt==='11'){ Object.assign(p,{pad:24,bg:'#ededf0',variant:0,slots:[
+      card('Progetto','cover',{title:I.title,sub:I.sub,img:I.img,client:I.client,meta:I.meta,services:I.services,cpad:60})]});
+    const at=list.indexOf(p)+1;
+    list.splice(at,0,
+      {key:p.key+'-sfida',name:p.name+' · Sfida',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[card('Sfida','story',{label:'Sfida',head:I.challengeHead,body:I.challengeBody,cpad:40})]},
+      {key:p.key+'-idea',name:p.name+' · Idea',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[card('Idea','story',{label:'Idea',head:I.ideaHead,body:I.ideaBody,cpad:40,two:true})]});
+    return; }
+  Object.assign(p,{pad:24,bg:'#ffffff',variant:0,slots:[card('Intro','reel',{label:'Progetto',title:I.title,sub:I.sub,services:I.services,cpad:40,
+    items:[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5)})]}); }
+// The sample case and client both start from the Intro, in every format.
+FORMATS.forEach(f=>{ const v=doc.views[f]; applyIntro(v.case,v.case[0],f,'case'); applyIntro(v.client.intro,v.client.intro[0],f,'client'); });
 function renderPage(p){
   const el=document.createElement('div');
   el.className='page'; el.dataset.ratio=state.fmt; el.id='p-'+p.key;
   if(state.sel&&state.sel.page===p.key&&state.sel.idx==null) el.classList.add('cur');
-  el.style.background=p.bg;
+  el.style.background=p.bg; el.style.setProperty('--u',`calc(100cqw / ${FRAME[state.fmt]})`);
+  if(p.pad!=null) el.style.setProperty('--pad',`calc(var(--u) * ${p.pad})`); // the template's own page margin
   if(animOf(p)){ el.innerHTML=`<div class="reel-anim">${animHTML(animOf(p),pageMedia(p),5)}</div>`; el.addEventListener('click',()=>select(p.key,null)); return el; }
   const grid=document.createElement('div'); grid.className='bento';
   const L=layoutOf(p); grid.style.gridTemplate=tpl(tracksOf(p));
@@ -623,6 +642,9 @@ function renderPage(p){
     if(s.k==='img'){ d.classList.add('img'); d.dataset.fit=s.fit||'fill'; if(s.imgbg) d.style.setProperty('--imgbg',s.imgbg);
       const m=allMedia().find(x=>x.id===s.m);
       d.innerHTML=`<div class="ph ${m?m.g:''}">${m&&m.src?mediaTag(m):''}</div>${s.video?'<span class="vid-badge">▶</span>':''}`; d.draggable=true; d.addEventListener('dragstart',startMove); }
+    else if(s.k==='card'){ d.classList.add('card','c-'+s.v); if(s.two) d.classList.add('two');
+      if(s.cpad!=null) d.style.padding=`calc(var(--u) * ${s.cpad})`; if(s.bg) d.style.background=s.bg;
+      d.innerHTML=cardHTML(s); wireCard(d,p,s); d.draggable=true; d.addEventListener('dragstart',startMove); }
     else if(s.k==='anim'){ d.classList.add('anim'); const bm=s.bgImg&&allMedia().find(x=>x.id===s.bgImg);
       d.style.background=s.bg||'#ededf0';
       d.innerHTML=(s.bgMode==='img'&&bm?`<div class="ph ${bm.g}" style="position:absolute;inset:0">${bm.src?mediaTag(bm):''}</div>`:'')+animHTML(s.type,s.items.map(id=>allMedia().find(x=>x.id===id)).filter(Boolean));
@@ -796,15 +818,15 @@ function renderCanvas(){
   meta.textContent={169:'Presentazione · 1920×1080 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28',11:'Carosello · 1080×1080 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28',916:'Reel · 1080×1920 px · margine 64 · spazio tra blocchi 24 · padding blocchi 28'}[state.fmt];
   c.appendChild(meta);
   let n=1;
-  if(state.mode==='case'){ V().case.forEach(p=>{ n+=appendPage(c,p,n); }); }
+  if(state.mode==='case'){ V().case.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));}); }
   else{
     const grp=t=>{const g=document.createElement('div');g.className='group-label';g.textContent=t;c.appendChild(g);};
-    grp('Introduzione'); V().client.intro.forEach(p=>{ n+=appendPage(c,p,n); });
+    grp('Introduzione'); V().client.intro.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));});
     V().client.projects.forEach(pr=>{ grp(pr.code+' · '+pr.name);
       const ghost=document.createElement('div'); ghost.className='page'; ghost.dataset.ratio=state.fmt; ghost.style.cssText='display:grid;place-items:center';
       ghost.innerHTML=`<div style="position:absolute;inset:0" class="${pr.g}"></div><div style="position:relative;color:#fff;text-align:center"><div class="t-h2">${pr.name}</div><div class="t-p" style="opacity:.8">${pr.pages} pagine · si modificano dalla sua case</div></div>`;
       c.appendChild(ghost); n+=pr.pages; });
-    grp('Chiusura'); V().client.outro.forEach(p=>{ n+=appendPage(c,p,n); });
+    grp('Chiusura'); V().client.outro.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));});
   }
   c.querySelectorAll('.page[id]').forEach(el=>placeHandles(el,pageByKey(el.id.slice(2))));
   const add=document.createElement('button'); add.className='add-page press'; add.textContent='+ Aggiungi pagina'; c.appendChild(add);
@@ -859,10 +881,9 @@ const DEFAULT_PAGES=[
 ];
 function applyDefaultPage(p,key){
   const D=DEFAULT_PAGES.find(d=>d.k===key); commit();
-  if(key==='intro'){ p.tpl='intro'; p.preset='intro'; select(p.key,null); return; } // the Intro template: its own layout in each format
-  p.tpl=null;
+  if(key==='intro'){ applyIntro(V().case.includes(p)?V().case:V().client.intro.includes(p)?V().client.intro:V().client.outro,p,state.fmt); select(p.key,null); return; }
   const imgs=[...p.slots.filter(x=>x.k==='img'&&x.m).map(x=>x.m),...(state.mode==='case'?doc.media:doc.cmedia).filter(m=>!m.video).map(m=>m.id)];
-  p.slots=D.slots(STORY[state.mode]).map(x=>x.k==='img'?{...x,m:imgs.shift()||null}:x);
+  p.pad=null; p.slots=D.slots(STORY[state.mode]).map(x=>x.k==='img'?{...x,m:imgs.shift()||null}:x);
   resetLayout(p); const w=layW(p); w.variant=D.v; w.anim=null; p.preset=key; select(p.key,null); }
 const dpThumb=D=>{ const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.k==='img'?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
 function applyPreset(p,n,v){
@@ -873,7 +894,7 @@ function applyPreset(p,n,v){
   if(n!==p.slots.length){ while(p.slots.length<n) p.slots.push({k:'img',n:'Immagine',m:null});
     for(let i=p.slots.length-1;i>=0&&p.slots.length>n;i--) if(empty(p.slots[i])) p.slots.splice(i,1);
     resetLayout(p); }
-  const w=layW(p); w.variant=v; w.anim=null; p.preset=null; p.tpl=null; select(p.key,null); }
+  const w=layW(p); w.variant=v; w.anim=null; p.preset=null; select(p.key,null); }
 function layoutsAndElements(p){
   const full=p&&p.slots.length>=MAX_BLOCKS;
   const cur=p&&p.slots.length&&!animOf(p)&&!p.preset?layoutOf(p):null;
@@ -910,13 +931,27 @@ function renderProps(){
         ${swatches(p.bg,'data-bg')}</div>`;
     wireDrag(el);
     // An animated layout is the page's layout in the Reel: the whole page plays the animation with its media.
-    el.querySelectorAll('[data-anvar]').forEach(b=>b.onclick=()=>{ commit(); layW(p).anim=b.dataset.anvar; p.preset=null; p.tpl=null; select(p.key,null); });
+    el.querySelectorAll('[data-anvar]').forEach(b=>b.onclick=()=>{ commit(); layW(p).anim=b.dataset.anvar; p.preset=null; select(p.key,null); });
     el.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>applyDefaultPage(p,b.dataset.dp));
     el.querySelectorAll('[data-var]').forEach(b=>b.onclick=()=>{ const [n,v]=b.dataset.var.split(':').map(Number); applyPreset(p,n,v); });
-    const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ commit(); const w=layW(p); w.variant=((w.variant||0)+1)%layoutsFor(p.slots.length).length; w.anim=null; p.preset=null; p.tpl=null; select(p.key,null); };
+    const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ commit(); const w=layW(p); w.variant=((w.variant||0)+1)%layoutsFor(p.slots.length).length; w.anim=null; p.preset=null; select(p.key,null); };
     el.querySelectorAll('[data-bg]').forEach(b=>b.onclick=()=>{ commit(); p.bg=b.dataset.bg; p.dark=DARK.includes(p.bg); select(p.key,null); });
     return; }
   const rm=`<div class="sec-b"><button class="btn sm sec press" id="rm" style="width:100%">Rimuovi dalla pagina</button></div>`;
+  if(s.k==='card'){ const m=s.v==='cover'&&allMedia().find(x=>x.id===s.img);
+    el.innerHTML=`<div class="sec-b"><div class="crumb">${p.name}</div><div class="sel-title">${s.n}</div>
+        <p class="help">Doppio clic su un testo per modificarlo.${s.services?' I servizi si scrivono separati da virgole.':''}</p></div>
+      <div class="sec-b"><p class="eyebrow">Contenuti</p>${cardSources(s).map(([k,v])=>`<div class="row" style="align-items:flex-start"><label>${k}</label><span class="help" style="flex:1">${v}</span></div>`).join('')}</div>
+      ${s.v==='cover'?`<div class="sec-b"><p class="eyebrow">Immagine</p>
+        <div style="display:flex;gap:10px;align-items:center"><div class="${m?m.g:''}" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;overflow:hidden;background-color:var(--fill-2)">${m&&m.src?`<div class="ph" style="width:100%;height:100%">${mediaTag(m)}</div>`:''}</div>
+        <div style="min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m?m.name:'Nessuna immagine'}</div><button style="color:var(--ink);font-size:12.5px;font-weight:500" id="cardimg">Sostituisci dai Media</button></div></div></div>`
+      :`<div class="sec-b"><p class="eyebrow">Sfondo blocco</p>
+        <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${s.bg||'#ededf0'}"></span><input value="${(s.bg||'#ededf0').toUpperCase()}"></div></div>
+        ${swatches(s.bg||'#ededf0','data-cardbg')}</div>`}${rm}`;
+    el.querySelectorAll('[data-cardbg]').forEach(b=>b.onclick=()=>{ commit(); s.bg=b.dataset.cardbg; select(p.key,state.sel.idx); });
+    const ci=$('#cardimg'); if(ci) ci.onclick=()=>setTab('media');
+    $('#rm').onclick=()=>removeBlock(p,state.sel.idx);
+    return; }
   if(s.k==='anim'){
     el.innerHTML=`<div class="sec-b"><div class="crumb">${p.name}</div><div class="sel-title">${s.n}</div></div>
       <div class="sec-b"><p class="eyebrow">Animazione</p>
@@ -969,10 +1004,10 @@ function renderProps(){
   $('#rm').onclick=()=>removeBlock(p,state.sel.idx);
 }
 
-function miniOf(p){ if(p.tpl){ const v=viewsOf(p)[0]; return `<div class="mini" style="position:relative;padding:0;display:block;container-type:inline-size;--u:calc(100cqw / ${FRAME[state.fmt]});--pad:0px;background:${v.bg||p.bg}">${v.html}</div>`; }
+function miniOf(p){
   if(animOf(p)) return `<div class="mini" style="background:${p.bg};position:relative;padding:0">${animHTML(animOf(p),pageMedia(p),5)}</div>`;
   const L=layoutOf(p);
-  return `<div class="mini" style="background:${p.bg};grid-template:${tpl(tracksOf(p))}">${p.slots.map((s,j)=>`<span class="${s.k==='img'?gOf(s.m)||'':''}" style="grid-area:${L.a[j]};${s.k==='anim'?'background:#d9d9de':s.k!=='img'?'background:'+(p.dark?'rgb(255 255 255 / .25)':'rgb(0 0 0 / .14)')+';height:'+(s.cls==='h1'||s.cls==='kpi'?'40%':'20%'):s.m?'':'background:rgb(0 0 0 / .08)'}"></span>`).join('')}</div>`; }
+  return `<div class="mini" style="background:${p.bg};grid-template:${tpl(tracksOf(p))}">${p.slots.map((s,j)=>`<span class="${s.k==='img'?gOf(s.m)||'':''}" style="grid-area:${L.a[j]};${s.k==='card'?(s.v==='cover'?'background:#4a4038':'background:#ededf0')+';border-radius:3px':s.k==='anim'?'background:#d9d9de':s.k!=='img'?'background:'+(p.dark?'rgb(255 255 255 / .25)':'rgb(0 0 0 / .14)')+';height:'+(s.cls==='h1'||s.cls==='kpi'?'40%':'20%'):s.m?'':'background:rgb(0 0 0 / .08)'}"></span>`).join('')}</div>`; }
 
 function renderRight(){
   const b=$('#rbody'); const q=$('#q').value.toLowerCase();
@@ -1002,6 +1037,7 @@ function renderRight(){
   b.querySelectorAll('[data-m]').forEach(t=>{
     t.addEventListener('dragstart',e=>{ drag={kind:'media',id:t.dataset.m}; e.dataTransfer.setData('text/plain','media'); });
     t.onclick=()=>{ const cur=findSel(); if(cur&&cur.s&&cur.s.k==='img'){ commit(); cur.s.m=t.dataset.m; select(cur.p.key,state.sel.idx); }
+      else if(cur&&cur.s&&cur.s.k==='card'&&cur.s.v==='cover'){ commit(); cur.s.img=t.dataset.m; select(cur.p.key,state.sel.idx); }
       else if(cur&&cur.s&&cur.s.k==='anim'&&cur.s.bgMode==='img'){ commit(); cur.s.bgImg=t.dataset.m; select(cur.p.key,state.sel.idx); } }; });
 }
 
