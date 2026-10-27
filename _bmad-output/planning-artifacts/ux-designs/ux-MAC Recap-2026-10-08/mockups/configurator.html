@@ -111,7 +111,7 @@ body.previewing .canvas .page .it-txt:focus{outline:none;box-shadow:0 0 0 2px va
 .social-dots i{width:7px;height:7px;border-radius:50%;background:var(--border-strong)}
 .social-dots i.on{background:var(--accent)}
 .social-cap{font-size:12.5px;color:var(--fg-3)}
-body.previewing .pg-del,body.previewing .handle,body.previewing .grip,body.previewing .hl,body.previewing .add-page,body.previewing .ig-switch,body.previewing #formats{display:none}
+body.previewing .pg-del,body.previewing .handle,body.previewing .grip,body.previewing .hl,body.previewing .add-page,body.previewing #formats{display:none}
 body.previewing .page.cur{box-shadow:var(--shadow-page)}
 body.previewing .it.sel{outline:none}
 .pane{background:var(--sidebar);display:flex;flex-direction:column;min-height:0}
@@ -187,7 +187,7 @@ body.previewing .canvas{--sw11:460px;--sw916:300px}
 /* Bento: blocks sit in the grid; 24 px gutter, 64 px margin and 28 px padding inside each block
    at the export size (1920 or 1080 wide). */
 .page[data-ratio="169"]{--pad:3.333cqw;--gut:1.25cqw;--bpad:1.458cqw}
-.page[data-ratio="11"],.page[data-ratio="916"]{--pad:5.926cqw;--gut:2.222cqw;--bpad:2.593cqw}
+.page[data-ratio="11"],.page[data-ratio="916"]{--pad:calc(var(--u) * 24);--gut:calc(var(--u) * 24);--bpad:calc(var(--u) * 28)} /* Carosello templates: margin and gutter 24, block padding 28; Video the same */
 .bento{position:absolute;inset:var(--pad);display:grid;gap:var(--gut)}
 .page[data-ratio="169"]{aspect-ratio:16/9}
 .page[data-ratio="11"]{aspect-ratio:1/1;max-width:var(--pw11)}
@@ -219,8 +219,12 @@ body.previewing .canvas{--sw11:460px;--sw916:300px}
 .blk.on-photo{color:#fff}
 .it{min-width:0;border-radius:4px}
 .it.sel{outline:2px solid var(--accent);outline-offset:2px}
+.it-anim.sel,.it-img.sel{outline-offset:-3px} /* inside the block, so a full-bleed element still shows it */
 .it.drop-before{box-shadow:0 -3px 0 var(--accent)}
-.it-sp{flex:1 0 0;min-height:0}
+.it-sp{flex:1 0 0;min-height:0;pointer-events:none}
+.it-col.grp{flex:1 1 auto;min-height:0;gap:calc(var(--u)*12)}
+.it-col.grp.dist-top{justify-content:flex-start}.it-col.grp.dist-center{justify-content:center}.it-col.grp.dist-bottom{justify-content:flex-end}
+.it-col.grp.dist-between>.push{margin-bottom:auto}
 .it-img{flex:1 1 0;min-height:calc(var(--u)*40);position:relative;overflow:hidden;border-radius:calc(var(--u)*12);background:var(--imgbg,#dcdce1)}
 .blk.bleed .it-img{border-radius:0}
 .it-img .ph{position:absolute;inset:0}
@@ -609,6 +613,7 @@ addLayout('presOnly',{g:'488fr 147fr 317fr/908fr 442fr 442fr',a:[A(1,1,3,2),A(3,
 addLayout('caro3a',{g:'1fr 1fr/1fr 1fr',a:[A(1,1,2,2),A(2,1,3,2),A(1,2,3,3)]});                               // Carosello · 3 immagini A
 addLayout('caro3b',{g:'1fr 1fr/1fr 1fr',a:[A(1,1,3,2),A(1,2,2,3),A(2,2,3,3)]});                               // Carosello · 3 immagini B (also Presentazione · Risultati e testimonial)
 addLayout('caroStack',{g:'468fr 460fr/1fr',a:[A(1,1,2,2),A(2,1,3,2)]});                                        // Carosello · Risultati e testimonial, uno sopra l'altro
+addLayout('videoIntro',{g:'820fr 1028fr/1fr',a:[A(1,1,2,2),A(2,1,3,2)]});                                   // Video · Intro (info, animazione)
 addLayout('videoOutro',{g:'720fr 680fr 424fr/1fr',a:[A(1,1,2,2),A(2,1,3,2),A(3,1,4,2)]});                     // Video · Risultati e testimonial (info, risultati, testimonianza)
 const MAX_BLOCKS=6;
 const layoutsFor=n=>BENTO[Math.max(1,Math.min(MAX_BLOCKS,n))];
@@ -634,13 +639,24 @@ const STYLE_MAP={eyebrow:{c:'lab'},ctal:{c:'lab',align:'center'},h1:{c:'xl'},big
 /* Elements go inside blocks; Blocco adds a bento block to the page. */
 const ELEMENTS = [
   {block:true,label:'Blocco',icon:'grid'},
+  {group:true,label:'Blocco testo',icon:'text'},
   {cls:'title',label:'Titolo',icon:'text',t:'Nuovo titolo'},{cls:'text',label:'Testo',icon:'text',t:'Scrivi qui il testo.'},
   {cls:'num',label:'Numero',icon:'hash',t:'+00%'},{cls:'quote',label:'Citazione',icon:'quote',t:'«La citazione del cliente.»'},
   {cls:'lab',label:'Etichetta',icon:'text',t:'Etichetta'},{img:true,label:'Immagine',icon:'image'},
   {img:true,video:true,label:'Video',icon:'video'},{anim:true,label:'Animazione',icon:'anim'},
 ];
 /* Builders: a block and its elements. */
-const B=(n,items,x={})=>({k:'block',n,items,...x});
+/* Text block: texts kept together, aligned in the block at the top, centre or bottom, or split
+   ('Distanziati': the first `split` texts at the top, the rest at the bottom). It replaces the template
+   spacers: in Figma they are spacing, not things to select. */
+const G=(items,dist='top',split=1)=>({e:'col',n:'Blocco testo',group:true,dist,split,items});
+function fromSpacers(items){ const sp=items.map((x,i)=>x&&x.e==='sp'?i:-1).filter(i=>i>=0); if(!sp.length) return items;
+  const rest=items.filter(x=>x.e!=='sp');
+  if(sp.length>=2&&sp[0]===0&&sp[sp.length-1]===items.length-1) return [G(rest,'center')];
+  if(sp[0]===0) return [G(rest,'bottom')];
+  if(sp[0]===items.length-1) return [G(rest,'top')];
+  return [G(rest,'between',sp[0])]; }
+const B=(n,items,x={})=>({k:'block',n,items:fromSpacers(items),...x});
 const T=(cls,t,x={})=>{ const m=STYLE_MAP[cls]||{c:cls}, {c,...extra}=m; return {e:'txt',n:STYLES[c],cls:c,t,...extra,...x}; };
 const IM=(m,x={})=>({e:'img',n:x.video?'Video':'Immagine',m,fit:'fill',...x});
 const SP={e:'sp',n:'Spazio'}, HR={e:'hr',n:'Linea'}, BRAND={e:'brand',n:'Loghi'};
@@ -742,11 +758,12 @@ function renderItem(p,j,b,it,path,onPhoto,thumb){
       d.addEventListener('blur',()=>{ d.contentEditable='false'; renderAll(); }); } }
   else if(it.e==='brand') d.innerHTML=brandHTML(onPhoto);
   else if(it.e==='hr'&&it.kpi){ d.classList.add('kline'); d.innerHTML='<img src="assets/kpi-line.svg" alt="">'; }
-  else if(it.e==='row'||it.e==='col'){ if(it.wide) d.classList.add('wide'); if(it.loose) d.classList.add('loose'); if(it.top) d.classList.add('atop'); if(it.cls) d.classList.add(...it.cls.split(' '));
-    it.items.forEach((c,k)=>d.appendChild(renderItem(p,j,b,c,path+'.'+k,onPhoto,thumb))); }
+  else if(it.e==='row'||it.e==='col'){ if(it.group){ d.classList.add('grp','dist-'+(it.dist||'top')); d.style.setProperty('--split',it.split||1); }
+    if(it.wide) d.classList.add('wide'); if(it.loose) d.classList.add('loose'); if(it.top) d.classList.add('atop'); if(it.cls) d.classList.add(...it.cls.split(' '));
+    it.items.forEach((c,k)=>{ const ch=renderItem(p,j,b,c,path+'.'+k,onPhoto,thumb); if(it.group&&it.dist==='between'&&k===(it.split||1)-1) ch.classList.add('push'); d.appendChild(ch); }); }
   if(thumb) return d;
   const s=state.sel; if(s&&s.page===p.key&&s.idx===j&&String(s.path)===String(path)) d.classList.add('sel');
-  if(it.e!=='row'&&it.e!=='col'){
+  if((it.e!=='row'&&it.e!=='col')||it.group){
     d.addEventListener('click',e=>{ e.stopPropagation(); select(p.key,j,path); });
     // Drag any element to another block or place; texts stop being draggable while they're being edited.
     { d.draggable=true; d.addEventListener('dragstart',e=>{ if(d.isContentEditable){ e.preventDefault(); return; } e.stopPropagation();
@@ -784,7 +801,8 @@ function renderBlock(p,j,b,area,grid,thumb){
   b.items.forEach((it,k)=>d.appendChild(renderItem(p,j,b,it,String(k),onPhoto,thumb)));
   if(thumb) return d;
   const startMove=e=>{ drag={kind:'block',page:p.key,idx:j}; e.dataTransfer.setData('text/plain','block'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setDragImage(d,24,24); };
-  const s=state.sel; if(s&&s.page===p.key&&s.idx===j&&s.path==null){ d.classList.add('sel'); grid.appendChild(hl(area,'sel')); grid.appendChild(grip(area,startMove)); }
+  // The block's frame shows when the block or anything inside it is selected; the Sposta handle only for the block itself.
+  const s=state.sel; if(s&&s.page===p.key&&s.idx===j){ grid.appendChild(hl(area,'sel')); if(s.path==null){ d.classList.add('sel'); grid.appendChild(grip(area,startMove)); } }
   d.addEventListener('click',e=>{ e.stopPropagation(); select(p.key,j); });
   wireBlock(d,p,j,b,grid);
   return d; }
@@ -823,8 +841,10 @@ function applyIntro(list,p,fmt,mode=state.mode){ const I=clone(typeof mode==='st
       {key:p.key+'-sfida',name:p.name+' · Sfida',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[B('Sfida',[T('lab','Sfida',{fs:18}),SP,T('big',I.challengeHead),T('body2',I.challengeBody,{fs:22})],{pad:40})]},
       {key:p.key+'-idea',name:p.name+' · Idea',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[B('Idea',[T('lab','Idea',{fs:18}),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]});
     return; }
-  Object.assign(p,{pad:24,bg:'#ffffff',slots:[B('Intro',[head(),T('xl',I.title,{fs:56}),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true}),
-    ANIMI('c04',[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5),{bleed:true})],{pad:60,padTop:220,cls:'vinfo'})]}); }
+  // Video: two bento blocks, the info above and the animation below; the border between them resizes both.
+  Object.assign(p,{pad:24,bg:'#ffffff',variant:TL.videoIntro[1],slots:[
+    B('Progetto',[head(),T('xl',I.title,{fs:56}),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true})],{pad:60,padTop:220,cls:'vinfo'}),
+    B('Animazione',[ANIMI('c04',[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5))],{pad:0})]}); }
 // The sample case and client both start from the Intro, in every format.
 // In Presentazione the Intro already holds the challenge and the idea, so the case has no separate pages for them.
 // No separate Sfida / Approccio pages in any format: the intro holds them (owner, 2026-10-27).
@@ -883,7 +903,7 @@ function renderPage(p,thumb=false){
   if(p.pad!=null) el.style.setProperty('--pad',`calc(var(--u) * ${p.pad})`); // the template's own page margin
   if(p.deco==='star') el.insertAdjacentHTML('beforeend','<div class="page-deco" style="inset:10.9% -20.6% -24.2% 39.1%"><img src="assets/closing-star.svg" alt=""></div>'); // closing page star (Figma)
   const pm=p.img&&mediaOf(p.img); if(pm) el.insertAdjacentHTML('beforeend',`<div class="page-bg">${pm.src?mediaTag(pm):`<span class="${pm.g}"></span>`}</div>`);
-  if(animOf(p)){ el.innerHTML=`<div class="reel-anim">${animHTML(animOf(p),pageMedia(p),5)}</div>${!thumb&&state.ig!=='off'?igOverlay(state.ig):''}`; if(!thumb) el.addEventListener('click',()=>select(p.key,null)); return el; }
+  if(animOf(p)){ el.innerHTML=`<div class="reel-anim">${animHTML(animOf(p),pageMedia(p),5)}</div>${!thumb&&state.ig!=='off'&&previewing()?igOverlay(state.ig):''}`; if(!thumb) el.addEventListener('click',()=>select(p.key,null)); return el; }
   const grid=document.createElement('div'); grid.className='bento';
   const L=layoutOf(p); grid.style.gridTemplate=tpl(tracksOf(p));
   p.slots.forEach((b,j)=>grid.appendChild(renderBlock(p,j,b,L.a[j],grid,thumb)));
@@ -891,7 +911,7 @@ function renderPage(p,thumb=false){
   // Video: texts come in one after the other, on a loop (it is a video).
   if(state.fmt==='916'&&!thumb) el.querySelectorAll('.it-txt,.it-tags,.it-brand,.it-hr').forEach((x,k)=>{ x.classList.add('vin'); x.style.setProperty('--i',k); });
   if(thumb) return el;
-  if(state.fmt==='916'&&state.ig!=='off') el.insertAdjacentHTML('beforeend',igOverlay(state.ig));
+  if(state.fmt==='916'&&state.ig!=='off'&&previewing()) el.insertAdjacentHTML('beforeend',igOverlay(state.ig));
   el.addEventListener('click',()=>select(p.key,null));
   // Drop on the page itself: a layout applies; a new block, or a block from another page, goes at the end.
   const isBlockEl=()=>drag&&drag.kind==='el'&&ELEMENTS[drag.i].block;
@@ -975,7 +995,8 @@ function addElement(p,i,j,at){
   if(j==null){ toast('Seleziona un blocco, oppure trascina l’elemento dentro un blocco.'); return; }
   const b=p.slots[j]; at=at??b.items.length;
   if(E.anim){ openAnim({page:p.key,idx:j,at}); return; } // added once a style is picked
-  commit(); b.items.splice(at,0,E.img?IM(null,{video:!!E.video}):T(E.cls,E.t,{n:E.label})); select(p.key,j,String(at));
+  commit(); b.items.splice(at,0,E.group?G([T('lab','Etichetta'),T('title','Titolo'),T('text','Scrivi qui il testo.')],'between',1)
+    :E.img?IM(null,{video:!!E.video}):T(E.cls,E.t,{n:E.label})); select(p.key,j,String(at));
 }
 function removeItem(p,j,path){ commit(); const {list,i}=parentOf(p.slots[j],path); list.splice(i,1); select(p.key,j); }
 /* Animations (names from the owner's references, 2026-10-27). Each one adapts to the number of media. */
@@ -1061,7 +1082,7 @@ function deletePage(p,confirmed){ const list=listOf(p); if(!list) return;
 function renderCanvas(){
   const c=$('#canvas'); const top=c.scrollTop; c.innerHTML='';
   const meta=document.createElement('div'); meta.className='fmt-meta';
-  if(state.fmt==='916'){ // Video only: show where Instagram's own interface sits once published, as a Reel or a Story
+  if(state.fmt==='916'&&previewing()){ // Anteprima of Video only: show where Instagram's own interface sits once published, as a Reel or a Story
     meta.classList.add('with-switch');
     const sw=document.createElement('div'); sw.className='ig-switch'; sw.setAttribute('role','group'); sw.setAttribute('aria-label','Anteprima Instagram');
     sw.innerHTML=`<span>Anteprima</span><div class="seg">${[['off','Nessuna'],['reel','Reel'],['story','Storia']].map(([k,t])=>`<button data-ig="${k}" aria-pressed="${state.ig===k}">${t}</button>`).join('')}</div>`;
@@ -1132,7 +1153,7 @@ const thumbOf=L=>`style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style=
 const PRESETS_BY_FMT={
   169:[[5,0],TL.pres1,TL.pres3,TL.pres5,TL.presOnly,TL.caro3b],   // Intro · 1, 3, 5 immagini · solo layout · Risultati e testimonial
   11:[[1,0],[2,0],TL.caro3a,TL.caro3b,[4,0],TL.caroStack],   // 1, 2, 3 A, 3 B, 4 immagini · due blocchi uno sopra l'altro
-  916:[[1,0],TL.videoOutro],                           // Video: one block · Risultati e testimonial (plus the animated layouts)
+  916:[[1,0],TL.caroStack,TL.videoIntro,TL.videoOutro],          // Video: one block · two blocks one above the other · Risultati e testimonial
 };
 const presets=()=>PRESETS_BY_FMT[state.fmt].map(([n,v])=>({n,v,L:BENTO[n][v]}));
 
@@ -1204,7 +1225,7 @@ FORMATS.forEach(f=>{ const v=doc.views[f]; const o=v.case.find(p=>p.key==='outro
 const dpThumb=D=>{ if(D.k==='end') return `<div class="dp"><button class="var press" data-dp="end" aria-label="Chiusura" style="grid-template:1fr/1fr;background:#ededf0"><span style="background:#defe56;border-radius:40% 0 0 0;margin:30% 0 0 45%"></span></button><small>Chiusura</small></div>`;
   if(D.k==='outro'){ const L=state.fmt==='169'?BENTO[3][TL.caro3b[1]]:state.fmt==='11'?BENTO[2][0]:BENTO[3][TL.videoOutro[1]];
     return `<div class="dp"><button class="var press" data-dp="outro" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style="grid-area:${a}"></span>`).join('')}</button><small>${D.name}</small></div>`; }
-  if(D.k==='intro'){ const L=state.fmt==='169'?BENTO[5][0]:BENTO[1][0];
+  if(D.k==='intro'){ const L=state.fmt==='169'?BENTO[5][0]:state.fmt==='916'?BENTO[2][TL.videoIntro[1]]:BENTO[1][0];
     return `<div class="dp"><button class="var press" data-dp="intro" aria-label="Intro" style="grid-template:${frTpl(L.g)}">${L.a.map((a,j)=>`<span style="grid-area:${a};${j===0?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>Intro</small></div>`; }
   const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case,INTRO.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.items.some(i=>i.e==='img')?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
 /* A layout with more cells adds empty blocks; with fewer it drops empty blocks, and refuses to drop filled ones. */
@@ -1227,10 +1248,7 @@ function layoutsAndElements(p){
       </div>
       <div class="sec-b"><p class="eyebrow">Pagine di default</p>
       <div class="variants">${DEFAULT_PAGES.filter(D=>!D.fmt||D.fmt===state.fmt).map(dpThumb).join('').replace(`data-dp="${p.preset}"`,`data-dp="${p.preset}" aria-pressed="true"`)}</div>
-      </div>${state.fmt==='916'?`
-      <div class="sec-b"><p class="eyebrow">Layout animati</p>
-      <div class="variants">${ANIMS.map(a=>`<button class="var an-var press" data-anvar="${a.k}" aria-pressed="${animOf(p)===a.k}" aria-label="${a.name}" title="${a.name}">${animHTML(a.k,[],5)}</button>`).join('')}</div>
-      </div>`:''}`:''; // animated layouts are for the Video only
+      </div>`:'';
   return layouts+`<div class="sec-b"><p class="eyebrow">Elementi</p>
       <div class="els">${ELEMENTS.map((E,i)=>`<div class="el" draggable="true" data-el="${i}">${I(E.icon)}${E.label}</div>`).join('')}</div>
       </div>`;
@@ -1277,8 +1295,6 @@ function wirePageTools(el,p){
     wireBgTools(el,p);
     wireDrag(el);
     const dp=$('#delpage'); if(dp) dp.onclick=()=>deletePage(p);
-    // An animated layout is the page's layout in the Video: the whole page plays the animation with its media.
-    el.querySelectorAll('[data-anvar]').forEach(b=>b.onclick=()=>{ commit(); layW(p).anim=b.dataset.anvar; p.preset=null; select(p.key,null); });
     el.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>applyDefaultPage(p,b.dataset.dp));
     el.querySelectorAll('[data-var]').forEach(b=>b.onclick=()=>{ const [n,v]=b.dataset.var.split(':').map(Number); applyPreset(p,n,v); });
     const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ const same=presets().filter(x=>x.n===p.slots.length), k=same.findIndex(x=>x.L===layoutOf(p));
@@ -1299,6 +1315,9 @@ function renderBlockProps(el,p,b,it){
         ${swatches(c,'data-color')}</div>`; }
     if(it.e==='img') body=`<div class="sec-b"><p class="eyebrow">${it.video?'Video':'Immagine'}</p>${mediaPicker(mediaOf(it.m),'swap',(it.m?'Sostituisci':'Scegli')+' dai Media')}</div>
       <div class="sec-b"><p class="eyebrow">Adattamento</p><div class="seg full" id="fit">${[['fill','Riempi'],['fit','Adatta'],['crop','Ritaglia']].map(([k,t])=>`<button data-fit="${k}" aria-pressed="${(it.fit||'fill')===k}">${t}</button>`).join('')}</div></div>`;
+    if(it.group) body=`<div class="sec-b"><p class="eyebrow">Allineamento nel blocco</p>
+        <div class="seg full" id="dist">${[['top','Alto'],['center','Centro'],['bottom','Basso'],['between','Distanziati']].map(([k,t])=>`<button data-dist="${k}" aria-pressed="${(it.dist||'top')===k}">${t}</button>`).join('')}</div>
+        <p class="help" style="margin-top:8px">Distanziati: ${(it.split||1)===1?'il primo testo':'i primi '+it.split+' testi'} in alto, il resto in basso.</p></div>`;
     if(it.e==='anim') body=`<div class="sec-b"><p class="eyebrow">Animazione</p>
         <div class="row"><label>Tipo</label><select class="field" id="antype">${ANIMS.map(a=>`<option value="${a.k}" ${a.k===it.type?'selected':''}>${a.name}</option>`).join('')}</select></div>
         <div class="row"><label>Media</label><span class="help">${it.items.length} file</span></div>
@@ -1306,6 +1325,7 @@ function renderBlockProps(el,p,b,it){
     el.innerHTML=head+body+rm;
     el.querySelectorAll('[data-color]').forEach(x=>x.onclick=()=>{ commit(); it.color=x.dataset.color; re(); });
     const st=$('#style'); if(st) st.onchange=e=>{ commit(); it.cls=e.target.value; it.n=STYLES[it.cls]; delete it.fs; re(); };
+    el.querySelectorAll('[data-dist]').forEach(x=>x.onclick=()=>{ commit(); it.dist=x.dataset.dist; re(); });
     el.querySelectorAll('[data-al]').forEach(x=>x.onclick=()=>{ commit(); it.align=x.dataset.al==='left'?null:x.dataset.al; re(); });
     el.querySelectorAll('#fit button').forEach(x=>x.onclick=()=>{ commit(); it.fit=x.dataset.fit; re(); });
     const sw=$('#swap'); if(sw) sw.onclick=()=>setTab('media');
