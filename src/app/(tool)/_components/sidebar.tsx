@@ -10,7 +10,7 @@ import type { ThemeChoice } from "@/app/_lib/theme";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { MacWordmark } from "@/app/_components/mac-wordmark";
-import { ThemeSwitch } from "./theme-switch";
+import { ThemeSwitch } from "@/app/_components/theme-switch";
 import { UserMenu } from "./user-menu";
 
 export interface SidebarProps {

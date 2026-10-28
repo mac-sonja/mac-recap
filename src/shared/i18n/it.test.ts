@@ -247,3 +247,51 @@ describe("voice", () => {
     expect([it.shell.theme.system, it.shell.theme.light, it.shell.theme.dark]).toEqual(["Automatico", "Chiaro", "Scuro"]);
   });
 });
+
+describe("configurator copy", () => {
+  test("has the approved strings", () => {
+    expect(t("configurator.back")).toBe("Torna alle case history");
+    expect(t("configurator.narrowScreen")).toBe("Il configuratore ha bisogno di uno schermo più grande.");
+    expect([it.configurator.formats.presentazione_16_9, it.configurator.formats.carosello_1_1, it.configurator.formats.video_9_16]).toEqual([
+      "Presentazione",
+      "Carosello",
+      "Video",
+    ]);
+    expect([t("configurator.saved"), t("configurator.undo"), t("configurator.redo"), t("configurator.approve")]).toEqual([
+      "Salvato",
+      "Annulla",
+      "Ripeti",
+      "Approva",
+    ]);
+    expect(t("configurator.soon")).toBe("Arriva presto");
+    expect(fill(t("configurator.soonMessage"), { tool: "Layout" })).toBe("Layout arriva presto.");
+    expect(t("configurator.trial.title")).toBe("Bozza di prova");
+    expect(fill(t("configurator.canvas.pageLabel"), { n: 2, name: "La sfida" })).toBe("2 · La sfida");
+    expect(t("configurator.canvas.move")).toBe("⠿ Sposta");
+    expect(Object.values(it.configurator.sections)).toEqual(["Intro", "Output", "Risultati"]);
+    expect([
+      t("configurator.tools.layout"),
+      t("configurator.tools.defaultPages"),
+      t("configurator.tools.elements"),
+      t("configurator.tools.background"),
+      t("configurator.tools.deletePage"),
+    ]).toEqual(["Layout", "Pagine di default", "Elementi", "Sfondo", "Elimina pagina"]);
+    expect(Object.values(it.configurator.elements)).toEqual([
+      "Blocco",
+      "Testi",
+      "Titolo",
+      "Testo",
+      "Numero",
+      "Citazione",
+      "Etichetta",
+      "Immagine",
+      "Video",
+      "Animazione",
+    ]);
+    expect([t("configurator.tabs.pages"), t("configurator.tabs.media"), t("configurator.search.placeholder")]).toEqual(["Pagine", "Media", "Cerca"]);
+    expect([t("configurator.panels.hideLeft"), t("configurator.panels.showLeft")]).toEqual([
+      "Nascondi il pannello a sinistra",
+      "Mostra il pannello a sinistra",
+    ]);
+  });
+});

@@ -8,7 +8,7 @@ import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-style
 import { CARD, SEARCH_FIELD, SEARCH_ICON, TH } from "@/app/_components/field-styles";
 import { DownloadButton } from "@/app/_components/download-button";
 import { StatusBadge } from "@/app/_components/status-badge";
-import { wizardHref } from "@/app/_lib/routes";
+import { configuratorHref, wizardHref } from "@/app/_lib/routes";
 import { CASE_STATUSES } from "@/shared/case-status";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -308,8 +308,14 @@ export function CaseStudiesTable({
             </thead>
             <tbody>
               {visible.map((row) => {
-                // A Bozza reopens the wizard with no step: it picks the first incomplete one.
-                const href = row.status === "draft" ? wizardHref(row.id) : null;
+                // A Bozza reopens the wizard with no step: it picks the first incomplete one. A case in
+                // Da approvare or Approvato opens in the configurator (Story 4.2); In elaborazione opens nothing.
+                const href =
+                  row.status === "draft"
+                    ? wizardHref(row.id)
+                    : row.status === "in_review" || row.status === "approved"
+                      ? configuratorHref(row.id)
+                      : null;
                 return (
                   <tr
                     key={row.id}
