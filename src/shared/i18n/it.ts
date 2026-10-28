@@ -690,10 +690,10 @@ export const it = {
     in_review: "Da approvare",
     approved: "Approvato",
   },
-  /** Role labels for people, keyed by `Role`; `system` is never shown. */
+  /** Role labels for people, keyed by `Role`; `system` is never shown. One word each (owner, 2026-10-28). */
   role: {
-    owner_designer: "Owner/designer",
-    account_sales_social: "Account/sales/social",
+    owner_designer: "Designer",
+    account_sales_social: "Account",
     admin: "Amministratore",
   },
 } as const;

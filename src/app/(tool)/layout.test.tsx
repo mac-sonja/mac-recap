@@ -53,12 +53,12 @@ describe("ToolLayout", () => {
     expect(html).toContain('href="/home"');
     expect(html).toContain('href="/case-studies"');
     expect(html).toContain('href="/clients"');
-    expect(html).toContain("Owner/designer");
+    expect(html).toContain("Designer");
     expect(html).toContain("content");
   });
 
   it.each([
-    ["account_sales_social", "Account/sales/social"],
+    ["account_sales_social", "Account"],
     ["admin", "Amministratore"],
   ] as const)("shows neither nav item for %s", async (role, label) => {
     getActor.mockResolvedValue(ok(actor(role)));
