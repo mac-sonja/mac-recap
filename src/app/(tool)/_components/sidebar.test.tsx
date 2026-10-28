@@ -133,6 +133,14 @@ describe("Sidebar", () => {
     expect(active[0]).toContain('href="/clients"');
   });
 
+  it.each(["/case-studies", "/case-studies/aaaaaaaa-0000-4000-8000-000000000001"])("marks Case history active on %s", (path) => {
+    pathname.current = path;
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true });
+    const active = [...html.matchAll(/<a [^>]*aria-current="page"[^>]*>/g)].map((m) => m[0]);
+    expect(active).toHaveLength(1);
+    expect(active[0]).toContain('href="/case-studies"');
+  });
+
   it("does not mark Clienti active on a lookalike path", () => {
     pathname.current = "/clientsx";
     const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true });
