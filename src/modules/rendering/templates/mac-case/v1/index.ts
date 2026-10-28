@@ -1,7 +1,19 @@
+import { createElement, type ReactElement } from "react";
+import type { FormatId } from "@/modules/rendering/domain/formats";
 import { layouts } from "@/modules/rendering/templates/mac-case/v1/layouts";
 import { defaultPages, starterPages } from "@/modules/rendering/templates/mac-case/v1/pages";
+import { Carosello } from "@/modules/rendering/templates/mac-case/v1/render/carosello";
+import { Presentazione } from "@/modules/rendering/templates/mac-case/v1/render/presentazione";
+import { Video } from "@/modules/rendering/templates/mac-case/v1/render/video";
 import { textStyles } from "@/modules/rendering/templates/mac-case/v1/styles";
-import type { TemplateVersion } from "@/modules/rendering/templates/types";
+import type { RenderInput, TemplateVersion } from "@/modules/rendering/templates/types";
+
+/** One renderer per format (Story 3.5). */
+const RENDERERS: Readonly<Record<FormatId, (input: RenderInput) => ReactElement>> = Object.freeze({
+  presentazione_16_9: Presentazione,
+  carosello_1_1: Carosello,
+  video_9_16: Video,
+});
 
 /**
  * The case history template, version 1 (Story 3.4), from the Figma frames "MAC-TF-AI".
@@ -14,4 +26,5 @@ export const macCaseV1: TemplateVersion = Object.freeze({
   defaultPages,
   starterPages,
   textStyles,
+  render: (formatId: FormatId, input: RenderInput) => createElement(RENDERERS[formatId], input),
 });

@@ -1,6 +1,15 @@
 {
-  "mac-case/v1/index.ts": "665500a5ba7085b833ca091f35be8ce904eea4b4c131681f3f1f0a4a0b2f0c36",
+  "mac-case/v1/index.ts": "485ed215e3282d3f07eb5f08e582faf5b7f48ff608e72215f2e76e883d915ed7",
   "mac-case/v1/layouts.ts": "07e74832e5c3ef312870543a392db5719c402e00767d0fb486d900a746c15fa9",
   "mac-case/v1/pages.ts": "05596c07bfeaa3f59656f6f43c6a7f82efdffdcb677f1d1b3cefe20bd33a655c",
+  "mac-case/v1/render/animation.tsx": "1092ba2632cfd916556c693a4f2c557251026723c40de7d7bbacb2b2c5462a06",
+  "mac-case/v1/render/art.tsx": "e6424bf415d9eca831d4fcba3947b112b0cb80e822357201d94bb16310092bbc",
+  "mac-case/v1/render/carosello.tsx": "f39dbde124087112cf133d95266b3e445742858483b3a86d4a12c749547a7fb4",
+  "mac-case/v1/render/css.ts": "276a1022ceeea9968b616f9d75b9d8d2a05af148f5a2e6586de2164f6705eaf8",
+  "mac-case/v1/render/elements.tsx": "57030950361780c9f3208addbde9846bebfa59752c683a8b838c3dc5e63e73ec",
+  "mac-case/v1/render/media.tsx": "c9a89c5d1c8ac04c93ad9083a8c9a037d0940430ceaa287869547a6a2fc1d737",
+  "mac-case/v1/render/page.tsx": "3947d34c55b567e91c6e6e3cfef4bc89c57bdd1399649f0fe334c27ace1b4ba0",
+  "mac-case/v1/render/presentazione.tsx": "b16cfa51d74ec298b7bede28feaf927d1d5df3e4d9d379255464dc4e3bdab055",
+  "mac-case/v1/render/video.tsx": "eb6b108416066f03fa1f8dd8e25aecfc3099d3eb583eb91e3ed2f2d6aefa3900",
   "mac-case/v1/styles.ts": "daf6eb1731076a2927f37d50de75b16627a8dd7619d52b94fae6c1153cd6cbe9"
 }

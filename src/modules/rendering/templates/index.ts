@@ -1,7 +1,8 @@
+import type { ReactElement } from "react";
 import type { DocumentKind, Page } from "@/modules/generation";
 import { isFormatId, type FormatId } from "@/modules/rendering/domain/formats";
 import { macCaseV1 } from "@/modules/rendering/templates/mac-case/v1";
-import type { DefaultPage, Layout, TemplateContext, TemplateVersion } from "@/modules/rendering/templates/types";
+import type { DefaultPage, Layout, RenderInput, TemplateContext, TemplateVersion } from "@/modules/rendering/templates/types";
 
 /**
  * The template registry (Story 3.4): templates as versioned code under
@@ -45,5 +46,31 @@ export function starterPages(template: string, kind: DocumentKind, formatId: str
   return found.starterPages(formatId, ctx);
 }
 
+/**
+ * One format's pages drawn by the template's renderer (Story 3.5): a pure function of
+ * the pages, asset URLs and current bound values. The same element serves the
+ * configurator, the case study view, shared links and exports (`renderToStaticMarkup`).
+ * Throws for a template that isn't registered or has no renderer (a bug).
+ */
+export function renderFormat(template: string, formatId: FormatId, input: RenderInput): ReactElement {
+  const found = required(template);
+  if (found.render === undefined) throw new Error(`template ${template} has no renderer`);
+  return found.render(formatId, input);
+}
+
 export { TEMPLATE_TEXT_KEYS } from "@/modules/rendering/templates/types";
-export type { DefaultPage, GridArea, Layout, TemplateContext, TemplateTextKey, TemplateVersion, TextStyleSpec } from "@/modules/rendering/templates/types";
+export type {
+  BoundResult,
+  BoundTestimonial,
+  BoundValues,
+  DefaultPage,
+  GridArea,
+  Layout,
+  RenderAsset,
+  RenderInput,
+  RenderOptions,
+  TemplateContext,
+  TemplateTextKey,
+  TemplateVersion,
+  TextStyleSpec,
+} from "@/modules/rendering/templates/types";
