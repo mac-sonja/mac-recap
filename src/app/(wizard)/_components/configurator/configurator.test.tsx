@@ -49,8 +49,9 @@ function setup(trial = false) {
 }
 
 const canvas = () => screen.getByRole("region", { name: dict.configurator.canvas.label, hidden: true });
-const leftPanel = () => screen.getByRole("complementary", { name: dict.configurator.panels.left, hidden: true });
-const rightPanel = () => screen.getByRole("complementary", { name: dict.configurator.panels.right, hidden: true });
+// By label, not role: a hidden panel stays mounted but has no accessible name.
+const leftPanel = () => document.querySelector<HTMLElement>(`aside[aria-label="${dict.configurator.panels.left}"]`)!;
+const rightPanel = () => document.querySelector<HTMLElement>(`aside[aria-label="${dict.configurator.panels.right}"]`)!;
 const pageNode = (pageKey: string) => canvas().querySelector<HTMLElement>(`[data-canvas-page="${pageKey}"]`)!;
 const button = (name: string | RegExp, within_: HTMLElement = document.body) => within(within_).getByRole("button", { name, hidden: true });
 const status = () => screen.getByRole("status", { hidden: true });
@@ -61,6 +62,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("Configurator", () => {
@@ -152,18 +154,88 @@ describe("Configurator", () => {
   it("hides each panel from its own bar and reopens it from the canvas edge, moving focus", () => {
     setup();
     fireEvent.click(button(dict.configurator.panels.hideLeft));
-    expect(screen.queryByRole("complementary", { name: dict.configurator.panels.left, hidden: true })).toBeNull();
+    expect(leftPanel().hidden).toBe(true);
     const reopen = button(dict.configurator.panels.showLeft);
     expect(document.activeElement).toBe(reopen);
     fireEvent.click(reopen);
-    expect(leftPanel()).toBeTruthy();
+    expect(leftPanel().hidden).toBe(false);
     expect(document.activeElement).toBe(button(dict.configurator.panels.hideLeft));
 
     fireEvent.click(button(dict.configurator.panels.hideRight));
-    expect(screen.queryByRole("complementary", { name: dict.configurator.panels.right, hidden: true })).toBeNull();
+    expect(rightPanel().hidden).toBe(true);
     expect(document.activeElement).toBe(button(dict.configurator.panels.showRight));
     fireEvent.click(button(dict.configurator.panels.showRight));
     expect(document.activeElement).toBe(button(dict.configurator.panels.hideRight));
+  });
+
+  it("keeps the theme picked in the left panel across a hide and reopen", () => {
+    setup();
+    fireEvent.click(within(leftPanel()).getByRole("radio", { name: dict.shell.theme.dark, hidden: true }));
+    fireEvent.click(button(dict.configurator.panels.hideLeft));
+    fireEvent.click(button(dict.configurator.panels.showLeft));
+    expect(within(leftPanel()).getByRole("radio", { name: dict.shell.theme.dark, hidden: true }).getAttribute("aria-checked")).toBe("true");
+    expect(within(leftPanel()).getByRole("radio", { name: dict.shell.theme.system, hidden: true }).getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("keeps the selection when Esc is pressed in the Cerca field", () => {
+    setup();
+    const page = formats.presentazione_16_9[0];
+    fireEvent.click(pageNode(page.pageKey).querySelector(`[data-block-id="${page.blocks[0].blockId}"]`)!);
+    fireEvent.keyDown(within(rightPanel()).getByRole("searchbox", { hidden: true }), { key: "Escape" });
+    expect(pageNode(page.pageKey).querySelector('[data-frame="block"]')).not.toBeNull();
+  });
+
+  it("clears the selection when the empty canvas around the pages is clicked", () => {
+    setup();
+    const page = formats.presentazione_16_9[0];
+    fireEvent.click(pageNode(page.pageKey).querySelector(`[data-block-id="${page.blocks[0].blockId}"]`)!);
+    expect(pageNode(page.pageKey).querySelector('[data-frame="block"]')).not.toBeNull();
+    fireEvent.click(canvas());
+    expect(canvas().querySelector("[data-frame]")).toBeNull();
+    expect(canvas().querySelector("[data-selected]")).toBeNull();
+  });
+
+  it("names the page in the middle of the canvas in the left panel when nothing is selected", () => {
+    setup();
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      cb(0);
+      return 1;
+    });
+    const rect = (top: number, height: number) => ({ top, bottom: top + height, height, left: 0, right: 800, width: 800, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    canvas().getBoundingClientRect = () => rect(0, 800);
+    const pages = formats.presentazione_16_9;
+    pages.forEach((p, i) => {
+      pageNode(p.pageKey).getBoundingClientRect = () => rect(i * 400 - 100, 300);
+    });
+    // Page 2 spans 300–600, across the middle (400).
+    fireEvent.scroll(canvas());
+    expect(leftPanel().textContent?.startsWith(`${dict.configurator.crumbs.page}${pages[1].name}`)).toBe(true);
+  });
+
+  it("clears the selected page and thumbnail when the format changes", () => {
+    setup();
+    const page = formats.presentazione_16_9[1];
+    fireEvent.click(rightPanel().querySelector<HTMLElement>(`[data-thumb="${page.pageKey}"]`)!);
+    expect(canvas().querySelector("[data-selected]")).not.toBeNull();
+    fireEvent.click(button(/Carosello/));
+    expect(canvas().querySelector("[data-selected]")).toBeNull();
+    expect(rightPanel().querySelector('[aria-current="true"]')).toBeNull();
+  });
+
+  it.each([
+    [false, "smooth"],
+    [true, "auto"],
+  ] as const)("scrolls to a thumbnail's page (reduced motion %s: %s)", (reduce, behavior) => {
+    const original = window.matchMedia;
+    window.matchMedia = vi.fn((query: string) => ({ matches: reduce && query === "(prefers-reduced-motion: reduce)" }) as MediaQueryList);
+    try {
+      setup();
+      const page = formats.presentazione_16_9[2];
+      fireEvent.click(rightPanel().querySelector<HTMLElement>(`[data-thumb="${page.pageKey}"]`)!);
+      expect(pageNode(page.pageKey).scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior });
+    } finally {
+      window.matchMedia = original;
+    }
   });
 
   it("shows the left panel's tools in place, inactive; pressing one says it comes soon for 3.5 s and changes nothing", () => {

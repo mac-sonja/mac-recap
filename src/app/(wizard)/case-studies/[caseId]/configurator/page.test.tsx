@@ -115,6 +115,16 @@ const listed = (id: string, kind: ListedAsset["kind"]): ListedAsset => ({
   thumbnailPending: false,
 });
 
+/** `doc` with the first block of every format's first page showing `assetId` as a video. */
+function withVideo(doc: CaseStudyRevision["doc"], assetId: string): CaseStudyRevision["doc"] {
+  const copy = structuredClone(doc);
+  for (const entry of Object.values(copy.formats)) {
+    const block = entry.pages[0]?.blocks[0];
+    if (block !== undefined) block.elements = [{ elementId: "eeeeeeee-0000-4000-8000-000000000001", type: "video", assetId, fit: "fill" }];
+  }
+  return copy;
+}
+
 const link = (url: string): Result<RenditionLink> => ok({ url, width: 100, height: 100, contentType: "image/webp" });
 
 const render = async (caseId = ID) => renderToStaticMarkup(await ConfiguratorPage({ params: Promise.resolve({ caseId }) }));
@@ -170,6 +180,30 @@ describe("ConfiguratorPage", () => {
     expect(getRendition).toHaveBeenCalledWith(VIDEO, "video.poster");
     expect(html).toContain(`https://cdn.test/${IMAGE}/image.display`);
     expect(html).not.toContain(`${PENDING}/`);
+  });
+
+  it("gives a video its ready poster", async () => {
+    listAssets.mockResolvedValue(ok([listed(VIDEO, "video")]));
+    getRendition.mockImplementation(async (assetId, spec) => link(`https://cdn.test/${String(assetId)}/${String(spec)}`));
+    getEditableRevision.mockResolvedValue(ok({ ...revision, doc: withVideo(revision.doc, VIDEO) }));
+    const html = await render();
+    expect(html).toContain(`src="https://cdn.test/${VIDEO}/video.display"`);
+    expect(html).toContain(`poster="https://cdn.test/${VIDEO}/video.poster"`);
+  });
+
+  it("leaves out an asset whose rendition is NOT_FOUND and still renders the page", async () => {
+    getEditableRevision.mockResolvedValue(ok(null));
+    getRendition.mockImplementation(async (assetId, spec) =>
+      assetId === IMAGE ? err({ code: "NOT_FOUND", message: "Gone." }) : link(`https://cdn.test/${String(assetId)}/${String(spec)}`),
+    );
+    const html = await render();
+    expect(html).toContain('data-template="mac-case@1"');
+    expect(html).not.toContain(`${IMAGE}/`);
+  });
+
+  it("shows the client's logo from getClient", async () => {
+    const html = await render();
+    expect(html).toContain("https://cdn.test/logo.png");
   });
 
   it("shows the template's starter pages and the Bozza di prova note when the case has no revision", async () => {

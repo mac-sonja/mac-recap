@@ -152,6 +152,7 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
         <CaseStudiesTable
           rows={rows}
           canCreate={canCreate}
+          canEdit={can(actor, "edit")}
           emptyMessage={it.clients.detail.noCases}
           emptyAction={it.clients.detail.newCase}
           newHref={newHref}

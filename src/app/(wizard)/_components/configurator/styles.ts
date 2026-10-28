@@ -1,4 +1,5 @@
 import { PRESSABLE } from "@/app/_components/button-styles";
+import type { FormatId } from "@/modules/rendering";
 
 /**
  * The configurator's shared class names (mockup `configurator.html`: `.seg`, `.btn.icon`,
@@ -30,11 +31,11 @@ export const PAGE_WIDTH = {
   presentazione_16_9: "max-w-[1280px]",
   carosello_1_1: "max-w-[540px]",
   video_9_16: "max-w-[420px]",
-} as const;
+} as const satisfies Record<FormatId, string>;
 
 /** A format's shape, for thumbnails. */
 export const ASPECT = {
   presentazione_16_9: "aspect-video",
   carosello_1_1: "aspect-square",
   video_9_16: "aspect-[9/16]",
-} as const;
+} as const satisfies Record<FormatId, string>;

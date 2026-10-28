@@ -29,6 +29,8 @@ export interface CaseStudiesTableProps {
   rows: CaseStudyRow[];
   /** Policy decision (`create case`): whether the empty state offers "Nuova case history". */
   canCreate: boolean;
+  /** Policy decision (`edit`): whether Da approvare and Approvato rows open the configurator. */
+  canEdit?: boolean;
   /** The empty-state line; defaults to the Case history page's. */
   emptyMessage?: string;
   /** Where the empty state's call to action goes; defaults to the wizard's step 0. */
@@ -149,6 +151,7 @@ function isTextField(el: Element | null): boolean {
 export function CaseStudiesTable({
   rows,
   canCreate,
+  canEdit = false,
   emptyMessage = it.caseStudies.empty,
   newHref = "/case-studies/new",
   emptyAction = it.caseStudies.emptyAction,
@@ -309,11 +312,12 @@ export function CaseStudiesTable({
             <tbody>
               {visible.map((row) => {
                 // A Bozza reopens the wizard with no step: it picks the first incomplete one. A case in
-                // Da approvare or Approvato opens in the configurator (Story 4.2); In elaborazione opens nothing.
+                // Da approvare or Approvato opens in the configurator (Story 4.2) for a role that may `edit`;
+                // In elaborazione opens nothing.
                 const href =
                   row.status === "draft"
                     ? wizardHref(row.id)
-                    : row.status === "in_review" || row.status === "approved"
+                    : canEdit && (row.status === "in_review" || row.status === "approved")
                       ? configuratorHref(row.id)
                       : null;
                 return (

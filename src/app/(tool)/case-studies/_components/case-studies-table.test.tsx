@@ -430,7 +430,7 @@ describe("CaseStudiesTable", () => {
 
   it("opens a Bozza row at /case-studies/new?caseId={id}, Da approvare and Approvato rows in the configurator", async () => {
     const user = userEvent.setup();
-    render(<CaseStudiesTable rows={rows} canCreate />);
+    render(<CaseStudiesTable rows={rows} canCreate canEdit />);
     const table = screen.getByRole("table");
     const links = within(table).getAllByRole("link").filter((a) => a.getAttribute("href")?.startsWith("/case-studies"));
     expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
@@ -447,10 +447,21 @@ describe("CaseStudiesTable", () => {
     expect(push).toHaveBeenCalledWith("/case-studies/cccccccc-0000-4000-8000-000000000003/configurator");
   });
 
+  it("opens only Bozza rows for a role that may not edit (no configurator links)", async () => {
+    const user = userEvent.setup();
+    render(<CaseStudiesTable rows={rows} canCreate={false} canEdit={false} />);
+    const table = screen.getByRole("table");
+    const links = within(table).getAllByRole("link").filter((a) => a.getAttribute("href")?.startsWith("/case-studies"));
+    expect(links.map((a) => a.getAttribute("href"))).toEqual([`/case-studies/new?caseId=${DRAFT_ID}`]);
+    await user.click(within(table).getByText("Beta Lumen"));
+    await user.click(within(table).getByText("Città di Roma"));
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("opens nothing for a case In elaborazione", async () => {
     const user = userEvent.setup();
     const generating: CaseStudyRow = { ...rows[2], id: "dddddddd-0000-4000-8000-000000000005", name: "Gamma", clientName: "Gamma Srl", status: "generating" };
-    render(<CaseStudiesTable rows={[generating]} canCreate />);
+    render(<CaseStudiesTable rows={[generating]} canCreate canEdit />);
     const table = screen.getByRole("table");
     expect(within(table).queryAllByRole("link").filter((a) => a.getAttribute("href")?.startsWith("/case-studies"))).toEqual([]);
     await user.click(within(table).getByText("Gamma Srl"));

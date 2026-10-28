@@ -25,6 +25,8 @@ const ELEMENT_ICONS: Readonly<Record<keyof typeof it.configurator.elements, Luci
 };
 
 export interface LeftPanelProps {
+  /** Hidden from its own bar; kept mounted so its state survives. */
+  hidden?: boolean;
   formatId: FormatId;
   template: string;
   /** The page the tools act on: the selected one, or the one in view when nothing is selected. */
@@ -76,7 +78,7 @@ const colourOf = (background: Background): string | undefined =>
  * They arrive with Stories 4.3, 4.4 and 4.13: here they show in place, inactive, and
  * say so when pressed. The theme switch sits at its foot.
  */
-export function LeftPanel({ formatId, template, page, block, element, theme, onSoon, onHide, hideRef }: LeftPanelProps) {
+export function LeftPanel({ hidden = false, formatId, template, page, block, element, theme, onSoon, onHide, hideRef }: LeftPanelProps) {
   const t = it.configurator.tools;
   const soon = (tool: string) => () => onSoon(tool);
   const inactive = { "aria-disabled": true, "aria-describedby": SOON_ID, title: it.configurator.soon } as const;
@@ -84,7 +86,7 @@ export function LeftPanel({ formatId, template, page, block, element, theme, onS
   const backgroundColour = background === undefined ? undefined : colourOf(background);
 
   return (
-    <aside aria-label={it.configurator.panels.left} className="col-start-1 row-start-1 flex min-h-0 flex-col border-r border-border bg-surface-sidebar">
+    <aside aria-label={it.configurator.panels.left} hidden={hidden} className="col-start-1 row-start-1 flex min-h-0 flex-col border-r border-border bg-surface-sidebar">
       <div className="flex px-2.5 pt-2">
         <button
           ref={hideRef}

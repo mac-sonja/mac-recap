@@ -124,19 +124,19 @@ export function Configurator({ header, back, template, formats, assets, values, 
           className="grid min-h-0 flex-1"
           style={{ gridTemplateColumns: `${leftOpen ? "312px" : "0px"} minmax(0,1fr) ${rightOpen ? "224px" : "0px"}`, gridTemplateRows: "minmax(0,1fr)" }}
         >
-          {leftOpen && (
-            <LeftPanel
-              formatId={formatId}
-              template={template}
-              page={toolPage}
-              block={block}
-              element={element}
-              theme={theme}
-              onSoon={soon}
-              onHide={() => toggleLeft(false)}
-              hideRef={hideLeft}
-            />
-          )}
+          {/* Hidden, not unmounted: the theme switch and the panels' own state survive a hide. */}
+          <LeftPanel
+            hidden={!leftOpen}
+            formatId={formatId}
+            template={template}
+            page={toolPage}
+            block={block}
+            element={element}
+            theme={theme}
+            onSoon={soon}
+            onHide={() => toggleLeft(false)}
+            hideRef={hideLeft}
+          />
 
           <div className="relative col-start-2 row-start-1 min-h-0">
             <Canvas
@@ -178,20 +178,19 @@ export function Configurator({ header, back, template, formats, assets, values, 
             )}
           </div>
 
-          {rightOpen && (
-            <RightPanel
-              formatId={formatId}
-              template={template}
-              pages={pages}
-              assets={assets}
-              values={values}
-              currentPageKey={selectedPage?.pageKey}
-              onSelectPage={selectPage}
-              onSoon={soon}
-              onHide={() => toggleRight(false)}
-              hideRef={hideRight}
-            />
-          )}
+          <RightPanel
+            hidden={!rightOpen}
+            formatId={formatId}
+            template={template}
+            pages={pages}
+            assets={assets}
+            values={values}
+            currentPageKey={selectedPage?.pageKey}
+            onSelectPage={selectPage}
+            onSoon={soon}
+            onHide={() => toggleRight(false)}
+            hideRef={hideRight}
+          />
         </main>
       </div>
     </div>

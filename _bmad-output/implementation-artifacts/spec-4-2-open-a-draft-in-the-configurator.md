@@ -2,7 +2,7 @@
 title: 'Story 4.2a: open a draft in the configurator (frame, canvas, panels)'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'b654cdc7df752e8c48660fc3b3437539a1aa4a55'
 route: 'dispatch'
 review_loop_iteration: 0

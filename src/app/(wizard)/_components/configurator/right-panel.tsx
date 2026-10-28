@@ -12,6 +12,8 @@ import { ASPECT, EYEBROW, ICON_BUTTON, SEG, SEG_BUTTON, SOON_ID } from "./styles
 const SECTIONS: readonly PageSection[] = ["intro", "output", "risultati"];
 
 export interface RightPanelProps {
+  /** Hidden from its own bar; kept mounted so its state survives. */
+  hidden?: boolean;
   formatId: FormatId;
   template: string;
   pages: readonly Page[];
@@ -58,7 +60,7 @@ const Thumbnail = memo(function Thumbnail({
  * section and labelled "{n} · {name}"; clicking one selects that page and brings it
  * to the middle of the canvas.
  */
-export function RightPanel({ formatId, template, pages, assets, values, currentPageKey, onSelectPage, onSoon, onHide, hideRef }: RightPanelProps) {
+export function RightPanel({ hidden = false, formatId, template, pages, assets, values, currentPageKey, onSelectPage, onSoon, onHide, hideRef }: RightPanelProps) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const searchId = useId();
@@ -67,7 +69,7 @@ export function RightPanel({ formatId, template, pages, assets, values, currentP
   const shown = q === "" ? numbered : numbered.filter(({ page }) => page.name.toLocaleLowerCase("it").includes(q));
 
   return (
-    <aside aria-label={it.configurator.panels.right} className="col-start-3 row-start-1 flex min-h-0 flex-col border-l border-border bg-surface-sidebar">
+    <aside aria-label={it.configurator.panels.right} hidden={hidden} className="col-start-3 row-start-1 flex min-h-0 flex-col border-l border-border bg-surface-sidebar">
       <div className="flex shrink-0 flex-col gap-2.5 border-b border-border p-3.5">
         <div className="flex items-center gap-1.5">
           <div role="group" aria-label={it.configurator.tabs.label} className={cn(SEG, "flex flex-1")}>

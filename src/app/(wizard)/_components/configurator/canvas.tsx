@@ -82,15 +82,14 @@ function CanvasPage({
   useLayoutEffect(() => {
     const el = host.current;
     if (el === null) return;
-    const measure = () => {
-      const block = blockId === undefined ? null : el.querySelector(`[data-block-id="${blockId}"]`);
-      const element = elementId === undefined || block === null ? null : block.querySelector(`[data-element-id="${elementId}"]`);
-      setFrames({ block: block === null ? null : boxIn(el, block), element: element === null ? null : boxIn(el, element) });
-    };
+    const block = blockId === undefined ? null : el.querySelector(`[data-block-id="${blockId}"]`);
+    const element = elementId === undefined || block === null ? null : block.querySelector(`[data-element-id="${elementId}"]`);
+    const measure = () => setFrames({ block: block === null ? null : boxIn(el, block), element: element === null ? null : boxIn(el, element) });
     measure();
-    if (blockId === undefined || typeof ResizeObserver === "undefined") return;
+    if (block === null || typeof ResizeObserver === "undefined") return;
+    // The page, and the selected block and element themselves: they can reflow in a page of the same size.
     const observer = new ResizeObserver(measure);
-    observer.observe(el);
+    for (const node of [el, block, element]) if (node !== null) observer.observe(node);
     return () => observer.disconnect();
   }, [blockId, elementId, page, formatId]);
 
