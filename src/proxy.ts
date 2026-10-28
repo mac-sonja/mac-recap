@@ -1,12 +1,15 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
-import { refreshSession } from "@/modules/access";
+import { hasSessionCookie, refreshSession } from "@/modules/access";
 import { getGateCredentials, type GateCredentials } from "@/shared/env";
 
-// HTTP basic-auth gate (IR-A2) in front of every request until login ships in
-// Epic 6. There is deliberately no `config.matcher`: without one, Proxy runs on
-// every path, including `/s/*`, `/_next/*`, `public/` assets and 404s. Proxy
-// uses the Node.js runtime by default, so `node:crypto` is available.
+// Sign-in is the way in (Story 6.2): a page request without a session goes to
+// `/sign-in`, except the sign-in screens and `/s/{token}`, the only page open to
+// anyone (AR12). The HTTP basic-auth gate stays as an opt-in for non-production
+// environments (staging); prod leaves it off. There is deliberately no
+// `config.matcher`: without one, Proxy runs on every path, including `/s/*`,
+// `/_next/*`, `public/` assets and 404s. Proxy uses the Node.js runtime by
+// default, so `node:crypto` is available.
 
 export const REALM_HEADER = 'Basic realm="MAC Recap", charset="UTF-8"';
 
@@ -64,13 +67,44 @@ export function gate(request: NextRequest, credentials: GateCredentials | null):
     : unauthorized();
 }
 
+/** Where a request without a session is sent (the same path as `SIGN_IN_PATH` in `app/_lib/surface.ts`). */
+export const SIGN_IN_PATH = "/sign-in";
+
+/** Pages anyone may open without a session: the sign-in screens, the email link and shared links. */
+const PUBLIC_PREFIXES = ["/sign-in", "/sign-up", "/forgot-password", "/set-password", "/auth/", "/s/"];
+
+/** True for a path that never needs a session: public pages, Next's own files and static assets. */
+export function isPublicPath(pathname: string): boolean {
+  if (pathname.startsWith("/_next/")) return true;
+  // A file in `public/` (favicon.ico, an svg): the last segment has an extension.
+  if (/\.[a-z0-9]+$/i.test(pathname.slice(pathname.lastIndexOf("/")))) return true;
+  return PUBLIC_PREFIXES.some((prefix) =>
+    prefix.endsWith("/") ? pathname.startsWith(prefix) : pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 /**
- * The basic-auth gate first (until Story 6.2 retires it), then the Supabase Auth
- * session refresh (Story 6.1): an expiring token is renewed here, where cookies
- * can still be written. Who may do what is decided per request by `getActor()`.
+ * Sends a page request without a session cookie to sign-in. Only GET and HEAD:
+ * a server action or form post answers 401 itself through `getActor()`. A cookie
+ * that no longer holds a valid session is caught by the page (`resolveShellActor`).
+ */
+export function requireSession(request: NextRequest): NextResponse | null {
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  if (isPublicPath(request.nextUrl.pathname) || hasSessionCookie(request)) return null;
+  const url = request.nextUrl.clone();
+  url.pathname = SIGN_IN_PATH;
+  url.search = "";
+  return NextResponse.redirect(url);
+}
+
+/**
+ * The opt-in basic-auth gate first (staging only), then sign-in for pages
+ * without a session, then the Supabase Auth session refresh (Story 6.1): an
+ * expiring token is renewed here, where cookies can still be written. Who may do
+ * what is decided per request by `getActor()`.
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const gated = gate(request, getGateCredentials());
   if (gated.status === 401) return gated;
-  return refreshSession(request);
+  return requireSession(request) ?? refreshSession(request);
 }

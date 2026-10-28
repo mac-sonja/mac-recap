@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Smoke-tests a built MAC Recap image against the Story 2.2 I/O matrix:
-#   web without gate vars  -> exit 1 naming BASIC_AUTH_USER, port never opened
-#   web with gate vars     -> / and /s/x 401 without credentials, / not 401 with them
+#   web with one gate var  -> exit 1 naming BASIC_AUTH_PASSWORD, port never opened
+#   web without gate vars  -> / 307 to /sign-in, /sign-in 200, /s/x neither 401 nor 307 (Story 6.2, prod)
+#   web with gate vars     -> / and /s/x 401 without credentials, / not 401 with them (staging)
 #   worker                 -> against a stub Supabase (system profile, empty queue): one readiness
 #                             JSON line with actorId, keeps running, exit 0 on SIGTERM/SIGINT;
 #                             exit 1 on invalid env; exit 1 with no readiness line when Supabase
@@ -67,26 +68,66 @@ wait_for_log() {
   return 1
 }
 
-# --- Web, gate vars missing: exits 1 naming the var; the port never opens ------
-web_ungated() {
-  local name="$PREFIX-web-ungated" logs code
-  docker run -d --name "$name" "${SUPABASE_ENV[@]}" "$IMAGE" >/dev/null || { fail "web ungated: docker run"; return; }
+# --- Web, half a gate: exits 1 naming the missing var; the port never opens ----
+web_half_gate() {
+  local name="$PREFIX-web-half-gate" logs code
+  docker run -d --name "$name" "${SUPABASE_ENV[@]}" -e "BASIC_AUTH_USER=$GATE_USER" "$IMAGE" >/dev/null \
+    || { fail "web half gate: docker run"; return; }
   if ! wait_stopped "$name"; then
-    fail "web ungated: still running after ${TIMEOUT}s"
+    fail "web half gate: still running after ${TIMEOUT}s"
     dump_logs "$name"
     return
   fi
   code="$(exit_code "$name")"
   logs="$(docker logs "$name" 2>&1)"
-  [ "$code" = "1" ] && pass "web ungated: exit 1" || fail "web ungated: exit $code, expected 1"
-  grep -q "BASIC_AUTH_USER" <<<"$logs" && pass "web ungated: names BASIC_AUTH_USER" \
-    || fail "web ungated: log does not name BASIC_AUTH_USER"
+  [ "$code" = "1" ] && pass "web half gate: exit 1" || fail "web half gate: exit $code, expected 1"
+  grep -q "BASIC_AUTH_PASSWORD" <<<"$logs" && pass "web half gate: names BASIC_AUTH_PASSWORD" \
+    || fail "web half gate: log does not name BASIC_AUTH_PASSWORD"
   if grep -Eq "$LISTEN_PATTERN" <<<"$logs"; then
-    fail "web ungated: server reached listen"
+    fail "web half gate: server reached listen"
   else
-    pass "web ungated: no listening line (port never opened)"
+    pass "web half gate: no listening line (port never opened)"
   fi
   [ "$code" = "1" ] || dump_logs "$name"
+}
+
+# Starts a web container with extra docker args and prints its base URL once it answers.
+start_web() {
+  local name="$1" port status i
+  shift
+  docker run -d --name "$name" -p 127.0.0.1::3000 "${SUPABASE_ENV[@]}" "$@" "$IMAGE" >/dev/null || return 1
+  port="$(docker port "$name" 3000/tcp | head -n1 | sed 's/.*://')"
+  for ((i = 0; i < TIMEOUT; i++)); do
+    running "$name" || return 1
+    status="$(http -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/" || true)"
+    [ "$status" != "000" ] && { echo "http://127.0.0.1:$port"; return 0; }
+    sleep 1
+  done
+  return 1
+}
+
+# --- Web, no gate (prod, Story 6.2): pages go to sign-in, /s/{token} is open ----
+web_open() {
+  local name="$PREFIX-web-open" base status location
+  if ! base="$(start_web "$name")"; then
+    fail "web open: never answered on port 3000"
+    dump_logs "$name"
+    return
+  fi
+  status="$(http -o /dev/null -w '%{http_code}' "$base/")"
+  location="$(http -o /dev/null -w '%{redirect_url}' "$base/")"
+  [ "$status" = "307" ] && [[ "$location" == */sign-in ]] && pass "web open: / without a session -> 307 /sign-in" \
+    || fail "web open: / without a session -> $status $location, expected 307 to /sign-in"
+  status="$(http -o /dev/null -w '%{http_code}' "$base/sign-in")"
+  [ "$status" = "200" ] && pass "web open: /sign-in -> 200" || fail "web open: /sign-in -> $status, expected 200"
+  # No share page exists yet (Story 5.6): anything but a challenge or a sign-in redirect proves it is open.
+  status="$(http -o /dev/null -w '%{http_code}' "$base/s/x")"
+  if [ "$status" != "401" ] && [ "$status" != "307" ] && [ "$status" -lt 500 ]; then
+    pass "web open: /s/x without a session -> $status (no gate, no sign-in)"
+  else
+    fail "web open: /s/x without a session -> $status, expected neither 401 nor 307"
+  fi
+  running "$name" || { fail "web open: process exited"; dump_logs "$name"; }
 }
 
 # --- Web, gated: 401 without credentials, not 401 (nor 5xx) with them ---------
@@ -125,9 +166,9 @@ web_gated() {
     fail "web gated: / with credentials -> $status, expected not 401 and below 500"
   fi
 
-  # Positive control for web_ungated: the listening pattern must match a server that did listen.
+  # Positive control for web_half_gate: the listening pattern must match a server that did listen.
   if grep -Eq "$LISTEN_PATTERN" <<<"$(docker logs "$name" 2>&1)"; then
-    pass "web gated: listening line present (ungated check is not vacuous)"
+    pass "web gated: listening line present (half-gate check is not vacuous)"
   else
     fail "web gated: no line matches the listening pattern; update LISTEN_PATTERN"
     dump_logs "$name"
@@ -264,7 +305,8 @@ image_user() {
   [ "$user" = "pwuser" ] && pass "user: pwuser" || fail "user: '$user', expected pwuser"
 }
 
-web_ungated
+web_half_gate
+web_open
 web_gated
 if start_stub; then
   worker_signal SIGTERM

@@ -34,8 +34,8 @@ Supabase directly.
 | `SUPABASE_URL` | API URL from `npx supabase status`, `http://127.0.0.1:54321` |
 | `SUPABASE_PUBLISHABLE_KEY` | Publishable key from `npx supabase status` |
 | `SUPABASE_SECRET_KEY` | Secret key from `npx supabase status` (server only) |
-| `BASIC_AUTH_USER` | Basic-auth gate user (web only; see below) |
-| `BASIC_AUTH_PASSWORD` | Basic-auth gate password (web only; see below) |
+| `BASIC_AUTH_USER` | Optional basic-auth gate user, staging only (web only; see below) |
+| `BASIC_AUTH_PASSWORD` | Optional basic-auth gate password, staging only (web only; see below) |
 
 #### File storage
 
@@ -44,20 +44,22 @@ Project files live in the Supabase Storage bucket `material`, created by a migra
 The per-file limit is 50 MB, the hosted plan's upload cap. To go to 100 MB, raise the
 project's upload limit (Pro), then update `MAX_FILE_BYTES` and add a bucket migration.
 
-#### Basic-auth gate
+#### Sign-in and the basic-auth gate
 
-Until login ships (Epic 6), `src/proxy.ts` puts HTTP basic auth in front of every
-request the web process serves, including `/s/*`, `/_next/*` and 404s; there is no
-unauthenticated path. Credentials are compared in constant time.
+Sign-in is the way in (Story 6.2). `src/proxy.ts` sends every page request without
+a Supabase Auth session to `/sign-in`, except the sign-in screens (`/sign-in`,
+`/sign-up`, `/forgot-password`, `/set-password`, `/auth/*`), `/s/{token}` (shared
+links, open to anyone with the link) and static files. Each page and action still
+resolves the actor itself, so a stale cookie also ends on the sign-in screen.
 
-- **Production** (any `NODE_ENV` other than `development` or `test`, including unset;
-  the standalone `server.js` and `next start` set `production`): both
-  `BASIC_AUTH_USER` and `BASIC_AUTH_PASSWORD` are required. If either is unset or
-  empty, the web process exits with code 1 before serving, naming it (in the
-  Docker image, before the port opens; see Deploy).
-- **Development / test** (`npm run dev`, Vitest): both are optional. Leave both unset
-  or empty for no gate, or set both to try it. Setting only one is treated as a
-  misconfiguration (exit 1).
+The HTTP basic-auth gate is now opt-in, in every `NODE_ENV`:
+
+- **Both `BASIC_AUTH_USER` and `BASIC_AUTH_PASSWORD` set**: every request, `/s/*`
+  included, needs them first (constant-time compare). Staging, as a non-production
+  environment, keeps it on.
+- **Both unset or empty**: no gate. Prod and local development run this way.
+- **Only one set**: a misconfiguration; the web process exits with code 1 before
+  serving, naming the missing one (in the Docker image, before the port opens).
 - **Worker**: never needs them.
 
 ## Scripts
@@ -264,13 +266,23 @@ docker run --env-file staging.env -p 3000:3000 mac-recap:<version>
 docker run --env-file staging.env mac-recap:<version> node dist/worker.js
 ```
 
+### Environments
+
+- **Prod** has its own Supabase project and its own private storage bucket in an EU
+  region, runs with no basic-auth gate, and lets in only signed-in users (plus
+  `/s/{token}`).
+- **Staging** has its own Supabase project too and keeps the basic-auth gate (both
+  variables set), so it stays private as a non-production environment.
+- Migrations reach staging first, then prod (see Migrations).
+
 ### Probes
 
-The gate has no unauthenticated path, and the image defines no `HEALTHCHECK`
-because the worker shares it. Configure the host instead:
+The image defines no `HEALTHCHECK` because the worker shares it. Configure the host
+instead:
 
-- **Web:** a TCP check on port 3000, or an HTTP check that sends
-  `Authorization: Basic <base64 of user:password>` (without it every path answers 401).
+- **Web:** a TCP check on port 3000, or an HTTP check on `/sign-in` (200 without a
+  session). Where the gate is on (staging), the HTTP check must send
+  `Authorization: Basic <base64 of user:password>`, or every path answers 401.
 - **Worker:** process liveness only; it opens no port.
 
 ### Stop timeout
@@ -285,7 +297,7 @@ SIGKILL can land before the release and the job waits for its 10-minute lease to
 
 No shared cache or CDN may sit in front of the web process. Next serves
 `/_next/static/*` as `public, immutable`, so a shared cache could replay those
-responses to clients that never passed the gate.
+responses to clients that never passed the gate (staging) or signed in.
 
 ### Migrations
 

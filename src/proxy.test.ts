@@ -1,15 +1,19 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { gate, isAuthorized, parseBasicAuth, REALM_HEADER, safeEqual } from "./proxy";
+import { gate, isAuthorized, isPublicPath, parseBasicAuth, REALM_HEADER, requireSession, safeEqual } from "./proxy";
 
 const CREDS = { user: "mac", password: "s3cret" };
 
 const basic = (raw: string) => `Basic ${Buffer.from(raw, "utf8").toString("base64")}`;
 
-function request(path: string, authorization?: string): NextRequest {
-  const headers = authorization === undefined ? undefined : { authorization };
-  return new NextRequest(new URL(path, "http://localhost:3000"), { headers });
+function request(path: string, authorization?: string, init: { method?: string; cookie?: string } = {}): NextRequest {
+  const headers: Record<string, string> = {};
+  if (authorization !== undefined) headers.authorization = authorization;
+  if (init.cookie !== undefined) headers.cookie = init.cookie;
+  return new NextRequest(new URL(path, "http://localhost:3000"), { headers, method: init.method });
 }
+
+const SESSION_COOKIE = "sb-127-auth-token=base64-x";
 
 const passesThrough = (response: Response) => response.headers.get("x-middleware-next") === "1";
 
@@ -152,7 +156,7 @@ describe("proxy", () => {
     vi.unstubAllEnvs();
   });
 
-  it("reads the gate credentials from the environment", async () => {
+  it("reads the gate credentials from the environment (staging keeps its gate)", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("BASIC_AUTH_USER", "mac");
     vi.stubEnv("BASIC_AUTH_PASSWORD", "s3cret");
@@ -161,11 +165,71 @@ describe("proxy", () => {
     expect(passesThrough(await proxy(request("/s/abc", basic("mac:s3cret"))))).toBe(true);
   });
 
-  it("does not gate in development when both variables are unset", async () => {
-    vi.stubEnv("NODE_ENV", "development");
+  it.each(["production", "development"])(
+    "applies no basic auth when both variables are unset (NODE_ENV=%s), and opens /s/{token} to anyone",
+    async (NODE_ENV) => {
+      vi.stubEnv("NODE_ENV", NODE_ENV);
+      vi.stubEnv("BASIC_AUTH_USER", undefined);
+      vi.stubEnv("BASIC_AUTH_PASSWORD", undefined);
+      const { proxy } = await import("./proxy");
+      const response = await proxy(request("/s/abc"));
+      expect(response.status).not.toBe(401);
+      expect(passesThrough(response)).toBe(true);
+    },
+  );
+
+  it("sends a page without a session to sign-in, after the gate", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("BASIC_AUTH_USER", undefined);
     vi.stubEnv("BASIC_AUTH_PASSWORD", undefined);
     const { proxy } = await import("./proxy");
-    expect(passesThrough(await proxy(request("/s/abc")))).toBe(true);
+    const response = await proxy(request("/case-studies?q=x"));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/sign-in");
+  });
+});
+
+describe("isPublicPath", () => {
+  it.each([
+    "/sign-in",
+    "/sign-up",
+    "/forgot-password",
+    "/set-password",
+    "/auth/confirm",
+    "/s/abc123",
+    "/_next/static/chunks/app.js",
+    "/favicon.ico",
+    "/logo.svg",
+  ])("%s needs no session", (path) => {
+    expect(isPublicPath(path)).toBe(true);
+  });
+
+  it.each(["/", "/home", "/case-studies", "/clients/42", "/organization", "/library", "/s", "/sign-inx", "/auth"])(
+    "%s needs a session",
+    (path) => {
+      expect(isPublicPath(path)).toBe(false);
+    },
+  );
+});
+
+describe("requireSession", () => {
+  it("redirects a page request without a session cookie to /sign-in, dropping the query", () => {
+    const response = requireSession(request("/organization?tab=1"));
+    expect(response?.status).toBe(307);
+    expect(response?.headers.get("location")).toBe("http://localhost:3000/sign-in");
+  });
+
+  it("lets a request with a session cookie through (the page checks the session itself)", () => {
+    expect(requireSession(request("/home", undefined, { cookie: SESSION_COOKIE }))).toBeNull();
+  });
+
+  it("never redirects public paths or non-GET requests (actions answer 401 themselves)", () => {
+    expect(requireSession(request("/s/abc"))).toBeNull();
+    expect(requireSession(request("/sign-in"))).toBeNull();
+    expect(requireSession(request("/home", undefined, { method: "POST" }))).toBeNull();
+  });
+
+  it("redirects HEAD like GET", () => {
+    expect(requireSession(request("/home", undefined, { method: "HEAD" }))?.status).toBe(307);
   });
 });

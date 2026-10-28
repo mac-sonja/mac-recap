@@ -59,12 +59,11 @@ describe("instrumentation register", () => {
     });
 
     it.each([
-      ["both unset", {}, "BASIC_AUTH_USER"],
       ["user unset", { BASIC_AUTH_PASSWORD: "s3cret" }, "BASIC_AUTH_USER"],
       ["password unset", { BASIC_AUTH_USER: "mac" }, "BASIC_AUTH_PASSWORD"],
       ["user empty", { BASIC_AUTH_USER: "", BASIC_AUTH_PASSWORD: "s3cret" }, "BASIC_AUTH_USER"],
       ["password empty", { BASIC_AUTH_USER: "mac", BASIC_AUTH_PASSWORD: "" }, "BASIC_AUTH_PASSWORD"],
-    ])("exits 1 in production with %s, naming the missing variable", async (_, gate, name) => {
+    ])("exits 1 in production with half a gate (%s), naming the missing variable", async (_, gate, name) => {
       vi.stubEnv("NODE_ENV", "production");
       for (const [key, value] of Object.entries(gate)) vi.stubEnv(key, value);
       const exit = await runRegister();
@@ -94,13 +93,12 @@ describe("instrumentation register", () => {
       expect(exit).not.toHaveBeenCalled();
     });
 
-    it.each(["staging", undefined])(
-      "exits 1 when NODE_ENV=%s and the variables are unset",
+    it.each(["production", "staging", undefined])(
+      "starts when NODE_ENV=%s and both variables are unset (no gate; Story 6.2)",
       async (NODE_ENV) => {
         vi.stubEnv("NODE_ENV", NODE_ENV);
         const exit = await runRegister();
-        expect(exit).toHaveBeenCalledWith(1);
-        expect(loggedError()).toContain("BASIC_AUTH_USER");
+        expect(exit).not.toHaveBeenCalled();
       },
     );
 
@@ -118,8 +116,8 @@ describe("instrumentation register", () => {
 });
 
 // The preflight (`dist/preflight.js`) runs only in front of the standalone
-// server.js, which forces production; it must never let a development or test
-// NODE_ENV through ungated. Tested here so BASIC_AUTH stays out of other files.
+// server.js. Since Story 6.2 the gate is opt-in there too: no variables means no
+// gate, half a gate stops the web. Tested here so BASIC_AUTH stays out of other files.
 describe("preflight", () => {
   const loggedError = () =>
     vi.mocked(console.error).mock.calls.map((args) => args.map(String).join(" ")).join("\n");
@@ -135,14 +133,21 @@ describe("preflight", () => {
   });
 
   it.each(["development", "test", "production", undefined])(
-    "exits 1 with NODE_ENV=%s and the gate unset, naming BASIC_AUTH_USER",
+    "passes with NODE_ENV=%s and the gate unset (prod runs without basic auth)",
     async (NODE_ENV) => {
       vi.stubEnv("NODE_ENV", NODE_ENV);
       const exit = await runPreflight();
-      expect(exit).toHaveBeenCalledWith(1);
-      expect(loggedError()).toContain("BASIC_AUTH_USER");
+      expect(exit).not.toHaveBeenCalled();
     },
   );
+
+  it("exits 1 in production when only the user is set, naming the password", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BASIC_AUTH_USER", "mac");
+    const exit = await runPreflight();
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(loggedError()).toMatch(/Missing BASIC_AUTH_PASSWORD/);
+  });
 
   it("exits 1 in development when only the password is missing, naming it", async () => {
     vi.stubEnv("NODE_ENV", "development");

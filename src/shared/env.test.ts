@@ -55,17 +55,11 @@ describe("resolveGateCredentials", () => {
     },
   );
 
-  it.each(["development", "test"])("turns the gate off when both are unset (NODE_ENV=%s)", (NODE_ENV) => {
-    expect(resolve({ NODE_ENV })).toBeNull();
-    expect(resolve({ NODE_ENV, BASIC_AUTH_USER: "", BASIC_AUTH_PASSWORD: "" })).toBeNull();
-  });
-
-  it.each(["production", "staging", "prod", undefined])(
-    "requires both when NODE_ENV=%s, naming each missing variable",
+  it.each(["production", "staging", "development", "test", undefined])(
+    "turns the gate off when both are unset or empty (NODE_ENV=%s; Story 6.2)",
     (NODE_ENV) => {
-      expect(() => resolve({ NODE_ENV })).toThrow(
-        /BASIC_AUTH_USER, BASIC_AUTH_PASSWORD[\s\S]*unless NODE_ENV is development or test/,
-      );
+      expect(resolve({ NODE_ENV })).toBeNull();
+      expect(resolve({ NODE_ENV, BASIC_AUTH_USER: "", BASIC_AUTH_PASSWORD: "" })).toBeNull();
     },
   );
 
@@ -85,7 +79,7 @@ describe("resolveGateCredentials", () => {
     ["BASIC_AUTH_PASSWORD", { BASIC_AUTH_USER: "mac" }],
   ])("treats a lone variable in development as misconfigured, naming %s", (name, source) => {
     expect(() => resolve({ ...source, NODE_ENV: "development" })).toThrow(
-      new RegExp(`Missing ${name}:`),
+      new RegExp(`Missing ${name}: set both basic-auth variables or neither`),
     );
   });
 

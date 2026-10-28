@@ -15,9 +15,8 @@ export const envSchema = z.object({
   SUPABASE_URL: z.url(),
   SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
   SUPABASE_SECRET_KEY: z.string().min(1),
-  // Basic-auth gate (IR-A2), web process only. Optional here so the worker never
-  // needs them; an empty value counts as unset. `resolveGateCredentials` decides
-  // when the web process requires them.
+  // Basic-auth gate, web process only and opt-in (Story 6.2): staging sets both to
+  // stay private, prod sets neither. An empty value counts as unset.
   BASIC_AUTH_USER: optionalNonEmpty,
   BASIC_AUTH_PASSWORD: optionalNonEmpty,
   NODE_ENV: z.string().optional(),
@@ -42,25 +41,19 @@ export type GateCredentials = { user: string; password: string };
 
 const GATE_VARS = ["BASIC_AUTH_USER", "BASIC_AUTH_PASSWORD"] as const;
 
-/** NODE_ENV values under which the gate is optional; any other value (or none) requires it. */
-const GATE_OPTIONAL_IN = new Set(["development", "test"]);
-
 /**
- * Web-only rule for the basic-auth gate. Both variables are required unless
- * `NODE_ENV` is `development` or `test`; there the gate is on only when both are
- * set, and setting just one is a misconfiguration. Returns `null` when the gate
- * is off; throws an `Error` naming each missing variable (never their values).
+ * Web-only rule for the basic-auth gate (Story 6.2: sign-in replaced it as the
+ * way in). The gate is on only when both variables are set, in any `NODE_ENV`;
+ * a non-production environment such as staging sets both to stay private.
+ * Returns `null` when both are unset; setting just one is a misconfiguration and
+ * throws an `Error` naming the missing variable (never a value).
  */
 export function resolveGateCredentials(env: Env): GateCredentials | null {
   const { BASIC_AUTH_USER: user, BASIC_AUTH_PASSWORD: password } = env;
   if (user && password) return { user, password };
   const missing = GATE_VARS.filter((name) => !env[name]);
-  const optional = env.NODE_ENV !== undefined && GATE_OPTIONAL_IN.has(env.NODE_ENV);
-  if (optional && missing.length === GATE_VARS.length) return null;
-  const reason = optional
-    ? "set both basic-auth variables or neither"
-    : "the basic-auth gate is required unless NODE_ENV is development or test";
-  throw new Error(`Missing ${missing.join(", ")}: ${reason}.`);
+  if (missing.length === GATE_VARS.length) return null;
+  throw new Error(`Missing ${missing.join(", ")}: set both basic-auth variables or neither.`);
 }
 
 /** Gate credentials for the web process (`proxy.ts`, boot check); `null` when the gate is off. */
