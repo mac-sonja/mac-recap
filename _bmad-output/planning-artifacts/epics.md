@@ -2746,6 +2746,8 @@ So that no role gets more than the matrix allows.
 
 Covers: NFR3, NFR7, AR5, AR11 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Order: MVP, Sprint 3, last before the demo: after 6.4 (owner amendment 2026-10-16)
+⛔ Blocked on: the actions it checks. Start once client intros (Stories 3.9 and 3.11), client packs (Story 5.9) and collections (Story 5.10) have their server actions; until then there is nothing new to test (owner 2026-10-28).
+How: extend `test/permissions.test.ts` (built in Story 6.4), which runs every server action for every role through the real `getActor` and `authorize`. Add the new action files to its list, with the roles allowed for each; the admin has every owner/designer permission plus Organizzazione (owner 2026-10-28).
 
 **Acceptance Criteria:**
 
@@ -2753,3 +2755,7 @@ Order: MVP, Sprint 3, last before the demo: after 6.4 (owner amendment 2026-10-1
 **When** the permission suite runs
 **Then** every new matrix cell (section 4.3) is checked end to end: allowed actions succeed, denied ones return 403
 **And** it proves account/sales/social can't edit collection text (IR-COLL-EDIT), can't edit clients or intros, and see only clients with an approved case history
+
+**Given** the client intro, client pack and collection actions
+**When** they are added to `test/permissions.test.ts`
+**Then** the suite fails if any of them is missing from its list, so a later action can't skip the check
