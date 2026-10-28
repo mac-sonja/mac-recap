@@ -2,7 +2,7 @@
 title: 'Story 5.2 (part): approved case detail page and Modifica'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '0d8abf2547b6c95c25bc1903f9a2bb336b719446'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -48,12 +48,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/app/_lib/routes.ts` and its tests -- add `caseViewHref` and the new `caseHref` rule.
-- [ ] `src/app/(wizard)/case-studies/[caseId]/page.tsx` and `page.test.tsx` -- server loader with the matrix redirects: `requireSurface("list cases")`, then `can(actor, "view", { status })`; pass `canEdit`.
-- [ ] `src/app/(wizard)/_components/case-view/case-view.tsx` and its test -- client frame. The top bar has: back to `/case-studies`, name, code, badge, the format switch, Scarica, and **Modifica** as a link to `configuratorHref` when `canEdit`. Below it, the read-only `Canvas`: Presentazione stacked, Carosello and Video as a slideshow with ← →, and the Instagram overlay on Video.
-- [ ] `src/app/(tool)/case-studies/_components/case-studies-table.tsx` and its test -- a **Modifica** link on Approvato rows when `canEdit`, next to Scarica. Clicking it does not also trigger the row's own open.
-- [ ] `src/shared/i18n/it.ts` -- the copy above.
-- [ ] Planning -- `epics.md`: a 4.1 owner note (2026-10-28) that drops the Delete criterion and says the To review entry shipped as the sidebar note (#115); a 5.2 note that this part is built and the rest is backlog. `sprint-status.yaml`: 4.1 done, 5.2 in-progress (part built), epic-5 in-progress.
+- [x] `src/app/_lib/routes.ts` and its tests -- add `caseViewHref` and the new `caseHref` rule.
+- [x] `src/app/(wizard)/case-studies/[caseId]/page.tsx` and `page.test.tsx` -- server loader with the matrix redirects: `requireSurface("list cases")`, then `can(actor, "view", { status })`; pass `canEdit`.
+- [x] `src/app/(wizard)/_components/case-view/case-view.tsx` and its test -- client frame. The top bar has: back to `/case-studies`, name, code, badge, the format switch, Scarica, and **Modifica** as a link to `configuratorHref` when `canEdit`. Below it, the read-only `Canvas`: Presentazione stacked, Carosello and Video as a slideshow with ← →, and the Instagram overlay on Video.
+- [x] `src/app/(tool)/case-studies/_components/case-studies-table.tsx` and its test -- a **Modifica** link on Approvato rows when `canEdit`, next to Scarica. Clicking it does not also trigger the row's own open.
+- [x] `src/shared/i18n/it.ts` -- the copy above.
+- [x] Planning -- `epics.md`: a 4.1 owner note (2026-10-28) that drops the Delete criterion and says the To review entry shipped as the sidebar note (#115); a 5.2 note that this part is built and the rest is backlog. `sprint-status.yaml`: 4.1 done, 5.2 in-progress (part built), epic-5 in-progress.
 
 **Acceptance Criteria:**
 - Given the Case table or Home, when I click an Approvato row, then the detail page opens. With `edit`, the table row also shows **Modifica**, which opens the configurator.
@@ -62,9 +62,32 @@ context:
 
 ## Implementation Notes
 
+- `requireSurface` gained an optional `resource` (default `{}`): the sales role's `list cases` is approved-only, so `requireSurface("list cases")` would always send it to `/library`. The page calls `requireSurface("list cases", { status: "approved" })`, then `can(actor, "view", { status })`.
+- `DocumentHeading` and `FormatSwitch` moved out of `TopBar` (same markup) and are shared by `CaseView`.
+- Below 1024 px the page shows a larger-screen message, as the configurator does; noted as backlog on Story 5.2.
+- The theme cookie is not read: the page has no theme switch.
+- `case-details-step.test.tsx`: `@next/next/no-html-link-for-pages` turned off for that file, since its plain `<a href="/case-studies">` now matches the `/case-studies/[caseId]` page.
+- Verified: typecheck, lint, `npm test` (123 files, 3536 passed, 2 skipped). Not checked in a browser.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | ← → inside the Scarica dialog's radios step the slideshow (blind, edge, verification) | medium | `case-view.tsx` keydown handler skips text fields only; `DownloadButton` radios sit in a modal dialog; `preventDefault` blocks radio navigation | patch |
+| 2 | `useReducedMotion` untested (verification gap) | medium | No `CaseView` test stubs `matchMedia`; inverting the hook passes every test | patch |
+| 3 | `CaseStudiesTable` JSDoc stale ("other rows are not links yet") | low | Doc block above the component contradicts the new row behaviour; direct correction | patch |
+| 4 | `ROW_PILL` copies `DownloadButton`'s class string | low | Character-for-character copy; the two will drift; extracting one constant is a direct change | patch |
+| 5 | File-wide eslint-disable in `case-details-step.test.tsx` | low | One `<a>` needs it; `eslint-disable-next-line` is a direct correction | patch |
+| 6 | One non-"not ready" rendition failure throws the whole page into the error boundary | medium | `renderAssetsOf` over every listed asset, as the configurator; a broken unused upload blocks viewing | defer |
+| 7 | Narrow screen message has no back link | low | Tool is desktop-first (1280 px min); browser back works; preview below 1024 px is 5.2 backlog | reject |
+| 8 | Back link and redirects go to `/case-studies` for the sales role | low | `/case-studies` redirects that role to its landing; the role has no entry to this page yet | reject |
+| 9 | Sales role cannot reach the page except by URL | low | Entry point is the Library (Story 5.1), outside this intent | reject |
+| 10 | Starter pages shown for an approved case without approved revision | false | Owner decision in the frozen intent | reject |
+| 11 | Arrow keys captured while the canvas is hidden below 1024 px | low | Narrow layout is a stopgap; no horizontal scroll to block there | reject |
+| 12 | NOT_FOUND from later loads after a concurrent delete reaches the error boundary | low | Same as the configurator; needs a delete racing the page load | reject |
+| 13 | Other missing tests (ArrowLeft clamp, alt/ctrl, sales back href) | low | Clamp and modifiers share the tested code path; sales back href follows #8 | reject |
 
 ## Verification
 
