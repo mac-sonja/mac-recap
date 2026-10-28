@@ -25,9 +25,12 @@ export interface CaseStudyRow {
    * in a new tab. Shareable links come with Story 5.5; until then no row sets it.
    */
   publicUrl?: string | null;
+  /** When a Da approvare case entered that status (its latest `generation_succeeded`); null otherwise. */
+  inReviewSince?: string | null;
 }
 
-export const SORT_KEYS = ["id", "name", "client", "year", "status", "businessLine", "updated"] as const;
+/** The column keys, then `inReviewSince`: the To review queue's order, which has no column of its own. */
+export const SORT_KEYS = ["id", "name", "client", "year", "status", "businessLine", "updated", "inReviewSince"] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 export type SortDirection = "asc" | "desc";
 export interface SortState {
@@ -39,10 +42,10 @@ export interface SortState {
 export const DEFAULT_SORT: SortState = { key: "updated", direction: "desc" };
 
 /**
- * The To review queue (Story 4.1): Updated, oldest first, so nothing sits waiting. Until the time a
- * case entered Da approvare is stored, its last update stands in for it.
+ * The To review queue (Story 4.1): the longest waiting first, by when each case entered
+ * Da approvare. Clicking a column header leaves it for that column's sort.
  */
-export const REVIEW_QUEUE_SORT: SortState = { key: "updated", direction: "asc" };
+export const REVIEW_QUEUE_SORT: SortState = { key: "inReviewSince", direction: "asc" };
 
 /** `?stato=` as a status filter: one of the case statuses, else every status. */
 export function parseStatusFilter(value: unknown): StatusFilter {
@@ -95,6 +98,9 @@ function compare(a: CaseStudyRow, b: CaseStudyRow, key: SortKey): number {
       return CASE_STATUSES.indexOf(a.status) - CASE_STATUSES.indexOf(b.status);
     case "updated":
       return Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
+    case "inReviewSince":
+      // A row without the time (any other status, or no event) falls back to its last update.
+      return Date.parse(a.inReviewSince ?? a.updatedAt) - Date.parse(b.inReviewSince ?? b.updatedAt);
     case "id":
       // Natural order on the code: `LUM-2026-9` before `LUM-2026-10`.
       return collator.compare(a.code, b.code);

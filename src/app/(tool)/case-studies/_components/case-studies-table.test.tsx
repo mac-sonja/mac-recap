@@ -458,12 +458,20 @@ describe("CaseStudiesTable", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("starts on ?stato=in_review as the To review queue: Da approvare only, oldest Updated first", () => {
-    const older: CaseStudyRow = { ...rows[2], id: "eeeeeeee-0000-4000-8000-000000000006", name: "Prima", updatedAt: "2026-10-03T10:00:00+00:00" };
-    render(<CaseStudiesTable rows={[...rows, older]} canCreate initialStatus="in_review" />);
+  it("starts on ?stato=in_review as the To review queue: Da approvare only, longest waiting first", async () => {
+    const user = userEvent.setup();
+    // Prima was updated later but has waited longer: the time it entered Da approvare wins.
+    const waiting: CaseStudyRow[] = [
+      { ...rows[2], inReviewSince: "2026-10-04T10:00:00+00:00" },
+      { ...rows[2], id: "eeeeeeee-0000-4000-8000-000000000006", name: "Prima", updatedAt: "2026-10-09T10:00:00+00:00", inReviewSince: "2026-10-02T10:00:00+00:00" },
+    ];
+    render(<CaseStudiesTable rows={[...rows.slice(0, 2), ...waiting]} canCreate initialStatus="in_review" />);
     expect(segment(SEGMENTS.statuses.in_review).getAttribute("aria-checked")).toBe("true");
     expect(names()).toEqual(["Prima", "Émile"]);
-    expect(header(COLUMNS.updated).getAttribute("aria-sort")).toBe("ascending");
+    // No column owns the queue's order; a header click switches to that column's sort.
+    expect(screen.getAllByRole("columnheader").some((th) => th.hasAttribute("aria-sort"))).toBe(false);
+    await user.click(within(header(COLUMNS.updated)).getByRole("button"));
+    expect(names()).toEqual(["Émile", "Prima"]);
   });
 
   it("keeps ?stato= in step with the filter when asked, leaving ?q= alone", async () => {

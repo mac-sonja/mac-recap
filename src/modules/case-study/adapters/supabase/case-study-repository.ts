@@ -1,5 +1,5 @@
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
-import { caseEventSchema, type CaseEvent } from "@/modules/case-study/domain/case-event";
+import { caseEventSchema, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import { caseStudySchema, type CaseStudy } from "@/modules/case-study/domain/case-study";
 import type { Json, Tables } from "@/shared/db.types";
 import { log } from "@/shared/log";
@@ -120,6 +120,29 @@ export function createSupabaseCaseStudyRepository(
     return toCaseStudy(data);
   }
 
+  /**
+   * When each of `caseIds` last entered Da approvare: the newest `generation_succeeded`
+   * transition event per case (Story 4.1). No query when there are none.
+   */
+  async function inReviewSince(caseIds: string[]): Promise<Result<Map<string, string>>> {
+    const since = new Map<string, string>();
+    if (caseIds.length === 0) return { ok: true, value: since };
+    const { data, error } = await client()
+      .from("case_event")
+      .select("case_id, at")
+      .eq("type", TRANSITION)
+      .eq("data->>event", "generation_succeeded")
+      .in("case_id", caseIds)
+      .order("at", { ascending: false });
+    if (error) {
+      log.error(`case_event review time lookup failed: ${error.code}`);
+      return err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "Could not list the case studies." });
+    }
+    // Newest first, so the first event seen per case is its latest.
+    for (const event of data) if (!since.has(event.case_id)) since.set(event.case_id, event.at);
+    return { ok: true, value: since };
+  }
+
   return {
     async create(input, actorId) {
       // One Postgres function assigns the number and code and writes the case and
@@ -203,7 +226,12 @@ export function createSupabaseCaseStudyRepository(
         if (!mapped.ok) return mapped;
         cases.push(mapped.value);
       }
-      return { ok: true, value: cases };
+      const since = await inReviewSince(cases.filter((c) => c.status === "in_review").map((c) => c.id));
+      if (!since.ok) return since;
+      return {
+        ok: true,
+        value: cases.map((c) => ({ ...c, inReviewSince: c.status === "in_review" ? (since.value.get(c.id) ?? null) : null })),
+      };
     },
 
     async appendEvent(event) {

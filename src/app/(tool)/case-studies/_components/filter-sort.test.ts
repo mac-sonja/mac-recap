@@ -6,6 +6,7 @@ import {
   nextSort,
   normalizeForSearch,
   parseStatusFilter,
+  REVIEW_QUEUE_SORT,
   sortRows,
   type CaseStudyRow,
 } from "./filter-sort";
@@ -153,5 +154,16 @@ describe("parseStatusFilter", () => {
     expect(parseStatusFilter("deleted")).toBe("all");
     expect(parseStatusFilter(["in_review", "draft"])).toBe("all");
     expect(parseStatusFilter(undefined)).toBe("all");
+  });
+});
+
+describe("REVIEW_QUEUE_SORT", () => {
+  it("puts the longest waiting first; a row without the time falls back to its last update", () => {
+    const rows = [
+      row({ id: "late", status: "in_review", updatedAt: "2026-10-01T10:00:00+00:00", inReviewSince: "2026-10-09T10:00:00+00:00" }),
+      row({ id: "early", status: "in_review", updatedAt: "2026-10-10T10:00:00+00:00", inReviewSince: "2026-10-02T10:00:00+00:00" }),
+      row({ id: "none", status: "in_review", updatedAt: "2026-10-05T10:00:00+00:00", inReviewSince: null }),
+    ];
+    expect(sortRows(rows, REVIEW_QUEUE_SORT).map((r) => r.id)).toEqual(["early", "none", "late"]);
   });
 });

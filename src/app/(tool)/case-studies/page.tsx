@@ -45,6 +45,7 @@ export default async function CaseStudiesPage({
     businessLines: c.businessLines,
     updatedAt: c.updatedAt,
     updatedLabel: formatDateTime(c.updatedAt),
+    inReviewSince: c.inReviewSince,
   }));
 
   return (

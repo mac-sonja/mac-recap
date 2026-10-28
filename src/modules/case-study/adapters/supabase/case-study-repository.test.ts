@@ -262,6 +262,81 @@ describe("createSupabaseCaseStudyRepository().list", () => {
   });
 });
 
+/**
+ * Two-table stub for `list`: `case_study` resolves to `cases`, `case_event` to `events`;
+ * every builder step is recorded per table as `[method, ...args]`.
+ */
+function listClient(cases: { data: unknown; error: unknown }, events: { data: unknown; error: unknown } = { data: [], error: null }) {
+  const calls: Record<string, unknown[][]> = { case_study: [], case_event: [] };
+  const from = vi.fn((table: "case_study" | "case_event") => {
+    const response = table === "case_study" ? cases : events;
+    const builder: Record<string, unknown> = { then: (resolve: (r: typeof response) => unknown) => resolve(response) };
+    for (const method of ["select", "is", "eq", "in", "order"]) {
+      builder[method] = (...args: unknown[]) => {
+        calls[table].push([method, ...args]);
+        return builder;
+      };
+    }
+    return builder;
+  });
+  const factory = (() => ({ from })) as unknown as Parameters<typeof createSupabaseCaseStudyRepository>[0];
+  return { factory, from, calls };
+}
+
+describe("createSupabaseCaseStudyRepository().list: when a case entered Da approvare", () => {
+  const WAITING = "bbbbbbbb-0000-4000-8000-000000000002";
+  const OTHER_WAITING = "bbbbbbbb-0000-4000-8000-000000000003";
+
+  it("takes each Da approvare case's latest generation_succeeded event; null for other statuses", async () => {
+    const { factory, calls } = listClient(
+      { data: [row({ status: "approved" }), row({ id: WAITING, status: "in_review" }), row({ id: OTHER_WAITING, status: "in_review" })], error: null },
+      {
+        // Newest first, as the query orders them: a case sent back and regenerated has two.
+        data: [
+          { case_id: WAITING, at: "2026-10-20T09:00:00+00:00" },
+          { case_id: WAITING, at: "2026-10-18T09:00:00+00:00" },
+        ],
+        error: null,
+      },
+    );
+    const result = await createSupabaseCaseStudyRepository(factory).list({});
+    expect(result.ok && result.value.map((c) => [c.id, c.inReviewSince])).toEqual([
+      [row().id, null],
+      [WAITING, "2026-10-20T09:00:00+00:00"],
+      [OTHER_WAITING, null],
+    ]);
+    expect(calls.case_event).toEqual([
+      ["select", "case_id, at"],
+      ["eq", "type", "transition"],
+      ["eq", "data->>event", "generation_succeeded"],
+      ["in", "case_id", [WAITING, OTHER_WAITING]],
+      ["order", "at", { ascending: false }],
+    ]);
+  });
+
+  it("reads no events when nothing is in Da approvare", async () => {
+    const { factory, from } = listClient({ data: [row({ status: "draft" })], error: null });
+    const result = await createSupabaseCaseStudyRepository(factory).list({});
+    expect(result.ok && result.value[0].inReviewSince).toBeNull();
+    expect(from).toHaveBeenCalledExactlyOnceWith("case_study");
+  });
+
+  it("fails the list with CASE_STUDY_LOOKUP_FAILED when the events can't be read", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const { factory } = listClient(
+        { data: [row({ id: WAITING, status: "in_review" })], error: null },
+        { data: null, error: { code: "PGRST000", message: "down" } },
+      );
+      const result = await createSupabaseCaseStudyRepository(factory).list({});
+      expect(!result.ok && result.error.code).toBe("CASE_STUDY_LOOKUP_FAILED");
+      expect(String(write.mock.calls[0][0])).toContain("PGRST000");
+    } finally {
+      write.mockRestore();
+    }
+  });
+});
+
 describe("re-read after a successful write", () => {
   const ID = row().id;
   const writes = {
