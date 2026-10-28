@@ -2501,7 +2501,7 @@ So that I can prepare a custom case for one pitch and reuse it later.
 Covers: FR13, AR26 (AD-24), AR11 (`manage collections`), NFR7, UX-DR39, UX-DR40 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Order: MVP, Sprint 3: after 5.9 (owner amendment 2026-10-16)
 Amended per SCP 2026-10-28 (C28, C38): PDF A4 is dropped; a case's Risultati e testimonial pages stay after the client's closing is added.
-Amended per SCP 2026-10-28 (owner, 2026-10-28), replacing the 2026-10-16 decision that Carosello stays single-case: packs and collections come in every format (Presentazione, Carosello, Video). Building one opens the configurator itself, not a reduced collection editor. Owner/designers and account/sales/social users can both create them, and all of them sit in one shared space that every such user sees. Some configurator features are hidden or locked for account/sales/social users; which ones is still to be listed (until then IR-COLL-EDIT applies). Text editing is not among them: every user who manages collections edits text (owner, 2026-10-28).
+Amended per SCP 2026-10-28 (owner, 2026-10-28), replacing the 2026-10-16 decision that Carosello stays single-case: packs and collections come in every format (Presentazione, Carosello, Video). Building one opens the configurator itself, not a reduced collection editor. Owner/designers and account/sales/social users can both create them, and all of them sit in one shared space that every such user sees. Some configurator features are hidden for account/sales/social users. In a collection, account/sales/social users only reorder pages and edit texts (owner, 2026-10-28): the left panel (block and element settings, Layout, Pagine di default, Elementi, Sfondo, Elimina pagina) is not shown at all, the right panel shows **Pagine** for reordering only and no **Media** tab, and the canvas preview, Anteprima and editing a text on the canvas (double click) stay.
 
 **Acceptance Criteria:**
 
@@ -2553,7 +2553,7 @@ So that the custom case fits the pitch without changing the original case histor
 Covers: FR13, AR26, NFR7 (IR-COLL-EDIT), UX-DR39 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Rule: IR-COLL-EDIT, decided by the owner on 2026-10-16 (OP 15), amended by the owner on 2026-10-28: every user who manages collections, account/sales/social included, edits text in a collection and exports it with no **Approva modifiche** step. Edits stay in the collection and never change the original case study or client (NFR7 amended).
 Order: MVP, Sprint 3, last in Epic 5: after 5.10 (owner amendment 2026-10-16)
-Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configurator (Story 5.10). Edits still apply only to the collection. Which tools account/sales/social users lose is still to be listed.
+Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configurator (Story 5.10). Edits still apply only to the collection. In a collection, account/sales/social users only reorder pages and edit texts (owner, 2026-10-28): the left panel (block and element settings, Layout, Pagine di default, Elementi, Sfondo, Elimina pagina) is not shown at all, the right panel shows **Pagine** for reordering only and no **Media** tab, and the canvas preview, Anteprima and editing a text on the canvas (double click) stay.
 
 **Acceptance Criteria:**
 
@@ -2570,7 +2570,7 @@ Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configura
 **When** it runs
 **Then** it needs no owner/designer approval of those edits (IR-COLL-EDIT as amended 2026-10-28)
 
-**Given** any user who can manage collections
+**Given** an owner/designer in a collection (account/sales/social users don't get **Nascondi pagina**; owner, 2026-10-28)
 **When** they choose **Nascondi pagina** on a page
 **Then** a `collection_hidden_page` row (part, format, `pageKey`) is stored, the page leaves the preview and the exports for that format, and **Mostra** brings it back
 **And** a client intro or outro page can be hidden like any other
@@ -2583,8 +2583,15 @@ Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configura
 **When** I look for layout, media, typography, About block or section controls
 **Then** none exists; the About the client block and section structure can't be edited or hidden as text
 
+**Given** an account/sales/social user in a collection
+**When** the configurator opens
+**Then** the left panel isn't shown at all and can't be reopened from the canvas edge, the right panel shows **Pagine** with no **Media** tab, and the canvas preview and Anteprima work as for an owner/designer
+**And** they edit a text by double-clicking it on the canvas
+**And** in **Pagine** they reorder pages by drag or "Sposta su / giù", and the new order is stored in the collection (`collection_page_order`), never in the case history; adding, deleting and hiding pages aren't offered
+**And** a direct call to any other configurator action fails with `FORBIDDEN`
+
 **Given** an export
-**When** the collection has text edits or hidden pages
+**When** the collection has text edits, a page order or hidden pages
 **Then** the export applies them to a copy of the documents, and its `content_hash` includes them
 
 ## Epic 6: Sign in, users and fixed permissions
