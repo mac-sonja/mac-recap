@@ -47,6 +47,12 @@ export interface CaseStudyRepository {
    * on any `err`; no row or object is ever removed.
    */
   softDelete(caseId: string, actorId: string): Promise<Result<void>>;
+  /**
+   * When each of `caseIds` last entered `in_review`: the `at` of its newest
+   * `transition` event whose `data.to` is `in_review`, keyed by case id. A case with
+   * no such event is absent. `err` only when the read fails (logged).
+   */
+  reviewSince(caseIds: readonly string[]): Promise<Result<Map<string, string>>>;
 }
 
 export interface StatusChange {

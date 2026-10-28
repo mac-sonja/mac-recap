@@ -25,6 +25,12 @@ export interface CaseStudyRow {
    * in a new tab. Shareable links come with Story 5.5; until then no row sets it.
    */
   publicUrl?: string | null;
+  /**
+   * ISO timestamp of when the case entered Da approvare (Story 4.1), for the review
+   * queue's order; only on `in_review` rows of the Case history page. Without it the
+   * queue uses `updatedAt`.
+   */
+  reviewSince?: string;
 }
 
 export const SORT_KEYS = ["id", "name", "client", "year", "status", "businessLine", "updated"] as const;
@@ -103,5 +109,17 @@ export function sortRows(rows: readonly CaseStudyRow[], { key, direction }: Sort
   return rows
     .map((row, index) => ({ row, index }))
     .sort((a, b) => sign * compare(a.row, b.row, key) || a.index - b.index)
+    .map(({ row }) => row);
+}
+
+/**
+ * The Da approvare queue (Story 4.1): oldest entry into Da approvare first
+ * (`reviewSince`, else `updatedAt`); ties keep their incoming order.
+ */
+export function sortByReviewOrder(rows: readonly CaseStudyRow[]): CaseStudyRow[] {
+  const since = (row: CaseStudyRow) => Date.parse(row.reviewSince ?? row.updatedAt);
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => since(a.row) - since(b.row) || a.index - b.index)
     .map(({ row }) => row);
 }

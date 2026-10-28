@@ -130,6 +130,8 @@ export const it = {
     noResultsStatus: "Nessuna case history in “{status}”.",
     /** The search and a status filter leave no rows; `{query}` is the search text, `{status}` the status label. */
     noResultsQueryStatus: "Nessuna case history per “{query}” in “{status}”.",
+    /** The Da approvare queue is empty and there is no search text (Story 4.1). */
+    noneToReview: "Niente da approvare.",
     clearSearch: "Azzera i filtri",
     empty: "Qui raccoglierai le storie dei vostri progetti. Parti dal materiale di un lavoro appena chiuso.",
     emptyAction: "Crea la prima",

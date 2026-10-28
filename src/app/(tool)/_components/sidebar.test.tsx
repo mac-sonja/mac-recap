@@ -81,6 +81,14 @@ describe("Sidebar", () => {
     expect(render({ showNewCaseStudy: true, showCaseStudies: true, toReviewCount: 0 })).not.toContain("da approvare");
   });
 
+  it("shows no number after Clienti (owner, 2026-10-28)", () => {
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true, toReviewCount: 2 });
+    const clients = html.match(/<a [^>]*href="\/clients"[^>]*>.*?<\/a>/)?.[0] ?? "";
+    expect(clients).toContain("Clienti");
+    expect(clients).not.toMatch(/tabular-nums|\d/);
+    expect(html).toContain("2 da approvare");
+  });
+
   it("marks Home active on /home", () => {
     pathname.current = "/home";
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });

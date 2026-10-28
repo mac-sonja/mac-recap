@@ -8,6 +8,7 @@ import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const list = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
+const reviewSince = vi.fn<(cases: readonly CaseStudy[]) => Promise<Map<string, string>>>();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -16,7 +17,10 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
-vi.mock("@/modules/case-study", () => ({ list: (scope: ListScope) => list(scope) }));
+vi.mock("@/modules/case-study", () => ({
+  list: (scope: ListScope) => list(scope),
+  reviewSince: (cases: readonly CaseStudy[]) => reviewSince(cases),
+}));
 
 const { default: CaseStudiesPage } = await import("./page");
 const { default: Loading } = await import("./loading");
@@ -52,6 +56,7 @@ const renderPage = async () => renderToStaticMarkup(await CaseStudiesPage());
 beforeEach(() => {
   requireSurface.mockReset();
   list.mockReset();
+  reviewSince.mockReset().mockResolvedValue(new Map());
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -84,6 +89,33 @@ describe("CaseStudiesPage", () => {
     list.mockResolvedValue(ok([caseStudy({})]));
     const html = renderToStaticMarkup(await CaseStudiesPage({ searchParams: Promise.resolve({ q: "lumen" }) }));
     expect(html).toMatch(/<input[^>]*type="search"[^>]*value="lumen"/);
+  });
+
+  it("opens on ?status=in_review as the queue, oldest entry into Da approvare first", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    const early = caseStudy({ id: "aaaaaaaa-0000-4000-8000-00000000000a", name: "Entrata lunedì", status: "in_review", updatedAt: "2026-10-23T09:00:00+00:00" });
+    const late = caseStudy({ id: "aaaaaaaa-0000-4000-8000-00000000000b", name: "Entrata martedì", status: "in_review", updatedAt: "2026-10-22T09:00:00+00:00" });
+    const draft = caseStudy({ name: "Una bozza" });
+    list.mockResolvedValue(ok([early, late, draft]));
+    reviewSince.mockResolvedValue(
+      new Map([
+        [early.id, "2026-10-19T09:00:00+00:00"],
+        [late.id, "2026-10-20T09:00:00+00:00"],
+      ]),
+    );
+    const html = renderToStaticMarkup(await CaseStudiesPage({ searchParams: Promise.resolve({ status: "in_review" }) }));
+    expect(reviewSince).toHaveBeenCalledExactlyOnceWith([early, late, draft]);
+    expect(html).toMatch(new RegExp(`aria-checked="true"[^>]*>${dict.caseStudies.filter.statuses.in_review}`));
+    expect(html.indexOf("Entrata lunedì")).toBeLessThan(html.indexOf("Entrata martedì"));
+    expect(html).not.toContain("Una bozza");
+  });
+
+  it.each([["bogus"], [["in_review", "draft"]]])("ignores ?status=%j and opens on Tutti", async (status) => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(ok([caseStudy({})]));
+    const html = renderToStaticMarkup(await CaseStudiesPage({ searchParams: Promise.resolve({ status }) }));
+    expect(html).toMatch(new RegExp(`aria-checked="true"[^>]*>${dict.caseStudies.filter.all}`));
+    expect(html).toContain("Rebrand");
   });
 
   it("queries approved cases only for account/sales/social", async () => {

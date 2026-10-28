@@ -29,6 +29,7 @@ import { makeGetClientInfoForCase } from "./get-client-info-for-case";
 import { makeRequestClientLogoUpload } from "./request-client-logo-upload";
 import { makeUpdateClient } from "./update-client";
 import { makeRecordEvent } from "./record-event";
+import { makeReviewSince } from "./review-since";
 import { makeSaveClientBriefField, makeSaveClientResults, makeSaveClientTestimonial } from "./save-client-brief-field";
 import { makeTransition } from "./transition";
 import { makeUpdateCaseStudyDetails } from "./update-case-study-details";
@@ -182,6 +183,16 @@ function fakeRepository() {
         data: { reason: "draft_deleted", clientId: row.client.id, code: row.code, status: row.status },
       });
       return ok(undefined);
+    }),
+    // Mirrors the adapter query: newest `transition` event to `in_review` per asked case.
+    reviewSince: vi.fn<CaseStudyRepository["reviewSince"]>(async (caseIds) => {
+      const since = new Map<string, string>();
+      const newestFirst = [...events].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+      for (const event of newestFirst) {
+        if (event.type !== TRANSITION || event.data.to !== "in_review" || !caseIds.includes(event.caseId)) continue;
+        if (!since.has(event.caseId)) since.set(event.caseId, event.at);
+      }
+      return ok(since);
     }),
   } satisfies CaseStudyRepository;
 
@@ -1928,5 +1939,79 @@ describe("deleteClient", () => {
     expect(removed.ok || removed.error.code).toBe("CLIENT_NOT_FOUND");
     const read = await makeGetClient(repo, fakeLogoStorage().storage)(LUMEN.id);
     expect(read.ok || read.error.code).toBe("CLIENT_NOT_FOUND");
+  });
+});
+
+describe("reviewSince", () => {
+  const MON = "2026-10-19T09:00:00Z";
+  const TUE = "2026-10-20T09:00:00Z";
+  const WED = "2026-10-21T09:00:00Z";
+  const THU = "2026-10-22T09:00:00Z";
+
+  async function seeded() {
+    const fake = fakeRepository();
+    const make = async (name: string, status: CaseStatus, updatedAt: string) => {
+      const created = await makeCreateCaseStudy(fake.repo)(actor, { name, clientId: ACME.id, year: 2026, businessLines: ["branding"] });
+      if (!created.ok) throw new Error("setup");
+      const row: CaseStudy = { ...created.value, status, updatedAt };
+      fake.cases.set(row.id, row);
+      return row;
+    };
+    const enter = (caseId: string, at: string, from: CaseStatus = "generating", to: CaseStatus = "in_review") =>
+      fake.events.push({ id: crypto.randomUUID(), caseId, revisionId: null, actorId: actor.id, type: TRANSITION, at, data: { event: "e", from, to } });
+    return { ...fake, make, enter };
+  }
+
+  const queue = (since: Map<string, string>) => [...since].sort(([, a], [, b]) => Date.parse(a) - Date.parse(b)).map(([id]) => id);
+
+  it("uses each case's entry into Da approvare, else its updatedAt, so the queue reads A, B, C", async () => {
+    const { repo, make, enter } = await seeded();
+    const a = await make("A", "in_review", THU);
+    const b = await make("B", "in_review", THU);
+    const c = await make("C", "in_review", WED);
+    const draft = await make("Draft", "draft", MON);
+    enter(a.id, MON);
+    enter(b.id, TUE);
+    const since = await makeReviewSince(repo)([c, b, draft, a]);
+    expect(since).toEqual(new Map([[c.id, WED], [b.id, TUE], [a.id, MON]]));
+    expect(queue(since)).toEqual([a.id, b.id, c.id]);
+    // Only the waiting cases are asked about.
+    expect(repo.reviewSince).toHaveBeenCalledExactlyOnceWith([c.id, b.id, a.id]);
+  });
+
+  it("uses the latest entry of a case that left Da approvare and came back", async () => {
+    const { repo, make, enter } = await seeded();
+    const a = await make("A", "in_review", THU);
+    const b = await make("B", "in_review", TUE);
+    enter(a.id, MON);
+    enter(a.id, MON.replace("09:", "10:"), "in_review", "approved");
+    enter(b.id, TUE);
+    enter(a.id, THU);
+    const since = await makeReviewSince(repo)([a, b]);
+    expect(since.get(a.id)).toBe(THU);
+    expect(queue(since)).toEqual([b.id, a.id]);
+  });
+
+  it("falls back to updatedAt for every case when the event read fails, and logs it", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const { repo, make, enter } = await seeded();
+      const a = await make("A", "in_review", WED);
+      const b = await make("B", "in_review", TUE);
+      enter(a.id, MON);
+      repo.reviewSince.mockResolvedValueOnce(err({ code: "CASE_EVENT_LOOKUP_FAILED", message: "m" }));
+      const since = await makeReviewSince(repo)([a, b]);
+      expect(since).toEqual(new Map([[a.id, WED], [b.id, TUE]]));
+      expect(String(write.mock.calls[0][0])).toContain("CASE_EVENT_LOOKUP_FAILED");
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("reads nothing when no case is waiting", async () => {
+    const { repo, make } = await seeded();
+    const draft = await make("Draft", "draft", MON);
+    expect(await makeReviewSince(repo)([draft])).toEqual(new Map());
+    expect(repo.reviewSince).not.toHaveBeenCalled();
   });
 });

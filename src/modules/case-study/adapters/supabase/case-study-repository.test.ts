@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSupabaseCaseStudyRepository } from "./case-study-repository";
+import { createSupabaseCaseStudyRepository, REVIEW_SINCE_CHUNK } from "./case-study-repository";
 
 const row = (over: Record<string, unknown> = {}) => ({
   id: "aaaaaaaa-0000-4000-8000-000000000001",
@@ -292,6 +292,72 @@ describe("re-read after a successful write", () => {
       expect(entry.msg).toContain(logged as string);
     } finally {
       stdout.mockRestore();
+    }
+  });
+});
+
+describe("createSupabaseCaseStudyRepository().reviewSince", () => {
+  const A = "aaaaaaaa-0000-4000-8000-00000000000a";
+  const B = "aaaaaaaa-0000-4000-8000-00000000000b";
+
+  /** Stub of `from().select().eq().eq().in().order().order()`, resolving each query to the next response. */
+  function eventsClient(...responses: Array<{ data: unknown; error: unknown }>) {
+    const builder: Record<string, unknown> = {};
+    const step = () => vi.fn(() => builder);
+    const calls = { select: step(), eq: step(), in: step(), order: step() };
+    let n = 0;
+    Object.assign(builder, calls, { then: (resolve: (r: unknown) => unknown) => resolve(responses[n++]) });
+    const from = vi.fn(() => builder);
+    const factory = (() => ({ from })) as unknown as Parameters<typeof createSupabaseCaseStudyRepository>[0];
+    return { factory, from, ...calls };
+  }
+
+  it("reads the newest transition to in_review per case, newest first", async () => {
+    const stub = eventsClient({
+      data: [
+        { case_id: A, at: "2026-10-22T09:00:00+00:00" },
+        { case_id: B, at: "2026-10-20T09:00:00+00:00" },
+        { case_id: A, at: "2026-10-19T09:00:00+00:00" },
+      ],
+      error: null,
+    });
+    const result = await createSupabaseCaseStudyRepository(stub.factory).reviewSince([A, B]);
+    expect(stub.from).toHaveBeenCalledWith("case_event");
+    expect(stub.eq).toHaveBeenCalledWith("type", "transition");
+    expect(stub.eq).toHaveBeenCalledWith("data->>to", "in_review");
+    expect(stub.in).toHaveBeenCalledWith("case_id", [A, B]);
+    expect(stub.order).toHaveBeenNthCalledWith(1, "at", { ascending: false });
+    expect(result).toEqual({
+      ok: true,
+      value: new Map([
+        [A, "2026-10-22T09:00:00+00:00"],
+        [B, "2026-10-20T09:00:00+00:00"],
+      ]),
+    });
+  });
+
+  it("queries nothing for no case, and splits many cases into chunks", async () => {
+    const none = eventsClient();
+    expect(await createSupabaseCaseStudyRepository(none.factory).reviewSince([])).toEqual({ ok: true, value: new Map() });
+    expect(none.from).not.toHaveBeenCalled();
+
+    const ids = Array.from({ length: REVIEW_SINCE_CHUNK + 1 }, (_, i) => `aaaaaaaa-0000-4000-8000-${String(i).padStart(12, "0")}`);
+    const many = eventsClient({ data: [], error: null }, { data: [{ case_id: ids.at(-1), at: "2026-10-20T09:00:00+00:00" }], error: null });
+    const result = await createSupabaseCaseStudyRepository(many.factory).reviewSince(ids);
+    expect(many.in).toHaveBeenCalledTimes(2);
+    expect(many.in).toHaveBeenLastCalledWith("case_id", ids.slice(REVIEW_SINCE_CHUNK));
+    expect(result).toEqual({ ok: true, value: new Map([[ids.at(-1), "2026-10-20T09:00:00+00:00"]]) });
+  });
+
+  it("returns CASE_EVENT_LOOKUP_FAILED and logs the code when the read fails", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const stub = eventsClient({ data: null, error: { code: "57014", message: "timeout" } });
+      const result = await createSupabaseCaseStudyRepository(stub.factory).reviewSince([A]);
+      expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: "CASE_EVENT_LOOKUP_FAILED" }) });
+      expect(String(write.mock.calls[0][0])).toContain("57014");
+    } finally {
+      write.mockRestore();
     }
   });
 });

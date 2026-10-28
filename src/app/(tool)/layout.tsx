@@ -14,21 +14,15 @@ function roleLabel(role: string): string {
 }
 
 /**
- * The sidebar's counts: cases waiting for a review and clients. Only what the
- * policy lets the actor list; a failed read shows no count rather than breaking
- * the shell.
+ * The sidebar's one count: cases waiting for a review (Clienti shows none, owner
+ * 2026-10-28). Only what the policy lets the actor list; a failed read shows no
+ * count rather than breaking the shell.
  */
-async function sidebarCounts(actor: Actor): Promise<{ toReview: number | null; clients: number | null }> {
+async function toReviewCount(actor: Actor): Promise<number | null> {
   const scope = listScopeFor(actor);
-  const [cases, clients] = await Promise.all([
-    scope !== null && authorize(actor, "list cases", scope).ok ? caseStudy.list(scope) : null,
-    // The plain list: the count needs no case counts or signed logo links.
-    can(actor, "list clients") ? caseStudy.listClients() : null,
-  ]);
-  return {
-    toReview: cases?.ok ? cases.value.filter((c) => c.status === "in_review").length : null,
-    clients: clients?.ok ? clients.value.length : null,
-  };
+  if (scope === null || !authorize(actor, "list cases", scope).ok) return null;
+  const cases = await caseStudy.list(scope);
+  return cases.ok ? cases.value.filter((c) => c.status === "in_review").length : null;
 }
 
 /**
@@ -40,7 +34,7 @@ export default async function ToolLayout({ children }: Readonly<{ children: Reac
   const shell = await resolveShellActor();
   if (shell === null) return <NoActor />;
   const { actor } = shell;
-  const [counts, cookieStore] = await Promise.all([sidebarCounts(actor), cookies()]);
+  const [toReview, cookieStore] = await Promise.all([toReviewCount(actor), cookies()]);
 
   return (
     <div className="flex min-h-screen bg-surface text-foreground">
@@ -52,8 +46,7 @@ export default async function ToolLayout({ children }: Readonly<{ children: Reac
         showOrganization={can(actor, "manage users")}
         displayName={actor.displayName}
         roleLabel={roleLabel(actor.role)}
-        toReviewCount={counts.toReview}
-        clientCount={counts.clients}
+        toReviewCount={toReview}
         theme={parseTheme(cookieStore.get(THEME_COOKIE)?.value)}
       />
       <main className="min-w-0 flex-1 px-8 py-10 xl:px-12">

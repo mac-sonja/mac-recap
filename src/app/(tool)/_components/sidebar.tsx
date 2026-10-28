@@ -27,8 +27,6 @@ export interface SidebarProps {
   roleLabel: string;
   /** Cases waiting for a review, shown after Case; nothing when 0 or unknown. */
   toReviewCount?: number | null;
-  /** Clients, shown after Clienti; nothing when unknown. */
-  clientCount?: number | null;
   /** The appearance choice from the theme cookie. */
   theme?: ThemeChoice;
 }
@@ -126,7 +124,6 @@ export function Sidebar({
   displayName,
   roleLabel,
   toReviewCount = null,
-  clientCount = null,
   theme = "system",
 }: SidebarProps) {
   const pathname = usePathname();
@@ -172,15 +169,7 @@ export function Sidebar({
         {showLibrary && (
           <NavLink href="/library" icon={Library} label={it.shell.nav.library} active={pathname === "/library"} />
         )}
-        {showClients && (
-          <NavLink
-            href="/clients"
-            icon={Building2}
-            label={it.shell.nav.clients}
-            active={isClients}
-            meta={clientCount === null ? null : String(clientCount)}
-          />
-        )}
+        {showClients && <NavLink href="/clients" icon={Building2} label={it.shell.nav.clients} active={isClients} />}
         {showOrganization && (
           <NavLink
             href="/organization"

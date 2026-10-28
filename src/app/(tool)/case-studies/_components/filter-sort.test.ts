@@ -5,6 +5,7 @@ import {
   filterRows,
   nextSort,
   normalizeForSearch,
+  sortByReviewOrder,
   sortRows,
   type CaseStudyRow,
 } from "./filter-sort";
@@ -141,5 +142,31 @@ describe("sort", () => {
     const copy = [...same];
     expect(sortRows(same, { key: "name", direction: "desc" }).map((r) => r.id)).toEqual(["1", "2", "3"]);
     expect(same).toEqual(copy);
+  });
+});
+
+describe("sortByReviewOrder (the Da approvare queue)", () => {
+  const MON = "2026-10-19T09:00:00+00:00";
+  const TUE = "2026-10-20T09:00:00+00:00";
+  const WED = "2026-10-21T09:00:00+00:00";
+  const THU = "2026-10-22T09:00:00+00:00";
+
+  it("puts the case waiting longest first, falling back to updatedAt", () => {
+    const a = row({ id: "a", status: "in_review", reviewSince: MON, updatedAt: THU });
+    const b = row({ id: "b", status: "in_review", reviewSince: TUE, updatedAt: THU });
+    const c = row({ id: "c", status: "in_review", updatedAt: WED });
+    expect(ids(sortByReviewOrder([c, b, a]))).toEqual(["a", "b", "c"]);
+  });
+
+  it("orders a case that came back by its latest entry", () => {
+    const a = row({ id: "a", status: "in_review", reviewSince: THU, updatedAt: THU });
+    const b = row({ id: "b", status: "in_review", reviewSince: TUE, updatedAt: TUE });
+    expect(ids(sortByReviewOrder([a, b]))).toEqual(["b", "a"]);
+  });
+
+  it("keeps the incoming order on ties and leaves its input alone", () => {
+    const input = [row({ id: "x", reviewSince: MON }), row({ id: "y", updatedAt: MON }), row({ id: "z", reviewSince: MON })];
+    expect(ids(sortByReviewOrder(input))).toEqual(["x", "y", "z"]);
+    expect(ids(input)).toEqual(["x", "y", "z"]);
   });
 });
