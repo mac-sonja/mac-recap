@@ -28,15 +28,15 @@ Scope: the standalone MVP, Epics 2–6, keeping PRD v2 numbering (Epic 1 is team
 
 FR1: The owner/designer creates a case study by hand, and the system gives it a unique, permanent ID (a database-generated uuid that is never changed or reused) and a readable **case history code** (client code, year, number, e.g. `LUM-2026-01`), fixed at creation. The code is what people see; the uuid is the only identifier exposed to other systems and used in URLs, and is ready for the later project-order link. Every case belongs to one client record, picked from the client list. There is no trigger at project close. (CAP-1, Stories 2.2 and 2.5) Amended (owner, 2026-10-20, Story 2.17): every case also has a business line, picked from a fixed list (Branding, Social media, Video, Web design, Advertising, Eventi) on wizard step 1 **Dettagli**, together with name, client and year; cases created before this change have none until they are reopened. Amended (owner, 2026-10-20, Story 2.18): the language is no longer asked; new cases are Italian until multilingual creates a case in both languages at once.
 FR2: The owner/designer uploads material (images, videos, text documents, PDFs) to a case study. The limit is 20 files of at most 50 MB each, of an allowlisted type. A file over the limits, or of a type not on the allowlist, is rejected without blocking the others. Any number of images and videos can be marked as favourite; the mark is optional. The owner/designer also fills in an optional details form (context, solution, results), which is the only place for typed project text, is saved, can be cited as a claim source, and never counts as material. (CAP-2, CAP-3, Stories 2.3–2.4) Amended (owner, 2026-10-20, Story 2.17): the details form is part of wizard step 1 **Dettagli**, before the material; the material is step 2.
-FR3: The system generates a graphic case study in the background by applying MAC templates to the uploaded material. The case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The narrative follows challenge, approach and result (always present, can't be removed or reordered), covers the technical and the graphic side, and uses only the uploaded material, the form answers and the client's info (description, sector and brief; SCP 2026-10-19). Every case study shows an About the client block with the client's logo, name, sector and description, as entered on the client and always current: drafts and approved case studies alike show the client's info as it is now. Template design and assets stay unchanged. Generation is refused when there is no material, even with the form filled in. Layouts are produced for every MVP export format. (CAP-4, CAP-5, Story 3.1)
-FR4: Templates adapt their layout to the number of available media items, using the template's own media-count rules (slot mapping per count). (CAP-4, Story 3.2)
-FR5: The owner/designer reviews and edits case studies through the review dashboard (every case with its status, a To review queue oldest first, delete only in Bozza) and the configurator (generated text in place, layout variant, shuffle, spacing, media replace / reorder / remove, font pairing and text scale per format). Layout, spacing and typography accept only template-defined values; media come only from this case's material; the preview matches the exported files exactly; there is no canvas-ratio control. (CAP-6, CAP-7, Stories 4.1–4.2)
-FR6: Any owner/designer approves a case study after manually checking every text block against the material and form answers. Approve stays disabled until every block has a current manual check, no block overflows in any format, and no referenced material is deleted. There is no bulk check or bulk approve. Approval makes the case available for export and sharing. Editing an approved case keeps it approved. (CAP-8, Story 4.3)
-FR7: Owner/designer and account/sales/social users export an approved case study in each MVP format (at least a 16:9 deck as PDF, a social carousel and an A4 PDF), and publish it as a shareable link to a hosted presentation. Each link shows one format of the current approved version, never a working copy, and offers no file download. The share dialog says who can open the link. A link can be turned off; a turned-off or expired link shows "no longer available". Account/sales/social users see approved case studies only; unapproved content has no view, export or share entry point. The tool does not post to social channels or the website. (CAP-9, CAP-10, Stories 5.1–5.2)
+FR3: The system generates a graphic case study in the background by applying MAC templates to the uploaded material. The case shows "In elaborazione" until the draft is ready; a failure returns it to Bozza with material and details intact. The narrative follows challenge, approach and result (always present, can't be removed or reordered), covers the technical and the graphic side, and uses only the uploaded material, the form answers and the client's info (description, sector and brief; SCP 2026-10-19). Every case study shows an About the client block with the client's logo, name, sector and description, as entered on the client and always current: drafts and approved case studies alike show the client's info as it is now. Template design and assets stay unchanged. Generation is refused when there is no material, even with the form filled in. Layouts are produced for every MVP export format. (CAP-4, CAP-5, Story 3.1) Amended (SCP 2026-10-28; [Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md)): the formats are Presentazione, Carosello and Video, each with its own pages (C28, C29); the About the client block becomes the Intro's Cliente block, whose client fields are bound to the client's record and editable on the page (C33, answer 2). Whether the challenge / approach / result content can still be deleted by a person is open (Story 3.3).
+FR4: Templates adapt their layout to the number of available media items, using the template's own media-count rules (slot mapping per count). (CAP-4, Story 3.2) Superseded (SCP 2026-10-28, C31): media-count rules are replaced by each format's layout grids and default pages from the templates; a grid with more cells adds empty blocks, one with fewer removes only empty blocks.
+FR5: The owner/designer reviews and edits case studies through the review dashboard (every case with its status, a To review queue oldest first, delete only in Bozza) and the configurator (generated text in place, layout variant, shuffle, spacing, media replace / reorder / remove, font pairing and text scale per format). Layout, spacing and typography accept only template-defined values; media come only from this case's material; the preview matches the exported files exactly; there is no canvas-ratio control. (CAP-6, CAP-7, Stories 4.1–4.2) Amended (SCP 2026-10-28, C29–C37, C40): the configurator edits each format's own pages: texts in seven styles with colour and alignment, elements and bento blocks, layouts, default pages, backgrounds, media with Riempi, Adatta or Ritaglia, animations, and pages; layout variant, shuffle, spacing, font pairing and text scale are gone. The mockup `ux-designs/ux-MAC Recap-2026-10-08/mockups/configurator.html` is the UX source of truth.
+FR6: Any owner/designer approves a case study after manually checking every text block against the material and form answers. Approve stays disabled until every block has a current manual check, no block overflows in any format, and no referenced material is deleted. There is no bulk check or bulk approve. Approval makes the case available for export and sharing. Editing an approved case keeps it approved. (CAP-8, Story 4.3) Amended for the demo (owner 2026-10-27; SCP 2026-10-28, C39): Approve needs no per-block check, only no overflow in any format and no referenced material deleted.
+FR7: Owner/designer and account/sales/social users export an approved case study in each MVP format (at least a 16:9 deck as PDF, a social carousel and an A4 PDF), and publish it as a shareable link to a hosted presentation. Each link shows one format of the current approved version, never a working copy, and offers no file download. The share dialog says who can open the link. A link can be turned off; a turned-off or expired link shows "no longer available". Account/sales/social users see approved case studies only; unapproved content has no view, export or share entry point. The tool does not post to social channels or the website. (CAP-9, CAP-10, Stories 5.1–5.2) Amended (SCP 2026-10-28, C28, answer 1): the formats are Presentazione 16:9 (PDF) and Carosello 1:1 (ZIP of PNGs); Video 9:16 is Anteprima only for the demo and exports as MP4 or WebM after it. Deck 16:9, the 4:5 carousel and PDF A4 are dropped.
 FR8: Users sign in with one of three fixed roles (owner/designer, account/sales/social, admin). The admin adds and removes users and assigns their role, and nothing else: no case content, no permission settings, no guardrail settings. The last admin can't drop their own admin role. Every action follows the AD-11 permission matrix. Delivered in Sprint 3. (CAP-11, Stories 6.1–6.2)
 FR11 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-19): Creating a client is a wizard: details (name, sector, description, logo, context, solution and results, all required), then up to 3 files of client material with at least 2 images. Since SCP 2026-10-21 the client is added and edited in a side panel, and the intro and outro open in the configurator from the client's page. The system drafts the client's intro and outro pages from the client's name, sector, description, brief and material, and the owner/designer edits, checks and approves them in the configurator. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md); [Sprint Change Proposal 2026-10-21, client outro](sprint-change-proposal-2026-10-21-client-outro.md))
 FR12 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-21): **Modifica layout** on the client's page opens the client overview: the intro, every case study and the outro of the client in one preview. Editing a case study there edits that case study. **Modifica cliente** edits the client's data in a side panel.
-FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro, approved case studies and approved outro), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them, replacing their own outro pages; otherwise each case study keeps its own intro and outro (SCP 2026-10-26). Text edits (owner/designers only) and hidden pages in a collection apply only to that collection.
+FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro, approved case studies and approved outro), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them, replacing their own outro pages; otherwise each case study keeps its own intro and outro (SCP 2026-10-26). Text edits (owner/designers only) and hidden pages in a collection apply only to that collection. Amended (SCP 2026-10-28, C28, C38): PDF A4 is dropped, so collections export Presentazione 16:9; a case's Risultati e testimonial pages stay in a client file after the client's closing is added, and only the case's own intro and Carosello Chiusura are left out.
 CAP-12 (SPEC; no PRD FR number): every transition, upload, save, block check, claim edit, approval, export and link change is an append-only, timestamped event with its actor, and the generated draft is kept next to the approved version. The tool does not record hands-on time. Built by each epic as it goes, not as an epic of its own.
 
 Out of MVP scope (listed for traceability only): FR9 MAC Productive via MCP (Epic 7), FR10 text-based case studies and whitepapers (Epic 8).
@@ -65,29 +65,30 @@ From the architecture spine (AD-1 to AD-21 are binding):
 - AR1 (AD-1): Modular monolith with modules `case-study`, `material`, `generation`, `rendering`, `sharing`, `access`, `jobs`; each with `domain/`, `application/`, `index.ts`, plus `ports/` and `adapters/` only at vendor seams. Cross-module imports only through `index.ts`; vendor SDKs only in adapters. Table and storage-prefix ownership per AD-1. Enforced by a lint rule.
 - AR2 (AD-2): `case_study.id` is a DB-generated uuid, immutable, never reused; `project_order_ref` nullable and unset in the MVP. `case_study.code` is a separate, unique, immutable display code (AD-21); it is never used as a key or in URLs.
 - AR3 (AD-3): `case_study.status` changes only through `case-study.transition`. Revisions have `working | approved | superseded`. `head_revision_id` and `approved_revision_id` pointers; `getLiveRevision` and `getEditableRevision` reads. Generation only from `draft`; delete only in `draft`, soft (`deleted_at`). A client intro (AD-23) has the same states and pointers on `client_intro` and changes only through `case-study.transitionIntro`. A revision belongs to exactly one subject, a case or a client intro.
-- AR4 (AD-4): `CaseStudyDocument` (zod, jsonb) stored twice per revision, `generated_doc` (immutable) and `doc` (editable). Shared part (template@version, blocks with stable `blockId`, claims and check state, media set) and per-format part (variant, slot assignments, spacing, text scale, font pairing). No canvas ratio. Schema rejects a missing challenge/approach/result. The document stores no client values; the About block is filled at render time from the client's current info (AD-22). `rendering.relayout` is the only slot-assignment code. `schemaVersion` + `upgrade(doc)` on read. `FORMAT_NOT_IN_REVISION`. The document has `kind` ∈ `case_history | client_intro`; the challenge/approach/result rule applies only to `case_history`. Every page a template defines has a stable `pageKey` and a `role` ∈ `intro | body | outro` (`outro` added by SCP 2026-10-21).
+- AR4 (AD-4): `CaseStudyDocument` (zod, jsonb) stored twice per revision, `generated_doc` (immutable) and `doc` (editable). Shared part (template@version, blocks with stable `blockId`, claims and check state, media set) and per-format part (variant, slot assignments, spacing, text scale, font pairing). No canvas ratio. Schema rejects a missing challenge/approach/result. The document stores no client values; the About block is filled at render time from the client's current info (AD-22). `rendering.relayout` is the only slot-assignment code. `schemaVersion` + `upgrade(doc)` on read. `FORMAT_NOT_IN_REVISION`. The document has `kind` ∈ `case_history | client_intro`; the challenge/approach/result rule applies only to `case_history`. Every page a template defines has a stable `pageKey` and a `role` ∈ `intro | body | outro` (`outro` added by SCP 2026-10-21). Amended (SCP 2026-10-28, C29, C30): document schema v2 replaces the shared and per-format parts with one page list per format (pages → blocks → elements); client and case fields on a page are bindings, not values; v1 is upgraded on read (AD-4, Story 3.3).
 - AR5 (AD-5): Guardrails are code (`generation/domain/guardrails.ts`, `access/domain/policy.ts`, `case-study` preconditions), never DB/env/UI. Each guardrail is enforced in a use case and covered by an automated test, so the end-of-Sprint-2 guardrail check runs on the pre-login build.
 - AR6 (AD-6): `generate` fails with `NO_MATERIAL` before any LLM call unless there's at least one non-deleted asset; the same check backs the Generate button and the worker's claim. Claims tagged `aspect: technical | graphic`; a draft missing one is `MISSING_ASPECT`. The LLM also receives the client's current name, sector, description and brief (context, solution, results), read when the job runs (AD-22; SCP 2026-10-19).
 - AR7 (AD-7): One `NarrativeGenerator` port, worker only. Adapter uses `client.beta.messages.parse` with the zod schema, model `claude-opus-5-5` from one constant, adaptive thinking, `effort: "high"`, server-side refusal fallbacks; `refusal` → `LLM_REFUSAL`. Versioned prompt files. Each revision records `response.model`, `fellBack`, `promptVersion`, `schemaVersion`.
 - AR8 (AD-8): Private Supabase Storage bucket `material` in the project's EU region, created by migration, with `file_size_limit` 50 MB and `allowed_mime_types` set to the allowlist; no public access, service role is the only reader and writer. Browser uploads to a signed upload URL issued after `authorize`; size and type limits enforced by the bucket and re-checked from the object's metadata at confirm. Asset row only after that check. 20-file cap checked on issue and confirm. Signed GET ≤ 15 min. No versioning, so the app never deletes material objects; the one exception is a replaced or removed client logo, whose object is deleted (AD-22). Fixed key layout. No AWS S3. The client intro and collections change (SCP 2026-10-16) adds the client material key, owned by `case-study`: since SCP 2026-10-19 it is `clients/{clientId}/material/{assetId}.{ext}` (`clients/{clientId}/images/**` is never created), and removing a client file deletes its object, as for logos, and exports live at `exports/{contentHash}/{format}.{ext}` (owned by `rendering`).
-- AR9 (AD-9): A format registry (`rendering/domain/formats.ts`) and one React renderer per format, used by the configurator, case study view, `/s/{token}` and exports. Exports: `renderToStaticMarkup` + Playwright `page.setContent`, no print route. Deck and A4 → PDF; image formats → ZIP of PNGs; Export all → one ZIP. Video shows its poster frame in static formats. An export renders an ordered list of parts (one part for a single case history). `export` is unique and immutable on `content_hash`, a hash of the parts, their revision ids, each part's client info, any collection edits and hidden pages, and the format. `ensureExport` reuses an export only when the hash matches, so after a client edit the next export renders again (AD-22).
+- AR9 (AD-9): A format registry (`rendering/domain/formats.ts`) and one React renderer per format, used by the configurator, case study view, `/s/{token}` and exports. Exports: `renderToStaticMarkup` + Playwright `page.setContent`, no print route. Deck and A4 → PDF; image formats → ZIP of PNGs; Export all → one ZIP. Video shows its poster frame in static formats. An export renders an ordered list of parts (one part for a single case history). `export` is unique and immutable on `content_hash`, a hash of the parts, their revision ids, each part's client info, any collection edits and hidden pages, and the format. `ensureExport` reuses an export only when the hash matches, so after a client edit the next export renders again (AD-22). Amended (SCP 2026-10-28, C28): the registry is Presentazione 16:9 (PDF), Carosello 1:1 (ZIP of PNGs) and Video 9:16 (motion; MP4 or WebM after the demo); combined files are Presentazione only.
 - AR10 (AD-10): Postgres job table (`generate`, `export`, `rendition`), idempotent enqueue via partial unique index, `jobs_claim()` with `FOR UPDATE SKIP LOCKED`, 10-min lease renewed every minute, max 3 attempts then `failed` + `job_failed`. Web requests never call the LLM, Chromium or ffmpeg.
 - AR11 (AD-11): Every action and route calls `access.getActor()` + `access.authorize()`. Permission matrix lives only in `policy.ts`. Role read from `profile` on every request. A `system` actor for the worker. Server-only data access with the service-role key; RLS denies `anon` and `authenticated`. A seeded dev `owner_designer` until Epic 6, disabled at cutover and never reassigned. The client intro and collections change (SCP 2026-10-16) adds `download client pack`, `manage collections` and `edit collection text` (owner/designer only), plus intro generation, editing and approval under `generate`, `edit` and `approve` with resource `client_intro`; `list clients` opens to account/sales/social for clients with an approved case history, read-only.
 - AR12 (AD-12): HTTP basic auth in `proxy.ts` on every deployed environment until Epic 6, including `/s/{token}`. Forward-only SQL migrations applied staging → prod before the image.
 - AR13 (AD-13): `share_link` (token ≥ 128 bits URL-safe, caseId, format, createdBy/At, expiresAt, revokedAt, accessMode enum). `/s/{token}` resolves via `getLiveRevision` at request time, read-only, display renditions only, no download.
 - AR14 (AD-14): Favourite is a boolean on `asset` (`is_favourite`, default false), settable only on image and video assets; changing it records an event and never changes case status. There is no taxonomy.
-- AR15 (AD-15): Templates are versioned code folders `rendering/templates/{templateId}/v{n}/` (variants, slots, media-count rules, allowed values, one renderer per format); a published version is never edited. `rendering.listVariants(templateId, format, mediaCount)` is the only variant source.
+- AR15 (AD-15): Templates are versioned code folders `rendering/templates/{templateId}/v{n}/` (variants, slots, media-count rules, allowed values, one renderer per format); a published version is never edited. `rendering.listVariants(templateId, format, mediaCount)` is the only variant source. Amended (SCP 2026-10-28, C31, C32): a template version holds, per format, its layout grids, default pages and text styles; variants, media-count rules, spacing ranges, text scales and font pairings are retired.
 - AR16 (AD-16): No MVP code calls MAC Productive.
 - AR17 (AD-17): Compare-and-set on `revision.version` (`STALE_REVISION`) and `case_study.head_version` (`STALE_HEAD`); no edits while `generating`; only `working` revisions writable (`REVISION_NOT_WRITABLE`); explicit idempotent `forkHead`; generate results create a new revision, discarded on head mismatch.
 - AR18 (AD-18): `MaterialRef { asset | form_field, id }` resolved only via `material.resolveRefs`. Generate jobs carry a material manifest (refs + hashes) stored on the revision. Referenced material is soft-deleted only; `approve` fails with `MATERIAL_MISSING`. Upload and favourite never change case status. Anthropic limits (32 MB request, 600-page PDF, no DOCX, no video); Files API not used. `MaterialRef.kind` gains `client_field` (`description`, `industry`, `context`, `solution` or `results`; SCP 2026-10-19), resolved from the client's current values; a valid claim source that never counts as material.
-- AR19 (AD-19): Per-block `check: { by, at, textHash } | null`, set only by a person, no bulk check. A check counts only while `textHash` matches. `approve(caseId, revisionId, expectedRevisionVersion, expectedHeadVersion)` checks every block on the server and requires an overflow-free result per format from the client. Claims carry `provenance` and optional validated `sourceRefs`, never shown as "verified".
+- AR19 (AD-19): Per-block `check: { by, at, textHash } | null`, set only by a person, no bulk check. A check counts only while `textHash` matches. `approve(caseId, revisionId, expectedRevisionVersion, expectedHeadVersion)` checks every block on the server and requires an overflow-free result per format from the client. Claims carry `provenance` and optional validated `sourceRefs`, never shown as "verified". Demo (owner 2026-10-27; SCP 2026-10-28, C39): no per-block check; `approve` needs only an overflow-free result per format and the material present.
 - AR20 (AD-20): `case_event` append-only rows (`case_id`, `revision_id`, `actor_id`, `type`, `at`, `data`) on every transition, upload confirmation, save, block check/uncheck, claim edit, approval, export, link create and turn-off.
 - AR21 (conventions): snake_case singular tables; uuid ids; `timestamptz` UTC, displayed Europe/Rome; zod in `domain/` as single definition; generated DB types; `Result<T, AppError>` with SCREAMING_SNAKE codes; structured JSON logs with no material or prompts; env read only in `src/shared/env.ts`; `case_study.locale` it|en default it.
 - AR22 (deployment): One Docker image on the Playwright base, two processes (`node server.js`, `node dist/worker.js`). Environments `local`, `staging` (demo, gated), `prod` (from Epic 6), each with its own Supabase project and storage bucket. EU container host chosen by end of Sprint 1.
 - AR23 (AD-21): `client` (uuid id, unique `name_key`, unique immutable `code`) owned by `case-study`; every case has `client_id`. Case code `{clientCode}-{year}-{nn}` is assigned inside `create_case_study` from `case_number_counter`, fixed once created, never reused.
-- AR24 (AD-22): `client` gains `description` (≤400), `industry` (one key of the shared `client_sector` list, which owners and designers can add to; 2026-10-22, replacing the multiselect `industries` of SCP 2026-10-19) and `logo_id`, which points to the client's current `client_logo` row under `clients/{clientId}/logos/`. A `client_brief` row holds the client's context, solution and results (≤5000 each). Name, sector, description, logo and brief are all required by the app (SCP 2026-10-19). Replacing or removing a logo deletes the old row and its object; there is no logo history. Client info is live: nothing about the client is snapshotted into a job, revision or document. Renderers fill the About block at render time from the client's current info, so a client edit shows at once in every case history of that client, drafts and approved ones alike, in every format, the case study view, new exports and shared links (SCP 2026-10-16, amendment).
+- AR24 (AD-22): `client` gains `description` (≤400), `industry` (one key of the shared `client_sector` list, which owners and designers can add to; 2026-10-22, replacing the multiselect `industries` of SCP 2026-10-19) and `logo_id`, which points to the client's current `client_logo` row under `clients/{clientId}/logos/`. A `client_brief` row holds the client's context, solution and results (≤5000 each). Name, sector, description, logo and brief are all required by the app (SCP 2026-10-19). Replacing or removing a logo deletes the old row and its object; there is no logo history. Client info is live: nothing about the client is snapshotted into a job, revision or document. Renderers fill the About block at render time from the client's current info, so a client edit shows at once in every case history of that client, drafts and approved ones alike, in every format, the case study view, new exports and shared links (SCP 2026-10-16, amendment). Amended (SCP 2026-10-28, answer 2): the client's fields on a page are bound to the client's record, editable on the page, and an edit updates the record everywhere; the case's fields (year, services) work the same on the case's record.
 - AR25 (AD-23): A client has one intro-and-outro document (kind `client_intro`, pages with role `intro` or `outro`; SCP 2026-10-21) with the case lifecycle, generated from the client's name, sector, description and brief, plus its material as OP 2 allows, and laid out with 2–3 of its images (image rows in `client_asset`; SCP 2026-10-19). It is checked and approved like a case history. Client info and client material are read live at render time. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 - AR26 (AD-24): A collection is a named, ordered list of approved case histories owned by the `collection` module. It references live approved revisions and stores only its own text edits (per block) and hidden pages (per format and page key). It never writes a revision. Combined files come from `rendering.composeParts`.
+- AR27 (AD-25; SCP 2026-10-28, C38): The client's file references its cases' pages and never copies them; an edit in the case or in the client's file shows in both. In the client's file a case shows its pages without its own intro and Carosello Chiusura; its Risultati e testimonial pages stay.
 
 ### UX Design Requirements
 
@@ -96,24 +97,24 @@ UX-DR2: Role-based absence. A control a role can't use is absent, not disabled. 
 UX-DR3: Status badge. Always colour plus text label, using tokens `status-draft`, `status-generating`, `status-review`, `status-approved`. Labels from the OP 8 interim (Bozza, In elaborazione, Da approvare, Approvato).
 UX-DR4: Owner/designer Case studies table. Columns ID (the case history code, monospace), Name, Client, Year, Status, Business line (sortable, empty for cases created before Story 2.17), Updated, Links (count, Approvato only). A toolbar at the top right holds the search "Cerca progetto o cliente…" (~250 ms debounce, case- and accent-insensitive over name, client name, client code, case code and business line label) and the segmented status filter Tutti · Bozza · In elaborazione · Da approvare · Approvato (single choice, default Tutti, a pill track with the selected segment filled), combined with the search (AND); the segments have no counts until Story 4.1. Sorting by ID orders codes naturally (`LUM-2026-9` < `LUM-2026-10`). Default sort Updated newest; header click sorts. Row click by status (Bozza → wizard at the first incomplete step: Dettagli without a business line, else Materiale without a file, else Genera; In elaborazione → no-op with "Still generating" tooltip; Da approvare → configurator; Approvato → configurator plus View). Overflow menu: View, Export, Share (Approvato), Delete (Bozza, with confirm). Rows in In elaborazione update without reload. Empty and no-results states with their copy (the no-results line names the search and the status). Amended (owner, 2026-10-20, Story 2.17): the Business line column, the toolbar with the new search copy, and the status filter without counts (Story 4.1 may add them).
 UX-DR5: To review queue. The table pre-filtered to Da approvare, oldest first; sidebar count; no assignment or claiming; empty copy "Nothing to review."
-UX-DR6: Library view. Card grid (cover = first slide of the 16:9 deck, name, client, year; no tags); approved only; no status filter or badge; same search; facets Client and Year as multi-select chips with active filters and Clear all; newest approved first; paginates at 24, no infinite scroll; empty copy "No approved case studies yet."; owner/designer Table / Library toggle.
+UX-DR6: Library view. Card grid (cover = first page of Presentazione 16:9, was the 16:9 deck before SCP 2026-10-28, name, client, year; no tags); approved only; no status filter or badge; same search; facets Client and Year as multi-select chips with active filters and Clear all; newest approved first; paginates at 24, no infinite scroll; empty copy "No approved case studies yet."; owner/designer Table / Library toggle.
 UX-DR7: Wizard step 1 **Dettagli** (the wizard is 1 Dettagli · 2 Materiale · 3 Genera). In order: Nome (required); Cliente (required, picked from the existing clients; no free text, no adding here; `?clientId=` preselects it); Anno (required, defaults to the current year); Business line (required, single-select pills: Branding, Social media, Video, Web design, Advertising, Eventi, Sviluppo; Sviluppo added 2026-10-20); Contesto, Soluzione, Risultati (optional textareas with one-line prompts). **Avanti** is inactive until name, client, year and business line are set, with the reason linked via `aria-describedby`. On a new case **Avanti** creates it (code shown in the header, saved as Bozza from that moment), saves the texts and opens step 2; leaving before that with something entered asks "Le informazioni inserite non sono ancora salvate. Uscire comunque?". On an existing draft the texts autosave and name, year and business line save on **Avanti** (the stored language is kept); the client is fixed once the case exists, and a year change renumbers the draft (AD-21 owner note). Amended (owner, 2026-10-20, Story 2.17): step 0 and the old Details step merge into this step, which adds the business line. Amended (owner, 2026-10-20, Story 2.18): the large title follows Nome; Cliente is a search box (ARIA combobox) over name and code; Lingua is removed (new cases are `it`; multilingual will create both languages at once); Nome, Cliente, Anno and Business line are marked required with a "*" marker (no legend, owner review 2026-10-20); the pills are larger; the wizard footer stays in view, flush on the window's bottom edge, while the step scrolls; seven business lines (Sviluppo added after Eventi, 2026-10-20).
 UX-DR8: Wizard step 2 Material, in the focused wizard (per `mockups/material-step.html`). Reached once the business line is set. Dropzone plus browse button with accepted-type chips; no pasted text; copy "Fino a 20 file, 50 MB ciascuno."; per-file inline rejections (over 50 MB / unsupported type / 21st file) that don't block others; parallel uploads with per-file progress, progress and rejections announced to screen readers; rows (thumbnail, name, size, remove, plus a **Preferito** toggle on images and videos); remove is immediate, with no confirm and no undo; **Avanti** is active from the first uploaded file and opens step 3 Genera, which can't be reached with 0 files. Renumbered (owner, 2026-10-20, Story 2.17): was step 1.
 UX-DR9: The details form (Context, Solution, Results textareas with one-line prompts, a "{n} of 3" counter, all optional) is part of wizard step 1 **Dettagli** (UX-DR7). Amended (owner, 2026-10-20, Story 2.17): it was step 2.
 UX-DR10: Wizard step 3 Generate. Summary "{n} files, {m} of 3 details filled."; Generate disabled without material, with the visible reason linked via `aria-describedby`; processing state with leave-page copy and Back to case studies; no ETA or percentage; failure banner "Generation didn't finish. Your material and details are saved." with Try again. (owner, 2026-10-20, Story 2.17: still step 3; it needs the business line and at least one file.)
 UX-DR11: Draft-ready toast anywhere in the app: "{Name} is ready to review." with Open (C3).
-UX-DR12: Configurator frame. Top bar (back, name, status badge, save state, Approve or Update approved version); left Formats pane (one entry per registry format: name, ratio, pixel size, looked-at check mark); centre canvas at fit-to-pane zoom with page strip for multi-page formats; right pane Edit and Check tabs. At 1024–1279 px the panes narrow and the right pane can collapse. Below 1024 px: "The configurator needs a larger screen." Client intro and collections (SCP 2026-10-16): three modes share the frame: *case history* (as today), *client intro* (same panes, intro and outro blocks), *client overview* (left pane lists the intro, the client's case histories and the outro; the format switch moves to the top bar; outro per SCP 2026-10-21). The collection configurator (UX-DR39) reuses the frame with fewer controls.
+UX-DR12: Configurator frame. Top bar (back, name, status badge, save state, Approve or Update approved version); left Formats pane (one entry per registry format: name, ratio, pixel size, looked-at check mark); centre canvas at fit-to-pane zoom with page strip for multi-page formats; right pane Edit and Check tabs. At 1024–1279 px the panes narrow and the right pane can collapse. Below 1024 px: "The configurator needs a larger screen." Client intro and collections (SCP 2026-10-16): three modes share the frame: *case history* (as today), *client intro* (same panes, intro and outro blocks), *client overview* (left pane lists the intro, the client's case histories and the outro; the format switch moves to the top bar; outro per SCP 2026-10-21). The collection configurator (UX-DR39) reuses the frame with fewer controls. Amended (SCP 2026-10-28, C37, C40): the frame is the mockup's: format switch and Anteprima in the top bar, a 312 px left panel (selection settings, Layout, Pagine di default, Elementi, Sfondo, Elimina pagina) and a 224 px right panel (Pagine, Media); no Formats pane, page strip or Edit and Check tabs (Story 4.2).
 UX-DR34: Adding material after generation. To add material to a case in Da approvare or Approvato, the owner/designer goes back to the wizard's Material step; the case keeps its status, and the new material is available to Replace media (EXPERIENCE `[ASSUMPTION]`, spine *Deferred: Regenerate*).
-UX-DR13: Configurator text editing. Click to edit in place, Esc or click outside to finish, autosave. Plain text and line breaks only. Section headings can be reworded, sections can't be deleted or reordered. Overflow marker; no silent shrink below template minimum. Edited blocks are marked "edited" and need re-checking.
-UX-DR14: Configurator layout. Variant thumbnail grid from the template's designed variants for the format; Shuffle layout steps to the next designed variant that fits the media count, with undo; spacing sliders bounded by template range; Reset to generated default per format.
-UX-DR15: Configurator media. Replace from this case's own material only (no upload, stock or generated images); drag to swap slots with a keyboard/menu alternative; remove from layout re-adapts to the new count; media placed whole (fit, no stretching); no crop, recolour, filter or effect controls.
-UX-DR16: Configurator typography. Font pairing from the template's list; text scale S / M / L per format; no per-word or per-block styling.
-UX-DR17: Check tab. Every block listed by section (challenge, approach, result, headline, KPI tiles) with "Checked against material"; selection synced between list and canvas; material drawer showing files (image, PDF, text viewer; video player) and details answers beside the canvas; editing a block unticks it; Approve disabled with "{n} blocks still to check" (reason via `aria-describedby`, counter `aria-live="polite"`); overflowing blocks listed; no tick-all.
-UX-DR18: Approve confirm dialog with the specified copy; on confirm, status Approvato, toast "Approved. It's now in the library.", navigate to To review if items are waiting, otherwise Case studies.
+UX-DR13: Configurator text editing. Click to edit in place, Esc or click outside to finish, autosave. Plain text and line breaks only. Section headings can be reworded, sections can't be deleted or reordered. Overflow marker; no silent shrink below template minimum. Edited blocks are marked "edited" and need re-checking. Amended (SCP 2026-10-28, C29, C30, C32, C39): double click edits a text in the format in view only; seven text styles with colour and alignment; no re-check for the demo (Story 4.3).
+UX-DR14: Configurator layout. Variant thumbnail grid from the template's designed variants for the format; Shuffle layout steps to the next designed variant that fits the media count, with undo; spacing sliders bounded by template range; Reset to generated default per format. Superseded (SCP 2026-10-28, C31): Layout grids, Mescola, border resizing and Pagine di default (Story 4.4).
+UX-DR15: Configurator media. Replace from this case's own material only (no upload, stock or generated images); drag to swap slots with a keyboard/menu alternative; remove from layout re-adapts to the new count; media placed whole (fit, no stretching); no crop, recolour, filter or effect controls. Amended (SCP 2026-10-28, C30, C35, answer 4): Riempi, Adatta or Ritaglia; client media allowed; a drop zone in the Media tab adds files to the case; animations (Story 4.5).
+UX-DR16: Configurator typography. Font pairing from the template's list; text scale S / M / L per format; no per-word or per-block styling. Superseded (SCP 2026-10-28, C32): seven text styles, folded into Story 4.3.
+UX-DR17: Check tab. Not for the demo (owner 2026-10-27; SCP 2026-10-28, C39; Story 4.7). Every block listed by section (challenge, approach, result, headline, KPI tiles) with "Checked against material"; selection synced between list and canvas; material drawer showing files (image, PDF, text viewer; video player) and details answers beside the canvas; editing a block unticks it; Approve disabled with "{n} blocks still to check" (reason via `aria-describedby`, counter `aria-live="polite"`); overflowing blocks listed; no tick-all.
+UX-DR18: Approve confirm dialog with the specified copy (for the demo without "Every claim has been checked against the material", C39); on confirm, status Approvato, toast "Approved. It's now in the library.", navigate to To review if items are waiting, otherwise Case studies.
 UX-DR19: Editing an approved case. Banner "Approved, with {n} live links. Changes go live when you update the approved version."; edits autosave to a working copy; edited blocks unticked; Update approved version enabled when every edited block is ticked again; confirm "{n} links will show the new version."; Discard changes.
 UX-DR20: Autosave state. "Saved" / "Saving…" / "Not saved. Retrying…"; after 3 failures a banner "Changes aren't saving. Keep this tab open." No Save draft button, no version history.
 UX-DR21: Case study view. Top bar Back, name, badge, Share, Export (+ Edit for owner/designer); format list matching the configurator; pager ("Slide 1 of 12"), zoom − / 100% / +, fit, full screen; Export selected format with progress and browser download; Export all as one ZIP; "Export didn't finish." toast with Try again; format list becomes a dropdown at 1024–1279 px.
-UX-DR22: Share dialog. Choose a format (default 16:9 deck); link auto-copied with "Link copied" toast; plain "who can open it" sentence above the link; link list with format, created by, created on, Copy, Turn off link (with confirm).
+UX-DR22: Share dialog. Choose a format (default Presentazione 16:9; SCP 2026-10-28); link auto-copied with "Link copied" toast; plain "who can open it" sentence above the link; link list with format, created by, created on, Copy, Turn off link (with confirm).
 UX-DR23: Shared link page. Full-screen presentation of one format, pager, arrow keys, full screen; no app chrome, no sign-in prompt under the interim mode, no download; fully responsive with swipe on phones; slide text available to screen readers; turned-off or expired copy "This case study is no longer available. Contact the person who shared it."
 UX-DR24: Users (admin). List (name, email, role, added on); Add user (email + one role); role dropdown per row, effective at the user's next page load; Remove user with confirm (their cases and links stay); last-admin guard; no permission matrix, guardrail settings or case access.
 UX-DR25: Sign in. One screen, no self-sign-up.
@@ -126,10 +127,10 @@ UX-DR31: Design tokens (DESIGN.md). Implement the fixed token names (colours, ty
 UX-DR32: Templates surface (conditional on C4). Browse templates and their variants per format with sample content; turn variants on and off (at least one per format stays on); see usage counts.
 UX-DR33: `MISSING_ASPECT` warning shown in the configurator (spine AD-6; placement and blocking are conflict A3).
 UX-DR35: Clients (owner/designer). Table of clients (ID: the client code, mono; Name; Case histories count; owner 2026-10-19), search over name and code, default sort Name A–Z. SCP 2026-10-21 (EXPERIENCE.md C22, replacing the client wizard of SCP 2026-10-19): **Aggiungi cliente** opens the client side panel over the Clients list, one form in sections: **01 Dettagli** (Nome, Settore pills, one choice from a shared list with a field to add a sector (2026-10-22), Descrizione), **02 Logo e immagini** (Logo, 2–3 images), **03 Racconto** (Contesto, Soluzione, Risultati); all required; **Annulla** and **Aggiungi**. Every row opens the client page, finished or not; an unfinished client is completed through **Modifica cliente** (owner, 2026-10-19). **Modifica cliente** opens the same side panel with the client's data and **Salva**, stating that the code stays the same and that changes apply to all the client's case histories, approved ones included. **Modifica layout** on the client page opens the client overview (UX-DR38); until Story 4.12 it is inactive with "Arriva con il configuratore". Account/sales/social get a read-only Clients list of clients with an approved case history, with **Scarica** per row and no add or edit; row click opens the client page: logo, client name and code, its sector as a pill (2026-10-22), description, **Edit client**, and the Case history table limited to that client, with **New case history** preselecting the client. **Elimina cliente** at the bottom of the **Modifica cliente** panel (SCP 2026-10-21; owner, 2026-10-19: clients can be deleted (soft), with their cases): a dialog where the user types the client's name; the client and all its case histories, approved ones included, are soft-deleted. Not on the Clients list. Below 1024 px read-only.
-UX-DR36: About the client block. Shown in every format of a case study: logo, client name, sector (2026-10-22), description, always the client's current info (drafts and approved case studies alike). Read-only in the configurator, with the hint "Modifica i dati nella pagina del cliente. Le modifiche si vedono in tutte le sue case history." Not in the Check tab list. Parts without a value are hidden; the block is hidden when the client has no description, sector or logo (since SCP 2026-10-19 all are required, so this only covers a client whose wizard isn't finished).
+UX-DR36: About the client block. Superseded (SCP 2026-10-28, C33, answer 2): it becomes the Intro's Cliente block, and the client's fields there are editable on the page and write back to the client's record. Was: Shown in every format of a case study: logo, client name, sector (2026-10-22), description, always the client's current info (drafts and approved case studies alike). Read-only in the configurator, with the hint "Modifica i dati nella pagina del cliente. Le modifiche si vedono in tutte le sue case history." Not in the Check tab list. Parts without a value are hidden; the block is hidden when the client has no description, sector or logo (since SCP 2026-10-19 all are required, so this only covers a client whose wizard isn't finished).
 UX-DR37: Client material (was Client images; SCP 2026-10-19). Up to 3 files per client, at least 2 images, in wizard step 2 **Materiale** and in **Dati cliente**: drop zone, file rows in order, **Rimuovi**; in **Dati cliente** also **Sostituisci** and drag or menu to reorder, and an image can't be removed when only 2 remain. Images PNG, JPEG or WebP ≥1600 px on the short side; other files as case material (Story 2.7 types, ≤50 MB). Copy: "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione."; a 4th file: "Massimo 3 file."
-UX-DR38: Client overview, opened by **Modifica layout** (SCP 2026-10-21). Left pane: **Introduzione** (with its status badge), then every case history of the client that has a document, newest first, each with code, name and status badge, then **Chiusura** (the outro; same document and status badge as **Introduzione**). A Bozza case history is listed greyed with "Non ancora generata". Centre: one continuous preview of the selected format, every part in that order, with a divider per part. Clicking a part in the list scrolls to it. Editing a block edits that part (status and save state shown for that part). Right pane: Edit and Check for the selected part. The top bar has the format switch, **Dati cliente** and, for the selected part, its **Approve** or **Update approved version**.
-UX-DR39: Collections. Library cards get a checkbox. With one or more selected, a bar shows "{n} selezionate" and **Crea raccolta**, which asks for a name and opens the collection configurator. Left pane: the parts in order, a client's case histories grouped under its computed intro and followed by its outro (both shown locked; outro per SCP 2026-10-21). Reorder groups and case histories within a group by drag handle or by the menu "Sposta su / giù". Centre: continuous preview per format. Right pane: **Testo** (edit the selected block, owner/designers only, IR-COLL-EDIT), **Pagine** (hide or show the selected page). Edited blocks show "Modificato in questa raccolta". Hidden pages show as a collapsed strip with **Mostra**. Top bar: name (editable), save state, **Esporta** and **Esporta tutto** (Deck 16:9 and PDF A4). No layout, media or typography controls. A sidebar item **Raccolte** lists collections (name, parts, updated, created by) with open, rename and delete (with confirm).
+UX-DR38: Client overview, opened by **Modifica layout** (SCP 2026-10-21). Left pane: **Introduzione** (with its status badge), then every case history of the client that has a document, newest first, each with code, name and status badge, then **Chiusura** (the outro; same document and status badge as **Introduzione**). A Bozza case history is listed greyed with "Non ancora generata". Centre: one continuous preview of the selected format, every part in that order, with a divider per part. Clicking a part in the list scrolls to it. Editing a block edits that part (status and save state shown for that part). Right pane: Edit and Check for the selected part. The top bar has the format switch, **Dati cliente** and, for the selected part, its **Approve** or **Update approved version**. Amended (SCP 2026-10-28, C38): the client's file shows the client's intro, each case's pages (without its own intro and Carosello Chiusura; Risultati e testimonial stay) and the client's closing; cases reorder by dragging their row; the client's fields are edited on the page (Story 4.12).
+UX-DR39: Collections. Library cards get a checkbox. With one or more selected, a bar shows "{n} selezionate" and **Crea raccolta**, which asks for a name and opens the collection configurator. Left pane: the parts in order, a client's case histories grouped under its computed intro and followed by its outro (both shown locked; outro per SCP 2026-10-21). Reorder groups and case histories within a group by drag handle or by the menu "Sposta su / giù". Centre: continuous preview per format. Right pane: **Testo** (edit the selected block, owner/designers only, IR-COLL-EDIT), **Pagine** (hide or show the selected page). Edited blocks show "Modificato in questa raccolta". Hidden pages show as a collapsed strip with **Mostra**. Top bar: name (editable), save state, **Esporta** and **Esporta tutto** (Presentazione 16:9; PDF A4 dropped per SCP 2026-10-28). No layout, media or typography controls. A sidebar item **Raccolte** lists collections (name, parts, updated, created by) with open, rename and delete (with confirm).
 UX-DR40: Combined download copy. The client pack and collection exports show progress and then the browser download, like UX-DR21. When a client's intro isn't approved: "L'introduzione di {client} non è ancora approvata: le sue case history usano la propria introduzione."
 
 ### Interim Rules Register
@@ -138,13 +139,13 @@ These are the rules the stories are built against. None of them is a decision; e
 
 | ID | Open point / conflict | Owner | Interim rule used by the stories | Source |
 | --- | --- | --- | --- | --- |
-| IR-OP1 | OP 1 export formats | PRD owner | Format registry holds UX Option A only: Deck 16:9 (1920×1080, PDF), Social carousel 4:5 (1080×1350, ZIP of PNGs), PDF A4 portrait (PDF). Adding formats means adding registry entries and template renderers. | SPEC CAP-9, ui-flows, AD-9 |
+| IR-OP1 | OP 1 export formats | PRD owner | **Resolved 2026-10-28** (SCP 2026-10-28, C28, answers 1 and 3): Presentazione 16:9 (1920×1080, PDF), Carosello 1:1 (1080×1080, ZIP of PNGs), Video 9:16 (1080×1920; Anteprima only for the demo, MP4 or WebM after it). Was: Format registry holds UX Option A only: Deck 16:9 (1920×1080, PDF), Social carousel 4:5 (1080×1350, ZIP of PNGs), PDF A4 portrait (PDF). Adding formats means adding registry entries and template renderers. | SPEC CAP-9, ui-flows, AD-9 |
 | IR-OP2 | OP 2 data processing logic | PRD owner | **No interim rule.** Stable regardless: the `NarrativeGenerator` port, `MaterialRef`s and the manifest shape (AD-18). Which material types the LLM reads, and how each is turned into input, is open. | AD-7, AD-18 |
 | IR-OP3 | OP 3 taxonomy values | PRD owner | **Resolved 2026-10-14:** no taxonomy. Tags, properties and flags are dropped; favourites replace them (AR14). No interim rule remains. | PRD OP 3, AD-14 |
 | IR-OP4 | OP 4 account/sales/social browsing | PRD owner | UX proposal: card library with search, Client / Year facets, paginated at 24, approved only. | EXPERIENCE (library view) |
 | IR-OP8 | OP 8 status lifecycle | PRD owner | Option A: `draft` Bozza → `generating` In elaborazione → `in_review` Da approvare → `approved` Approvato. Links are a count, not a status. No path back from Approvato. | AD-3, EXPERIENCE |
 | IR-OP11 | OP 11 link access | PRD owner | `accessMode = unlisted` (anyone with the link), with `expiresAt` present but unused in the UI. Share dialog says "Anyone with the link can view." Combined with IR-A2 until Epic 6. | AD-13, FR7 |
-| IR-OP12 | OP 12 what counts as altering | Design team | Renditions only downscale whole images (no upscaling, crop, recolour or filter) and make video poster frames/transcodes. Media are placed whole (fit). No crop or focal point. Media-count adaptation and Shuffle pick only among designed variants. | AD-5, AD-15, EXPERIENCE |
+| IR-OP12 | OP 12 what counts as altering | Design team | **Reversed in part 2026-10-28** (SCP 2026-10-28, answer 4, C31): a person sets each image to Riempi, Adatta or Ritaglia; media-count adaptation and Shuffle are gone. Still true: renditions only downscale whole images, and no AI alters media. Was: Renditions only downscale whole images (no upscaling, crop, recolour or filter) and make video poster frames/transcodes. Media are placed whole (fit). No crop or focal point. Media-count adaptation and Shuffle pick only among designed variants. | AD-5, AD-15, EXPERIENCE |
 | IR-OP13 | OP 13 recording the measures | PRD owner | The tool records no hands-on time and has no timer UI; it keeps the append-only `case_event` log and `generated_doc` next to the approved `doc`. | AD-20, UX Q3 |
 | IR-OP14 | OP 14 what a favourite means for generation (Epic 3) | PRD owner | Favourites are stored and shown, not used by generation. | AD-14, PRD OP 14 |
 | IR-NFR5 | NFR5 quality checklist (Sprint 2 deliverable) | Non-dev, Sprint 2 | **No interim rule.** The schema enforces challenge / approach / result and both aspects are tagged; the checklist content for prompts is open. | SPEC Open Questions |
@@ -152,7 +153,7 @@ These are the rules the stories are built against. None of them is a decision; e
 | IR-A1 | A1 / C1 live edits vs claim check | PRD owner | Edits to an approved case are staged on a working head; links keep serving the approved revision until an owner/designer re-checks the edited blocks and runs **Update approved version**. **Discard changes** returns to the live version. | AD-3, AD-19, EXPERIENCE |
 | IR-A2 | A2 links before login | PRD owner | `/s/{token}` stays behind the AD-12 basic-auth gate until Epic 6; after Epic 6 it is the only unauthenticated route. | AD-12 |
 | IR-A3 | A3 `MISSING_ASPECT` | UX | Detected and shown as a warning in the configurator; it does not block approval. | AD-6 |
-| IR-A4 | A4 zero images or videos | Design team | **No interim rule.** Generation is allowed from texts or PDFs alone (NFR6 is satisfied); what the template renders for zero media is not yet supplied. | AD-6 |
+| IR-A4 | A4 zero images or videos | Design team | **No interim rule.** Generation is allowed from texts or PDFs alone (NFR6 is satisfied); what the template renders for zero media is not yet supplied. Note (SCP 2026-10-28): media-count rules are gone; default pages can place image blocks the case has no image for; what such an empty block shows in an export is still open (Story 3.4). | AD-6 |
 | IR-A5 | A5 concurrent editing | UX | The server rejects a stale write with `STALE_REVISION` / `STALE_HEAD`; the client doesn't retry and reloads the revision. No dedicated "someone else changed this" state is designed. | AD-17 |
 | IR-C3 | C3 autosave and toast not in any FR | PRD owner | Built as UX describes: autosave with save states, and an in-app polled toast when a draft is ready. No email or Slack. | EXPERIENCE, AD Deferred |
 | IR-C4 | C4 template maintenance | PRD owner | `manage templates` exists in the policy matrix, but the Templates surface and the `template_variant_state` table are **not built** unless the PRD owner adopts the UX scope. | AD-15, AD-11 |
@@ -166,9 +167,9 @@ These are the rules the stories are built against. None of them is a decision; e
 | FR1 | Epic 2 | Manual creation with a permanent uuid, readable code and client record |
 | FR2 | Epic 2 | Upload (20 × 50 MB, allowlist), favourites, details form |
 | FR3 | Epic 2, Epic 3 | Background generation, narrative from material, form and client info only, About the client block, NFR6 gate, layouts per format |
-| FR4 | Epic 3 | Media-count rules (re-applied when the media set changes in the Epic 4 configurator) |
+| FR4 | Epic 3 | Media-count rules (re-applied when the media set changes in the Epic 4 configurator); superseded by layout grids and default pages per format (SCP 2026-10-28) |
 | FR5 | Epic 4 | Review dashboard, To review queue, configurator editing |
-| FR6 | Epic 4 | Manual per-block check, approval, approved-case editing |
+| FR6 | Epic 4 | Approval, approved-case editing; the manual per-block check is not for the demo (SCP 2026-10-28) |
 | FR7 | Epic 5 | Library, export, shareable links, turning links off |
 | FR8 | Epic 6 | Login, fixed roles, user admin |
 | CAP-12 | Epics 2–5 | Each epic emits its own `case_event` rows (AR20) |
@@ -280,7 +281,7 @@ Note (owner, 2026-10-20): multilingual: a case will be created in both languages
 **Then** they pass
 
 ## Epic 3: Generate a graphic case study from the material (Sprint 2, due 2026-10-21)
-The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
+The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out in each format's own pages from the MAC templates (Presentazione, Carosello, Video; SCP 2026-10-28). The case lands in To review with a toast.
 **FRs covered:** FR3, FR4, NFR1, NFR5, NFR6, CAP-12 (also FR11, client intro draft)
 
 #### Story 3.10: Test draft without AI (dev only)
@@ -289,8 +290,9 @@ As the team,
 I want to turn a case with material into a reviewable draft without calling the AI,
 So that the configurator (Epic 4) can be built and tried before the narrative guidelines exist.
 
-Covers: none (dev tooling) ([Sprint Change Proposal 2026-10-20](sprint-change-proposal-2026-10-20.md))
+Covers: none (dev tooling) ([Sprint Change Proposal 2026-10-20](sprint-change-proposal-2026-10-20.md); [Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md), C31, C33, C36)
 Order: after 3.5, before 4.1 (owner, 2026-10-20).
+Amended per SCP 2026-10-28: the draft is built in document v2 from each format's default pages, filled from the case and the client.
 
 **Acceptance Criteria:**
 
@@ -298,10 +300,12 @@ Order: after 3.5, before 4.1 (owner, 2026-10-20).
 **When** the dev command runs for it (e.g. `npm run dev:test-draft -- <caseId>`), against mac-recap-dev or a local database only
 **Then**:
 - it moves the case through the normal transitions (generate, then generation_succeeded) with the dev actor
-- it writes a `working` revision built by Story 3.3's document schema, with placeholder challenge, approach and result text marked "[bozza di prova]", each claim citing the case's own form answers or files
-- it lays the revision out with Story 3.4's templates and 3.5's renderers for every MVP format
+- it writes a `working` revision in Story 3.3's document schema v2, with one page list per format
+- it builds each format's pages from Story 3.4's default pages (C31, C36): Presentazione: Intro, Contenuti (3 images) and Risultati e testimonial, with no separate Sfida or Approccio page because the Intro holds them; Carosello: Intro (Copertina, Sfida, Idea), a content page, Risultati e testimonial and Chiusura; Video: Intro and Risultati e testimonial only
+- it fills them from the case and the client: the client's and the case's fields bound to their records (answer 2), the case's own images in the image blocks and animations, Risultati e testimonial from Story 2.21 as typed, and test text marked "[bozza di prova]" wherever the AI will write (the title, subtitle, Sfida and Idea texts), each citing the case's own form answers or files
 - the case appears in **Da approvare**
 
+**And** a case with no result and no testimonial gets no Risultati e testimonial page (C24)
 **And** the command refuses to run against the production project ref, and there is no UI entry point
 **And** no LLM is called
 
@@ -328,7 +332,7 @@ Order: after 3.10, before 4.1. Blocked on the client template from the design te
 
 
 ## Epic 4: Review, edit and approve a case study (Sprint 2)
-The owner/designer works the To review queue, refines the draft in the configurator, checks every block against the material and approves; later edits to an approved case go live only through Update approved version.
+The owner/designer works the To review queue, refines each format's pages in the configurator and approves (no per-block check for the demo, SCP 2026-10-28); later edits to an approved case go live only through Update approved version.
 **FRs covered:** FR5, FR6, NFR2, NFR7 (approval), CAP-12 (also FR11 intro review, FR12 client overview)
 
 ### Epic 5: Find, export and share approved case studies (Sprint 2)
@@ -345,7 +349,7 @@ Each user signs in with one of three fixed roles; the admin manages users and ro
 - Every story that adds a server action or route calls `access.getActor()` and `access.authorize()` first (AR11), returns `Result<T, AppError>` (AR21), uses Italian copy from the dictionary (UX-DR29), and emits the `case_event` rows its mutations require (AR20). These are not repeated in each story's criteria.
 - NFR10 (sequential epics, sprint dates) is met by the epic order itself: stories within an epic depend only on earlier stories and earlier epics, never later ones.
 - Tables and storage prefixes are created by the first story that needs them, through a forward-only migration (AR12).
-- **Client intro and collections stories** (2.15, 2.16 (SCP 2026-10-19), 3.9, 4.11, 4.12, 5.9, 5.10, 5.11, 6.5; [Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md)) are MVP and built before the October 30 demo (owner amendment 2026-10-16: "Tutto. dovremmo farcela"). Epics stay in order (NFR10); inside each epic a new story comes after the stories it depends on and after that epic's demo-path stories. Sprint 2: 2.15 → 2.16 → 3.2–3.8 → 3.9 → 4.1–4.8 → 4.11 → 4.9 → 4.12 (client creation first, owner 2026-10-19). Sprint 3: 5.1–5.8 → 5.9 → 5.10 → 5.11 → 6.1–6.4 → 6.5. If dates slip, the owner decides at each checkpoint; the proposed slip order is 5.11, 5.10, 4.12, 5.9, then the client intro (3.9, 4.11, 2.16, 2.15), and the demo path (3.2–3.8, 4.1–4.8, 5.1–5.4) never slips. Owner, 2026-10-20 ([SCP 2026-10-20](sprint-change-proposal-2026-10-20.md)): Sprint 2 runs 3.2–3.5 → 3.10 → 4.1–4.8 → 3.6–3.9 → 4.11 → 4.9 → 4.12; the Bento configurator is designed with the owner before 4.2.
+- **Client intro and collections stories** (2.15, 2.16 (SCP 2026-10-19), 3.9, 4.11, 4.12, 5.9, 5.10, 5.11, 6.5; [Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md)) are MVP and built before the October 30 demo (owner amendment 2026-10-16: "Tutto. dovremmo farcela"). Epics stay in order (NFR10); inside each epic a new story comes after the stories it depends on and after that epic's demo-path stories. Sprint 2: 2.15 → 2.16 → 3.2–3.8 → 3.9 → 4.1–4.8 → 4.11 → 4.9 → 4.12 (client creation first, owner 2026-10-19). Sprint 3: 5.1–5.8 → 5.9 → 5.10 → 5.11 → 6.1–6.4 → 6.5. If dates slip, the owner decides at each checkpoint; the proposed slip order is 5.11, 5.10, 4.12, 5.9, then the client intro (3.9, 4.11, 2.16, 2.15), and the demo path (3.2–3.8, 4.1–4.8, 5.1–5.4) never slips. Owner, 2026-10-20 ([SCP 2026-10-20](sprint-change-proposal-2026-10-20.md)): Sprint 2 runs 3.2–3.5 → 3.10 → 4.1–4.8 → 3.6–3.9 → 4.11 → 4.9 → 4.12; the Bento configurator is designed with the owner before 4.2. SCP 2026-10-28 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md)) sets the build order 3.3 (document v2) → 3.4 → 3.5 → 3.10 → 4.2 → 4.3 → 4.4 → 4.5 → 4.13 → 4.11 and 4.12 → 4.8, then 3.6 and 3.7; Story 4.6 is folded into 4.3 and 4.7 is not for the demo.
 
 ## Epic 2: Create a case study and collect its material
 
@@ -1102,7 +1106,7 @@ Order: MVP, Sprint 2, after 2.20; does not wait for the templates.
 
 ## Epic 3: Generate a graphic case study from the material
 
-The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out for every MVP format and adapted to the media count. The case lands in To review with a toast.
+The owner/designer presses Generate and can leave. The worker produces a draft from MAC templates: a challenge / approach / result narrative built only from this case's material and form answers, laid out in each format's own pages from the MAC templates (Presentazione, Carosello, Video; SCP 2026-10-28). The case lands in To review with a toast.
 
 Epic prerequisites (non-dev): graphic template layouts and final case study templates (Sprint 2, decided 2026-10-09), each with an About the client area in every format (logo, name, sector (one label up to 40 characters; one sector from a shared list since 2026-10-22) and a description up to 400 characters, all required, so no rules for a missing field; SCP 2026-10-16), every page of every format named (`pageKey`) with the pages that introduce the case history (for example the cover and About the client) marked as intro pages (SCP 2026-10-16 client intro and collections), a client template in every format for 2–3 images, with intro and outro pages (the client's image files; SCP 2026-10-19; outro per SCP 2026-10-21), a headline and one short paragraph (needed by 2026-10-20, before Story 3.9 closes; owner amendment 2026-10-16: before the demo), narrative structure and quality criteria (NFR5, Sprint 2), and data processing logic (OP 2, Sprint 1). Stories 3.4–3.7 can't close before their prerequisites land; when in Sprint 2 the templates arrive is the schedule risk.
 
@@ -1187,13 +1191,22 @@ I want one validated document per revision that every format and screen reads, a
 So that content never differs between formats, configurator edits reach the exports, and old revisions survive schema changes.
 
 Covers: AR3 (revision model, live and editable reads), AR4, AR9 (format registry), AR21, FR3 (layouts per format), CAP-12 (generated draft kept)
-⚑ Interim: IR-OP1 (registry holds Deck 16:9, Social carousel 4:5, PDF A4 only), IR-OP8, IR-OP13 (`generated_doc` is kept next to the approved `doc` for the measures)
+⚑ Interim: IR-OP8, IR-OP13 (`generated_doc` is kept next to the approved `doc` for the measures). IR-OP1 is resolved (SCP 2026-10-28, C28); until then the registry held Deck 16:9, Social carousel 4:5 and PDF A4.
+
+**Amended per SCP 2026-10-28** ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C28, C29, C30, answers 2 and 3). The story is done for document schema v1 (#68). The amendment changes the format registry and adds document schema v2, built as a follow-up before Story 3.4 (status stays done; the follow-up is tracked on this story). The v1 criteria below stay as the record of what was built; where they differ from the amendment criteria at the end, the amendment wins.
+⛔ Open: how the AI's claims (Story 3.6) map onto texts that now exist once per format: one set shared by the three formats' copies, or one per copy.
+⛔ Open: whether v2 keeps a `check` field on texts for Story 4.7 after the demo. Nothing reads or sets it for the demo (C39).
+⛔ Open: v1 rejects a document missing challenge, approach or result. In v2 that narrative sits in the Intro's Sfida and Idea blocks and the Risultati e testimonial page, which a person can delete (C30, C36); whether the schema still requires them is for the owner (FR3, NFR5).
 
 **Acceptance Criteria:**
 
 **Given** `rendering/domain/formats.ts`
 **When** I read it
-**Then** it lists exactly the IR-OP1 formats, each with id, name, ratio, pixel size (1920×1080, 1080×1350, A4 portrait), page model, file type (PDF / ZIP of PNGs / PDF) and `static`
+**Then** it lists exactly the formats of C28 (answer 3), in this order, each with id, name, ratio, pixel size, page model, file type and `static | motion`:
+- Presentazione, 16:9, 1920×1080, static, PDF
+- Carosello, 1:1, 1080×1080 (its templates are drawn on a 1000 px Figma frame and scaled), static, ZIP of PNGs
+- Video, 9:16, 1080×1920, motion, MP4 or WebM with the animations (export after the demo; for the demo Video is Anteprima only, answer 1)
+**And** Deck 16:9 (1920×1080), Social carousel 4:5 (1080×1350) and PDF A4 portrait, the v1 entries, are removed (amended per SCP 2026-10-28)
 **And** it is the only list of formats used anywhere; there is no canvas-ratio field in any type
 
 **Given** `generation/domain` zod schema for `CaseStudyDocument`
@@ -1220,56 +1233,98 @@ Covers: AR3 (revision model, live and editable reads), AR4, AR9 (format registry
 **Then** they use `getLiveRevision(caseId)` (approved revision, or none) or `getEditableRevision(caseId)` (head), and documents are passed through `upgrade(doc)` on read without writing the upgrade back to a non-working revision (covered by a test with a v0 fixture)
 **And** `getLiveRevision` and `getEditableRevision` take a subject (`{ kind: 'case', id }` or `{ kind: 'client_intro', id }`); the MVP calls them only with cases (SCP 2026-10-16 client intro and collections)
 
-### Story 3.4: Templates as versioned code with media-count rules
+Amendment criteria (SCP 2026-10-28):
+
+**Given** the `CaseStudyDocument` zod schema v2
+**When** a document is validated
+**Then** it has `schemaVersion: 2`, `kind`, `templateId@version` and one page list per registry format, keyed by format id (C29); there is no shared text part and no per-format layout part
+**And** each page has a stable `pageKey`, a name, a `role` (`intro`, `body` or `outro`), a section (`intro`, `output` or `risultati`), a background (colour, transparent or an image ref), its grid and its own track sizes, and an ordered list of blocks
+**And** each block has a stable `blockId`, a background (colour, transparent or an image ref) and an ordered list of elements (C30): text (one of the seven styles, with colour, alignment and columns, and its template size where it differs), **Testi** (a group of texts aligned top, centre, bottom or split), image and video (an asset ref and **Riempi**, **Adatta** or **Ritaglia**), **Animazione** (type, asset refs, fit and size), services as tags, the client's and MAC's logos, and a divider
+**And** a text keeps `provenance` (`generated`, `human_edited` or `human_added`) and, where generation gave them, `aspect` and `sourceRefs`
+
+**Given** a text bound to the client's or the case's record (answer 2)
+**When** it is stored
+**Then** the document stores the binding (which record, which field) and no value; renderers read the current value, and an edit on the page writes to the record (Story 4.3)
+**And** the document still stores no client values (AD-22 as amended)
+
+**Given** a v1 document (test fixtures only: no case on mac-recap-dev has a revision yet)
+**When** it is read
+**Then** `upgrade(doc)` turns it into a valid v2 document, dropping formats no longer in the registry and giving a missing format its template's default pages; the upgrade is never written back to a non-working revision (test with a v1 fixture)
+
+**Given** an edit to one format's pages
+**When** it is saved
+**Then** no other format's pages change; nothing cascades from Presentazione to the others (C29)
+
+### Story 3.4: Templates as versioned code: pages, layouts and default pages per format
 
 As an owner/designer,
-I want the case study layout to adapt to how many images and videos I have,
-So that the draft looks designed whether I uploaded three media items or twelve.
+I want each format's pages laid out from MAC's Figma templates,
+So that a draft starts from the designed Intro, Contenuti, Risultati e testimonial and Chiusura pages, and I can get a template page back if it gets lost.
 
-Covers: FR4, CAP-4 (slot mapping per media count), AR4 (`relayout`), AR15, NFR1 (template design unchanged), PRD Story 3.2
-⚑ Interim: IR-OP1, IR-OP12 (adaptation chooses only among designed variants), IR-C4 (no variant on/off state)
-⛔ Blocked on: IR-A4 (the zero-images-or-videos rule), the graphic template layouts and final templates (Sprint 2 non-dev prerequisites), the About the client area in the final templates (SCP 2026-10-16), and page names and intro pages in the final templates (SCP 2026-10-16 client intro and collections)
+Covers: FR3 (layouts per format), FR4 (as amended), AR15, NFR1 (template design unchanged), C30, C31, C32, C33 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
+⚑ Interim: IR-C4 (no layout on/off state)
+⛔ Open: how the case's typed **Risultati** (Story 2.21, one text field) become result rows of a number and what it measures (C33).
+⛔ Open: where the case's services are stored. The Intro shows them as tags bound to the case record (answer 2), but a case has only one business line today.
+⛔ Open: the Figma template for the client's closing page in Presentazione and Video (the mockup shows a placeholder).
+⛔ Open: what an empty image block shows in an approved export (IR-A4; default pages can place image blocks the case has no image for).
+Amended per SCP 2026-10-28: rewritten. Media-count rules, variants, spacing ranges, text scales S/M/L and font pairings are gone (C31, C32). The mockup `ux-designs/ux-MAC Recap-2026-10-08/mockups/configurator.html` is the reference for every value below.
 
 **Acceptance Criteria:**
 
-**Given** the design team's final template specs
-**When** the first template is coded
-**Then** it lives in `src/modules/rendering/templates/{templateId}/v1/` and holds, per registry format: its layout variants, slots, media-count rules (supported range and slot mapping per count), and allowed values (spacing ranges, text scales S/M/L, font pairings)
-**And** no template design value is stored in the database or editable at runtime
+**Given** the design team's Figma file "MAC-TF-AI"
+**When** the case history template is coded
+**Then** it lives in `src/modules/rendering/templates/{templateId}/v1/` and holds, per format (Presentazione, Carosello, Video): its layout grids, its default pages, the seven text styles with their sizes for that format (C32, DESIGN.md), and each template text's own Figma size where it differs from its style
+**And** no template value is stored in the database or editable at runtime
 
 **Given** a published template version
 **When** a change is needed
 **Then** it ships as `v{n+1}`, and a test fails if a file in an existing version folder changes (checked against a committed hash list)
 
-**Given** `rendering.listVariants(templateId, format, mediaCount)`
-**When** it is called
-**Then** it returns only the variants whose media-count rule supports that count, and it is the only source of variants for generation and Shuffle
+**Given** one format
+**When** its layouts are listed
+**Then** one function returns that format's bento grids, each a grid plus the cell each block takes, in order, and it is the only source of layouts for generation and the configurator's **Layout** section (C31):
+- Presentazione: Intro (5 blocks), Contenuti with 1, 3 and 5 images, the Intro grid without images ("solo layout"), and Risultati e testimonial (3 blocks)
+- Carosello: 1 block, 2 blocks, 3 blocks A and B, 4 blocks, and two blocks one above the other
+- Video: 1 block, two blocks one above the other, Intro (info above, animation below) and Risultati e testimonial (three blocks stacked)
+**And** each new Figma template the owner sends adds its grid to its format's list without moving the others
 
-**Given** `rendering.relayout(doc, template)`
-**When** it runs for a media set
-**Then** for every format it picks a supported variant and assigns slots → assetIds deterministically (same input, same output), never invents an asset, and leaves the shared text untouched
-**And** it is a pure function with unit tests at the low and high ends of each format's supported range
+**Given** one format
+**When** its default pages are listed (C31)
+**Then** Presentazione has Intro, Contenuti with 1, 3 or 5 images, and Risultati e testimonial; Carosello has Intro, Sfida, Idea, Risultati e testimonial and Chiusura; Video has Intro and Risultati e testimonial
+**And** a default page is a template page filled from the case (or the client): it only restores a lost template page and is never a way to add pages
 
-**Given** a media count above the template's maximum
-**When** relayout runs
-**Then** it uses the template's rule for the overflow case as specified by the design team, and never crops or resizes media to fit
+**Given** the Intro template (C33)
+**When** it is laid out
+**Then** in Presentazione it is one page of five blocks: 01 Progetto (title and subtitle over the cover image), 02 Cliente (client name, sector and year, the client's and MAC's logos), 03 Servizi (the services as tags), 04 Sfida and 05 Idea (a heading and a text each)
+**And** in Carosello it is three pages: Copertina (grey page, cover image, title, subtitle, services), Sfida and Idea
+**And** in Video it is one page of two blocks: the info above, with room at the top for Instagram's bar, and a Carousel 04 animation of the case's images below, at 105%
 
-**Given** a case whose material has no images or videos
-**When** relayout runs
-**Then** it applies the template's zero-media rule (IR-A4: not yet supplied; until it is, this criterion stays open and the case is not silently rendered with empty slots)
+**Given** the Contenuti template (Presentazione, C33)
+**When** it is laid out
+**Then** the images sit in grey blocks and a text block reads "06 Deliverable — Output" with a heading and a text
 
-**Given** the design team's template specs
-**When** a template is coded
-**Then** every format has an About the client area for the logo, name, sector and description (AD-22), with no rules for a missing field, because all of them are required (SCP 2026-10-19)
-**And** its layout fits one sector label of up to 40 characters plus a 400-character description without overflow (a test renders the longest allowed label and description in every format; SCP 2026-10-19, 2026-10-22)
+**Given** the Risultati e testimonial template (C33)
+**When** it is laid out
+**Then** a blue (`#2977FF`) block "06 — Risultati" holds one row per result: what it measures, and the number in lime (`#DEFE56`) under a thin line; a grey block "08 — Voce del cliente" holds the testimonial and its author
+**And** Presentazione adds a visual on the left, Carosello shows the two blocks, and Video starts with the Intro's info block above them
+**And** its texts come from Story 2.21 as typed, with no AI text; a case with neither results nor a testimonial has no such page (C24, SCP 2026-10-26)
 
-**Given** a template format
+**Given** the Chiusura template (Carosello only, C33)
+**When** a carousel is laid out
+**Then** it ends with a grey page with the star, "Al prossimo progetto" and a short line, the same for every carousel, each carousel holding its own copy that can be edited
+
+**Given** a template text that the Figma frame spaces with spacers
 **When** it is coded
-**Then** every page it can produce has a stable `pageKey` and a `role` (`intro`, `body` or `outro`; `outro` per SCP 2026-10-21) from the design team's spec, and the keys never change within a published version (SCP 2026-10-16 client intro and collections)
+**Then** the spacers are not elements: the texts become a **Testi** group whose alignment (top, centre, bottom, or split) reproduces the spacing (C30)
 
-**Given** the case history template
+**Given** a template page
 **When** it is coded
-**Then** every format has an `outro` page holding the case's Risultati and Testimonial as typed (Story 2.21), with no AI text; a case history with neither has no outro page (SCP 2026-10-26)
+**Then** it has a stable `pageKey`, a `role` (`intro`, `body` or `outro`) and a section (Intro, Output or Risultati), and the keys never change within a published version (SCP 2026-10-16 client intro and collections, C36)
+
+**Given** the client's and the case's fields on a template page (client name, sector and logo; case year and services)
+**When** the template places them
+**Then** they are bound to the client's or the case's record, not copied (answer 2), and the template fits a sector label of up to 40 characters without overflow in every format (SCP 2026-10-19, 2026-10-22)
+**And** the About the client block of earlier versions becomes the Intro's Cliente block; the client's description is not on the case's pages, so the 400-character description fit test is dropped (C33)
 
 ### Story 3.5: One renderer per format
 
@@ -1277,38 +1332,62 @@ As an owner/designer,
 I want each format rendered by one implementation,
 So that the preview I approve is exactly what gets exported and shared.
 
-Covers: AR9 (one renderer per format), FR3 (layouts per format), CAP-7 (preview matches export), NFR1
-⚑ Interim: IR-OP1, IR-OP12 (media placed whole, fit, never stretched or cropped)
-⛔ Blocked on: final templates (Sprint 2 non-dev prerequisite)
+Covers: AR9 (one renderer per format), FR3 (layouts per format), CAP-7 (preview matches export), NFR1, C28, C30, C32, C34, C35, C38 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
+Amended per SCP 2026-10-28: rewritten for document v2 (Story 3.3), with a Video renderer and animations. "Media placed whole, never cropped" is reversed (answer 4).
 
 Note (2026-10-19, owner): a client logo may be an SVG ([spec](../implementation-artifacts/spec-svg-client-logo.md)). Renderers draw the logo through `<img>`, and any raster output rasterises an SVG logo at render time; the stored SVG is never rewritten. Rasterising an SVG logo must run with external DTD/entity loading and network access off.
 
 **Acceptance Criteria:**
 
-**Given** each registry format
+**Given** each registry format (Presentazione, Carosello, Video)
 **When** I look at the template version folder
-**Then** there is exactly one React renderer for it, a pure function of (document, format, template, asset URLs, the client's current info for the About block) with no data fetching
+**Then** there is exactly one React renderer for it, a pure function of (that format's pages from the document, template, asset URLs, the current values of the client and case fields the pages are bound to) with no data fetching
 
-**Given** a document and a format
-**When** the renderer runs
-**Then** it lays out the shared text blocks and the format's slot assignments, places each media item whole within its slot (fit, no stretching, no crop), shows videos as their poster frame, and paginates multi-page formats (deck pages, carousel slides, A4 pages)
-**And** template output uses the template's own styles, not the tool UI tokens
+**Given** a page
+**When** the renderer draws it
+**Then** it draws the page's bento grid with the page's own track sizes, each block with its background (a brand colour, transparent, or an image from the case's or the client's media; page default white, block default `#EDEDF0`), and each block's elements stacked top to bottom (C30)
+**And** sizes are in units of the template's Figma frame width (1920 Presentazione, 1000 Carosello, 1080 Video), so a page looks the same as a thumbnail, on the canvas and in an export
+
+**Given** a text element
+**When** it is drawn
+**Then** it uses its style's size for the format (C32), or its own template size until its style is changed, with its colour, alignment and columns; it wraps to its block and grows in height; only a result's number stays on one line
+
+**Given** an image or video element
+**When** it is drawn
+**Then** **Riempi** fills the block edge to edge (a block holding only that image ignores its padding), **Adatta** shows the whole media inside the block, and **Ritaglia** crops it (answer 4)
+**And** the original and its renditions are never changed (Story 3.2); a video plays muted on a loop in the tool and shows its poster frame in static exports
+
+**Given** the logos element
+**When** it is drawn
+**Then** it shows the client's logo, a divider and MAC's logo, all white when the block has a photo background
+
+**Given** an **Animazione** element (C35)
+**When** it is drawn
+**Then** it shows one of Carousel 01, Carousel 03, Carousel 04 or Wheel 02 with 9:16 cards, adapting to the number of its media (three empty cards when it has none), at **Adatta** or **Riempi** and its size from 50% to 150%
+
+**Given** the Video renderer (C34)
+**When** it draws a page
+**Then** the texts come in one after the other on a loop; it takes a setting that stops this animation (the editor's "Animazione testi" switch), and with reduced motion set nothing animates
+**And** its pages keep room at the top for Instagram's bar
 
 **Given** the renderer
 **When** rendered server-side with `renderToStaticMarkup`
-**Then** the output is identical to the client render for the same input (snapshot test), so the configurator, case study view, shared link page and exports can all use it
+**Then** the output is identical to the client render for the same input (snapshot test), so the configurator, case study view, shared link page and exports all use it
+**And** template output uses the template's own styles, not the tool UI tokens
 
-**Given** a text block that doesn't fit its slot
+**Given** a text that doesn't fit its block
 **When** the renderer runs
-**Then** it exposes an overflow result per block and page, and never shrinks text below the template's minimum size
+**Then** it exposes an overflow result per block and page
 
 **Given** a renderer
 **When** it paginates
-**Then** each page carries its `pageKey` and `role`, and the renderer accepts a starting page number, so chained documents number their pages continuously (SCP 2026-10-16 client intro and collections)
+**Then** each page carries its `pageKey`, `role` and section, and the renderer accepts a starting page number, so chained documents number their pages continuously (SCP 2026-10-16 client intro and collections)
 
-**Given** `composeParts` and a client with an approved outro
+**Given** `composeParts` and a client with 2 or more case histories in the file (C38; the 2+ rule of SCP 2026-10-26 is unchanged)
 **When** it composes that client's parts
-**Then**, with 2 or more case histories of the client, it places the client's intro before them and its outro once after the last of them, and leaves out their own `intro` and `outro` pages; with one, that case history keeps its own (SCP 2026-10-26)
+**Then** it places the client's intro first, then each case's pages without the case's own intro pages and without its Carosello Chiusura, then the client's closing (in Carosello also the client's own Chiusura); with one case history, that case keeps its own intro and closing
+**And** each case's Risultati e testimonial pages stay (owner, 2026-10-27; reverses the SCP 2026-10-26 rule for the outro)
+**And** the case pages are read from the case's revision, never copied (AD-25)
 
 ### Story 3.6: Narrative generator port and Anthropic adapter
 
@@ -1477,9 +1556,9 @@ Order: MVP, Sprint 2: after 2.15, 2.16 and 3.3–3.8, before Epic 4 (owner amend
 
 ## Epic 4: Review, edit and approve a case study
 
-The owner/designer works the To review queue, refines the draft in the configurator, checks every block against the material and approves; later edits to an approved case go live only through Update approved version.
+The owner/designer works the To review queue, refines each format's pages in the configurator and approves (no per-block check for the demo, SCP 2026-10-28); later edits to an approved case go live only through Update approved version.
 
-Epic prerequisite (non-dev, Sprint 2): configurator visual design (Bento). Story 4.2 follows it for layout; EXPERIENCE.md wins on behaviour.
+Epic prerequisite (non-dev, Sprint 2): configurator visual design (Bento). Story 4.2 follows it for layout; EXPERIENCE.md wins on behaviour. Done (SCP 2026-10-28): the mockup `ux-designs/ux-MAC Recap-2026-10-08/mockups/configurator.html`, built with the owner from the Figma file "MAC-TF-AI", is the source of truth for Stories 3.4, 3.5, 4.2–4.5, 4.8, 4.11–4.13, and EXPERIENCE.md points to it.
 
 ### Story 4.1: Review dashboard and To review queue
 
@@ -1515,11 +1594,12 @@ Note (owner, 2026-10-20, Story 2.17): the segmented status filter (without count
 ### Story 4.2: Open a draft in the configurator
 
 As an owner/designer,
-I want to open a case in the configurator and see every format of the draft,
-So that I can review the generated case study exactly as it will be exported.
+I want to open a case in the configurator and see each format's pages,
+So that I can review the case study exactly as it will be exported.
 
-Covers: FR5 (configurator), CAP-7 (preview equals export), AR3 (`getEditableRevision`), AR9 (same renderer), UX-DR12, UX-DR26 (`[` `]`), UX-DR33, PRD Story 4.2 (Bento layout)
-⚑ Interim: IR-OP1 (three formats), IR-A3 (`MISSING_ASPECT` shown as a non-blocking warning; placement is UX's call)
+Covers: FR5 (configurator), CAP-7 (preview equals export), AR3 (`getEditableRevision`), AR9 (same renderer), UX-DR12 (as amended), UX-DR33, C28, C29, C34, C37, C40 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
+⚑ Interim: IR-A3 (`MISSING_ASPECT` shown as a non-blocking message)
+Amended per SCP 2026-10-28: rewritten. The frame, Anteprima and panel sizes follow the mockup `ux-designs/ux-MAC Recap-2026-10-08/mockups/configurator.html`. The Formats pane, the looked-at check marks, the page strip and the Edit and Check tabs are gone.
 
 **Acceptance Criteria:**
 
@@ -1529,21 +1609,60 @@ Covers: FR5 (configurator), CAP-7 (preview equals export), AR3 (`getEditableRevi
 
 **Given** the configurator
 **When** it loads
-**Then** the top bar shows back, case name, status badge and save state; the left Formats pane lists every format in the revision with name, ratio and pixel size, in registry order; the centre canvas shows the selected format at fit-to-pane zoom using the Story 3.5 renderer; the right pane has Edit and Check tabs
-**And** multi-page formats show a page strip under the canvas, and `[` / `]` move between pages
-**And** a format gets a check mark in the Formats pane once I've viewed it
+**Then** the top bar shows, on the left, back, case name, case code and status badge; in the centre, the format switch **Presentazione** 16:9 · **Carosello** 1:1 · **Video** 9:16 and the **Anteprima** eye icon; on the right, the save state ("Salvato" / "Salvataggio…"), undo, redo and **Approva**
+**And** the canvas shows the selected format's pages one under the other, each labelled "{n} · {page name}", grouped under the section labels Intro, Output and Risultati, drawn by the Story 3.5 renderer
+
+**Given** the format switch
+**When** I pick another format
+**Then** the canvas shows that format's own pages, blocks and texts (C29); nothing I changed in one format appears in another
+
+**Given** the left panel (312 px, C40)
+**When** something or nothing is selected
+**Then** it shows the selected block's or element's settings first, then always **Layout**, **Pagine di default**, **Elementi**, **Sfondo** and **Elimina pagina**, acting on the selected page, or on the page in view when nothing is selected
+**And** the theme switch (Automatico, Chiaro, Scuro) sits at its foot
+
+**Given** the right panel (224 px, C40)
+**When** it loads
+**Then** it has the tabs **Pagine** and **Media**, a **Cerca** field and a grid or list view
+
+**Given** either panel
+**When** I press the hide button in its own bar
+**Then** it hides and a button at that edge of the canvas reopens it, by pointer and by keyboard, with focus moved to the button that appeared
+
+**Given** a page on the canvas (C40)
+**When** I click a block
+**Then** the block is framed and shows a "⠿ Sposta" handle
+**And** clicking an element selects it and frames its block; a double click on a text (or Enter on a selected text) edits it; Esc steps out from element to block to page to nothing
+
+**Given** an action with something to say (a refusal, a deletion, a copy)
+**When** it happens
+**Then** a message shows at the top of the canvas for a few seconds and is announced to screen readers (`role="status"`)
+
+**Given** the **Anteprima** eye icon (C37)
+**When** I press it
+**Then** the same canvas shows without the editing tools, the formats stay switchable, and the icon turns into a pencil, "Torna all’editor", which (like Esc) goes back
+**And** Presentazione shows its pages one under the other; Carosello and Video show one social-style slideshow of every page, with previous and next buttons, dots, "{i} di {n} · {page name}" and the arrow keys
+**And** texts stay editable in Anteprima (click and type); nothing else can be selected
+
+**Given** Video in Anteprima (C34)
+**When** I pick **Reel** or **Storia** in the Anteprima switch (**Nessuna** by default)
+**Then** Instagram's interface for a Reel or a Story is drawn over the pages, with the account `mac.creativetech` and friends' photos and counts blanked out
+
+**Given** Video in the editor (C34)
+**When** I turn off **Animazione testi** above the pages
+**Then** the texts stop animating while I edit; with reduced motion set they never animate
 
 **Given** the revision is marked `MISSING_ASPECT`
 **When** the configurator opens
-**Then** a warning says the draft lacks the technical or the graphic side (whichever is missing), and Approve is not blocked by it
+**Then** a message at the top of the canvas says the draft lacks the technical or the graphic side (whichever is missing), and **Approva** is not blocked by it
 
 **Given** a viewport of 1024–1279 px
 **When** the configurator loads
-**Then** the panes narrow and the right pane can be collapsed and reopened, by pointer and by keyboard
+**Then** the panels can be hidden and reopened as above
 
 **Given** a viewport narrower than 1024 px
 **When** I open the configurator
-**Then** it shows "The configurator needs a larger screen." instead of the panes
+**Then** it shows "The configurator needs a larger screen." instead of the panels
 
 **Given** a case in Bozza or In elaborazione
 **When** I open the configurator URL directly
@@ -1551,33 +1670,84 @@ Covers: FR5 (configurator), CAP-7 (preview equals export), AR3 (`getEditableRevi
 
 **Given** the configurator
 **When** it loads a document
-**Then** it reads it through `getEditableRevision(subject)`, and the frame (top bar, panes, canvas, page strip) has no case-only assumption beyond the case's own data in the top bar (SCP 2026-10-16 client intro and collections)
+**Then** it reads it through `getEditableRevision(subject)`, and the frame has no case-only assumption beyond the case's own data in the top bar (SCP 2026-10-16 client intro and collections)
 
-### Story 4.3: Edit generated text in place, with autosave
+### Story 4.3: Edit pages in place: texts, elements and blocks, with autosave
 
 As an owner/designer,
-I want to fix any generated text directly on the canvas and have it saved as I go,
-So that a claim that doesn't match the material can be corrected without losing work.
+I want to edit texts, elements and blocks directly on the page, in each format, and have it saved as I go,
+So that I can fix wording and arrangement without losing work.
 
-Covers: FR5 (text editing), CAP-7, NFR5 (sections locked), AR4, AR17, AR19 (provenance; any text change voids the check), AR20 (save, claim edit), UX-DR13, UX-DR20, UX-DR26 (undo/redo, Esc), UX-DR27 (blocks reachable by Tab)
+Covers: FR5 (editing, as amended), CAP-7, AR4 (document v2), AR17, AR20 (save, claim edit), AR24 (as amended), UX-DR13 (as amended), UX-DR20, UX-DR26 (undo/redo, Esc), C29, C30, C32, C40, answer 2 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 ⚑ Interim: IR-C3 (autosave), IR-A5 (stale writes reload; no "someone else changed this" state)
+⛔ Open: v1 locked the challenge, approach and result sections (FR3, NFR5). Blocks and pages can now be deleted (C30, C36); whether anything stops a person deleting the Sfida, Idea or Risultati content is for the owner.
+⛔ Open: how the client's fields that aren't free text (the sector, picked from the shared list, and the logo) are edited on the page (answer 2).
+⛔ Open: the keyboard or menu alternative for dragging elements and blocks (UX-DR26); the mockup has none.
+⛔ Open: whether a person can switch a text to two columns; the mockup keeps it only from the template (C32).
+Amended per SCP 2026-10-28: rewritten, and Story 4.6 (typography) is folded in. The About the client block is no longer read-only (answer 2).
 
 **Acceptance Criteria:**
 
-**Given** a text block on the canvas
-**When** I click it (or Tab to it in reading order and press Enter)
-**Then** I can edit it in place as plain text with line breaks; Esc or clicking outside finishes editing
-**And** there is no font, colour or size control inside a block
+**Given** a text on the canvas
+**When** I double-click it (or press Enter with it selected)
+**Then** I edit it in place as plain text with line breaks; Esc or clicking outside finishes editing
+**And** the change applies only to the format in view (C29)
 
-**Given** I change a block's text
+**Given** I change anything on a page
 **When** editing pauses
-**Then** the change is saved to the working revision's `doc` with the expected `revision.version` (writes sent one at a time), the save state shows "Saving…" then "Saved", and the block is marked "edited"
-**And** the changed claims get `provenance: human_edited` (or `human_added` for new text), and save and claim-edit events are recorded
-**And** `generated_doc` is unchanged
+**Then** the change is saved to the working revision's `doc` with the expected `revision.version` (writes sent one at a time), the save state shows "Salvataggio…" then "Salvato", and a save event is recorded
+**And** a changed AI text gets `provenance: human_edited` (or `human_added` for new text), and `generated_doc` is unchanged
 
-**Given** the challenge, approach and result sections
-**When** I edit them
-**Then** I can reword their headings but there is no control to delete or reorder them, and a write that would remove or reorder one is rejected by the schema
+**Given** a selected text
+**When** I look at the left panel ("Testo · {format}", C32)
+**Then** I can set **Stile** to one of the seven styles (Etichetta, Titolo XL, Titolo, Sottotitolo, Testo, Numero, Citazione), **Allinea** to Sinistra, Centro or Destra, and **Colore** from white, `#EDEDF0`, `#012234`, `#DEFE56`, `#2977FF` and Trasparente, or a colour typed in the field
+**And** a text is `#012234` unless a colour is chosen (white on a photo background), and a text keeps its template size until its style is changed
+**And** there is no font picker, font upload, text scale or per-word styling
+
+**Given** a selected **Testi** group
+**When** I set **Allineamento nel blocco**
+**Then** its texts sit In alto, Al centro, In basso, or Distanziati (the first text at the top, the rest at the bottom) (C30)
+
+**Given** **Elementi** in the left panel
+**When** I drag Testi, Titolo, Testo, Numero, Citazione, Etichetta, Immagine, Video or Animazione into a block
+**Then** it goes before the element under the pointer, or at the end; clicking one instead adds it to the selected block
+**And** dropping it on a page outside a block says "Trascina l’elemento dentro un blocco."; clicking one with no block selected says "Seleziona un blocco, oppure trascina l’elemento dentro un blocco."
+**And** services, logos and the divider come only from the templates
+
+**Given** an element
+**When** I drag it within its block, into another block or onto another page's block
+**Then** it moves there and is selected
+
+**Given** **Blocco** in Elementi
+**When** I click it or drop it on a page
+**Then** an empty block is added after the selected block (or at the end), and the page's layout starts again from the first grid for the new number of blocks
+**And** a page holds at most 6 blocks: a 7th says "Questa pagina ha già 6 blocchi."
+
+**Given** a block
+**When** I drag it by its "⠿ Sposta" handle (or drag a block holding a single element) onto another block, on the same page or another
+**Then** the two blocks swap places
+**And** dropping it on another page outside its blocks moves it to the end of that page, if that page has fewer than 6 blocks and the source page keeps at least one
+
+**Given** a selected block
+**When** I press ⌘C, ⌘X or ⌘V
+**Then** it is copied ("Blocco copiato."), cut ("Blocco tagliato."), or the copied block is pasted after the selected one, within the 6-block limit
+
+**Given** a selected element or block
+**When** I press Backspace or Delete, or **Rimuovi elemento** / **Rimuovi blocco** in the left panel
+**Then** it is removed and the message says "Elemento eliminato. ⌘Z per annullare." or "Blocco eliminato. ⌘Z per annullare."
+
+**Given** any edit (text, element, block, layout, background or page)
+**When** I press ⌘Z or ⇧⌘Z, or undo or redo in the top bar
+**Then** it is undone or redone, and the result is saved like any edit
+
+**Given** a text bound to the client's record (name, sector, logo) or the case's record (year, services) (answer 2)
+**When** I edit it on the page
+**Then** the edit updates that record through the client's or case's own update, with its validation, and shows at once on every page, in every format and in every case that uses the field
+**And** the document still stores no client or case values, only the binding (AD-22 as amended)
+
+**Given** a text that no longer fits its block in a format
+**When** the renderer reports overflow
+**Then** the block shows an overflow marker, and **Approva** names it (C39, Story 4.8)
 
 **Given** a save fails
 **When** the network or server errors
@@ -1587,126 +1757,121 @@ Covers: FR5 (text editing), CAP-7, NFR5 (sections locked), AR4, AR17, AR19 (prov
 **When** my save returns `STALE_REVISION`, `STALE_HEAD` or `REVISION_NOT_WRITABLE`
 **Then** the client does not retry; it reloads the revision and shows the current content
 
-**Given** text no longer fits its slot in a format
-**When** the renderer reports overflow
-**Then** the block shows an overflow marker; text is never shrunk below the template minimum
-
-**Given** an edit
-**When** I press Cmd/Ctrl+Z or Shift+Cmd/Ctrl+Z
-**Then** the text change is undone or redone, and the result is saved like any edit
-
 **Given** the case is `generating`
 **When** a save arrives
 **Then** it is rejected
 
-**Given** the About the client block (UX-DR36)
-**When** I click it
-**Then** it isn't editable and a hint says "Modifica i dati nella pagina del cliente. Le modifiche si vedono in tutte le sue case history."
-
 ### Story 4.4: Adjust the layout per format
 
 As an owner/designer,
-I want to pick a designed variant, shuffle, adjust spacing or reset each format's layout,
-So that each format looks right without changing the template design.
+I want to pick a layout, resize blocks, restore a template page and set backgrounds, page by page in each format,
+So that each format looks right while staying inside MAC's templates.
 
-Covers: FR5 (layout), FR4 (shuffle respects media count), CAP-7, NFR1, AR15 (`listVariants`), UX-DR14, UX-DR26 (undo/redo), UX-DR27 (reduced motion)
-⚑ Interim: IR-OP12 (Shuffle and variants choose only among designed variants), IR-C4 (all coded variants are available), IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
+Covers: FR5 (layout, as amended), FR4 (as amended), CAP-7, NFR1, AR15 (as amended), UX-DR14 (as amended), UX-DR26 (undo/redo), UX-DR27 (reduced motion), C29, C30, C31 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
+⚑ Interim: IR-C4 (every coded layout is available), IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
+Amended per SCP 2026-10-28: rewritten. Variants, Shuffle, spacing sliders and Reset are replaced by Layout, Mescola, resizing and Pagine di default (C31).
 
 **Acceptance Criteria:**
 
-**Given** the Edit tab for the selected format
-**When** I open Layout
-**Then** I see a thumbnail grid of the variants `rendering.listVariants(templateId, format, mediaCount)` returns, and picking one re-renders the canvas and saves it to that format only
+**Given** **Layout** in the left panel
+**When** it shows
+**Then** it lists the format's grids from Story 3.4 as thumbnails, with the page's current grid pressed
 
-**Given** **Shuffle layout**
-**When** I press it
-**Then** the format moves to the next variant in that list (never a newly generated layout), and Cmd/Ctrl+Z returns the previous one
+**Given** a layout thumbnail
+**When** I click it, or drag it onto a page
+**Then** that page takes the grid, in this format only
+**And** a grid with more cells than the page has blocks adds empty blocks; a grid with fewer cells removes only empty blocks
+**And** when filled blocks would have to go, nothing changes and the message says "La pagina ha {k} blocchi in più di questo layout: toglili prima." ("La pagina ha 1 blocco in più di questo layout: toglilo prima." for one)
 
-**Given** spacing (outer padding and gap)
-**When** I move a slider
-**Then** it moves only within the template's allowed range for that format, and the server rejects any out-of-range value
+**Given** the format has more than one grid with the page's number of blocks
+**When** I press **Mescola**
+**Then** the page moves to the next of those grids, in order, coming back to the first after the last; with only one such grid, **Mescola** isn't shown
 
-**Given** **Reset**
-**When** I press it
-**Then** this format's variant, spacing, text scale and font pairing return to the values in `generated_doc`, and other formats are unchanged
+**Given** the border between two blocks
+**When** I drag it
+**Then** the blocks on both sides give or take the space, and the page keeps these sizes while its grid stays the same
+**And** a move that would make a text overflow its block, or make a row or column smaller than 12% of the page, is refused and the border turns orange
+**And** the whole drag is one undo step
 
-**Given** any layout change
+**Given** **Pagine di default** (C31)
+**When** I pick one of the format's default pages
+**Then** the selected page is laid out as that template page, filled from the case (or the client), keeping the page's images first
+**And** picking Intro in Carosello also lays out its Sfida and Idea pages, replacing the ones it added before
+**And** no default page adds a page to the list
+
+**Given** **Sfondo** in the left panel
+**When** a block is selected it reads "Sfondo · blocco", otherwise "Sfondo · pagina"
+**Then** **Tinta unita** offers white, `#EDEDF0`, `#012234`, `#DEFE56`, `#2977FF` and Trasparente, plus a typed colour, and **Immagine** offers the images of the case's and the client's media, with **Togli immagine** (C30)
+**And** a page starts white and a block `#EDEDF0`
+
+**Given** any layout or background change
 **When** it is saved
-**Then** it uses the Story 4.3 save path (compare-and-set, save states, events), and the shared text and media set are unchanged
+**Then** it uses the Story 4.3 save path (compare-and-set, save states, events) and changes only the format in view
 
 **Given** reduced motion is set
-**When** the variant changes (pick, Shuffle, undo or Reset)
+**When** a layout changes (pick, Mescola, resize, undo)
 **Then** the canvas switches without an animated transition
 
 ### Story 4.5: Replace, reorder and remove media
 
 As an owner/designer,
-I want to swap, reorder or hide media in the layout using only this case's material,
-So that the best visuals lead without anything outside the project creeping in.
+I want to place, replace, fit and animate images and videos from the case's and the client's media, and add files without leaving the configurator,
+So that the best visuals lead and nothing from outside the project creeps in.
 
-Covers: FR5 (media), FR4 (adapt on count change), CAP-7, NFR1, AR3 (generation only from `draft`), AR4 (`relayout` in the same write), AR18 (refs from own material; upload never changes status), UX-DR15, UX-DR26 (drag alternative), UX-DR34
-⚑ Interim: IR-OP12 (fit whole; no crop, focal point, recolour, filter or effect controls), IR-OP8 (status kept when material is added), IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
-UX gap: EXPERIENCE.md sends the owner/designer "back to the wizard's Material step" but designs no control for it. This story adds **Add material** in the Replace media picker. Flag to UX.
+Covers: FR5 (media, as amended), CAP-7, NFR1, AR3 (generation only from `draft`), AR14 (favourites), AR18 (refs from own material; upload never changes status), UX-DR15 (as amended), UX-DR34 (as amended), C30, C35 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
+⚑ Interim: IR-OP8 (status kept when material is added), IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
+⛔ Open: how the visible part of an image set to **Ritaglia** is chosen (the mockup applies a fixed zoom).
+Amended per SCP 2026-10-28: rewritten. Media can be cropped (answer 4); files are added from the **Media** tab's drop zone, which replaces the earlier **Add material** link to the wizard; animations are new (C35).
 
 **Acceptance Criteria:**
 
-**Given** a selected media slot
-**When** I choose **Replace media**
-**Then** a picker lists only this case's non-deleted images and videos (display renditions), with no upload, stock or generated option, and the chosen item replaces the slot's media in the shared media set
+**Given** the **Media** tab in the right panel
+**When** it opens
+**Then** it lists the case's images and videos (videos with their length), searchable and in grid or list view, with the files already on a page marked
+**And** each file has a star ("Aggiungi ai preferiti" / "Togli dai preferiti") that sets its favourite mark and records an event, and never changes the case's status (AR14)
 
-**Given** two media slots
-**When** I drag one onto the other, or use the slot's menu "Swap with…"
-**Then** the two items swap, and the change is saved
+**Given** the drop zone at the foot of the Media tab ("Trascina qui immagini e video", "Finiscono nei Media di questa case.")
+**When** I drop images or videos on it
+**Then** they upload to the case's material with the Story 2.7 rules (20 files, 50 MB each, allowlisted types, per-file rejections), and the case's status doesn't change
 
-**Given** a media item
-**When** I choose **Remove from layout**
-**Then** it leaves the shared media set (the asset itself is untouched) and `rendering.relayout` runs in the same write, so every format adapts to the new count
+**Given** a file in the Media tab
+**When** I drag it onto an image on a page
+**Then** it replaces that image; dropped elsewhere in a block it comes in as a new image there
+**And** clicking a file fills the selected image, or adds it to the selected block
+
+**Given** a selected image or video
+**When** I look at the left panel
+**Then** it shows the file with **Sostituisci dai Media** (**Scegli dai Media** when empty), which opens the Media tab, and **Adattamento**: **Riempi**, **Adatta** or **Ritaglia** (answer 4)
+
+**Given** **Animazione** dragged into a block, or clicked with a block selected (C35)
+**When** the "Animazione" dialog opens
+**Then** it previews Carousel 01, Carousel 03, Carousel 04 and Wheel 02 with the chosen media; I pick media from the case's and the client's media, numbered in the order I pick them, or drop files (or "scegli dai file"), which join the case's Media
+**And** **Inserisci** stays disabled until at least one file is chosen ("Carica almeno un’immagine o un video")
+
+**Given** a selected animation
+**When** I look at the left panel
+**Then** it shows **Tipo**, the number of media, **Cambia animazione o media** (which reopens the dialog with **Salva**, as does a double click), **Adattamento** (**Adatta** or **Riempi**) and **Dimensione** from 50% to 150%
+**And** there are no animated page layouts
 
 **Given** a server-side write
-**When** it names an asset that isn't this case's non-deleted material
+**When** it names an asset that isn't a non-deleted file of this case or of its client
 **Then** it is rejected
 
-**Given** a case in Da approvare or Approvato
-**When** I choose **Add material** in the Replace media picker
-**Then** the wizard's Material step (Stories 2.7–2.9) opens for this case, with uploads and favourites working as for a draft, and a back arrow to the configurator
-**And** the case status doesn't change, no Details or Generate step is offered (generation runs only from `draft`), and the Generate action called directly fails because the case isn't in `draft`
-**And** when I return, the new images and videos are listed in the Replace media picker; nothing enters the layout or the revision until I place it
-**And** removing a file there that a revision references only soft-deletes it (AR18), so the revision's references stay resolvable and the approval check can report the missing material
+**Given** an image or video removed from a page
+**When** the change is saved
+**Then** the asset itself is untouched, and removing a file that a revision references only soft-deletes it (AR18), so the approval check can report the missing material
 
 **Given** any media control
-**When** I look for crop, recolour, filter or effect controls
-**Then** none exists; media are always placed whole within their slot
+**When** I look for recolour, filter or effect controls
+**Then** none exists
 
 **Given** a media change
-**When** I press Cmd/Ctrl+Z
+**When** I press ⌘Z
 **Then** it is undone and saved
 
 ### Story 4.6: Choose typography per format
 
-As an owner/designer,
-I want to choose the font pairing and text scale the template offers,
-So that the text reads well in each format while staying on-brand.
-
-Covers: FR5 (typography), CAP-7, NFR1, UX-DR16
-⚑ Interim: IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
-
-**Acceptance Criteria:**
-
-**Given** the Edit tab for the selected format
-**When** I open Typography
-**Then** I can choose one of the template's font pairings and a text scale S / M / L, saved to that format only
-
-**Given** the typography controls
-**When** I look for other options
-**Then** there is no font upload, free font picker or per-word or per-block styling
-
-**Given** a value the template doesn't allow
-**When** it is sent to the server
-**Then** it is rejected
-
-**Given** a larger text scale
-**When** a block no longer fits
-**Then** the overflow marker from Story 4.3 appears on it
+**Folded into Story 4.3 per SCP 2026-10-28 (C32).** What moved: the text controls (the seven styles, colour and alignment) are now in Story 4.3's text settings, with the style sizes per format in DESIGN.md. What was dropped: font pairings and the S / M / L text scale. Nothing is left to build here; the story stays so its number keeps its place.
 
 ### Story 4.7: Check every block against the material
 
@@ -1716,6 +1881,7 @@ So that nothing reaches a client that a person hasn't traced back to the source.
 
 Covers: NFR2, FR6 (manual check), CAP-8, AR19 (`check { by, at, textHash }`, no bulk, voided on change, `sourceRefs` never "verified"), AR20 (check and uncheck events), UX-DR17, UX-DR26 (`J` `K` `Space`), UX-DR28 (no tick-all), UX-DR29 (never "verified")
 ⚑ Interim: IR-C3 and IR-A5 (ticks save through the Story 4.3 autosave path)
+**Not for the demo (owner 2026-10-27; SCP 2026-10-28 C39).** Approval needs no per-block check (Story 4.8), and the configurator has no Check tab. The criteria below are kept for after the demo; they were written for document v1 and need rewriting for v2 (Story 3.3) before this story is built.
 
 **Acceptance Criteria:**
 
@@ -1760,30 +1926,31 @@ Covers: NFR2, FR6 (manual check), CAP-8, AR19 (`check { by, at, textHash }`, no 
 ### Story 4.8: Approve a case study
 
 As an owner/designer,
-I want to approve a case once every block is checked and nothing overflows,
+I want to approve a case once nothing overflows and its material is all there,
 So that it becomes available for export and sharing, and only then.
 
-Covers: FR6, CAP-8, NFR2, NFR7, AR3 (`in_review` → `approved`, `approved_revision_id`), AR5 (automated guardrail test), AR17, AR18 (`MATERIAL_MISSING`), AR19 (server-side check, overflow per format), AR20, UX-DR18, UX-DR28, PRD Story 4.3
+Covers: FR6 (as amended for the demo), CAP-8, NFR7, AR3 (`in_review` → `approved`, `approved_revision_id`), AR5 (automated guardrail test), AR17, AR18 (`MATERIAL_MISSING`), AR19 (overflow per format; the per-block check is not for the demo), AR20, UX-DR18 (as amended), UX-DR28, PRD Story 4.3, C39
 ⚑ Interim: IR-OP8, IR-A3 (`MISSING_ASPECT` doesn't block), IR-A5 (a stale approve reloads the revision; no "someone else changed this" state)
+**Amended per SCP 2026-10-28 (C39; owner 2026-10-27).** **Approva** needs only no overflow in any format and the referenced material present. There is no per-block check (Story 4.7 is not for the demo), no `BLOCKS_UNCHECKED` and no "blocks still to check". The person who approves is still a person pressing **Approva** and confirming (NFR2 for the demo rests on that review, not on per-block ticks).
 
 **Acceptance Criteria:**
 
 **Given** a case in Da approvare
-**When** any block lacks a current check, or any format overflows
-**Then** **Approve** is disabled and names what's left ("3 blocks still to check." / overflow), linked via `aria-describedby`
+**When** any format overflows, or something the revision references has been deleted
+**Then** **Approva** is disabled and names what's left (the overflowing page and format, or the missing file), linked via `aria-describedby`
 
-**Given** every block is checked and nothing overflows
-**When** I press **Approve**
-**Then** a dialog asks "Approve {Name}? Every claim has been checked against the material. Once approved, it can be exported and shared." with **Approve** / **Cancel**
+**Given** nothing overflows and the material is all there
+**When** I press **Approva**
+**Then** a dialog asks "Approve {Name}? Once approved, it can be exported and shared." with **Approve** / **Cancel**
 
 **Given** I confirm
-**When** the client calls `approve(caseId, revisionId, expectedRevisionVersion, expectedHeadVersion)` with an overflow-free result measured with the shared renderer for every format of that revision version
-**Then** the server recomputes that every block has a current check, confirms nothing the revision references is deleted, and in one transaction sets the revision to `approved`, sets `approved_revision_id`, transitions the case to `approved` and records an approval event with my actor id
+**When** the client calls `approve(caseId, revisionId, expectedRevisionVersion, expectedHeadVersion)` with an overflow-free result measured with the shared renderer for every format of that revision version (Presentazione, Carosello and Video)
+**Then** the server confirms nothing the revision references is deleted, and in one transaction sets the revision to `approved`, sets `approved_revision_id`, transitions the case to `approved` and records an approval event with my actor id
 **And** any owner/designer can approve, not only the one who created the case
 
 **Given** the call
-**When** a block lacks a current check, an overflow result is missing for any format, referenced material is deleted, or a version is stale
-**Then** it fails with `BLOCKS_UNCHECKED`, `OVERFLOW_NOT_CLEARED`, `MATERIAL_MISSING`, `STALE_REVISION` or `STALE_HEAD`, and nothing changes
+**When** an overflow result is missing for any format, referenced material is deleted, or a version is stale
+**Then** it fails with `OVERFLOW_NOT_CLEARED`, `MATERIAL_MISSING`, `STALE_REVISION` or `STALE_HEAD`, and nothing changes
 
 **Given** approval succeeds
 **When** the dialog closes
@@ -1791,7 +1958,7 @@ Covers: FR6, CAP-8, NFR2, NFR7, AR3 (`in_review` → `approved`, `approved_revis
 
 **Given** an automated guardrail test
 **When** the suite runs
-**Then** it proves approval is impossible without a person's per-block check and that no bulk approve or auto-approve use case exists
+**Then** it proves approval happens only through a person's call to `approve` with an overflow-free result and no missing material, and that no bulk approve or auto-approve use case exists
 
 ### Story 4.9: Edit an approved case and update the approved version
 
@@ -1859,27 +2026,37 @@ Covers: UX-DR32, AR15 (conditional `template_variant_state`), AR11 (`manage temp
 ### Story 4.11: Client intro and outro in the configurator
 
 As an owner/designer,
-I want to edit, check and approve the client intro and outro like a case history,
-So that the intro and outro that reach clients has been reviewed by a person.
+I want to edit and approve the client's own pages (its intro and closing) with the same tools as a case history,
+So that the pages that open and close a client's file have been reviewed by a person.
 
-Covers: FR11, AR25, AR19, NFR2, NFR7, UX-DR12 (client intro mode), UX-DR35 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md))
+Covers: FR11, AR25, NFR7, UX-DR12 (client intro mode, as amended), UX-DR35, C38, C39 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md); [Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 Order: MVP, Sprint 2: after 3.9 and 4.8, before 4.9 (owner amendment 2026-10-16). Its approved-intro editing criterion closes with 4.9, which covers intros too.
-⛔ Blocked on: a design session with the owner for the client intro mode (owner, 2026-10-19; it was wizard step 3, which the side panel replaces per SCP 2026-10-21).
+⛔ Open: the Figma template for the client's closing page in Presentazione and Video (via Story 3.4).
+⛔ Open: the Media drop zone puts files in the client's material, which allows only 3 files (Story 2.16). This story keeps that limit until the owner says otherwise.
+Amended per SCP 2026-10-28: the design session it was blocked on is the mockup `ux-designs/ux-MAC Recap-2026-10-08/mockups/configurator.html` ("Un cliente"). There is no Check tab (C39).
 
 **Acceptance Criteria:**
 
-**Given** a client whose intro and outro draft is ready
-**When** I open it
-**Then** the configurator in client intro mode is opened from the client's page or the ready toast after **Aggiungi** (SCP 2026-10-26); the left pane lists **Introduzione** and **Chiusura** (SCP 2026-10-21; replaces wizard step 3 of SCP 2026-10-19)
+**Given** a client whose intro and closing draft is ready
+**When** I open it from the client's page or from the ready toast after **Aggiungi** (SCP 2026-10-26)
+**Then** the configurator opens on the client's file (Story 4.12), with the client's own pages listed under **Introduzione** and **Chiusura** in the right panel's Pagine
 
-**Given** an intro in Da approvare or Approvato
-**When** I open it (from the client page, the overview or the toast)
-**Then** the configurator opens in client intro mode with the Formats pane, the canvas and the Edit and Check tabs, and text, layout (designed variants only), image order and typography work as in Stories 4.3–4.6
+**Given** the client's intro
+**When** it is laid out (Story 3.4's Intro template, filled from the client)
+**Then** the first block reads "01 Cliente", and its texts, images and services come from the client's data, brief and media
 
-**Given** the Check tab
-**When** it opens
-**Then** it lists the intro's and outro's text blocks; the material drawer shows the client's data, brief and client material (SCP 2026-10-19)
-**And** **Approve** follows Story 4.8 (every block checked, no overflow), and editing an approved intro follows Story 4.9 (working copy, **Update approved version**, **Discard changes**)
+**Given** the client's closing
+**When** it is laid out
+**Then** it holds the client's closing page, and in Carosello also the client's own Chiusura ("Al prossimo progetto")
+
+**Given** the client's own pages
+**When** I edit them
+**Then** texts, elements, blocks, layouts, default pages (filled from the client), backgrounds, media and pages work as in Stories 4.3, 4.4, 4.5 and 4.13, per format, saved to the client's intro revision with compare-and-set (AR17)
+**And** the Media tab shows "Del cliente" and "Dalle sue case", and its drop zone reads "Finiscono nei Media di questo cliente."
+
+**Given** the client's intro in Da approvare
+**When** I press **Approva**
+**Then** approval follows Story 4.8 (no overflow in any format and no referenced material deleted; no per-block check, C39), and editing an approved intro follows Story 4.9 (working copy, **Update approved version**, **Discard changes**)
 
 **Given** an intro that isn't approved
 **When** anything builds a client pack or collection
@@ -1888,11 +2065,13 @@ Order: MVP, Sprint 2: after 3.9 and 4.8, before 4.9 (owner amendment 2026-10-16)
 ### Story 4.12: Client overview configurator
 
 As an owner/designer,
-I want **Modifica layout** to open the client's intro, all its case histories and its outro as one file (SCP 2026-10-21),
+I want **Modifica layout** to open the client's intro, all its case histories and its closing as one file (SCP 2026-10-21),
 So that I see the client's whole story and fix any part of it in place.
 
-Covers: FR12, UX-DR38, AR3, AR17, AR19, IR-A1 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
-Order: MVP, Sprint 2, last in Epic 4: after 4.9 and 4.11 (owner amendment 2026-10-16)
+Covers: FR12, UX-DR38 (as amended), AR3, AR17, IR-A1, C38 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
+Order: MVP, Sprint 2, last in Epic 4: after 4.9, 4.11 and 4.13 (owner amendment 2026-10-16; SCP 2026-10-28)
+⛔ Open: whether the client pack (Story 5.9) follows the case order set here, instead of newest first.
+Amended per SCP 2026-10-28: rewritten from C38. Case histories can now be reordered, their Risultati e testimonial pages stay, and **Dati cliente** is replaced by editing the client's fields on the page (answer 2; the client's data panel stays on the client page as **Modifica cliente**).
 
 **Acceptance Criteria:**
 
@@ -1902,33 +2081,96 @@ Order: MVP, Sprint 2, last in Epic 4: after 4.9 and 4.11 (owner amendment 2026-1
 
 **Given** a client page
 **When** I press **Modifica layout**
-**Then** the client overview opens full-screen: the left pane lists **Introduzione**, every case history of the client, newest first, each with code, name and status badge, then **Chiusura**; the centre shows the selected format with every part in that order as one continuous, paginated preview
+**Then** the client's file opens in the configurator (Story 4.2 frame) and, for the selected format, the canvas shows in order: **Introduzione** (the client's intro), then one group per case history, labelled "{code} · {name}", with that case's pages, then **Chiusura** (the client's closing, in Carosello also the client's own Chiusura)
+
+**Given** a case history in the client's file
+**When** its pages are shown
+**Then** they are that case's own pages, without the case's own intro pages and without its Carosello Chiusura; its Risultati e testimonial pages stay (owner, 2026-10-27; reverses C23 for the outro)
+
+**Given** the right panel's Pagine in the client's file
+**When** it loads
+**Then** it shows the **Introduzione** thumbnails, then **Progetti del cliente** with one row per case (first page thumbnail, name, "{code} · {n} pagine"), then the **Chiusura** thumbnails
+**And** clicking a case row scrolls the canvas to that case
+
+**Given** a case row
+**When** I drag it onto another case row
+**Then** the cases change order and their pages move with them, in every format, and the order is saved for the client
+
+**Given** I edit a case history's page in the client's file
+**When** the edit is saved
+**Then** it is saved to that case history's editable revision with that revision's expected version (AD-17), and the change shows when the case history is opened on its own; an edit there shows here too (AD-25: the file references the case's pages, it never copies them)
+**And** for an Approvato case history the first edit forks a working copy, the part shows "Modifiche non ancora pubblicate", and the change goes live only through that part's **Update approved version** (Story 4.9)
+
+**Given** a case page in the client's file
+**When** I delete it
+**Then** I'm asked "Eliminare la pagina?" with "Questa pagina fa parte della case {code} · {name}: eliminandola qui sparisce anche dalla case. Puoi annullare con ⌘Z." and **Elimina** / **Annulla** (Story 4.13)
 
 **Given** a case history in Bozza or In elaborazione
-**When** the overview loads
-**Then** it is listed greyed ("Non ancora generata" / "In elaborazione") and has no pages in the preview
-
-**Given** I edit a block of a case history in the overview
-**When** the edit is saved
-**Then** it is saved to that case history's editable revision with that revision's expected version (AD-17), exactly as in its own configurator, and the change shows when the case history is opened on its own
-**And** for an Approvato case history the first edit forks a working copy, the part shows "Modifiche non ancora pubblicate", and the change goes live only through that part's **Update approved version** after its edited blocks are checked again (Story 4.9)
+**When** the file loads
+**Then** it is listed greyed ("Non ancora generata" / "In elaborazione") and has no pages in the canvas
 
 **Given** a part's save returns `STALE_REVISION` or `STALE_HEAD`
 **When** the client receives it
 **Then** only that part reloads; the other parts keep their state
 
-**Given** **Dati cliente** in the top bar
-**When** I open it
-**Then** a panel shows the step 1 fields (name, sector, description, logo, context, solution, results) and the step 2 client material with the rules of Stories 2.15 and 2.16, plus **Sostituisci** and reorder, and saving them updates the About blocks and the intro in the preview at once (SCP 2026-10-19)
-**And** removing an image when only 2 remain is refused ("Servono almeno 2 immagini.")
+**Given** the client's fields on a page (name, sector, logo)
+**When** I edit them
+**Then** the client's record changes, as in Story 4.3 (answer 2)
 
-**Given** the overview
-**When** I look for reordering case histories, or approving several parts at once
-**Then** neither exists; each part is checked and approved on its own (no bulk approve, UX-DR28)
+**Given** the Media tab in the client's file
+**When** it opens
+**Then** it shows "Del cliente" and "Dalle sue case"
+
+**Given** the client's file
+**When** I look for approving several parts at once
+**Then** there is none; each part is approved on its own (no bulk approve, UX-DR28)
 
 **Given** a viewport narrower than 1024 px
-**When** I open the overview
+**When** I open the client's file
 **Then** it shows "The configurator needs a larger screen."
+
+### Story 4.13: Pages — add, delete, reorder, sections
+
+As an owner/designer,
+I want to add, delete and reorder pages in each format, grouped in sections, with thumbnails that show the real page,
+So that each format tells the case in the pages it needs, without losing a page by mistake.
+
+Covers: FR5 (as amended), AR17, AR20, C29, C36, C38 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
+⚑ Interim: IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
+⛔ Open: the keyboard or menu alternative for reordering pages by drag (UX-DR26); the mockup has none.
+Order: after 4.5, before 4.11 and 4.12 (SCP 2026-10-28 build order). New per SCP 2026-10-28.
+
+**Acceptance Criteria:**
+
+**Given** the canvas
+**When** I press **+ Aggiungi pagina** at the end of the pages
+**Then** an empty page ("Nuova pagina", white, one empty block) is added after the selected page (or at the end), in that page's section (Output when nothing is selected), in the format in view only, and it is selected and scrolled into view
+
+**Given** a page
+**When** I press the bin icon on its label, or **Elimina pagina** in the left panel
+**Then** it is deleted from the format in view only, the message says "Pagina eliminata. ⌘Z per annullare.", and ⌘Z brings it back
+
+**Given** a case page that is also in the client's file, or a client-file page that belongs to a case (C38)
+**When** I delete it
+**Then** I'm asked "Eliminare la pagina?" with "Questa pagina è anche nelle pagine del cliente {client}: eliminandola qui sparisce anche lì." (from the case) or "Questa pagina fa parte della case {code} · {name}: eliminandola qui sparisce anche dalla case." (from the client's file), followed by "Puoi annullare con ⌘Z.", with **Elimina** / **Annulla**
+**And** a case's own intro and closing pages are not in the client's file, so deleting them doesn't ask
+
+**Given** the right panel's Pagine
+**When** I drag a page thumbnail onto another page of the same list
+**Then** the page moves there in the format in view; a page can't be dropped into another list (another case, the client's intro or the client's closing)
+
+**Given** a case's pages
+**When** they show on the canvas and in the right panel
+**Then** they are grouped under Intro, Output and Risultati: intro pages in Intro, Risultati e testimonial and Chiusura in Risultati, the rest in Output (C36)
+
+**Given** the right panel's Pagine
+**When** it shows the pages
+**Then** each thumbnail draws the real page small with the Story 3.5 renderer, labelled "{n} · {page name}", in grid or list view, filtered by **Cerca** on the page name
+**And** clicking a thumbnail selects the page and scrolls the canvas to it
+
+**Given** any page change
+**When** it is saved
+**Then** it uses the Story 4.3 save path (compare-and-set, save states, events) and is one undo step
 
 ## Epic 5: Find, export and share approved case studies
 
@@ -2017,7 +2259,8 @@ I want to download the selected format as a file,
 So that I can attach it or drop it into my own slides.
 
 Covers: FR7 (export), CAP-9, NFR7, AR5 (guardrail test), AR8 (exports prefix, signed GET), AR9 (export pipeline, file types, `ensureExport`), AR10, AR20, UX-DR21 (Export, progress, failure), UX-DR4 (Export row action), PRD Story 5.1
-⚑ Interim: IR-OP1 (deck → PDF, carousel → ZIP of PNGs, A4 → PDF)
+IR-OP1 resolved (SCP 2026-10-28, C28, answer 1): Presentazione → PDF, Carosello → ZIP of PNGs; Video → MP4 or WebM **after the demo** (was: deck → PDF, carousel → ZIP of PNGs, A4 → PDF).
+Amended per SCP 2026-10-28: the formats change (C28); for the demo Video is Anteprima only and has no Export.
 
 Note (2026-10-19, owner): a client logo may be an SVG ([spec](../implementation-artifacts/spec-svg-client-logo.md)). The export renderer rasterises an SVG logo at render time (PNG pages, and PDF pages wherever the logo is not embedded as vector), from the stored file as is, with external DTD/entity loading and network access off.
 
@@ -2035,7 +2278,7 @@ Note (2026-10-19, owner): a client logo may be an SVG ([spec](../implementation-
 
 **Given** the worker runs the export
 **When** it renders
-**Then** it builds HTML with `renderToStaticMarkup` from the same renderer, loads it into Playwright Chromium with `page.setContent` (no print route exists), and writes a PDF for deck and A4 or a ZIP of one PNG per slide for the carousel, using display renditions and video poster frames
+**Then** it builds HTML with `renderToStaticMarkup` from the same renderer, loads it into Playwright Chromium with `page.setContent` (no print route exists), and writes a PDF for Presentazione or a ZIP of one PNG per page for Carosello, using display renditions and video poster frames
 **And** `rendering.ensureExport(revisionId, format)` returns the existing export if there is one, so a second request for the same revision and format doesn't render again
 **And** an existing export is reused only if it was made with the client's current info; after a client edit, the next export renders again with the new info (AD-22)
 
@@ -2046,6 +2289,11 @@ Note (2026-10-19, owner): a client logo may be an SVG ([spec](../implementation-
 **Given** the export job fails
 **When** it is marked failed
 **Then** a toast says "Export didn't finish." with **Try again**, and the case status doesn't change
+
+**Given** the Video format (answer 1)
+**When** I look for its export before the demo
+**Then** there is none: Video is Anteprima only
+**And** after the demo (not built now): Video exports as one MP4 or WebM file with its animations, from the same renderer
 
 **Given** an automated guardrail test
 **When** the suite runs
@@ -2058,13 +2306,13 @@ I want one ZIP with every format,
 So that I can hand over the whole case study in one go.
 
 Covers: FR7, CAP-9, NFR7, AR9 (Export all), UX-DR21
-⚑ Interim: IR-OP1
+IR-OP1 resolved (SCP 2026-10-28, C28). Amended per SCP 2026-10-28: Export all holds the Presentazione PDF and the Carosello PNGs; the Video file joins it **after the demo** (answer 1).
 
 **Acceptance Criteria:**
 
 **Given** an approved case in the view
 **When** I press **Export all**
-**Then** the server ensures an export of every format of the live revision (Story 5.3), then builds one ZIP stored as export `(revision_id, 'all')` from exactly those files, and the browser downloads it
+**Then** the server ensures an export of every exportable format of the live revision (Story 5.3: Presentazione and Carosello for the demo; Video after it), then builds one ZIP stored as export `(revision_id, 'all')` from exactly those files, and the browser downloads it
 
 **Given** an `all` export already exists for the revision
 **When** I press **Export all** again
@@ -2091,7 +2339,7 @@ Covers: FR7 (publish as link), CAP-10, NFR7, AR11 (create link), AR13, AR20, UX-
 
 **Given** an approved case
 **When** I press **Share** in the view (or in an Approvato row's overflow menu)
-**Then** the Share dialog lets me pick a format (default: Deck 16:9) and states, as a plain sentence above the link, "Anyone with the link can view."
+**Then** the Share dialog lets me pick a format (default: Presentazione 16:9; was Deck 16:9 before SCP 2026-10-28) and states, as a plain sentence above the link, "Anyone with the link can view."
 
 **Given** I create the link
 **When** it is created
@@ -2203,6 +2451,8 @@ So that I can send a client's whole track record in one go.
 
 Covers: FR13, AR9 (combined export), AR11 (`list clients` read-only, `download client pack`), NFR7, UX-DR35 (amended), UX-DR40 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Order: MVP, Sprint 3: after 5.1–5.8 (needs 5.3, 5.4 and 4.11) (owner amendment 2026-10-16)
+⛔ Open: whether the client pack is also offered in Carosello (only Presentazione is left of the two formats decided on 2026-10-16).
+Amended per SCP 2026-10-28 (C28, C38): PDF A4 is dropped; a case's Risultati e testimonial pages stay in the client file, and only a case's own intro pages and its Carosello Chiusura are left out (reverses C23 for the outro).
 
 **Acceptance Criteria:**
 
@@ -2210,7 +2460,8 @@ Order: MVP, Sprint 3: after 5.1–5.8 (needs 5.3, 5.4 and 4.11) (owner amendment
 **When** it runs
 **Then**:
 - it renders each part with its format renderer, in order, with continuous page numbers
-- it leaves out the `intro` pages of each case history that follows its client's intro, and the `outro` pages of each case history followed by its client's outro (SCP 2026-10-26)
+- it leaves out the `intro` pages of each case history that follows its client's intro, and that case's own Carosello Chiusura; each case's Risultati e testimonial pages stay (C38; replaces the SCP 2026-10-26 outro rule)
+- it reads each case's pages from that case's revision and never copies them (AD-25)
 - it has unit tests for one part, two parts of one client, and mixed clients
 
 **Given** an account/sales/social user
@@ -2218,8 +2469,8 @@ Order: MVP, Sprint 3: after 5.1–5.8 (needs 5.3, 5.4 and 4.11) (owner amendment
 **Then** it shows **Clienti**, listing only clients with at least one approved case history, read-only (no add, no edit, no overview), with **Scarica** per row and on the client page
 
 **Given** **Scarica** on a client
-**When** I pick a format (Deck 16:9 or PDF A4 only; owner decision 2026-10-16) and confirm
-**Then** the server builds the parts: the client's approved intro (if any), then its approved case histories newest first, using the intro rule (2+ case histories → the client intro replaces their own intro pages; 1 → its own intro), then, with 2 or more case histories, the client's approved outro once after the last of them, replacing their own outro pages; with one, that case history's own outro (SCP 2026-10-26), and enqueues one `export` job
+**When** I pick a format (Presentazione 16:9; it was Deck 16:9 or PDF A4, owner decision 2026-10-16, and PDF A4 is dropped by C28) and confirm
+**Then** the server builds the parts: the client's approved intro (if any), then its approved case histories newest first, using the intro rule (2+ case histories → the client intro replaces their own intro pages; 1 → its own intro), then, with 2 or more case histories, the client's approved closing once after the last of them, with each case's Risultati e testimonial pages kept (C38); with one, that case history's own pages as they are, and enqueues one `export` job
 **And** if the intro and outro aren't approved, every case history keeps its own intro and outro, and the dialog says so (UX-DR40)
 **And** a client with no approved case history has no **Scarica**, and a direct call fails with `NOT_APPROVED`
 
@@ -2239,6 +2490,7 @@ So that I can prepare a custom case for one pitch and reuse it later.
 
 Covers: FR13, AR26 (AD-24), AR11 (`manage collections`), NFR7, UX-DR39, UX-DR40 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Order: MVP, Sprint 3: after 5.9 (owner amendment 2026-10-16)
+Amended per SCP 2026-10-28 (C28, C38): PDF A4 is dropped, so collections export Presentazione 16:9; a case's Risultati e testimonial pages stay after the client's closing is added.
 
 **Acceptance Criteria:**
 
@@ -2252,7 +2504,7 @@ Order: MVP, Sprint 3: after 5.9 (owner amendment 2026-10-16)
 
 **Given** the collection configurator
 **When** it loads
-**Then** the left pane lists the parts in order: for each client with 2 or more case histories in the collection, its approved intro comes before the first of them, shown locked, its approved outro comes once after the last of them, shown locked, replacing their own outro pages (SCP 2026-10-21, SCP 2026-10-26), and that client's case histories are kept together as a group, and I reorder groups and case histories within a group (owner decision 2026-10-16); the centre shows the continuous preview per format through `composeParts`
+**Then** the left pane lists the parts in order: for each client with 2 or more case histories in the collection, its approved intro comes before the first of them, shown locked, its approved closing comes once after the last of them, shown locked, and their own Risultati e testimonial pages stay (SCP 2026-10-21; C38 replaces the SCP 2026-10-26 rule that removed them), and that client's case histories are kept together as a group, and I reorder groups and case histories within a group (owner decision 2026-10-16); the centre shows the continuous preview per format through `composeParts`
 
 **Given** I move a case history (drag handle, or the menu "Sposta su / giù")
 **When** the move is saved
@@ -2269,7 +2521,7 @@ Order: MVP, Sprint 3: after 5.9 (owner amendment 2026-10-16)
 
 **Given** **Esporta** or **Esporta tutto** in a collection
 **When** I press it
-**Then** it exports through the Story 5.9 pipeline, one file per format, Deck 16:9 PDF and PDF A4 only; the social carousel stays a single-case-history format (owner decision 2026-10-16)
+**Then** it exports through the Story 5.9 pipeline as a Presentazione 16:9 PDF (PDF A4 dropped by C28; it was Deck 16:9 PDF and PDF A4); Carosello stays a single-case-history format (owner decision 2026-10-16), and Video has no export before the demo (answer 1)
 
 **Given** a case history in a collection
 **When** its approved version is updated, or the client is edited
