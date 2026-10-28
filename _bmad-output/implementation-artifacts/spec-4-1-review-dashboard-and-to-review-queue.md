@@ -2,7 +2,7 @@
 title: 'Story 4.1: Da approvare queue in the Case table; no client count in the sidebar'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 baseline_commit: 'e494a9525550c5fb97b11bd63b669f521e8762a9'
 review_loop_iteration: 0
@@ -89,3 +89,19 @@ Ordering by event, not `updated_at`: configurator edits (4.3) will touch a case 
 - 2026-10-28, owner at approval: keep the "{n} da approvare" note next to Case; no Da approvare sidebar item. The `/to-review` page is dropped; the queue lives in the Case table's Da approvare filter, reachable by `?status=in_review`.
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence / route |
+|---|-------|---------|---------|------------------|
+| 1 | verification-gap | `reviewSince` query only checked against a stub | medium | No test under `test/` runs it; a wrong filter would silently fall back to `updatedAt`. patch: DB test. |
+| 2 | blind | Nothing links to `?status=in_review`; the "{n} da approvare" note goes to plain `/case-studies` | medium | Sidebar `NavLink` href is `/case-studies`. intent_gap: owner asked to keep the note and add no item; where it links is the owner's call. Asked at hand-off rather than reverting working code. |
+| 3 | blind | Filter not written back to the URL | low | Real, but needs router sync logic; rejected (low, adds complexity). |
+| 4 | blind | Queue order not visible in any column | maybe-false | Whether owners find it confusing needs a look in the app; rejected (would be low). |
+| 5 | blind | No way back to queue order after a header click | false | Frozen intent: a clicked sort holds across every filter; reload restores it. |
+| 6 | blind | Empty queue shows "Azzera i filtri" | low | It switches to Tutti, a sensible next step; rejected (cosmetic). |
+| 7 | blind | sprint-status task missing from diff | false | Diff was `src/` only; `sprint-status.yaml` already has 3.4, 3.5, 6.1–6.3 done. |
+| 8 | blind, edge | One failed chunk discards the others; serial chunks | low | Needs over 100 waiting cases and a failure; rejected. |
+| 9 | blind | Extra `case_event` read on every load | low | One query, only when a case is waiting; rejected. |
+| 10 | blind, edge | `Date.parse` NaN breaks the sort | false | Both values are timestamptz strings from Postgres, validated ISO by the schemas. |
+| 11 | blind | Test nits (dead `listClients` mocks, regex without `s`, tiebreak unchecked) | low | No user or developer harm; rejected. |
+| 12 | edge | >1000 events per chunk truncated by max_rows | low | Would need ~10 re-entries per case on average; rejected. |
+| 13 | edge | `data` null with no error throws | false | supabase-js returns `[]` for an empty select; types make `data` non-null when `error` is null (typecheck passes). |
