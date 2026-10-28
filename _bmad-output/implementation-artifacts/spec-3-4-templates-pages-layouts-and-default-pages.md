@@ -2,7 +2,8 @@
 title: 'Story 3.4: templates as versioned code — pages, layouts and default pages per format'
 type: 'feature'
 created: '2026-10-28'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: 'ccf8b674388c7c36ece34d0cc10ba1f1f056c419'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
