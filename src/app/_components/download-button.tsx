@@ -8,8 +8,12 @@ import type { FormatId } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
-/** The order the picker lists today's formats in (owner, 2026-10-21). */
-const FORMAT_ORDER: readonly FormatId[] = ["deck_16_9", "pdf_a4", "social_carousel_4_5"];
+/**
+ * The formats the picker offers today, in its order (SCP 2026-10-28). Video is
+ * Anteprima only for the demo, so it stays under *In arrivo* (answer 1).
+ */
+const FORMAT_ORDER = ["presentazione_16_9", "carosello_1_1"] as const satisfies readonly FormatId[];
+type DownloadFormatId = (typeof FORMAT_ORDER)[number];
 
 const UPCOMING = Object.values(it.download.upcoming);
 
@@ -30,12 +34,12 @@ export interface DownloadButtonProps {
 
 /**
  * **Scarica**: a small grey pill that opens the format picker. Today's formats are
- * radio choices (Deck 16:9 first); the ones still to come are listed greyed out
+ * radio choices (Presentazione first); the ones still to come are listed greyed out
  * with *In arrivo*. Shown only where there is something approved to download.
  */
 export function DownloadButton({ label, title, description, onDownload }: DownloadButtonProps) {
   const [open, setOpen] = useState(false);
-  const [format, setFormat] = useState<FormatId>(FORMAT_ORDER[0]!);
+  const [format, setFormat] = useState<DownloadFormatId>(FORMAT_ORDER[0]);
   const name = useId();
 
   function download() {

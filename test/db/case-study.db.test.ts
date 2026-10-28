@@ -526,9 +526,9 @@ describe("recordEvent", () => {
     const created = await createCase();
     // Story 3.3: case_event.revision_id references revision, so the id must be a real revision.
     const { createWorkingRevision, recordEvent } = await loadCaseStudy();
-    const { caseHistoryV1 } = await import("@/modules/generation");
+    const { caseHistoryV2 } = await import("@/modules/generation");
     const { FORMAT_IDS } = await import("@/modules/rendering");
-    const revision = await createWorkingRevision(await devActor(), { caseId: created.id, doc: caseHistoryV1(FORMAT_IDS), expectedHeadVersion: 0 });
+    const revision = await createWorkingRevision(await devActor(), { caseId: created.id, doc: caseHistoryV2(FORMAT_IDS), expectedHeadVersion: 0 });
     if (!revision.ok) throw new Error(`setup revision failed: ${revision.error.code}`);
     const revisionId = revision.value.id;
     const result = await recordEvent(await devActor(), { caseId: created.id, type: "text_added", revisionId });

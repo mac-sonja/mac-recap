@@ -1,14 +1,24 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { MATERIAL_REF_KINDS as MATERIAL_MODULE_REF_KINDS, type MaterialRef } from "@/modules/material";
 import { FORMAT_IDS } from "@/modules/rendering";
+import { upgrade as upgradeWith, type DefaultPages, type Page } from "@/modules/generation/domain/document";
 import {
   caseHistoryV0,
   caseHistoryV1,
+  caseHistoryV2,
   caseStudyDocumentSchema,
   clientIntroV1,
+  clientIntroV2,
+  CASE_BINDING_FIELDS,
+  CLIENT_BINDING_FIELDS,
+  ELEMENT_TYPES,
+  LEGACY_FORMAT_IDS,
   MATERIAL_REF_KINDS,
+  RESULT_ROW_FIELDS,
   upgrade,
   validateNewDocument,
+  type CaseStudyDocument,
+  type DocumentElement,
   type DocumentIssue,
   type DocumentMaterialRef,
 } from "@/modules/generation";
@@ -18,7 +28,22 @@ const issuesOf = (result: { ok: boolean; error?: { details?: unknown } }) =>
 
 const codeOf = (result: { ok: true } | { ok: false; error: { code: string } }) => (result.ok ? "ok" : result.error.code);
 
-describe("the claim refs match material's MaterialRef", () => {
+/** The fixture's pages of one format (default: Presentazione). */
+const pagesOf = (doc: CaseStudyDocument, formatId: string = "presentazione_16_9") => doc.formats[formatId].pages;
+/** An element of the fixture's Presentazione, by page, block and element index. */
+const elementAt = (doc: CaseStudyDocument, page: number, block: number, element: number) =>
+  pagesOf(doc)[page].blocks[block].elements[element] as Record<string, unknown>;
+const elementPath = (page: number, block: number, element: number) =>
+  `formats.presentazione_16_9.pages.${page}.blocks.${block}.elements.${element}`;
+
+const elementTypesOf = (doc: CaseStudyDocument) =>
+  new Set(
+    Object.values(doc.formats).flatMap(({ pages }) =>
+      pages.flatMap((p) => p.blocks.flatMap((b) => b.elements.flatMap((el: DocumentElement) => (el.type === "text_group" ? [el.type, ...el.items.map((i) => i.type)] : [el.type])))),
+    ),
+  );
+
+describe("the text refs match material's MaterialRef", () => {
   it("has the same kinds", () => {
     expect([...MATERIAL_REF_KINDS]).toEqual([...MATERIAL_MODULE_REF_KINDS]);
   });
@@ -28,198 +53,475 @@ describe("the claim refs match material's MaterialRef", () => {
   });
 });
 
-describe("validateNewDocument (the I/O matrix, schema side)", () => {
-  it("accepts a case history with challenge, approach, result and a title", () => {
-    const doc = caseHistoryV1(FORMAT_IDS);
+describe("validateNewDocument (the I/O matrix)", () => {
+  it("accepts a v2 case history with the three formats and every element type", () => {
+    const doc = caseHistoryV2(FORMAT_IDS);
+    expect(Object.keys(doc.formats)).toEqual([...FORMAT_IDS]);
+    expect([...elementTypesOf(doc)].sort()).toEqual([...ELEMENT_TYPES].sort());
     expect(validateNewDocument(doc)).toEqual({ ok: true, value: doc });
   });
 
-  it.each([
-    ["approach before challenge", ["approach", "challenge", "result", "title"]],
-    ["no result", ["challenge", "approach", "title"]],
-    ["a title first", ["title", "challenge", "approach", "result"]],
-    ["challenge twice", ["challenge", "approach", "result", "challenge"]],
-    ["no blocks", []],
-  ])("rejects %s with an issue naming blocks", (_name, sections) => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    const byName = new Map(doc.blocks.map((b) => [b.section, b]));
-    doc.blocks = sections.map((section, i) => ({
-      ...(byName.get(section) ?? doc.blocks[0]),
-      section,
-      blockId: `dddddddd-0000-4000-8000-00000000000${i}`,
-      claims: [],
-    }));
-    const result = validateNewDocument(doc);
-    expect(codeOf(result)).toBe("DOCUMENT_INVALID");
-    expect(issuesOf(result).map((i) => i.path)).toContain("blocks");
+  it("accepts a v2 client intro", () => {
+    const doc = clientIntroV2(FORMAT_IDS);
+    expect(validateNewDocument(doc)).toEqual({ ok: true, value: doc });
   });
 
-  it("accepts a client intro without the three narrative sections", () => {
-    expect(validateNewDocument(clientIntroV1(FORMAT_IDS)).ok).toBe(true);
-  });
-
-  it.each([
-    ["an about object", { about: { name: "Acme" } }],
-    ["a client name", { clientName: "Acme" }],
-    ["a client logo", { logo: "aaaaaaaa-0000-4000-8000-000000000009" }],
-  ])("rejects %s with an unknown-key error", (_name, extra) => {
-    const result = validateNewDocument({ ...caseHistoryV1(FORMAT_IDS), ...extra });
-    expect(codeOf(result)).toBe("DOCUMENT_INVALID");
-    expect(issuesOf(result)).toEqual([expect.objectContaining({ path: "", code: "unrecognized_keys" })]);
-  });
-
-  it("rejects a client value inside a block or claim", () => {
-    const doc = caseHistoryV1(FORMAT_IDS) as unknown as { blocks: Record<string, unknown>[] };
-    doc.blocks[3] = { ...doc.blocks[3], clientName: "Acme" };
-    expect(issuesOf(validateNewDocument(doc))).toEqual([expect.objectContaining({ path: "blocks.3", code: "unrecognized_keys" })]);
-  });
-
-  it("rejects an about block", () => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    doc.blocks[3] = { ...doc.blocks[3], section: "about" };
-    const result = validateNewDocument(doc);
-    expect(codeOf(result)).toBe("DOCUMENT_INVALID");
-    expect(issuesOf(result).map((i) => i.path)).toEqual(["blocks.3.section"]);
-  });
-
-  it("rejects formats missing pdf_a4 with FORMAT_NOT_IN_REVISION", () => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    delete doc.formats.pdf_a4;
-    const result = validateNewDocument(doc);
-    expect(result).toMatchObject({ ok: false, error: { code: "FORMAT_NOT_IN_REVISION", details: { missing: ["pdf_a4"], extra: [] } } });
-  });
-
-  it("rejects formats with story_9_16 with FORMAT_NOT_IN_REVISION", () => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    doc.formats.story_9_16 = doc.formats.deck_16_9;
-    const result = validateNewDocument(doc);
-    expect(result).toMatchObject({ ok: false, error: { code: "FORMAT_NOT_IN_REVISION", details: { missing: [], extra: ["story_9_16"] } } });
-  });
-
-  it("rejects a future version with DOCUMENT_SCHEMA_UNSUPPORTED", () => {
-    expect(codeOf(validateNewDocument({ ...caseHistoryV1(FORMAT_IDS), schemaVersion: 99 }))).toBe("DOCUMENT_SCHEMA_UNSUPPORTED");
-  });
-
-  it("requires new documents to be the current version", () => {
-    expect(codeOf(validateNewDocument(caseHistoryV0(FORMAT_IDS)))).toBe("DOCUMENT_SCHEMA_UNSUPPORTED");
-  });
-
-  it.each([
-    ["a duplicate block id", (d: ReturnType<typeof caseHistoryV1>) => (d.blocks[3].blockId = d.blocks[0].blockId), "blocks"],
-    ["a duplicate claim id", (d: ReturnType<typeof caseHistoryV1>) => (d.blocks[3].claims[0].claimId = d.blocks[0].claims[0].claimId), "blocks"],
-    ["a non-uuid block id", (d: ReturnType<typeof caseHistoryV1>) => (d.blocks[0].blockId = "b1"), "blocks.0.blockId"],
-    ["an unknown aspect", (d: ReturnType<typeof caseHistoryV1>) => ((d.blocks[0].claims[0] as { aspect: string }).aspect = "client"), "blocks.0.claims.0.aspect"],
-    ["an unknown provenance", (d: ReturnType<typeof caseHistoryV1>) => ((d.blocks[0].claims[0] as { provenance: string }).provenance = "verified"), "blocks.0.claims.0.provenance"],
-    ["an unknown ref kind", (d: ReturnType<typeof caseHistoryV1>) => ((d.blocks[0].claims[0].sourceRefs![0] as { kind: string }).kind = "client_field"), "blocks.0.claims.0.sourceRefs.0.kind"],
-    ["a bad template ref", (d: ReturnType<typeof caseHistoryV1>) => (d.template = "mac-case"), "template"],
-    ["a duplicate selected asset", (d: ReturnType<typeof caseHistoryV1>) => d.selectedMedia.push(d.selectedMedia[0]), "selectedMedia"],
-    ["a non-uuid slot asset", (d: ReturnType<typeof caseHistoryV1>) => (d.formats.pdf_a4.slots.hero = "logo.png"), "formats.pdf_a4.slots.hero"],
-    ["a malformed check", (d: ReturnType<typeof caseHistoryV1>) => (d.blocks[0].check = { by: "x", at: "now", textHash: "" }), "blocks.0.check.by"],
-  ])("rejects %s", (_name, mutate, path) => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    mutate(doc);
-    const result = validateNewDocument(doc);
-    expect(codeOf(result)).toBe("DOCUMENT_INVALID");
-    expect(issuesOf(result).map((i) => i.path)).toContain(path);
-  });
-
-  it("rejects a slot asset that is not in selectedMedia", () => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    doc.formats.social_carousel_4_5.slots.extra = "aaaaaaaa-0000-4000-8000-0000000000ff";
-    const result = validateNewDocument(doc);
-    expect(codeOf(result)).toBe("DOCUMENT_INVALID");
-    expect(issuesOf(result).map((i) => i.path)).toEqual(["formats.social_carousel_4_5.slots.extra"]);
-  });
-
-  it("accepts empty slots and slots of selected media only", () => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    doc.selectedMedia = [doc.selectedMedia[0]];
-    for (const entry of Object.values(doc.formats)) entry.slots = { hero: doc.selectedMedia[0], detail: null };
+  it("accepts formats with no pages, and a case history without Sfida, Idea or Risultati (answer 5)", () => {
+    const doc = caseHistoryV2(FORMAT_IDS);
+    doc.formats.video_9_16.pages = [];
+    doc.formats.carosello_1_1.pages = doc.formats.carosello_1_1.pages.filter((p) => p.section !== "risultati");
     expect(validateNewDocument(doc).ok).toBe(true);
   });
 
-  const at = (n: number) => `dddddddd-0000-4000-8000-${String(n).padStart(12, "0")}`;
-  it.each([
-    ["block text over 5000 characters", (d: ReturnType<typeof caseHistoryV1>) => (d.blocks[0].text = "x".repeat(5001)), "blocks.0.text"],
-    ["claim text over 5000 characters", (d: ReturnType<typeof caseHistoryV1>) => (d.blocks[0].claims[0].text = "x".repeat(5001)), "blocks.0.claims.0.text"],
-    [
-      "over 50 claims in a block",
-      (d: ReturnType<typeof caseHistoryV1>) =>
-        (d.blocks[3].claims = Array.from({ length: 51 }, (_, i) => ({ claimId: at(i), text: "x", aspect: "technical" as const, provenance: "generated" as const }))),
-      "blocks.3.claims",
-    ],
-    [
-      "over 50 blocks",
-      (d: ReturnType<typeof caseHistoryV1>) =>
-        d.blocks.push(...Array.from({ length: 47 }, (_, i) => ({ blockId: at(i), section: "note", text: "x", claims: [], check: null }))),
-      "blocks",
-    ],
-    ["over 100 selected media", (d: ReturnType<typeof caseHistoryV1>) => d.selectedMedia.push(...Array.from({ length: 99 }, (_, i) => at(i))), "selectedMedia"],
-    [
-      "a text hash over 128 characters",
-      (d: ReturnType<typeof caseHistoryV1>) => (d.blocks[0].check = { by: "00000000-0000-4000-8000-000000000002", at: "2026-10-21T10:00:00Z", textHash: "a".repeat(129) }),
-      "blocks.0.check.textHash",
-    ],
-  ])("rejects %s", (_name, mutate, path) => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    mutate(doc);
-    const result = validateNewDocument(doc);
-    expect(codeOf(result)).toBe("DOCUMENT_INVALID");
-    expect(issuesOf(result).map((i) => i.path)).toContain(path);
+  describe("bound texts", () => {
+    it("accepts a text with a binding and no text: the document holds no value", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      const bound = elementAt(doc, 0, 1, 0);
+      expect(bound).toEqual({
+        elementId: expect.any(String),
+        type: "text",
+        style: "title",
+        binding: { record: "client", field: "name" },
+        provenance: "generated",
+      });
+      expect(validateNewDocument(doc).ok).toBe(true);
+    });
+
+    it.each([
+      ["both text and binding", (el: Record<string, unknown>) => (el.text = "Acme")],
+      ["neither text nor binding", (el: Record<string, unknown>) => delete el.binding],
+    ])("rejects %s with DOCUMENT_INVALID", (_name, mutate) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      mutate(elementAt(doc, 0, 1, 0));
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result).map((i) => i.path)).toEqual([elementPath(0, 1, 0)]);
+    });
+
+    it("rejects a group item with neither text nor binding", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      delete (elementAt(doc, 0, 0, 0).items as Record<string, unknown>[])[0].text;
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result).map((i) => i.path)).toEqual([`${elementPath(0, 0, 0)}.items.0`]);
+    });
+
+    it.each([
+      ["an unknown record", { record: "project", field: "name" }, "binding.record"],
+      ["an unknown field", { record: "client", field: "logo" }, "binding.field"],
+      ["a client field on the case", { record: "case", field: "sector" }, "binding.field"],
+      ["a value next to the field", { record: "client", field: "name", value: "Acme" }, "binding"],
+      ["a result field without index", { record: "case", field: "resultValue" }, "binding.index"],
+      ["an index on another field", { record: "client", field: "name", index: 0 }, "binding.index"],
+      ["index 3", { record: "case", field: "resultLabel", index: 3 }, "binding.index"],
+      ["a negative index", { record: "client", field: "resultLabel", index: -1 }, "binding.index"],
+      ["a fractional index", { record: "client", field: "resultLabel", index: 0.5 }, "binding.index"],
+    ])("rejects a binding with %s", (_name, binding, path) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      elementAt(doc, 0, 1, 0).binding = binding;
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result).map((i) => i.path)).toContain(`${elementPath(0, 1, 0)}.${path}`);
+    });
+
+    it.each([
+      ["every client field", CLIENT_BINDING_FIELDS, "client"],
+      ["every case field", CASE_BINDING_FIELDS, "case"],
+    ] as const)("accepts %s, result rows 0–2 with an index", (_name, fields, record) => {
+      for (const field of fields) {
+        const rows = (RESULT_ROW_FIELDS as readonly string[]).includes(field) ? [0, 1, 2] : [undefined];
+        for (const index of rows) {
+          const doc = caseHistoryV2(FORMAT_IDS);
+          elementAt(doc, 0, 1, 0).binding = index === undefined ? { record, field } : { record, field, index };
+          expect(validateNewDocument(doc).ok, `${record}.${field}[${index}]`).toBe(true);
+        }
+      }
+    });
   });
 
-  it("accepts the bounds themselves", () => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    doc.blocks[0].text = "x".repeat(5000);
-    doc.blocks[0].check = { by: "00000000-0000-4000-8000-000000000002", at: "2026-10-21T10:00:00Z", textHash: "a".repeat(128) };
-    doc.blocks[3].claims = Array.from({ length: 50 }, (_, i) => ({ claimId: at(i), text: "x", aspect: "graphic" as const, provenance: "generated" as const }));
-    doc.blocks.push(...Array.from({ length: 46 }, (_, i) => ({ blockId: at(100 + i), section: "note", text: "x", claims: [], check: null })));
-    doc.selectedMedia.push(...Array.from({ length: 98 }, (_, i) => at(200 + i)));
-    expect(validateNewDocument(doc).ok).toBe(true);
+  describe("ids", () => {
+    it.each([
+      ["a page key", (d: CaseStudyDocument) => (pagesOf(d)[1].pageKey = pagesOf(d)[0].pageKey), "pageKey"],
+      ["a block id", (d: CaseStudyDocument) => (pagesOf(d)[1].blocks[0].blockId = pagesOf(d)[0].blocks[0].blockId), "blockId"],
+      ["an element id across blocks", (d: CaseStudyDocument) => (elementAt(d, 1, 0, 0).elementId = elementAt(d, 0, 1, 0).elementId), "elementId"],
+      [
+        "an element id inside a text group",
+        (d: CaseStudyDocument) => ((elementAt(d, 0, 0, 0).items as Record<string, unknown>[])[1].elementId = elementAt(d, 0, 0, 0).elementId),
+        "elementId",
+      ],
+    ])("rejects %s used twice in one format", (_name, mutate, name) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      mutate(doc);
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result)).toEqual([expect.objectContaining({ path: "formats.presentazione_16_9", message: expect.stringContaining(name) })]);
+    });
+
+    it("accepts the same ids in two formats (independent copies)", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      expect(pagesOf(doc, "carosello_1_1")[0].blocks[0].blockId).toBe(pagesOf(doc)[0].blocks[0].blockId);
+      expect(validateNewDocument(doc).ok).toBe(true);
+    });
+
+    it.each([
+      ["a non-uuid block id", (d: CaseStudyDocument) => (pagesOf(d)[0].blocks[0].blockId = "b1"), "formats.presentazione_16_9.pages.0.blocks.0.blockId"],
+      ["a non-uuid element id", (d: CaseStudyDocument) => (elementAt(d, 0, 1, 2).elementId = "e1"), `${elementPath(0, 1, 2)}.elementId`],
+      ["a malformed page key", (d: CaseStudyDocument) => (pagesOf(d)[0].pageKey = "Intro Page"), "formats.presentazione_16_9.pages.0.pageKey"],
+    ])("rejects %s", (_name, mutate, path) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      mutate(doc);
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result).map((i) => i.path)).toContain(path);
+    });
   });
 
-  it("names at most 10 unknown format keys", () => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    for (let i = 0; i < 12; i++) doc.formats[`story_${i}`] = doc.formats.deck_16_9;
-    const result = validateNewDocument(doc);
-    expect(result).toMatchObject({ ok: false, error: { code: "FORMAT_NOT_IN_REVISION", details: { extraCount: 12 } } });
-    if (!result.ok) expect((result.error.details as { extra: string[] }).extra).toHaveLength(10);
+  describe("media", () => {
+    it.each(["fill", "fit"])("rejects a crop with fit %s", (fit) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      elementAt(doc, 1, 1, 0).fit = fit;
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result).map((i) => i.path)).toEqual([`${elementPath(1, 1, 0)}.crop`]);
+    });
+
+    it("rejects a crop on a video without fit crop", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      elementAt(doc, 1, 2, 0).crop = { x: 0, y: 0, zoom: 1 };
+      expect(issuesOf(validateNewDocument(doc)).map((i) => i.path)).toEqual([`${elementPath(1, 2, 0)}.crop`]);
+    });
+
+    it("accepts a crop at its bounds, and a crop fit without a crop", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      elementAt(doc, 1, 1, 0).crop = { x: 1, y: 0, zoom: 4 };
+      elementAt(doc, 1, 0, 0).fit = "crop";
+      expect(validateNewDocument(doc).ok).toBe(true);
+    });
+
+    it.each([
+      ["x below 0", { x: -0.1, y: 0, zoom: 1 }, "x"],
+      ["y above 1", { x: 0, y: 1.1, zoom: 1 }, "y"],
+      ["zoom below 1", { x: 0, y: 0, zoom: 0.5 }, "zoom"],
+      ["zoom above 4", { x: 0, y: 0, zoom: 4.5 }, "zoom"],
+    ])("rejects a crop with %s", (_name, crop, key) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      elementAt(doc, 1, 1, 0).crop = crop;
+      expect(issuesOf(validateNewDocument(doc)).map((i) => i.path)).toEqual([`${elementPath(1, 1, 0)}.crop.${key}`]);
+    });
+
+    it("accepts an empty image (null asset, exported transparent)", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      elementAt(doc, 1, 0, 0).assetId = null;
+      expect(validateNewDocument(doc).ok).toBe(true);
+    });
+
+    it.each([
+      ["an animation fit of crop", (el: Record<string, unknown>) => (el.fit = "crop"), "fit"],
+      ["an animation size under 50%", (el: Record<string, unknown>) => (el.size = 49), "size"],
+      ["an animation size over 150%", (el: Record<string, unknown>) => (el.size = 151), "size"],
+      ["an unknown animation", (el: Record<string, unknown>) => (el.animation = "spin"), "animation"],
+      ["a non-uuid animation asset", (el: Record<string, unknown>) => (el.assetIds = ["logo.png"]), "assetIds.0"],
+    ])("rejects %s", (_name, mutate, key) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      mutate(elementAt(doc, 1, 3, 0));
+      expect(issuesOf(validateNewDocument(doc)).map((i) => i.path)).toEqual([`${elementPath(1, 3, 0)}.${key}`]);
+    });
   });
 
-  it("accepts a checked block and an edited or added claim", () => {
-    const doc = caseHistoryV1(FORMAT_IDS);
-    doc.blocks[0].check = { by: "00000000-0000-4000-8000-000000000002", at: "2026-10-21T10:00:00.000Z", textHash: "abc" };
-    doc.blocks[0].claims[0].provenance = "human_edited";
-    doc.blocks[1].claims[0] = { claimId: "eeeeeeee-0000-4000-8000-000000000001", text: "x", aspect: "graphic", provenance: "human_added" };
-    expect(validateNewDocument(doc).ok).toBe(true);
+  describe("pages, blocks and elements", () => {
+    it.each([
+      ["an unknown element type", (d: CaseStudyDocument) => (elementAt(d, 0, 1, 3).type = "button"), `${elementPath(0, 1, 3)}.type`],
+      ["an unknown text style", (d: CaseStudyDocument) => (elementAt(d, 0, 1, 0).style = "huge"), `${elementPath(0, 1, 0)}.style`],
+      ["three columns", (d: CaseStudyDocument) => (elementAt(d, 2, 1, 0).columns = 3), "formats.presentazione_16_9.pages.2.blocks.1.elements.0.columns"],
+      ["a colour name", (d: CaseStudyDocument) => (elementAt(d, 2, 0, 0).colour = "white"), "formats.presentazione_16_9.pages.2.blocks.0.elements.0.colour"],
+      ["an unknown provenance", (d: CaseStudyDocument) => (elementAt(d, 0, 1, 0).provenance = "verified"), `${elementPath(0, 1, 0)}.provenance`],
+      ["an unknown aspect", (d: CaseStudyDocument) => (elementAt(d, 2, 0, 0).aspect = "client"), "formats.presentazione_16_9.pages.2.blocks.0.elements.0.aspect"],
+      [
+        "an unknown ref kind",
+        (d: CaseStudyDocument) => (elementAt(d, 2, 0, 0).sourceRefs = [{ kind: "client_field", id: "name" }]),
+        "formats.presentazione_16_9.pages.2.blocks.0.elements.0.sourceRefs.0.kind",
+      ],
+      ["splitAt on a top group", (d: CaseStudyDocument) => (elementAt(d, 0, 2, 0).splitAt = 1), "formats.presentazione_16_9.pages.0.blocks.2.elements.0.splitAt"],
+      ["a split group without splitAt", (d: CaseStudyDocument) => delete elementAt(d, 0, 0, 0).splitAt, `${elementPath(0, 0, 0)}.splitAt`],
+      ["splitAt past the texts", (d: CaseStudyDocument) => (elementAt(d, 0, 0, 0).splitAt = 3), `${elementPath(0, 0, 0)}.splitAt`],
+      [
+        "a non-text item in a group",
+        (d: CaseStudyDocument) => ((elementAt(d, 0, 0, 0).items as unknown[])[0] = { elementId: "eeeeeeee-0000-4000-8000-0000000000ff", type: "divider" }),
+        `${elementPath(0, 0, 0)}.items.0.type`,
+      ],
+      ["an unknown role", (d: CaseStudyDocument) => ((pagesOf(d)[0] as { role: string }).role = "cover"), "formats.presentazione_16_9.pages.0.role"],
+      ["an unknown section", (d: CaseStudyDocument) => ((pagesOf(d)[0] as { section: string }).section = "sfida"), "formats.presentazione_16_9.pages.0.section"],
+      ["a short hex background", (d: CaseStudyDocument) => (pagesOf(d)[0].background = { kind: "colour", value: "#fff" }), "formats.presentazione_16_9.pages.0.background.value"],
+      [
+        "a background image that is not an asset id",
+        (d: CaseStudyDocument) => (pagesOf(d)[0].blocks[0].background = { kind: "image", assetId: "bg.png" }),
+        "formats.presentazione_16_9.pages.0.blocks.0.background.assetId",
+      ],
+      ["a zero grid track", (d: CaseStudyDocument) => (pagesOf(d)[0].grid.rows = [1, 0]), "formats.presentazione_16_9.pages.0.grid.rows.1"],
+      ["a grid without columns", (d: CaseStudyDocument) => (pagesOf(d)[0].grid.cols = []), "formats.presentazione_16_9.pages.0.grid.cols"],
+      ["a page without a layout", (d: CaseStudyDocument) => delete (pagesOf(d)[0].grid as Partial<Page["grid"]>).layoutId, "formats.presentazione_16_9.pages.0.grid.layoutId"],
+      [
+        "over 6 blocks on a page",
+        (d: CaseStudyDocument) =>
+          pagesOf(d)[1].blocks.push(
+            ...[90, 91, 92].map((n) => ({ blockId: `bbbbbbbb-0000-4000-8000-0000000000${n}`, name: "Vuoto", background: { kind: "transparent" as const }, elements: [] })),
+          ),
+        "formats.presentazione_16_9.pages.1.blocks",
+      ],
+      ["a text over 5000 characters", (d: CaseStudyDocument) => (elementAt(d, 2, 0, 0).text = "x".repeat(5001)), "formats.presentazione_16_9.pages.2.blocks.0.elements.0.text"],
+      ["a bad template ref", (d: CaseStudyDocument) => (d.template = "mac-case"), "template"],
+      ["a format entry with a layout part", (d: CaseStudyDocument) => ((d.formats.video_9_16 as Record<string, unknown>).variant = "a"), "formats.video_9_16"],
+    ])("rejects %s", (_name, mutate, path) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      mutate(doc);
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result).map((i) => i.path)).toContain(path);
+    });
+
+    const uuid = (prefix: string, n: number) => `${prefix}-0000-4000-8000-${String(n).padStart(12, "0")}`;
+    const emptyPage = (n: number): Page => ({
+      pageKey: `extra-${n}`,
+      name: "Vuota",
+      role: "body",
+      section: "output",
+      background: { kind: "transparent" },
+      grid: { layoutId: "uno", rows: [1], cols: [1] },
+      blocks: [],
+    });
+    const dividers = (count: number) => Array.from({ length: count }, (_, i) => ({ elementId: uuid("ffffffff", i), type: "divider" as const }));
+    const texts = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({ elementId: uuid("ffffffff", 100 + i), type: "text" as const, style: "text" as const, text: "x", provenance: "human_added" as const }));
+    const assets = (count: number) => Array.from({ length: count }, (_, i) => uuid("aaaaaaaa", 100 + i));
+    const refs = (count: number) => Array.from({ length: count }, () => ({ kind: "form_field" as const, id: "context" }));
+    const PAGE = "formats.presentazione_16_9.pages";
+
+    /** Sets every limit to `n` past its bound (0: at the bound). */
+    const atLimits = (d: CaseStudyDocument, past: 0 | 1) => {
+      pagesOf(d).push(...Array.from({ length: 47 + past }, (_, i) => emptyPage(i)));
+      pagesOf(d)[0].name = "x".repeat(100 + past);
+      pagesOf(d)[0].blocks[0].name = "x".repeat(100 + past);
+      pagesOf(d)[0].grid.rows = Array(12 + past).fill(1);
+      pagesOf(d)[0].grid.cols = Array(12 + past).fill(1);
+      pagesOf(d)[0].blocks[2].elements.push(...dividers(29 + past));
+      (elementAt(d, 0, 0, 0).items as unknown[]).push(...texts(18 + past));
+      elementAt(d, 1, 3, 0).assetIds = assets(30 + past);
+      elementAt(d, 2, 0, 0).sourceRefs = refs(50 + past);
+      elementAt(d, 2, 0, 2).size = 1000 + past;
+    };
+
+    it.each([
+      ["a page name over 100 characters", (d: CaseStudyDocument) => (pagesOf(d)[0].name = "x".repeat(101)), `${PAGE}.0.name`],
+      ["an empty page name", (d: CaseStudyDocument) => (pagesOf(d)[0].name = ""), `${PAGE}.0.name`],
+      ["a block name over 100 characters", (d: CaseStudyDocument) => (pagesOf(d)[0].blocks[0].name = "x".repeat(101)), `${PAGE}.0.blocks.0.name`],
+      ["an empty block name", (d: CaseStudyDocument) => (pagesOf(d)[0].blocks[0].name = ""), `${PAGE}.0.blocks.0.name`],
+      ["over 50 pages in a format", (d: CaseStudyDocument) => pagesOf(d).push(...Array.from({ length: 48 }, (_, i) => emptyPage(i))), PAGE],
+      ["over 30 elements in a block", (d: CaseStudyDocument) => pagesOf(d)[0].blocks[2].elements.push(...dividers(30)), `${PAGE}.0.blocks.2.elements`],
+      ["over 20 texts in a group", (d: CaseStudyDocument) => (elementAt(d, 0, 0, 0).items as unknown[]).push(...texts(19)), `${elementPath(0, 0, 0)}.items`],
+      ["over 12 grid rows", (d: CaseStudyDocument) => (pagesOf(d)[0].grid.rows = Array(13).fill(1)), `${PAGE}.0.grid.rows`],
+      ["over 12 grid columns", (d: CaseStudyDocument) => (pagesOf(d)[0].grid.cols = Array(13).fill(1)), `${PAGE}.0.grid.cols`],
+      ["over 30 animation media", (d: CaseStudyDocument) => (elementAt(d, 1, 3, 0).assetIds = assets(31)), `${elementPath(1, 3, 0)}.assetIds`],
+      ["over 50 source refs", (d: CaseStudyDocument) => (elementAt(d, 2, 0, 0).sourceRefs = refs(51)), `${PAGE}.2.blocks.0.elements.0.sourceRefs`],
+      ["a text size over 1000 px", (d: CaseStudyDocument) => (elementAt(d, 2, 0, 2).size = 1001), `${PAGE}.2.blocks.0.elements.2.size`],
+    ])("rejects %s", (_name, mutate, path) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      mutate(doc);
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result).map((i) => i.path)).toContain(path);
+    });
+
+    it("accepts every limit at its bound: 6 blocks, 5000 characters, names of 100, 50 pages, 30 elements, 20 texts, 12 tracks, 30 media, 50 refs, 1000 px", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      pagesOf(doc)[1].blocks.push(
+        ...[90, 91].map((n) => ({ blockId: `bbbbbbbb-0000-4000-8000-0000000000${n}`, name: "Vuoto", background: { kind: "transparent" as const }, elements: [] })),
+      );
+      elementAt(doc, 2, 0, 0).text = "x".repeat(5000);
+      atLimits(doc, 0);
+      expect(validateNewDocument(doc)).toEqual({ ok: true, value: doc });
+    });
+
+    it("rejects every limit one past its bound at once", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      atLimits(doc, 1);
+      expect(codeOf(validateNewDocument(doc))).toBe("DOCUMENT_INVALID");
+    });
+  });
+
+  describe("client values (AD-22)", () => {
+    it.each([
+      ["an about object", { about: { name: "Acme" } }],
+      ["a client name", { clientName: "Acme" }],
+      ["a shared text part", { blocks: [] }],
+      ["selected media", { selectedMedia: [] }],
+    ])("rejects %s on the document with an unknown-key error", (_name, extra) => {
+      const result = validateNewDocument({ ...caseHistoryV2(FORMAT_IDS), ...extra });
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result)).toEqual([expect.objectContaining({ path: "", code: "unrecognized_keys" })]);
+    });
+
+    it.each([
+      ["a page", (d: CaseStudyDocument) => pagesOf(d)[0] as unknown as Record<string, unknown>, "formats.presentazione_16_9.pages.0"],
+      ["a block", (d: CaseStudyDocument) => pagesOf(d)[0].blocks[1] as unknown as Record<string, unknown>, "formats.presentazione_16_9.pages.0.blocks.1"],
+      ["a bound text", (d: CaseStudyDocument) => elementAt(d, 0, 1, 0), elementPath(0, 1, 0)],
+      ["the logos", (d: CaseStudyDocument) => elementAt(d, 0, 1, 2), elementPath(0, 1, 2)],
+      ["the services", (d: CaseStudyDocument) => elementAt(d, 0, 1, 4), elementPath(0, 1, 4)],
+    ])("rejects a client value on %s", (_name, target, path) => {
+      for (const key of ["about", "clientName"]) {
+        const doc = caseHistoryV2(FORMAT_IDS);
+        target(doc)[key] = "Acme";
+        const result = validateNewDocument(doc);
+        expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+        expect(issuesOf(result)).toEqual([expect.objectContaining({ path, code: "unrecognized_keys" })]);
+      }
+    });
+
+    it("rejects a check on a text (answer 11)", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      elementAt(doc, 2, 0, 0).check = null;
+      expect(issuesOf(validateNewDocument(doc))).toEqual([expect.objectContaining({ code: "unrecognized_keys" })]);
+    });
+  });
+
+  describe("format keys", () => {
+    it("rejects formats missing video_9_16 with FORMAT_NOT_IN_REVISION", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      delete doc.formats.video_9_16;
+      expect(validateNewDocument(doc)).toMatchObject({ ok: false, error: { code: "FORMAT_NOT_IN_REVISION", details: { missing: ["video_9_16"], extra: [] } } });
+    });
+
+    it("rejects an extra deck_16_9 with FORMAT_NOT_IN_REVISION", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      doc.formats.deck_16_9 = doc.formats.presentazione_16_9;
+      expect(validateNewDocument(doc)).toMatchObject({ ok: false, error: { code: "FORMAT_NOT_IN_REVISION", details: { missing: [], extra: ["deck_16_9"] } } });
+    });
+
+    it("names both missing and extra keys", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      doc.formats.story_9_16 = doc.formats.video_9_16;
+      delete doc.formats.video_9_16;
+      expect(validateNewDocument(doc)).toMatchObject({
+        ok: false,
+        error: { code: "FORMAT_NOT_IN_REVISION", details: { missing: ["video_9_16"], extra: ["story_9_16"], extraCount: 1 } },
+      });
+    });
+
+    it("names at most 10 unknown format keys", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      for (let i = 0; i < 12; i++) doc.formats[`story_${i}`] = { pages: [] };
+      const result = validateNewDocument(doc);
+      expect(result).toMatchObject({ ok: false, error: { code: "FORMAT_NOT_IN_REVISION", details: { extraCount: 12 } } });
+      if (!result.ok) expect((result.error.details as { extra: string[] }).extra).toHaveLength(10);
+    });
+  });
+
+  describe("versions", () => {
+    it.each([
+      ["a v1 document", () => caseHistoryV1()],
+      ["a v1 document keyed by the registry", () => caseHistoryV1(FORMAT_IDS)],
+      ["a v0 document", () => caseHistoryV0()],
+      ["a future version", () => ({ ...caseHistoryV2(FORMAT_IDS), schemaVersion: 99 })],
+      ["no version", () => ({ kind: "case_history" })],
+    ])("refuses %s with DOCUMENT_SCHEMA_UNSUPPORTED", (_name, doc) => {
+      expect(codeOf(validateNewDocument(doc()))).toBe("DOCUMENT_SCHEMA_UNSUPPORTED");
+    });
   });
 });
 
 describe("upgrade", () => {
-  it("returns a current document as it is", () => {
-    const doc = caseHistoryV1(FORMAT_IDS);
+  it("returns a v2 document as it is", () => {
+    const doc = caseHistoryV2(FORMAT_IDS);
     expect(upgrade(doc)).toEqual({ ok: true, value: doc });
   });
 
-  it("takes the v0 fixture to v1 without touching the input", () => {
-    const v0 = caseHistoryV0(FORMAT_IDS);
+  it("reads a v1 document with the old format keys as v2 with the three formats, leaving the input unchanged", () => {
+    const v1 = caseHistoryV1();
+    expect(Object.keys(v1.formats)).toEqual([...LEGACY_FORMAT_IDS]);
+    const before = structuredClone(v1);
+    const result = upgrade(v1);
+    expect(v1).toEqual(before);
+    // Until Story 3.4 the templates' default pages are empty.
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        schemaVersion: 2,
+        kind: "case_history",
+        template: "mac-case@1",
+        formats: { presentazione_16_9: { pages: [] }, carosello_1_1: { pages: [] }, video_9_16: { pages: [] } },
+      },
+    });
+  });
+
+  it("reads a v1 client intro as v2", () => {
+    expect(upgrade(clientIntroV1())).toMatchObject({ ok: true, value: { schemaVersion: 2, kind: "client_intro", template: "mac-intro@1" } });
+  });
+
+  describe("with injected default pages", () => {
+    const deps = (defaultPages: DefaultPages) => ({ defaultPages, formatIds: FORMAT_IDS });
+    const intro = (formatId: string): Page[] => structuredClone(pagesOf(caseHistoryV2([formatId]), formatId).slice(0, 1));
+
+    it("gives every registry format the template's default pages and drops the other keys", () => {
+      const calls: unknown[][] = [];
+      const defaultPages: DefaultPages = (template, kind, formatId) => {
+        calls.push([template, kind, formatId]);
+        return intro(formatId);
+      };
+      const result = upgradeWith(caseHistoryV1(), deps(defaultPages));
+      expect(calls).toEqual(FORMAT_IDS.map((id) => ["mac-case@1", "case_history", id]));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(Object.keys(result.value.formats)).toEqual([...FORMAT_IDS]);
+      for (const id of FORMAT_IDS) expect(result.value.formats[id].pages).toEqual(intro(id));
+      expect(caseStudyDocumentSchema.safeParse(result.value).success).toBe(true);
+    });
+
+    it("replaces a v1 entry keyed by a registry id with the default pages", () => {
+      const v1 = caseHistoryV1([...LEGACY_FORMAT_IDS, "presentazione_16_9"]);
+      const result = upgradeWith(v1, deps(intro));
+      expect(result.ok && result.value.formats.presentazione_16_9).toEqual({ pages: intro("presentazione_16_9") });
+    });
+
+    it("never shares the default pages' objects with the result", () => {
+      const shared = intro("presentazione_16_9");
+      const result = upgradeWith(caseHistoryV1(), deps(() => shared));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.formats.presentazione_16_9.pages[0]).not.toBe(shared[0]);
+      expect(result.value.formats.presentazione_16_9.pages[0]).not.toBe(result.value.formats.carosello_1_1.pages[0]);
+    });
+
+    it("refuses default pages that break v2 with DOCUMENT_INVALID", () => {
+      const broken = () => [{ ...intro("presentazione_16_9")[0], about: "Acme" }] as unknown as Page[];
+      expect(codeOf(upgradeWith(caseHistoryV1(), deps(broken)))).toBe("DOCUMENT_INVALID");
+    });
+  });
+
+  it("takes the v0 fixture through v1 to v2 without touching the input", () => {
+    const v0 = caseHistoryV0();
     const before = structuredClone(v0);
     const result = upgrade(v0);
     expect(v0).toEqual(before);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const doc = result.value;
-    expect(caseStudyDocumentSchema.safeParse(doc).success).toBe(true);
-    expect(doc).toMatchObject({ schemaVersion: 1, kind: "case_history", template: "mac-case@1", selectedMedia: v0.media });
-    expect(doc.blocks.map((b) => [b.blockId, b.section, b.check])).toEqual(v0.blocks.map((b) => [b.id, b.section, null]));
-    expect(doc.blocks.flatMap((b) => b.claims.map((c) => c.provenance))).toEqual(["generated", "generated"]);
-    expect(doc.blocks[2].claims[0].sourceRefs).toEqual(v0.blocks[2].claims[0].sourceRefs);
-    expect(doc.formats).toEqual(v0.formats);
-    expect(doc.formats).not.toBe(v0.formats);
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        schemaVersion: 2,
+        kind: "case_history",
+        template: "mac-case@1",
+        formats: { presentazione_16_9: { pages: [] }, carosello_1_1: { pages: [] }, video_9_16: { pages: [] } },
+      },
+    });
+  });
+
+  it("refuses a v1 document that breaks the v1 narrative rule", () => {
+    const v1 = caseHistoryV1();
+    v1.blocks.reverse();
+    const result = upgrade(v1);
+    expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+    expect(issuesOf(result).map((i) => i.path)).toContain("blocks");
   });
 
   it("refuses a v0 document that breaks the narrative rule", () => {
-    const v0 = caseHistoryV0(FORMAT_IDS);
+    const v0 = caseHistoryV0();
     v0.blocks.reverse();
     const result = upgrade(v0);
     expect(codeOf(result)).toBe("DOCUMENT_INVALID");
@@ -227,13 +529,17 @@ describe("upgrade", () => {
   });
 
   it("refuses a malformed v0 document with DOCUMENT_INVALID", () => {
-    expect(codeOf(upgrade({ ...caseHistoryV0(FORMAT_IDS), templateVersion: "one" }))).toBe("DOCUMENT_INVALID");
+    expect(codeOf(upgrade({ ...caseHistoryV0(), templateVersion: "one" }))).toBe("DOCUMENT_INVALID");
+  });
+
+  it("refuses a malformed v2 document with DOCUMENT_INVALID", () => {
+    expect(codeOf(upgrade({ ...caseHistoryV2(FORMAT_IDS), about: { name: "Acme" } }))).toBe("DOCUMENT_INVALID");
   });
 
   it.each([
-    ["a future version", { ...caseHistoryV1(FORMAT_IDS), schemaVersion: 99 }],
-    ["a negative version", { ...caseHistoryV1(FORMAT_IDS), schemaVersion: -1 }],
-    ["a string version", { ...caseHistoryV1(FORMAT_IDS), schemaVersion: "1" }],
+    ["a future version", { ...caseHistoryV2(FORMAT_IDS), schemaVersion: 99 }],
+    ["a negative version", { ...caseHistoryV2(FORMAT_IDS), schemaVersion: -1 }],
+    ["a string version", { ...caseHistoryV2(FORMAT_IDS), schemaVersion: "2" }],
     ["no version", { kind: "case_history" }],
     ["null", null],
     ["an array", []],

@@ -397,7 +397,7 @@ describe("CaseStudiesTable", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("offers Scarica on approved rows only; it opens the format picker with Deck 16:9 chosen", async () => {
+  it("offers Scarica on approved rows only; the picker lists Presentazione (chosen), then Carosello 1080×1080, with Video under In arrivo", async () => {
     const user = userEvent.setup();
     render(<CaseStudiesTable rows={rows} canCreate />);
     const buttons = screen.getAllByRole("button", { name: /^Scarica / });
@@ -405,10 +405,16 @@ describe("CaseStudiesTable", () => {
     await user.click(buttons[0]!);
     const dialog = screen.getByRole("dialog", { hidden: true });
     const radios = within(dialog).getAllByRole("radio", { hidden: true }) as HTMLInputElement[];
-    expect(radios.filter((r) => !r.disabled)).toHaveLength(3);
-    expect(radios[0]?.checked).toBe(true);
-    expect(dialog.textContent).toContain(dict.download.format.deck_16_9.name);
-    expect(dialog.textContent).toContain(dict.download.soon);
+    const enabled = radios.filter((r) => !r.disabled);
+    expect(enabled.map((r) => r.closest("label")?.querySelector("span > span")?.textContent)).toEqual([
+      dict.download.format.presentazione_16_9.name,
+      dict.download.format.carosello_1_1.name,
+    ]);
+    expect(dict.download.format.carosello_1_1.name).toBe("Carosello 1080×1080");
+    expect(enabled.map((r) => r.checked)).toEqual([true, false]);
+    const upcoming = radios.filter((r) => r.disabled).map((r) => r.parentElement?.textContent ?? "");
+    expect(upcoming.some((text) => text.includes(dict.download.upcoming.video) && text.includes(dict.download.soon))).toBe(true);
+    expect(dialog.textContent).not.toContain("Post 1080×1080");
   });
 
   it("offers no Elimina in the list: a draft is deleted from inside it (owner, 2026-10-22)", () => {

@@ -1,55 +1,121 @@
 // Public surface of the generation module. Code outside this module imports only this file.
 // Pure and safe for web code so far (Story 3.3): the case study document schema and
 // `upgrade`. The narrative generator (Story 3.6) will live behind `worker.ts`.
-import { validateNewDocument as validateAgainst, type CaseStudyDocument } from "@/modules/generation/domain/document";
+import {
+  upgrade as upgradeWith,
+  validateNewDocument as validateAgainst,
+  type CaseStudyDocument,
+  type DefaultPages,
+} from "@/modules/generation/domain/document";
 import { FORMAT_IDS } from "@/modules/rendering";
 import type { Result } from "@/shared/result";
 
 export {
+  ANIMATION_FITS,
+  ANIMATIONS,
+  animationElementSchema,
+  backgroundSchema,
+  BINDING_RECORDS,
+  CASE_BINDING_FIELDS,
+  bindingSchema,
   blockSchema,
   caseStudyDocumentSchema,
   caseStudyDocumentV0Schema,
-  checkSchema,
+  caseStudyDocumentV1Schema,
   CLAIM_ASPECTS,
   CLAIM_PROVENANCES,
-  claimSchema,
-  CLIENT_SECTIONS,
+  CLIENT_BINDING_FIELDS,
+  cropSchema,
   CURRENT_SCHEMA_VERSION,
   DOCUMENT_INVALID,
   DOCUMENT_KINDS,
   DOCUMENT_SCHEMA_UNSUPPORTED,
-  formatEntrySchema,
+  ELEMENT_TYPES,
+  elementSchema,
+  formatPagesSchema,
+  gridSchema,
   MATERIAL_REF_KINDS,
   materialRefSchema,
-  NARRATIVE_SECTIONS,
+  MAX_RESULT_ROWS,
+  MEDIA_FITS,
+  PAGE_ROLES,
+  PAGE_SECTIONS,
+  pageSchema,
+  RESULT_ROW_FIELDS,
   templateRefSchema,
-  upgrade,
+  TEXT_ALIGNS,
+  TEXT_GROUP_ALIGNS,
+  TEXT_STYLES,
+  textElementSchema,
 } from "@/modules/generation/domain/document";
-/** Reference documents (valid v1 case history and client intro, a stored v0), for tests of other modules. */
-export { caseHistoryV0, caseHistoryV1, clientIntroV1 } from "@/modules/generation/domain/document-fixtures";
+/** Reference documents (valid v2 case history and client intro; a stored v1 and v0), for tests of other modules. */
+export {
+  caseHistoryV0,
+  caseHistoryV1,
+  caseHistoryV2,
+  clientIntroV1,
+  clientIntroV2,
+  LEGACY_FORMAT_IDS,
+} from "@/modules/generation/domain/document-fixtures";
 export type {
+  AnimationElement,
+  AnimationId,
+  Background,
+  Binding,
+  BindingRecord,
   Block,
   CaseStudyDocument,
   CaseStudyDocumentV0,
-  Check,
-  Claim,
+  CaseStudyDocumentV1,
   ClaimAspect,
   ClaimProvenance,
+  Crop,
+  DefaultPages,
+  DocumentElement,
   DocumentIssue,
   DocumentKind,
   DocumentMaterialRef,
-  FormatEntry,
+  ElementType,
+  FormatPages,
+  Grid,
+  ImageElement,
+  MediaFit,
+  Page,
+  PageRole,
+  PageSection,
+  TextAlign,
+  TextElement,
+  TextGroupAlign,
+  TextGroupElement,
+  TextStyle,
+  VideoElement,
 } from "@/modules/generation/domain/document";
 
 /**
+ * The template's default pages of a format, which v1 → v2 gives every registry
+ * format. TODO(Story 3.4): read them from `rendering/templates/{id}/v{n}/`.
+ */
+const defaultPages: DefaultPages = () => [];
+
+/**
+ * Takes a stored document of any known version (v0, v1, v2) to v2 in memory; the
+ * input is never mutated or written back. v1 → v2 drops format keys outside the
+ * registry and gives every registry format the template's default pages. Errors:
+ * `DOCUMENT_SCHEMA_UNSUPPORTED` (unknown, missing or newer version),
+ * `DOCUMENT_INVALID` (zod issues in `details.issues`).
+ */
+export function upgrade(doc: unknown): Result<CaseStudyDocument> {
+  return upgradeWith(doc, { defaultPages, formatIds: FORMAT_IDS });
+}
+
+/**
  * Validates the document of a new revision. Errors: `DOCUMENT_SCHEMA_UNSUPPORTED`
- * (not the current schema version), `DOCUMENT_INVALID` (zod issues in
- * `details.issues`: e.g. path `blocks` for a missing or misordered narrative,
- * `unrecognized_keys` for a client value, a slot asset outside `selectedMedia`, a
- * size bound), `FORMAT_NOT_IN_REVISION` (not one entry for exactly each registry
- * format; `details: { missing, extra, extraCount }`, `extra` capped at 10 keys).
- * `upgrade(doc)` (stored documents) returns `DOCUMENT_SCHEMA_UNSUPPORTED` or
- * `DOCUMENT_INVALID`.
+ * (not v2), `DOCUMENT_INVALID` (zod issues in `details.issues`: e.g.
+ * `unrecognized_keys` for a client value, a text with both or neither of `text`
+ * and `binding`, a duplicate page key, block or element id within a format, a crop
+ * without `fit: crop`, a size bound), `FORMAT_NOT_IN_REVISION` (not one page list
+ * for exactly each registry format; `details: { missing, extra, extraCount }`,
+ * `extra` capped at 10 keys).
  */
 export function validateNewDocument(doc: unknown): Result<CaseStudyDocument> {
   return validateAgainst(doc, FORMAT_IDS);

@@ -2,21 +2,21 @@ import { z } from "zod";
 import { err, ok, type Result } from "@/shared/result";
 
 /**
- * The format registry (Story 3.3): the only list of output formats anywhere. No
- * other type carries a canvas ratio; everything that needs a format's size, page
- * model or file type reads it here. Every format is static (no motion) in the MVP.
+ * The format registry (Story 3.3, C28): the only list of output formats anywhere.
+ * No other type carries a canvas ratio; everything that needs a format's size,
+ * page model, file type or motion reads it here.
  */
-export const FORMAT_IDS = ["deck_16_9", "social_carousel_4_5", "pdf_a4"] as const;
+export const FORMAT_IDS = ["presentazione_16_9", "carosello_1_1", "video_9_16"] as const;
 export type FormatId = (typeof FORMAT_IDS)[number];
 
 export const formatIdSchema = z.enum(FORMAT_IDS);
 
-/** `pages`: a paged document (A4); `slides`: one canvas per slide (deck, carousel). */
+/** `pages`: a paged document; `slides`: one canvas per slide (every format today). */
 export const PAGE_MODELS = ["pages", "slides"] as const;
 export type PageModel = (typeof PAGE_MODELS)[number];
 
-/** `pdf`: one PDF file; `zip_png`: a ZIP of one PNG per slide. */
-export const FILE_TYPES = ["pdf", "zip_png"] as const;
+/** `pdf`: one PDF file; `zip_png`: a ZIP of one PNG per slide; `mp4_webm`: an MP4 or WebM video. */
+export const FILE_TYPES = ["pdf", "zip_png", "mp4_webm"] as const;
 export type FileType = (typeof FILE_TYPES)[number];
 
 export interface Format {
@@ -29,37 +29,39 @@ export interface Format {
   pixelSize: { width: number; height: number };
   pageModel: PageModel;
   fileType: FileType;
-  static: true;
+  /** True when the format animates (Video); false for a static one. */
+  motion: boolean;
 }
 
 export const FORMATS: readonly Format[] = Object.freeze([
   Object.freeze({
-    id: "deck_16_9",
-    name: "Deck 16:9",
+    id: "presentazione_16_9",
+    name: "Presentazione",
     ratio: "16:9",
     pixelSize: Object.freeze({ width: 1920, height: 1080 }),
     pageModel: "slides",
     fileType: "pdf",
-    static: true,
+    motion: false,
   }),
+  // Drawn on a 1000 px Figma frame ("MAC-TF-AI") and scaled to 1080 px.
   Object.freeze({
-    id: "social_carousel_4_5",
-    name: "Carosello social 4:5",
-    ratio: "4:5",
-    pixelSize: Object.freeze({ width: 1080, height: 1350 }),
+    id: "carosello_1_1",
+    name: "Carosello",
+    ratio: "1:1",
+    pixelSize: Object.freeze({ width: 1080, height: 1080 }),
     pageModel: "slides",
     fileType: "zip_png",
-    static: true,
+    motion: false,
   }),
-  // A4 portrait at 300 dpi.
+  // Instagram Reels and Stories; texts animate in sequence on a loop.
   Object.freeze({
-    id: "pdf_a4",
-    name: "PDF A4",
-    ratio: "210:297",
-    pixelSize: Object.freeze({ width: 2480, height: 3508 }),
-    pageModel: "pages",
-    fileType: "pdf",
-    static: true,
+    id: "video_9_16",
+    name: "Video",
+    ratio: "9:16",
+    pixelSize: Object.freeze({ width: 1080, height: 1920 }),
+    pageModel: "slides",
+    fileType: "mp4_webm",
+    motion: true,
   }),
 ] satisfies Format[]);
 
