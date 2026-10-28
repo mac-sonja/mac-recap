@@ -2,7 +2,7 @@
 title: "MAC Recap – MVP PRD (v2)"
 status: final
 created: 2026-10-07
-updated: 2026-10-19
+updated: 2026-10-28
 version: 2
 supersedes: "docs/sources/MAC Recap-PRD-EN v1.pdf"
 ---
@@ -22,6 +22,8 @@ Updated Oct 16, 2026 (second): before the October 30 demo (owner amendment the s
 Updated Oct 19, 2026: Add client is a three-step wizard (Dettagli, Materiale, Introduzione). Client fields: name, industries (fixed list, multiselect), description, logo, context, solution, results, all required. Client material: up to 3 files, any type, at least 2 images ([Sprint Change Proposal 2026-10-19](../../sprint-change-proposal-2026-10-19.md)).
 
 Updated Oct 22, 2026: a client has one sector, picked from a shared list that owners and designers can add to (it replaces the multiselect industries).
+
+Updated Oct 28, 2026: the configurator is built as in the owner's mockup. The formats are Presentazione 16:9, Carosello 1:1 and Video 9:16, each with its own pages; pages are bento blocks of elements inside MAC's templates; images can be cropped; client fields on a page are editable and update the client. FR3, FR4, FR5 and FR7 are amended, open point 1 is answered and open point 12 is partly reversed ([Sprint Change Proposal 2026-10-28, configurator](../../sprint-change-proposal-2026-10-28-configurator.md)).
 
 This version updates PRD v1 (Oct 7, 2026) with the decisions taken in the product brief (`_bmad-output/planning-artifacts/briefs/brief-MAC-Recap-2026-10-08/`). FR, NFR, epic, story and open-point numbers are unchanged from v1. Retired items are marked, not renumbered, and new items are added at the end.
 
@@ -58,7 +60,7 @@ Goals:
 **October 30 demo (go / no-go with the CEO).** One real past project goes through MAC Recap live. Ideally it is one of the seven never published.
 
 - From upload to approved case study in 15-20 minutes of the owner/designer's hands-on time (NFR4).
-- The same case study exported in several formats, such as deck, social carousel and PDF (FR7).
+- The same case study exported in several formats, such as deck, social carousel and PDF (FR7). Amended (SCP 2026-10-28): Presentazione and Carosello for the demo; Video is shown in Anteprima and exported after the demo.
 - The text covers both the technical and the graphic side of the project (NFR5).
 - A person checks during review that every claim in the text can be traced back to the uploaded material (NFR2).
 
@@ -124,17 +126,21 @@ MAC closes about one project a month, so 8 weeks yields only a few case studies.
 
 **FR3** – The system generates graphic case studies by applying templates to the uploaded material. It writes the text as challenge, approach and result, using only the uploaded material, the form answers and the client's description, sector and brief. Every case study shows the client's info in an About the client block.
 - If no material is uploaded, generation is not available (NFR6).
+- Amended (SCP 2026-10-28): the system lays out pages for three formats, Presentazione 16:9, Carosello 1:1 and Video 9:16. Each format has its own pages, built from MAC's Figma templates (Intro, Contenuti, Risultati e testimonial, and Chiusura in Carosello). The About the client block becomes the Intro's Cliente block: the client's name, sector and logo, bound to the client's record. Whether a person may delete the challenge, approach or result content once blocks and pages can be deleted is open.
 
 **FR4** – Templates adapt their layout to the number of available media items.
+- Amended (SCP 2026-10-28): media-count rules are replaced. Each format offers the layout grids of MAC's templates and default pages that restore a lost template page. A grid with more cells adds empty blocks; one with fewer removes only empty blocks and refuses to remove filled ones.
 
 **FR5** – The owner/designer reviews and edits case studies through the review dashboard and the configurator. Editing covers the generated text as well as layout, media and typography, so a claim that fails the review check (NFR2) can be corrected before approval.
+- Amended (SCP 2026-10-28): the owner/designer edits each format's own pages; an edit in one format doesn't change the others. A page is a bento grid of blocks, and a block holds elements: texts in seven styles, groups of texts, images and videos, animations, the case's services, the logos and a divider. Blocks can be added, swapped, resized and deleted within MAC's template layouts, pages can be added, deleted and reordered, and backgrounds come from the brand palette or the case's and client's media. Media are fitted with Riempi, Adatta or Ritaglia. The client's and the case's fields on a page (name, sector, logo; year, services) can be edited there and update the client's or the case's record. Layout variants, shuffle, spacing sliders, font pairings and text scale are gone. The configurator mockup (`ux-designs/ux-MAC Recap-2026-10-08/mockups/configurator.html`) is the UX source of truth.
+- Amended for the demo (owner 2026-10-27; SCP 2026-10-28): approval needs no per-block check, only no overflow and the material present.
 
 **FR6** – When the owner/designer approves a case study, it becomes an approved case study. Approval is the mandatory human review (NFR7). Any owner/designer can approve.
 
 **FR7** – Owner/designer and account/sales/social users can export an approved case study as files in the MVP formats, or publish it as a shareable link, such as a hosted presentation.
 - Only approved case studies can be exported or shared.
 - The tool does not post to social channels or the website.
-- Which formats are in the MVP is open point 1.
+- Which formats are in the MVP is open point 1. Answered (SCP 2026-10-28): Presentazione 16:9 (1920×1080, PDF) and Carosello 1:1 (1080×1080, PNG images). Video 9:16 (1080×1920) is shown in Anteprima only for the demo, and is exported as MP4 or WebM with its animations after the demo. The 4:5 carousel and the A4 PDF are dropped.
 - Until open point 11 is decided, anyone with a shareable link can open it.
 
 **FR8** – Owner/designer, account/sales/social and admin users sign in through a login, with distinct roles and permissions. Delivered in Sprint 3.
@@ -153,14 +159,14 @@ Added by the [Sprint Change Proposal 2026-10-16, client intro and collections](.
 
 **FR12** – **Modifica layout** on the client's page opens the client overview: the intro, every case study and the outro of the client in one preview. Editing a case study there edits that case study. **Modifica cliente** edits the client's data in a side panel (SCP 2026-10-21).
 
-**FR13** – Owner/designer and account/sales/social users download a client pack, or build, save and export collections of approved case studies (16:9 deck and A4 PDF). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them, replacing their own outro pages; otherwise each case study keeps its own intro and outro (SCP 2026-10-26). Text edits and hidden pages in a collection apply only to that collection. Only owner/designers edit text in a collection (decided by the owner on 2026-10-16).
+**FR13** – Owner/designer and account/sales/social users download a client pack, or build, save and export collections of approved case studies (16:9 deck and A4 PDF; since SCP 2026-10-28 Presentazione 16:9 only, as the A4 PDF is dropped). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them, replacing their own outro pages; otherwise each case study keeps its own intro and outro (SCP 2026-10-26). Amended (SCP 2026-10-28): a case study's Risultati e testimonial pages stay in a client's file; only its own intro and its Carosello closing are left out. Text edits and hidden pages in a collection apply only to that collection. Only owner/designers edit text in a collection (decided by the owner on 2026-10-16).
 
 ## 4. Non-functional requirements and guardrails
 
 Guardrails are non-negotiable constraints. Any requirement that contradicts them must be flagged, not implemented.
 
 **NFR1** – The AI does not alter graphic assets, the technical substance of the content, or template design.
-- [FLAG: possible conflict with FR4 and FR7. Layouts adapt to the number of media items, and exports resize to 16:9, 4:5, 1:1, 9:16 and A4. What counts as "altering" is open point 12.]
+- [FLAG: possible conflict with FR4 and FR7. Layouts adapt to the number of media items, and exports resize to 16:9, 4:5, 1:1, 9:16 and A4. What counts as "altering" is open point 12.] Update (SCP 2026-10-28): the formats are 16:9, 1:1 and 9:16, and a person can crop an image in the layout (Ritaglia); the AI still alters nothing.
 
 **NFR2** – In the MVP, a person checks generated technical content for hallucinations during review, before approval. Every claim must trace back to the uploaded material or the form answers. This is a manual step, not an automated feature.
 
@@ -273,6 +279,7 @@ Prerequisite: configurator visual design (Bento).
 **Story 4.2** – As an owner/designer, I want to edit a case study through the configurator.
 - The configurator follows the designed Bento layout
 - I can edit the generated text, layout, media and typography
+- Amended (SCP 2026-10-28): the configurator follows the owner's mockup; see FR5
 
 **Story 4.3** – As an owner/designer, I want to approve a case study.
 - Before approving, I check that every claim in the text traces back to the uploaded material or the form answers
@@ -295,7 +302,7 @@ Prerequisite: account/sales/social user journey.
 
 **Story 5.1** – As an owner/designer or account/sales/social user, I want to export an approved case study as files.
 - Only approved case studies can be exported
-- Export produces files in the MVP formats (open point 1)
+- Export produces files in the MVP formats (open point 1; answered by SCP 2026-10-28: Presentazione as PDF, Carosello as PNG images, Video as MP4 or WebM after the demo)
 
 **Story 5.2** – As an owner/designer or account/sales/social user, I want to publish an approved case study as a shareable link.
 - The approved case study can be published as a shareable link, such as a hosted presentation
@@ -307,7 +314,7 @@ Prerequisite: account/sales/social user journey.
 - The client's approved outro comes once after the last case study when there are 2 or more; with one, it keeps its own outro (SCP 2026-10-26)
 
 **Story 5.4** – As an owner/designer or account/sales/social user, I want to build a collection.
-- I pick approved case studies, name the collection, reorder it and export it as a 16:9 deck or A4 PDF
+- I pick approved case studies, name the collection, reorder it and export it as a 16:9 deck or A4 PDF (since SCP 2026-10-28: Presentazione 16:9)
 - A client with 2 or more case studies gets its intro in front of them, and its case studies stay together
 - A client with 2 or more case studies gets its approved outro once after the last of them (SCP 2026-10-26)
 - Collections are saved, visible to everyone who can export, and can be reopened, changed and exported again
@@ -381,7 +388,7 @@ Prerequisite: account/sales/social user journey.
 
 These points must be resolved before the epics that depend on them. Owners are not yet assigned.
 
-1. **Export formats** (Epics 3 and 5; decide before Sprint 2). Which formats the MVP produces. The demo criteria set a minimum: 16:9 deck, social carousel and PDF. The A3 deck shows eight: 16:9 deck, A4 whitepaper, 1080×1350 carousel, square post, 1080×1920 social video, 1200×675 LinkedIn cover, HD PNG pack and ZIP. Merges v1 points 1 and 5. The publishing channel is now settled as the shareable link.
+1. **Export formats** (Epics 3 and 5; decide before Sprint 2). Which formats the MVP produces. The demo criteria set a minimum: 16:9 deck, social carousel and PDF. The A3 deck shows eight: 16:9 deck, A4 whitepaper, 1080×1350 carousel, square post, 1080×1920 social video, 1200×675 LinkedIn cover, HD PNG pack and ZIP. Merges v1 points 1 and 5. The publishing channel is now settled as the shareable link. **Answered 2026-10-28 by the owner (SCP 2026-10-28, C28):** Presentazione 16:9 (1920×1080), Carosello 1:1 (1080×1080) and Video 9:16 (1080×1920), which serves both Instagram Reels and Stories. For the demo Video is Anteprima only; after it, Video exports as MP4 or WebM. The 4:5 carousel and the A4 PDF are dropped.
 2. **Data processing logic** (Epic 3; decide before Sprint 2). How the tool turns uploaded material into text.
 3. **Tag, property and flag taxonomy.** Resolved 2026-10-14: no taxonomy. Tags, properties and flags are dropped; favourites replace them (Story 2.4).
 4. **Account/sales/social user journey** (Epic 5). Partly resolved: these users reach approved case studies inside MAC Recap, with their own login from Sprint 3. Still open: how they find and browse case studies.
@@ -392,7 +399,7 @@ These points must be resolved before the epics that depend on them. Owners are n
 9. **Owner/designer export rights.** Resolved: both owner/designer and account/sales/social users can export and share approved case studies.
 10. **Attribution** (6-month review). How inbound contacts and upsells are attributed to a case study.
 11. **Shareable link access** (Epic 5). Until this is decided, links open for anyone who has them (FR7). Can anyone with the link open it, only logged-in users, or does the link expire? This is a client confidentiality decision.
-12. **What counts as altering** (Epics 3 and 4, NFR1; decide before Sprint 2). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary.
+12. **What counts as altering** (Epics 3 and 4, NFR1; decide before Sprint 2). Whether adapting the layout to the number of media items (FR4), the configurator's shuffle and replace, and resizing for export formats count as altering graphic assets or template design. The design team defines the boundary. **Partly reversed 2026-10-28 by the owner (SCP 2026-10-28, answer 4):** a person can crop an image in the layout (Ritaglia), next to Riempi and Adatta. Media-count adaptation and shuffle are gone (FR4, FR5). Uploaded files and their display copies are still never changed, and the AI alters nothing.
 13. **Recording the 8-week measures.** How owner/designer time, editing and hallucinations are recorded during validation.
 14. **What a favourite means for generation** (Epic 3; decide before Sprint 2). Whether generation must use, prefers, or simply shows favourites first.
 15. **Who may edit text in a collection** (Epic 5). Resolved 2026-10-16 by the owner: only owner/designers edit text in a collection; account/sales/social reorder, hide pages and export. If sales people need to change wording, the planned upgrade is an owner/designer approval of their edits before export. Assumption: "PM" in the owner's request means an owner/designer in the tool.
