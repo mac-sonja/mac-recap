@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 import { PRESSABLE } from "@/app/_components/button-styles";
+import { caseStudiesHref } from "@/app/_lib/routes";
 import { SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import { fill, it } from "@/shared/i18n/it";
@@ -30,9 +31,6 @@ export interface SidebarProps {
   /** The appearance choice from the theme cookie. */
   theme?: ThemeChoice;
 }
-
-/** The "{n} da approvare" note opens the Case page on the Da approvare queue (owner 2026-10-28; the queue itself is Story 4.1). */
-const TO_REVIEW_HREF = "/case-studies?stato=in_review";
 
 /** Full labels at ≥1280 px; icons only at 1024–1279 px, labels kept for screen readers. */
 const LABEL = "sr-only xl:not-sr-only";
@@ -182,7 +180,7 @@ export function Sidebar({
             label={it.shell.nav.caseStudies}
             active={isCaseStudies}
             meta={toReviewCount ? fill(it.shell.nav.toReview, { n: toReviewCount }) : null}
-            metaHref={TO_REVIEW_HREF}
+            metaHref={caseStudiesHref("in_review")}
           />
         )}
         {showLibrary && (
