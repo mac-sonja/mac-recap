@@ -10,7 +10,8 @@ export default async function AuthLayout({ children }: Readonly<{ children: Reac
   await connection();
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-8 bg-surface px-4 py-12 text-foreground">
-      <p className="flex items-end gap-2 text-foreground-strong">
+      {/* RECAP sits under the wordmark here (owner, 2026-10-28); the sidebar keeps it beside. */}
+      <p className="flex flex-col items-center gap-2 text-foreground-strong">
         <MacWordmark label={it.app.name} className="h-[26px] w-auto" />
         <span aria-hidden="true" className="font-label text-xs leading-none font-semibold tracking-[0.18em]">
           {it.app.wordmarkSuffix}
