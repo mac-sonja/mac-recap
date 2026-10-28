@@ -8,7 +8,7 @@ import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-style
 import { CARD, SEARCH_FIELD, SEARCH_ICON, TH } from "@/app/_components/field-styles";
 import { DownloadButton } from "@/app/_components/download-button";
 import { StatusBadge } from "@/app/_components/status-badge";
-import { wizardHref } from "@/app/_lib/routes";
+import { configuratorHref, wizardHref } from "@/app/_lib/routes";
 import { CASE_STATUSES } from "@/shared/case-status";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -29,6 +29,8 @@ export interface CaseStudiesTableProps {
   rows: CaseStudyRow[];
   /** Policy decision (`create case`): whether the empty state offers "Nuova case history". */
   canCreate: boolean;
+  /** Policy decision (`edit`): whether Da approvare and Approvato rows open the configurator. */
+  canEdit?: boolean;
   /** The empty-state line; defaults to the Case history page's. */
   emptyMessage?: string;
   /** Where the empty state's call to action goes; defaults to the wizard's step 0. */
@@ -149,6 +151,7 @@ function isTextField(el: Element | null): boolean {
 export function CaseStudiesTable({
   rows,
   canCreate,
+  canEdit = false,
   emptyMessage = it.caseStudies.empty,
   newHref = "/case-studies/new",
   emptyAction = it.caseStudies.emptyAction,
@@ -308,8 +311,15 @@ export function CaseStudiesTable({
             </thead>
             <tbody>
               {visible.map((row) => {
-                // A Bozza reopens the wizard with no step: it picks the first incomplete one.
-                const href = row.status === "draft" ? wizardHref(row.id) : null;
+                // A Bozza reopens the wizard with no step: it picks the first incomplete one. A case in
+                // Da approvare or Approvato opens in the configurator (Story 4.2) for a role that may `edit`;
+                // In elaborazione opens nothing.
+                const href =
+                  row.status === "draft"
+                    ? wizardHref(row.id)
+                    : canEdit && (row.status === "in_review" || row.status === "approved")
+                      ? configuratorHref(row.id)
+                      : null;
                 return (
                   <tr
                     key={row.id}

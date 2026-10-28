@@ -9,7 +9,7 @@ const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
       "font-size": [{ text: ["badge"] }],
-      shadow: [{ shadow: ["card", "control", "popover", "primary", "monogram"] }],
+      shadow: [{ shadow: ["card", "control", "popover", "primary", "monogram", "page"] }],
     },
   },
 });

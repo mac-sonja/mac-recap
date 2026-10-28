@@ -49,6 +49,7 @@ export default async function CaseStudiesPage({ searchParams }: { searchParams?:
         key={initialQuery}
         rows={rows}
         canCreate={can(actor, "create case")}
+        canEdit={can(actor, "edit")}
         showCreate={can(actor, "create case")}
         initialQuery={initialQuery}
       />
