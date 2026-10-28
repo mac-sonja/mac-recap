@@ -2,7 +2,7 @@
 title: 'Story 3.4: templates as versioned code — pages, layouts and default pages per format'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'ccf8b674388c7c36ece34d0cc10ba1f1f056c419'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -69,15 +69,44 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/generation/domain/document.ts` + fixtures + tests -- schema amendments -- Figma pages must be storable.
-- [ ] `src/modules/rendering/templates/mac-case/v1/*` -- styles, layouts, default pages from the mockup.
-- [ ] `src/modules/rendering/templates/index.ts`, `rendering/index.ts` -- template API.
-- [ ] `src/modules/rendering/templates/templates.test.ts`, `hashes.json` -- I/O matrix, layout lists, schema validity, immutability.
-- [ ] `src/modules/generation/index.ts` + tests -- upgrade uses the template's starter pages.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.4 to review.
+- [x] `src/modules/generation/domain/document.ts` + fixtures + tests -- schema amendments -- Figma pages must be storable.
+- [x] `src/modules/rendering/templates/mac-case/v1/*` -- styles, layouts, default pages from the mockup.
+- [x] `src/modules/rendering/templates/index.ts`, `rendering/index.ts` -- template API.
+- [x] `src/modules/rendering/templates/templates.test.ts`, `hashes.json` -- I/O matrix, layout lists, schema validity, immutability.
+- [x] `src/modules/generation/index.ts` + tests -- upgrade uses the template's starter pages.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.4 to review.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, when they run, then they pass.
+
+## Implementation Notes
+
+- Implemented by a subagent; `npm run typecheck`, `npm run lint`, `npm test` (3035 passed) and `npm run build` green locally (Node 24). The DB suite (`test/db/revision.db.test.ts`, expectation updated to the starter pages) runs only in CI.
+- Choices the spec left open: the shared shapes (`Layout`, `DefaultPage`, `TemplateContext`, `TextStyleSpec`, `TemplateVersion`) live in `templates/types.ts`, outside the immutable folder. Row items are a discriminated union (clear error paths). On-photo blocks (Intro with an image) store white ink and on-photo label/muted colours explicitly; without an image the block is grey with the normal colours. Risultati with one of its two blocks uses the format's layout for that block count (Presentazione `content_1`, Carosello `one`, Video `stack`). Presentazione Risultati's visual is `images[1]` (the first image not the Intro's, as the mockup); Contenuti take `images[0…n-1]` and the `outputHead/outputBody` texts. Standalone Carosello Sfida/Idea default pages use keys `sfida`/`idea` (role intro) so every default page of a format fits one document; Contenuti keys are `content-1`, `content`, `content-5`.
+- Upgrade context: no texts, no images, `resultRows: 0`, `hasTestimonial: false`, so v1 → v2 starter pages omit Risultati (a v1 document says nothing of results). v1's `mac-case@1` ref names the v2 template, no mapping needed.
+- Template spacers: a top-aligned Testi group holding only the label stands in for "label, spacer, non-text elements" (the group grows and pushes what follows to the bottom), as the mockup's `.grp{flex:1 1 auto}` does; the renderer (3.5) must keep that behaviour.
+
+## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Project block ink and on-photo colours untested (gap) | medium | No assertion on `ink` or on-photo colours for Intro block 0 or the Carosello cover | patch |
+| 2 | Presentazione Risultati visual image untested (gap) | low | Only block names and layout id are asserted | patch |
+| 3 | `STACK` comment names Carosello Risultati, which uses `two` (gap, other) | low | `results()` uses `two`/`one` for Carosello | patch |
+| 4 | Upgraded documents repeat ids across formats and documents (blind) | false | Same ids across formats are independent copies by design (3.3 v2); nothing keys ids across documents | reject |
+| 5 | Non-finite `resultRows` makes `results()` throw (blind, edge) | low | `NaN` passes both `rows === 0` and `rows > 0` checks as false; direct fix | patch |
+| 6 | `MAX_ROWS` copies `MAX_RESULT_ROWS` (blind) | low | The binding `index` schema caps rows at 3 anyway; a tie-in needs new test code | reject |
+| 7 | Hash test breaks on CRLF checkout (blind, edge) | low | Raw-byte hashes; no `.gitattributes`; one-line fix | patch |
+| 8 | Upgrade expectation copied in three test files (blind) | low | Duplication only; no wrong result | reject |
+| 9 | DB test imports rendering internals (blind) | low | Both names are exported from `@/modules/rendering` | patch |
+| 10 | Row accepts 0 items (blind, edge) | low | `items` has no minimum; direct `.min(1)` | patch |
+| 11 | `bindings` accepts duplicates (blind, edge) | low | Only template code writes `bindings`; the guard adds a refinement | reject |
+| 12 | Starter Presentazione repeats images (blind) | low | Matches the mockup's `fillDefault`, which puts the cover's media back in Contenuti; images are 3.10/3.7's choice | reject |
+| 13 | Template API throws vs returns `[]` (blind, edge) | low | `layouts`/`defaultPages`/`textStyles` take a typed `FormatId`; `starterPages` is the upgrade seam that must not throw | reject |
+| 14 | Grey-block labels have no colour, testimonial label has one (blind) | false | Mockup: `applyIntro` labels have no colour, `applyOutro` labels set `rgb(1 34 52 / .65)` | reject |
+| 15 | `last_updated` goes backwards (blind, edge) | low | 12:00 → 10:54 | patch |
+| 16 | Story key still says media-count rules (blind) | low | Pre-existing key; renaming breaks references | reject |
+| 17 | No consumer of the new schema shapes; 3.5 must honour them (blind) | medium | Grep finds none outside domain and templates | defer |
 
 ## Design Notes
 

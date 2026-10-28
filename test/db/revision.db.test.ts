@@ -8,7 +8,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
 import { REVISION_CREATED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
 import { caseHistoryV0, caseHistoryV1, caseHistoryV2 } from "@/modules/generation/domain/document-fixtures";
-import { FORMAT_IDS } from "@/modules/rendering/domain/formats";
+import { UPGRADE_ID_PREFIX } from "@/modules/generation";
+import { FORMAT_IDS, starterPages } from "@/modules/rendering";
 import { createTestClient } from "../helpers/db-clients";
 
 const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
@@ -22,12 +23,18 @@ const UNKNOWN_ID = "11111111-1111-4111-8111-111111111111";
 const v2 = () => caseHistoryV2(FORMAT_IDS);
 const v1 = () => caseHistoryV1();
 const v0 = () => caseHistoryV0();
-/** What a stored v1 or v0 case history reads as, until Story 3.4 gives the templates default pages. */
+/** What a stored v1 or v0 case history reads as: the template's starter pages, built with no texts, images or results and counter ids. */
 const upgradedV2 = {
   schemaVersion: 2,
   kind: "case_history",
   template: "mac-case@1",
-  formats: { presentazione_16_9: { pages: [] }, carosello_1_1: { pages: [] }, video_9_16: { pages: [] } },
+  formats: Object.fromEntries(
+    FORMAT_IDS.map((id) => {
+      let n = 0;
+      const newId = () => `${UPGRADE_ID_PREFIX}${String(++n).padStart(12, "0")}`;
+      return [id, { pages: starterPages("mac-case@1", "case_history", id, { newId, texts: {}, images: [], resultRows: 0, hasTestimonial: false }) }];
+    }),
+  ),
 };
 
 let pool: pg.Pool;

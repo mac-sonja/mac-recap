@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { MATERIAL_REF_KINDS as MATERIAL_MODULE_REF_KINDS, type MaterialRef } from "@/modules/material";
-import { FORMAT_IDS } from "@/modules/rendering";
+import { FORMAT_IDS, starterPages, type TemplateContext } from "@/modules/rendering";
 import { upgrade as upgradeWith, type DefaultPages, type Page } from "@/modules/generation/domain/document";
 import {
   caseHistoryV0,
@@ -15,6 +15,7 @@ import {
   LEGACY_FORMAT_IDS,
   MATERIAL_REF_KINDS,
   RESULT_ROW_FIELDS,
+  UPGRADE_ID_PREFIX,
   upgrade,
   validateNewDocument,
   type CaseStudyDocument,
@@ -36,12 +37,16 @@ const elementAt = (doc: CaseStudyDocument, page: number, block: number, element:
 const elementPath = (page: number, block: number, element: number) =>
   `formats.presentazione_16_9.pages.${page}.blocks.${block}.elements.${element}`;
 
+const typesOf = (elements: readonly DocumentElement[]): string[] =>
+  elements.flatMap((el) => (el.type === "text_group" || el.type === "row" ? [el.type, ...typesOf(el.items)] : [el.type]));
 const elementTypesOf = (doc: CaseStudyDocument) =>
-  new Set(
-    Object.values(doc.formats).flatMap(({ pages }) =>
-      pages.flatMap((p) => p.blocks.flatMap((b) => b.elements.flatMap((el: DocumentElement) => (el.type === "text_group" ? [el.type, ...el.items.map((i) => i.type)] : [el.type])))),
-    ),
-  );
+  new Set(Object.values(doc.formats).flatMap(({ pages }) => pages.flatMap((p) => p.blocks.flatMap((b) => typesOf(b.elements)))));
+
+/** The fixture's first row (client block): a group holding the meta line, then the logos. */
+const ROW = [0, 1, 6] as const;
+const metaLine = (doc: CaseStudyDocument) =>
+  ((elementAt(doc, ...ROW).items as Record<string, unknown>[])[0].items as Record<string, unknown>[])[0];
+const META_PATH = `${elementPath(...ROW)}.items.0.items.0`;
 
 describe("the text refs match material's MaterialRef", () => {
   it("has the same kinds", () => {
@@ -136,6 +141,79 @@ describe("validateNewDocument (the I/O matrix)", () => {
           expect(validateNewDocument(doc).ok, `${record}.${field}[${index}]`).toBe(true);
         }
       }
+    });
+
+    it("accepts a text bound to two or three fields (the meta line), holding no value", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      expect(metaLine(doc).bindings).toEqual([
+        { record: "client", field: "sector" },
+        { record: "case", field: "year" },
+      ]);
+      expect(validateNewDocument(doc).ok).toBe(true);
+      (metaLine(doc).bindings as unknown[]).push({ record: "client", field: "name" });
+      expect(validateNewDocument(doc).ok).toBe(true);
+    });
+
+    it.each([
+      ["one binding in the list", (el: Record<string, unknown>) => (el.bindings = [{ record: "client", field: "sector" }]), `${META_PATH}.bindings`],
+      [
+        "four bindings",
+        (el: Record<string, unknown>) => (el.bindings = [...(el.bindings as unknown[]), { record: "client", field: "name" }, { record: "client", field: "description" }]),
+        `${META_PATH}.bindings`,
+      ],
+      ["bindings and text", (el: Record<string, unknown>) => (el.text = "Illuminazione · 2026"), META_PATH],
+      ["bindings and binding", (el: Record<string, unknown>) => (el.binding = { record: "client", field: "name" }), META_PATH],
+      ["a bad field in the list", (el: Record<string, unknown>) => ((el.bindings as Record<string, unknown>[])[1].field = "sector"), `${META_PATH}.bindings.1.field`],
+    ])("rejects %s with DOCUMENT_INVALID", (_name, mutate, path) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      mutate(metaLine(doc));
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result).map((i) => i.path)).toContain(path);
+    });
+  });
+
+  describe("template amendments (Story 3.4)", () => {
+    it("accepts rows, alpha colours on texts, dividers and ink, block paddings, page margin and the star", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      expect(elementAt(doc, ...ROW)).toMatchObject({ type: "row", align: "centre", wide: true });
+      expect(pagesOf(doc)[2].blocks[0]).toMatchObject({ padding: 28, ink: "#FFFFFF" });
+      expect(pagesOf(doc)[1]).toMatchObject({ margin: 0, decoration: "star" });
+      elementAt(doc, 2, 0, 0).colour = "#01223499";
+      pagesOf(doc)[2].blocks[0].ink = "#ffffffa6";
+      expect(validateNewDocument(doc).ok).toBe(true);
+    });
+
+    it.each([
+      ["an image in a row", (d: CaseStudyDocument) => ((elementAt(d, ...ROW).items as unknown[])[1] = { elementId: "ffffffff-0000-4000-8000-000000000001", type: "image", assetId: null, fit: "fill" }), `${elementPath(...ROW)}.items.1.type`],
+      ["a divider in a row", (d: CaseStudyDocument) => ((elementAt(d, ...ROW).items as unknown[])[1] = { elementId: "ffffffff-0000-4000-8000-000000000001", type: "divider" }), `${elementPath(...ROW)}.items.1.type`],
+      ["a row in a row", (d: CaseStudyDocument) => ((elementAt(d, ...ROW).items as unknown[])[1] = { elementId: "ffffffff-0000-4000-8000-000000000001", type: "row", align: "top", items: [] }), `${elementPath(...ROW)}.items.1.type`],
+      ["an empty row", (d: CaseStudyDocument) => (elementAt(d, ...ROW).items = []), `${elementPath(...ROW)}.items`],
+      ["a bottom row", (d: CaseStudyDocument) => (elementAt(d, ...ROW).align = "bottom"), `${elementPath(...ROW)}.align`],
+      ["a row without align", (d: CaseStudyDocument) => delete elementAt(d, ...ROW).align, `${elementPath(...ROW)}.align`],
+      ["over 20 items in a row", (d: CaseStudyDocument) => (elementAt(d, ...ROW).items = Array.from({ length: 21 }, (_, i) => ({ elementId: `ffffffff-0000-4000-8000-${String(i).padStart(12, "0")}`, type: "logos" }))), `${elementPath(...ROW)}.items`],
+      ["an alpha page background", (d: CaseStudyDocument) => (pagesOf(d)[0].background = { kind: "colour", value: "#FFFFFFA6" }), "formats.presentazione_16_9.pages.0.background.value"],
+      ["a short alpha text colour", (d: CaseStudyDocument) => (elementAt(d, 2, 0, 0).colour = "#FFFA"), "formats.presentazione_16_9.pages.2.blocks.0.elements.0.colour"],
+      ["a divider colour name", (d: CaseStudyDocument) => (elementAt(d, 2, 0, 1).colour = "grey"), "formats.presentazione_16_9.pages.2.blocks.0.elements.1.colour"],
+      ["an ink name", (d: CaseStudyDocument) => (pagesOf(d)[2].blocks[0].ink = "white"), "formats.presentazione_16_9.pages.2.blocks.0.ink"],
+      ["a negative padding", (d: CaseStudyDocument) => (pagesOf(d)[2].blocks[0].padding = -1), "formats.presentazione_16_9.pages.2.blocks.0.padding"],
+      ["a top padding over 1000 px", (d: CaseStudyDocument) => (pagesOf(d)[1].blocks[3].paddingTop = 1001), "formats.presentazione_16_9.pages.1.blocks.3.paddingTop"],
+      ["a negative margin", (d: CaseStudyDocument) => (pagesOf(d)[2].margin = -4), "formats.presentazione_16_9.pages.2.margin"],
+      ["an unknown decoration", (d: CaseStudyDocument) => ((pagesOf(d)[1] as Record<string, unknown>).decoration = "moon"), "formats.presentazione_16_9.pages.1.decoration"],
+    ])("rejects %s", (_name, mutate, path) => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      mutate(doc);
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result).map((i) => i.path)).toContain(path);
+    });
+
+    it("rejects an element id used twice through a row's group", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      metaLine(doc).elementId = elementAt(doc, 0, 0, 0).elementId;
+      const result = validateNewDocument(doc);
+      expect(codeOf(result)).toBe("DOCUMENT_INVALID");
+      expect(issuesOf(result)).toEqual([expect.objectContaining({ path: "formats.presentazione_16_9", message: expect.stringContaining("elementId") })]);
     });
   });
 
@@ -429,31 +507,61 @@ describe("validateNewDocument (the I/O matrix)", () => {
 });
 
 describe("upgrade", () => {
+  /** What a stored v1 or v0 case history reads as: the template's starter pages, built with no texts, images or results. */
+  const upgradeContext = (): TemplateContext => {
+    let n = 0;
+    return { newId: () => `${UPGRADE_ID_PREFIX}${String(++n).padStart(12, "0")}`, texts: {}, images: [], resultRows: 0, hasTestimonial: false };
+  };
+  const upgradedV1 = {
+    schemaVersion: 2,
+    kind: "case_history",
+    template: "mac-case@1",
+    formats: Object.fromEntries(FORMAT_IDS.map((id) => [id, { pages: starterPages("mac-case@1", "case_history", id, upgradeContext()) }])),
+  };
+
   it("returns a v2 document as it is", () => {
     const doc = caseHistoryV2(FORMAT_IDS);
     expect(upgrade(doc)).toEqual({ ok: true, value: doc });
   });
 
-  it("reads a v1 document with the old format keys as v2 with the three formats, leaving the input unchanged", () => {
+  it("reads a v1 document with the old format keys as v2 with the template's starter pages, leaving the input unchanged", () => {
     const v1 = caseHistoryV1();
     expect(Object.keys(v1.formats)).toEqual([...LEGACY_FORMAT_IDS]);
     const before = structuredClone(v1);
     const result = upgrade(v1);
     expect(v1).toEqual(before);
-    // Until Story 3.4 the templates' default pages are empty.
-    expect(result).toEqual({
+    expect(result).toEqual({ ok: true, value: upgradedV1 });
+  });
+
+  it("gives each format the starter pages without Risultati (a v1 document says nothing of results), with deterministic ids", () => {
+    const result = upgrade(caseHistoryV1());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const keys = Object.fromEntries(FORMAT_IDS.map((id) => [id, result.value.formats[id].pages.map((p) => p.pageKey)]));
+    expect(keys).toEqual({
+      presentazione_16_9: ["intro", "content"],
+      carosello_1_1: ["intro", "intro-sfida", "intro-idea", "closing"],
+      video_9_16: ["intro"],
+    });
+    for (const id of FORMAT_IDS) {
+      const ids = JSON.stringify(result.value.formats[id]).match(/"(blockId|elementId)":"[^"]+"/g) ?? [];
+      expect(ids.length).toBeGreaterThan(0);
+      for (const found of ids) expect(found).toMatch(new RegExp(`"${UPGRADE_ID_PREFIX}\\d{12}"$`));
+    }
+    expect(upgrade(caseHistoryV1())).toEqual(result);
+    expect(validateNewDocument(result.value)).toEqual(result);
+  });
+
+  it("reads a v1 client intro as v2 with no pages (its template arrives with Stories 3.9 and 3.11)", () => {
+    expect(upgrade(clientIntroV1())).toEqual({
       ok: true,
       value: {
         schemaVersion: 2,
-        kind: "case_history",
-        template: "mac-case@1",
+        kind: "client_intro",
+        template: "mac-intro@1",
         formats: { presentazione_16_9: { pages: [] }, carosello_1_1: { pages: [] }, video_9_16: { pages: [] } },
       },
     });
-  });
-
-  it("reads a v1 client intro as v2", () => {
-    expect(upgrade(clientIntroV1())).toMatchObject({ ok: true, value: { schemaVersion: 2, kind: "client_intro", template: "mac-intro@1" } });
   });
 
   describe("with injected default pages", () => {
@@ -501,15 +609,7 @@ describe("upgrade", () => {
     const before = structuredClone(v0);
     const result = upgrade(v0);
     expect(v0).toEqual(before);
-    expect(result).toEqual({
-      ok: true,
-      value: {
-        schemaVersion: 2,
-        kind: "case_history",
-        template: "mac-case@1",
-        formats: { presentazione_16_9: { pages: [] }, carosello_1_1: { pages: [] }, video_9_16: { pages: [] } },
-      },
-    });
+    expect(result).toEqual({ ok: true, value: upgradedV1 });
   });
 
   it("refuses a v1 document that breaks the v1 narrative rule", () => {

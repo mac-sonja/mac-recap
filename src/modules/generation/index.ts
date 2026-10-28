@@ -1,13 +1,13 @@
 // Public surface of the generation module. Code outside this module imports only this file.
 // Pure and safe for web code so far (Story 3.3): the case study document schema and
-// `upgrade`. The narrative generator (Story 3.6) will live behind `worker.ts`.
+// `upgrade` (v1 → v2 reads the template's starter pages from rendering, Story 3.4). The narrative generator (Story 3.6) will live behind `worker.ts`.
 import {
   upgrade as upgradeWith,
   validateNewDocument as validateAgainst,
   type CaseStudyDocument,
   type DefaultPages,
 } from "@/modules/generation/domain/document";
-import { FORMAT_IDS } from "@/modules/rendering";
+import { FORMAT_IDS, starterPages, type TemplateContext } from "@/modules/rendering";
 import type { Result } from "@/shared/result";
 
 export {
@@ -27,6 +27,7 @@ export {
   CLIENT_BINDING_FIELDS,
   cropSchema,
   CURRENT_SCHEMA_VERSION,
+  dividerElementSchema,
   DOCUMENT_INVALID,
   DOCUMENT_KINDS,
   DOCUMENT_SCHEMA_UNSUPPORTED,
@@ -36,12 +37,17 @@ export {
   gridSchema,
   MATERIAL_REF_KINDS,
   materialRefSchema,
+  MAX_BINDINGS,
   MAX_RESULT_ROWS,
+  MIN_BINDINGS,
   MEDIA_FITS,
+  PAGE_DECORATIONS,
   PAGE_ROLES,
   PAGE_SECTIONS,
   pageSchema,
   RESULT_ROW_FIELDS,
+  ROW_ALIGNS,
+  rowElementSchema,
   templateRefSchema,
   TEXT_ALIGNS,
   TEXT_GROUP_ALIGNS,
@@ -75,14 +81,20 @@ export type {
   DocumentIssue,
   DocumentKind,
   DocumentMaterialRef,
+  DividerElement,
   ElementType,
   FormatPages,
   Grid,
   ImageElement,
+  LogosElement,
   MediaFit,
   Page,
+  PageDecoration,
   PageRole,
   PageSection,
+  RowAlign,
+  RowElement,
+  ServicesElement,
   TextAlign,
   TextElement,
   TextGroupAlign,
@@ -91,11 +103,29 @@ export type {
   VideoElement,
 } from "@/modules/generation/domain/document";
 
+/** The uuid prefix of the ids an upgrade gives the template's pages; a 12-digit counter per format follows. */
+export const UPGRADE_ID_PREFIX = "00000000-0000-4000-8000-";
+
 /**
- * The template's default pages of a format, which v1 → v2 gives every registry
- * format. TODO(Story 3.4): read them from `rendering/templates/{id}/v{n}/`.
+ * What v1 → v2 builds the template's starter pages from: no texts, no images (empty
+ * image blocks), and ids from a counter, so reading the same stored document twice
+ * gives the same document. A v1 document says nothing of the case's result rows or
+ * testimonial, so Risultati e testimonial is left out (it comes back from Pagine di
+ * default). No v1 revision exists on any environment (Story 3.3 v2).
  */
-const defaultPages: DefaultPages = () => [];
+const upgradeContext = (): TemplateContext => {
+  let counter = 0;
+  return {
+    newId: () => `${UPGRADE_ID_PREFIX}${String(++counter).padStart(12, "0")}`,
+    texts: {},
+    images: [],
+    resultRows: 0,
+    hasTestimonial: false,
+  };
+};
+
+/** The template's starter pages of a format, which v1 → v2 gives every registry format (`mac-case@1` is v1's template ref too). */
+const defaultPages: DefaultPages = (template, kind, formatId) => starterPages(template, kind, formatId, upgradeContext());
 
 /**
  * Takes a stored document of any known version (v0, v1, v2) to v2 in memory; the
