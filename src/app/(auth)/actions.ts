@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { requestOrigin } from "@/app/_lib/origin";
 import { requestPasswordReset, setPassword, signIn, signOut, signUp } from "@/modules/access";
 import type { AuthFormState } from "./_lib/messages";
-import { authMessage } from "./_lib/messages";
+import { authMessage, signUpFieldsMessage } from "./_lib/messages";
 
 // Sign-in and sign-up run before there is an actor, so these actions call only
 // the access module's session entry points (test/helpers/authorize-guard.ts).
@@ -38,7 +38,8 @@ export async function signUpAction(_: AuthFormState, form: FormData): Promise<Au
   if (!result.ok) {
     const fields = result.error.code === "EMAIL_DOMAIN_NOT_ALLOWED" ? ["email"] : fieldsOf(result.error.details);
     const values = { firstName: input.firstName, lastName: input.lastName, email: input.email, team: input.team, otherTitle: input.otherTitle ?? "" };
-    return { message: authMessage(result.error.code), fields, values };
+    const message = result.error.code === "INVALID_INPUT" ? signUpFieldsMessage(fields) : authMessage(result.error.code);
+    return { message, fields, values };
   }
   return { sentTo: input.email.trim().toLowerCase() };
 }

@@ -657,6 +657,8 @@ export const it = {
       toSignIn: "Accedi",
       domainNotAllowed: "Usa il tuo indirizzo @{domain}. Se non ce l'hai, chiedi a un amministratore di aggiungerti.",
       invalid: "Controlla i campi evidenziati.",
+      /** `{fields}`: the labels of the fields to fix, e.g. "Cosa fai in MAC, Password". */
+      invalidFields: "Da completare: {fields}.",
       sentTitle: "Controlla la posta",
       sent: "Ti abbiamo mandato un link a {email}. Aprilo per confermare l'indirizzo e entrare.",
     },
