@@ -2,7 +2,8 @@
 title: 'Story 4.2a: open a draft in the configurator (frame, canvas, panels)'
 type: 'feature'
 created: '2026-10-28'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: 'b654cdc7df752e8c48660fc3b3437539a1aa4a55'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -83,7 +84,7 @@ context:
 
 ## Verification
 
-**Commands:**
+**Commands** (Node 24: `export NVM_DIR=/opt/nvm; . /opt/nvm/nvm.sh; nvm use 24`; dependencies already installed):
 - `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` -- expected: pass
 
 **Manual checks:**
