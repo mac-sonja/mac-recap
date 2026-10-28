@@ -1,6 +1,7 @@
 import type { ProfileRepository } from "@/modules/access/application/ports";
 import { profileSchema, type Profile } from "@/modules/access/domain/actor";
 import { normalizeEmail } from "@/modules/access/domain/sign-up";
+import type { ListedUser } from "@/modules/access/domain/users";
 import type { Tables } from "@/shared/db.types";
 import { log } from "@/shared/log";
 import { err, ok, type Result } from "@/shared/result";
@@ -34,6 +35,9 @@ export function toProfile(row: ProfileRow): Result<Profile> {
 export function literalIlike(value: string): string {
   return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
+
+/** The database backstop for the last admin (migration 20261028140000) raises this message. */
+const isLastAdminError = (error: { message?: string }) => (error.message ?? "").includes("LAST_ADMIN");
 
 export function createSupabaseProfileRepository(
   client: () => ReturnType<typeof createSupabaseAdminClient> = createSupabaseAdminClient,
@@ -76,6 +80,98 @@ export function createSupabaseProfileRepository(
       if (error) {
         if (error.code === "23505") return err({ code: "PROFILE_EXISTS", message: "A profile has this email." });
         log.error(`profile insert failed: ${error.code}`);
+        return err({ code: "PROFILE_WRITE_FAILED", message: "Could not save the profile." });
+      }
+      return toProfile(data);
+    },
+
+    async listUsers() {
+      const { data, error } = await client()
+        .from("profile")
+        .select(`${COLUMNS}, created_at`)
+        .is("disabled_at", null)
+        .neq("role", "system")
+        .order("created_at", { ascending: true });
+      if (error) {
+        log.error(`profile list failed: ${error.code}`);
+        return err({ code: "PROFILE_LOOKUP_FAILED", message: "Could not read the profiles." });
+      }
+      const users: ListedUser[] = [];
+      for (const row of data) {
+        const profile = toProfile(row);
+        if (!profile.ok) return profile;
+        users.push({ ...profile.value, createdAt: row.created_at });
+      }
+      return ok(users);
+    },
+
+    async countEnabledAdmins() {
+      const { count, error } = await client()
+        .from("profile")
+        .select("id", { count: "exact", head: true })
+        .eq("role", "admin")
+        .is("disabled_at", null);
+      if (error || count === null) {
+        log.error(`admin count failed: ${error?.code ?? "no count"}`);
+        return err({ code: "PROFILE_LOOKUP_FAILED", message: "Could not count the admins." });
+      }
+      return ok(count);
+    },
+
+    async setRole(id, role) {
+      const { data, error } = await client()
+        .from("profile")
+        .update({ role, designer_requested_at: null })
+        .eq("id", id)
+        .select(COLUMNS)
+        .single();
+      if (error) {
+        if (isLastAdminError(error)) return err({ code: "LAST_ADMIN", message: "The last admin can't lose the role." });
+        log.error(`profile role update failed: ${error.code}`, { actorId: id });
+        return err({ code: "PROFILE_WRITE_FAILED", message: "Could not save the profile." });
+      }
+      return toProfile(data);
+    },
+
+    async setJobTitle(id, jobTitle) {
+      const { data, error } = await client()
+        .from("profile")
+        .update({ job_title: jobTitle })
+        .eq("id", id)
+        .neq("role", "system")
+        .select(COLUMNS)
+        .single();
+      if (error) {
+        log.error(`profile job title update failed: ${error.code}`, { actorId: id });
+        return err({ code: "PROFILE_WRITE_FAILED", message: "Could not save the profile." });
+      }
+      return toProfile(data);
+    },
+
+    async disable(id) {
+      const { error } = await client()
+        .from("profile")
+        .update({ disabled_at: new Date().toISOString() })
+        .eq("id", id)
+        .is("disabled_at", null);
+      if (error) {
+        if (isLastAdminError(error)) return err({ code: "LAST_ADMIN", message: "The last admin can't be removed." });
+        log.error(`profile disable failed: ${error.code}`, { actorId: id });
+        return err({ code: "PROFILE_WRITE_FAILED", message: "Could not save the profile." });
+      }
+      return ok(undefined);
+    },
+
+    async enable(id, displayName, role, jobTitle) {
+      const { data, error } = await client()
+        .from("profile")
+        .update({ disabled_at: null, display_name: displayName, role, job_title: jobTitle, designer_requested_at: null })
+        .eq("id", id)
+        .neq("role", "system")
+        .select(COLUMNS)
+        .single();
+      if (error) {
+        log.error(`profile enable failed: ${error.code}`, { actorId: id });
         return err({ code: "PROFILE_WRITE_FAILED", message: "Could not save the profile." });
       }
       return toProfile(data);

@@ -1,5 +1,6 @@
 import type { Profile } from "@/modules/access/domain/actor";
 import type { NewProfile } from "@/modules/access/domain/sign-up";
+import type { AssignableRole, ListedUser } from "@/modules/access/domain/users";
 import type { Result } from "@/shared/result";
 
 /** Reads and writes `profile` rows. Implemented by `adapters/supabase/profile-repository.ts`. */
@@ -10,6 +11,26 @@ export interface ProfileRepository {
   findByEmail(email: string): Promise<Result<Profile | null>>;
   /** Inserts a profile; `PROFILE_EXISTS` when the email is taken (in any letter case). */
   create(profile: NewProfile): Promise<Result<Profile>>;
+  /** Enabled, non-system profiles, oldest first (the Users screen). */
+  listUsers(): Promise<Result<ListedUser[]>>;
+  countEnabledAdmins(): Promise<Result<number>>;
+  /** Sets the role and clears a pending designer request. `LAST_ADMIN` from the database backstop. */
+  setRole(id: string, role: AssignableRole): Promise<Result<Profile>>;
+  /** Sets the free-text job title (**Ruolo**); `null` clears it. */
+  setJobTitle(id: string, jobTitle: string | null): Promise<Result<Profile>>;
+  /** Sets `disabled_at` (Remove user); records keep pointing at the profile. */
+  disable(id: string): Promise<Result<void>>;
+  /** Re-enables a removed profile with a new name, role and job title (Add user on a removed address). */
+  enable(id: string, displayName: string, role: AssignableRole, jobTitle: string | null): Promise<Result<Profile>>;
+}
+
+/** Admin-side Supabase Auth (service role). Implemented by `adapters/supabase/auth-admin.ts`. */
+export interface AuthAdmin {
+  /**
+   * Sends the invite email whose link lets the person set a password. `ok(false)`
+   * when the address already has an auth user (they sign in, or reset the password).
+   */
+  invite(email: string, redirectTo: string): Promise<Result<boolean>>;
 }
 
 /** The signed-in person as Supabase Auth knows them: a verified email and the sign-up metadata. */

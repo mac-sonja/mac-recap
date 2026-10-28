@@ -156,7 +156,7 @@ describe("HomePage", () => {
     list.mockResolvedValue(ok([]));
     requireSurface.mockResolvedValue(shell("owner_designer"));
     expect(await renderPage()).toContain("Inizia ora");
-    requireSurface.mockResolvedValue(shell("admin"));
+    requireSurface.mockResolvedValue(shell("system"));
     await expect(renderPage()).rejects.toThrow("REDIRECT /home");
   });
 

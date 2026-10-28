@@ -24,6 +24,18 @@ export function formatDateTime(iso: string, now: Date = new Date()): string {
   return (currentYear(date) === currentYear(now) ? DAY_TIME : DAY_YEAR_TIME).format(date);
 }
 
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat("it-IT", {
+  timeZone: "Europe/Rome",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+/** An ISO timestamp as an Italian date in Europe/Rome: `28 ott 2026`. */
+export function formatDate(iso: string): string {
+  return DAY_MONTH_YEAR.format(new Date(iso));
+}
+
 const YEAR = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Rome", year: "numeric" });
 
 /** The calendar year in Europe/Rome at `now`, e.g. `2026`. */

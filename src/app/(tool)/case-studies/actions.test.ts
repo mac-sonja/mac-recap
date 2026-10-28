@@ -122,7 +122,7 @@ describe("updateCaseStudyDetails", () => {
     expect(updateDetails).toHaveBeenCalledWith(actor("owner_designer"), details);
   });
 
-  it.each(["account_sales_social", "admin", "system"] as const)("returns 403 FORBIDDEN for %s and never calls the use case", async (role) => {
+  it.each(["account_sales_social", "system"] as const)("returns 403 FORBIDDEN for %s and never calls the use case", async (role) => {
     getActor.mockResolvedValue(ok(actor(role)));
     const result = await updateCaseStudyDetails(details);
     expect(result).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
@@ -153,7 +153,7 @@ describe("deleteCaseStudy", () => {
     expect(deleteCaseStudyUseCase).toHaveBeenCalledWith(actor("owner_designer"), { caseId: created.id });
   });
 
-  it.each(["account_sales_social", "admin", "system"] as const)("returns 403 FORBIDDEN for %s and never calls the use case", async (role) => {
+  it.each(["account_sales_social", "system"] as const)("returns 403 FORBIDDEN for %s and never calls the use case", async (role) => {
     getActor.mockResolvedValue(ok(actor(role)));
     const result = await deleteCaseStudy({ caseId: created.id });
     expect(result).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
@@ -179,7 +179,7 @@ describe("createCaseStudy", () => {
     expect(create).toHaveBeenCalledWith(actor("owner_designer"), input);
   });
 
-  it.each(["account_sales_social", "admin", "system"] as const)(
+  it.each(["account_sales_social", "system"] as const)(
     "returns 403 FORBIDDEN for %s and never calls the use case",
     async (role) => {
       getActor.mockResolvedValue(ok(actor(role)));
@@ -250,7 +250,7 @@ describe("material actions", () => {
   });
 
   it.each(
-    actions.flatMap((a) => (["account_sales_social", "admin", "system"] as const).map((role) => [a[0], role, a[1], a[2], a[3]] as const)),
+    actions.flatMap((a) => (["account_sales_social", "system"] as const).map((role) => [a[0], role, a[1], a[2], a[3]] as const)),
   )("%s returns 403 FORBIDDEN for %s and never calls the use case", async (_name, role, action, useCase, input) => {
     getActor.mockResolvedValue(ok(actor(role)));
     expect(await action(input)).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
@@ -356,7 +356,7 @@ describe("details form actions", () => {
   ] as const;
 
   it.each(
-    actions.flatMap((a) => (["account_sales_social", "admin", "system"] as const).map((role) => [a[0], role, a[1], a[2]] as const)),
+    actions.flatMap((a) => (["account_sales_social", "system"] as const).map((role) => [a[0], role, a[1], a[2]] as const)),
   )("%s returns 403 FORBIDDEN for %s and never calls the use case", async (_name, role, call, useCase) => {
     getActor.mockResolvedValue(ok(actor(role)));
     expect(await call()).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
@@ -437,7 +437,7 @@ describe("listAssets action", () => {
     expect(listAssetsUseCase.mock.calls[0][0]).toBe(listInput);
   });
 
-  it.each(["account_sales_social", "admin", "system"] as const)("returns 403 FORBIDDEN for %s and never lists", async (role) => {
+  it.each(["account_sales_social", "system"] as const)("returns 403 FORBIDDEN for %s and never lists", async (role) => {
     getActor.mockResolvedValue(ok(actor(role)));
     expect(await listAssets(listInput)).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
     expect(listAssetsUseCase).not.toHaveBeenCalled();

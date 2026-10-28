@@ -2,13 +2,13 @@ import type { Role } from "./actor";
 
 /**
  * Where each role lands (owner/designer: the Home dashboard, 2026-10-20): `/` and any surface the role cannot use redirect here.
- * Defined only here. `/library` (Story 5.1) and `/users` (Story 6.3) are registered
- * by their stories; `system` is the worker and has no UI.
+ * Defined only here. `/library` is registered by Story 5.1; the admin reaches every
+ * page and lands on Home too (owner, 2026-10-28). `system` is the worker and has no UI.
  */
 const LANDING: Readonly<Record<Role, string | null>> = {
   owner_designer: "/home",
   account_sales_social: "/library",
-  admin: "/users",
+  admin: "/home",
   system: null,
 };
 

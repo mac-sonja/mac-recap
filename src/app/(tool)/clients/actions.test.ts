@@ -167,7 +167,7 @@ describe("client actions", () => {
     expect(useCase.mock.calls[0][1]).toBe(input);
   });
 
-  it.each(allCases.flatMap((c) => (["account_sales_social", "admin", "system"] as const).map((role) => [c[0], role, c[1], c[2], c[3]] as const)))(
+  it.each(allCases.flatMap((c) => (["account_sales_social", "system"] as const).map((role) => [c[0], role, c[1], c[2], c[3]] as const)))(
     "%s returns 403 FORBIDDEN for %s and never calls the use case",
     async (_name, role, action, useCase, input) => {
       getActor.mockResolvedValue(ok(actor(role)));

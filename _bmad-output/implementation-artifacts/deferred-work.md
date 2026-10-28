@@ -10,7 +10,7 @@
   summary: The service-role client in access/adapters/supabase/admin.ts has no server-only import guard.
   evidence: server-only is not a dependency; only the post-build .next/static scan catches a client import. Needs a decision to add the package.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-actor-and-policy-seam-with-a-dev-owner-designer.md`
-  summary: The profile table lets any row hold the system role.
+  summary: Resolved by Story 6.3 (`profile_system_role_only_seeded` ties the system role to SYSTEM_ACTOR_ID; Users actions accept only ASSIGNABLE_ROLES). Was: the profile table lets any row hold the system role.
   evidence: The role check allows 'system' on every row; Story 6.3 manage users must not assign it (add a constraint tying system to SYSTEM_ACTOR_ID).
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-actor-and-policy-seam-with-a-dev-owner-designer.md`
   summary: Resolved by Story 6.1 (`profile_email_lower_key` on lower(email); getActor matches the session email case-insensitively). Was: profile.email uniqueness is case-sensitive.

@@ -28,6 +28,12 @@ function fakes(rows: Profile[], user: SessionUser | null = null) {
       rows.push(created);
       return ok(created);
     }),
+    listUsers: vi.fn(),
+    countEnabledAdmins: vi.fn(),
+    setRole: vi.fn(),
+    setJobTitle: vi.fn(),
+    disable: vi.fn(),
+    enable: vi.fn(),
   } satisfies ProfileRepository;
   const auth = {
     currentUser: vi.fn(async () => user),
@@ -45,7 +51,7 @@ describe("signIn", () => {
   it.each([
     ["owner_designer", "/home"],
     ["account_sales_social", "/library"],
-    ["admin", "/users"],
+    ["admin", "/home"],
   ] as const)("lands %s on %s", async (role, landing) => {
     const { session } = fakes([profile({ role })], { email: "anna@menatcode.it", metadata: {} });
     expect(await session.signIn("anna@menatcode.it", "pw")).toEqual(ok(landing));
@@ -140,7 +146,7 @@ describe("sessionState", () => {
     expect(await fakes([]).session.sessionState()).toEqual({ kind: "none" });
     const user = { email: "anna@menatcode.it", metadata: {} };
     expect(await fakes([], user).session.sessionState()).toEqual({ kind: "inactive" });
-    expect(await fakes([profile({ role: "admin" })], user).session.sessionState()).toEqual({ kind: "active", landing: "/users" });
+    expect(await fakes([profile({ role: "admin" })], user).session.sessionState()).toEqual({ kind: "active", landing: "/home" });
   });
 });
 

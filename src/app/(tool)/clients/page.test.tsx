@@ -151,7 +151,6 @@ describe("ClientsPage", () => {
 
   it.each([
     ["account_sales_social", "/library"],
-    ["admin", "/users"],
   ] as const)("redirects %s to its landing and lists nothing", async (role, landing) => {
     requireSurface.mockResolvedValue(shell(role, landing));
     await expect(ClientsPage()).rejects.toThrow(`REDIRECT ${landing}`);

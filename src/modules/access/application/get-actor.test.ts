@@ -20,6 +20,12 @@ function fakeRepository(rows: Profile[]) {
     findById: vi.fn(async (id: string) => ok(rows.find((r) => r.id === id) ?? null)),
     findByEmail: vi.fn(async (email: string) => ok(rows.find((r) => r.email.toLowerCase() === email.toLowerCase()) ?? null)),
     create: vi.fn(),
+    listUsers: vi.fn(),
+    countEnabledAdmins: vi.fn(),
+    setRole: vi.fn(),
+    setJobTitle: vi.fn(),
+    disable: vi.fn(),
+    enable: vi.fn(),
   } satisfies ProfileRepository;
 }
 

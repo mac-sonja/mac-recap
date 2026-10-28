@@ -6,7 +6,7 @@ export { CASE_STATUSES, type CaseStatus } from "@/shared/case-status";
 /**
  * The AD-11 permission matrix. This file is the only place permissions are
  * defined: no table, environment variable or API changes it (AD-5, AD-11).
- * The admin changes only `profile.role`.
+ * The admin changes only `profile.role`; it never changes this matrix.
  */
 export const ACTIONS = [
   "list cases",
@@ -48,31 +48,37 @@ type Rule = true | ((resource: Resource) => boolean);
 const approved: Rule = (r) => r.status === "approved";
 const draft: Rule = (r) => r.status === "draft";
 
+/**
+ * The admin sees and does everything an owner does, plus `manage users`
+ * (owner, 2026-10-28: the admin reaches every page, not only the Organizzazione).
+ */
+const owners = (rule: Rule) => ({ owner_designer: rule, admin: rule });
+
 const MATRIX: Readonly<Record<Action, Readonly<Partial<Record<Role, Rule>>>>> = {
-  "list cases": { owner_designer: true, account_sales_social: approved },
-  "create case": { owner_designer: true },
+  "list cases": { ...owners(true), account_sales_social: approved },
+  "create case": { ...owners(true) },
   // AD-21: the step 0 client picker (Sprint Change Proposal 2026-10-15).
-  "list clients": { owner_designer: true },
+  "list clients": { ...owners(true) },
   // AD-21: add, edit and delete (owner, 2026-10-19: clients can be deleted (soft), with their cases).
-  "manage clients": { owner_designer: true },
-  upload: { owner_designer: true },
-  "fill details": { owner_designer: true },
+  "manage clients": { ...owners(true) },
+  upload: { ...owners(true) },
+  "fill details": { ...owners(true) },
   // AD-14: favourites replace the retired taxonomy (Sprint Change Proposal 2026-10-14).
-  "mark favourites": { owner_designer: true },
-  generate: { owner_designer: true },
-  edit: { owner_designer: true },
-  "delete case": { owner_designer: draft },
-  approve: { owner_designer: true },
-  "update approved version": { owner_designer: true },
-  discard: { owner_designer: true },
-  view: { owner_designer: approved, account_sales_social: approved },
-  export: { owner_designer: approved, account_sales_social: approved },
+  "mark favourites": { ...owners(true) },
+  generate: { ...owners(true) },
+  edit: { ...owners(true) },
+  "delete case": { ...owners(draft) },
+  approve: { ...owners(true) },
+  "update approved version": { ...owners(true) },
+  discard: { ...owners(true) },
+  view: { ...owners(approved), account_sales_social: approved },
+  export: { ...owners(approved), account_sales_social: approved },
   "job work": { system: true },
-  "create link": { owner_designer: approved, account_sales_social: approved },
+  "create link": { ...owners(approved), account_sales_social: approved },
   // IR-PERM (interim): any sharer may turn off any link.
-  "turn off link": { owner_designer: true, account_sales_social: true },
+  "turn off link": { ...owners(true), account_sales_social: true },
   // IR-C4 (interim): in the matrix, no surface yet.
-  "manage templates": { owner_designer: true },
+  "manage templates": { ...owners(true) },
   // The last-admin rule is enforced by the Story 6.3 use case.
   "manage users": { admin: true },
   // Denied to every role, admin and system included (AD-5).

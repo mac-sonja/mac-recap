@@ -17,6 +17,8 @@ export const it = {
       clients: "Clienti",
       /** Account/sales/social: the library of approved cases (Story 5.1). */
       library: "Libreria",
+      /** Admin: the Organizzazione screen (Story 6.3), right after Clienti. */
+      organization: "Organizzazione",
       /** Above Nuova case history: searches the case list and opens it filtered. */
       search: {
         label: "Cerca progetto o cliente",
@@ -677,6 +679,61 @@ export const it = {
     rateLimited: "Troppi tentativi. Aspetta qualche minuto e riprova.",
     failed: "Non siamo riusciti a completare l'operazione. Riprova tra poco.",
   },
+  /** The admin's Organizzazione screen (Story 6.3): people, their Permessi and their Ruolo. */
+  users: {
+    title: "Organizzazione",
+    lead: "Chi entra in MAC Recap e cosa può fare.",
+    add: "Aggiungi utente",
+    columns: {
+      name: "Nome",
+      email: "Email",
+      /** Free text: what the person does in the team; grants nothing. */
+      jobTitle: "Ruolo",
+      /** The fixed role (`Role`): what the person can do. */
+      role: "Permessi",
+      added: "Aggiunto il",
+      actions: "Azioni",
+    },
+    /** Under the name of someone who signed up as designer and waits. */
+    designerRequest: "Chiede i permessi Owner",
+    approve: "Approva",
+    approveLabel: "Dai a {name} i permessi Owner",
+    roleLabel: "Permessi di {name}",
+    jobTitleLabel: "Ruolo di {name}",
+    jobTitlePlaceholder: "Aggiungi ruolo",
+    remove: "Rimuovi",
+    removeLabel: "Rimuovi {name}",
+    you: "tu",
+    empty: "Nessun utente, per ora.",
+    addDialog: {
+      title: "Aggiungi utente",
+      description: "Riceverà un'email per scegliere la password.",
+      firstName: "Nome",
+      lastName: "Cognome",
+      email: "Email",
+      jobTitle: "Ruolo",
+      jobTitlePlaceholder: "Per esempio: art director",
+      role: "Permessi",
+      submit: "Invia invito",
+      cancel: "Annulla",
+      close: "Chiudi",
+    },
+    removeDialog: {
+      title: "Rimuovere {name}?",
+      description: "Non potrà più entrare. I suoi case, i link e lo storico restano.",
+      confirm: "Rimuovi",
+      cancel: "Annulla",
+    },
+    added: "Invito inviato a {email}.",
+    addedNoInvite: "{email} ha già un accesso: può entrare con la sua password o usare Password dimenticata.",
+    errors: {
+      lastAdmin: "Serve almeno un amministratore. Nomina prima qualcun altro.",
+      exists: "Questa email ha già un account.",
+      invalid: "Controlla i campi evidenziati.",
+      invite: "Abbiamo creato l'utente ma l'email non è partita. Riprova tra poco.",
+      failed: "Non siamo riusciti a salvare. Riprova.",
+    },
+  },
   /** Library of approved cases (Story 5.1); until it ships, a placeholder. */
   library: {
     title: "Libreria",
@@ -690,10 +747,10 @@ export const it = {
     in_review: "Da approvare",
     approved: "Approvato",
   },
-  /** Role labels for people, keyed by `Role`; `system` is never shown. One word each (owner, 2026-10-28). */
+  /** Permessi labels, keyed by `Role`; `system` is never shown. One word each (owner, 2026-10-28). */
   role: {
-    owner_designer: "Designer",
-    account_sales_social: "Account",
+    owner_designer: "Owner",
+    account_sales_social: "Editor",
     admin: "Amministratore",
   },
 } as const;
