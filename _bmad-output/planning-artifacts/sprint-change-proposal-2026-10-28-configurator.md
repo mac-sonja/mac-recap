@@ -211,7 +211,7 @@ Type: new requirements from the stakeholder, decided by building them. Evidence:
 Later the same day, the owner settled four points left open in the stories:
 
 5. **Deleting.** Blocks and pages, including Sfida, Idea and Risultati, can be deleted freely. They are recovered from **Pagine di default** or with ⌘Z, so document v2 doesn't require them (Stories 3.3, 4.3).
-6. **AI texts per format.** The AI writes **three texts, one per format**, each fitted to that format's space. An edit in one format doesn't reach the others, and each copy carries its own claims (Stories 3.3, 3.5, 3.6).
+6. **AI texts per format.** The AI writes **three texts, one per format**, each fitted to that format's space. An edit in one format doesn't reach the others, and each copy carries its own claims (Stories 3.3, 3.6).
 7. **Services.** Picked as a **multiselect when the case is created** and stored on the case as a list. The Intro shows them as tags (Story 3.4).
 8. **Ritaglia control.** The person **drags the image inside its block** and sets the **zoom with a slider** (Story 4.5).
 
