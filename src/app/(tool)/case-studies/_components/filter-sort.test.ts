@@ -5,6 +5,7 @@ import {
   filterRows,
   nextSort,
   normalizeForSearch,
+  parseStatusFilter,
   sortRows,
   type CaseStudyRow,
 } from "./filter-sort";
@@ -141,5 +142,16 @@ describe("sort", () => {
     const copy = [...same];
     expect(sortRows(same, { key: "name", direction: "desc" }).map((r) => r.id)).toEqual(["1", "2", "3"]);
     expect(same).toEqual(copy);
+  });
+});
+
+describe("parseStatusFilter", () => {
+  it("takes one case status and falls back to every status for anything else", () => {
+    expect(parseStatusFilter("in_review")).toBe("in_review");
+    expect(parseStatusFilter("draft")).toBe("draft");
+    expect(parseStatusFilter("all")).toBe("all");
+    expect(parseStatusFilter("deleted")).toBe("all");
+    expect(parseStatusFilter(["in_review", "draft"])).toBe("all");
+    expect(parseStatusFilter(undefined)).toBe("all");
   });
 });

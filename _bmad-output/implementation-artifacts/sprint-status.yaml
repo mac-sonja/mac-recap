@@ -74,7 +74,7 @@ development_status:
   epic-3-retrospective: optional
 
   epic-4: in-progress
-  4-1-review-dashboard-and-to-review-queue: backlog  # after 3.10, before 3.6 (SCP 2026-10-20); build on the Home dashboard from 2.19 (its "Ti aspettano" list is the start of the to-review queue)
+  4-1-review-dashboard-and-to-review-queue: in-progress  # Home rows and Attività open Da approvare/Approvato cases in the configurator; ?stato= filter on the Case table, kept in the URL, ?stato=in_review = To review queue (Updated oldest first as a stand-in for entered-review time), opened from Home's Tutte da approvare; still to do: sidebar To review entry, real entered-review time, row Delete (settle with the owner: 2.20 moved delete inside the draft); after 3.10, before 3.6 (SCP 2026-10-20); build on the Home dashboard from 2.19 (its "Ti aspettano" list is the start of the to-review queue)
   4-2-open-a-draft-in-the-configurator: review  # 4.2a in review, 4.2b still to build; split by the owner 2026-10-28: 4.2a frame, canvas, panels (spec-4-2-open-a-draft-in-the-configurator); 4.2b Anteprima, Instagram overlay, Animazione testi (deferred-work); amendment per SCP 2026-10-16 client intro and collections (read by subject); Bento designed with the owner first (SCP 2026-10-20); per SCP 2026-10-28: rewritten from the mockup (frame C40, Anteprima C37, three formats)
   4-3-edit-generated-text-in-place-with-autosave: backlog  # per SCP 2026-10-28: rewritten (texts, elements and blocks per format; seven text styles; client fields editable on the page); 4.6 folded in
   4-4-adjust-the-layout-per-format: backlog  # per SCP 2026-10-28: rewritten (Layout grids, Mescola, resize, Pagine di default, Sfondo); variants, Shuffle, spacing and Reset gone

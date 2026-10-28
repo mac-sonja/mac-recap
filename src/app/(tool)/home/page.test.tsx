@@ -88,14 +88,27 @@ describe("HomePage", () => {
     ]);
   });
 
-  it("links drafts back to the wizard and leaves other cases unlinked", async () => {
+  it("links drafts back to the wizard and cases to approve to the configurator", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     const draft = caseStudy({ status: "draft" });
-    list.mockResolvedValue(ok([draft, caseStudy({ status: "in_review" })]));
+    const waiting = caseStudy({ status: "in_review" });
+    list.mockResolvedValue(ok([draft, waiting]));
     const html = await renderPage();
     expect(html).toContain(`href="/case-studies/new?caseId=${draft.id}"`);
     expect(html.match(/href="\/case-studies\/new\?caseId=/g)).toHaveLength(1); // in A metà strada
+    expect(html.match(new RegExp(`href="/case-studies/${waiting.id}/configurator"`, "g"))).toHaveLength(1); // in Da approvare
   });
+
+  it("opens the To review queue from Da approvare, only when something waits", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(ok([caseStudy({ status: "in_review" })]));
+    const html = await renderPage();
+    expect(html).toMatch(/href="\/case-studies\?stato=in_review"[^>]*>Tutte da approvare/);
+
+    list.mockResolvedValue(ok([caseStudy({ status: "draft" })]));
+    expect(await renderPage()).not.toContain("stato=in_review");
+  });
+
 
   const event = (over: Partial<CaseActivity>): CaseActivity => ({
     id: `eeeeeeee-0000-4000-8000-00000000000${++n}`,
@@ -129,8 +142,9 @@ describe("HomePage", () => {
       "Giulia Riva ha creato Showroom in tasca.",
     ]);
     expect(html).toContain('<strong class="font-semibold text-foreground-strong">Mattoni</strong>');
-    // A draft's line opens its wizard; an approved case has no page yet.
+    // A draft's line opens its wizard; an approved case's opens its configurator.
     expect(activity?.[2].match(/href="\/case-studies\/new\?caseId=aaaaaaaa-0000-4000-8000-000000000001"/g)).toHaveLength(2);
+    expect(activity?.[2].match(/href="\/case-studies\/aaaaaaaa-0000-4000-8000-000000000009\/configurator"/g)).toHaveLength(1);
     expect(activity?.[2].match(/<svg/g)).toHaveLength(3);
   });
 

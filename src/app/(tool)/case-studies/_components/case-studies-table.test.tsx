@@ -458,6 +458,33 @@ describe("CaseStudiesTable", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("starts on ?stato=in_review as the To review queue: Da approvare only, oldest Updated first", () => {
+    const older: CaseStudyRow = { ...rows[2], id: "eeeeeeee-0000-4000-8000-000000000006", name: "Prima", updatedAt: "2026-10-03T10:00:00+00:00" };
+    render(<CaseStudiesTable rows={[...rows, older]} canCreate initialStatus="in_review" />);
+    expect(segment(SEGMENTS.statuses.in_review).getAttribute("aria-checked")).toBe("true");
+    expect(names()).toEqual(["Prima", "Émile"]);
+    expect(header(COLUMNS.updated).getAttribute("aria-sort")).toBe("ascending");
+  });
+
+  it("keeps ?stato= in step with the filter when asked, leaving ?q= alone", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/case-studies?q=lumen");
+    render(<CaseStudiesTable rows={rows} canCreate statusInUrl />);
+    await user.click(segment(SEGMENTS.statuses.approved));
+    expect(window.location.search).toBe("?q=lumen&stato=approved");
+    await user.click(segment(SEGMENTS.all));
+    expect(window.location.search).toBe("?q=lumen");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("leaves the address alone by default (a client's page)", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/clients/x");
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    await user.click(segment(SEGMENTS.statuses.approved));
+    expect(window.location.search).toBe("");
+  });
+
   it("opens nothing for a case In elaborazione", async () => {
     const user = userEvent.setup();
     const generating: CaseStudyRow = { ...rows[2], id: "dddddddd-0000-4000-8000-000000000005", name: "Gamma", clientName: "Gamma Srl", status: "generating" };

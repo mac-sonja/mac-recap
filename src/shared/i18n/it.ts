@@ -54,6 +54,8 @@ export const it = {
     review: {
       heading: "Da approvare",
       empty: "Niente da approvare. Goditi il momento.",
+      /** Opens the Case table filtered to Da approvare, oldest first. */
+      seeAll: "Tutte da approvare",
     },
     drafts: {
       heading: "A metà strada",

@@ -38,6 +38,17 @@ export interface SortState {
 /** Updated, newest first. */
 export const DEFAULT_SORT: SortState = { key: "updated", direction: "desc" };
 
+/**
+ * The To review queue (Story 4.1): Updated, oldest first, so nothing sits waiting. Until the time a
+ * case entered Da approvare is stored, its last update stands in for it.
+ */
+export const REVIEW_QUEUE_SORT: SortState = { key: "updated", direction: "asc" };
+
+/** `?stato=` as a status filter: one of the case statuses, else every status. */
+export function parseStatusFilter(value: unknown): StatusFilter {
+  return typeof value === "string" && (CASE_STATUSES as readonly string[]).includes(value) ? (value as CaseStatus) : "all";
+}
+
 /** Clicking a header sorts by it ascending; clicking the sorted header again reverses it. */
 export function nextSort(current: SortState, key: SortKey): SortState {
   if (current.key !== key) return { key, direction: "asc" };

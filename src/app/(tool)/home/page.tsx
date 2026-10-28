@@ -18,7 +18,7 @@ import { PRIMARY_ACTION } from "@/app/_components/button-styles";
 import { CARD } from "@/app/_components/field-styles";
 import { StatusBadge } from "@/app/_components/status-badge";
 import { listScopeFor } from "@/app/_lib/list-scope";
-import { wizardHref } from "@/app/_lib/routes";
+import { caseHref, caseStudiesHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
 import { authorize, can, type CaseStatus } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
@@ -37,7 +37,7 @@ interface HomeCase {
   clientName: string;
   status: CaseStatus;
   updatedAt: string;
-  /** Drafts reopen the wizard; other cases have no page yet. */
+  /** Where the row opens (`caseHref`): the wizard, the configurator, or nothing. */
   href: string | null;
 }
 
@@ -153,7 +153,7 @@ function ActivitySentence({ template, name }: { template: string; name: string }
  * The event log as short sentences: an icon by kind, who did what to which case,
  * and how long ago. Scrolls inside its card. `lines` is null when the log could not be read.
  */
-function Activity({ lines, more }: { lines: readonly ActivityLine[] | null; more?: ReactNode }) {
+function Activity({ lines, more, canEdit }: { lines: readonly ActivityLine[] | null; more?: ReactNode; canEdit: boolean }) {
   return (
     <section aria-labelledby="home-activity" className={cn(CARD, "flex flex-col")}>
       <div className="flex items-center justify-between gap-4 px-5 pt-4 pb-2">
@@ -176,7 +176,7 @@ function Activity({ lines, more }: { lines: readonly ActivityLine[] | null; more
         >
           {lines.map((line) => {
             const Icon = ACTIVITY_ICON[line.kind];
-            const href = line.caseStatus === "draft" ? wizardHref(line.caseId) : null;
+            const href = caseHref(line.caseId, line.caseStatus, canEdit);
             const content = (
               <>
                 <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-foreground-muted" strokeWidth={1.75} />
@@ -230,6 +230,7 @@ export default async function HomePage() {
   // A log that can't be read leaves the rest of the Dashboard working: Attività says so.
   const lines = activity.ok ? activityLines(activity.value) : null;
 
+  const canEdit = can(actor, "edit");
   const cases: HomeCase[] = listed.value
     .map((c) => ({
       id: c.id,
@@ -238,7 +239,7 @@ export default async function HomePage() {
       clientName: c.client.name,
       status: c.status,
       updatedAt: c.updatedAt,
-      href: c.status === "draft" ? wizardHref(c.id) : null,
+      href: caseHref(c.id, c.status, canEdit),
     }))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
@@ -248,15 +249,16 @@ export default async function HomePage() {
   const firstName = actor.displayName.trim().split(/\s+/)[0] ?? "";
   const canCreate = can(actor, "create case");
 
-  const seeAll = (
+  const moreLink = (href: string, label: string) => (
     <Link
-      href="/case-studies"
+      href={href}
       className="inline-flex items-center gap-1 rounded-sm font-label text-[13px] text-foreground-muted transition-colors hover:text-foreground"
     >
-      {it.home.seeAll}
+      {label}
       <ArrowRight aria-hidden="true" className="size-3.5" />
     </Link>
   );
+  const seeAll = moreLink("/case-studies", it.home.seeAll);
 
   return (
     <div className="flex flex-col gap-8">
@@ -279,6 +281,7 @@ export default async function HomePage() {
           heading={it.home.review.heading}
           empty={it.home.review.empty}
           cases={toReview.slice(0, LIST_SIZE)}
+          more={toReview.length > 0 ? moreLink(caseStudiesHref("in_review"), it.home.review.seeAll) : undefined}
         />
         <CaseList
           id="home-drafts"
@@ -289,7 +292,7 @@ export default async function HomePage() {
       </div>
 
       <div className={cn("grid gap-4", canCreate && "xl:grid-cols-[1fr_20rem]")}>
-        <Activity lines={lines} more={cases.length > 0 ? seeAll : undefined} />
+        <Activity lines={lines} more={cases.length > 0 ? seeAll : undefined} canEdit={canEdit} />
         {canCreate && (
           <section
             aria-labelledby="home-start"
