@@ -7,7 +7,7 @@ paradigm: 'modular monolith with ports at vendor seams; generation as a pipes-an
 scope: 'MAC Recap standalone MVP (Epics 2-6): case creation, upload and favourites, generation, review and approval, export and shareable links, auth. Plus the seam for the later MAC Productive (MCP) integration'
 status: final
 created: '2026-10-08'
-updated: '2026-10-19'
+updated: '2026-10-28'
 binds: [FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, FR11, FR12, FR13, NFR1, NFR2, NFR3, NFR4, NFR5, NFR6, NFR7, FR9-seam]
 sources:
   - '_bmad-output/planning-artifacts/prds/prd-MAC Recap-2026-10-08/prd.md (PRD v2, final)'
@@ -135,6 +135,16 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 
   The shared/per-format split follows an `[ASSUMPTION]` in EXPERIENCE.md; if UX changes it, this AD changes with it.
 
+  **Amended 2026-10-28: document model v2** ([Sprint Change Proposal 2026-10-28, configurator](../../sprint-change-proposal-2026-10-28-configurator.md); C29, C30, answer 2). UX changed the assumption above, so the shared/per-format split is replaced:
+  - `schemaVersion: 2`. The document holds `kind`, `templateId@version` and **one page list per registry format**, keyed by format id. Each format owns its pages, blocks, elements, texts and backgrounds. An edit changes only that format; nothing cascades from Presentazione to the others.
+  - A **page** has a stable `pageKey`, a name, a `role` (`intro` | `body` | `outro`), a section (`intro` | `output` | `risultati`), a background (brand colour, transparent, or an image ref) and a bento grid with its own track sizes. It holds at most 6 blocks.
+  - A **block** has a stable `blockId`, a background (as a page; default `#EDEDF0`, page default white) and an ordered list of **elements**: text (one of seven styles, colour, alignment, columns), a **Testi** group (texts aligned top, centre, bottom or split), image or video (asset ref and fit: Riempi, Adatta or Ritaglia), **Animazione** (type, asset refs, fit, size 50–150%), services as tags, the client's and MAC's logos, and a divider. Template spacers are not elements.
+  - Texts keep `provenance` and optional `aspect` and `sourceRefs` from generation. How generated claims map onto a text that exists once per format is decided with Story 3.6. The per-block `check` is not used for the demo (AD-19).
+  - Client and case fields on a page (client name, sector, logo; case year, services) are stored as **bindings** to the record, never as values (AD-22 as amended). The document still stores no client values.
+  - `rendering.relayout`, slot assignments, variants, spacing, text scale and font pairing are gone. Layout grids and default pages come from the template version (AD-15).
+  - v1 documents are upgraded on read by `upgrade(doc)`; no case on mac-recap-dev has a revision yet, so v1 exists only in test fixtures. The rules above about `generated_doc`, `doc`, `FORMAT_NOT_IN_REVISION`, the absent canvas ratio and upgrade-on-read still hold.
+  - Open: v1 required the challenge, approach and result blocks. In v2 the narrative sits in the Intro's Sfida and Idea blocks and the Risultati e testimonial page, which a person can delete; whether the schema still requires them is for the owner (FR3, NFR5).
+
 ### AD-5 — Guardrails are code, not configuration [ADOPTED]
 
 - **Binds:** NFR1–NFR7, Story 6.3, the Sprint 2 and Sprint 3 guardrail checks
@@ -196,8 +206,9 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - Each format in the format registry (`rendering/domain/formats.ts`: id, name, ratio, pixel size, page model, file type, `static | motion`) has exactly one React renderer. The configurator, the case study view, `/s/{token}` and exports all use it and the same format list.
   - For an export, the worker renders HTML server-side (`renderToStaticMarkup`) and loads it into Playwright Chromium with `page.setContent`. **No print route exists.**
   - File types: deck and A4 → PDF; image formats → ZIP of PNGs `[ASSUMPTION, from UX]`; **Export all** → one ZIP, stored as export `(revision_id, 'all')`, built only after `ensureExport` has produced every format of that same revision. No PPTX in the MVP (UX decision).
-  - Video assets show as their poster frame in static formats. Motion formats (social video 9:16) stay out of the registry until OP 1 adds them.
+  - Video assets show as their poster frame in static formats. Motion formats (social video 9:16) stay out of the registry until OP 1 adds them (OP 1 added Video on 2026-10-28; see below).
   - An export renders an ordered list of parts through `rendering.composeParts` (one part for a single case history). `export` is unique on `content_hash` (parts, revision ids, each part's client info, collection edits and hidden pages, format) and immutable. `ensureExport` reuses an export on a hash match and renders again otherwise, so a client edit (AD-22) leads to a new render. **Export all** is one ZIP of the per-format exports for the same parts. Combined files (client packs, collections) come in Deck 16:9 and PDF A4 only.
+  - **Amended 2026-10-28 (C28, answers 1 and 3).** The registry holds exactly three formats: **Presentazione** 16:9, 1920×1080, static, PDF; **Carosello** 1:1, 1080×1080, static, ZIP of PNGs (templates drawn on a 1000 px Figma frame and scaled); **Video** 9:16, 1080×1920, motion, MP4 or WebM with its animations. Deck 16:9, Social carousel 4:5 and PDF A4 are dropped. Renderers size everything in units of the template's Figma frame width, so a thumbnail, the canvas and an export match. For the demo Video is Anteprima only and has no export; the Video export (a motion render in the worker) comes after the demo. Combined files come in Presentazione 16:9 only, since PDF A4 is dropped.
 
 ### AD-10 — Long work runs as leased Postgres jobs in the worker
 
@@ -293,6 +304,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - Generation and Shuffle get the list of usable variants only from `rendering.listVariants(templateId, format, mediaCount)`.
   - *Conditional on C4 (EXPERIENCE.md):* if variants can be turned on and off in the tool, the on/off state is a row in `template_variant_state` owned by `rendering`, `listVariants` filters on it, and at least one variant per format stays on. Template design is never stored in the database.
   - Whether layout adaptation and Shuffle count as altering (OP 12) can remove Shuffle or narrow the variant lists; it does not change this structure.
+  - **Amended 2026-10-28 (C31, C32).** A template version holds, per format: the **layout grids** of its Figma pages (a grid and the cell each block takes), the **default pages** that restore a lost template page, and the seven **text styles** with their sizes for that format. Variants, slots, media-count rules, spacing ranges, text scales, font pairings and `listVariants` are retired. One function lists a format's grids; generation and the configurator use only it. Each Figma template the owner sends adds its grid to its format's list. The structure rules above (folders, never-edited versions, nothing in the database) are unchanged.
 
 ### AD-16 — MAC Productive is reached only through `integration`
 
@@ -335,6 +347,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   - Text overflow also blocks approval. The configurator measures it with the AD-9 renderer for **every** format of the revision and sends the result with the approve call for that same revision version; `approve` rejects a call without an overflow-free result for each format. The server does not re-measure (see Deferred).
   - Each claim also stores `provenance` (`generated`, `human_edited`, `human_added`) and optional `sourceRefs: MaterialRef[]` from generation. Server validation rejects refs that are unknown or not in the manifest. `sourceRefs` never satisfy the approval check and are never shown as "verified" or "unsupported" (NFR2 is a manual step).
   - `approve` records the approver in `case_event` (AD-20).
+  - **Demo (owner 2026-10-27; SCP 2026-10-28, C39).** There is no per-block check: `approve` requires only an overflow-free result for every format of the revision (Presentazione, Carosello and Video) and no deleted material. `BLOCKS_UNCHECKED` is not raised. The per-block check (Story 4.7) can come back after the demo.
 
 ### AD-20 — Every lifecycle step is an event, kept for the validation measures
 
@@ -377,6 +390,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   6. A downloaded export can't change after it is made. A stored export is reused only if it was rendered with the client's current info (AD-9); after a client edit, the next export renders again.
   7. Every template fits one sector label (up to 40 characters) and the maximum description length in every format (SCP 2026-10-19), so the About block can never cause an overflow that blocks approval.
   8. The About block appears in every format, export and shared link, like the rest of the document. AD-21 rule 8 (no case code there) is unchanged.
+  9. **Changed 2026-10-28 (SCP 2026-10-28, answer 2; replaces "not editable on the page" in rules 3 and 4).** The client's fields on a page (name, sector, logo and the like) are **bound** to the client's record, not copied, and they are **editable on the page**: an edit there goes through the client's own update use case (with its validation and `manage clients` permission) and changes the record, so it shows at once on every page, in every format and in every case that uses the field. The case's fields on a page (year, services) follow the same rule on the case's record. The About block becomes the Intro's Cliente block (C33). How fields that aren't free text (the sector from the shared list, the logo) are edited on the page is open.
 
 ### AD-23 — A client has one intro-and-outro document, reviewed like a case history
 
@@ -386,7 +400,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   1. A client has one intro-and-outro document (kind `client_intro`, pages with role `intro` or `outro`; SCP 2026-10-21): one `client_intro` per client, with the case lifecycle (AD-3) and revisions of kind `client_intro`. One review and one approval cover both. Its events go to the append-only `client_event`.
   2. Generated only with 2+ image rows in `client_asset` (`NO_CLIENT_IMAGES`). The LLM writes intro and outro text blocks only (a headline and one short paragraph each, from the client's name, sector, description and brief, plus its material as OP 2 allows); layout is `relayout` over the client's images (AD-5, AD-15; SCP 2026-10-19).
   3. Client info and client material are read live at render time (AD-22); AI text stays as written.
-  4. Checked and approved as in AD-19. Only an approved intro and outro appear in a client pack or a collection; otherwise case histories keep their own intro and outro pages (SCP 2026-10-26).
+  4. Checked and approved as in AD-19. Only an approved intro and outro appear in a client pack or a collection; otherwise case histories keep their own intro and outro pages (SCP 2026-10-26). Amended 2026-10-28 (C38): where the client's closing appears, a case's Risultati e testimonial pages stay; only its own intro pages and its Carosello Chiusura are left out (AD-25).
 
 ### AD-24 — A collection is an overlay on live approved revisions
 
@@ -395,10 +409,22 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Rule:**
   1. A collection stores a name, an ordered list of case ids, its text edits (by part and `blockId`, with the original text's hash) and hidden pages (by part, format and `pageKey`). It never stores or writes a revision.
   2. It always reads `getLiveRevision`; a case with no approved revision is shown as unavailable and left out.
-  3. The intro rule is computed: a client with 2+ case histories in the collection gets its approved intro before them, its case histories stay together as a group, and their `intro` pages are left out. Its approved outro comes once after its last case history in the collection, and their `outro` pages are left out; a client with one case history keeps that case history's own outro (SCP 2026-10-26).
+  3. The intro rule is computed: a client with 2+ case histories in the collection gets its approved intro before them, its case histories stay together as a group, and their `intro` pages are left out. Its approved outro comes once after its last case history in the collection, and their `outro` pages are left out; a client with one case history keeps that case history's own outro (SCP 2026-10-26). Amended 2026-10-28 (C38): their Risultati e testimonial pages stay; only their own intro pages and Carosello Chiusura are left out.
   4. Text edits apply to a copy of the document at render time. Only owner/designers can make them (`edit collection text`, IR-COLL-EDIT). Untouched text follows the live approved version; a changed original under an edit is flagged, never merged silently.
   5. Layout, media, typography, sections and the About block can't be changed in a collection.
   6. Every user who can manage collections sees and changes every collection; `created_by` is shown.
+
+### AD-25 — A client's file references its cases' pages and never copies them
+
+- **Binds:** FR12, FR13, `case-study`, `rendering`, configurator ([Sprint Change Proposal 2026-10-28, configurator](../../sprint-change-proposal-2026-10-28-configurator.md); C38)
+- **Prevents:** a case page edited in the client's file drifting from the same page in the case, two copies of a case's text to keep in step, and a client file that shows a case's outdated pages
+- **Rule:**
+  1. The client's file is the client's intro, then each of its case histories' pages, then the client's closing (in Carosello also the client's own Chiusura). It stores no case pages.
+  2. A case's pages there are read from that case's editable revision (in the configurator) or its live approved revision (exports), per format. An edit made in the client's file is saved to that case's revision with that revision's expected version (AD-17), exactly as in the case's own configurator, so the change shows in both places.
+  3. A case's own intro pages and its Carosello Chiusura are left out of the client's file, because the client's intro and closing take their place. Its Risultati e testimonial pages stay (owner, 2026-10-27; reverses C23 for the outro).
+  4. Deleting a shared page from either place deletes it from the case, after a confirmation that says so; a case's own intro and closing pages aren't shared and don't ask (C36).
+  5. Cases in the client's file can be reordered, and their pages move with them. The order belongs to the client, not to the cases' documents. Where it is stored is decided with Story 4.12.
+  6. Approval stays per part: each case and the client's intro are approved on their own (AD-19, no bulk approve).
 
 ## Consistency Conventions
 
@@ -498,7 +524,7 @@ supabase/migrations/        # forward-only SQL, incl. jobs_claim()
 | FR1 unique ID, readable code, client | `case-study` | AD-2, AD-21 |
 | FR2 upload (20 × 50 MB), favourites, details form | `material` | AD-8, AD-14, AD-18 |
 | FR3 generate from templates, only from material, form answers and client info (name, sector, description, brief); About the client block | `generation`, `jobs`, `case-study` | AD-4, AD-5, AD-6, AD-7, AD-10, AD-17, AD-18, AD-22 |
-| FR4 adapt to media count | `rendering/templates` | AD-15 |
+| FR4 adapt to media count (since SCP 2026-10-28: layout grids and default pages per format) | `rendering/templates` | AD-15 |
 | FR5 review dashboard and configurator, text editing | `app/(tool)`, `case-study` | AD-3, AD-4, AD-17, AD-19 |
 | FR6 approval by any owner/designer | `case-study` | AD-3, AD-19 |
 | FR7 export and shareable link, both roles | `rendering`, `sharing`, `jobs` | AD-9, AD-10, AD-11, AD-13 |
@@ -510,7 +536,7 @@ supabase/migrations/        # forward-only SQL, incl. jobs_claim()
 | NFR6 no material, no generation | `generation` gate + wizard | AD-6 |
 | NFR7 approval before export or share | `case-study`, `rendering`, `sharing` | AD-3, AD-13, AD-19 |
 | FR11 client wizard (details, material) and client intro (SCP 2026-10-19) | `app/(tool)`, `case-study`, `generation`, `rendering` | AD-8, AD-22, AD-23 |
-| FR12 client overview | `app/(tool)`, `case-study` | AD-3, AD-17 |
+| FR12 client overview (client's file, C38) | `app/(tool)`, `case-study`, `rendering` | AD-3, AD-17, AD-25 |
 | FR13 client packs and collections | `collection`, `rendering`, `jobs` | AD-9, AD-24 |
 | FR9 MAC Productive seam | `integration` (Epic 7) | AD-2, AD-16 |
 
@@ -528,13 +554,13 @@ Not resolved by this spine. Each AD carries an interim rule so building can cont
 
 | PRD open point | Architecture that depends on it | Stable regardless |
 | --- | --- | --- |
-| OP 1 export formats | AD-9 format registry entries, AD-15 template formats, motion formats | renderer-per-format, export uniqueness, file types |
+| OP 1 export formats | Answered 2026-10-28 (C28): Presentazione, Carosello, Video (AD-9) | renderer-per-format, export uniqueness, file types |
 | OP 2 data processing logic | AD-7 prompt content, AD-18 per-type LLM input (PDF, DOCX, video) | port, manifest and ref shapes |
 | OP 3 taxonomy | Resolved 2026-10-14: dropped, no taxonomy (AD-14) | — |
 | OP 4 account/sales/social journey (browsing) | library queries over `getLiveRevision` | approved-only listing (AD-11) |
 | OP 8 status lifecycle | AD-3 stored state set and labels | revision model, approved is terminal |
 | OP 11 link access | AD-13 default `accessMode`, expiry UI, AD-12 after Epic 6 | token, case + format link, turn-off |
-| OP 12 what counts as altering | AD-5 rendition operations (fitting into export formats, crop, focal point, PDF pages as media), AD-15 Shuffle and media-count adaptation | no AI modifies assets, no upscaling, template versions in code |
+| OP 12 what counts as altering (partly reversed 2026-10-28: Ritaglia exists; media-count adaptation and Shuffle are gone) | AD-5 rendition operations (fitting into export formats, crop, focal point, PDF pages as media), AD-15 Shuffle and media-count adaptation | no AI modifies assets, no upscaling, template versions in code |
 | OP 13 recording the measures | AD-20 use of the event log | append-only `case_event` |
 | OP 14 what a favourite means for generation | AD-14 use of `is_favourite` in generation (AD-7 prompt, AD-18 manifest) | `asset.is_favourite`, carried in the manifest |
 
