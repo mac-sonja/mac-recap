@@ -225,7 +225,7 @@ Then the remaining nine:
 14. **Two columns.** **Yes**, as a control in the text panel (Story 4.3).
 15. **Client media.** The **3-file limit goes**. The intro and closing use the first 3 images in upload order, and favourite images come first (Stories 2.16, 4.11).
 16. **Client pack order.** **Newest first** by default; once reordered in the client configurator, the pack follows that order (Stories 4.12, 5.9).
-17. **Packs and collections.** In **every format**. Building one opens the **configurator**. Owner/designers and account/sales/social users can both create them, and all of them sit in **one shared space**. Some features are hidden or locked for account/sales/social users; the list is still to be written, and until then IR-COLL-EDIT applies (Stories 5.9–5.11, UX-DR39, FR13).
+17. **Packs and collections.** In **every format**. Building one opens the **configurator**. Owner/designers and account/sales/social users can both create them, and all of them sit in **one shared space**. Some features are hidden or locked for account/sales/social users; the list is still to be written, and until then IR-COLL-EDIT applies (Stories 5.9–5.11, UX-DR39, FR13). Amended later the same day (owner): account/sales/social can edit text in a collection and export it without a designer's approval; edits never change the original case or client.
 
 ## 7. Implementation handoff
 

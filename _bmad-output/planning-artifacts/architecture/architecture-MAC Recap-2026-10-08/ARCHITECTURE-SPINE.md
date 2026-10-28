@@ -247,7 +247,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 | generate, edit, approve a client intro | ✓ | — | — | — |
 | download client pack | approved content | approved content | — | — |
 | manage collections: create, rename, reorder, add/remove, hide pages, delete, export | ✓ | ✓ | — | — |
-| edit collection text | ✓ | — (IR-COLL-EDIT, OP 15 resolved 2026-10-16) | — | — |
+| edit collection text | ✓ | ✓ (IR-COLL-EDIT amended 2026-10-28; edits stay in the collection) | — | — |
 | delete case | any `draft` case | — | — | — |
 | approve, update approved version, discard | any case (AD-19) | — | — | — |
 | view, export | any approved | any approved | — | — |
@@ -410,7 +410,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
   1. A collection stores a name, an ordered list of case ids, its text edits (by part and `blockId`, with the original text's hash) and hidden pages (by part, format and `pageKey`). It never stores or writes a revision.
   2. It always reads `getLiveRevision`; a case with no approved revision is shown as unavailable and left out.
   3. The intro rule is computed: a client with 2+ case histories in the collection gets its approved intro before them, its case histories stay together as a group, and their `intro` pages are left out. Its approved outro comes once after its last case history in the collection, and their `outro` pages are left out; a client with one case history keeps that case history's own outro (SCP 2026-10-26). Amended 2026-10-28 (C38): their Risultati e testimonial pages stay; only their own intro pages and Carosello Chiusura are left out.
-  4. Text edits apply to a copy of the document at render time. Only owner/designers can make them (`edit collection text`, IR-COLL-EDIT). Untouched text follows the live approved version; a changed original under an edit is flagged, never merged silently.
+  4. Text edits apply to a copy of the document at render time. Every user who manages collections can make them (`edit collection text`, IR-COLL-EDIT as amended 2026-10-28), and they export with no separate approval (NFR7 amended). They never write a revision or a client row. Untouched text follows the live approved version; a changed original under an edit is flagged, never merged silently.
   5. Layout, media, typography, sections and the About block can't be changed in a collection.
   6. Every user who can manage collections sees and changes every collection; `created_by` is shown.
 
