@@ -1,5 +1,6 @@
 // Public surface of the rendering module. Code outside this module imports only this file.
-// Pure and safe for web code: the format registry (Story 3.3) and the templates (Story 3.4).
+// Pure and safe for web code: the format registry (Story 3.3), the templates (Story 3.4),
+// their renderers and the overflow helper (Story 3.5).
 // The templates import generation's types only (`import type`): generation's index
 // imports this module at runtime, so there is no cycle.
 export {
@@ -18,15 +19,24 @@ export {
   CASE_TEMPLATE,
   defaultPages,
   layouts,
+  renderFormat,
   starterPages,
   TEMPLATE_TEXT_KEYS,
   templates,
   textStyles,
 } from "@/modules/rendering/templates";
+export { measureOverflow } from "@/modules/rendering/overflow";
+export type { BlockOverflow, OverflowReport, PageOverflow } from "@/modules/rendering/overflow";
 export type {
+  BoundResult,
+  BoundTestimonial,
+  BoundValues,
   DefaultPage,
   GridArea,
   Layout,
+  RenderAsset,
+  RenderInput,
+  RenderOptions,
   TemplateContext,
   TemplateTextKey,
   TemplateVersion,

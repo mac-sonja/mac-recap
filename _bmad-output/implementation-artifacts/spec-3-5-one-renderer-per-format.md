@@ -2,7 +2,7 @@
 title: 'Story 3.5: one renderer per format (Presentazione, Carosello, Video)'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '7b0f4d29234b8253eb97a63e39c86de80702c812'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -66,14 +66,50 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `templates/types.ts` -- render input types.
-- [ ] `mac-case/v1/render/*` and `v1/index.ts` -- the three renderers.
-- [ ] `rendering/overflow.ts`, `templates/index.ts`, `rendering/index.ts` -- overflow helper and public API.
-- [ ] `templates/render.test.tsx` (happy-dom where needed) -- I/O matrix, element coverage, SSR hydration, snapshots; `hashes.json` regenerated.
-- [ ] `sprint-status.yaml` -- 3.5 to review; note composeParts split.
+- [x] `templates/types.ts` -- render input types.
+- [x] `mac-case/v1/render/*` and `v1/index.ts` -- the three renderers.
+- [x] `rendering/overflow.ts`, `templates/index.ts`, `rendering/index.ts` -- overflow helper and public API.
+- [x] `templates/render.test.tsx` (happy-dom where needed) -- I/O matrix, element coverage, SSR hydration, snapshots; `hashes.json` regenerated.
+- [x] `sprint-status.yaml` -- 3.5 to review; note composeParts split.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, when they run, then they pass.
+
+## Implementation Notes
+
+- Implemented by a subagent. `RenderInput` is `{ pages, assets, values, options? }` with `options: { still?, animateTexts?, startPage? }`; `TemplateVersion.render?(formatId, input)`; `renderFormat(template, formatId, input)` throws for an unregistered template or one without a renderer.
+- Output: a `div.mr-root` holding one `<style>` (static CSS from `css.ts`, the format's seven text styles generated from `styles.ts`, and the stepped keyframes the pages' Carousel 03/04 need) and one `section.mr-page` per page. Every class is prefixed `mr-`; elements carry `data-element-id`, blocks `data-block-id`.
+- Choices the spec left open: shared render helpers live in `render/media.tsx` (context, `Media`, `assetOf`) to avoid an import cycle. A row holding a `num` text is a result row (mockup `.kpirow` widths). A Video block with `paddingTop` gets the mockup's `.vinfo` spacing. A coloured divider (results' lines) uses opacity 1 and margins that reproduce the mockup's kpi gaps per format. A block whose image background is missing renders its default grey without the on-photo styling (its stored white ink stays). Animation loop copies (the seamless repeat) are marked `mr-ac-copy`/`aria-hidden`; with no media, three empty cards plus the loop copy, as the mockup. Empty bound values in `bindings` are left out of the " · " join. The testimonial quote is shown between « » (quotes already present are dropped), as the mockup.
+- `measureOverflow` compares `scrollHeight/scrollWidth` with `clientHeight/clientWidth` (1 px slack) on each `[data-block-id]`; a page overflows only when one of its blocks does (its own clipped decoration, e.g. the closing star, is not overflow); measure a render made with `animateTexts: false`. Tested in happy-dom with stubbed sizes (no layout engine).
+
+## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Text style rules unscoped: two formats in one document share sizes (blind) | medium | `textStyleCss` emits `.mr-t-*` with no format selector; the last `<style>` wins | patch |
+| 2 | Closing page always reported as overflowing (blind, edge) | medium | `overflows(page)` counts the star's negative insets | patch |
+| 3 | Video texts mid-loop skew the measure (edge) | low | `.mr-vin` translates texts; callers should measure with texts off | patch (doc) |
+| 4 | `measureOverflow(root)` misses a root that is itself a page (edge) | low | `querySelectorAll` excludes root; one-line fix | patch |
+| 5 | Unknown `formatId` at runtime gives an opaque React error (blind, edge) | low | Parameter is typed `FormatId`; callers read registry ids | reject |
+| 6 | Still video without poster: photo styling over grey, cell not marked empty (edge, gap) | medium | `Media` returns null but block/page background still treated as photo | patch |
+| 7 | Page grid track count may differ from the layout's (edge) | low | Grids come from the layout; 4.4's resize keeps the counts | reject |
+| 8 | Page photo background keeps dark text (edge) | false | The mockup's `.page-bg` doesn't invert text either | reject |
+| 9 | Wheel 02 spins with one or no card (blind, edge) | low | Checks `still` only; direct fix | patch |
+| 10 | Quote stripping misses ‘ ’ „ (edge) | low | Users type “ ” or none; adding cases is noise | reject |
+| 11 | Video info spacing keyed on any `paddingTop` (edge) | low | `paddingTop: 0` would match; direct fix | patch |
+| 12 | Reduced motion doesn't stop autoplay videos (blind, edge) | low | Same as the mockup; videos are media, not CSS animations | reject |
+| 13 | Client-record result/testimonial bindings untested (gap) | medium | All tests bind `case` | patch |
+| 14 | Still video without poster untested (gap) | low | Only poster videos tested | patch |
+| 15 | Empty-value " · " join untested (gap) | low | Only full values tested | patch |
+| 16 | Page and width overflow untested (gap) | low | Only one block's height is stubbed | patch |
+| 17 | Snapshot file untracked (blind, gap) | false | Committed with the change | reject |
+| 18 | `BoundValues` required fields vs defensive reads (blind) | low | No wrong output | reject |
+| 19 | Riempi bleed only for images (blind) | low | The mockup's video is an `img` item, so it bleeds too | patch |
+| 20 | `alt=""` on every image (blind) | low | No alt or caption exists in the product's media | reject |
+| 21 | Global keyframes may collide across template versions (blind) | low | Only `mac-case@1` exists | reject |
+| 22 | `startPage` accepts 0 or negative (blind) | low | Callers pass counts from 1 | reject |
+| 23 | Spec `in-review` vs sprint `review` (blind) | false | The workflow's spec and sprint vocabularies differ by design | reject |
+| 24 | Template without `render` untested (gap, blind) | low | Bug path only | reject |
 
 ## Design Notes
 

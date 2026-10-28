@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import type { Page, TextStyle } from "@/modules/generation";
 import type { FormatId } from "@/modules/rendering/domain/formats";
 
@@ -77,4 +78,72 @@ export interface TemplateVersion {
   /** The default pages a new document starts with, in order (the v1 → v2 seam, Story 3.10's test draft). */
   starterPages: (formatId: FormatId, ctx: TemplateContext) => Page[];
   textStyles: (formatId: FormatId) => Readonly<Record<TextStyle, TextStyleSpec>>;
+  /**
+   * The format's renderer (Story 3.5): a pure function of the input, the same for the
+   * configurator, the case study view, shared links and exports. Optional so a
+   * template version without renderers still type-checks.
+   */
+  render?: (formatId: FormatId, input: RenderInput) => ReactElement;
+}
+
+// ---------------------------------------------------------------------------
+// Rendering (Story 3.5)
+// ---------------------------------------------------------------------------
+
+/** A media file a page shows, by asset id: a signed URL (rendition) and its kind. */
+export interface RenderAsset {
+  url: string;
+  kind: "image" | "video";
+  /** A video's poster frame: shown in place of the video when the render is still. */
+  posterUrl?: string;
+}
+
+/** A typed result row (Story 2.21): what is measured and the number. */
+export interface BoundResult {
+  label: string;
+  value: string;
+}
+
+export interface BoundTestimonial {
+  quote: string;
+  author: string;
+}
+
+/**
+ * The current values of the client's and case's fields that pages bind to. Read at
+ * render time, never stored in the document; a missing value renders as empty text.
+ */
+export interface BoundValues {
+  client: {
+    name: string;
+    sector: string;
+    description: string;
+    logoUrl: string | null;
+    results: readonly BoundResult[];
+    testimonial: BoundTestimonial | null;
+  };
+  case: {
+    year: number | null;
+    services: readonly string[];
+    results: readonly BoundResult[];
+    testimonial: BoundTestimonial | null;
+  };
+}
+
+export interface RenderOptions {
+  /** Exports: no animation, and videos show their poster. Default false. */
+  still?: boolean;
+  /** Video only: texts come in one after the other on a loop. Default true. */
+  animateTexts?: boolean;
+  /** The number of the first page (`data-page-number`); default 1. */
+  startPage?: number;
+}
+
+/** What a format's renderer draws: that format's pages, asset URLs and the current bound values. */
+export interface RenderInput {
+  pages: readonly Page[];
+  /** By asset id; an id missing here (or a `null` asset) renders an empty, transparent cell. */
+  assets: Readonly<Record<string, RenderAsset>>;
+  values: BoundValues;
+  options?: RenderOptions;
 }
