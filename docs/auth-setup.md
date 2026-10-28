@@ -5,9 +5,9 @@ How people get in (owner decision, 2026-10-28):
 - Anyone with an `@menatcode.it` address signs up on `/sign-up`: name, what they
   do (Designer, Account, Commerciale, or Altro with their own words) and a
   password. They confirm the address from an email, then they're in.
-- Everyone who signs up starts with the account/sales/social permissions (read,
-  download and share approved cases). Designers are flagged as waiting; an
-  admin grants them owner/designer from the Users screen (Story 6.3).
+- Everyone who signs up starts with the **Editor** permissions (account/sales/social:
+  read, download and share approved cases). Designers are flagged as waiting; an
+  admin grants them **Owner** (owner/designer) from **Organizzazione** (Story 6.3).
 - Anyone else (no company address) is added by an admin and sets a password
   from the invite email (Story 6.3).
 - The role is always read from `profile` on each request; nothing in the session
@@ -50,14 +50,19 @@ migrations `20261028120000` and `20261028140000` are applied:
      where lower(email) = lower('nome.cognome@menatcode.it');
    ```
 
-   It must report `UPDATE 1`. At their next page load they land on **Utenti**.
-3. From then on, admins add people, change roles, approve designers and remove
-   users from **Utenti**. The database refuses to remove or demote the last
+   It must report `UPDATE 1`. At their next page load they land on the Dashboard,
+   with **Organizzazione** in the sidebar under Clienti.
+3. From then on, admins add people, change their Permessi and Ruolo, approve
+   designers and remove users from **Organizzazione** (`/organization`). The database refuses to remove or demote the last
    enabled admin, and only the seeded system profile can hold the `system` role.
 
-An admin sees only **Utenti**: no cases, library, templates, permissions or
-guardrails. Someone who must also work on cases needs a second account, or
-another role.
+An admin sees and does everything an Owner does, plus **Organizzazione**
+(owner, 2026-10-28). No role, admin included, can change the permission matrix or
+a guardrail.
+
+Labels in the UI (owner, 2026-10-28): the fixed role is called **Permessi**, with
+Owner (`owner_designer`), Editor (`account_sales_social`) and Amministratore
+(`admin`). **Ruolo** is free text for what the person does; it grants nothing.
 
 ## Cutover
 
