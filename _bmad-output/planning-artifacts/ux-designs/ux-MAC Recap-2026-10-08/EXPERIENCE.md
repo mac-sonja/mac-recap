@@ -2,7 +2,7 @@
 name: MAC Recap
 status: final
 created: 2026-10-08
-updated: 2026-10-19
+updated: 2026-10-28
 sources:
   - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/prd.md
   - {planning_artifacts}/prds/prd-MAC Recap-2026-10-08/addendum.md
@@ -175,6 +175,27 @@ A three-step stepper: **1 Material · 2 Details · 3 Generate**, horizontal, abo
 
 ### Configurator (FR5, FR6, NFR2, NFR7)
 
+**Source of truth since 2026-10-28: the mockup [`mockups/configurator.html`](mockups/configurator.html)** ([Sprint Change Proposal 2026-10-28, configurator](../../sprint-change-proposal-2026-10-28-configurator.md), approved by the owner). It was built with the owner on 2026-10-27/28 from the design team's Figma file "MAC-TF-AI" (Intro, Contenuti, Risultati e testimonial and Chiusura templates). Where this section and the mockup differ, the mockup and C28–C40 win. The text below this summary is kept as history; the stories (4.2–4.5, 4.8, 4.11–4.13) carry the current criteria.
+
+In short (C28–C40, conflicts log below):
+- **Formats (C28):** Presentazione 16:9 (1920×1080), Carosello 1:1 (1080×1080) and Video 9:16 (1080×1920, for Instagram Reels and Stories). They replace Deck 16:9, Social carousel 4:5 and PDF A4. For the demo Video is shown in Anteprima only.
+- **Each format has its own pages (C29).** An edit changes only the format in view.
+- **Pages are bento blocks of elements (C30):** text in one of seven styles, Testi groups, image and video (Riempi, Adatta, Ritaglia), Animazione, services, logos, divider. Drag elements into and between blocks, swap blocks, resize by dragging the border, add a block with **Blocco**, delete elements and blocks. Backgrounds: brand colour, transparent or an image from the case's or client's media (page white, block `#EDEDF0` by default).
+- **Layout and Pagine di default (C31):** the templates' grids per format, **Mescola** to the next grid with as many blocks; default pages only restore a lost template page. Variants, Shuffle, spacing sliders, Reset and media-count rules are gone.
+- **Seven text styles (C32)** and the palette white, `#EDEDF0`, `#012234`, `#DEFE56`, `#2977FF`, transparent (DESIGN.md). Font pairings and S/M/L are gone.
+- **Templates (C33)** as in the Figma file; the company is MAC.
+- **Video (C34):** texts animate in on a loop ("Animazione testi" switch in the editor), room at the top for Instagram's bar, Anteprima can overlay Instagram's Reel or Story interface.
+- **Animations (C35):** Carousel 01, Carousel 03, Carousel 04, Wheel 02; 9:16 cards; media from the case and the client, or uploaded; Adatta or Riempi, size 50–150%.
+- **Pages (C36):** **+ Aggiungi pagina**, delete with ⌘Z to undo (a page shared with the client's file asks first), drag to reorder in the right panel, sections Intro, Output, Risultati, thumbnails that draw the real page.
+- **Anteprima (C37):** the eye icon next to the formats shows the same canvas without editing tools; texts stay editable; Carosello and Video show one slideshow.
+- **The client's file (C38):** the client's intro, each case's own pages (without its intro and closing; Risultati e testimonial stay), the client's closing. Case pages are referenced, never copied; cases reorder by dragging.
+- **Approval (C39):** **Approva** needs only no overflow and the material present. No per-block check and no Check tab for the demo.
+- **Frame (C40):** left panel 312 px (selection settings, then Layout, Pagine di default, Elementi, Sfondo, Elimina pagina), right panel 224 px (Pagine, Media), both can hide; selecting an element frames its block; double click edits a text; messages at the top of the canvas.
+
+---
+
+*History (before 2026-10-28):*
+
 Three panes, as in A3 1.6, with the changes noted. The canvas is a Bento-style template layout (PRD Story 4.2).
 
 → Layout reference: [`wireframes/flow-configurator-2026-10-08.excalidraw`](wireframes/flow-configurator-2026-10-08.excalidraw) (Edit tab, Check tab with material drawer, Approve confirm, editing an approved case study). Low fidelity, greyscale; open in Excalidraw. Placeholder content in it (file names, KPI values) is illustrative. This spine wins on conflict.
@@ -193,6 +214,8 @@ Three panes, as in A3 1.6, with the changes noted. The canvas is a Bento-style t
 **Right pane: two tabs, Edit and Check.**
 
 #### Configurator acceptance criteria: editing
+
+*Superseded 2026-10-28 by C29–C33 and the mockup; kept as history.*
 
 **Text**
 - Every generated text block is editable in place on the canvas: click to edit, Escape or click outside to finish. Changes autosave.
@@ -222,6 +245,8 @@ Three panes, as in A3 1.6, with the changes noted. The canvas is a Bento-style t
 
 #### Configurator acceptance criteria: claim check (NFR2)
 
+*Not for the demo (C39); kept for after it.*
+
 The owner/designer checks every claim against the material before approving. This is a manual step; the tool supports it but doesn't automate it or judge claims.
 
 - The **Check** tab lists every text block by section (challenge, approach, result, headline, KPI tiles), each with a checkbox "Checked against material".
@@ -245,6 +270,8 @@ The PRD decides that editing an approved case study updates it and its shareable
 - [CONFLICT] C1: if the PRD intends edits to go live immediately, an unchecked claim could reach clients through a live link, which goes against NFR2 and NFR7. This staging is the proposed resolution.
 
 #### Configurator modes
+
+*Amended 2026-10-28 by C38: in the mockup the client's file shows the client's intro, its cases' own pages and its closing; cases reorder by dragging; the client's fields are edited on the page instead of in **Dati cliente**. Where the text below differs, C38 wins.*
 
 Added by the [Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md). The same frame serves three modes:
 
@@ -350,6 +377,8 @@ Decided 2026-10-16 by the owner ([Sprint Change Proposal 2026-10-16, client intr
 
 ## Export formats [OPEN 1]
 
+**Answered 2026-10-28 (C28):** Presentazione 16:9 (1920×1080, PDF), Carosello 1:1 (1080×1080, PNG images) and Video 9:16 (1080×1920; Anteprima only for the demo, MP4 or WebM after it). The options below are kept as history.
+
 The Formats pane, the case study view and export all use **one list with one name per format**, which resolves the 4-versus-7 mismatch in the A3 sketches.
 
 | Option | Formats | Notes |
@@ -361,6 +390,8 @@ The Formats pane, the case study view and export all use **one list with one nam
 Recommendation: A for the demo, B straight after. Whatever is chosen, each format gets a name, a ratio and a pixel size, and the "Social 16:9" label is retired.
 
 ## What counts as altering assets [OPEN 12]
+
+**Partly reversed 2026-10-28 (SCP 2026-10-28, answer 4):** a person can crop an image in the layout (**Ritaglia**, next to **Riempi** and **Adatta**). Shuffle and media-count adaptation are gone (C31). Uploaded files are still never changed, and the AI alters nothing. The guarantees and options below are kept as history; "no crop" no longer holds.
 
 NFR1: the AI doesn't alter graphic assets, technical substance or template design. The design team sets the boundary. The UX guarantees below hold under every option; the open question is which operations go beyond them.
 
@@ -510,7 +541,7 @@ Failure: nothing matches → "Nothing matches 'energy'." He clears filters and b
 - **C10. Client as a record. Resolved 2026-10-15 by the owner:** every case study belongs to one client record; free-text clients were migrated to records with codes.
 - **C11. Clients page. Resolved 2026-10-15 by the owner:** owner/designers list, add and rename clients and open a client's case studies; codes never change. Update (owner, 2026-10-19: clients can be deleted (soft), with their cases): a client can be deleted from the wizard; its code is never reused.
 - **C12. Picking the client. Resolved 2026-10-15 by the owner:** step 0 offers only existing clients; clients are added only on the Clients page.
-- **C13. Client info. Resolved 2026-10-16 by the owner** ([Sprint Change Proposal](../../sprint-change-proposal-2026-10-16.md)): clients have a description, sector and logo; every case study shows them in an About the client block and the AI uses them. Amended the same day by the owner: client info is live, so every case study, drafts and approved ones alike, always shows the client's current info, and a replaced or removed logo is deleted. Amended 2026-10-19 by the owner (C20): the sector became industries, and every client field is required. Amended 2026-10-22 by the owner: back to one sector per client, from a shared list anyone managing clients can add to.
+- **C13. Client info. Resolved 2026-10-16 by the owner** *(read-only About block superseded 2026-10-28 by C38's answer 2: the client's fields on a page are editable and update the client's record)* ([Sprint Change Proposal](../../sprint-change-proposal-2026-10-16.md)): clients have a description, sector and logo; every case study shows them in an About the client block and the AI uses them. Amended the same day by the owner: client info is live, so every case study, drafts and approved ones alike, always shows the client's current info, and a replaced or removed logo is deleted. Amended 2026-10-19 by the owner (C20): the sector became industries, and every client field is required. Amended 2026-10-22 by the owner: back to one sector per client, from a shared list anyone managing clients can add to.
 - **C14. Client intro. Resolved 2026-10-16 by the owner** ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md); before the demo, owner amendment the same day): adding a client asks for 2–3 images; the AI drafts the client's intro pages, which the owner/designer refines, checks and approves like a case study. Amended 2026-10-19 by the owner (C19): adding a client is a wizard, and its material step takes up to 3 files, at least 2 of them images.
 - **C15. Client page.** Confirmed 2026-10-16: the client page lists its case studies and creates new ones (already built).
 - **C16. Client overview. Resolved 2026-10-16 by the owner** (before the demo): ~~**Modifica cliente** opens the intro and every case study as one preview~~ *(superseded 2026-10-21 by the owner, C22: the overview opens from **Modifica layout**)*; editing there edits the case study itself. ~~Until Story 4.12, **Modifica cliente** opens the client wizard (C19).~~
@@ -520,14 +551,27 @@ Failure: nothing matches → "Nothing matches 'energy'." He clears filters and b
 - **C20. Client fields. Resolved 2026-10-19 by the owner:** Nome, Settore (pills, one choice, from a shared list seeded with *Interior design, Energia, Risorse umane, Lusso*, replacing the free-text sector; since 2026-10-22 single select, and a new sector typed under the pills joins the list for everyone), Descrizione (up to 400 characters), Logo (PNG, JPEG, WebP or SVG; an SVG with script or external links is refused with "Il file SVG non è sicuro: contiene script o collegamenti esterni."; owner, 2026-10-19), and Contesto, Soluzione and Risultati (up to 5000 characters each). All are required.
 - **C21. Client outro. Resolved 2026-10-21 by the owner** ([Sprint Change Proposal 2026-10-21, client outro](../../sprint-change-proposal-2026-10-21-client-outro.md), where it is C20): creating a client also creates the outro of its case histories. The AI drafts intro and outro from the client's data and images, in one document reviewed and approved together; the owner/designer refines them in the configurator (**Introduzione**, **Chiusura**). The outro comes once after the client's last case history wherever its case histories appear together (pack, collection, overview); a single case history exported on its own ends with its client's approved outro (superseded by C23: it keeps its own outro); an outro that isn't approved is never included.
 - **C22. Modifica cliente and Modifica layout. Resolved 2026-10-21 by the owner** ([Sprint Change Proposal 2026-10-21, client outro](../../sprint-change-proposal-2026-10-21-client-outro.md), where it is C21): **Modifica cliente** opens the client side panel (data only), which also replaces the client wizard for adding a client. Editing the layout of a client's case histories is a separate button, **Modifica layout**, on the client page; it shows inactive with "Arriva con il configuratore" until Story 4.12, then opens the client overview. Supersedes C16's **Modifica cliente** entry.
-- **C23. One rule for the client intro and outro. Resolved 2026-10-26 by the owner** ([Sprint Change Proposal 2026-10-26, client pages](../../sprint-change-proposal-2026-10-26-client-pages.md)): the client's outro appears only where its intro does, with 2+ of its case histories in one file, and replaces their own outro pages. A single case history keeps its own intro and outro. Supersedes C21's "a single case history exported on its own ends with its client's approved outro".
+- **C23. One rule for the client intro and outro. Resolved 2026-10-26 by the owner** *(superseded for the outro 2026-10-28 by C38: a case's Risultati e testimonial pages stay in the client's file; the intro rule is unchanged)* ([Sprint Change Proposal 2026-10-26, client pages](../../sprint-change-proposal-2026-10-26-client-pages.md)): the client's outro appears only where its intro does, with 2+ of its case histories in one file, and replaces their own outro pages. A single case history keeps its own intro and outro. Supersedes C21's "a single case history exported on its own ends with its client's approved outro".
 - **C24. Case outro. Resolved 2026-10-26 by the owner:** a case history has its own outro page, made only of its **Risultati** and **Testimonial** as typed (Story 2.21), both optional; with neither, there is no outro page.
-- **C25. Social carousel. Resolved 2026-10-26 by the owner:** the carousel always ends on the case history's own outro, never the client's.
+- **C25. Social carousel. Resolved 2026-10-26 by the owner** *(superseded 2026-10-28 by C33 and C38: every carousel ends with its own Chiusura page, and in the client's file the client's Chiusura replaces the cases' ones)*: the carousel always ends on the case history's own outro, never the client's.
 - **C26. Client draft trigger. Resolved 2026-10-26 by the owner:** **Aggiungi** in the client panel saves the client and starts the intro and outro draft in the background; no **Crea introduzione**, no waiting screen.
 - **C27. Test text first. Resolved 2026-10-26 by the owner:** the client intro and outro are laid out first with test text (Story 3.11), then the AI writes them (Story 3.9).
+- **C28. Three formats. Resolved 2026-10-28 by the owner** ([Sprint Change Proposal 2026-10-28, configurator](../../sprint-change-proposal-2026-10-28-configurator.md)): Presentazione 16:9 (1920×1080), Carosello 1:1 (1080×1080; Figma frame 1000) and Video 9:16 (1080×1920), which serves both Instagram Reels and Stories. They replace Deck 16:9, Social carousel 4:5 and PDF A4 ([OPEN 1]). For the demo Video is Anteprima only; it exports as MP4 or WebM after the demo. Supersedes the Formats pane's format list and the Export formats options.
+- **C29. Each format has its own pages. Resolved 2026-10-28 by the owner:** a format owns its pages, blocks, elements, texts and backgrounds; an edit changes only the format in view. Supersedes the `[ASSUMPTION]` "Content is shared, layout is per format".
+- **C30. Bento blocks hold elements. Resolved 2026-10-28 by the owner:** a page is a bento grid of blocks; a block holds elements stacked top to bottom (text, Testi group, image, video, Animazione, services, logos, divider). Drag elements into and between blocks, drag a block onto another to swap, drag a border to resize, add a block with **Blocco**, delete elements and blocks. Backgrounds: brand colour, transparent, or an image from the case's or client's media. Template spacers become the alignment of a Testi group. Images fit with Riempi, Adatta or Ritaglia (supersedes "no crop" in the Media criteria and [OPEN 12]).
+- **C31. Layouts and default pages. Resolved 2026-10-28 by the owner:** **Layout** lists the templates' grids per format and grows as templates arrive; more cells add empty blocks, fewer remove only empty blocks and otherwise refuse; **Mescola** moves to the next grid with the same number of blocks. **Pagine di default** only restore a lost template page. Supersedes layout variants, Shuffle, spacing sliders, Reset and media-count rules.
+- **C32. Seven text styles. Resolved 2026-10-28 by the owner:** Etichetta, Titolo XL, Titolo, Sottotitolo, Testo, Numero, Citazione, each with a desktop and a mobile size (DESIGN.md); colour, alignment and two columns are settings of the text; texts wrap and grow, only a result's number stays on one line. Supersedes font pairings, the S / M / L scale and "no colour control inside a text block".
+- **C33. Templates as decided. Resolved 2026-10-28 by the owner:** Intro, Contenuti, Risultati e testimonial and Chiusura as in the Figma frames; Risultati e testimonial texts come from Story 2.21 as typed, with no AI; Chiusura (Carosello only) is the same for every carousel and editable per carousel. The company is MAC.
+- **C34. Video. Resolved 2026-10-28 by the owner:** texts animate in one after the other on a loop, with an "Animazione testi" switch in the editor; pages keep room at the top for Instagram's bar; Anteprima can overlay Instagram's Reel or Story interface (`mac.creativetech`, friends' photos and counts blanked out).
+- **C35. Animations. Resolved 2026-10-28 by the owner:** Carousel 01, Carousel 03, Carousel 04 and Wheel 02; 9:16 cards adapting to the number of media; media from the case and the client, or uploaded into the case's Media; Adatta or Riempi, size 50–150%. No animated page layouts.
+- **C36. Pages. Resolved 2026-10-28 by the owner:** **Aggiungi pagina** adds an empty page after the selected one; a page can be deleted and ⌘Z brings it back, and a page shared between a case and the client's file asks first; pages reorder by drag within the same list; a case's pages fall in Intro, Output and Risultati; thumbnails draw the real page. Supersedes "sections can't be deleted or reordered" as far as pages go (whether the narrative content itself may be deleted is open, Story 3.3).
+- **C37. Anteprima. Resolved 2026-10-28 by the owner:** the same canvas without editing tools, from an eye icon next to the formats that turns into a pencil; formats stay switchable; Carosello and Video show one social-style slideshow; texts stay editable.
+- **C38. The client's file shows its cases. Resolved 2026-10-28 by the owner:** the client tab shows the client's intro, each case's pages without the case's own intro and closing, and the client's closing (plus the client's own Chiusura in Carosello). A case's pages there are the case's own pages, so an edit shows in both places. Cases reorder by dragging their row, and their pages move with them. Case Risultati e testimonial pages stay (owner, 2026-10-27). Supersedes C23 for the outro, C25, and "There is no reordering" in the client overview. Client fields on a page are editable and update the client's record; case fields (year, services) likewise update the case's record (open point 2 of the proposal; supersedes the read-only About block of C13).
+- **C39. Approval for the demo. Resolved 2026-10-28 by the owner** (decided 2026-10-27): **Approva** needs only no overflow and the material present. No per-block check (Story 4.7 not for the demo), no Check tab, no "generated, not checked" marking. Supersedes the claim-check criteria above for the demo.
+- **C40. The editor frame. Resolved 2026-10-28 by the owner:** left panel 312 px (the selection's settings, then Layout, Pagine di default, Elementi, Sfondo, Elimina pagina), right panel 224 px (Pagine, Media), both hidden from their own bar and reopened from the canvas edge; selecting an element frames its block; a double click edits a text; messages show at the top of the canvas. Supersedes the Formats pane, the page strip and the Edit and Check tabs.
 - **C5. Brief vs PRD:** the brief limits export to account/sales/social and puts the hallucination target on "caught in review". The PRD (both roles export; zero reaching approved) wins; noted only.
 
-**PRD open points with options above:** [OPEN 1] export formats · [OPEN 8] status lifecycle · [OPEN 11] link access · [OPEN 12] what counts as altering. **[OPEN 14]** what a favourite means for generation. [OPEN 3] taxonomy resolved 2026-10-14: dropped.
+**PRD open points with options above:** [OPEN 1] export formats (answered 2026-10-28, C28) · [OPEN 8] status lifecycle · [OPEN 11] link access · [OPEN 12] what counts as altering. **[OPEN 14]** what a favourite means for generation. [OPEN 3] taxonomy resolved 2026-10-14: dropped.
 
 **UX questions resolved (2026-10-08):**
 - **Q1.** UI language: Italian.
