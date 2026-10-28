@@ -104,11 +104,15 @@ export const it = {
         businessLine: "Servizi",
         updated: "Aggiornata",
         links: "Link",
-        /** Read by screen readers only: the column of Scarica and Elimina. */
+        /** Read by screen readers only: the column of Scarica and Modifica. */
         actions: "Azioni",
       },
       /** The Link column's icon, read by screen readers; `{name}` is the case name. */
       openLink: "Apri il link di {name} in un’altra scheda",
+      /** An Approvato row's link to the configurator (Story 5.2, with `edit`). */
+      edit: "Modifica",
+      /** Its accessible name; `{name}` is the case name. */
+      editLabel: "Modifica {name}",
     },
     search: {
       label: "Cerca progetto o cliente",
@@ -886,6 +890,18 @@ export const it = {
     },
     /** The Video editor's switch that stops the text loop while working on a page. */
     textAnimation: "Animazione testi",
+  },
+  /**
+   * An approved case's read-only detail page (Story 5.2): each format as in the
+   * configurator's Anteprima, with **Scarica** and, with `edit`, **Modifica**.
+   */
+  caseView: {
+    /** Accessible name of the top bar's back arrow. */
+    back: "Torna alle case history",
+    /** Opens the configurator. */
+    edit: "Modifica",
+    /** Below 1024 px, instead of the page. */
+    narrowScreen: "L’anteprima ha bisogno di uno schermo più grande.",
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {

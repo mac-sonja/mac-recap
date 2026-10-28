@@ -25,17 +25,23 @@ export const editClientPanelHref = (id: string) => `${clientHref(id)}?modifica=1
 /** A case's configurator (Story 4.2): only a case in Da approvare or Approvato opens there. */
 export const configuratorHref = (id: string) => `/case-studies/${encodeURIComponent(id)}/configurator`;
 
+/** An approved case's read-only detail page (Story 5.2): every role that may `view` it. */
+export const caseViewHref = (id: string) => `/case-studies/${encodeURIComponent(id)}`;
+
 /**
  * Where a case opens from a list: a Bozza reopens the wizard (no step, so it picks the first
- * incomplete one); Da approvare and Approvato open the configurator for a role that may `edit`;
- * In elaborazione, or a role without `edit`, opens nothing (null).
+ * incomplete one); an Approvato opens its detail page for every role; Da approvare opens the
+ * configurator for a role that may `edit`. In elaborazione, or Da approvare without `edit`,
+ * opens nothing (null).
  */
 export const caseHref = (id: string, status: CaseStatus, canEdit: boolean): string | null =>
   status === "draft"
     ? wizardHref(id)
-    : canEdit && (status === "in_review" || status === "approved")
-      ? configuratorHref(id)
-      : null;
+    : status === "approved"
+      ? caseViewHref(id)
+      : canEdit && status === "in_review"
+        ? configuratorHref(id)
+        : null;
 
 /** The Case studies table filtered to one status (`?stato=`), e.g. the To review queue. */
 export const caseStudiesHref = (status: CaseStatus) => `/case-studies?stato=${encodeURIComponent(status)}`;

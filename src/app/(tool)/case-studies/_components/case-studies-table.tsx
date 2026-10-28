@@ -1,14 +1,14 @@
 "use client";
 
-import { ArrowDown, ArrowUp, FolderOpen, Link2, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, FolderOpen, Link2, Pencil, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
-import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
+import { PRESSABLE, PRIMARY_ACTION, ROW_PILL, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { CARD, SEARCH_FIELD, SEARCH_ICON, TH } from "@/app/_components/field-styles";
 import { DownloadButton } from "@/app/_components/download-button";
 import { StatusBadge } from "@/app/_components/status-badge";
-import { caseHref } from "@/app/_lib/routes";
+import { caseHref, configuratorHref } from "@/app/_lib/routes";
 import { CASE_STATUSES } from "@/shared/case-status";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -30,7 +30,10 @@ export interface CaseStudiesTableProps {
   rows: CaseStudyRow[];
   /** Policy decision (`create case`): whether the empty state offers "Nuova case history". */
   canCreate: boolean;
-  /** Policy decision (`edit`): whether Da approvare and Approvato rows open the configurator. */
+  /**
+   * Policy decision (`edit`): whether Da approvare rows open the configurator and Approvato
+   * rows show **Modifica** to it (an Approvato row itself opens its detail page for every role).
+   */
   canEdit?: boolean;
   /** The empty-state line; defaults to the Case history page's. */
   emptyMessage?: string;
@@ -144,7 +147,7 @@ function isTextField(el: Element | null): boolean {
 /**
  * The Case studies table: ID (the case history code, mono), Name, Client (its
  * current name), Year, Status, Business line (empty for cases created before Story
- * 2.17), Link (an icon when the case has a public link), Scarica (approved cases only,
+ * 2.17), Link (an icon when the case has a public link), the actions (approved cases only,
  * no header text) and Updated, last (owner, 2026-10-21). Default sort Updated newest first; a header
  * click sorts by it, again reverses; ID sorts codes naturally. The toolbar above the table
  * holds the status filter (*Tutti* · Bozza · In elaborazione · Da approvare ·
@@ -152,8 +155,10 @@ function isTextField(el: Element | null): boolean {
  * name, client name, client code, case code and business line label (case- and
  * accent-insensitive, debounced); both apply together. `/` focuses the search unless
  * focus is already in a text field. A Bozza row opens
- * `/case-studies/new?caseId={id}`; other rows are not links yet. The actions column
- * holds Scarica on approved rows. A draft is deleted from inside it (**Elimina bozza**,
+ * `/case-studies/new?caseId={id}`; a Da approvare row opens the configurator with `edit`
+ * (otherwise it is not a link); an Approvato row opens its detail page for every role;
+ * In elaborazione is not a link. The actions column holds Scarica on Approvato rows, with
+ * **Modifica** to the configurator next to it with `edit`. A draft is deleted from inside it (**Elimina bozza**,
  * owner 2026-10-22), not from the list.
  */
 export function CaseStudiesTable({
@@ -245,7 +250,7 @@ export function CaseStudiesTable({
         : fill(it.caseStudies.noResultsQueryStatus, { query: query.trim(), status: it.caseStudies.filter.statuses[status] });
 
   function openRow(event: MouseEvent<HTMLTableRowElement>, href: string) {
-    // Links and buttons (the name, Scarica, Elimina) and their dialogs act on their own; modifier or
+    // Links and buttons (the name, Scarica, Modifica) and their dialogs act on their own; modifier or
     // non-primary clicks and text selection (copying an ID) do not navigate.
     if ((event.target as Element).closest("a, button, dialog")) return;
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -322,7 +327,7 @@ export function CaseStudiesTable({
                 <th scope="col" className={TH}>
                   {it.caseStudies.table.columns.links}
                 </th>
-                {/* Scarica and Elimina: the buttons speak for themselves, so the header stays empty (owner, 2026-10-21). */}
+                {/* Scarica and Modifica: the buttons speak for themselves, so the header stays empty (owner, 2026-10-21). */}
                 <th scope="col" className={TH}>
                   <span className="sr-only">{it.caseStudies.table.columns.actions}</span>
                 </th>
@@ -374,11 +379,23 @@ export function CaseStudiesTable({
                     </td>
                     <td className="px-4 py-2">
                       {row.status === "approved" && (
-                        <DownloadButton
-                          label={fill(it.download.caseLabel, { name: row.name })}
-                          title={fill(it.download.caseTitle, { name: row.name })}
-                          description={it.download.caseDescription}
-                        />
+                        <div className="flex items-center gap-2">
+                          <DownloadButton
+                            label={fill(it.download.caseLabel, { name: row.name })}
+                            title={fill(it.download.caseTitle, { name: row.name })}
+                            description={it.download.caseDescription}
+                          />
+                          {canEdit && (
+                            <Link
+                              href={configuratorHref(row.id)}
+                              aria-label={fill(it.caseStudies.table.editLabel, { name: row.name })}
+                              className={cn(ROW_PILL, PRESSABLE)}
+                            >
+                              <Pencil aria-hidden="true" className="size-3.5" />
+                              {it.caseStudies.table.edit}
+                            </Link>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-foreground-muted tabular-nums">

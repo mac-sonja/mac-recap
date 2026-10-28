@@ -2,7 +2,7 @@
 
 import { Download } from "lucide-react";
 import { useId, useState } from "react";
-import { PRESSABLE, PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
+import { PRESSABLE, PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, ROW_PILL } from "@/app/_components/button-styles";
 import { Dialog } from "@/app/_components/dialog";
 import type { FormatId } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
@@ -55,7 +55,7 @@ export function DownloadButton({ label, title, description, onDownload }: Downlo
         aria-label={label}
         onClick={() => setOpen(true)}
         className={cn(
-          "inline-flex h-7 items-center gap-1.5 rounded-full bg-surface-control px-3 font-label text-[13px] font-medium whitespace-nowrap text-foreground hover:bg-surface-selected",
+          ROW_PILL,
           PRESSABLE,
         )}
       >

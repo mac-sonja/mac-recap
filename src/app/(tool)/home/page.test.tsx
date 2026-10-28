@@ -157,9 +157,9 @@ describe("HomePage", () => {
       "Giulia Riva ha creato Showroom in tasca.",
     ]);
     expect(html).toContain('<strong class="font-semibold text-foreground-strong">Mattoni</strong>');
-    // A draft's line opens its wizard; an approved case's opens its configurator.
+    // A draft's line opens its wizard; an approved case's opens its detail page.
     expect(activity?.[2].match(/href="\/case-studies\/new\?caseId=aaaaaaaa-0000-4000-8000-000000000001"/g)).toHaveLength(2);
-    expect(activity?.[2].match(/href="\/case-studies\/aaaaaaaa-0000-4000-8000-000000000009\/configurator"/g)).toHaveLength(1);
+    expect(activity?.[2].match(/href="\/case-studies\/aaaaaaaa-0000-4000-8000-000000000009"/g)).toHaveLength(1);
     expect(activity?.[2].match(/<svg/g)).toHaveLength(3);
   });
 

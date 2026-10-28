@@ -92,7 +92,7 @@ describe("CaseStudiesTable", () => {
       COLUMNS.status,
       COLUMNS.businessLine,
       COLUMNS.links,
-      COLUMNS.actions, // screen readers only: the Scarica and Elimina column shows no header
+      COLUMNS.actions, // screen readers only: the Scarica and Modifica column shows no header
       COLUMNS.updated,
     ]);
     expect(names()).toEqual(["Alfa", "Émile", "Zeta"]);
@@ -428,15 +428,17 @@ describe("CaseStudiesTable", () => {
     expect(screen.getByRole("status").textContent).toBe("");
   });
 
-  it("opens a Bozza row at /case-studies/new?caseId={id}, Da approvare and Approvato rows in the configurator", async () => {
+  it("opens a Bozza row at /case-studies/new?caseId={id}, Da approvare in the configurator and Approvato on its detail page", async () => {
     const user = userEvent.setup();
     render(<CaseStudiesTable rows={rows} canCreate canEdit />);
     const table = screen.getByRole("table");
-    const links = within(table).getAllByRole("link").filter((a) => a.getAttribute("href")?.startsWith("/case-studies"));
+    const links = within(table)
+      .getAllByRole("link")
+      .filter((a) => a.getAttribute("href")?.startsWith("/case-studies") && !a.getAttribute("aria-label"));
     expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
       ["Alfa", `/case-studies/new?caseId=${DRAFT_ID}`],
       ["Émile", "/case-studies/cccccccc-0000-4000-8000-000000000003/configurator"],
-      ["Zeta", "/case-studies/aaaaaaaa-0000-4000-8000-000000000001/configurator"],
+      ["Zeta", "/case-studies/aaaaaaaa-0000-4000-8000-000000000001"],
     ]);
 
     await user.click(within(table).getByText("Acme"));
@@ -445,17 +447,34 @@ describe("CaseStudiesTable", () => {
     push.mockReset();
     await user.click(within(table).getByText("Beta Lumen"));
     expect(push).toHaveBeenCalledWith("/case-studies/cccccccc-0000-4000-8000-000000000003/configurator");
+
+    push.mockReset();
+    await user.click(within(table).getByText("Città di Roma"));
+    expect(push).toHaveBeenCalledWith("/case-studies/aaaaaaaa-0000-4000-8000-000000000001");
   });
 
-  it("opens only Bozza rows for a role that may not edit (no configurator links)", async () => {
+  it("shows Modifica next to Scarica on Approvato rows only, with `edit`; it opens the configurator, not the row", () => {
+    render(<CaseStudiesTable rows={rows} canCreate canEdit />);
+    const edits = screen.getAllByRole("link", { name: /^Modifica / });
+    expect(edits.map((a) => [a.getAttribute("aria-label"), a.textContent, a.getAttribute("href")])).toEqual([
+      [fill(dict.caseStudies.table.editLabel, { name: "Zeta" }), dict.caseStudies.table.edit, "/case-studies/aaaaaaaa-0000-4000-8000-000000000001/configurator"],
+    ]);
+    expect(edits[0]!.closest("td")?.querySelector("button")?.getAttribute("aria-label")).toBe(fill(dict.download.caseLabel, { name: "Zeta" }));
+    fireEvent.click(edits[0]!);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("opens Bozza and Approvato rows for a role that may not edit: no configurator links, no Modifica", async () => {
     const user = userEvent.setup();
     render(<CaseStudiesTable rows={rows} canCreate={false} canEdit={false} />);
     const table = screen.getByRole("table");
     const links = within(table).getAllByRole("link").filter((a) => a.getAttribute("href")?.startsWith("/case-studies"));
-    expect(links.map((a) => a.getAttribute("href"))).toEqual([`/case-studies/new?caseId=${DRAFT_ID}`]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual([`/case-studies/new?caseId=${DRAFT_ID}`, "/case-studies/aaaaaaaa-0000-4000-8000-000000000001"]);
+    expect(screen.queryAllByRole("link", { name: /^Modifica / })).toEqual([]);
     await user.click(within(table).getByText("Beta Lumen"));
-    await user.click(within(table).getByText("Città di Roma"));
     expect(push).not.toHaveBeenCalled();
+    await user.click(within(table).getByText("Città di Roma"));
+    expect(push).toHaveBeenCalledWith("/case-studies/aaaaaaaa-0000-4000-8000-000000000001");
   });
 
   it("starts on ?stato=in_review as the To review queue: Da approvare only, longest waiting first", async () => {

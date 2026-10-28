@@ -217,3 +217,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-2-open-a-draft-in-the-configurator.md`
   summary: Keyboard selection of blocks and elements on the configurator canvas (today pages are reachable by keyboard through the Pagine thumbnails; blocks and elements only by pointer).
   evidence: Review of 4.2a (maybe-false, medium if keyboard selection is required): `CanvasPage` handles clicks only; settle with the owner before 4.3 makes selection the way into editing.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
+  summary: Elimina on an approved case's detail page (owner 2026-10-28): soft delete confirmed by typing *elimina*, Owner and Amministratore only (`delete case` covers draft or approved), new migration redefining `delete_case_study` (reason `approved_deleted`), AR3 amended; its links stop working (note on 5.5/5.7) and it leaves client packs and collections (note on 5.9/5.10).
+  evidence: Split from the detail-page spec at the owner's choice (2026-10-28) to keep each spec under the size limit; built right after it, on the same page.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
+  summary: On the approved case detail page (and the configurator), one rendition failure other than "not ready" (e.g. `STORAGE_FAILED`) throws the whole page into the error boundary, even for an asset the revision doesn't use; draw it as an empty cell instead, or sign only referenced assets.
+  evidence: Review of Story 5.2 part (medium): `renderAssetsOf` runs over every listed asset and rethrows; `page.test.tsx` asserts the throw.
