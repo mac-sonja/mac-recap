@@ -111,7 +111,7 @@ UX-DR15: Configurator media. Replace from this case's own material only (no uplo
 UX-DR16: Configurator typography. Font pairing from the template's list; text scale S / M / L per format; no per-word or per-block styling. Superseded (SCP 2026-10-28, C32): seven text styles, folded into Story 4.3.
 UX-DR17: Check tab. Not for the demo (owner 2026-10-27; SCP 2026-10-28, C39; Story 4.7). Every block listed by section (challenge, approach, result, headline, KPI tiles) with "Checked against material"; selection synced between list and canvas; material drawer showing files (image, PDF, text viewer; video player) and details answers beside the canvas; editing a block unticks it; Approve disabled with "{n} blocks still to check" (reason via `aria-describedby`, counter `aria-live="polite"`); overflowing blocks listed; no tick-all.
 UX-DR18: Approve confirm dialog with the specified copy (for the demo without "Every claim has been checked against the material", C39); on confirm, status Approvato, toast "Approved. It's now in the library.", navigate to To review if items are waiting, otherwise Case studies.
-UX-DR19: Editing an approved case. Banner "Approved, with {n} live links. Changes go live when you update the approved version."; edits autosave to a working copy; edited blocks unticked; Update approved version enabled when every edited block is ticked again; confirm "{n} links will show the new version."; Discard changes.
+UX-DR19: Editing an approved case. Banner "Approved, with {n} live links. Changes go live when you update the approved version."; edits autosave to a working copy; Update approved version enabled when nothing overflows and the material is present (no per-block check; SCP 2026-10-28 C39); confirm "{n} links will show the new version."; Discard changes.
 UX-DR20: Autosave state. "Saved" / "Saving…" / "Not saved. Retrying…"; after 3 failures a banner "Changes aren't saving. Keep this tab open." No Save draft button, no version history.
 UX-DR21: Case study view. Top bar Back, name, badge, Share, Export (+ Edit for owner/designer); format list matching the configurator; pager ("Slide 1 of 12"), zoom − / 100% / +, fit, full screen; Export selected format with progress and browser download; Export all as one ZIP; "Export didn't finish." toast with Try again; format list becomes a dropdown at 1024–1279 px.
 UX-DR22: Share dialog. Choose a format (default Presentazione 16:9; SCP 2026-10-28); link auto-copied with "Link copied" toast; plain "who can open it" sentence above the link; link list with format, created by, created on, Copy, Turn off link (with confirm).
@@ -326,7 +326,7 @@ Order: after 3.10, before 4.1. Blocked on the client template from the design te
 
 **Given** **Aggiungi** in the client side panel
 **When** the client is saved
-**Then** the server checks the client has at least 2 image rows in `client_asset` (else `NO_CLIENT_IMAGES`), creates the `client_intro` and, in the background, a `working` revision of kind `client_intro` with test text marked "[bozza di prova]" built from the client's own fields, laid out by `rendering.relayout` with 2–3 of its images in every format
+**Then** the server checks the client has at least 2 image rows in `client_asset` (else `NO_CLIENT_IMAGES`), creates the `client_intro` and, in the background, a `working` revision of kind `client_intro` with test text marked "[bozza di prova]" built from the client's own fields, laid out by default pages (Story 3.4) filled with 2–3 of its images in every format (`relayout` retired per SCP 2026-10-28)
 **And** the client page opens at once, and the intro moves to **Da approvare** when the draft is ready
 **And** no LLM is called; Story 3.9 later replaces the test text with the AI's
 
@@ -1546,7 +1546,7 @@ Order: MVP, Sprint 2: after 2.15, 2.16 and 3.3–3.8, before Epic 4 (owner amend
 **Given** the worker runs the intro job
 **When** it calls the LLM
 **Then** the input is the client's current name, sector, description and brief (the intro is a headline and one short paragraph; owner decision 2026-10-16), plus its material as OP 2 allows (until then, nothing but the text fields; SCP 2026-10-19); the output schema has only intro and outro text blocks (headline and short paragraph each; outro per SCP 2026-10-21) with claims and `client_field` refs, and no layout, asset or `about` field
-**And** `rendering.relayout` places 2–3 of the client's images (image rows in `client_asset`) in the template's intro and outro slots for every format
+**And** the client's default pages (Story 3.4) are filled with 2–3 of the client's images (image rows in `client_asset`) in every format; there is no `relayout` (SCP 2026-10-28)
 **And** a new `working` revision of kind `client_intro` is created and the intro moves to `in_review`
 
 **Given** the job fails after its attempts
