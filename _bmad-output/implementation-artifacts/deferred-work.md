@@ -202,3 +202,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-3-v2-document-model-and-format-registry.md`
   summary: Remove the remaining `rendering.relayout` and "Deck 16:9 and PDF A4" mentions from ARCHITECTURE-SPINE.md (L55, L132, L210, L401).
   evidence: SCP 2026-10-28 retired relayout and those formats; the spine still names them.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-4-templates-pages-layouts-and-default-pages.md`
+  summary: Story 3.5's renderers must honour every field Story 3.4 added to schema v2 (`row`, text `bindings` joined by " · ", `#rrggbbaa` colours, `divider.colour`, block `padding`/`paddingTop`/`ink`, page `margin`/`decoration: star`) and the top Testi group that grows like the mockup's spacer.
+  evidence: Nothing outside the domain and the templates reads these shapes yet; the spacer rule is written only in the 3.4 spec's Implementation Notes (review, 2026-10-28).

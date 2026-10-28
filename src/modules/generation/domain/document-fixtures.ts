@@ -70,6 +70,34 @@ function casePages(): Page[] {
       { elementId: elementId(7), type: "divider" },
       { elementId: elementId(8), type: "services" },
       { elementId: elementId(9), type: "text", style: "lab", binding: { record: "case", field: "year" }, provenance: "generated" },
+      // A row: a group holding the meta line (two bindings joined by " · "), then the logos; and a label with the services.
+      {
+        elementId: elementId(26),
+        type: "row",
+        align: "centre",
+        wide: true,
+        items: [
+          {
+            elementId: elementId(27),
+            type: "text_group",
+            align: "top",
+            items: [
+              {
+                elementId: elementId(28),
+                type: "text",
+                style: "text",
+                bindings: [
+                  { record: "client", field: "sector" },
+                  { record: "case", field: "year" },
+                ],
+                provenance: "generated",
+              },
+            ],
+          },
+          { elementId: elementId(29), type: "logos" },
+        ],
+      },
+      { elementId: elementId(30), type: "row", align: "top", items: [generated(31, "lab", "Servizi"), { elementId: elementId(32), type: "services" }] },
     ],
   };
   const challenge: Block = {
@@ -91,6 +119,8 @@ function casePages(): Page[] {
       blockId: blockId(7),
       name: "Animazione",
       background: { kind: "image", assetId: ASSET_B },
+      padding: 60,
+      paddingTop: 220,
       elements: [{ elementId: elementId(16), type: "animation", animation: "carousel_04", assetIds: [ASSET_A, ASSET_B], fit: "fill", size: 105 }],
     },
   ];
@@ -99,9 +129,11 @@ function casePages(): Page[] {
       blockId: blockId(8),
       name: "Risultati",
       background: { kind: "colour", value: "#2977FF" },
+      padding: 28,
+      ink: "#FFFFFF",
       elements: [
-        { ...generated(17, "text", "Visite al sito"), colour: "#FFFFFF" },
-        { elementId: elementId(18), type: "divider" },
+        { ...generated(17, "text", "Visite al sito"), colour: "#FFFFFFA6" },
+        { elementId: elementId(18), type: "divider", colour: "#B0B0B1" },
         { ...generated(19, "num", "+40%"), colour: "#DEFE56", size: 75 },
         // The case's typed result rows (Story 2.21), bound rather than copied.
         { elementId: elementId(22), type: "text", style: "text", binding: { record: "case", field: "resultLabel", index: 1 }, provenance: "generated" },
@@ -146,6 +178,8 @@ function casePages(): Page[] {
       section: "output",
       background: { kind: "transparent" },
       grid: { layoutId: "contenuti-4", rows: [1, 1], cols: [1, 1] },
+      margin: 0,
+      decoration: "star",
       blocks: media,
     },
     {
@@ -155,6 +189,7 @@ function casePages(): Page[] {
       section: "risultati",
       background: { kind: "image", assetId: ASSET_A },
       grid: { layoutId: "risultati-2", rows: [1], cols: [1, 1] },
+      margin: 40,
       blocks: results,
     },
   ];

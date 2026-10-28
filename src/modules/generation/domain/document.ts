@@ -68,6 +68,10 @@ export const templateRefSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]*@[1-9][0-
 
 /** `#rrggbb`. */
 const hexColourSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be #rrggbb.");
+/** `#rrggbb` or `#rrggbbaa` (texts, dividers and block ink: the templates use alpha, e.g. muted text `#01223499`). */
+const inkColourSchema = z.string().regex(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/, "Must be #rrggbb or #rrggbbaa.");
+/** A px measure on the Figma frame (margins, paddings). */
+const pxSchema = z.number().min(0).max(1000);
 
 /** A page's or block's background: a colour, transparent, or an image from the case's or client's media. */
 export const backgroundSchema = z.discriminatedUnion("kind", [
@@ -120,14 +124,21 @@ export const bindingSchema = z.discriminatedUnion("record", [
 ]);
 export type Binding = z.infer<typeof bindingSchema>;
 
-/** A text holds exactly one of `text` (its own words) or `binding` (a record field read at render time). */
+/** A text bound to two or three fields, shown joined by " · " (the meta line "sector · year"). */
+export const MIN_BINDINGS = 2;
+export const MAX_BINDINGS = 3;
+
+/**
+ * A text holds exactly one of `text` (its own words), `binding` (a record field read
+ * at render time) or `bindings` (two or three fields, joined by " · ").
+ */
 export const textElementSchema = z
   .strictObject({
     elementId: z.uuid(),
     type: z.literal("text"),
     style: z.enum(TEXT_STYLES),
-    /** `#rrggbb` or transparent; defaults to the template's (`#012234`). */
-    colour: z.union([hexColourSchema, z.literal("transparent")]).optional(),
+    /** `#rrggbb`, `#rrggbbaa` or transparent; defaults to the block's ink (`#012234`). */
+    colour: z.union([inkColourSchema, z.literal("transparent")]).optional(),
     align: z.enum(TEXT_ALIGNS).optional(),
     /** One or two columns (answer 14). */
     columns: z.union([z.literal(1), z.literal(2)]).optional(),
@@ -135,13 +146,15 @@ export const textElementSchema = z
     size: z.number().positive().max(1000).optional(),
     text: textSchema.optional(),
     binding: bindingSchema.optional(),
+    bindings: z.array(bindingSchema).min(MIN_BINDINGS).max(MAX_BINDINGS).optional(),
     provenance: z.enum(CLAIM_PROVENANCES),
     aspect: z.enum(CLAIM_ASPECTS).optional(),
     sourceRefs: z.array(materialRefSchema).max(MAX_SOURCE_REFS).optional(),
   })
   .superRefine((el, ctx) => {
-    if ((el.text === undefined) === (el.binding === undefined)) {
-      ctx.addIssue({ code: "custom", path: [], message: "A text holds exactly one of text or binding." });
+    const held = [el.text, el.binding, el.bindings].filter((value) => value !== undefined).length;
+    if (held !== 1) {
+      ctx.addIssue({ code: "custom", path: [], message: "A text holds exactly one of text, binding or bindings." });
     }
   });
 export type TextElement = z.infer<typeof textElementSchema>;
@@ -229,8 +242,31 @@ export type ServicesElement = z.infer<typeof servicesElementSchema>;
 export const logosElementSchema = z.strictObject({ elementId: z.uuid(), type: z.literal("logos") });
 export type LogosElement = z.infer<typeof logosElementSchema>;
 
-export const dividerElementSchema = z.strictObject({ elementId: z.uuid(), type: z.literal("divider") });
+export const dividerElementSchema = z.strictObject({
+  elementId: z.uuid(),
+  type: z.literal("divider"),
+  /** `#rrggbb` or `#rrggbbaa`; the template's lines are `#B0B0B1`. */
+  colour: inkColourSchema.optional(),
+});
 export type DividerElement = z.infer<typeof dividerElementSchema>;
+
+/** How a row's items line up across it: centred, or along their top edge. */
+export const ROW_ALIGNS = ["centre", "top"] as const;
+export type RowAlign = (typeof ROW_ALIGNS)[number];
+
+/**
+ * A row: items side by side, the first at the start and the last at the end (e.g. the
+ * client's name and the logos, or "Servizi" and the tags, or a result's label and number).
+ * `wide` is the template's wider gap.
+ */
+export const rowElementSchema = z.strictObject({
+  elementId: z.uuid(),
+  type: z.literal("row"),
+  align: z.enum(ROW_ALIGNS),
+  wide: z.boolean().optional(),
+  items: z.array(z.discriminatedUnion("type", [textElementSchema, textGroupElementSchema, logosElementSchema, servicesElementSchema])).min(1).max(MAX_ITEMS_PER_GROUP),
+});
+export type RowElement = z.infer<typeof rowElementSchema>;
 
 export const elementSchema = z.discriminatedUnion("type", [
   textElementSchema,
@@ -241,15 +277,22 @@ export const elementSchema = z.discriminatedUnion("type", [
   servicesElementSchema,
   logosElementSchema,
   dividerElementSchema,
+  rowElementSchema,
 ]);
 export type DocumentElement = z.infer<typeof elementSchema>;
 export type ElementType = DocumentElement["type"];
-export const ELEMENT_TYPES = ["text", "text_group", "image", "video", "animation", "services", "logos", "divider"] as const satisfies readonly ElementType[];
+export const ELEMENT_TYPES = ["text", "text_group", "image", "video", "animation", "services", "logos", "divider", "row"] as const satisfies readonly ElementType[];
 
 export const blockSchema = z.strictObject({
   blockId: z.uuid(),
   name: nameSchema,
   background: backgroundSchema,
+  /** Inner padding in px on the Figma frame; defaults to the format's (28). */
+  padding: pxSchema.optional(),
+  /** A top padding that differs from `padding` (Video: room for Instagram's top bar). */
+  paddingTop: pxSchema.optional(),
+  /** The block's text colour (`#rrggbb` or `#rrggbbaa`); defaults to `#012234`. */
+  ink: inkColourSchema.optional(),
   elements: z.array(elementSchema).max(MAX_ELEMENTS_PER_BLOCK),
 });
 export type Block = z.infer<typeof blockSchema>;
@@ -269,6 +312,10 @@ export type PageRole = (typeof PAGE_ROLES)[number];
 export const PAGE_SECTIONS = ["intro", "output", "risultati"] as const;
 export type PageSection = (typeof PAGE_SECTIONS)[number];
 
+/** A page's template decoration: the Carosello closing page's star. */
+export const PAGE_DECORATIONS = ["star"] as const;
+export type PageDecoration = (typeof PAGE_DECORATIONS)[number];
+
 export const pageSchema = z.strictObject({
   /** Stable, unique within its format. */
   pageKey: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, "Must be a page key.").max(MAX_REF_ID_CHARS),
@@ -277,6 +324,9 @@ export const pageSchema = z.strictObject({
   section: z.enum(PAGE_SECTIONS),
   background: backgroundSchema,
   grid: gridSchema,
+  /** The page's margin around the grid in px on the Figma frame; defaults to the format's. */
+  margin: pxSchema.optional(),
+  decoration: z.enum(PAGE_DECORATIONS).optional(),
   blocks: z.array(blockSchema).max(MAX_BLOCKS_PER_PAGE),
 });
 export type Page = z.infer<typeof pageSchema>;
@@ -286,9 +336,11 @@ export const formatPagesSchema = z.strictObject({
 });
 export type FormatPages = z.infer<typeof formatPagesSchema>;
 
-/** Every element id of a block, Testi group items included. */
+/** Every element id of a block, the items of Testi groups and rows included. */
 const elementIdsOf = (elements: readonly DocumentElement[]): string[] =>
-  elements.flatMap((el) => (el.type === "text_group" ? [el.elementId, ...el.items.map((item) => item.elementId)] : [el.elementId]));
+  elements.flatMap((el) =>
+    el.type === "text_group" || el.type === "row" ? [el.elementId, ...elementIdsOf(el.items)] : [el.elementId],
+  );
 
 const firstDuplicate = (values: readonly string[]): string | undefined => {
   const seen = new Set<string>();
@@ -484,7 +536,7 @@ function fromV0(doc: CaseStudyDocumentV0): unknown {
 // The upgrade seam: what v1 → v2 needs from outside the domain.
 // ---------------------------------------------------------------------------
 
-/** The template's default pages of one format (Story 3.4 fills it; `[]` until then). */
+/** The template's starter pages of one format (Story 3.4: `rendering/templates/{id}/v{n}/`; `[]` for an unknown template or a client intro). */
 export type DefaultPages = (template: string, kind: DocumentKind, formatId: string) => readonly Page[];
 
 export interface UpgradeDeps {
@@ -507,7 +559,7 @@ function fromV1(deps: UpgradeDeps) {
     formats: Object.fromEntries(
       deps.formatIds.map((formatId) => [
         formatId,
-        // TODO(Story 3.4): v1 template refs (`mac-case@1`) may need mapping to the new template id before asking for its default pages.
+        // v1's template ref (`mac-case@1`) names the v2 template too (Story 3.4), so it needs no mapping.
         { pages: structuredClone(deps.defaultPages(doc.template, doc.kind, formatId)) },
       ]),
     ),

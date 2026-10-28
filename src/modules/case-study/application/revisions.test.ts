@@ -4,8 +4,8 @@ import type { CaseStudy } from "@/modules/case-study/domain/case-study";
 import type { Revision } from "@/modules/case-study/domain/revision";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import type { RevisionRepository } from "@/modules/case-study/ports/revision-repository";
-import { caseHistoryV0, caseHistoryV1, caseHistoryV2 } from "@/modules/generation";
-import { FORMAT_IDS } from "@/modules/rendering";
+import { caseHistoryV0, caseHistoryV1, caseHistoryV2, UPGRADE_ID_PREFIX } from "@/modules/generation";
+import { FORMAT_IDS, starterPages } from "@/modules/rendering";
 import { err, ok } from "@/shared/result";
 import { makeCreateWorkingRevision, makeGetEditableRevision, makeGetLiveRevision } from "./revisions";
 
@@ -158,12 +158,18 @@ describe("getLiveRevision and getEditableRevision", () => {
   const v2 = caseHistoryV2(FORMAT_IDS);
   const v1 = caseHistoryV1();
   const v0 = caseHistoryV0();
-  /** What a stored v1 or v0 case history reads as, until Story 3.4 gives the templates default pages. */
+  /** What a stored v1 or v0 case history reads as: the template's starter pages, built with no texts, images or results and counter ids. */
   const upgradedV2 = {
     schemaVersion: 2,
     kind: "case_history",
     template: "mac-case@1",
-    formats: { presentazione_16_9: { pages: [] }, carosello_1_1: { pages: [] }, video_9_16: { pages: [] } },
+    formats: Object.fromEntries(
+      FORMAT_IDS.map((id) => {
+        let n = 0;
+        const newId = () => `${UPGRADE_ID_PREFIX}${String(++n).padStart(12, "0")}`;
+        return [id, { pages: starterPages("mac-case@1", "case_history", id, { newId, texts: {}, images: [], resultRows: 0, hasTestimonial: false }) }];
+      }),
+    ),
   };
 
   it("live is the approved revision, editable is the head", async () => {
