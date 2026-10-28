@@ -113,7 +113,7 @@ UX-DR17: Check tab. Not for the demo (owner 2026-10-27; SCP 2026-10-28, C39; Sto
 UX-DR18: Approve confirm dialog with the specified copy (for the demo without "Every claim has been checked against the material", C39); on confirm, status Approvato, toast "Approved. It's now in the library.", navigate to To review if items are waiting, otherwise Case studies.
 UX-DR19: Editing an approved case. Banner "Approved, with {n} live links. Changes go live when you update the approved version."; edits autosave to a working copy; Update approved version enabled when nothing overflows and the material is present (no per-block check; SCP 2026-10-28 C39); confirm "{n} links will show the new version."; Discard changes.
 UX-DR20: Autosave state. "Saved" / "Saving…" / "Not saved. Retrying…"; after 3 failures a banner "Changes aren't saving. Keep this tab open." No Save draft button, no version history.
-UX-DR21: Case study view. Top bar Back, name, badge, Share, Export (+ Edit for owner/designer); format list matching the configurator; pager ("Slide 1 of 12"), zoom − / 100% / +, fit, full screen; Export selected format with progress and browser download; Export all as one ZIP; "Export didn't finish." toast with Try again; format list becomes a dropdown at 1024–1279 px.
+UX-DR21: Case study view. Top bar Back, name, badge, Share, Export (+ Edit for owner/designer); format list matching the configurator; pager ("Slide 1 of 12"), zoom − / 100% / +, fit, full screen; **Export** opens the export dialog (owner, 2026-10-28; the same for a case study, a client pack and a collection): a checkbox per format (Presentazione, Carosello; Video shown disabled as "Dopo la demo" until it has an export), **Esporta** disabled until one is ticked; one format downloads its file, several download as one ZIP, with progress and browser download (replaces Export selected format and Export all); "Export didn't finish." toast with Try again; format list becomes a dropdown at 1024–1279 px.
 UX-DR22: Share dialog. Choose a format (default Presentazione 16:9; SCP 2026-10-28); link auto-copied with "Link copied" toast; plain "who can open it" sentence above the link; link list with format, created by, created on, Copy, Turn off link (with confirm).
 UX-DR23: Shared link page. Full-screen presentation of one format, pager, arrow keys, full screen; no app chrome, no sign-in prompt under the interim mode, no download; fully responsive with swipe on phones; slide text available to screen readers; turned-off or expired copy "This case study is no longer available. Contact the person who shared it."
 UX-DR24: Users (admin). List (name, email, role, added on); Add user (email + one role); role dropdown per row, effective at the user's next page load; Remove user with confirm (their cases and links stay); last-admin guard; no permission matrix, guardrail settings or case access.
@@ -2281,9 +2281,13 @@ Note (2026-10-19, owner): a client logo may be an SVG ([spec](../implementation-
 **Then** an `export` table exists, unique and immutable on `content_hash` (a hash of the ordered parts, their revision ids, each part's client info, any collection edits and hidden pages, and the format; AD-9, AD-22), with storage keys `exports/{contentHash}/{format}.{ext}` built only by `rendering` adapters, and RLS denying `anon` and `authenticated` (amendment, SCP 2026-10-16 client intro and collections)
 **And** the export job's payload is `{ parts: [{ subject, revisionId }], format }`; the MVP always sends one part
 
-**Given** an approved case in the view with a format selected
+**Given** an approved case in the view
 **When** I press **Export** (or **Export** in an Approvato row's overflow menu)
-**Then** the server checks `case-study.isRevisionApproved` on the live revision and that the format is in it, then enqueues an `export` job; the button shows progress and I can keep browsing
+**Then** the export dialog (owner, 2026-10-28; the same for a case study, a client pack and a collection): a checkbox per format (Presentazione, Carosello; Video shown disabled as "Dopo la demo" until it has an export), **Esporta** disabled until one is ticked; one format downloads its file, several download as one ZIP; the format selected in the view is ticked by default
+
+**Given** the export dialog with formats ticked
+**When** I press **Esporta**
+**Then** for each ticked format the server checks `case-study.isRevisionApproved` on the live revision and that the format is in it, then enqueues an `export` job; the button shows progress and I can keep browsing
 **And** for a case with no approved revision, or a format not in the revision, it fails with `NOT_APPROVED` or `FORMAT_NOT_IN_REVISION` and nothing is enqueued
 
 **Given** the worker runs the export
@@ -2320,16 +2324,18 @@ IR-OP1 resolved (SCP 2026-10-28, C28). Amended per SCP 2026-10-28: Export all ho
 
 **Acceptance Criteria:**
 
-**Given** an approved case in the view
-**When** I press **Export all**
-**Then** the server ensures an export of every exportable format of the live revision (Story 5.3: Presentazione and Carosello for the demo; Video after it), then builds one ZIP stored as export `(revision_id, 'all')` from exactly those files, and the browser downloads it
+Amended (owner, 2026-10-28): there is no **Export all** button; the export dialog (Story 5.3) handles several formats.
 
-**Given** an `all` export already exists for the revision
-**When** I press **Export all** again
+**Given** the export dialog with two or more formats ticked
+**When** I press **Esporta**
+**Then** the server ensures an export of each ticked format of the live revision (Story 5.3: Presentazione and Carosello for the demo; Video after it), then builds one ZIP stored as an export keyed by the revision and the ticked formats from exactly those files, and the browser downloads it
+
+**Given** a ZIP for the same revision and the same ticked formats already exists
+**When** I export them again
 **Then** the existing ZIP is returned
 
 **Given** one format's export fails
-**When** Export all runs
+**When** a multi-format export runs
 **Then** no partial ZIP is stored, and the "Export didn't finish." toast with **Try again** appears
 
 ### Story 5.5: Create a shareable link
@@ -2479,8 +2485,9 @@ Amended per SCP 2026-10-28 (C28, C38): PDF A4 is dropped; a case's Risultati e t
 **Then** it shows **Clienti**, listing only clients with at least one approved case history, read-only (no add, no edit, no overview), with **Scarica** per row and on the client page
 
 **Given** **Scarica** on a client
-**When** I pick a format (Presentazione or Carosello, and Video after the demo; owner, 2026-10-28; it was Deck 16:9 or PDF A4, and PDF A4 is dropped by C28) and confirm
-**Then** the server builds the parts: the client's approved intro (if any), then its approved case histories newest first, using the intro rule (2+ case histories → the client intro replaces their own intro pages; 1 → its own intro), then, with 2 or more case histories, the client's approved closing once after the last of them, with each case's Risultati e testimonial pages kept (C38); with one, that case history's own pages as they are, and enqueues one `export` job
+**When** I press it
+**Then** the same export dialog as a case study opens (Story 5.3; owner, 2026-10-28), and I tick the formats I need (Presentazione, Carosello; Video after the demo; PDF A4 dropped by C28) and press **Esporta**
+**And** for each ticked format the server builds the parts: the client's approved intro (if any), then its approved case histories newest first, using the intro rule (2+ case histories → the client intro replaces their own intro pages; 1 → its own intro), then, with 2 or more case histories, the client's approved closing once after the last of them, with each case's Risultati e testimonial pages kept (C38); with one, that case history's own pages as they are, and enqueues one `export` job; several formats download as one ZIP
 **And** if the intro and outro aren't approved, every case history keeps its own intro and outro, and the dialog says so (UX-DR40)
 **And** a client with no approved case history has no **Scarica**, and a direct call fails with `NOT_APPROVED`
 
@@ -2539,7 +2546,7 @@ Amended per SCP 2026-10-28 (owner, 2026-10-28), replacing the 2026-10-16 decisio
 
 **Given** **Esporta** in a collection (one button; **Esporta tutto** is gone; owner, 2026-10-28)
 **When** I press it
-**Then** a dialog lists the formats with a checkbox each (Presentazione, Carosello; Video shown disabled as "Dopo la demo" until it has an export), and I tick the ones I need and press **Esporta**
+**Then** the same export dialog as a case study and a client pack opens (Story 5.3), and I tick the formats I need and press **Esporta**
 **And** it exports each ticked format through the Story 5.9 pipeline: Presentazione as a PDF, Carosello as a ZIP of PNGs (owner, 2026-10-28, replacing the 2026-10-16 decision that Carosello stays single-case), and Video as MP4 or WebM after the demo (answer 1); PDF A4 is dropped by C28
 **And** with more than one format ticked, the files download together as one ZIP
 
