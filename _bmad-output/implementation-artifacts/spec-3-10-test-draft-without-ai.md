@@ -2,7 +2,7 @@
 title: 'Story 3.10: test draft without AI (dev only)'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '9477c610a9264de404215289118e983883a1815a'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -83,17 +83,37 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/generation/application/test-draft.ts` -- `buildTestDraft({ images, assetIds, form, newId })` → `CaseStudyDocument`: the test texts, the starter pages per format, the Carosello Contenuti page inserted after the intro pages, `sourceRefs` set on each test text by walking the pages (text, text_group and row items). Export it from `generation/index.ts`.
-- [ ] `src/modules/generation/application/test-draft.test.ts` -- the matrix's build rows; the result passes `validateNewDocument`; the page keys in order for every format; every placeholder is marked and cites; no client value anywhere.
-- [ ] `src/worker/test-draft.ts`, `test-draft-entry.ts` -- `runTestDraft(deps, argv)` with the flow above; real deps loaded after the project check.
-- [ ] `src/worker/test-draft.test.ts` -- the matrix's command rows with fake deps, including the rollback on a revision failure.
-- [ ] `package.json` -- `dev:test-draft`, built like `dev:renditions-backfill`.
-- [ ] `README.md` -- a short "Test draft (dev only)" section near the backfill's.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.10 to review; 3.4 and 3.5 to done (#107, #111 merged).
+- [x] `src/modules/generation/application/test-draft.ts` -- `buildTestDraft({ images, assetIds, form, newId })` → `CaseStudyDocument`: the test texts, the starter pages per format, the Carosello Contenuti page inserted after the intro pages, `sourceRefs` set on each test text by walking the pages (text, text_group and row items). Export it from `generation/index.ts`.
+- [x] `src/modules/generation/application/test-draft.test.ts` -- the matrix's build rows; the result passes `validateNewDocument`; the page keys in order for every format; every placeholder is marked and cites; no client value anywhere.
+- [x] `src/worker/test-draft.ts`, `test-draft-entry.ts` -- `runTestDraft(deps, argv)` with the flow above; real deps loaded after the project check.
+- [x] `src/worker/test-draft.test.ts` -- the matrix's command rows with fake deps, including the rollback on a revision failure.
+- [x] `package.json` -- `dev:test-draft`, built like `dev:renditions-backfill`.
+- [x] `README.md` -- a short "Test draft (dev only)" section near the backfill's.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.10 to review; 3.4 and 3.5 to done (#107, #111 merged).
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `npm run lint`, `npm test` and `npm run build`, when they run, then they pass.
 - Given the built bundle, when it is searched for `@anthropic-ai/sdk`, then there is no match.
+
+## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Rollback after a revision write that may have committed (blind) | medium | `createWorkingRevision` docs: `REVISION_WRITE_FAILED` and returned-row errors may have committed; the command then sends `generation_failed`, leaving a Bozza case with a new head | patch |
+| 2 | `attempt()` drops the thrown error (blind, edge) | low | Only the code is logged; the fix is one log line | patch |
+| 3 | `generation_succeeded` failure branch untested (gap, blind, edge) | medium | No test fails only the last transition | patch |
+| 4 | Rollback-failure branch untested (gap, blind) | medium | The default `transition` fake always succeeds | patch |
+| 5 | `--env-file-if-exists` differs from the backfill (blind, edge) | low | Deliberate, so the usage message prints without `.env.local`; `checkDevProject` still refuses production | reject |
+| 6 | Same text on two keys overwrites refs (blind, edge) | low | 3.10's texts are distinct by construction (tested); 3.7 owns its AI texts; a guard adds code for an unreached path | reject |
+| 7 | No direct tests of `buildCaseDocument`, `testDraftTexts` (blind) | low | Both run through every `buildTestDraft` test | reject |
+| 8 | Weak "no client value" test (blind) | low | Each test also passes `validateNewDocument`, whose strict schema refuses client values | reject |
+| 9 | Worker test doesn't check form texts reach the doc (blind) | low | A wiring slip would pass; one assertion | patch |
+| 10 | Spec `in-review` vs sprint `review` (blind) | false | The workflow's two vocabularies differ by design (3.5 log #23) | reject |
+| 11 | Service types looser than the real use cases (blind) | low | No wrong output; the real functions type-check against them | reject |
+| 12 | A re-run supersedes the working head (blind) | low | Intended: every result is a new revision (3.3) | reject |
+| 13 | `listAssets` fails on a signing error (edge) | low | Dev tool, re-run; a storage-free lookup is new surface | reject |
+| 14 | No asset left between `hasMaterial` and `listAssets` (edge) | low | Needs a delete in the same second on a dev database | reject |
+| 15 | `excerpt` can split a surrogate pair (edge) | low | Real with an emoji at the cut; direct fix | patch |
 
 ## Design Notes
 
