@@ -317,14 +317,14 @@ isOneToOne: false
                   ]
                 },"profile": {
                   Row: {
-                    "created_at": string,"disabled_at": string | null,"display_name": string,"email": string,"id": string,"role": string
+                    "created_at": string,"designer_requested_at": string | null,"disabled_at": string | null,"display_name": string,"email": string,"id": string,"job_title": string | null,"role": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"disabled_at"?: string | null,"display_name": string,"email": string,"id"?: string,"role": string
+                    "created_at"?: string,"designer_requested_at"?: string | null,"disabled_at"?: string | null,"display_name": string,"email": string,"id"?: string,"job_title"?: string | null,"role": string
                   }
                   Update: {
-                    "created_at"?: string,"disabled_at"?: string | null,"display_name"?: string,"email"?: string,"id"?: string,"role"?: string
+                    "created_at"?: string,"designer_requested_at"?: string | null,"disabled_at"?: string | null,"display_name"?: string,"email"?: string,"id"?: string,"job_title"?: string | null,"role"?: string
                   }
                   Relationships: [
                     

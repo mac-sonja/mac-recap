@@ -11,6 +11,7 @@ const render = (show: {
   showNewCaseStudy: boolean;
   showCaseStudies: boolean;
   showClients?: boolean;
+  showLibrary?: boolean;
   toReviewCount?: number;
   theme?: "system" | "light" | "dark";
 }) =>
@@ -57,9 +58,15 @@ describe("Sidebar", () => {
     expect(render({ showNewCaseStudy: false, showCaseStudies: false })).not.toContain('role="search"');
   });
 
-  it("has no Templates, Users or sign-out entries", () => {
+  it("has no Templates or Users entries, and offers Esci (Story 6.1)", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });
-    expect(html).not.toMatch(/Template|Utenti|Esci|\/users|\/templates|\/review/i);
+    expect(html).not.toMatch(/Template|Utenti|\/users|\/templates|\/review/i);
+    expect(html).toContain('aria-label="Esci"');
+  });
+
+  it("shows Libreria only when asked (account/sales/social)", () => {
+    expect(render({ showNewCaseStudy: false, showCaseStudies: false, showLibrary: true })).toContain('href="/library"');
+    expect(render({ showNewCaseStudy: true, showCaseStudies: true })).not.toContain('href="/library"');
   });
 
   it("shows the cases to review after Case only when there are some", () => {
@@ -112,6 +119,6 @@ describe("Sidebar", () => {
     expect(html).not.toContain('href="/case-studies"');
     expect(html).not.toContain('href="/home"');
     expect(html).not.toContain('href="/clients"');
-    expect(html).not.toContain("disabled");
+    expect(html).not.toMatch(/ disabled=""|aria-disabled="true"/);
   });
 });

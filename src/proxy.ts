@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
+import { refreshSession } from "@/modules/access";
 import { getGateCredentials, type GateCredentials } from "@/shared/env";
 
 // HTTP basic-auth gate (IR-A2) in front of every request until login ships in
@@ -63,6 +64,13 @@ export function gate(request: NextRequest, credentials: GateCredentials | null):
     : unauthorized();
 }
 
-export function proxy(request: NextRequest): NextResponse {
-  return gate(request, getGateCredentials());
+/**
+ * The basic-auth gate first (until Story 6.2 retires it), then the Supabase Auth
+ * session refresh (Story 6.1): an expiring token is renewed here, where cookies
+ * can still be written. Who may do what is decided per request by `getActor()`.
+ */
+export async function proxy(request: NextRequest): Promise<NextResponse> {
+  const gated = gate(request, getGateCredentials());
+  if (gated.status === 401) return gated;
+  return refreshSession(request);
 }

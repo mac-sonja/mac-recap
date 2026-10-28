@@ -157,8 +157,8 @@ describe("proxy", () => {
     vi.stubEnv("BASIC_AUTH_USER", "mac");
     vi.stubEnv("BASIC_AUTH_PASSWORD", "s3cret");
     const { proxy } = await import("./proxy");
-    await expectChallenge(proxy(request("/s/abc")));
-    expect(passesThrough(proxy(request("/s/abc", basic("mac:s3cret"))))).toBe(true);
+    await expectChallenge(await proxy(request("/s/abc")));
+    expect(passesThrough(await proxy(request("/s/abc", basic("mac:s3cret"))))).toBe(true);
   });
 
   it("does not gate in development when both variables are unset", async () => {
@@ -166,6 +166,6 @@ describe("proxy", () => {
     vi.stubEnv("BASIC_AUTH_USER", undefined);
     vi.stubEnv("BASIC_AUTH_PASSWORD", undefined);
     const { proxy } = await import("./proxy");
-    expect(passesThrough(proxy(request("/s/abc")))).toBe(true);
+    expect(passesThrough(await proxy(request("/s/abc")))).toBe(true);
   });
 });

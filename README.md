@@ -175,11 +175,16 @@ Every server action and route handler calls `getActor()` and then
 `authorize(actor, action, resource)` from `@/modules/access` before any other
 module call (AD-11); `test/authorize-guard.test.ts` enforces this for
 `"use server"` modules, inline server actions and `route.ts` handlers. The
-role matrix lives only in `src/modules/access/domain/policy.ts`. Until Epic 6,
-`getActor()` resolves the seeded dev owner/designer profile; the seeded
-`system` profile is the worker's actor, resolved only through `getSystemActor()`
-(its id never leaves `access`). The worker still calls
-`authorize(system, "job work")` before every job.
+role matrix lives only in `src/modules/access/domain/policy.ts`. Since Story 6.1,
+`getActor()` resolves the Supabase Auth session to a `profile` by email
+(case-insensitive) and reads the role from the database on every request; the
+seeded dev owner/designer is disabled. Sign-in, sign-up and email-link actions
+run before there is an actor and call only the access session entry points
+(listed in `test/helpers/authorize-guard.ts`). The seeded `system` profile is the
+worker's actor, resolved only through `getSystemActor()` (its id never leaves
+`access`), and can never sign in. The worker still calls
+`authorize(system, "job work")` before every job. Supabase Auth settings for each
+environment: [docs/auth-setup.md](docs/auth-setup.md).
 
 Exact versions only: `test/scaffold.test.ts` fails if any dependency in `package.json`
 uses `^`, `~` or a tag.

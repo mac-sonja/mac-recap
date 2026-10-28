@@ -87,3 +87,17 @@ export async function a(x: unknown) { authorize(x); }
     expect(checkSource("src/app/lib.ts", `export async function helper() {}\n`)).toEqual([]);
   });
 });
+
+describe("session entry points (Story 6.1)", () => {
+  const action = (body: string) =>
+    `"use server";\nimport { signIn, signOut } from "@/modules/access";\nimport { getCase } from "@/modules/case-study";\nexport async function a() { ${body} }\n`;
+
+  it("lets an action call only session entry points without authorize", () => {
+    expect(checkSource("src/app/(auth)/actions.ts", action("await signIn('a', 'b'); await signOut();"))).toEqual([]);
+  });
+
+  it("still fails an action that mixes them with another module call", () => {
+    const [v] = checkSource("src/app/(auth)/actions.ts", action("await signIn('a', 'b'); await getCase();"));
+    expect(v.reason).toBe("never calls authorize( from @/modules/access");
+  });
+});

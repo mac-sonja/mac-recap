@@ -85,8 +85,13 @@ describe("ToolLayout", () => {
     expect(html).not.toContain("da approvare");
   });
 
-  it("renders only the no-actor message on UNAUTHENTICATED", async () => {
+  it("redirects to sign-in on UNAUTHENTICATED", async () => {
     getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "m" }));
+    await expect(renderLayout()).rejects.toThrow("REDIRECT /sign-in");
+  });
+
+  it("renders only the no-actor message when the profile can't be read", async () => {
+    getActor.mockResolvedValue(err({ code: "PROFILE_LOOKUP_FAILED", message: "m" }));
     const html = await renderLayout();
     expect(html).toContain(NO_ACTOR);
     expect(html).not.toContain("<nav");
@@ -100,9 +105,9 @@ describe("Root page", () => {
     await expect(Root()).rejects.toThrow("REDIRECT /home");
   });
 
-  it("renders the no-actor message on UNAUTHENTICATED", async () => {
+  it("redirects to sign-in on UNAUTHENTICATED", async () => {
     getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "m" }));
-    expect(renderToStaticMarkup(await Root())).toContain(NO_ACTOR);
+    await expect(Root()).rejects.toThrow("REDIRECT /sign-in");
   });
 });
 

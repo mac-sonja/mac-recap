@@ -1,60 +1,93 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEV_ACTOR_ID, type Profile } from "@/modules/access/domain/actor";
+import type { Profile } from "@/modules/access/domain/actor";
 import { err, ok } from "@/shared/result";
 import { makeGetActor } from "./get-actor";
-import type { ProfileRepository } from "./ports";
+import type { AuthGateway, ProfileRepository, SessionUser } from "./ports";
 
-const dev: Profile = {
-  id: DEV_ACTOR_ID,
-  email: "dev-owner-designer@mac-recap.invalid",
-  displayName: "Dev owner/designer",
+const anna: Profile = {
+  id: "00000000-0000-4000-8000-000000000010",
+  email: "anna@menatcode.it",
+  displayName: "Anna",
   role: "owner_designer",
   disabledAt: null,
+  jobTitle: "Designer",
+  designerRequestedAt: null,
 };
 
-/** In-memory ProfileRepository fake. */
-function fakeRepository(rows: Profile[]): ProfileRepository & { findById: ReturnType<typeof vi.fn> } {
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  return { findById: vi.fn(async (id: string) => ok(byId.get(id) ?? null)) };
+/** In-memory ProfileRepository fake, matching email case-insensitively. */
+function fakeRepository(rows: Profile[]) {
+  return {
+    findById: vi.fn(async (id: string) => ok(rows.find((r) => r.id === id) ?? null)),
+    findByEmail: vi.fn(async (email: string) => ok(rows.find((r) => r.email.toLowerCase() === email.toLowerCase()) ?? null)),
+    create: vi.fn(),
+  } satisfies ProfileRepository;
 }
 
+function fakeAuth(user: SessionUser | null): AuthGateway {
+  return {
+    currentUser: vi.fn(async () => user),
+    signInWithPassword: vi.fn(),
+    signUp: vi.fn(),
+    verifyEmailLink: vi.fn(),
+    requestPasswordReset: vi.fn(),
+    updatePassword: vi.fn(),
+    signOut: vi.fn(),
+  };
+}
+
+const session = (email: string): SessionUser => ({ email, metadata: {} });
+
+const expectUnauthenticated = (result: Awaited<ReturnType<ReturnType<typeof makeGetActor>>>) => {
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.error.code).toBe("UNAUTHENTICATED");
+};
+
 describe("getActor", () => {
-  it("resolves the dev owner/designer from profile", async () => {
-    const repo = fakeRepository([dev]);
-    const result = await makeGetActor(repo)();
-    expect(result).toEqual(
-      ok({ id: DEV_ACTOR_ID, email: dev.email, displayName: dev.displayName, role: "owner_designer" }),
-    );
-    expect(repo.findById).toHaveBeenCalledWith(DEV_ACTOR_ID);
+  it("resolves the session's profile", async () => {
+    const repo = fakeRepository([anna]);
+    const result = await makeGetActor(fakeAuth(session(anna.email)), repo)();
+    expect(result).toEqual(ok({ id: anna.id, email: anna.email, displayName: "Anna", role: "owner_designer" }));
   });
 
-  it("returns UNAUTHENTICATED when the dev profile is missing", async () => {
-    const result = await makeGetActor(fakeRepository([]))();
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("UNAUTHENTICATED");
+  it("matches the session email case-insensitively", async () => {
+    const result = await makeGetActor(fakeAuth(session("Anna@MenAtCode.it")), fakeRepository([anna]))();
+    expect(result.ok && result.value.id).toBe(anna.id);
   });
 
-  it("returns UNAUTHENTICATED when the dev profile is disabled", async () => {
-    const result = await makeGetActor(fakeRepository([{ ...dev, disabledAt: "2026-10-09T10:00:00Z" }]))();
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("UNAUTHENTICATED");
+  it("returns UNAUTHENTICATED without a session", async () => {
+    const repo = fakeRepository([anna]);
+    expectUnauthenticated(await makeGetActor(fakeAuth(null), repo)());
+    expect(repo.findByEmail).not.toHaveBeenCalled();
   });
 
-  it("reads the profile on every call (no caching)", async () => {
-    const rows = [dev];
-    const repo = fakeRepository(rows);
-    const getActor = makeGetActor(repo);
+  it("returns UNAUTHENTICATED for a session with no profile", async () => {
+    expectUnauthenticated(await makeGetActor(fakeAuth(session("nuovo@menatcode.it")), fakeRepository([anna]))());
+  });
+
+  it("returns UNAUTHENTICATED when the profile is disabled", async () => {
+    const disabled = { ...anna, disabledAt: "2026-10-28T10:00:00Z" };
+    expectUnauthenticated(await makeGetActor(fakeAuth(session(anna.email)), fakeRepository([disabled]))());
+  });
+
+  it("never resolves the system profile from a session", async () => {
+    const system = { ...anna, role: "system" as const };
+    expectUnauthenticated(await makeGetActor(fakeAuth(session(anna.email)), fakeRepository([system]))());
+  });
+
+  it("reads the role from profile on every call (no caching)", async () => {
+    const repo = fakeRepository([anna]);
+    const getActor = makeGetActor(fakeAuth(session(anna.email)), repo);
     const first = await getActor();
-    repo.findById.mockResolvedValueOnce(ok({ ...dev, role: "account_sales_social" }));
+    repo.findByEmail.mockResolvedValueOnce(ok({ ...anna, role: "account_sales_social" }));
     const second = await getActor();
-    expect(repo.findById).toHaveBeenCalledTimes(2);
+    expect(repo.findByEmail).toHaveBeenCalledTimes(2);
     expect(first.ok && first.value.role).toBe("owner_designer");
     expect(second.ok && second.value.role).toBe("account_sales_social");
   });
 
   it("passes a repository failure through", async () => {
     const failure = err({ code: "PROFILE_LOOKUP_FAILED", message: "down" });
-    const repo: ProfileRepository = { findById: async () => failure };
-    expect(await makeGetActor(repo)()).toEqual(failure);
+    const repo = { ...fakeRepository([]), findByEmail: async () => failure };
+    expect(await makeGetActor(fakeAuth(session(anna.email)), repo)()).toEqual(failure);
   });
 });

@@ -1,7 +1,10 @@
 // Public surface of the access module. Code outside this module imports only this file.
+import { createSupabaseAuthGateway } from "@/modules/access/adapters/supabase/auth-gateway";
 import { createSupabaseProfileRepository } from "@/modules/access/adapters/supabase/profile-repository";
 import { makeGetActor } from "@/modules/access/application/get-actor";
 import { makeGetSystemActor } from "@/modules/access/application/get-system-actor";
+import type { EmailLink } from "@/modules/access/application/ports";
+import { makeSession, type SessionState } from "@/modules/access/application/session";
 import type { Actor } from "@/modules/access/domain/actor";
 import { can as policyCan, type Action, type Resource } from "@/modules/access/domain/policy";
 import type { AppError, Result } from "@/shared/result";
@@ -9,6 +12,10 @@ import type { AppError, Result } from "@/shared/result";
 export { authorize } from "@/modules/access/application/authorize";
 export type { Actor, Role } from "@/modules/access/domain/actor";
 export { landingFor } from "@/modules/access/domain/landing";
+export { MIN_PASSWORD_LENGTH, SIGN_UP_DOMAIN, TEAMS, type Team } from "@/modules/access/domain/sign-up";
+export { refreshSession } from "@/modules/access/adapters/supabase/proxy-session";
+export type { EmailLink, EmailLinkType } from "@/modules/access/application/ports";
+export type { SessionState } from "@/modules/access/application/session";
 export { CASE_STATUSES } from "@/modules/access/domain/policy";
 export type { Action, CaseStatus, Resource } from "@/modules/access/domain/policy";
 
@@ -21,12 +28,53 @@ export function can(actor: Actor, action: Action, resource: Resource = {}): bool
 }
 
 /**
- * Resolves who is making the current request, reading `profile` on every call.
- * Every server action and route handler calls this, then `authorize`, before
- * any use case (AD-11). `UNAUTHENTICATED` when the profile is missing or disabled.
+ * Resolves who is making the current request: the Supabase Auth session matched
+ * to a `profile`, read on every call (Story 6.1). Every server action and route
+ * handler calls this, then `authorize`, before any use case (AD-11).
+ * `UNAUTHENTICATED` with no session, or when the profile is missing or disabled.
  */
 export function getActor(): Promise<Result<Actor>> {
-  return makeGetActor(createSupabaseProfileRepository())();
+  return makeGetActor(createSupabaseAuthGateway(), createSupabaseProfileRepository())();
+}
+
+// Session entry points (Story 6.1). They run before there is an actor, so they
+// are the only exports a server action may call without `authorize`
+// (test/helpers/authorize-guard.ts lists them).
+const session = () => makeSession({ auth: createSupabaseAuthGateway(), profiles: createSupabaseProfileRepository() });
+
+/** Whether the request has a session, and whether its person may use the tool. */
+export function sessionState(): Promise<SessionState> {
+  return session().sessionState();
+}
+
+/** Signs in with email and password; returns the role's landing. `ACCOUNT_INACTIVE` ends the session. */
+export function signIn(email: string, password: string): Promise<Result<string>> {
+  return session().signIn(email, password);
+}
+
+/** Self-sign-up on the company domain; sends the confirmation email back to `origin`. */
+export function signUp(input: unknown, origin: string): Promise<Result<void>> {
+  return session().signUp(input, origin);
+}
+
+/** Turns an email link into a session; returns the path to go to next. */
+export function confirmEmailLink(link: EmailLink): Promise<Result<string>> {
+  return session().confirmEmailLink(link);
+}
+
+/** Sends a password-reset email when the address has an account; never says which. */
+export function requestPasswordReset(email: string, origin: string): Promise<Result<void>> {
+  return session().requestPasswordReset(email, origin);
+}
+
+/** Sets the signed-in person's password; returns their landing. */
+export function setPassword(password: string): Promise<Result<string>> {
+  return session().setPassword(password);
+}
+
+/** Ends the session. */
+export function signOut(): Promise<void> {
+  return session().signOut();
 }
 
 /**
@@ -78,6 +126,13 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   UNKNOWN_REF: 400,
   // Favourites (Story 2.9).
   NOT_FAVOURITABLE: 400,
+  // Sign-in and sign-up (Story 6.1).
+  INVALID_CREDENTIALS: 401,
+  EMAIL_NOT_CONFIRMED: 403,
+  ACCOUNT_INACTIVE: 403,
+  EMAIL_DOMAIN_NOT_ALLOWED: 400,
+  LINK_INVALID: 400,
+  RATE_LIMITED: 429,
 };
 
 /** HTTP status for an `AppError` code; unknown codes are 500. */
