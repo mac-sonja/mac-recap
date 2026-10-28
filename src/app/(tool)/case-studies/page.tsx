@@ -60,6 +60,7 @@ export default async function CaseStudiesPage({
         key={`${initialStatus}:${initialQuery}`}
         rows={rows}
         canCreate={can(actor, "create case")}
+        canEdit={can(actor, "edit")}
         showCreate={can(actor, "create case")}
         initialQuery={initialQuery}
         initialStatus={initialStatus}

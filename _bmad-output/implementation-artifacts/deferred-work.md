@@ -208,3 +208,9 @@
 - source_spec: none
   summary: Story 3.5's `composeParts` (client file order: client intro, each case's pages without its own intro and Carosello Chiusura, Risultati e testimonial kept, then the client's closing; case pages read from the case's revision, never copied).
   evidence: Split from Story 3.5 by the owner (2026-10-28): the renderers ship first; composeParts is an independent pure function, built right after.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-2-open-a-draft-in-the-configurator.md`
+  summary: Story 4.2b: Anteprima in the configurator (eye ↔ "Torna all’editor", Esc back, Presentazione stacked, Carosello and Video as one slideshow with ‹ ›, dots, "{i} di {n} · {name}" and arrow keys, texts editable but nothing selectable), the Video Instagram overlay (Nessuna / Reel / Storia, `mac.creativetech`, counts blanked) and the editor's "Animazione testi" switch.
+  evidence: Split from Story 4.2 by the owner (2026-10-28) to keep each PR reviewable; built right after 4.2a on the same frame.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-2-open-a-draft-in-the-configurator.md`
+  summary: Keyboard selection of blocks and elements on the configurator canvas (today pages are reachable by keyboard through the Pagine thumbnails; blocks and elements only by pointer).
+  evidence: Review of 4.2a (maybe-false, medium if keyboard selection is required): `CanvasPage` handles clicks only; settle with the owner before 4.3 makes selection the way into editing.

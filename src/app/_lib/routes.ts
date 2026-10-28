@@ -19,3 +19,6 @@ export const newClientPanelHref = () => "/clients?nuovo=1";
 
 /** A client's page with the edit panel open (**Modifica cliente**). */
 export const editClientPanelHref = (id: string) => `${clientHref(id)}?modifica=1`;
+
+/** A case's configurator (Story 4.2): only a case in Da approvare or Approvato opens there. */
+export const configuratorHref = (id: string) => `/case-studies/${encodeURIComponent(id)}/configurator`;

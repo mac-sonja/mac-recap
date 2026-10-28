@@ -740,6 +740,121 @@ export const it = {
     lead: "Qui troverai i case approvati, pronti da scaricare e condividere.",
     soon: "La libreria è in arrivo. Ti avvisiamo appena è pronta.",
   },
+  /**
+   * The configurator (Story 4.2a, mockup `configurator.html`): top bar, left panel
+   * (selection, page tools, theme), canvas and right panel (Pagine, Media).
+   */
+  configurator: {
+    /** Accessible name of the top bar's back arrow. */
+    back: "Torna alle case history",
+    /** Read by screen readers before the code in the top bar. */
+    codeLabel: "ID",
+    /** Below 1024 px, instead of the frame. */
+    narrowScreen: "Il configuratore ha bisogno di uno schermo più grande.",
+    /** The format switch, keyed by `FormatId`; the ratio comes from the format registry. */
+    formats: {
+      label: "Formato",
+      presentazione_16_9: "Presentazione",
+      carosello_1_1: "Carosello",
+      video_9_16: "Video",
+    },
+    saved: "Salvato",
+    undo: "Annulla",
+    redo: "Ripeti",
+    approve: "Approva",
+    /** The hint on a tool that arrives with a later story. */
+    soon: "Arriva presto",
+    /** The canvas message when a tool that isn't here yet is pressed. */
+    soonMessage: "{tool} arriva presto.",
+    /** A case with no revision yet: the template's starter pages, nothing saved. */
+    trial: {
+      title: "Bozza di prova",
+      body: "Sono le pagine di partenza, con le immagini della case e i testi ancora vuoti. Per ora non salviamo nulla.",
+    },
+    canvas: {
+      label: "Pagine",
+      /** Above each page: its number and name. */
+      pageLabel: "{n} · {name}",
+      empty: "Nessuna pagina in questo formato.",
+      /** On the selected block. */
+      move: "⠿ Sposta",
+    },
+    /** Section labels, keyed by `PageSection`. */
+    sections: {
+      intro: "Intro",
+      output: "Output",
+      risultati: "Risultati",
+    },
+    panels: {
+      left: "Proprietà",
+      right: "Pagine e media",
+      hideLeft: "Nascondi il pannello a sinistra",
+      showLeft: "Mostra il pannello a sinistra",
+      hideRight: "Nascondi il pannello a destra",
+      showRight: "Mostra il pannello a destra",
+      hide: "Nascondi pannello",
+      show: "Mostra pannello",
+    },
+    /** The left panel's crumbs above the selection's name. */
+    crumbs: {
+      page: "Pagina",
+      block: "Blocco",
+    },
+    tools: {
+      layout: "Layout",
+      /** A layout thumbnail's accessible name. */
+      layoutOption: "Layout {name}",
+      defaultPages: "Pagine di default",
+      elements: "Elementi",
+      background: "Sfondo",
+      backgroundOf: "Sfondo · {what}",
+      backgroundPage: "pagina",
+      backgroundBlock: "blocco",
+      solid: "Tinta unita",
+      image: "Immagine",
+      deletePage: "Elimina pagina",
+    },
+    /** The Elementi list, in the mockup's order. */
+    elements: {
+      block: "Blocco",
+      group: "Testi",
+      title: "Titolo",
+      text: "Testo",
+      number: "Numero",
+      quote: "Citazione",
+      label: "Etichetta",
+      image: "Immagine",
+      video: "Video",
+      animation: "Animazione",
+    },
+    /** A selected element's name, keyed by element type (a text shows its style's name). */
+    elementTypes: {
+      text: "Testo",
+      text_group: "Testi",
+      row: "Riga",
+      image: "Immagine",
+      video: "Video",
+      animation: "Animazione",
+      services: "Servizi",
+      logos: "Loghi",
+      divider: "Linea",
+    },
+    tabs: {
+      label: "Contenuto del pannello",
+      pages: "Pagine",
+      media: "Media",
+    },
+    search: {
+      label: "Cerca tra le pagine",
+      placeholder: "Cerca",
+    },
+    view: {
+      label: "Vista",
+      grid: "Anteprime",
+      list: "Elenco",
+    },
+    noMatch: "Nessuna pagina per “{query}”.",
+  },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {
     draft: "Bozza",
