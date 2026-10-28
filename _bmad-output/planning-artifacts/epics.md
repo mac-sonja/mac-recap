@@ -2501,39 +2501,47 @@ So that I can prepare a custom case for one pitch and reuse it later.
 Covers: FR13, AR26 (AD-24), AR11 (`manage collections`), NFR7, UX-DR39, UX-DR40 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Order: MVP, Sprint 3: after 5.9 (owner amendment 2026-10-16)
 Amended per SCP 2026-10-28 (C28, C38): PDF A4 is dropped; a case's Risultati e testimonial pages stay after the client's closing is added.
-Amended per SCP 2026-10-28 (owner, 2026-10-28), replacing the 2026-10-16 decision that Carosello stays single-case: packs and collections come in every format (Presentazione, Carosello, Video). Building one opens the configurator itself, not a reduced collection editor. Owner/designers and account/sales/social users can both create them, and all of them sit in one shared space that every such user sees. Some configurator features are hidden for account/sales/social users. In a collection, account/sales/social users only reorder pages and edit texts (owner, 2026-10-28): the left panel (block and element settings, Layout, Pagine di default, Elementi, Sfondo, Elimina pagina) is not shown at all, the right panel shows **Pagine** for reordering only and no **Media** tab, and the canvas preview, Anteprima and editing a text on the canvas (double click) stay.
+Amended per SCP 2026-10-28 (owner, 2026-10-28), replacing the 2026-10-16 decision that Carosello stays single-case: packs and collections come in every format (Presentazione, Carosello, Video). Building one opens the configurator itself, not a reduced collection editor. Owner/designers and account/sales/social users can both create them, and all of them sit in one shared space that every such user sees. Some configurator features are hidden for account/sales/social users. In a collection, account/sales/social users only reorder pages, delete pages from the collection, add or remove case histories and edit texts (owner, 2026-10-28): the left panel (block and element settings, Layout, Pagine di default, Elementi, Sfondo, Elimina pagina) is not shown at all, the right panel shows **Pagine** for reordering only and no **Media** tab, and the canvas preview, Anteprima and editing a text on the canvas (double click) stay.
 
 **Acceptance Criteria:**
 
 **Given** the forward migration for this story
 **When** it runs
-**Then** `collection` and `collection_item` exist, owned by the `collection` module, with RLS denying `anon` and `authenticated`
+**Then** `collection`, `collection_item` and `collection_tag` (business lines and industries; owner, 2026-10-28) exist, owned by the `collection` module, with RLS denying `anon` and `authenticated`
 
 **Given** the library with cards selected
-**When** I press **Crea raccolta** and enter a name (1–120 characters)
-**Then** a collection is saved with those case histories in selection order, and the collection configurator opens
+**When** I press **Crea raccolta**, enter a name (1–120 characters) and pick its tags: one or more business lines and one or more industries, from the same lists as the case wizard and the client panel (owner, 2026-10-28)
+**Then** a collection is saved with those case histories in selection order and those tags, and the collection configurator opens
+**And** the tags can be changed later from the collection's top bar
 
 **Given** the collection configurator
 **When** it loads
-**Then** the left pane lists the parts in order: for each client with 2 or more case histories in the collection, its approved intro comes before the first of them, shown locked, its approved closing comes once after the last of them, shown locked, and their own Risultati e testimonial pages stay (SCP 2026-10-21; C38 replaces the SCP 2026-10-26 rule that removed them), and that client's case histories are kept together as a group, and I reorder groups and case histories within a group (owner decision 2026-10-16); the centre shows the continuous preview per format through `composeParts`
+**Then** the **Pagine** panel (C40, right panel) lists the parts in order: for each client with 2 or more case histories in the collection, its approved intro comes before the first of them, shown locked, its approved closing comes once after the last of them, shown locked, and their own Risultati e testimonial pages stay (SCP 2026-10-21; C38 replaces the SCP 2026-10-26 rule that removed them), and that client's case histories are kept together as a group, and I reorder groups and case histories within a group (owner decision 2026-10-16); the centre shows the continuous preview per format through `composeParts`
 
 **Given** I move a case history (drag handle, or the menu "Sposta su / giù")
 **When** the move is saved
 **Then** the order and the computed intros update, with compare-and-set on `collection.version`
 
-**Given** I add or remove case histories (from the left pane's **Aggiungi** picker, approved only)
+**Given** **Aggiungi casi** in the **Pagine** panel (owner, 2026-10-28; any user who manages collections)
+**When** I press it
+**Then** a dialog lists approved case histories not yet in the collection, suggested first by the collection's tags (matching business line or client industry), with a search bar using the library's search rules (Story 5.1)
+**And** I select one or more and press **Aggiungi**; they join the collection, grouped with their client
+**And** removing a case history is in its menu in **Pagine** (**Rimuovi dalla raccolta**), with confirm
+
+**Given** I add or remove case histories
 **When** a client crosses from 1 to 2 case histories, or back
 **Then** its intro appears or disappears, and that client's case histories switch between their own intro pages and the client intro
 
 **Given** **Raccolte** in the sidebar
 **When** I open it
-**Then** I see every collection (name, number of case histories, updated, created by) and can open, rename or delete one (with confirm; delete is soft)
+**Then** I see every collection (name, tags, number of case histories, updated, created by), filterable by business line and industry, and can open, rename or delete one (with confirm; delete is soft)
 **And** every user who can manage collections sees every collection and can change it, and "created by" is shown (owner decision 2026-10-16)
 
-**Given** **Esporta** or **Esporta tutto** in a collection
+**Given** **Esporta** in a collection (one button; **Esporta tutto** is gone; owner, 2026-10-28)
 **When** I press it
-**Then** it exports the chosen format through the Story 5.9 pipeline: Presentazione as a PDF, Carosello as a ZIP of PNGs (owner, 2026-10-28, replacing the 2026-10-16 decision that Carosello stays single-case), and Video as MP4 or WebM after the demo (answer 1); PDF A4 is dropped by C28
-**And** **Esporta tutto** exports every format that has an export
+**Then** a dialog lists the formats with a checkbox each (Presentazione, Carosello; Video shown disabled as "Dopo la demo" until it has an export), and I tick the ones I need and press **Esporta**
+**And** it exports each ticked format through the Story 5.9 pipeline: Presentazione as a PDF, Carosello as a ZIP of PNGs (owner, 2026-10-28, replacing the 2026-10-16 decision that Carosello stays single-case), and Video as MP4 or WebM after the demo (answer 1); PDF A4 is dropped by C28
+**And** with more than one format ticked, the files download together as one ZIP
 
 **Given** a case history in a collection
 **When** its approved version is updated, or the client is edited
@@ -2553,7 +2561,7 @@ So that the custom case fits the pitch without changing the original case histor
 Covers: FR13, AR26, NFR7 (IR-COLL-EDIT), UX-DR39 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Rule: IR-COLL-EDIT, decided by the owner on 2026-10-16 (OP 15), amended by the owner on 2026-10-28: every user who manages collections, account/sales/social included, edits text in a collection and exports it with no **Approva modifiche** step. Edits stay in the collection and never change the original case study or client (NFR7 amended).
 Order: MVP, Sprint 3, last in Epic 5: after 5.10 (owner amendment 2026-10-16)
-Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configurator (Story 5.10). Edits still apply only to the collection. In a collection, account/sales/social users only reorder pages and edit texts (owner, 2026-10-28): the left panel (block and element settings, Layout, Pagine di default, Elementi, Sfondo, Elimina pagina) is not shown at all, the right panel shows **Pagine** for reordering only and no **Media** tab, and the canvas preview, Anteprima and editing a text on the canvas (double click) stay.
+Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configurator (Story 5.10). Edits still apply only to the collection. In a collection, account/sales/social users only reorder pages, delete pages from the collection, add or remove case histories and edit texts (owner, 2026-10-28): the left panel (block and element settings, Layout, Pagine di default, Elementi, Sfondo, Elimina pagina) is not shown at all, the right panel shows **Pagine** for reordering only and no **Media** tab, and the canvas preview, Anteprima and editing a text on the canvas (double click) stay.
 
 **Acceptance Criteria:**
 
@@ -2570,9 +2578,10 @@ Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configura
 **When** it runs
 **Then** it needs no owner/designer approval of those edits (IR-COLL-EDIT as amended 2026-10-28)
 
-**Given** an owner/designer in a collection (account/sales/social users don't get **Nascondi pagina**; owner, 2026-10-28)
-**When** they choose **Nascondi pagina** on a page
-**Then** a `collection_hidden_page` row (part, format, `pageKey`) is stored, the page leaves the preview and the exports for that format, and **Mostra** brings it back
+**Given** any user who can manage collections (owner, 2026-10-28)
+**When** they choose **Elimina dalla raccolta** on a page in **Pagine**
+**Then** a `collection_hidden_page` row (part, format, `pageKey`) is stored, the page leaves the preview and the exports for that format, and the original case history and client are unchanged (a test proves no revision and no client row is written)
+**And** a collapsed strip with **Ripristina** brings it back
 **And** a client intro or outro page can be hidden like any other
 
 **Given** the original block's text changed after it was edited in the collection
@@ -2587,7 +2596,7 @@ Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configura
 **When** the configurator opens
 **Then** the left panel isn't shown at all and can't be reopened from the canvas edge, the right panel shows **Pagine** with no **Media** tab, and the canvas preview and Anteprima work as for an owner/designer
 **And** they edit a text by double-clicking it on the canvas
-**And** in **Pagine** they reorder pages by drag or "Sposta su / giù", and the new order is stored in the collection (`collection_page_order`), never in the case history; adding, deleting and hiding pages aren't offered
+**And** in **Pagine** they reorder pages by drag or "Sposta su / giù", and the new order is stored in the collection (`collection_page_order`), never in the case history; they delete pages from the collection (above) and add or remove case histories (Story 5.10), but can't add new pages
 **And** a direct call to any other configurator action fails with `FORBIDDEN`
 
 **Given** an export
