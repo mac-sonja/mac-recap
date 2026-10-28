@@ -2,7 +2,7 @@
 title: 'Story 4.2a: open a draft in the configurator (frame, canvas, panels)'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'b654cdc7df752e8c48660fc3b3437539a1aa4a55'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -89,3 +89,33 @@ context:
 
 **Manual checks:**
 - Screenshot the page (Playwright, page rendered with fixture data) in light and dark, each format, with a block selected and a panel hidden.
+
+## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Approved rows link to the configurator for account/sales/social, who are bounced back (edge) | medium | Their list scope shows approved rows; `requireSurface("edit")` redirects them to landing | patch |
+| 2 | Theme radio resets after hiding and reopening the left panel (edge) | low | `ThemeSwitch` keeps its choice in state from `initial`; the panel unmounts on hide | patch |
+| 3 | Selection frames don't follow a block that reflows inside a same-size page (blind, edge) | low | `ResizeObserver` observes only the page host | patch |
+| 4 | `PAGE_WIDTH`/`ASPECT` not typed against `FormatId` (blind) | low | A new format would render unstyled silently; `satisfies` is a direct correction | patch |
+| 5 | Esc inside Cerca not covered (gap) | low | Every Escape test targets `document` | patch (test) |
+| 6 | Page in view never reaches the left panel in tests (gap, blind) | low | No scroll event fired; `pages[0]` fallback hides a broken `inView` | patch (test) |
+| 7 | Format switch clearing the selection untested (gap, blind) | low | Switch test selects nothing first | patch (test) |
+| 8 | Reduced-motion scroll behaviour untested (gap) | low | Assertion ignores `behavior` | patch (test) |
+| 9 | Ready poster, `NOT_FOUND` rendition and logo URL untested (gap) | low | Mocks never reach those branches; no html assertion on the logo | patch (test) |
+| 10 | Empty-canvas click clearing the selection untested (gap, blind) | low | No test clicks the section itself | patch (test) |
+| 11 | Pending scroll rAF not cancelled on format switch (gap, other) | low | A stale key can only point the disabled tools at a same-key page until the next scroll | reject |
+| 12 | Template CSS repeated in every page and thumbnail (blind) | low | Documents have a handful of pages; a style-once option changes the renderer API | reject |
+| 13 | Full editor rendered below 1024 px (blind) | low | Hidden with CSS; gating on the breakpoint needs client width detection | reject |
+| 14 | Blocks and elements can be selected by pointer only (blind) | maybe-false | The story asks for no keyboard path; pages are reachable through thumbnails; medium if keyboard selection is required | defer |
+| 15 | Same "arriva presto" message twice isn't re-announced (blind) | low | Rare; fix adds a message counter | reject |
+| 16 | Right panel groups by section, canvas by document order (blind, edge) | low | Template pages are contiguous by section; 4.13 reorders within a section's list | reject |
+| 17 | Approva shown on an approved case (blind) | low | Disabled here; 4.9 brings Update approved version | reject |
+| 18 | Ids interpolated into CSS selectors unescaped (blind) | false | Schema limits page keys to `[a-z0-9_-]` and block/element ids to uuids | reject |
+| 19 | Renditions signed for every asset, unbounded (blind) | low | A case holds at most 20 files (Story 2.7) | reject |
+| 20 | `selection.ts` lacks unit tests (blind) | low | Covered through the component tests added in 5–10 | reject |
+| 21 | Empty-format state and focus on mount untested (blind) | low | Empty state is unreachable with template pages; focus code runs only after a toggle | reject |
+| 22 | Clicks on labels and the trial note don't clear the selection (blind) | low | Mockup behaves the same (clears only on the canvas itself) | reject |
+| 23 | No page title for the configurator route (blind) | low | Other wizard pages set none either | reject |
+| 24 | 4.2a/4.2b split only in a sprint-status comment (blind) | low | 4.2b is tracked in deferred-work; the key stays until 4.2b ships | reject |
+| 25 | Elimina pagina not styled as danger (blind) | low | Disabled placeholder; 4.13 styles it when it acts | reject |
