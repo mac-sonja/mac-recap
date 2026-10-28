@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 import { PRESSABLE } from "@/app/_components/button-styles";
+import { caseStudiesHref } from "@/app/_lib/routes";
 import { SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import { fill, it } from "@/shared/i18n/it";
@@ -27,8 +28,6 @@ export interface SidebarProps {
   roleLabel: string;
   /** Cases waiting for a review, shown after Case; nothing when 0 or unknown. */
   toReviewCount?: number | null;
-  /** Clients, shown after Clienti; nothing when unknown. */
-  clientCount?: number | null;
   /** The appearance choice from the theme cookie. */
   theme?: ThemeChoice;
 }
@@ -42,6 +41,7 @@ function NavLink({
   label,
   active,
   meta,
+  metaHref,
 }: {
   href: string;
   icon: LucideIcon;
@@ -49,8 +49,10 @@ function NavLink({
   active: boolean;
   /** A short note after the label (a count), hidden when the sidebar is collapsed. */
   meta?: string | null;
+  /** Where the note goes, when it is a link of its own, laid over the item's right end (links can't nest). */
+  metaHref?: string;
 }) {
-  return (
+  const link = (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
@@ -62,12 +64,24 @@ function NavLink({
     >
       <Icon aria-hidden="true" className="size-[18px] shrink-0" strokeWidth={1.75} />
       <span className={LABEL}>{label}</span>
-      {meta ? (
+      {meta && metaHref === undefined ? (
         <span className="ml-auto hidden font-label text-xs font-normal text-foreground-muted tabular-nums xl:inline">
           {meta}
         </span>
       ) : null}
     </Link>
+  );
+  if (!meta || metaHref === undefined) return link;
+  return (
+    <div className="relative">
+      {link}
+      <Link
+        href={metaHref}
+        className="absolute inset-y-1.5 right-1.5 hidden items-center rounded-sm px-1 font-label text-xs font-normal text-foreground-muted tabular-nums transition-colors duration-150 hover:text-foreground hover:underline underline-offset-2 xl:flex"
+      >
+        {meta}
+      </Link>
+    </div>
   );
 }
 
@@ -126,7 +140,6 @@ export function Sidebar({
   displayName,
   roleLabel,
   toReviewCount = null,
-  clientCount = null,
   theme = "system",
 }: SidebarProps) {
   const pathname = usePathname();
@@ -167,20 +180,13 @@ export function Sidebar({
             label={it.shell.nav.caseStudies}
             active={isCaseStudies}
             meta={toReviewCount ? fill(it.shell.nav.toReview, { n: toReviewCount }) : null}
+            metaHref={caseStudiesHref("in_review")}
           />
         )}
         {showLibrary && (
           <NavLink href="/library" icon={Library} label={it.shell.nav.library} active={pathname === "/library"} />
         )}
-        {showClients && (
-          <NavLink
-            href="/clients"
-            icon={Building2}
-            label={it.shell.nav.clients}
-            active={isClients}
-            meta={clientCount === null ? null : String(clientCount)}
-          />
-        )}
+        {showClients && <NavLink href="/clients" icon={Building2} label={it.shell.nav.clients} active={isClients} />}
         {showOrganization && (
           <NavLink
             href="/organization"
