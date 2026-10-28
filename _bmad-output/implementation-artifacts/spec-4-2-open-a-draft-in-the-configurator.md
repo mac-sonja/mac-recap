@@ -69,12 +69,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `routes.ts`, `case-studies-table.tsx` (+ test) -- configurator link for in_review/approved rows.
-- [ ] `it.ts` (+ test) -- strings.
-- [ ] theme switch move to `src/app/_components/`.
-- [ ] `configurator/page.tsx` (+ test) -- guard, load, assets, values, starter-page fallback.
-- [ ] `_components/configurator/*` (+ tests) -- frame, panels, canvas, selection, message, narrow guard.
-- [ ] `sprint-status.yaml` -- 4.2 in progress, note the split.
+- [x] `routes.ts`, `case-studies-table.tsx` (+ test) -- configurator link for in_review/approved rows.
+- [x] `it.ts` (+ test) -- strings.
+- [x] theme switch move to `src/app/_components/`.
+- [x] `configurator/page.tsx` (+ test) -- guard, load, assets, values, starter-page fallback.
+- [x] `_components/configurator/*` (+ tests) -- frame, panels, canvas, selection, message, narrow guard.
+- [x] `sprint-status.yaml` -- 4.2 in progress, note the split.
 
 **Acceptance Criteria:**
 - Given Story 4.2's criteria in `epics.md` other than Anteprima, Instagram, Animazione testi, `MISSING_ASPECT` and the toast (3.8 not built), when checked on the running page, then each is met.
