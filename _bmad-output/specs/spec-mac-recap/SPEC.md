@@ -61,7 +61,7 @@ The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects clos
   - **success:** Every transition, upload, save, block check, claim edit, approval, export and link change is an append-only, timestamped event with its actor, and the generated draft is kept next to the approved version. The tool does not record hands-on time; how the measures are recorded is OP 13.
 - **CAP-13** (before the demo; [Sprint Change Proposal 2026-10-16, client intro and collections](../../planning-artifacts/sprint-change-proposal-2026-10-16-client-intro-and-collections.md); amended by [Sprint Change Proposal 2026-10-19](../../planning-artifacts/sprint-change-proposal-2026-10-19.md))
   - **intent:** A client gets AI-drafted intro pages from its data, its brief and up to 3 files of material, at least 2 of them images, laid out with its 2–3 images (SCP 2026-10-19); editing a client shows its intro and case studies as one file; users download a client pack or build named collections of approved case studies.
-  - **success:** The intro is checked and approved like a case study. A client with 2+ case studies in a combined file gets its intro in front of them. Collection text edits (owner/designers only) and hidden pages never change the original case studies, and no combined file contains unapproved content.
+  - **success:** The intro is checked and approved like a case study. A client with 2+ case studies in a combined file gets its intro in front of them. Collection text edits (any user who manages collections) and hidden pages never change the original case studies or clients, and no combined file contains an unapproved case study or intro (text written in a collection is the exception; NFR7 amended 2026-10-28).
 
 ## Constraints
 
@@ -70,7 +70,7 @@ The pain is that MAC's finished work goes unseen. Only 4 of the 11 projects clos
   - NFR2: a person checks every generated claim against the uploaded material or form answers during review, before approval.
   - NFR3: no role can view or change the guardrails, admin included.
   - NFR6: with no material, nothing is generated. The details form alone is not enough.
-  - NFR7: nothing is exported or shared before review and approval by an owner/designer.
+  - NFR7: nothing is exported or shared before review and approval by an owner/designer. Exception (owner, 2026-10-28): text written inside a collection by any user who manages collections is exported without a separate approval.
 - NFR4: the owner/designer's hands-on time from upload to approval is at most 20 minutes, target 15. If the claim check needs more time, NFR2 wins. Waiting for generation does not count, and generation time has no limit.
 - Owner/designer time must not fall by shortening the review. A faster case study that skips the claim check is a failure.
 - NFR5: the narrative follows challenge, approach and result, meets the Sprint 2 quality checklist, and covers both the technical and the graphic side.

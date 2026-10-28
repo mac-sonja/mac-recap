@@ -503,52 +503,6 @@ describe("listActivity (the Dashboard's Attività)", () => {
   });
 });
 
-describe("reviewSince (the Da approvare queue, Story 4.1)", () => {
-  /** Each `transition` event to `in_review` of a case, oldest first, with `at` as PostgREST returns it. */
-  async function reviewEntries(id: string) {
-    const { rows } = await pool.query<{ at: string }>(
-      "select to_jsonb(at) #>> '{}' as at from public.case_event where case_id = $1 and type = 'transition' and data->>'to' = 'in_review' order by at",
-      [id],
-    );
-    return rows.map((row) => row.at);
-  }
-
-  it("returns when a case last entered in_review, after leaving and coming back; a case never in review is absent", async () => {
-    const { transition, reviewSince } = await loadCaseStudy();
-    const { createSupabaseCaseStudyRepository } = await import("@/modules/case-study/adapters/supabase/case-study-repository");
-    const actor = await signedInActor();
-    const waiting = await createCase({ name: "Waiting case" });
-    const draft = await createCase({ name: "Never reviewed" });
-    for (const event of ["generate", "generation_succeeded"] as const) {
-      const moved = await transition(waiting.id, event, actor);
-      if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
-    }
-    // The lifecycle has no edge out of in_review but approve (terminal), so the case leaves
-    // through the same Postgres function with an explicit pair, then comes back the usual way.
-    const left = await createSupabaseCaseStudyRepository().transition({
-      caseId: waiting.id,
-      event: "generate",
-      from: "in_review",
-      to: "generating",
-      actorId: actor.id,
-    });
-    if (!left.ok) throw new Error(`setup leave failed: ${left.error.code}`);
-    const back = await transition(waiting.id, "generation_succeeded", actor);
-    if (!back.ok) throw new Error(`setup re-entry failed: ${back.error.code}`);
-
-    const entries = await reviewEntries(waiting.id);
-    expect(entries).toHaveLength(2);
-
-    const read = await createSupabaseCaseStudyRepository().reviewSince([waiting.id, draft.id]);
-    expect(read).toEqual({ ok: true, value: new Map([[waiting.id, entries[1]]]) });
-    expect(Date.parse(entries[1])).toBeGreaterThanOrEqual(Date.parse(entries[0]));
-
-    // The public use case: the waiting case carries its latest entry, the draft nothing.
-    const since = await reviewSince([back.value, draft]);
-    expect(since).toEqual(new Map([[waiting.id, entries[1]]]));
-  });
-});
-
 describe("recordEvent", () => {
   it("appends one case_event row with the actor, type and data", async () => {
     const created = await createCase();

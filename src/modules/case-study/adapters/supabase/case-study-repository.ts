@@ -1,5 +1,5 @@
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
-import { caseEventSchema, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
+import { caseEventSchema, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import { caseStudySchema, type CaseStudy } from "@/modules/case-study/domain/case-study";
 import type { Json, Tables } from "@/shared/db.types";
 import { log } from "@/shared/log";
@@ -18,9 +18,6 @@ export type CaseStudyRow = Omit<Tables<"case_study">, "client_id"> & {
 const CASE_STUDY_COLUMNS =
   "id, code, number, name, year, locale, business_lines, status, project_order_ref, head_revision_id, approved_revision_id, head_version, created_by, created_at, updated_at, deleted_at, client(id, name, code)";
 const CASE_EVENT_COLUMNS = "id, case_id, revision_id, actor_id, type, at, data";
-
-/** Case ids per `reviewSince` query, so the `in` filter keeps the request URL short. */
-export const REVIEW_SINCE_CHUNK = 100;
 
 /** Postgres foreign_key_violation, and the constraint naming an unknown case. */
 const FOREIGN_KEY_VIOLATION = "23503";
@@ -274,28 +271,6 @@ export function createSupabaseCaseStudyRepository(
         return err({ code: "CASE_STUDY_WRITE_FAILED", message: "Could not delete the case study.", details: { caseId } });
       }
       return { ok: true, value: undefined };
-    },
-
-    async reviewSince(caseIds) {
-      const since = new Map<string, string>();
-      for (let start = 0; start < caseIds.length; start += REVIEW_SINCE_CHUNK) {
-        const ids = caseIds.slice(start, start + REVIEW_SINCE_CHUNK);
-        // Newest first, so the first row seen per case is when it last entered review.
-        const { data, error } = await client()
-          .from("case_event")
-          .select("case_id, at")
-          .eq("type", TRANSITION)
-          .eq("data->>to", "in_review")
-          .in("case_id", ids)
-          .order("at", { ascending: false })
-          .order("id", { ascending: true });
-        if (error) {
-          log.error(`case_event review since failed: ${error.code}`);
-          return err({ code: "CASE_EVENT_LOOKUP_FAILED", message: "Could not read when the cases entered review." });
-        }
-        for (const row of data) if (!since.has(row.case_id)) since.set(row.case_id, row.at);
-      }
-      return { ok: true, value: since };
     },
   };
 }

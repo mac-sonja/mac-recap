@@ -17,7 +17,6 @@ import {
   businessLineLabel,
   filterRows,
   nextSort,
-  sortByReviewOrder,
   sortRows,
   type CaseStudyRow,
   type SortKey,
@@ -45,8 +44,6 @@ export interface CaseStudiesTableProps {
   showCreate?: boolean;
   /** The search text to start with (the sidebar search's `?q=`). */
   initialQuery?: string;
-  /** The status filter to start with (`?status=`); *Tutti* by default. */
-  initialStatus?: StatusFilter;
 }
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -150,10 +147,6 @@ function isTextField(el: Element | null): boolean {
  * `/case-studies/new?caseId={id}`; other rows are not links yet. The actions column
  * holds Scarica on approved rows. A draft is deleted from inside it (**Elimina bozza**,
  * owner 2026-10-22), not from the list.
- *
- * Da approvare is the review queue (Story 4.1): until a header is clicked, its rows
- * sort oldest entry into Da approvare first (`reviewSince`, else `updatedAt`), with no
- * header arrow. Once a header is clicked, that sort holds across every filter.
  */
 export function CaseStudiesTable({
   rows,
@@ -164,18 +157,14 @@ export function CaseStudiesTable({
   emptyAction = it.caseStudies.emptyAction,
   showCreate = false,
   initialQuery = "",
-  initialStatus = "all",
 }: CaseStudiesTableProps) {
   const router = useRouter();
   const searchId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
   const [input, setInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
-  // null until a header is clicked: the queue order on Da approvare, DEFAULT_SORT elsewhere.
-  const [sort, setSort] = useState<SortState | null>(null);
-  const [status, setStatus] = useState<StatusFilter>(initialStatus);
-  const reviewOrder = sort === null && status === "in_review";
-  const shownSort = reviewOrder ? null : (sort ?? DEFAULT_SORT);
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  const [status, setStatus] = useState<StatusFilter>("all");
 
   useEffect(() => {
     if (input === query) return;
@@ -197,10 +186,7 @@ export function CaseStudiesTable({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const visible = useMemo(() => {
-    const filtered = filterRows(rows, query, status);
-    return shownSort === null ? sortByReviewOrder(filtered) : sortRows(filtered, shownSort);
-  }, [rows, query, status, shownSort]);
+  const visible = useMemo(() => sortRows(filterRows(rows, query, status), sort), [rows, query, status, sort]);
   const counts = useMemo(() => {
     const matching = filterRows(rows, query, "all");
     const byStatus: Record<StatusFilter, number> = { all: matching.length, draft: 0, generating: 0, in_review: 0, approved: 0 };
@@ -231,17 +217,12 @@ export function CaseStudiesTable({
     searchRef.current?.focus();
   }
 
-  function noResultsMessage(): string {
-    const text = query.trim();
-    if (status === "all") return fill(it.caseStudies.noResults, { query: text });
-    // The empty review queue (Story 4.1).
-    if (text === "" && status === "in_review") return it.caseStudies.noneToReview;
-    const label = it.caseStudies.filter.statuses[status];
-    return text === ""
-      ? fill(it.caseStudies.noResultsStatus, { status: label })
-      : fill(it.caseStudies.noResultsQueryStatus, { query: text, status: label });
-  }
-  const noResults = noResultsMessage();
+  const noResults =
+    status === "all"
+      ? fill(it.caseStudies.noResults, { query: query.trim() })
+      : query.trim() === ""
+        ? fill(it.caseStudies.noResultsStatus, { status: it.caseStudies.filter.statuses[status] })
+        : fill(it.caseStudies.noResultsQueryStatus, { query: query.trim(), status: it.caseStudies.filter.statuses[status] });
 
   function openRow(event: MouseEvent<HTMLTableRowElement>, href: string) {
     // Links and buttons (the name, Scarica, Elimina) and their dialogs act on their own; modifier or
@@ -253,15 +234,13 @@ export function CaseStudiesTable({
   }
 
   function sortHeader({ key, label }: (typeof COLUMNS)[number]) {
-    // The queue order belongs to no column: no header is active then.
-    const active = shownSort !== null && shownSort.key === key;
-    const ascending = shownSort?.direction === "asc";
-    const Arrow = ascending ? ArrowUp : ArrowDown;
+    const active = sort.key === key;
+    const Arrow = sort.direction === "asc" ? ArrowUp : ArrowDown;
     return (
-      <th key={key} scope="col" aria-sort={active ? (ascending ? "ascending" : "descending") : undefined} className={TH}>
+      <th key={key} scope="col" aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined} className={TH}>
         <button
           type="button"
-          onClick={() => setSort(shownSort === null ? { key, direction: "asc" } : nextSort(shownSort, key))}
+          onClick={() => setSort((current) => nextSort(current, key))}
           className={cn("inline-flex items-center gap-1 rounded-sm transition-colors hover:text-foreground", active && "text-foreground")}
         >
           {label}

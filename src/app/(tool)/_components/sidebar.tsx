@@ -31,8 +31,8 @@ export interface SidebarProps {
   theme?: ThemeChoice;
 }
 
-/** The "{n} da approvare" note opens the Case page on the Da approvare queue (Story 4.1, owner 2026-10-28). */
-const TO_REVIEW_HREF = "/case-studies?status=in_review";
+/** The "{n} da approvare" note opens the Case page on the Da approvare queue (owner 2026-10-28; the queue itself is Story 4.1). */
+const TO_REVIEW_HREF = "/case-studies?stato=in_review";
 
 /** Full labels at ≥1280 px; icons only at 1024–1279 px, labels kept for screen readers. */
 const LABEL = "sr-only xl:not-sr-only";

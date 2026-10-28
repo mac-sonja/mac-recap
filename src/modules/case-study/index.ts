@@ -34,7 +34,6 @@ import { makeListCaseStudies } from "@/modules/case-study/application/list-case-
 import { makeListClientSummaries } from "@/modules/case-study/application/list-client-summaries";
 import { makeListClients } from "@/modules/case-study/application/list-clients";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
-import { makeReviewSince } from "@/modules/case-study/application/review-since";
 import {
   makeCreateWorkingRevision,
   makeGetEditableRevision,
@@ -210,16 +209,6 @@ export function get(id: unknown): Promise<Result<CaseStudy>> {
  */
 export function list(scope: ListScope): Promise<Result<CaseStudy[]>> {
   return makeListCaseStudies(createSupabaseCaseStudyRepository())(scope);
-}
-
-/**
- * When each `in_review` case of `cases` entered Da approvare (Story 4.1), keyed by case
- * id: the `at` of its newest `transition` event to `in_review`, or its `updatedAt`
- * when it has none. Other statuses are absent. Never fails: a failed read falls back
- * to `updatedAt` for every case and is logged. Pass only cases the actor may list.
- */
-export function reviewSince(cases: readonly CaseStudy[]): Promise<Map<string, string>> {
-  return makeReviewSince(createSupabaseCaseStudyRepository())(cases);
 }
 
 /**
