@@ -105,7 +105,7 @@ development_status:
   epic-6: in-progress
   6-1-sign-in-with-a-fixed-role: review  # owner 2026-10-28: email + password, open sign-up for @menatcode.it, role from a menu (designer read-only until an admin approves, Altro with free text), others invited by an admin; migration 20261028120000 not yet applied anywhere; Supabase Auth settings in docs/auth-setup.md
   6-2-retire-the-basic-auth-gate-and-open-shared-links-to-their-au: backlog
-  6-3-manage-users-and-their-roles: review  # stacked on 6.1; Utenti screen: add (invite email), change role, approve designers (owner 2026-10-28), remove (disabled_at), last-admin guard in action and DB trigger, system role tied to the seeded profile; first admin by one-off SQL in docs/auth-setup.md; migration 20261028140000 not yet applied anywhere
+  6-3-manage-users-and-their-roles: review  # stacked on 6.1; Utenti screen: add (invite email), change role, approve designers (owner 2026-10-28), remove (disabled_at), last-admin guard in action and DB trigger, system role tied to the seeded profile; first admin by one-off SQL in docs/auth-setup.md; migration 20261028140000 not yet applied anywhere; owner 2026-10-28: admin sees every page and lands on Home, role shown as Permessi (Owner, Editor, Amministratore), free-text Ruolo, Utenti renamed Organizzazione (/organization) under Clienti
   6-4-guardrail-and-permission-check-after-login: backlog
   6-5-permission-check-for-intros-client-packs-and-collections: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 6.4, last before the demo
   epic-6-retrospective: optional

@@ -2591,7 +2591,7 @@ Decided (owner, 2026-10-28): Supabase Auth email + password, with open sign-up l
 
 **Given** the sign-in screen
 **When** I open the app without a session
-**Then** I see one sign-in screen in Italian, with a link to sign up (company addresses only, owner 2026-10-28), and after signing in with Supabase Auth I land on my role's page: owner/designer → Case studies table (the Home dashboard since 2026-10-20), account/sales/social → library, admin → Users
+**Then** I see one sign-in screen in Italian, with a link to sign up (company addresses only, owner 2026-10-28), and after signing in with Supabase Auth I land on my role's page: owner/designer → Case studies table (the Home dashboard since 2026-10-20), account/sales/social → library, admin → the Home dashboard (owner 2026-10-28; Users was its landing before)
 
 **Given** the sign-up screen
 **When** I sign up with an address outside `@menatcode.it`
@@ -2693,7 +2693,11 @@ Covers: FR8 (admin), CAP-11, AR11 (role changes apply at next request; removal d
 
 **Given** the admin role
 **When** they look for other surfaces
-**Then** Case studies, library, case views, Templates, any permission matrix and any guardrail setting are absent, and the matching URLs and actions are refused
+**Then** they reach every surface an owner/designer reaches (Home, Case studies, Clienti, case views, Templates when it exists) plus **Organizzazione**, and any permission matrix or guardrail setting stays absent, with the matching URLs and actions refused (owner 2026-10-28: the admin sees every page, not only the users screen)
+
+**Given** the Organizzazione screen (owner 2026-10-28)
+**When** the admin looks at a person
+**Then** the fixed role is labelled **Permessi** (Owner = owner/designer, Editor = account/sales/social, Amministratore = admin), a free-text **Ruolo** (what the person does, up to 60 characters, grants nothing) can be set in Add user and edited in the list, and the screen is **Organizzazione** at `/organization`, right under Clienti in the sidebar
 
 ### Story 6.4: Guardrail and permission check after login
 
