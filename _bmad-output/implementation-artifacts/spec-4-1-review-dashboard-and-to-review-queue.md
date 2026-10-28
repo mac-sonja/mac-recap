@@ -2,7 +2,7 @@
 title: 'Story 4.1: Da approvare queue in the Case table; no client count in the sidebar'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 baseline_commit: 'e494a9525550c5fb97b11bd63b669f521e8762a9'
 review_loop_iteration: 0
@@ -61,13 +61,13 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] case-study module (repository port + Supabase adapter + application + index) with unit tests for the matrix's order, re-entry and read-failure rows -- the source of the queue order.
-- [ ] `filter-sort.ts` (+ `filter-sort.test.ts`) -- review-order sort.
-- [ ] `case-studies-table.tsx` (+ test) -- null sort, `initialStatus`, empty message.
-- [ ] `case-studies/page.tsx` (+ `page.test.tsx`) -- `?status=`, `reviewSince` on rows.
-- [ ] `sidebar.tsx`, `layout.tsx` (+ tests) -- no client count.
-- [ ] `src/shared/i18n/it.ts` -- copy.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.4, 3.5, 6.1, 6.2, 6.3 → done (merged).
+- [x] case-study module (repository port + Supabase adapter + application + index) with unit tests for the matrix's order, re-entry and read-failure rows -- the source of the queue order.
+- [x] `filter-sort.ts` (+ `filter-sort.test.ts`) -- review-order sort.
+- [x] `case-studies-table.tsx` (+ test) -- null sort, `initialStatus`, empty message.
+- [x] `case-studies/page.tsx` (+ `page.test.tsx`) -- `?status=`, `reviewSince` on rows.
+- [x] `sidebar.tsx`, `layout.tsx` (+ tests) -- no client count.
+- [x] `src/shared/i18n/it.ts` -- copy.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.4, 3.5, 6.1, 6.2, 6.3 → done (merged).
 
 **Acceptance Criteria:**
 - Given any role, when the sidebar renders, then Clienti shows no number and Case still shows "{n} da approvare" when n > 0.
@@ -83,6 +83,11 @@ Ordering by event, not `updated_at`: configurator edits (4.3) will touch a case 
 - `npm run lint && npm run typecheck && npx vitest run` -- expected: all pass.
 
 ## Implementation Notes
+
+- Queue order comes from `case-study.reviewSince(cases)` (new `application/review-since.ts`, adapter queries `case_event` in chunks of 100). The page always calls it; it never fails.
+- Table `sort` is `SortState | null`; null + Da approvare = `sortByReviewOrder`, no header arrow.
+- Real-DB test added in `test/db/case-study.db.test.ts`; not run locally (no Docker), runs in CI (`npm run test:db`).
+- Lint, typecheck and `vitest run` pass under Node 22 (`package.json` asks for 24; installed with `--engine-strict=false`).
 
 ## Spec Change Log
 
