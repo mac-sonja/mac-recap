@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Folder, LayoutDashboard, Library, Plus, Search, type LucideIcon } from "lucide-react";
+import { Building2, Folder, LayoutDashboard, Library, Plus, Search, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
@@ -21,6 +21,8 @@ export interface SidebarProps {
   showClients: boolean;
   /** Account/sales/social: the Libreria item (approved cases only). */
   showLibrary?: boolean;
+  /** `manage users` (admin): the Utenti item, the admin's only surface. */
+  showUsers?: boolean;
   displayName: string;
   roleLabel: string;
   /** Cases waiting for a review, shown after Case; nothing when 0 or unknown. */
@@ -120,6 +122,7 @@ export function Sidebar({
   showCaseStudies,
   showClients,
   showLibrary = false,
+  showUsers = false,
   displayName,
   roleLabel,
   toReviewCount = null,
@@ -168,6 +171,9 @@ export function Sidebar({
         )}
         {showLibrary && (
           <NavLink href="/library" icon={Library} label={it.shell.nav.library} active={pathname === "/library"} />
+        )}
+        {showUsers && (
+          <NavLink href="/users" icon={Users} label={it.shell.nav.users} active={pathname === "/users"} />
         )}
         {showClients && (
           <NavLink

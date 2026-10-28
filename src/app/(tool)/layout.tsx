@@ -49,6 +49,7 @@ export default async function ToolLayout({ children }: Readonly<{ children: Reac
         showCaseStudies={can(actor, "list cases")}
         showClients={can(actor, "list clients")}
         showLibrary={!can(actor, "list cases") && can(actor, "list cases", { status: "approved" })}
+        showUsers={can(actor, "manage users")}
         displayName={actor.displayName}
         roleLabel={roleLabel(actor.role)}
         toReviewCount={counts.toReview}

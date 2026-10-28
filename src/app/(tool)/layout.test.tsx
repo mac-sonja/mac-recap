@@ -69,6 +69,17 @@ describe("ToolLayout", () => {
     expect(html).toContain(label);
   });
 
+  it("shows only Utenti to the admin, and Libreria only to account/sales/social", async () => {
+    getActor.mockResolvedValue(ok(actor("admin")));
+    const admin = await renderLayout();
+    expect(admin).toContain('href="/users"');
+    expect(admin).not.toContain('href="/library"');
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
+    const account = await renderLayout();
+    expect(account).toContain('href="/library"');
+    expect(account).not.toContain('href="/users"');
+  });
+
   it("shows the cases to review after Case and the client count after Clienti", async () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     const html = await renderLayout();

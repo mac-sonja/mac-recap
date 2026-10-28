@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentYear, formatBytes, formatDateTime, formatRelative } from "./format";
+import { currentYear, formatBytes, formatDate, formatDateTime, formatRelative } from "./format";
 
 describe("formatDateTime", () => {
   it.each([
@@ -54,5 +54,11 @@ describe("formatRelative", () => {
 
   it("falls back to the date from a week on", () => {
     expect(formatRelative("2026-10-10T07:05:00Z", now)).toBe(formatDateTime("2026-10-10T07:05:00Z", now));
+  });
+});
+
+describe("formatDate", () => {
+  it("shows day, short month and year in Europe/Rome", () => {
+    expect(formatDate("2026-10-27T23:30:00Z")).toBe("28 ott 2026");
   });
 });

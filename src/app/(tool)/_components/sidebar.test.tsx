@@ -12,6 +12,7 @@ const render = (show: {
   showCaseStudies: boolean;
   showClients?: boolean;
   showLibrary?: boolean;
+  showUsers?: boolean;
   toReviewCount?: number;
   theme?: "system" | "light" | "dark";
 }) =>
@@ -62,6 +63,10 @@ describe("Sidebar", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });
     expect(html).not.toMatch(/Template|Utenti|\/users|\/templates|\/review/i);
     expect(html).toContain('aria-label="Esci"');
+  });
+
+  it("shows Utenti only when asked (admin)", () => {
+    expect(render({ showNewCaseStudy: false, showCaseStudies: false, showUsers: true })).toContain('href="/users"');
   });
 
   it("shows Libreria only when asked (account/sales/social)", () => {

@@ -34,6 +34,31 @@ project (mac-recap-dev, staging, prod), set them in the Supabase dashboard:
    emails per hour and is meant for testing. Before real people use it, set a
    custom SMTP sender.
 
+## The first admin (one-off, per environment)
+
+No screen can create an admin without an existing admin (Story 6.3). After
+migrations `20261028120000` and `20261028140000` are applied:
+
+1. The future admin signs up on `/sign-up` with their `@menatcode.it` address
+   and confirms the email (they land on the library as account/sales/social).
+2. In the Supabase dashboard → **SQL Editor** of that project, run, with their
+   address:
+
+   ```sql
+   update public.profile
+     set role = 'admin', designer_requested_at = null
+     where lower(email) = lower('nome.cognome@menatcode.it');
+   ```
+
+   It must report `UPDATE 1`. At their next page load they land on **Utenti**.
+3. From then on, admins add people, change roles, approve designers and remove
+   users from **Utenti**. The database refuses to remove or demote the last
+   enabled admin, and only the seeded system profile can hold the `system` role.
+
+An admin sees only **Utenti**: no cases, library, templates, permissions or
+guardrails. Someone who must also work on cases needs a second account, or
+another role.
+
 ## Cutover
 
 The migration `20261028120000_access_sign_in.sql` disables the seeded dev

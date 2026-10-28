@@ -28,6 +28,11 @@ function fakes(rows: Profile[], user: SessionUser | null = null) {
       rows.push(created);
       return ok(created);
     }),
+    listUsers: vi.fn(),
+    countEnabledAdmins: vi.fn(),
+    setRole: vi.fn(),
+    disable: vi.fn(),
+    enable: vi.fn(),
   } satisfies ProfileRepository;
   const auth = {
     currentUser: vi.fn(async () => user),

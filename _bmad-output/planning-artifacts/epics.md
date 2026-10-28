@@ -2679,6 +2679,10 @@ Covers: FR8 (admin), CAP-11, AR11 (role changes apply at next request; removal d
 **When** I change it
 **Then** the new role applies at that user's next request
 
+**Given** someone who signed up as Designer (Story 6.1, owner 2026-10-28)
+**When** I open the Users screen
+**Then** their row says they asked to be a designer, and **Approva** gives them owner/designer (they read approved cases until then)
+
 **Given** **Remove user**
 **When** I confirm
 **Then** the profile gets `disabled_at`, the user can no longer sign in, and their case studies, links and events stay

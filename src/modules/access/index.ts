@@ -1,21 +1,26 @@
 // Public surface of the access module. Code outside this module imports only this file.
+import { createSupabaseAuthAdmin } from "@/modules/access/adapters/supabase/auth-admin";
 import { createSupabaseAuthGateway } from "@/modules/access/adapters/supabase/auth-gateway";
 import { createSupabaseProfileRepository } from "@/modules/access/adapters/supabase/profile-repository";
 import { makeGetActor } from "@/modules/access/application/get-actor";
 import { makeGetSystemActor } from "@/modules/access/application/get-system-actor";
 import type { EmailLink } from "@/modules/access/application/ports";
 import { makeSession, type SessionState } from "@/modules/access/application/session";
-import type { Actor } from "@/modules/access/domain/actor";
+import { makeUsers, type AddedUser } from "@/modules/access/application/users";
+import type { ListedUser } from "@/modules/access/domain/users";
+import type { Actor, Profile } from "@/modules/access/domain/actor";
 import { can as policyCan, type Action, type Resource } from "@/modules/access/domain/policy";
 import type { AppError, Result } from "@/shared/result";
 
 export { authorize } from "@/modules/access/application/authorize";
-export type { Actor, Role } from "@/modules/access/domain/actor";
+export type { Actor, Profile, Role } from "@/modules/access/domain/actor";
 export { landingFor } from "@/modules/access/domain/landing";
 export { MIN_PASSWORD_LENGTH, SIGN_UP_DOMAIN, TEAMS, type Team } from "@/modules/access/domain/sign-up";
 export { refreshSession } from "@/modules/access/adapters/supabase/proxy-session";
 export type { EmailLink, EmailLinkType } from "@/modules/access/application/ports";
 export type { SessionState } from "@/modules/access/application/session";
+export type { AddedUser } from "@/modules/access/application/users";
+export { ASSIGNABLE_ROLES, type AssignableRole, type ListedUser } from "@/modules/access/domain/users";
 export { CASE_STATUSES } from "@/modules/access/domain/policy";
 export type { Action, CaseStatus, Resource } from "@/modules/access/domain/policy";
 
@@ -87,6 +92,30 @@ export function getSystemActor(): Promise<Result<Actor>> {
   return makeGetSystemActor(createSupabaseProfileRepository())();
 }
 
+// Users (Story 6.3). Callers authorize `manage users` first; these change only
+// `profile.role` and `profile.disabled_at`.
+const users = () => makeUsers({ profiles: createSupabaseProfileRepository(), authAdmin: createSupabaseAuthAdmin() });
+
+/** Enabled, non-system users, oldest first. */
+export function listUsers(): Promise<Result<ListedUser[]>> {
+  return users().list();
+}
+
+/** **Aggiungi utente**: `{ firstName, lastName, email, role }`; sends the invite whose link returns to `origin`. */
+export function addUser(actor: Actor, input: unknown, origin: string): Promise<Result<AddedUser>> {
+  return users().add(actor, input, origin);
+}
+
+/** Changes a role, or approves a designer: `{ profileId, role }`. `LAST_ADMIN` keeps one admin. */
+export function changeUserRole(actor: Actor, input: unknown): Promise<Result<Profile>> {
+  return users().changeRole(actor, input);
+}
+
+/** **Rimuovi**: `{ profileId }`; sets `disabled_at`. `LAST_ADMIN` keeps one admin. */
+export function removeUser(actor: Actor, input: unknown): Promise<Result<void>> {
+  return users().remove(actor, input);
+}
+
 const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   UNAUTHENTICATED: 401,
   FORBIDDEN: 403,
@@ -133,6 +162,10 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   EMAIL_DOMAIN_NOT_ALLOWED: 400,
   LINK_INVALID: 400,
   RATE_LIMITED: 429,
+  // Users (Story 6.3).
+  USER_EXISTS: 409,
+  LAST_ADMIN: 409,
+  INVITE_FAILED: 502,
 };
 
 /** HTTP status for an `AppError` code; unknown codes are 500. */

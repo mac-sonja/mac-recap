@@ -17,6 +17,8 @@ export const it = {
       clients: "Clienti",
       /** Account/sales/social: the library of approved cases (Story 5.1). */
       library: "Libreria",
+      /** Admin: the Users screen (Story 6.3). */
+      users: "Utenti",
       /** Above Nuova case history: searches the case list and opens it filtered. */
       search: {
         label: "Cerca progetto o cliente",
@@ -674,6 +676,54 @@ export const it = {
     },
     rateLimited: "Troppi tentativi. Aspetta qualche minuto e riprova.",
     failed: "Non siamo riusciti a completare l'operazione. Riprova tra poco.",
+  },
+  /** The admin's Users screen (Story 6.3). */
+  users: {
+    title: "Utenti",
+    lead: "Chi entra in MAC Recap e cosa può fare.",
+    add: "Aggiungi utente",
+    columns: {
+      name: "Nome",
+      email: "Email",
+      role: "Ruolo",
+      added: "Aggiunto il",
+      actions: "Azioni",
+    },
+    /** Under the name of someone who signed up as designer and waits. */
+    designerRequest: "Chiede di essere designer",
+    approve: "Approva",
+    approveLabel: "Approva {name} come designer",
+    roleLabel: "Ruolo di {name}",
+    remove: "Rimuovi",
+    removeLabel: "Rimuovi {name}",
+    you: "tu",
+    empty: "Nessun utente, per ora.",
+    addDialog: {
+      title: "Aggiungi utente",
+      description: "Riceverà un'email per scegliere la password.",
+      firstName: "Nome",
+      lastName: "Cognome",
+      email: "Email",
+      role: "Ruolo",
+      submit: "Invia invito",
+      cancel: "Annulla",
+      close: "Chiudi",
+    },
+    removeDialog: {
+      title: "Rimuovere {name}?",
+      description: "Non potrà più entrare. I suoi case, i link e lo storico restano.",
+      confirm: "Rimuovi",
+      cancel: "Annulla",
+    },
+    added: "Invito inviato a {email}.",
+    addedNoInvite: "{email} ha già un accesso: può entrare con la sua password o usare Password dimenticata.",
+    errors: {
+      lastAdmin: "Serve almeno un amministratore. Nomina prima qualcun altro.",
+      exists: "Questa email ha già un account.",
+      invalid: "Controlla i campi evidenziati.",
+      invite: "Abbiamo creato l'utente ma l'email non è partita. Riprova tra poco.",
+      failed: "Non siamo riusciti a salvare. Riprova.",
+    },
   },
   /** Library of approved cases (Story 5.1); until it ships, a placeholder. */
   library: {
