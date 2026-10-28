@@ -2,11 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
-import type { CaseActivity, CaseStudy, ListScope } from "@/modules/case-study";
+import type { CaseActivity, ListedCaseStudy, ListScope } from "@/modules/case-study";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
-const list = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
+const list = vi.fn<(scope: ListScope) => Promise<Result<ListedCaseStudy[]>>>();
 const listActivity = vi.fn<(scope: ListScope) => Promise<Result<CaseActivity[]>>>();
 
 vi.mock("next/navigation", () => ({
@@ -28,7 +28,7 @@ const shell = (role: Role, displayName = "Sonja Castillo"): ShellActor => ({
 });
 
 let n = 0;
-const caseStudy = (over: Partial<CaseStudy>): CaseStudy => ({
+const caseStudy = (over: Partial<ListedCaseStudy>): ListedCaseStudy => ({
   id: `aaaaaaaa-0000-4000-8000-00000000000${++n}`,
   code: `LUM-2026-0${n}`,
   number: n,
@@ -46,6 +46,7 @@ const caseStudy = (over: Partial<CaseStudy>): CaseStudy => ({
   createdAt: "2026-10-01T10:00:00+00:00",
   updatedAt: "2026-10-13T07:05:00+00:00",
   deletedAt: null,
+  inReviewSince: null,
   ...over,
 });
 
@@ -97,6 +98,20 @@ describe("HomePage", () => {
     expect(html).toContain(`href="/case-studies/new?caseId=${draft.id}"`);
     expect(html.match(/href="\/case-studies\/new\?caseId=/g)).toHaveLength(1); // in A metà strada
     expect(html.match(new RegExp(`href="/case-studies/${waiting.id}/configurator"`, "g"))).toHaveLength(1); // in Da approvare
+  });
+
+  it("lists Da approvare longest waiting first, not by last update", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(
+      ok([
+        // Newest update first would put Recente on top; it has waited less.
+        caseStudy({ status: "in_review", name: "Recente", updatedAt: "2026-10-12T10:00:00+00:00", inReviewSince: "2026-10-09T10:00:00+00:00" }),
+        caseStudy({ status: "in_review", name: "In attesa", updatedAt: "2026-10-03T10:00:00+00:00", inReviewSince: "2026-10-02T10:00:00+00:00" }),
+      ]),
+    );
+    const html = await renderPage();
+    const review = html.slice(html.indexOf('id="home-review"'), html.indexOf('id="home-drafts"'));
+    expect(review.indexOf("In attesa")).toBeLessThan(review.indexOf("Recente"));
   });
 
   it("opens the To review queue from Da approvare, only when something waits", async () => {

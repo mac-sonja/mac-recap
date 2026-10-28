@@ -37,6 +37,8 @@ interface HomeCase {
   clientName: string;
   status: CaseStatus;
   updatedAt: string;
+  /** When a Da approvare case entered that status; null otherwise. */
+  inReviewSince: string | null;
   /** Where the row opens (`caseHref`): the wizard, the configurator, or nothing. */
   href: string | null;
 }
@@ -239,11 +241,14 @@ export default async function HomePage() {
       clientName: c.client.name,
       status: c.status,
       updatedAt: c.updatedAt,
+      inReviewSince: c.inReviewSince ?? null,
       href: caseHref(c.id, c.status, canEdit),
     }))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-  const toReview = cases.filter((c) => c.status === "in_review");
+  // Longest waiting first, like the To review queue it links to; without the time, the last update stands in.
+  const waitingSince = (c: HomeCase) => Date.parse(c.inReviewSince ?? c.updatedAt);
+  const toReview = cases.filter((c) => c.status === "in_review").sort((a, b) => waitingSince(a) - waitingSince(b));
   const drafts = cases.filter((c) => c.status === "draft");
   const generating = cases.filter((c) => c.status === "generating");
   const firstName = actor.displayName.trim().split(/\s+/)[0] ?? "";
