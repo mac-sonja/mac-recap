@@ -39,3 +39,15 @@ export const ASPECT = {
   carosello_1_1: "aspect-square",
   video_9_16: "aspect-[9/16]",
 } as const satisfies Record<FormatId, string>;
+
+/** Anteprima of Presentazione: the pages stacked at up to 1600 px (mockup `body.previewing .canvas`). */
+export const PREVIEW_WIDTH = "max-w-[1600px]";
+
+/**
+ * Anteprima of Carosello and Video: one page as big as the screen allows (mockup
+ * `.social-frame`), leaving room for the top bar, the switch, the dots and the buttons.
+ */
+export const SLIDE_WIDTH = {
+  carosello_1_1: "w-[min(760px,calc(100dvh_-_250px),calc(100vw_-_200px))]",
+  video_9_16: "w-[min(460px,calc((100dvh_-_250px)_*_9_/_16))]",
+} as const satisfies Record<Exclude<FormatId, "presentazione_16_9">, string>;
