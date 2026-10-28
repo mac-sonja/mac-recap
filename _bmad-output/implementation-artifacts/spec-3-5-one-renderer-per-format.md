@@ -2,7 +2,8 @@
 title: 'Story 3.5: one renderer per format (Presentazione, Carosello, Video)'
 type: 'feature'
 created: '2026-10-28'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: '7b0f4d29234b8253eb97a63e39c86de80702c812'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
