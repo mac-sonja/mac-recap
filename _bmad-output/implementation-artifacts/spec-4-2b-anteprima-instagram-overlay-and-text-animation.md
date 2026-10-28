@@ -2,8 +2,8 @@
 title: 'Story 4.2b: Anteprima, the Instagram overlay and Animazione testi'
 type: 'feature'
 created: '2026-10-28'
-status: 'ready-for-dev'
-baseline_commit: '653c9a1c483fb3f83ddf2d4515cad5ef88488d4d'
+status: 'in-progress'
+baseline_commit: 'f0da7b8e633115532516dfa86b5155d4972647c9'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -83,6 +83,7 @@ context:
 ## Implementation Notes
 
 - Owner (2026-10-28): subagents may be used for this story's review step.
+- Baseline moved from 653c9a1 (4.2a head at planning) to f0da7b8 after #113 and #114 merged into main, so the diff holds 4.2b only.
 
 ## Verification
 
