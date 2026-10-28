@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
+import { ArrowLeft, Eye, Pencil, Redo2, Undo2 } from "lucide-react";
 import Link from "next/link";
+import type { Ref } from "react";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
 import { StatusBadge } from "@/app/_components/status-badge";
 import type { CaseStatus } from "@/modules/access";
@@ -27,15 +28,22 @@ export interface TopBarProps {
   onFormat: (formatId: FormatId) => void;
   /** A tool of a later story was pressed: its name, for the canvas message. */
   onSoon: (tool: string) => void;
+  /** In Anteprima (C37). */
+  preview: boolean;
+  onPreview: (on: boolean) => void;
+  /** The eye/pencil button, for focus to land on when Esc leaves Anteprima. */
+  previewRef?: Ref<HTMLButtonElement>;
 }
 
 /**
  * The configurator's top bar (mockup `.top`): back, name, code and status badge on the
- * left; the format switch in the centre; the save state, undo, redo and **Approva** on
- * the right. Undo, redo and **Approva** arrive with Stories 4.3 and 4.8: they show,
+ * left; the format switch and the Anteprima eye in the centre (a pencil, *Torna
+ * all’editor*, while in Anteprima); the save state, undo, redo and **Approva** on the
+ * right. Undo, redo and **Approva** arrive with Stories 4.3 and 4.8: they show,
  * inactive, and say so when pressed. Nothing is saved yet, so the state reads *Salvato*.
  */
-export function TopBar({ header, back, formatId, onFormat, onSoon }: TopBarProps) {
+export function TopBar({ header, back, formatId, onFormat, onSoon, preview, onPreview, previewRef }: TopBarProps) {
+  const previewLabel = preview ? it.configurator.preview.leave : it.configurator.preview.enter;
   return (
     <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-border bg-surface-sidebar px-3">
       <div className="flex min-w-0 items-center gap-2">
@@ -54,19 +62,36 @@ export function TopBar({ header, back, formatId, onFormat, onSoon }: TopBarProps
         <StatusBadge status={header.status} className="shrink-0" />
       </div>
 
-      <div role="group" aria-label={it.configurator.formats.label} className={SEG}>
-        {FORMATS.map((format) => (
-          <button
-            key={format.id}
-            type="button"
-            aria-pressed={format.id === formatId}
-            onClick={() => onFormat(format.id)}
-            className={SEG_BUTTON}
-          >
-            {it.configurator.formats[format.id]}
-            <small className="font-mono text-[11.5px] font-normal text-foreground-muted">{format.ratio}</small>
-          </button>
-        ))}
+      <div className="flex items-center gap-2">
+        <div role="group" aria-label={it.configurator.formats.label} className={SEG}>
+          {FORMATS.map((format) => (
+            <button
+              key={format.id}
+              type="button"
+              aria-pressed={format.id === formatId}
+              onClick={() => onFormat(format.id)}
+              className={SEG_BUTTON}
+            >
+              {it.configurator.formats[format.id]}
+              <small className="font-mono text-[11.5px] font-normal text-foreground-muted">{format.ratio}</small>
+            </button>
+          ))}
+        </div>
+        {/* Anteprima: an eye; in Anteprima the same button is a pencil back to the editor (mockup `#previewBtn`). */}
+        <button
+          ref={previewRef}
+          type="button"
+          aria-pressed={preview}
+          aria-label={previewLabel}
+          title={previewLabel}
+          onClick={() => onPreview(!preview)}
+          className={cn(
+            ICON_BUTTON,
+            "size-8 bg-surface-raised text-foreground shadow-control aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary-hover",
+          )}
+        >
+          {preview ? <Pencil aria-hidden="true" className="size-4" /> : <Eye aria-hidden="true" className="size-4" />}
+        </button>
       </div>
 
       <div className="flex min-w-0 items-center justify-end gap-2">

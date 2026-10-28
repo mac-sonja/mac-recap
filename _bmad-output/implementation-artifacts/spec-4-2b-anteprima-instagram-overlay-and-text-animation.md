@@ -2,7 +2,7 @@
 title: 'Story 4.2b: Anteprima, the Instagram overlay and Animazione testi'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'f0da7b8e633115532516dfa86b5155d4972647c9'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -66,15 +66,15 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/shared/i18n/it.ts`, `it.test.ts` -- strings.
-- [ ] `styles.ts` -- preview widths.
-- [ ] `instagram-overlay.tsx` -- Reel and Storia markup, case name caption.
-- [ ] `slideshow.tsx` -- frame, ‹ ›, dots, caption, overlay slot.
-- [ ] `canvas.tsx` -- preview mode, meta row, `animateTexts`.
-- [ ] `top-bar.tsx` -- eye/pencil.
-- [ ] `configurator.tsx` -- state, panels, keys.
-- [ ] `configurator.test.tsx` -- every matrix row, reduced motion, Esc inside Cerca still not leaving the editor.
-- [ ] `sprint-status.yaml` -- 4.2 note: 4.2b in review; `deferred-work.md` -- mark the 4.2b entry done.
+- [x] `src/shared/i18n/it.ts`, `it.test.ts` -- strings.
+- [x] `styles.ts` -- preview widths.
+- [x] `instagram-overlay.tsx` -- Reel and Storia markup, case name caption.
+- [x] `slideshow.tsx` -- frame, ‹ ›, dots, caption, overlay slot.
+- [x] `canvas.tsx` -- preview mode, meta row, `animateTexts`.
+- [x] `top-bar.tsx` -- eye/pencil.
+- [x] `configurator.tsx` -- state, panels, keys.
+- [x] `configurator.test.tsx` -- every matrix row, reduced motion, Esc inside Cerca still not leaving the editor.
+- [x] `sprint-status.yaml` -- 4.2 note: 4.2b in review; `deferred-work.md` -- mark the 4.2b entry done.
 
 **Acceptance Criteria:**
 - Given Story 4.2's Anteprima, Instagram and Animazione testi criteria in `epics.md` (texts not editable, per the decisions), when checked on the running page, then each is met.
@@ -84,6 +84,30 @@ context:
 
 - Owner (2026-10-28): subagents may be used for this story's review step.
 - Baseline moved from 653c9a1 (4.2a head at planning) to f0da7b8 after #113 and #114 merged into main, so the diff holds 4.2b only.
+
+## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Esc does nothing while the Animazione testi checkbox has focus (edge) | low | `typing()` matches every `input`, checkboxes included | patch |
+| 2 | Alt/⌘/Ctrl + ← → step the slideshow while the browser navigates (edge) | low | Keydown handler checks no modifier | patch |
+| 3 | ‹ › at an end becomes `disabled` and drops focus to body (edge) | low | `disabled` on the focused button blurs it | patch |
+| 4 | Esc from a slideshow or Instagram button drops focus to body (edge) | low | Those buttons unmount when Anteprima closes | patch |
+| 5 | Slideshow scroll sets the page in view to the slide (edge) | false | That is the page being looked at; the next editor scroll re-measures; the page tools are inactive | reject |
+| 6 | Format switch in Anteprima drops the held selection (edge, claim) | false | A format switch clears the selection in the editor too (4.2a); the old selection names another format's page | reject |
+| 7 | Eye's label changes while `aria-pressed` toggles (blind) | low | Required by the spec and the mockup (`#previewBtn`); changing it edits the spec | reject |
+| 8 | ← → don't `preventDefault`; canvas may scroll sideways (blind) | low | Handler steps without preventing the default | patch |
+| 9 | Reduced motion doesn't stop the text loop in Anteprima (blind) | false | Renderer CSS `@media (prefers-reduced-motion:reduce){.mr-vin{animation:none}}` (`css.ts:138`) | reject |
+| 10 | Reduced motion read once on entering Anteprima (blind) | low | A change mid-slideshow is rare; a listener adds a hook | reject |
+| 11 | "Texts editable with 4.3" tracked nowhere (blind) | low | deferred-work marks 4.2b resolved; 4.3's sprint note doesn't say it | patch |
+| 12 | Entering or leaving Anteprima loses the place on the canvas (blind) | low | Presentazione widens to 1600 px and the stacked pages remount with the old `scrollTop` | patch |
+| 13 | Slideshow flag computed twice; zero pages (blind) | low | Zero pages unreachable with template pages (4.2a #21) | reject |
+| 14 | Overlay `<style>` re-inserted per slide, global `.ig*` classes (blind) | low | Negligible cost; `ig-` names used only here | reject |
+| 15 | `VIDEO_FRAME_WIDTH = 1080` duplicates a registry value (blind) | low | Instagram sizes follow the published 1080 px; `getFormat("video_9_16").pixelSize.width` is exported | patch |
+| 16 | Slideshow buttons don't advertise ← → (blind) | low | No `aria-keyshortcuts`; a direct attribute | patch |
+| 17 | Slide width collapses below ~250 px of height (blind) | low | The configurator needs ≥1024 px wide; such heights don't occur | reject |
+| 18 | TopBar JSDoc line not re-wrapped (blind) | low | One ~150-character line | patch |
+| 19 | "keeps the arrow keys away from the editor" cannot fail (gap) | low | `togglePreview` resets the slide on entry, so the assertion holds even without the guard | patch (test) |
 
 ## Verification
 

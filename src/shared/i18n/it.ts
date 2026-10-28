@@ -852,6 +852,38 @@ export const it = {
       list: "Elenco",
     },
     noMatch: "Nessuna pagina per “{query}”.",
+    /**
+     * Anteprima (Story 4.2b, C37): the top bar's eye, the Carosello and Video slideshow
+     * and, on Video, Instagram's interface drawn over the page (C34).
+     */
+    preview: {
+      enter: "Anteprima",
+      leave: "Torna all’editor",
+      previous: "Pagina precedente",
+      next: "Pagina successiva",
+      /** Under the slideshow. */
+      slide: "{i} di {n} · {name}",
+      instagram: {
+        label: "Anteprima Instagram",
+        off: "Nessuna",
+        reel: "Reel",
+        story: "Storia",
+        /** The account shown in the overlay. */
+        account: "mac.creativetech",
+        /** The account's avatar. */
+        avatar: "mac",
+        /** The phone's clock in the status bar. */
+        clock: "9:41",
+        follow: "Segui",
+        forYou: "Per te",
+        friends: "Amici",
+        message: "Invia messaggio…",
+        /** How long ago the Story was posted. */
+        time: "9 min",
+      },
+    },
+    /** The Video editor's switch that stops the text loop while working on a page. */
+    textAnimation: "Animazione testi",
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {
