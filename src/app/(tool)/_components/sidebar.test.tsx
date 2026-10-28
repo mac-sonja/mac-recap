@@ -85,7 +85,8 @@ describe("Sidebar", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true, toReviewCount: 2 });
     const clients = html.match(/<a [^>]*href="\/clients"[^>]*>.*?<\/a>/)?.[0] ?? "";
     expect(clients).toContain("Clienti");
-    expect(clients).not.toMatch(/tabular-nums|\d/);
+    expect(clients).not.toContain("tabular-nums");
+    expect(clients.replace(/<[^>]*>/g, "")).toBe("Clienti");
     expect(html).toContain("2 da approvare");
   });
 
