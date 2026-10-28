@@ -189,7 +189,7 @@ http.createServer((req, res) => {
   res.setHeader("content-type", "application/json");
   if (req.method === "GET" && url.pathname === "/rest/v1/profile") {
     const id = (url.searchParams.get("id") || "").replace(/^eq\./, "");
-    res.end(JSON.stringify([{ id, email: "system@smoke.invalid", display_name: "System", role: "system", disabled_at: null }]));
+    res.end(JSON.stringify([{ id, email: "system@smoke.invalid", display_name: "System", role: "system", disabled_at: null, job_title: null, designer_requested_at: null }]));
   } else if (req.method === "POST" && url.pathname === "/rest/v1/rpc/jobs_claim") {
     res.end("[]");
   } else {
