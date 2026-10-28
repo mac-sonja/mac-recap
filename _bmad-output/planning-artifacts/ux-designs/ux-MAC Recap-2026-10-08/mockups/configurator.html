@@ -1,0 +1,1473 @@
+<!doctype html>
+<html lang="it" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configurator mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Round 3 (2026-10-27): pages are bento, blocks snap into the grid and the rest fill the space when one goes;
+   images swap by dragging on the canvas; no Il cliente page; formats Presentazione and Carosello only.
+   Governs: EXPERIENCE.md > Configurator; Stories 4.2–4.6, 4.11, 4.12.
+   Owner session 2026-10-27, round 2: type, buttons, tabs and radii from ../ui-specs-2026-10-27.md (platform-wide);
+   theme switch bottom left as in the sidebar (Chiaro default); undo/redo; page panel without Ripristina,
+   Duplica, Nascondi; layouts and elements dragged onto pages; text style picked from the template's styles;
+   Il cliente editable; stars toggled in Media; drop zone fixed at the bottom. Placeholder pages until the
+   real templates are in. */
+:root{
+  --surface:#f4f3ef;--sidebar:#f9f8f5;--raised:#fff;--fill:#f1f0ec;--fill-2:#ebeae5;--field:#f5f5f4;--selected:#e5e4de;
+  --border:#e6e5e0;--border-strong:#d4d3cc;--fg:#15160f;--fg-2:#53554b;--fg-3:#86887c;--ink:#4a6800;
+  --pri:#d4ff3f;--pri-hover:#c3ef2c;--pri-fg:#121500;--accent:#0a6cff;--focus:#0a6cff;
+  --review:#f08c00;--review-fg:#a8540a;--review-tint:#fff2de;
+  --shadow-card:0 0 0 1px rgb(0 0 0 / .04),0 1px 2px rgb(0 0 0 / .05);
+  --shadow-thumb:0 0 0 .5px rgb(0 0 0 / .06),0 1px 3px rgb(0 0 0 / .12);
+  --shadow-page:0 0 0 1px rgb(0 0 0 / .06),0 8px 24px -8px rgb(0 0 0 / .18);
+  --sans:-apple-system,"SF Pro Text",Geist,system-ui,sans-serif;
+  --display:-apple-system,"SF Pro Display",Geist,system-ui,sans-serif;
+  --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+}
+:root[data-theme="dark"]{
+  --surface:#000;--sidebar:#0a0a0a;--raised:#141414;--fill:#1a1a1a;--fill-2:#1e1e1e;--field:#1e1e1e;--selected:#282828;
+  --border:#232323;--border-strong:#333;--fg:#f3f4ee;--fg-2:#a6a89c;--fg-3:#6f7168;--ink:#d4ff3f;
+  --accent:#3b8bff;--focus:#d4ff3f;--review:#ffa526;--review-fg:#ffc266;--review-tint:rgb(255 165 38 / .13);
+  --shadow-card:0 0 0 1px rgb(255 255 255 / .06);--shadow-thumb:0 0 0 1px rgb(255 255 255 / .08),0 1px 2px rgb(0 0 0 / .5);
+  --shadow-page:0 0 0 1px rgb(255 255 255 / .08),0 8px 24px -8px rgb(0 0 0 / .7);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--surface);color:var(--fg);font:400 14px/1.45 var(--sans);letter-spacing:-.006em;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit;letter-spacing:inherit}
+button{background:none;border:0;cursor:pointer;padding:0}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:6px}
+.press{transition:transform 120ms var(--ease-out)}.press:active{transform:scale(.97)}
+svg.i{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+
+/* Mock-only strip */
+.mockbar{display:flex;gap:12px;align-items:center;padding:4px 16px;font-size:12.5px;color:var(--fg-3);background:var(--sidebar);border-bottom:1px dashed var(--border-strong)}
+.mockbar b{color:var(--fg-2);font-weight:600}
+
+/* Buttons (.btn spec) */
+.btn{height:34px;padding:0 14px;border-radius:999px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
+.btn.sm{height:28px;padding:0 11px;font-size:12.5px}
+.btn.icon{width:34px;padding:0}.btn.icon.sm{width:28px}
+.pri{background:var(--pri);color:var(--pri-fg)}.pri:hover{background:var(--pri-hover)}
+.sec{background:var(--fill-2);color:var(--fg)}
+.ghost{color:var(--fg-2)}.ghost:hover{background:var(--fill)}
+.btn:disabled{opacity:.4;cursor:default}.btn:disabled:active{transform:none}
+
+/* Segmented (.seg spec) */
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:10px;background:var(--fill-2)}
+.seg button{height:28px;padding:0 12px;border-radius:7px;font-size:13px;font-weight:500;color:var(--fg-2);white-space:nowrap;display:inline-flex;align-items:center;gap:6px;transition:background-color 120ms,color 120ms}
+.seg button[aria-pressed="true"]{background:var(--raised);color:var(--fg);box-shadow:var(--shadow-thumb)}
+.seg button small{font:400 11.5px var(--mono);color:var(--fg-3)}
+.seg.full{display:flex}.seg.full button{flex:1;justify-content:center;padding:0 6px;min-width:0}
+.seg.icons button{padding:0 9px}
+
+/* Top bar */
+.top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;height:56px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--sidebar);flex-shrink:0}
+.top-l,.top-r{display:flex;align-items:center;gap:8px;min-width:0}
+.top-r{justify-content:flex-end}
+.title{font:600 14px var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-left:4px}
+.code{font:400 12px var(--mono);color:var(--fg-3)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;height:22px;padding:0 9px;border-radius:999px;background:var(--review-tint);color:var(--review-fg);white-space:nowrap}
+.pill i{width:6px;height:6px;border-radius:50%;background:var(--review)}
+.save{font-size:12.5px;color:var(--fg-3);margin-right:4px}
+.divider{width:1px;height:20px;background:var(--border-strong);margin:0 4px}
+
+/* Panes */
+.work{flex:1;display:grid;grid-template-columns:var(--wl,312px) minmax(0,1fr) var(--wr,224px);min-height:0} /* right panel narrower, the left one gets the space */
+.pane-l{grid-column:1}.canvas{grid-column:2}.pane-r{grid-column:3} /* fixed columns, so hiding a panel keeps the canvas in the middle */
+.work.hide-l{--wl:0px}.work.hide-l .pane-l{display:none}
+.work.hide-r{--wr:0px}.work.hide-r .pane-r{display:none}
+/* Each panel hides from its own bar; a button on the canvas edge brings it back */
+.pane-bar{display:flex;justify-content:flex-start;padding:8px 10px 0}
+.r-tabs{display:flex;align-items:center;gap:6px}.r-tabs .seg{flex:1}
+.work{position:relative}
+.reopen{display:none;position:absolute;top:12px;z-index:6;box-shadow:var(--shadow-card)}
+.reopen-l{left:12px}.reopen-r{right:12px}
+.work.hide-l .reopen-l,.work.hide-r .reopen-r{display:inline-flex}
+body.previewing .reopen{display:none!important}
+/* Anteprima: like Webflow, the same canvas without the editing tools; the same button goes back */
+body.previewing .work{--wl:0px;--wr:0px}
+body.previewing .pane{display:none}
+body.previewing .canvas{--pw:1600px;--pw11:680px;--pw916:440px;background:var(--fill)}
+body.previewing .canvas .page *{pointer-events:none}
+/* In Anteprima texts stay editable: click and type */
+body.previewing .canvas .page .it-txt,body.previewing .canvas .page .it-tags{pointer-events:auto;cursor:text}
+body.previewing .canvas .page .it-txt:hover,body.previewing .canvas .page .it-tags:hover{box-shadow:0 0 0 1px rgb(41 119 255 / .5)}
+body.previewing .canvas .page .it-txt:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}
+/* Anteprima of Carosello and Video: one slideshow, as on social */
+.social{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;margin-top:8px}
+.social-stage{display:flex;align-items:center;gap:16px}
+.social-frame{width:min(760px,calc(100vh - 250px),calc(100vw - 200px))} /* as big as the screen allows */
+.social-frame.f916{width:min(460px,calc((100vh - 250px) * 9 / 16))}
+.social-frame .page{max-width:none}
+.social-nav{width:52px;height:52px;border-radius:50%;font-size:26px;line-height:1;background:#012234;color:#fff;box-shadow:0 6px 18px rgb(0 0 0 / .22)}
+.social-nav:hover{background:#2977ff}
+.social-nav:disabled{background:var(--fill-2);color:var(--fg-3);box-shadow:none;opacity:1}
+.social-dots{display:flex;gap:6px}
+.social-dots i{width:7px;height:7px;border-radius:50%;background:var(--border-strong)}
+.social-dots i.on{background:var(--accent)}
+.social-cap{font-size:12.5px;color:var(--fg-3)}
+body.previewing .pg-del,body.previewing .handle,body.previewing .grip,body.previewing .hl,body.previewing .add-page{display:none}
+.top-c{display:flex;align-items:center;gap:8px}
+#previewBtn[aria-pressed="true"]{background:var(--pri);color:var(--pri-fg)}
+body.previewing .page.cur{box-shadow:var(--shadow-page)}
+body.previewing .it.sel{outline:none}
+.pane{background:var(--sidebar);display:flex;flex-direction:column;min-height:0}
+.pane-l{border-right:1px solid var(--border)}
+.pane-r{border-left:1px solid var(--border)}
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
+.foot{flex-shrink:0;border-top:1px solid var(--border);padding:12px 14px;background:var(--sidebar)}
+.sec-b{padding:14px;border-bottom:1px solid var(--border)}
+.sec-b:last-child{border-bottom:0}
+.eyebrow{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+.eyebrow a{text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink);text-decoration:none;font-size:12.5px}
+.crumb{font-size:12.5px;color:var(--fg-3)}
+.sel-title{font:650 15px/1.3 var(--display);letter-spacing:-.016em;margin:2px 0 12px}
+.help{margin:0;color:var(--fg-3);font-size:12.5px}
+.row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.row label{font-size:12.5px;color:var(--fg-2);width:76px;flex-shrink:0}
+.field{flex:1;min-width:0;height:30px;border-radius:10px;background:var(--field);box-shadow:inset 0 0 0 1px var(--border);padding:0 10px;display:flex;align-items:center;gap:8px;font-size:13px}
+.field input{all:unset;width:100%;font:400 12px var(--mono)}
+select.field{appearance:none;cursor:pointer;background-image:linear-gradient(45deg,transparent 50%,var(--fg-3) 50%),linear-gradient(135deg,var(--fg-3) 50%,transparent 50%);background-position:calc(100% - 14px) 13px,calc(100% - 10px) 13px;background-size:4px 4px;background-repeat:no-repeat;border:0;padding-right:24px}
+.chip{width:14px;height:14px;border-radius:4px;box-shadow:inset 0 0 0 1px rgb(0 0 0 / .12);flex-shrink:0}
+.swatches{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.sw{width:22px;height:22px;border-radius:6px;box-shadow:inset 0 0 0 1px rgb(0 0 0 / .12)}
+.sw[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px}
+.sw[data-none],.chip[data-none]{background:conic-gradient(#d4d4d8 25%,#fff 0 50%,#d4d4d8 0 75%,#fff 0) 0 0/8px 8px!important}
+.slider{flex:1;accent-color:var(--fg);min-width:0}
+.readout{font:400 11.5px var(--mono);color:var(--fg-3);width:34px;text-align:right}
+
+/* Layout variants (owner's reference) */
+.variants{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+/* Thumbnails take the shape of the format in view */
+.fmt-11 .var{aspect-ratio:1/1}
+.fmt-916 .variants{grid-template-columns:repeat(4,1fr)}
+.fmt-916 .var{aspect-ratio:9/16}
+.var{aspect-ratio:16/9;border-radius:10px;background:var(--raised);box-shadow:var(--shadow-card);padding:5px;display:grid;gap:3px;cursor:grab}
+.var span{background:var(--fill-2);border-radius:3px}
+.dp{display:flex;flex-direction:column;gap:5px;text-align:center}
+.dp .var{width:100%}
+.dp small{font-size:12px;color:var(--fg-2);line-height:1.2}
+/* Animated layouts: the same thumbnail, with the animation playing inside. */
+.var.an-var{padding:0;display:block;position:relative;overflow:hidden}
+.var.an-var .ac{border-radius:3px;background:var(--fill-2)}
+.var[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:1px}
+.var:active{cursor:grabbing}
+.v1{grid-template-columns:1fr 1fr}.v2{grid-template-columns:2fr 1fr;grid-template-rows:1fr 1fr}.v2 span:first-child{grid-row:span 2}
+.v3{grid-template-rows:2fr 1fr}.v4{grid-template-columns:1fr 1fr 1fr}.v5{grid-template-columns:1fr 2fr}.v6{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+
+/* Draggable elements */
+.els{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.el{height:36px;border-radius:10px;background:var(--raised);box-shadow:var(--shadow-card);display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px;font-weight:500;cursor:grab;user-select:none}
+.el:hover{background:var(--fill)}
+.el:active{cursor:grabbing}
+.el svg{color:var(--fg-3)}
+
+/* Canvas */
+.canvas{overflow:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 28px 80px;--pw:1280px;--pw11:540px;--pw916:420px} /* editor sizes; Anteprima sizes itself */
+.canvas>*{flex-shrink:0}
+.fmt-meta{font:400 11.5px var(--mono);color:var(--fg-3);margin-bottom:4px}
+.pg-label{width:100%;max-width:var(--pw);margin-top:14px;display:flex;justify-content:space-between;font-size:12.5px;color:var(--fg-3)}
+.pg-label b{color:var(--fg-2);font-weight:600}
+.pg-label{align-items:center}
+.pg-del{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;color:var(--fg-3)}
+.pg-del:hover{background:var(--fill);color:var(--fg)}
+/* Client tab, Carosello and Video: each case is a slideshow row */
+.strip{width:100%;max-width:var(--pw);display:flex;gap:16px;overflow-x:auto;padding:4px 2px 12px;scroll-snap-type:x proximity}
+.strip>.slide{flex:0 0 auto;width:var(--sw11,360px);scroll-snap-align:start}
+.strip.f916>.slide{width:var(--sw916,240px)}
+body.previewing .canvas{--sw11:460px;--sw916:300px}
+.strip .pg-label{margin-top:0;margin-bottom:6px}
+.strip .page{max-width:none}
+.group-label{width:100%;max-width:var(--pw);margin-top:28px;display:flex;align-items:center;gap:10px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3)}
+.group-label::after{content:"";flex:1;height:1px;background:var(--border-strong)}
+.page{position:relative;width:100%;max-width:var(--pw);background:#ffffff;box-shadow:var(--shadow-page);color:#012234;overflow:hidden;container-type:inline-size;transition:box-shadow 120ms}
+/* Bento: blocks sit in the grid; 24 px gutter, 64 px margin and 28 px padding inside each block
+   at the export size (1920 or 1080 wide). */
+.page[data-ratio="169"]{--pad:3.333cqw;--gut:1.25cqw;--bpad:1.458cqw}
+.page[data-ratio="11"],.page[data-ratio="916"]{--pad:calc(var(--u) * 24);--gut:calc(var(--u) * 24);--bpad:calc(var(--u) * 28)} /* Carosello templates: margin and gutter 24, block padding 28; Video the same */
+.bento{position:absolute;inset:var(--pad);display:grid;gap:var(--gut)}
+.page[data-ratio="169"]{aspect-ratio:16/9}
+.page[data-ratio="11"]{aspect-ratio:1/1;max-width:var(--pw11)}
+.page[data-ratio="916"]{aspect-ratio:9/16;max-width:var(--pw916)}
+.page.drop-over{box-shadow:0 0 0 3px var(--accent),var(--shadow-page)}
+.page.cur{box-shadow:0 0 0 2px var(--accent),var(--shadow-page)}
+.slot{position:relative;background:#ededf0;box-sizing:border-box;padding:var(--bpad);outline:1px dashed transparent;outline-offset:2px;cursor:pointer;min-height:0;min-width:0}
+/* Highlight: a rounded frame round the whole block, drawn as its own grid item so images are not clipped. */
+.hl{position:relative;margin:0;border:2px solid var(--accent);border-radius:8px;pointer-events:none;z-index:1}
+.hl.stop{border-color:var(--review)}
+.slot.drop-before{outline:none}
+.slot.drop-before::before{content:"";position:absolute;left:calc(var(--gut) / -2 - 1.5px);top:0;bottom:0;width:3px;border-radius:2px;background:var(--accent)}
+.hl.drop{border-width:3px;background:rgb(10 108 255 / .08)}
+/* Move grip on the selected block: drag it onto another block to swap places. */
+.grip{position:relative;z-index:3;justify-self:center;align-self:start;margin-top:-17px;height:22px;padding:0 10px;border-radius:999px;background:var(--accent);color:#fff;font:600 11.5px/1 var(--sans);letter-spacing:0;display:inline-flex;align-items:center;gap:6px;cursor:grab;box-shadow:0 2px 6px rgb(0 0 0 / .2);user-select:none}
+.grip:active{cursor:grabbing}
+.img[draggable="true"]{cursor:grab}
+/* A text block fills its whole area, so a click anywhere in it selects it; the text sits at the top,
+   centre or bottom inside. */
+.txt{overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start}
+/* Blocks hold elements, top to bottom; a spacer pushes what follows down. */
+.slot.blk{display:flex;flex-direction:column;gap:calc(var(--u)*12);overflow:hidden;border-radius:calc(var(--u)*20);font-family:Inter,var(--sans);color:#012234;letter-spacing:0;--bp:var(--bpad)}
+.slot.blk.empty::after{content:"Trascina qui un elemento";margin:auto;font:500 12px var(--sans);color:var(--fg-3)}
+.slot.blk.bleed{padding:0!important}
+.blk>.bgimg{position:absolute;inset:0;z-index:0}
+.blk>.bgimg img,.blk>.bgimg>span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.blk>.bgimg::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgb(102 102 102 / 0),rgb(0 0 0 / .5))}
+.blk>*:not(.bgimg){position:relative;z-index:1}
+.blk.on-photo{color:#fff}
+.it{min-width:0;border-radius:4px}
+.it.sel{outline:2px solid var(--accent);outline-offset:2px}
+.it-anim.sel,.it-img.sel{outline-offset:-3px} /* inside the block, so a full-bleed element still shows it */
+.it.drop-before{box-shadow:0 -3px 0 var(--accent)}
+.it-sp{flex:1 0 0;min-height:0;pointer-events:none}
+.it-col.grp{flex:1 1 auto;min-height:0;gap:calc(var(--u)*12)}
+.it-col.grp.dist-top{justify-content:flex-start}.it-col.grp.dist-center{justify-content:center}.it-col.grp.dist-bottom{justify-content:flex-end}
+.it-col.grp.dist-between>.push{margin-bottom:auto}
+.it-img{flex:1 1 0;min-height:calc(var(--u)*40);position:relative;overflow:hidden;border-radius:calc(var(--u)*12);background:var(--imgbg,#dcdce1)}
+.blk.bleed .it-img{border-radius:0}
+.it-img .ph{position:absolute;inset:0}
+.it-img[data-fit="fit"] .ph{transform:scale(.78)}
+.it-img[data-fit="crop"] .ph{transform:scale(1.35) translate(8%,6%)}
+.it-anim{flex:1 1 0;min-height:calc(var(--u)*80);position:relative;overflow:hidden}
+/* Animation fit: Adatta keeps air around the cards, Riempi lets them fill the block; Dimensione scales them */
+.it-anim>.an{transform:scale(var(--as,1));transform-origin:center}
+.page .blk .it-anim[data-fit="fill"] .an-c04{--cw:min(70cqw,calc(100cqh * 9 / 16))}
+.page .blk .it-anim[data-fit="fill"] .an-c03{--ch:min(100cqh,calc(80cqw * 16 / 9))}
+.page .blk .it-anim[data-fit="fill"] .an-c01 .ac{height:min(100cqh,calc(80cqw * 16 / 9))}
+.page .blk .it-anim[data-fit="fill"] .an-w02 .ac{width:22cqmin}
+.it-anim.bleed{margin-left:calc(-1 * var(--bp));margin-right:calc(-1 * var(--bp))}
+.it-row{display:flex;justify-content:space-between;align-items:center;gap:calc(var(--u)*20)}
+.it-row.wide{gap:calc(var(--u)*110)}
+.it-row.atop{align-items:flex-start}
+.it-col{display:flex;flex-direction:column;gap:calc(var(--u)*6);flex:1;min-width:0}
+.it-col.loose{gap:calc(var(--u)*12)}
+.it-hr{height:1px;background:currentColor;opacity:.2;margin:calc(var(--u)*16) 0}
+/* The seven text styles (owner, 2026-10-27). Desktop = Presentazione; mobile = Carosello and Video.
+   Colour, alignment and columns are settings of each text, not styles. */
+.blk .t-lab{font-weight:600;font-size:calc(var(--u)*13);line-height:calc(var(--u)*18);text-transform:uppercase}
+.blk .t-xl{font-weight:700;font-size:calc(var(--u)*56);line-height:1.1;letter-spacing:-.02em}
+.blk .t-title{font-weight:600;font-size:calc(var(--u)*26);line-height:1.2;letter-spacing:-.02em}
+.blk .t-sub{font-size:calc(var(--u)*20);line-height:1.4}
+.blk .t-text{font-size:calc(var(--u)*16);line-height:calc(var(--u)*24);white-space:pre-line}
+.blk .t-num{font-weight:700;font-size:calc(var(--u)*56);line-height:1.07}
+/* Texts wrap to the block's width and grow in height (like Figma's hug); only a result's number stays on one line */
+.blk .it-txt{max-width:100%;overflow-wrap:break-word}
+.kpirow .t-num{white-space:nowrap}
+.blk .t-quote{font-weight:500;font-size:calc(var(--u)*39);line-height:1.1;letter-spacing:-.02em}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-lab{font-size:calc(var(--u)*16)}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-xl{font-size:calc(var(--u)*68)}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-title{font-size:calc(var(--u)*30)}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-sub{font-size:calc(var(--u)*26);line-height:1.3;letter-spacing:-.02em}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-text{font-size:calc(var(--u)*18);line-height:1.3}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-num{font-size:calc(var(--u)*75);line-height:.9}
+:is(.page[data-ratio="11"],.page[data-ratio="916"]) .blk .t-quote{font-size:calc(var(--u)*40)}
+.blk .tone-muted{color:rgb(1 34 52 / .6)}
+.blk.on-photo .t-lab{color:rgb(255 255 255 / .65)}
+.blk.on-photo .tone-muted{color:rgb(255 255 255 / .75)}
+.blk .al-center{text-align:center}.blk .al-right{text-align:right}
+.blk .cols-2{columns:2;column-gap:calc(var(--u)*40)}
+.kpirow .t-text{width:calc(var(--u)*120);flex-shrink:0;font-weight:500;line-height:1.1}
+/* Video results: the block is tall, so what each result measures gets room and size, and the numbers grow */
+.page[data-ratio="916"] .kpirow .t-text{width:auto;flex:1 1 0;max-width:52%;font-size:calc(var(--u)*30);line-height:1.15}
+.page[data-ratio="916"] .kpirow .t-num{font-size:calc(var(--u)*120);line-height:.9}
+.page[data-ratio="916"] .it-col.kpis{gap:calc(var(--u)*36)}
+.page[data-ratio="916"] .it-col.kpi{gap:calc(var(--u)*16)}
+.tags{display:flex;flex-wrap:wrap;gap:calc(var(--u)*6);align-content:center}
+.it-row .tags{justify-content:flex-end}
+.tag{border-radius:999px;padding:calc(var(--u)*7) calc(var(--u)*14);font-weight:500;font-size:calc(var(--u)*14);line-height:calc(var(--u)*18.2);white-space:nowrap;background:#012234;color:#efefef}
+.on-photo .tag{background:rgb(255 255 255 / .15);color:#fff}
+.brand{display:flex;align-items:center;gap:calc(var(--u)*20);flex-shrink:0}
+.brand .clogo{height:calc(var(--u)*40);width:auto;max-width:calc(var(--u)*180);object-fit:contain;display:block}
+.on-photo .brand .clogo{filter:brightness(0) invert(1)}
+.brand .dv{width:1px;height:calc(var(--u)*48);display:block}
+.brand .mac{width:calc(var(--u)*89);height:calc(var(--u)*28.914);display:block}
+.it-hr.kline{margin:0;opacity:1;background:none;height:auto}.it-hr.kline img{width:100%;height:1px;display:block}
+.it-col.kpis{gap:calc(var(--u)*24)}.page[data-ratio="11"] .it-col.kpis{gap:calc(var(--u)*40)}
+.it-col.kpi{gap:calc(var(--u)*8)}
+.it-row.kpirow{align-items:flex-start}
+@keyframes vtext{0%{opacity:0;transform:translateY(calc(var(--u)*28))}14%,100%{opacity:1;transform:none}}
+.vin{animation:vtext 7s cubic-bezier(.22,1,.36,1) infinite both;animation-delay:calc(var(--i) * 140ms)}
+body.previewing .vin{animation-iteration-count:infinite}
+@media (prefers-reduced-motion:reduce){.vin{animation:none}}
+.no-tanim .vin{animation:none}
+.tswitch{display:inline-flex;align-items:center;gap:8px;font:500 12.5px var(--sans);color:var(--fg-2);cursor:pointer;white-space:nowrap}
+.tswitch input{position:absolute;opacity:0;width:1px;height:1px}
+.tswitch .knob{width:30px;height:18px;border-radius:999px;background:var(--fill-2);box-shadow:inset 0 0 0 1px var(--border-strong);position:relative;transition:background-color 150ms}
+.tswitch .knob::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgb(0 0 0 / .25);transition:transform 150ms var(--ease-out)}
+.tswitch input:checked+.knob{background:var(--accent)}
+.tswitch input:checked+.knob::after{transform:translateX(12px)}
+.tswitch input:focus-visible+.knob{outline:2px solid var(--focus);outline-offset:2px}
+/* Video info section (intro and results): more air between the client's lines */
+.slot.blk.vinfo{gap:calc(var(--u)*24)}
+.vinfo>.it-row:first-of-type{margin-bottom:calc(var(--u)*40)}
+.vinfo .it-col{gap:calc(var(--u)*12)}
+.vinfo .t-sub{margin-top:calc(var(--u)*4)}
+.vinfo>.it-hr{margin:calc(var(--u)*20) 0}
+.page-deco{position:absolute;pointer-events:none}
+.page-deco img{position:absolute;inset:0;width:100%;height:100%;display:block}
+.page-bg{position:absolute;inset:0}
+.page-bg img,.page-bg>span{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.bg-pick{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.bg-pick button{aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;padding:0}
+.bg-pick .ph{position:absolute;inset:0}.bg-pick img{width:100%;height:100%;object-fit:cover}
+.bg-pick button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent)}
+/* Page thumbnails: the real page, drawn small */
+.mini.pv{position:relative;padding:0;display:block;overflow:hidden;container-type:inline-size}
+.mini.pv .page{position:absolute;inset:0;max-width:none;width:100%;box-shadow:none;pointer-events:none}
+.list .thumb .mini.pv{height:auto}
+.txt[contenteditable="true"]{outline:none}
+/* Messages show at the top of the canvas, over the page, where the eye already is */
+.toast{position:fixed;left:50%;top:112px;transform:translate(-50%,-8px);opacity:0;background:#012234;color:#fff;font-size:14px;font-weight:600;padding:12px 20px;border-radius:14px;box-shadow:0 10px 30px rgb(0 0 0 / .25),0 0 0 2px #defe56;pointer-events:none;transition:opacity 150ms,transform 200ms var(--ease-out);z-index:25;max-width:min(560px,calc(100vw - 32px));text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+/* Resize handles sit in the gutters between tracks. */
+.handle{position:absolute;z-index:2;display:grid;place-items:center}
+/* A wider grab area than the 24 px gutter, so the border is easy to catch. */
+.handle.v{top:0;bottom:0;cursor:col-resize;margin-left:-6px;padding:0 6px;box-sizing:content-box}
+.handle.h{left:0;right:0;cursor:row-resize;margin-top:-6px;padding:6px 0;box-sizing:content-box}
+/* No line of their own: hovering or dragging one frames the blocks on both sides. */
+.img{overflow:hidden;background:var(--imgbg,#ededf0)}
+.img .ph{width:100%;height:100%;transition:transform 200ms var(--ease-out)}
+/* Riempi: the image goes edge to edge, so the block's padding does not apply. */
+.img[data-fit="fill"]{padding:0}
+.img[data-fit="fit"] .ph{transform:scale(.78)}
+.img[data-fit="crop"] .ph{transform:scale(1.35) translate(8%,6%)}
+.txt[contenteditable="true"]{cursor:text}
+/* Media files uploaded in the mock fill their tile or block. */
+.ph img,.ph video,.ac img,.ac video{width:100%;height:100%;object-fit:cover;display:block}
+.ac>span{display:block;width:100%;height:100%}
+.vid-badge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:13%;max-width:56px;aspect-ratio:1;border-radius:50%;background:rgb(0 0 0 / .55);color:#fff;display:grid;place-items:center;font-size:clamp(10px,1.6cqw,22px);pointer-events:none}
+/* Animation block: its own canvas, edge to edge like an image set to Riempi. */
+.slot.anim{padding:0;overflow:hidden}
+.an{position:absolute;inset:0;overflow:hidden;container-type:size}
+.ac{flex-shrink:0;border-radius:8px;overflow:hidden;background:linear-gradient(135deg,#efeee9,#d6d5cf);aspect-ratio:9/16} /* every animation card is 9:16 */
+.trk{display:flex;flex-shrink:0}
+.an-c01{display:flex;justify-content:center}
+.an-c01 .trk{flex-direction:column;gap:4cqh;padding-bottom:4cqh}
+.an-c01 .ac{height:min(68cqh,calc(60cqw * 16 / 9));width:auto}
+.an-c03{display:flex;flex-direction:column;align-items:center}
+.an-c03{--ch:min(76cqh,calc(54cqw * 16 / 9))} /* cards fill the block's height, with a peek of the next ones */
+.an-c03 .trk{flex-direction:column;align-items:center;gap:6cqh;margin-top:calc(50cqh - var(--ch) / 2)}
+.an-c03 .ac{height:var(--ch);width:auto}
+.an-c04{display:flex;align-items:center}
+.an-c04{--cw:min(34cqw,calc(92cqh * 9 / 16))}
+.an-c04 .trk{gap:6cqw;margin-left:calc(50cqw - var(--cw) / 2)}
+/* Video: bigger cards in every animation slot */
+.page[data-ratio="916"] .an-c04{--cw:min(58cqw,calc(84cqh * 9 / 16))} /* air above and below the cards */
+.page[data-ratio="916"] .an-c03{--ch:min(80cqh,calc(66cqw * 16 / 9))}
+.page[data-ratio="916"] .an-c01 .ac{height:min(78cqh,calc(70cqw * 16 / 9))}
+.page[data-ratio="916"] .an-w02 .ac{width:20cqmin}
+.an-c04 .ac{width:var(--cw);height:auto}
+.an-w02 .ring{position:absolute;inset:0}
+.an-w02 .ac{position:absolute;left:50%;top:50%;width:16cqmin;height:auto;transform:translate(-50%,-50%) rotate(var(--a)) translateY(-31cqmin)}
+@keyframes an-y{to{transform:translateY(-50%)}}
+@keyframes an-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.an *{animation:none!important}}
+/* Animation picker */
+.modal-bg{position:fixed;inset:0;background:rgb(0 0 0 / .45);display:grid;place-items:center;z-index:20;padding:16px}
+.modal-bg[hidden]{display:none}
+.modal{width:min(760px,100%);max-height:100%;overflow:auto;background:var(--raised);border-radius:20px;box-shadow:0 20px 60px rgb(0 0 0 / .3);padding:20px;display:flex;flex-direction:column;gap:16px}
+.modal h2{margin:0;font:650 17px/1.3 var(--display);letter-spacing:-.016em}
+.modal .help{margin-top:4px}
+.an-opts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.an-opt{padding:8px;border-radius:16px;background:var(--fill-2);display:flex;flex-direction:column;gap:8px;text-align:center;font-size:13px;font-weight:600}
+.an-opt .pv{position:relative;aspect-ratio:3/4;border-radius:12px;background:#ededf0;overflow:hidden}
+.an-opt[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent)}
+.up-list{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;justify-content:center}
+.up-list .ac{width:44px;height:44px;border-radius:8px;position:relative}
+.up-list button{position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgb(0 0 0 / .6);color:#fff;font-size:11px;line-height:16px}
+.an-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px;max-height:172px;overflow:auto;padding:2px}
+.an-pick button{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;padding:0}
+.an-pick .ph{display:block;width:100%;height:100%}
+.an-pick button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent)}
+.an-pick b{position:absolute;top:4px;right:4px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;line-height:18px;display:none}
+.an-pick button[aria-pressed="true"] b{display:block}
+.an-pick .vid{position:absolute;bottom:4px;left:4px}
+.drop.over{border-color:var(--accent);background:rgb(10 108 255 / .06)}
+.drop label{color:var(--ink);font-weight:500;cursor:pointer}
+.modal-foot{display:flex;justify-content:flex-end;gap:8px}
+.modal.ask{width:min(440px,100%)}
+/* Right panel: drag a page (or a case) to reorder */
+.thumb[draggable="true"],.proj[draggable="true"]{cursor:grab}
+.thumb.drop-before,.proj.drop-before{box-shadow:0 -3px 0 var(--accent)}
+@media (max-width:640px){.an-opts{grid-template-columns:repeat(2,1fr)}}
+/* Instagram preview over a Reel (switch above the canvas) */
+.fmt-meta.with-switch{display:flex;flex-direction:column;align-items:center;gap:8px}
+.ig-switch{display:inline-flex;align-items:center;gap:8px;font:500 12.5px var(--sans);color:var(--fg-2);white-space:nowrap}
+.ig-switch .seg button{height:24px;padding:0 9px;font-size:12px}
+.ig{position:absolute;inset:0;pointer-events:none;z-index:4;color:#fff;font-family:Inter,var(--sans);font-size:calc(var(--u)*30)}
+.ig svg{width:calc(var(--u)*60);height:calc(var(--u)*60);display:block;filter:drop-shadow(0 1px 3px rgb(0 0 0 / .35))}
+.ig b{font-weight:600}
+.ig .sp{flex:1}
+.ig-status{position:absolute;left:calc(var(--u)*80);right:calc(var(--u)*70);top:calc(var(--u)*34);display:flex;justify-content:space-between;align-items:center;font-size:calc(var(--u)*34)}
+.ig-sys{display:flex;gap:calc(var(--u)*8);align-items:flex-end}
+.ig-sys i{width:calc(var(--u)*7);background:#fff;border-radius:2px}.ig-sys i:nth-child(1){height:calc(var(--u)*12)}.ig-sys i:nth-child(2){height:calc(var(--u)*18)}.ig-sys i:nth-child(3){height:calc(var(--u)*24)}
+.ig-sys em{width:calc(var(--u)*50);height:calc(var(--u)*24);border:calc(var(--u)*3) solid #fff;border-radius:calc(var(--u)*7);margin-left:calc(var(--u)*10)}
+.ig-tabs{position:absolute;left:0;right:0;top:calc(var(--u)*130);display:flex;justify-content:center;align-items:center;gap:calc(var(--u)*30);font-size:calc(var(--u)*46);text-shadow:0 1px 3px rgb(0 0 0 / .4)}
+.ig-tabs span{opacity:.6;font-weight:600}
+.ig-friends{display:flex}.ig-friends i{width:calc(var(--u)*44);height:calc(var(--u)*44);border-radius:50%;background:#9a9aa2;box-shadow:0 0 0 calc(var(--u)*3) #fff;margin-left:calc(var(--u)*-10)}
+.ig-acts{position:absolute;right:calc(var(--u)*34);bottom:calc(var(--u)*150);display:flex;flex-direction:column;gap:calc(var(--u)*40);align-items:center}
+.ig-acts>div{display:flex;flex-direction:column;align-items:center}
+.ig-n{display:block;width:calc(var(--u)*56);height:calc(var(--u)*18);border-radius:calc(var(--u)*9);background:rgb(255 255 255 / .45);margin-top:calc(var(--u)*12)}
+.ig-audio-sq{width:calc(var(--u)*62);height:calc(var(--u)*62);border-radius:calc(var(--u)*12);background:#9a9aa2;box-shadow:0 0 0 calc(var(--u)*3) #fff}
+.ig-cap{position:absolute;left:calc(var(--u)*40);right:calc(var(--u)*170);bottom:calc(var(--u)*70);display:flex;flex-direction:column;gap:calc(var(--u)*22);text-shadow:0 1px 3px rgb(0 0 0 / .4)}
+.ig-user,.ig-head{display:flex;align-items:center;gap:calc(var(--u)*20)}
+.ig-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.9}
+.ig-av{width:calc(var(--u)*90);height:calc(var(--u)*90);border-radius:50%;flex-shrink:0}
+.ig-mac{background:#012234;color:#defe56;display:grid;place-items:center;font:700 calc(var(--u)*26) Inter,var(--sans);box-shadow:0 0 0 calc(var(--u)*4) #fff}
+.ig-follow{border:calc(var(--u)*2) solid rgb(255 255 255 / .7);border-radius:calc(var(--u)*14);padding:calc(var(--u)*6) calc(var(--u)*20)}
+.ig-progress{position:absolute;left:calc(var(--u)*20);right:calc(var(--u)*20);top:calc(var(--u)*120);height:calc(var(--u)*5);border-radius:3px;background:rgb(255 255 255 / .4)}
+.ig-progress i{display:block;width:10%;height:100%;border-radius:3px;background:#fff}
+.ig-head{position:absolute;left:calc(var(--u)*30);right:calc(var(--u)*30);top:calc(var(--u)*150);font-size:calc(var(--u)*34)}
+.ig-head .ig-av{width:calc(var(--u)*76);height:calc(var(--u)*76)}
+.ig-time{opacity:.8}
+.ig-reply{position:absolute;left:calc(var(--u)*40);right:calc(var(--u)*40);bottom:calc(var(--u)*60);display:flex;align-items:center;gap:calc(var(--u)*40)}
+.ig-msg{flex:1;border:calc(var(--u)*2) solid rgb(255 255 255 / .6);border-radius:999px;padding:calc(var(--u)*26) calc(var(--u)*46)}
+/* Animated Video page: the animation sits in a background-grey block */
+.reel-anim{position:absolute;inset:var(--pad);border-radius:12px;background:#ededf0;overflow:hidden}
+.logo{background:#012234;color:#ffffff;display:grid;place-items:center;font:700 2.4cqw var(--display);border-radius:6px;aspect-ratio:1;width:8cqw;align-self:start}
+.add-page{width:100%;max-width:var(--pw);margin-top:14px;height:42px;border-radius:14px;border:1px dashed var(--border-strong);color:var(--fg-3);font-size:13.5px;font-weight:600}
+.add-page:hover{background:var(--fill);color:var(--fg)}
+
+/* Right pane */
+.r-head{padding:14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+.r-tools{display:flex;gap:8px}
+.search{flex:1;min-width:0;height:34px;border-radius:10px;background:var(--fill-2);display:flex;align-items:center;gap:8px;padding:0 11px;color:var(--fg-3)}
+.search input{all:unset;flex:1;color:var(--fg);font-size:13.5px}
+.r-body{padding:14px}
+.thumbs{display:flex;flex-direction:column;gap:6px}
+.thumb{display:flex;flex-direction:column;gap:6px;text-align:left;padding:6px;border-radius:12px}
+.thumb:hover{background:var(--fill)}
+.thumb[aria-current="true"]{background:var(--selected)}
+.thumb .mini{aspect-ratio:16/9;border-radius:10px;background:#ffffff;box-shadow:var(--shadow-card);overflow:hidden;display:grid;padding:6%;gap:4%}
+.thumb .mini span{border-radius:2px}
+.thumb small{font-size:12.5px;color:var(--fg-3)}.thumb small b{color:var(--fg-2);font-weight:600}
+.list .thumb{flex-direction:row;align-items:center;padding:6px 8px;border-radius:10px}
+.list .thumb .mini{width:52px;flex-shrink:0;padding:3px;gap:2px;border-radius:6px}
+.r-group{margin:18px 0 8px}.r-group:first-child{margin-top:0}
+.proj{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:10px;text-align:left;width:100%}
+.proj:hover{background:var(--fill)}
+.proj .mini{width:52px;aspect-ratio:16/9;border-radius:6px;flex-shrink:0}
+.proj b{display:block;font-weight:600;font-size:13px}
+.proj small{font:400 11.5px var(--mono);color:var(--fg-3)}
+.media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.mtile{position:relative;min-width:0;padding:6px;border-radius:12px;background:var(--fill-2);text-align:left;display:flex;flex-direction:column;gap:6px;cursor:pointer}
+.mtile:hover{background:var(--selected)}
+.mtile .ph{aspect-ratio:1;border-radius:9px;position:relative}
+.star{position:absolute;top:13px;right:13px;width:24px;height:24px;border-radius:50%;background:rgb(0 0 0 / .62);color:#fff;display:grid;place-items:center;opacity:0;transition:opacity 120ms}
+.star svg{width:12px;height:12px;stroke-width:2}
+.mtile:hover .star,.star:focus-visible,.star[aria-pressed="true"]{opacity:1}
+.star[aria-pressed="true"]{color:var(--pri)}.star[aria-pressed="true"] svg{fill:var(--pri)}
+.vid{position:absolute;bottom:6px;left:6px;font:500 10.5px var(--mono);background:rgb(0 0 0 / .62);color:#fff;padding:2px 5px;border-radius:5px}
+.mtile small{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg-2)}
+.mtile.in-use small::before{content:"● ";color:var(--accent)}
+.media.list{grid-template-columns:1fr;gap:2px}
+.media.list .mtile{flex-direction:row;align-items:center;background:none;padding:5px 6px;border-radius:10px}
+.media.list .mtile:hover{background:var(--fill)}
+.media.list .ph{width:36px;flex-shrink:0;border-radius:7px}
+.media.list .vid{display:none}
+.media.list .star{position:static;margin-left:auto;background:none;color:var(--fg-3);opacity:1}
+.media.list .star[aria-pressed="true"] svg{fill:var(--ink);stroke:var(--ink)}
+.drop{border:1.5px dashed var(--border-strong);border-radius:16px;padding:14px;text-align:center;background:var(--fill)}
+.drop b{display:block;font-size:13.5px;font-weight:600}
+.drop span{font-size:12.5px;color:var(--fg-3)}
+
+/* Theme switch, as in the sidebar */
+.theme{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--fill-2)}
+.theme button{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;color:var(--fg-3)}
+.theme button:hover{color:var(--fg)}
+.theme button[aria-checked="true"]{background:var(--raised);color:var(--fg);box-shadow:var(--shadow-thumb)}
+.theme svg{width:14px;height:14px}
+
+/* Placeholder photos */
+.g1{background:radial-gradient(circle at 30% 30%,#e0a24a 0,transparent 45%),radial-gradient(circle at 70% 70%,#9a9a2a 0,transparent 45%),#3d3424}
+.g2{background:radial-gradient(circle at 65% 40%,#d98b2e 0,transparent 40%),radial-gradient(circle at 30% 60%,#9e3f22 0,transparent 45%),#2b1c14}
+.g3{background:radial-gradient(circle at 50% 30%,#8fa23a 0,transparent 45%),radial-gradient(circle at 45% 70%,#e5b26a 0,transparent 45%),#3a3422}
+.g4{background:radial-gradient(circle at 75% 30%,#b0302a 0,transparent 40%),radial-gradient(circle at 30% 60%,#d98b2e 0,transparent 45%),#2a1d16}
+.g5{background:radial-gradient(circle at 70% 25%,#d0973a 0,transparent 40%),radial-gradient(circle at 25% 75%,#8a7a2a 0,transparent 45%),#3a3020}
+.g6{background:radial-gradient(circle at 40% 20%,#5a9a2e 0,transparent 40%),radial-gradient(circle at 55% 70%,#e0a24a 0,transparent 45%),#28301a}
+.g7{background:radial-gradient(circle at 50% 50%,#3c6fb0 0,transparent 50%),#1a2230}
+.g8{background:radial-gradient(circle at 30% 60%,#c2c2b8 0,transparent 50%),#4a4a44}
+.glogo{background:#012234}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+  <symbol id="i-panel-l" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9 4.5v15"/></symbol>
+  <symbol id="i-panel-r" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M15 4.5v15"/></symbol>
+  <symbol id="i-al-top" viewBox="0 0 24 24"><path d="M4 4h16"/><rect x="8" y="7" width="8" height="4" rx="1"/><rect x="8" y="13" width="8" height="3" rx="1"/></symbol>
+  <symbol id="i-al-center" viewBox="0 0 24 24"><path d="M4 12h3M17 12h3"/><rect x="8" y="7" width="8" height="4" rx="1"/><rect x="8" y="13" width="8" height="4" rx="1"/></symbol>
+  <symbol id="i-al-bottom" viewBox="0 0 24 24"><path d="M4 20h16"/><rect x="8" y="8" width="8" height="3" rx="1"/><rect x="8" y="13" width="8" height="4" rx="1"/></symbol>
+  <symbol id="i-al-between" viewBox="0 0 24 24"><path d="M4 3h16M4 21h16"/><rect x="8" y="5.5" width="8" height="3" rx="1"/><rect x="8" y="14" width="8" height="4.5" rx="1"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l1-4 11-11 3 3-11 11z"/><path d="M14 7l3 3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/></symbol>
+  <symbol id="i-contrast" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6V5h14v1M12 5v14M9 19h6"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M20 16l-5-5-8 8"/></symbol>
+  <symbol id="i-quote" viewBox="0 0 24 24"><path d="M7 7h4v4c0 3-1.5 5-4 6M14 7h4v4c0 3-1.5 5-4 6"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="13" height="13" rx="2"/><path d="M16.5 10l4-2.5v9l-4-2.5"/></symbol>
+  <symbol id="i-anim" viewBox="0 0 24 24"><rect x="8" y="5" width="8" height="14" rx="1.5"/><path d="M4.5 7v10M19.5 7v10"/></symbol>
+  <symbol id="i-hash" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14M10 4l-2 16M16 4l-2 16"/></symbol>
+</svg>
+<script>const I=n=>`<svg class="i"><use href="#i-${n}"/></svg>`;</script>
+
+<div class="mockbar">
+  <span><b>Mock</b> · pagine di esempio, i template veri arrivano dopo</span>
+  <span style="margin-left:auto">Stai modificando</span>
+  <div class="seg" id="mode" style="padding:2px"><button aria-pressed="true" data-mode="case" style="height:22px;font-size:12px">Una case</button><button aria-pressed="false" data-mode="client" style="height:22px;font-size:12px">Un cliente</button></div>
+</div>
+
+<header class="top">
+  <div class="top-l">
+    <button class="btn icon ghost press" aria-label="Torna alle case"><svg class="i"><use href="#i-back"/></svg></button>
+    <span class="title" id="docTitle">Lumen · Rebranding e sito</span>
+    <span class="code" id="docCode">LUM-2026-01</span>
+    <span class="pill"><i></i>Da rivedere</span>
+  </div>
+  <div class="top-c">
+  <div class="seg" id="formats" role="group" aria-label="Formato">
+    <button aria-pressed="true" data-fmt="169">Presentazione<small>16:9</small></button>
+    <button aria-pressed="false" data-fmt="11">Carosello<small>1:1</small></button>
+    <button aria-pressed="false" data-fmt="916">Video<small>9:16</small></button>
+  </div>
+  <button class="btn icon sec press" id="previewBtn" aria-pressed="false" aria-label="Anteprima" title="Anteprima"><svg class="i"><use href="#i-eye"/></svg></button>
+  </div>
+  <div class="top-r">
+    <span class="save" id="save">Salvato</span>
+    <button class="btn icon sm ghost press" id="undo" aria-label="Annulla" title="Annulla (⌘Z)" disabled><svg class="i"><use href="#i-undo"/></svg></button>
+    <button class="btn icon sm ghost press" id="redo" aria-label="Ripeti" title="Ripeti (⇧⌘Z)" disabled><svg class="i"><use href="#i-redo"/></svg></button>
+    <span class="divider"></span>
+    <button class="btn pri press">Approva</button>
+  </div>
+</header>
+
+<main class="work">
+  <aside class="pane pane-l" aria-label="Proprietà">
+    <div class="pane-bar"><button class="btn icon sm ghost press" id="panelL" aria-label="Nascondi il pannello a sinistra" title="Nascondi pannello"><svg class="i"><use href="#i-panel-l"/></svg></button></div>
+    <div class="scroll" id="props"></div>
+    <div class="foot">
+      <div class="theme" role="radiogroup" aria-label="Aspetto" id="theme">
+        <button role="radio" aria-checked="false" data-t="system" title="Automatico" aria-label="Automatico"><svg class="i"><use href="#i-contrast"/></svg></button>
+        <button role="radio" aria-checked="true" data-t="light" title="Chiaro" aria-label="Chiaro"><svg class="i"><use href="#i-sun"/></svg></button>
+        <button role="radio" aria-checked="false" data-t="dark" title="Scuro" aria-label="Scuro"><svg class="i"><use href="#i-moon"/></svg></button>
+      </div>
+    </div>
+  </aside>
+
+  <section class="canvas" id="canvas" aria-label="Pagine"></section>
+  <button class="btn icon sm sec press reopen reopen-l" id="openL" aria-label="Mostra il pannello a sinistra" title="Mostra pannello"><svg class="i"><use href="#i-panel-l"/></svg></button>
+  <button class="btn icon sm sec press reopen reopen-r" id="openR" aria-label="Mostra il pannello a destra" title="Mostra pannello"><svg class="i"><use href="#i-panel-r"/></svg></button>
+
+  <aside class="pane pane-r" aria-label="Pagine e media">
+    <div class="r-head">
+      <div class="r-tabs">
+      <div class="seg full" id="rtab"><button aria-pressed="true" data-tab="pages">Pagine</button><button aria-pressed="false" data-tab="media">Media</button></div>
+      <button class="btn icon sm ghost press" id="panelR" aria-label="Nascondi il pannello a destra" title="Nascondi pannello"><svg class="i"><use href="#i-panel-r"/></svg></button></div>
+      <div class="r-tools">
+        <label class="search"><svg class="i"><use href="#i-search"/></svg><input placeholder="Cerca" id="q"></label>
+        <div class="seg icons" id="view"><button aria-pressed="true" data-view="grid" aria-label="Anteprime"><svg class="i"><use href="#i-grid"/></svg></button><button aria-pressed="false" data-view="list" aria-label="Elenco"><svg class="i"><use href="#i-list"/></svg></button></div>
+      </div>
+    </div>
+    <div class="scroll"><div class="r-body" id="rbody"></div></div>
+    <div class="foot" id="dropFoot" hidden><div class="drop"><b>Trascina qui immagini e video</b><span id="dropHint">Finiscono nei Media di questa case.</span></div></div>
+  </aside>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+
+<div class="modal-bg" id="askModal" hidden>
+  <div class="modal ask" role="alertdialog" aria-modal="true" aria-labelledby="askTitle" aria-describedby="askText">
+    <div><h2 id="askTitle"></h2><p class="help" id="askText"></p></div>
+    <div class="modal-foot"><button class="btn sec press" id="askNo">Annulla</button><button class="btn pri press" id="askYes"></button></div>
+  </div>
+</div>
+<div class="modal-bg" id="anModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="anTitle">
+    <div><h2 id="anTitle">Animazione</h2><p class="help">Scegli come scorrono i media. L’anteprima si adatta a quanti ne carichi.</p></div>
+    <div class="an-opts" id="anOpts"></div>
+    <div><p class="eyebrow" style="margin-bottom:8px">Dai Media <span class="help" id="anCount"></span></p><div class="an-pick" id="anPick"></div></div>
+    <div class="drop" id="anDrop"><b>Trascina qui immagini e video</b><span>Finiscono nei Media di questa case. Oppure <label>scegli dai file<input type="file" id="anFile" accept="image/*,video/*" multiple hidden></label>.</span>
+      <div class="up-list" id="anList"></div></div>
+    <div class="modal-foot"><button class="btn sec press" id="anCancel">Annulla</button><button class="btn pri press" id="anOk">Inserisci</button></div>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const state = { mode:'case', fmt:'169', tab:'pages', view:'grid', sel:null, ig:'off' }; // ig: Instagram preview over Video pages: off | reel | story
+let drag = null; // what is being dragged: {kind:'el'|'var'|'img'|'media', ...}
+
+const MEDIA = [
+  {id:'m0',g:'',name:'LUM_2026_cover.jpg',src:'assets/intro-cover.jpg',fav:true},
+  {id:'m1',g:'g1',name:'LUM_2026_01.jpg',fav:true},{id:'m2',g:'g2',name:'LUM_2026_02.jpg',fav:true},
+  {id:'m3',g:'g3',name:'LUM_2026_03.jpg'},{id:'m4',g:'g4',name:'LUM_2026_04.jpg'},
+  {id:'m5',g:'g5',name:'LUM_2026_05.jpg'},{id:'m6',g:'g6',name:'LUM_2026_06.mp4',video:'0:24'},
+];
+const CLIENT_MEDIA = [
+  {id:'c1',g:'g7',name:'Lumen_sede.jpg',fav:true},{id:'c2',g:'g8',name:'Lumen_team.jpg'},{id:'c3',g:'g1',name:'Lumen_prodotto.jpg'},
+];
+
+/* Bento layouts by number of blocks: a grid and the cell each block takes, in order.
+   Placeholder set; the real ones come from the templates. */
+const A=(r,c,r2,c2)=>`${r}/${c}/${r2}/${c2}`;
+const BENTO = {
+  1:[{g:'1fr/1fr',a:[A(1,1,2,2)]}],
+  2:[{g:'1fr/1fr 1fr',a:[A(1,1,2,2),A(1,2,2,3)]},{g:'1fr/2fr 1fr',a:[A(1,1,2,2),A(1,2,2,3)]},{g:'1fr/1fr 2fr',a:[A(1,1,2,2),A(1,2,2,3)]},{g:'2fr 1fr/1fr',a:[A(1,1,2,2),A(2,1,3,2)]}],
+  3:[{g:'1fr 1fr/2fr 1fr',a:[A(1,1,3,2),A(1,2,2,3),A(2,2,3,3)]},{g:'1fr 1fr/1fr 2fr',a:[A(1,1,2,2),A(2,1,3,2),A(1,2,3,3)]},{g:'1fr/1fr 1fr 1fr',a:[A(1,1,2,2),A(1,2,2,3),A(1,3,2,4)]},{g:'2fr 1fr/1fr 1fr',a:[A(1,1,2,3),A(2,1,3,2),A(2,2,3,3)]}],
+  4:[{g:'1fr 1fr/1fr 1fr',a:[A(1,1,2,2),A(1,2,2,3),A(2,1,3,2),A(2,2,3,3)]},{g:'1fr 1fr 1fr/2fr 1fr',a:[A(1,1,4,2),A(1,2,2,3),A(2,2,3,3),A(3,2,4,3)]},{g:'2fr 1fr/1fr 1fr 1fr',a:[A(1,1,2,4),A(2,1,3,2),A(2,2,3,3),A(2,3,3,4)]}],
+  5:[{g:'147fr 317fr 488fr/908fr 442fr 442fr',a:[A(1,1,4,2),A(1,2,2,4),A(2,2,3,3),A(3,2,4,3),A(2,3,4,4)]}, // Intro (Figma)
+     {g:'1fr 1fr/2fr 1fr 1fr',a:[A(1,1,3,2),A(1,2,2,3),A(1,3,2,4),A(2,2,3,3),A(2,3,3,4)]},{g:'1fr 1fr/1fr 1fr 1fr',a:[A(1,1,2,3),A(1,3,2,4),A(2,1,3,2),A(2,2,3,3),A(2,3,3,4)]}],
+  6:[{g:'1fr 1fr/1fr 1fr 1fr',a:[A(1,1,2,2),A(1,2,2,3),A(1,3,2,4),A(2,1,3,2),A(2,2,3,3),A(2,3,3,4)]}],
+};
+// Content templates (Figma MAC-TF-AI, 2026-10-27), added to the lists above by block count.
+/* Each template layout gets a fixed name (TL.name = [blocks, index]), so adding one never shifts the others. */
+const TL={};
+const addLayout=(name,L)=>{ const n=L.a.length; BENTO[n].push(L); TL[name]=[n,BENTO[n].length-1]; };
+addLayout('pres1',{g:'1fr/1373fr 442fr',a:[A(1,1,2,2),A(1,2,2,3)]});                                          // Presentazione · 1 immagine
+addLayout('pres3',{g:'1fr 1fr/908fr 442fr 442fr',a:[A(1,1,3,2),A(1,2,2,3),A(2,2,3,3),A(1,3,3,4)]});           // Presentazione · 3 immagini
+addLayout('pres5',{g:'488fr 147fr 317fr/442fr 442fr 442fr 442fr',a:[A(1,1,3,2),A(3,1,4,2),A(1,2,4,3),A(1,3,2,4),A(2,3,4,4),A(1,4,4,5)]}); // Presentazione · 5 immagini
+addLayout('presOnly',{g:'488fr 147fr 317fr/908fr 442fr 442fr',a:[A(1,1,3,2),A(3,1,4,2),A(1,2,4,3),A(1,3,2,4),A(2,3,4,4)]}); // Presentazione · solo layout
+addLayout('caro3a',{g:'1fr 1fr/1fr 1fr',a:[A(1,1,2,2),A(2,1,3,2),A(1,2,3,3)]});                               // Carosello · 3 immagini A
+addLayout('caro3b',{g:'1fr 1fr/1fr 1fr',a:[A(1,1,3,2),A(1,2,2,3),A(2,2,3,3)]});                               // Carosello · 3 immagini B (also Presentazione · Risultati e testimonial)
+addLayout('caroStack',{g:'468fr 460fr/1fr',a:[A(1,1,2,2),A(2,1,3,2)]});                                        // Carosello · Risultati e testimonial, uno sopra l'altro
+addLayout('videoIntro',{g:'820fr 1028fr/1fr',a:[A(1,1,2,2),A(2,1,3,2)]});                                   // Video · Intro (info, animazione)
+addLayout('videoOutro',{g:'720fr 680fr 424fr/1fr',a:[A(1,1,2,2),A(2,1,3,2),A(3,1,4,2)]});                     // Video · Risultati e testimonial (info, risultati, testimonianza)
+const MAX_BLOCKS=6;
+const layoutsFor=n=>BENTO[Math.max(1,Math.min(MAX_BLOCKS,n))];
+/* Every format has its own copy of the pages (doc.views[fmt]): an edit changes only the format in the canvas. */
+const lay=p=>p, layW=p=>p;
+const animOf=p=>state.fmt==='916'&&p.anim||null;
+/* Adding or removing a block: the layout starts again from the first for that number of blocks. */
+function resetLayout(p){ p.preset=null; p.variant=0; }
+const layoutOf=p=>{ const L=layoutsFor(p.slots.length); return L[(lay(p).variant||0)%L.length]; };
+const layoutKey=p=>p.slots.length+':'+((lay(p).variant||0)%layoutsFor(p.slots.length).length);
+/* Track sizes: the layout's, or the page's own after a resize (kept only while the layout is the same). */
+function tracksOf(p){ const [r,c]=layoutOf(p).g.split('/').map(x=>x.trim().split(/\s+/).map(parseFloat));
+  const l=lay(p); return l.tk===layoutKey(p)?{rows:l.rows,cols:l.cols}:{rows:r,cols:c}; }
+const tpl=t=>t.rows.map(v=>`minmax(0,${v}fr)`).join(' ')+' / '+t.cols.map(v=>`minmax(0,${v}fr)`).join(' ');
+const frTpl=g=>g.replace(/(\d*\.?\d+)fr/g,'minmax(0,$1fr)');
+
+const STYLES = {lab:'Etichetta',xl:'Titolo XL',title:'Titolo',sub:'Sottotitolo',text:'Testo',num:'Numero',quote:'Citazione'};
+/* Old style names used by the templates, mapped to the seven styles and the per-text settings they had. */
+const STYLE_MAP={eyebrow:{c:'lab'},ctal:{c:'lab',align:'center'},h1:{c:'xl'},big:{c:'xl'},h2:{c:'title'},head:{c:'title'},name:{c:'title'},
+  h3:{c:'sub'},body2:{c:'sub',tone:'muted'},p:{c:'text'},body:{c:'text',tone:'muted'},cols:{c:'text',tone:'muted',cols:2},meta:{c:'text'},
+  author:{c:'text',tone:'muted'},caption:{c:'text',tone:'muted'},kpil:{c:'text'},kpi:{c:'num'},kpiv:{c:'num',color:'#defe56',align:'right'},
+  voice:{c:'quote'},ctat:{c:'quote',align:'center'},sub:{c:'sub',tone:'muted'}};
+/* Elements go inside blocks; Blocco adds a bento block to the page. */
+const ELEMENTS = [
+  {block:true,label:'Blocco',icon:'grid'},
+  {group:true,label:'Testi',icon:'text'},
+  {cls:'title',label:'Titolo',icon:'text',t:'Nuovo titolo'},{cls:'text',label:'Testo',icon:'text',t:'Scrivi qui il testo.'},
+  {cls:'num',label:'Numero',icon:'hash',t:'+00%'},{cls:'quote',label:'Citazione',icon:'quote',t:'«La citazione del cliente.»'},
+  {cls:'lab',label:'Etichetta',icon:'text',t:'Etichetta'},{img:true,label:'Immagine',icon:'image'},
+  {img:true,video:true,label:'Video',icon:'video'},{anim:true,label:'Animazione',icon:'anim'},
+];
+/* Builders: a block and its elements. */
+/* Text block: texts kept together, aligned in the block at the top, centre or bottom, or split
+   ('Distanziati': the first `split` texts at the top, the rest at the bottom). It replaces the template
+   spacers: in Figma they are spacing, not things to select. */
+const G=(items,dist='top',split=1)=>({e:'col',n:'Testi',group:true,dist,split,items});
+function fromSpacers(items){ const sp=items.map((x,i)=>x&&x.e==='sp'?i:-1).filter(i=>i>=0); if(!sp.length) return items;
+  const rest=items.filter(x=>x.e!=='sp');
+  if(sp.length>=2&&sp[0]===0&&sp[sp.length-1]===items.length-1) return [G(rest,'center')];
+  if(sp[0]===0) return [G(rest,'bottom')];
+  if(sp[0]===items.length-1) return [G(rest,'top')];
+  return [G(rest,'between',sp[0])]; }
+const B=(n,items,x={})=>({k:'block',n,items:fromSpacers(items),...x});
+const T=(cls,t,x={})=>{ const m=STYLE_MAP[cls]||{c:cls}, {c,...extra}=m; return {e:'txt',n:STYLES[c],cls:c,t,...extra,...x}; };
+const IM=(m,x={})=>({e:'img',n:x.video?'Video':'Immagine',m,fit:'fill',...x});
+const SP={e:'sp',n:'Spazio'}, HR={e:'hr',n:'Linea'}, BRAND={e:'brand',n:'Loghi'};
+const ROW=(items,x={})=>({e:'row',n:'Riga',items,...x}), COL=(items,x={})=>({e:'col',n:'Colonna',items,...x});
+const TAGS=list=>({e:'tags',n:'Servizi',list});
+const ANIMI=(type,items,x={})=>({e:'anim',n:'Animazione',type,items,...x});
+const clone=x=>JSON.parse(JSON.stringify(x));
+
+function casePages(){ return [
+  {key:'cover',name:'Intro',bg:'#ffffff',variant:1,slots:[]},
+  {key:'challenge',name:'La sfida',bg:'#ffffff',slots:[
+    B('Sfida',[T('h2','Un marchio forte, ma invisibile online')]),B('Immagine',[IM('m2')])]},
+  {key:'approach',name:'L’approccio',bg:'#ffffff',slots:[
+    B('Immagine',[IM('m3')]),B('Immagine',[IM('m4')]),
+    B('Approccio',[SP,T('p','Abbiamo ridisegnato il logo partendo dalla forma delle lampade e costruito un sito che mostra i prodotti al buio, come li vedono i clienti.')])]},
+  {key:'result',name:'Il risultato',bg:'#defe56',variant:1,slots:[
+    B('Risultato',[T('kpi','+38%')]),B('Testo risultato',[SP,T('p','di richieste dal sito nei primi tre mesi.')]),B('Immagine',[IM('m5')])]},
+  {key:'outro',name:'Risultati e testimonial',bg:'#ffffff',slots:[
+    B('Testimonial',[SP,T('quote','“Finalmente il sito racconta la luce come la raccontiamo noi.” Giulia R., Lumen'),SP])]},
+];}
+function clientPages(){ return {
+  intro:[{key:'c-intro',name:'Introduzione',bg:'#ffffff',variant:1,slots:[]}],
+  // The client's cases. LUM-2026-01 is the case open in "Una case": the client tab shows those same pages.
+  projects:[{code:'LUM-2026-01',name:'Rebranding e sito'},{code:'LUM-2025-02',name:'Catalogo 2025'},{code:'LUM-2024-01',name:'Stand Euroluce'}],
+  outro:[{key:'c-outro',name:'Chiusura',bg:'#ffffff',slots:[
+    B('Immagine',[IM('c2')]),B('Chiusura',[SP,T('h2','Grazie, Lumen. Alla prossima luce.')])]}],
+};}
+const FORMATS=['169','11','916'];
+let doc = { views:Object.fromEntries(FORMATS.map(f=>[f,{case:casePages(),client:clientPages()}])), media: MEDIA, cmedia: CLIENT_MEDIA };
+const V=()=>doc.views[state.fmt]; // the pages of the format in the canvas
+
+/* Undo / redo: a snapshot of the document before each change. */
+const past=[], future=[];
+function commit(){ past.push(JSON.stringify(doc)); future.length=0; syncHistory(); saving(); }
+function restore(from,to){ if(!from.length) return; to.push(JSON.stringify(doc)); doc=JSON.parse(from.pop()); syncHistory(); saving(); renderAll(); }
+function syncHistory(){ $('#undo').disabled=!past.length; $('#redo').disabled=!future.length; }
+$('#undo').onclick=()=>restore(past,future); $('#redo').onclick=()=>restore(future,past);
+/* Keyboard (not while typing): Backspace/Delete removes the selected element, or the block;
+   ⌘/Ctrl+C, X, V copy, cut and paste blocks; Enter edits a selected text; Escape steps out. */
+let clip=null;
+document.addEventListener('keydown',e=>{
+  if(!$('#anModal').hidden||!$('#askModal').hidden) return; // dialogs handle their own keys
+  if(previewing()){ if(document.activeElement.isContentEditable){ if(e.key==='Escape') document.activeElement.blur(); return; } // typing in a text
+    if(e.key==='Escape') setPreview(false); if(state.fmt!=='169'&&e.key==='ArrowRight') stepSlide(1); if(state.fmt!=='169'&&e.key==='ArrowLeft') stepSlide(-1); return; }
+  const a=document.activeElement, mod=e.metaKey||e.ctrlKey, k=e.key.toLowerCase();
+  if(a.isContentEditable){ if(e.key==='Escape'){ a.blur(); } return; }
+  if(a.matches('input,select,textarea')) return;
+  if(mod&&k==='z'){ e.preventDefault(); e.shiftKey?restore(future,past):restore(past,future); return; }
+  const f=findSel(); if(!f) return;
+  if(f.it&&(e.key==='Backspace'||e.key==='Delete')){ e.preventDefault(); removeItem(f.p,state.sel.idx,state.sel.path); toast('Elemento eliminato. ⌘Z per annullare.'); return; }
+  if(f.s&&(e.key==='Backspace'||e.key==='Delete')){ e.preventDefault(); removeBlock(f.p,state.sel.idx); toast('Blocco eliminato. ⌘Z per annullare.'); return; }
+  if(f.s&&!f.it&&mod&&(k==='c'||k==='x')){ e.preventDefault(); clip=JSON.stringify(f.s);
+    if(k==='x'){ removeBlock(f.p,state.sel.idx); toast('Blocco tagliato.'); } else toast('Blocco copiato.'); return; }
+  if(mod&&k==='v'&&clip){ e.preventDefault();
+    if(f.p.slots.length>=MAX_BLOCKS){ toast('Questa pagina ha già 6 blocchi.'); return; }
+    commit(); const at=f.s?state.sel.idx+1:f.p.slots.length; f.p.slots.splice(at,0,JSON.parse(clip)); resetLayout(f.p); select(f.p.key,at); return; }
+  if(f.it&&f.it.e==='txt'&&e.key==='Enter'){ e.preventDefault(); const t=document.querySelector(`#p-${f.p.key} [data-path="${state.sel.idx}:${state.sel.path}"]`); if(t) t.dispatchEvent(new MouseEvent('dblclick')); return; }
+  if(e.key==='Escape'){ state.sel.path!=null?select(f.p.key,state.sel.idx):state.sel.idx!=null?select(f.p.key,null):(state.sel=null,renderAll()); }
+});
+
+const allMedia=()=>[...doc.cmedia,...doc.media];
+const gOf=id=>(allMedia().find(m=>m.id===id)||{}).g;
+const pageEls=()=>state.mode==='case'?V().case:[...V().client.intro,...V().client.projects.flatMap(pr=>clientCasePages(pr)),...V().client.outro];
+const pageByKey=k=>pageEls().find(p=>p.key===k);
+const fmtName=()=>({169:'Presentazione',11:'Carosello',916:'Video'}[state.fmt]);
+const clearMarks=()=>{ document.querySelectorAll('.drop-before,.drop-over').forEach(x=>x.classList.remove('drop-before','drop-over'));
+  document.querySelectorAll('[data-over]').forEach(x=>delete x.dataset.over); document.querySelectorAll('.hl.drop').forEach(x=>x.remove()); };
+document.addEventListener('dragend',()=>{ drag=null; clearMarks(); });
+
+const FRAME={169:1920,11:1000,916:1080}; // Figma frame width per format
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+/* The client's logo (from the client), then MAC's. On a photo both turn white. */
+const CLIENT_LOGO='assets/lumen-logo.svg';
+const brandHTML=white=>`<div class="brand"><img class="clogo" src="${CLIENT_LOGO}" alt="Logo del cliente"><img class="dv" src="assets/${white?'divider-v-white':'divider-v'}.svg" alt=""><img class="mac" src="assets/${white?'mac-logo-white':'mac-logo'}.svg" alt="MAC"></div>`;
+const mediaOf=id=>allMedia().find(x=>x.id===id);
+/* Elements live at a path inside a block: "2" is the third element, "0.1" the second inside the first row. */
+const itemAt=(b,path)=>String(path).split('.').reduce((o,i)=>o&&o.items&&o.items[+i],b);
+const parentOf=(b,path)=>{ const ps=String(path).split('.'); const last=+ps.pop(); return {list:ps.length?itemAt(b,ps.join('.')).items:b.items,i:last}; };
+
+function renderItem(p,j,b,it,path,onPhoto,thumb){
+  const d=document.createElement('div'); d.className='it it-'+it.e; d.dataset.path=j+':'+path;
+  if(it.e==='txt'){ d.classList.add('t-'+it.cls); if(it.tone) d.classList.add('tone-'+it.tone); if(it.align) d.classList.add('al-'+it.align); if(it.cols) d.classList.add('cols-'+it.cols);
+    d.textContent=it.t; if(it.color) d.style.color=it.color;
+    if(it.fs) d.style.fontSize=`calc(var(--u) * ${it.fs})`; // the template's own size (Figma), where it differs from the style
+    if(!thumb&&previewing()){ // Anteprima: click and type, no selection
+      d.contentEditable='true'; d.addEventListener('click',e=>e.stopPropagation()); d.addEventListener('focus',()=>{ d._before=JSON.stringify(doc); });
+      d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.t=d.innerText; saving(); });
+      d.addEventListener('blur',()=>renderRight()); return d; }
+    if(!thumb){ d._edit=()=>{ select(p.key,j,path,true); d.draggable=false; d.contentEditable='true'; d.focus();
+        const r=document.createRange(); r.selectNodeContents(d); r.collapse(false); const sl=getSelection(); sl.removeAllRanges(); sl.addRange(r); d._before=JSON.stringify(doc); };
+      d.addEventListener('dblclick',e=>{ e.stopPropagation(); d._edit(); });
+      d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.t=d.innerText; saving(); });
+      d.addEventListener('blur',()=>{ d.contentEditable='false'; d.draggable=true; renderRight(); }); } }
+  else if(it.e==='img'){ const m=mediaOf(it.m); d.dataset.fit=it.fit||'fill'; if(it.imgbg) d.style.setProperty('--imgbg',it.imgbg);
+    d.innerHTML=`<div class="ph ${m?m.g:''}">${m&&m.src?mediaTag(m):''}</div>${it.video?'<span class="vid-badge">▶</span>':''}`; }
+  else if(it.e==='anim'){ if(it.bleed) d.classList.add('bleed'); d.dataset.fit=it.fit||'fit'; d.style.setProperty('--as',(it.size||100)/100); d.innerHTML=animHTML(it.type,it.items.map(mediaOf).filter(Boolean));
+    if(!thumb) d.addEventListener('dblclick',e=>{ e.stopPropagation(); openAnim({page:p.key,idx:j,path}); }); }
+  else if(it.e==='tags'){ d.className+=' tags'; d.innerHTML=it.list.map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+    if(!thumb){ d._edit=()=>{ select(p.key,j,path,true); d.textContent=it.list.join(', '); d.draggable=false; d.contentEditable='true'; d.focus(); d._before=JSON.stringify(doc); };
+      d.addEventListener('dblclick',e=>{ e.stopPropagation(); d._edit(); });
+      d.addEventListener('input',()=>{ if(d._before){ past.push(d._before); future.length=0; d._before=null; syncHistory(); } it.list=d.textContent.split(',').map(x=>x.trim()).filter(Boolean); saving(); });
+      d.addEventListener('blur',()=>{ d.contentEditable='false'; renderAll(); }); } }
+  else if(it.e==='brand') d.innerHTML=brandHTML(onPhoto);
+  else if(it.e==='hr'&&it.kpi){ d.classList.add('kline'); d.innerHTML='<img src="assets/kpi-line.svg" alt="">'; }
+  else if(it.e==='row'||it.e==='col'){ if(it.group){ d.classList.add('grp','dist-'+(it.dist||'top')); d.style.setProperty('--split',it.split||1); }
+    if(it.wide) d.classList.add('wide'); if(it.loose) d.classList.add('loose'); if(it.top) d.classList.add('atop'); if(it.cls) d.classList.add(...it.cls.split(' '));
+    it.items.forEach((c,k)=>{ const ch=renderItem(p,j,b,c,path+'.'+k,onPhoto,thumb); if(it.group&&it.dist==='between'&&k===(it.split||1)-1) ch.classList.add('push'); d.appendChild(ch); }); }
+  if(thumb) return d;
+  const s=state.sel; if(s&&s.page===p.key&&s.idx===j&&String(s.path)===String(path)) d.classList.add('sel');
+  if((it.e!=='row'&&it.e!=='col')||it.group){
+    // Click selects; a click on a text that is already selected opens it for editing (so a double click edits too).
+    d.addEventListener('click',e=>{ e.stopPropagation(); if(d.isContentEditable) return;
+      if(d._edit&&s&&s.page===p.key&&s.idx===j&&String(s.path)===String(path)){ d._edit(); return; } select(p.key,j,path); });
+    // Drag any element to another block or place; texts stop being draggable while they're being edited.
+    { d.draggable=true; d.addEventListener('dragstart',e=>{ if(d.isContentEditable){ e.preventDefault(); return; } e.stopPropagation();
+      // A block holding just this element (e.g. a full image) moves as the block: dropped on another block, they swap.
+      if(b.items.length===1&&!String(path).includes('.')){ drag={kind:'block',page:p.key,idx:j}; e.dataTransfer.setData('text/plain','block'); return; }
+      drag={kind:'item',page:p.key,idx:j,path}; e.dataTransfer.setData('text/plain','item'); }); } }
+  return d; }
+
+/* Drop on a block: a new element or a moved one goes before the element under the pointer (or at the end);
+   a Media file fills the image under the pointer, or comes in as a new image; a block swaps places. */
+function wireBlock(d,p,j,b,grid){
+  const target=e=>{ const t=e.target.closest('.blk>.it'); return t&&t.parentNode===d?+t.dataset.path.split(':')[1]:null; };
+  const accepts=()=>drag&&((drag.kind==='block'&&!(drag.page===p.key&&drag.idx===j))||drag.kind==='media'||drag.kind==='item'||(drag.kind==='el'&&!ELEMENTS[drag.i].block));
+  d.addEventListener('dragover',e=>{ if(!accepts()) return; e.preventDefault(); e.stopPropagation(); clearMarks();
+    if(drag.kind==='block'){ grid.appendChild(hl(d.style.gridArea,'drop')); return; }
+    grid.appendChild(hl(d.style.gridArea,'drop')); const at=target(e); if(at!=null) d.children[at+(d.querySelector(':scope>.bgimg')?1:0)]?.classList.add('drop-before'); });
+  d.addEventListener('drop',e=>{ if(!accepts()) return; e.preventDefault(); e.stopPropagation(); clearMarks(); const at=target(e); const dr=drag; drag=null;
+    if(dr.kind==='block'){ commit(); const src=pageByKey(dr.page); [src.slots[dr.idx],p.slots[j]]=[p.slots[j],src.slots[dr.idx]]; select(p.key,j); return; }
+    if(dr.kind==='media'){ commit(); const m=mediaOf(dr.id); const under=at!=null&&b.items[at];
+      if(under&&under.e==='img'){ under.m=dr.id; select(p.key,j,String(at)); return; }
+      const pos=at??b.items.length; b.items.splice(pos,0,IM(dr.id,{video:!!(m&&m.video)})); select(p.key,j,String(pos)); return; }
+    if(dr.kind==='item'){ const src=pageByKey(dr.page).slots[dr.idx]; const {list,i}=parentOf(src,dr.path);
+      commit(); const [moved]=list.splice(i,1); let pos=at??b.items.length; if(src===b&&list===b.items&&i<pos) pos--; b.items.splice(pos,0,moved); select(p.key,j,String(pos)); return; }
+    addElement(p,dr.i,j,at??b.items.length); }); }
+
+function renderBlock(p,j,b,area,grid,thumb){
+  const d=document.createElement('div'); d.className='slot blk'; d.dataset.name=b.n; d.style.gridArea=area;
+  if(b.pad!=null){ d.style.padding=`calc(var(--u) * ${b.pad})`; d.style.setProperty('--bp',`calc(var(--u) * ${b.pad})`); }
+  if(b.padTop!=null) d.style.paddingTop=`calc(var(--u) * ${b.padTop})`; // Video: room for Instagram's top bar
+  if(b.bg) d.style.background=b.bg; if(b.ink) d.style.color=b.ink; if(b.cls) d.classList.add(b.cls);
+  const bm=b.img&&mediaOf(b.img); const onPhoto=!!bm;
+  if(bm){ d.classList.add('on-photo'); d.insertAdjacentHTML('beforeend',`<div class="bgimg">${bm.src?mediaTag(bm):`<span class="${bm.g}"></span>`}</div>`); }
+  if(!b.items.length&&!bm&&!thumb) d.classList.add('empty'); // the hint only in the editor, not in previews
+  if(b.items.length===1&&b.items[0].e==='img'&&(b.items[0].fit||'fill')==='fill') d.classList.add('bleed'); // Riempi: edge to edge
+  b.items.forEach((it,k)=>d.appendChild(renderItem(p,j,b,it,String(k),onPhoto,thumb)));
+  if(thumb) return d;
+  const startMove=e=>{ drag={kind:'block',page:p.key,idx:j}; e.dataTransfer.setData('text/plain','block'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setDragImage(d,24,24); };
+  // The block's frame shows when the block or anything inside it is selected; the Sposta handle only for the block itself.
+  const s=state.sel; if(s&&s.page===p.key&&s.idx===j){ grid.appendChild(hl(area,'sel')); if(s.path==null){ d.classList.add('sel'); grid.appendChild(grip(area,startMove)); } }
+  d.addEventListener('click',e=>{ e.stopPropagation(); select(p.key,j); });
+  wireBlock(d,p,j,b,grid);
+  return d; }
+
+/* The Intro, from the case (or the client). Applying it lays out the page with blocks and elements in the
+   format in view: Presentazione one page of five blocks, Carosello three pages (cover, Sfida, Idea), Video one block. */
+const INTRO={
+  case:{title:'Una luce nuova per Lumen',sub:'Un marchio e un sito che mostrano i prodotti come li vedono i clienti: al buio.',
+    client:'Lumen S.r.l.',meta:'Illuminazione · 2026',services:['Branding','Web design','Fotografia','Art direction','Social media'],
+    challengeHead:'Un marchio forte, ma invisibile online',challengeBody:'Lumen era conosciuta dai progettisti, ma il sito non mostrava la qualità della luce e le richieste arrivavano quasi solo dalle fiere.',
+    ideaHead:'Mostrare la luce al buio',ideaBody:'Abbiamo ridisegnato il logo partendo dalla forma delle lampade e costruito un sito che mostra i prodotti al buio, come li vedono i clienti. Ogni pagina prodotto si apre con la lampada accesa, con le foto scattate nello studio di Lumen.\n\nIl nuovo marchio è nato dalla curva della lampada più venduta e ora firma packaging, cataloghi e stand.',img:'m0',
+    results:[['+38%','richieste dal sito nei primi tre mesi'],['3×','tempo medio sulle pagine prodotto'],['120','prodotti fotografati accesi']],
+    quote:'“Finalmente il sito racconta la luce come la raccontiamo noi.”',author:'Giulia R., Lumen'},
+  client:{title:'Lumen, tre anni di luce',sub:'Dal marchio al sito, dai cataloghi agli stand: il lavoro con Lumen dal 2023.',
+    client:'Lumen S.r.l.',meta:'Illuminazione · dal 2023',services:['Branding','Web design','Fotografia','Art direction','Social media','Editoria','Allestimenti'],
+    challengeHead:'Un’azienda di design senza una voce sua',challengeBody:'Quando ci siamo conosciuti, Lumen vendeva bene alle fiere ma online e nei cataloghi non raccontava la qualità della sua luce.',
+    ideaHead:'Un racconto unico, progetto dopo progetto',ideaBody:'Siamo partiti dal marchio e da lì abbiamo costruito il sito, i cataloghi e gli stand, sempre con la stessa idea: mostrare la luce come la vedono i clienti.',img:'c1',
+    results:[['3','progetti in tre anni'],['+52%','richieste dal 2023'],['2','fiere con uno stand nostro']],
+    quote:'“Ci conoscono come pochi: sanno cosa vogliamo prima di noi.”',author:'Paolo L., Lumen'},
+};
+function applyIntro(list,p,fmt,mode=state.mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode);
+  const head=()=>ROW([COL([T('meta',I.meta,{fs:16}),T('name',I.client)]),BRAND]);
+  Object.assign(p,{preset:'intro',anim:null,tk:null,rows:null,cols:null,variant:0});
+  // Re-applying replaces the Carosello pages the intro added before.
+  for(let i=list.length-1;i>=0;i--) if(list[i].introOf===p.key) list.splice(i,1);
+  if(fmt==='169'){ Object.assign(p,{pad:40,bg:'#ffffff',slots:[
+      B('Progetto',[T('lab',mode==='client'?'01 Cliente':'01 Progetto'),SP,T('xl',I.title),T('sub',I.sub)],{img:I.img,pad:28}),
+      B('Cliente',[ROW([COL([T('lab','02 Cliente'),COL([T('name',I.client),T('meta',I.meta)],{})],{loose:true}),BRAND],{wide:true})],{pad:28}),
+      B('Servizi',[T('lab','03 Servizi'),SP,TAGS(I.services)],{pad:28}),
+      B('Sfida',[T('lab','04 Sfida'),SP,T('head',I.challengeHead),T('body',I.challengeBody)],{pad:28}),
+      B('Idea',[T('lab','05 Idea'),SP,T('head',I.ideaHead),T('body',I.ideaBody)],{pad:28})]}); return; }
+  if(fmt==='11'){ Object.assign(p,{pad:24,bg:'#ededf0',slots:[
+      B('Progetto',[head(),SP,T('xl',I.title,{fs:56}),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true})],{img:I.img,pad:60})]});
+    const at=list.indexOf(p)+1;
+    list.splice(at,0,
+      {key:p.key+'-sfida',name:p.name+' · Sfida',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[B('Sfida',[T('lab','Sfida',{fs:18}),SP,T('big',I.challengeHead),T('body2',I.challengeBody,{fs:22})],{pad:40})]},
+      {key:p.key+'-idea',name:p.name+' · Idea',introOf:p.key,bg:'#ffffff',pad:24,variant:0,slots:[B('Idea',[T('lab','Idea',{fs:18}),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]});
+    return; }
+  // Video: two bento blocks, the info above and the animation below; the border between them resizes both.
+  Object.assign(p,{pad:24,bg:'#ffffff',variant:TL.videoIntro[1],slots:[
+    B('Progetto',[head(),T('xl',I.title,{fs:56}),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true})],{pad:60,padTop:220,cls:'vinfo'}),
+    B('Animazione',[ANIMI('c04',[I.img,...(mode==='client'?[...CLIENT_MEDIA,...MEDIA]:MEDIA).filter(m=>!m.video&&m.id!==I.img).map(m=>m.id)].slice(0,5),{size:105})],{pad:0})]}); } // Video intro: cards at 105%
+// The sample case and client both start from the Intro, in every format.
+// In Presentazione the Intro already holds the challenge and the idea, so the case has no separate pages for them.
+// No separate Sfida / Approccio pages in any format: the intro holds them (owner, 2026-10-27).
+FORMATS.forEach(f=>{ const ps=doc.views[f].case; for(let i=ps.length-1;i>=0;i--) if(['challenge','approach'].includes(ps[i].key)) ps.splice(i,1); });
+/* The client's other cases (sample content), one page list per case and format. */
+const OTHER_CASES={
+  'LUM-2025-02':{title:'Il catalogo che si accende',sub:'Un catalogo stampato e digitale che mostra ogni lampada accesa e spenta.',client:'Lumen S.r.l.',meta:'Illuminazione · 2025',
+    services:['Editoria','Fotografia','Art direction'],challengeHead:'Cento prodotti, una sola foto ciascuno',challengeBody:'Il catalogo precedente mostrava le lampade spente: i clienti non vedevano la luce.',
+    ideaHead:'Ogni lampada due volte',ideaBody:'Ogni prodotto ha due foto, accesa e spenta, scattate nello stesso punto: si sfoglia come un prima e dopo.',img:'m4',
+    results:[['240','pagine di catalogo'],['+21%','ordini dai rivenditori']],quote:'“I rivenditori lo usano come listino.”',author:'Marco T., Lumen'},
+  'LUM-2024-01':{title:'Uno stand al buio, a Euroluce',sub:'Uno stand senza luci di sala, illuminato solo dalle lampade Lumen.',client:'Lumen S.r.l.',meta:'Illuminazione · 2024',
+    services:['Allestimenti','Art direction','Video'],challengeHead:'Farsi notare tra mille stand',challengeBody:'A Euroluce ogni stand è pieno di luce: Lumen rischiava di sparire.',
+    ideaHead:'Spegnere tutto il resto',ideaBody:'Abbiamo costruito uno stand nero: entrando, le uniche luci erano quelle dei prodotti.',img:'m6',
+    results:[['1.800','visitatori in cinque giorni']],quote:'“Lo stand di cui parlavano tutti.”',author:'Marco T., Lumen'},
+};
+function otherCase(code,f){ const k=code.toLowerCase(); const list=[{key:k+'-cover',name:'Intro',bg:'#ffffff',slots:[]},
+    {key:k+'-outro',name:'Risultati e testimonial',bg:'#ffffff',slots:[B('Testimonial',[SP,T('quote','“Un lavoro che si vede, anche al buio.” Marco T., Lumen'),SP])]}];
+  applyIntro(list,list[0],f,OTHER_CASES[code]); return list; }
+FORMATS.forEach(f=>{ doc.views[f].others=Object.fromEntries(Object.keys(OTHER_CASES).map(c=>[c,otherCase(c,f)])); });
+const casePagesOf=pr=>pr.code==='LUM-2026-01'?V().case:V().others[pr.code];
+/* In the client file the client's introduction replaces each case's own (SCP 2026-10-26, C23): the intro pages are hidden. */
+const isCaseIntro=p=>!!p.introOf||p.key==='cover'||p.key.endsWith('-cover');
+// …and each carousel's closing page too: the client file ends with its own, once.
+const isCaseEnd=p=>p.key==='end'||p.key.endsWith('-end');
+const clientCasePages=pr=>casePagesOf(pr).filter(p=>!isCaseIntro(p)&&!isCaseEnd(p));
+/* A case's pages fall in three sections: Intro, Output (the work) and Risultati. */
+const SECTIONS={intro:'Intro',output:'Output',risultati:'Risultati'};
+const sectionOf=p=>p.section||(isCaseIntro(p)?'intro':p.key==='outro'||p.key.endsWith('-outro')||p.key==='end'||p.key.endsWith('-end')?'risultati':'output');
+FORMATS.forEach(f=>{ const v=doc.views[f]; applyIntro(v.case,v.case[0],f,'case'); applyIntro(v.client.intro,v.client.intro[0],f,'client'); });
+/* What Instagram lays over a Video once published (from the owner's screenshots, 2026-10-27).
+   Reel: status bar and Per te / Amici at the top, actions on the right, account and caption at the bottom.
+   Story: progress bar and account at the top, the reply bar at the bottom. Friends' photos and counts are
+   blanked out. No shading: it looks as in the app. Approximate, for checking the layout only. */
+const igIcon=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const IGI={heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',comment:'<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"/>',
+  repost:'<path d="M17 3l3 3-3 3"/><path d="M4 11V9a3 3 0 0 1 3-3h13"/><path d="M7 21l-3-3 3-3"/><path d="M20 13v2a3 3 0 0 1-3 3H4"/>',send:'<path d="M21 4 3 11l7 3 3 7z"/><path d="M10 14l11-10"/>',
+  menu:'<path d="M5 9h14M7 15h10"/>',close:'<path d="M6 6l12 12M18 6 6 18"/>'};
+const igStatus=`<div class="ig-status"><b>9:41</b><span class="ig-sys"><i></i><i></i><i></i><em></em></span></div>`;
+const igAcct='<span class="ig-av ig-mac">mac</span><b>mac.creativetech</b>';
+function igOverlay(kind){
+  if(kind==='story') return `<div class="ig ig-story" aria-hidden="true">${igStatus}
+    <div class="ig-progress"><i></i></div>
+    <div class="ig-head">${igAcct}<span class="ig-time">9 min</span><span class="sp"></span>${igIcon(IGI.menu)}${igIcon(IGI.close)}</div>
+    <div class="ig-reply"><span class="ig-msg">Invia messaggio…</span>${igIcon(IGI.heart)}${igIcon(IGI.send)}</div></div>`;
+  return `<div class="ig ig-reel" aria-hidden="true">${igStatus}
+    <div class="ig-tabs"><b>Per te ⌄</b><span>Amici</span><span class="ig-friends"><i></i><i></i><i></i></span></div>
+    <div class="ig-acts">${['heart','comment','repost','send','menu'].map(k=>`<div>${igIcon(IGI[k])}${['comment','repost'].includes(k)?'<small class="ig-n"></small>':''}</div>`).join('')}<span class="ig-audio-sq"></span></div>
+    <div class="ig-cap"><div class="ig-user">${igAcct}<span class="ig-follow">Segui</span></div>
+      <div class="ig-text">Una luce nuova per Lumen: rebranding e sito…</div></div></div>`;
+}
+function renderPage(p,thumb=false){
+  const el=document.createElement('div');
+  el.className='page'; el.dataset.ratio=state.fmt; if(!thumb) el.id='p-'+p.key;
+  if(!thumb&&state.sel&&state.sel.page===p.key&&state.sel.idx==null) el.classList.add('cur');
+  el.style.background=p.bg; el.style.setProperty('--u',`calc(100cqw / ${FRAME[state.fmt]})`);
+  if(p.pad!=null) el.style.setProperty('--pad',`calc(var(--u) * ${p.pad})`); // the template's own page margin
+  if(p.deco==='star') el.insertAdjacentHTML('beforeend','<div class="page-deco" style="inset:10.9% -20.6% -24.2% 39.1%"><img src="assets/closing-star.svg" alt=""></div>'); // closing page star (Figma)
+  const pm=p.img&&mediaOf(p.img); if(pm) el.insertAdjacentHTML('beforeend',`<div class="page-bg">${pm.src?mediaTag(pm):`<span class="${pm.g}"></span>`}</div>`);
+  if(animOf(p)){ el.innerHTML=`<div class="reel-anim">${animHTML(animOf(p),pageMedia(p),5)}</div>${!thumb&&state.ig!=='off'&&previewing()?igOverlay(state.ig):''}`; if(!thumb) el.addEventListener('click',()=>select(p.key,null)); return el; }
+  const grid=document.createElement('div'); grid.className='bento';
+  const L=layoutOf(p); grid.style.gridTemplate=tpl(tracksOf(p));
+  p.slots.forEach((b,j)=>grid.appendChild(renderBlock(p,j,b,L.a[j],grid,thumb)));
+  el.appendChild(grid);
+  // Video: texts come in one after the other, on a loop (it is a video).
+  if(state.fmt==='916'&&!thumb) el.querySelectorAll('.it-txt,.it-tags,.it-brand,.it-hr').forEach((x,k)=>{ x.classList.add('vin'); x.style.setProperty('--i',k); });
+  if(thumb) return el;
+  if(state.fmt==='916'&&state.ig!=='off'&&previewing()) el.insertAdjacentHTML('beforeend',igOverlay(state.ig));
+  el.addEventListener('click',()=>select(p.key,null));
+  // Drop on the page itself: a layout applies; a new block, or a block from another page, goes at the end.
+  const isBlockEl=()=>drag&&drag.kind==='el'&&ELEMENTS[drag.i].block;
+  const pageAccepts=()=>drag&&(drag.kind==='var'||isBlockEl()||drag.kind==='el'||(p.slots.length<MAX_BLOCKS&&drag.kind==='block'&&drag.page!==p.key&&pageByKey(drag.page).slots.length>1));
+  el.addEventListener('dragover',e=>{ if(!pageAccepts()) return; e.preventDefault(); if(el.classList.contains('drop-over')) return; clearMarks(); el.classList.add('drop-over'); });
+  el.addEventListener('drop',e=>{ if(!pageAccepts()) return; e.preventDefault(); clearMarks(); const dr=drag; drag=null;
+    if(dr.kind==='var'){ applyPreset(p,dr.n,dr.v); return; }
+    if(dr.kind==='block'){ commit(); const src=pageByKey(dr.page); p.slots.push(src.slots.splice(dr.idx,1)[0]); resetLayout(src); resetLayout(p); select(p.key,p.slots.length-1); return; }
+    if(ELEMENTS[dr.i].block){ addElement(p,dr.i,null); return; }
+    toast('Trascina l’elemento dentro un blocco.'); });
+  return el;
+}
+/* Resize: drag the gutter between two tracks. The neighbours give or take the space; a move that
+   would make text overflow its block (or a track smaller than 12%) is refused and the handle turns orange. */
+function grip(area,onStart){ const x=document.createElement('div'); x.className='grip'; x.draggable=true; x.style.gridArea=area; x.innerHTML='⠿ Sposta'; x.title='Trascina su un altro blocco per scambiarli';
+  x.addEventListener('dragstart',onStart); x.addEventListener('click',e=>e.stopPropagation()); return x; }
+let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),3500); }
+function hl(area,cls){ const x=document.createElement('div'); x.className='hl '+cls; x.style.gridArea=area; return x; }
+/* The blocks touching grid line `line` on an axis. */
+function edgeBlocks(g,axis,line){ return [...g.querySelectorAll(':scope>.slot')].filter(s=>{ const [r1,c1,r2,c2]=s.style.gridArea.split('/').map(v=>parseInt(v));
+  return axis==='v'?(c1===line||c2===line):(r1===line||r2===line); }); }
+const overflows=t=>t.scrollHeight>t.clientHeight+1||t.scrollWidth>t.clientWidth+1;
+function placeHandles(el,p){
+  const g=el.querySelector('.bento'); if(!g) return; // an animated Video page has no grid
+  g.querySelectorAll('.handle').forEach(h=>h.remove());
+  const cs=getComputedStyle(g); const gap=parseFloat(cs.columnGap);
+  const px={v:cs.gridTemplateColumns.split(' ').map(parseFloat),h:cs.gridTemplateRows.split(' ').map(parseFloat)};
+  const sum=(arr,a,b)=>arr.slice(a,b).reduce((x,y)=>x+y,0);
+  const areas=[...g.querySelectorAll(':scope>.slot')].map(b=>b.style.gridArea.split('/').map(v=>parseInt(v)));
+  ['v','h'].forEach(axis=>{ const t=px[axis], cross=px[axis==='v'?'h':'v'];
+    for(let i=0;i<t.length-1;i++){
+      const line=i+2;
+      // A border exists only across the tracks where no block spans over this line: one handle per stretch.
+      const open=cross.map((_,c)=>!areas.some(([r1,c1,r2,c2])=>axis==='v'
+        ?(c1<line&&line<c2&&r1<=c+1&&c+1<r2):(r1<line&&line<r2&&c1<=c+1&&c+1<c2)));
+      const segs=[]; open.forEach((o,c)=>{ if(!o) return; const last=segs[segs.length-1]; if(last&&last[1]===c-1) last[1]=c; else segs.push([c,c]); });
+      segs.forEach(([a,b])=>{
+      const h=document.createElement('div'); h.className='handle '+axis;
+      const from=sum(cross,0,a)+a*gap, len=sum(cross,a,b+1)+(b-a)*gap;
+      if(axis==='v'){ h.style.top=from+'px'; h.style.height=len+'px'; h.style.bottom='auto'; } else { h.style.left=from+'px'; h.style.width=len+'px'; h.style.right='auto'; }
+      const pos=()=>sum(t,0,i+1)+i*gap;
+      const place=()=>{ if(axis==='v'){ h.style.left=pos()+'px'; h.style.width=gap+'px'; } else { h.style.top=pos()+'px'; h.style.height=gap+'px'; } };
+      place();
+      h.addEventListener('click',e=>e.stopPropagation());
+      const frame=()=>{ unframe(); edgeBlocks(g,axis,line).filter(bl=>{ const [r1,c1,r2,c2]=bl.style.gridArea.split('/').map(v=>parseInt(v));
+          return axis==='v'?(r1-1<=b&&r2-1>a):(c1-1<=b&&c2-1>a); }).forEach(bl=>g.appendChild(hl(bl.style.gridArea,'edge'))); };
+      const unframe=()=>g.querySelectorAll('.hl.edge').forEach(x=>x.remove());
+      h.addEventListener('pointerenter',frame);
+      h.addEventListener('pointerleave',()=>{ if(!h.classList.contains('on')) unframe(); });
+      h.addEventListener('pointerdown',e=>{
+        e.preventDefault(); e.stopPropagation(); h.setPointerCapture(e.pointerId); h.classList.add('on');
+        const start=axis==='v'?e.clientX:e.clientY, base=t.slice(), before=JSON.stringify(doc);
+        const min=(axis==='v'?g.clientWidth:g.clientHeight)*0.12;
+        const texts=[...g.querySelectorAll(':scope>.slot')], was=texts.map(overflows);
+        const apply=arr=>{ const o={v:px.v,h:px.h}; o[axis]=arr; g.style.gridTemplate=tpl({rows:o.h,cols:o.v}); };
+        let moved=false;
+        const move=ev=>{ let d=(axis==='v'?ev.clientX:ev.clientY)-start;
+          d=Math.max(min-base[i],Math.min(base[i+1]-min,d));
+          const next=base.slice(); next[i]=base[i]+d; next[i+1]=base[i+1]-d; apply(next);
+          const edges=g.querySelectorAll('.hl.edge');
+          if(texts.some((x,k)=>!was[k]&&overflows(x))){ apply(t); edges.forEach(x=>x.classList.add('stop')); return; }
+          edges.forEach(x=>x.classList.remove('stop')); t.splice(0,t.length,...next); place(); moved=true; };
+        const up=()=>{ h.removeEventListener('pointermove',move); h.classList.remove('on'); unframe();
+          if(!moved) return;
+          past.push(before); future.length=0; syncHistory(); saving();
+          const w=layW(p); w.rows=axis==='h'?t.slice():px.h.slice(); w.cols=axis==='v'?t.slice():px.v.slice(); w.tk=layoutKey(p);
+          renderCanvas(); renderRight(); };
+        h.addEventListener('pointermove',move); h.addEventListener('pointerup',up,{once:true});
+      });
+      g.appendChild(h);
+      });
+    }
+  });
+}
+window.addEventListener('resize',()=>document.querySelectorAll('.page[id]').forEach(el=>placeHandles(el,pageByKey(el.id.slice(2)))));
+/* Add an element: Blocco adds a block to the page; anything else goes into block `j` at position `at`. */
+function addElement(p,i,j,at){
+  const E=ELEMENTS[i]; drag=null;
+  if(E.block){ if(p.slots.length>=MAX_BLOCKS){ toast('Questa pagina ha già 6 blocchi.'); return; }
+    commit(); const pos=j==null?p.slots.length:j+1; p.slots.splice(pos,0,B('Blocco',[])); resetLayout(p); select(p.key,pos); return; }
+  if(j==null){ toast('Seleziona un blocco, oppure trascina l’elemento dentro un blocco.'); return; }
+  const b=p.slots[j]; at=at??b.items.length;
+  if(E.anim){ openAnim({page:p.key,idx:j,at}); return; } // added once a style is picked
+  commit(); b.items.splice(at,0,E.group?G([T('lab','Etichetta'),T('title','Titolo'),T('text','Scrivi qui il testo.')],'between',1)
+    :E.img?IM(null,{video:!!E.video}):T(E.cls,E.t,{n:E.label})); select(p.key,j,String(at));
+}
+function removeItem(p,j,path){ commit(); const {list,i}=parentOf(p.slots[j],path); list.splice(i,1); select(p.key,j); }
+/* Animations (names from the owner's references, 2026-10-27). Each one adapts to the number of media. */
+const ANIMS=[{k:'c01',name:'Carousel 01'},{k:'c03',name:'Carousel 03'},{k:'c04',name:'Carousel 04'},{k:'w02',name:'Wheel 02'}];
+const mediaTag=m=>m.video?`<video src="${m.src}" muted autoplay loop playsinline></video>`:`<img src="${m.src}" alt="">`;
+const card=(m,extra='')=>`<div class="ac" ${extra}>${!m?'':m.src?mediaTag(m):`<span class="${m.g}"></span>`}</div>`;
+/* Stepped slide: hold on each item, then move one step; the copy of the first item at the end makes the loop seamless. */
+function stepKF(axis,n){ const name=`an-s2${axis}-${n}`; if(document.getElementById(name)) return name;
+  // One step = a 9:16 card plus the gap (the card size is --cw / --ch on the animation).
+  const step=axis==='x'?'(var(--cw) + 6cqw)':'(var(--ch) + 6cqh)', T=v=>`transform:translate${axis.toUpperCase()}(calc(-1 * ${v} * ${step}))`;
+  let k=''; for(let i=0;i<n;i++){ const a=i*100/n, b=a+70/n; k+=`${a.toFixed(2)}%,${b.toFixed(2)}%{${T(i)};animation-timing-function:cubic-bezier(.65,0,.35,1)}`; }
+  const st=document.createElement('style'); st.id=name; st.textContent=`@keyframes ${name}{${k}100%{${T(n)}}}`; document.head.appendChild(st); return name; }
+function animHTML(type,items,empty=3){
+  const list=items.length?items:Array(empty).fill(null); const n=list.length; // no media yet: three empty cards
+  const cards=list.map(m=>card(m)).join('');
+  if(type==='w02') return `<div class="an an-w02"><div class="ring" style="animation:an-spin ${Math.max(n,4)*3}s linear infinite">${list.map((m,i)=>card(m,`style="--a:${i*360/n}deg"`)).join('')}</div></div>`;
+  if(type==='c01') return `<div class="an an-c01"><div class="trk" style="${n>1?`animation:an-y ${n*2.5}s linear infinite`:''}">${cards}${n>1?cards:''}</div></div>`;
+  const axis=type==='c04'?'x':'y';
+  return `<div class="an an-${type}"><div class="trk" style="${n>1?`animation:${stepKF(axis,n)} ${n*2.2}s infinite`:''}">${cards}${n>1?card(list[0]):''}</div></div>`;
+}
+/* The media already on a page, used to preview animated layouts. */
+const itemsOf=list=>list.flatMap(it=>[it,...(it.items&&it.e!=='anim'?itemsOf(it.items):[])]);
+const pageMedia=p=>[...new Set(p.slots.flatMap(b=>[b.img,...itemsOf(b.items).filter(x=>x.e==='img'&&x.m).map(x=>x.m)]).filter(Boolean))].map(mediaOf).filter(Boolean);
+/* Picker: {page,idx,at} adds an animation to block idx; {page,idx,path} changes an existing one. */
+let anim=null, upN=0;
+function openAnim(target){
+  const p=pageByKey(target.page), s=target.path!=null?itemAt(p.slots[target.idx],target.path):null;
+  anim={...target,type:s?s.type:target.type||'c01',items:s?[...s.items]:[...(target.items||[])]};
+  $('#anOk').textContent=s?'Salva':'Inserisci';
+  $('#anModal').hidden=false; drawAnim(); $('#anOk').focus(); }
+function closeAnim(){ $('#anModal').hidden=true; anim=null; }
+function drawAnim(){
+  const items=anim.items.map(id=>allMedia().find(x=>x.id===id)).filter(Boolean);
+  $('#anOpts').innerHTML=ANIMS.map(a=>`<button class="an-opt press" data-an="${a.k}" aria-pressed="${a.k===anim.type}"><div class="pv">${animHTML(a.k,items)}</div>${a.name}</button>`).join('');
+  $('#anOpts').querySelectorAll('[data-an]').forEach(b=>b.onclick=()=>{ anim.type=b.dataset.an; drawAnim(); });
+  // Every file in Media can go in; a click adds it (numbered in order) or takes it out.
+  $('#anPick').innerHTML=allMedia().map(m=>{ const i=anim.items.indexOf(m.id);
+    return `<button class="press" data-pick="${m.id}" aria-pressed="${i>=0}" title="${m.name}" aria-label="${m.name}"><span class="ph ${m.g}">${m.src?mediaTag(m):''}</span>${m.video?'<span class="vid">▶</span>':''}<b>${i+1}</b></button>`; }).join('');
+  $('#anPick').querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{ const id=b.dataset.pick;
+    anim.items=anim.items.includes(id)?anim.items.filter(x=>x!==id):[...anim.items,id]; drawAnim(); });
+  $('#anCount').textContent=items.length?`· ${items.length} ${items.length===1?'scelto':'scelti'}`:'';
+  $('#anList').innerHTML=items.filter(m=>m.id.startsWith('u')).map(m=>`<div class="ac">${m.src?mediaTag(m):`<span class="${m.g}"></span>`}<button data-unup="${m.id}" aria-label="Togli ${m.name}">×</button></div>`).join('');
+  $('#anList').querySelectorAll('[data-unup]').forEach(b=>b.onclick=()=>{ anim.items=anim.items.filter(x=>x!==b.dataset.unup); drawAnim(); });
+  $('#anOk').disabled=!items.length; $('#anOk').title=items.length?'':'Carica almeno un’immagine o un video';
+}
+function addFiles(files){
+  [...files].filter(f=>/^(image|video)\//.test(f.type)).forEach(f=>{ const id='u'+(++upN);
+    doc.media.push({id,g:'',name:f.name,src:URL.createObjectURL(f),video:f.type.startsWith('video/')?'video':undefined}); anim.items.push(id); });
+  drawAnim(); renderRight(); }
+$('#anFile').onchange=e=>{ addFiles(e.target.files); e.target.value=''; };
+$('#anDrop').addEventListener('dragover',e=>{ e.preventDefault(); $('#anDrop').classList.add('over'); });
+$('#anDrop').addEventListener('dragleave',()=>$('#anDrop').classList.remove('over'));
+$('#anDrop').addEventListener('drop',e=>{ e.preventDefault(); $('#anDrop').classList.remove('over'); addFiles(e.dataTransfer.files); });
+$('#anCancel').onclick=closeAnim;
+$('#anModal').addEventListener('click',e=>{ if(e.target.id==='anModal') closeAnim(); });
+$('#anModal').addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.stopPropagation(); closeAnim(); } });
+$('#anOk').onclick=()=>{ const p=pageByKey(anim.page), b=p.slots[anim.idx]; commit(); const {idx,path,at}=anim;
+  if(path!=null){ Object.assign(itemAt(b,path),{type:anim.type,items:anim.items}); closeAnim(); select(p.key,idx,path); return; }
+  b.items.splice(at,0,ANIMI(anim.type,anim.items)); closeAnim(); select(p.key,idx,String(at)); };
+function removeBlock(p,idx){ commit(); p.slots.splice(idx,1); resetLayout(p); select(p.key,null); }
+function label(p,n){ const l=document.createElement('div'); l.className='pg-label';
+  l.innerHTML=`<span><b>${n}</b> · ${p.name}</span><button class="pg-del press" title="Elimina pagina" aria-label="Elimina la pagina ${n}">${I('trash')}</button>`;
+  l.querySelector('.pg-del').onclick=()=>deletePage(p); return l; }
+/* Add an empty page (one empty block) after the selected page, or at the end of the case. */
+let pageN=0;
+function addPage(){ const f=findSel(); const list=f?listOf(f.p):state.mode==='case'?V().case:V().client.outro;
+  commit(); const p={key:'new-'+(++pageN)+'-'+Date.now().toString(36),name:'Nuova pagina',bg:'#ffffff',variant:0,slots:[B('Blocco',[])],section:f?sectionOf(f.p):'output'};
+  list.splice(f?list.indexOf(f.p)+1:list.length,0,p); select(p.key,null);
+  document.getElementById('p-'+p.key)?.scrollIntoView({behavior:'smooth',block:'center'}); }
+/* A case page is also in the client's file (and the other way round): say so before deleting it. */
+function sharedNote(p){ if(isCaseIntro(p)||isCaseEnd(p)) return null; // the client file has its own intro and closing, so these aren't shared
+  if(V().case.includes(p)) return state.mode==='case'?'Questa pagina è anche nelle pagine del cliente Lumen: eliminandola qui sparisce anche lì.':'Questa pagina fa parte della case LUM-2026-01 · Rebranding e sito: eliminandola qui sparisce anche dalla case.';
+  const code=Object.keys(V().others).find(c=>V().others[c].includes(p)); if(code){ const pr=V().client.projects.find(x=>x.code===code); return `Questa pagina fa parte della case ${code} · ${pr.name}: eliminandola qui sparisce anche dalla case.`; }
+  return null; }
+function ask(title,text,yes,onYes){ $('#askTitle').textContent=title; $('#askText').textContent=text; $('#askYes').textContent=yes; $('#askModal').hidden=false; $('#askNo').focus();
+  const close=()=>{ $('#askModal').hidden=true; }; $('#askNo').onclick=close; $('#askYes').onclick=()=>{ close(); onYes(); };
+  $('#askModal').onkeydown=e=>{ if(e.key==='Escape'){ e.stopPropagation(); close(); } }; }
+/* Delete a page (only in the format in view); ⌘Z brings it back. */
+function deletePage(p,confirmed){ const list=listOf(p); if(!list) return;
+  const note=!confirmed&&sharedNote(p); if(note){ ask('Eliminare la pagina?',note+' Puoi annullare con ⌘Z.','Elimina',()=>deletePage(p,true)); return; }
+  commit(); list.splice(list.indexOf(p),1);
+  if(state.sel&&state.sel.page===p.key) state.sel=null; renderAll(); toast('Pagina eliminata. ⌘Z per annullare.'); }
+
+function renderCanvas(){
+  const c=$('#canvas'); const top=c.scrollTop; c.innerHTML='';
+  const meta=document.createElement('div'); meta.className='fmt-meta';
+  if(state.fmt==='916'&&previewing()){ // Anteprima of Video only: show where Instagram's own interface sits once published, as a Reel or a Story
+    meta.classList.add('with-switch');
+    const sw=document.createElement('div'); sw.className='ig-switch'; sw.setAttribute('role','group'); sw.setAttribute('aria-label','Anteprima Instagram');
+    sw.innerHTML=`<span>Anteprima</span><div class="seg">${[['off','Nessuna'],['reel','Reel'],['story','Storia']].map(([k,t])=>`<button data-ig="${k}" aria-pressed="${state.ig===k}">${t}</button>`).join('')}</div>`;
+    sw.querySelectorAll('[data-ig]').forEach(b=>b.onclick=()=>{ state.ig=b.dataset.ig; renderCanvas(); });
+    meta.appendChild(sw); }
+  if(state.fmt==='916'&&!previewing()){ // Video editor: a switch to stop the text animations while editing
+    meta.classList.add('with-switch');
+    const t=document.createElement('label'); t.className='tswitch';
+    t.innerHTML=`<input type="checkbox" ${state.textAnim!==false?'checked':''}><span class="knob" aria-hidden="true"></span>Animazione testi`;
+    t.querySelector('input').onchange=e=>{ state.textAnim=e.target.checked; c.classList.toggle('no-tanim',!state.textAnim); };
+    meta.appendChild(t); }
+  c.classList.toggle('no-tanim',state.textAnim===false&&!previewing());
+  if(meta.childNodes.length) c.appendChild(meta); // Video: the text animation switch (editor) or the Instagram preview switch (Anteprima)
+  let n=1;
+  if(previewing()&&state.fmt!=='169'){ // one slideshow of every page, as on social
+    const ps=pageEls(); state.pvI=Math.max(0,Math.min(ps.length-1,state.pvI||0)); const p=ps[state.pvI];
+    const box=document.createElement('div'); box.className='social';
+    box.innerHTML=`<div class="social-stage"><button class="btn sec press social-nav" id="sPrev" aria-label="Pagina precedente" ${state.pvI===0?'disabled':''}>‹</button>
+      <div class="social-frame f${state.fmt}"></div><button class="btn sec press social-nav" id="sNext" aria-label="Pagina successiva" ${state.pvI===ps.length-1?'disabled':''}>›</button></div>
+      <div class="social-dots">${ps.map((_,i)=>`<i class="${i===state.pvI?'on':''}"></i>`).join('')}</div><div class="social-cap">${state.pvI+1} di ${ps.length} · ${p.name}</div>`;
+    box.querySelector('.social-frame').appendChild(renderPage(p)); c.appendChild(box);
+    box.querySelector('#sPrev').onclick=()=>stepSlide(-1); box.querySelector('#sNext').onclick=()=>stepSlide(1);
+    return; }
+  if(state.mode==='case'){ let sec=null, row=null;
+    // In the editor pages go one under the other in every format; the slideshow is only in Anteprima.
+    V().case.forEach(p=>{ if(sectionOf(p)!==sec){ sec=sectionOf(p); const g=document.createElement('div'); g.className='group-label'; g.textContent=SECTIONS[sec]; c.appendChild(g); row=null; }
+      if(row){ const sl=document.createElement('div'); sl.className='slide'; sl.appendChild(label(p,n++)); sl.appendChild(renderPage(p)); row.appendChild(sl); }
+      else { c.appendChild(label(p,n++)); c.appendChild(renderPage(p)); } }); }
+  else{
+    // Every format: pages one under the other, grouped by case (the order of the cases follows the right panel).
+    const group=(t,pages)=>{ const g=document.createElement('div'); g.className='group-label'; g.textContent=t; c.appendChild(g);
+      pages.forEach(p=>{c.appendChild(label(p,n++)); c.appendChild(renderPage(p));}); };
+    group('Introduzione',V().client.intro);
+    // Each case's own pages, editable here: they are the case's pages, so a change shows in the case too.
+    V().client.projects.forEach(pr=>group(pr.code+' · '+pr.name,clientCasePages(pr)));
+    group('Chiusura',V().client.outro);
+  }
+  c.querySelectorAll('.page[id]').forEach(el=>placeHandles(el,pageByKey(el.id.slice(2))));
+  const add=document.createElement('button'); add.className='add-page press'; add.textContent='+ Aggiungi pagina'; add.onclick=addPage; c.appendChild(add);
+  c.scrollTop=top;
+}
+
+/* The page whose middle is nearest the middle of the canvas. */
+function pageInView(){ const c=$('#canvas').getBoundingClientRect(), mid=c.top+c.height/2;
+  let best=pageEls()[0], d=Infinity;
+  pageEls().forEach(p=>{ const e=document.getElementById('p-'+p.key); if(!e) return; const r=e.getBoundingClientRect(), x=Math.abs(r.top+r.height/2-mid); if(x<d){ d=x; best=p; } });
+  return best; }
+let inView=null;
+$('#canvas').addEventListener('scroll',()=>{ if(!state.sel&&pageInView().key!==inView) renderProps(); },{passive:true});
+function findSel(){ if(!state.sel) return null; const p=pageByKey(state.sel.page); if(!p) return null;
+  const s=state.sel.idx==null?null:p.slots[state.sel.idx]; if(state.sel.idx!=null&&!s) return {p,s:null,it:null};
+  return {p,s,it:s&&state.sel.path!=null?itemAt(s,state.sel.path):null}; }
+const previewing=()=>document.body.classList.contains('previewing');
+function select(page,idx=null,path=null,keepFocus=false){
+  if(previewing()&&!keepFocus) return; // nothing is selected in Anteprima
+  state.sel={page,idx,path:path==null?null:String(path)};
+  if(keepFocus){ // don't rebuild the text the person is typing into
+    document.querySelectorAll('.it.sel').forEach(x=>x.classList.remove('sel'));
+    const t=document.querySelector(`#p-${page} [data-path="${idx}:${path}"]`); if(t) t.classList.add('sel');
+  } else renderCanvas();
+  renderProps(); renderRight(); }
+function renderAll(){ renderCanvas(); renderProps(); renderRight(); }
+
+/* Brand palette (owner, 2026-10-27): background-grey, white, black, accent-lime, accent-main.
+   These are the defaults; any other colour can still be typed in the field. */
+const PALETTE=['#ffffff','#ededf0','#012234','#defe56','#2977ff','transparent']; // last: no colour
+const DARK=['#012234','#2977ff'];
+const textOf=(p,s)=>s.color||'#012234'; // text is black unless chosen, on any background
+const swatches=(cur,attr)=>`<div class="swatches">${PALETTE.map(c=>`<button class="sw" ${attr}="${c}" style="background:${c}" ${c==='transparent'?'data-none title="Trasparente"':''} aria-pressed="${c===cur}" aria-label="${c==='transparent'?'Trasparente':c}"></button>`).join('')}</div>`;
+const thumbOf=L=>`style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style="grid-area:${a}"></span>`).join('')}`;
+
+/* Every preset layout, whatever the page holds now. Picking one with more cells adds empty image blocks;
+   with fewer cells it drops empty blocks, and refuses when that would drop filled ones. */
+/* The layouts each format offers: one per template the owner sends (2026-10-27). Each format has its own. */
+const PRESETS_BY_FMT={
+  169:[[5,0],TL.pres1,TL.pres3,TL.pres5,TL.presOnly,TL.caro3b],   // Intro · 1, 3, 5 immagini · solo layout · Risultati e testimonial
+  11:[[1,0],[2,0],TL.caro3a,TL.caro3b,[4,0],TL.caroStack],   // 1, 2, 3 A, 3 B, 4 immagini · due blocchi uno sopra l'altro
+  916:[[1,0],TL.caroStack,TL.videoIntro,TL.videoOutro],          // Video: one block · two blocks one above the other · Risultati e testimonial
+};
+const presets=()=>PRESETS_BY_FMT[state.fmt].map(([n,v])=>({n,v,L:BENTO[n][v]}));
+
+/* Default pages: they work like a layout (same page, new layout) but come with their blocks already
+   filled from the case (or the client). Images already on the page are kept first. */
+const STORY={
+  case:{title:'Una luce nuova per Lumen',eyebrow:'Lumen · 2026 · Brand e digitale',head:'Un marchio forte, ma invisibile online',
+    body:'Abbiamo ridisegnato il logo partendo dalla forma delle lampade e costruito un sito che mostra i prodotti al buio, come li vedono i clienti.',
+    kpi:'+38%',kpiText:'di richieste dal sito nei primi tre mesi.',quote:'“Finalmente il sito racconta la luce come la raccontiamo noi.” Giulia R., Lumen'},
+  client:{title:'Lumen',eyebrow:'Cliente dal 2023 · Illuminazione',head:'Tre anni di lavoro insieme',
+    body:'Da tre anni lavoriamo con Lumen sul marchio, il sito e i cataloghi.',
+    kpi:'3',kpiText:'progetti, dal marchio allo stand.',quote:'Grazie, Lumen. Alla prossima luce.'},
+};
+/* Default pages are for getting a template page back if it gets lost (owner, 2026-10-27): they lay out the page
+   as that template, filled from the case. `fmt` limits one to a format. New grids go into Layout, not here.
+   Contenuti (Figma, 2026-10-27): three images in grey blocks and a text block like the intro's Idea. */
+const imgs=n=>Array.from({length:n},()=>B('Immagine',[IM(null)]));
+const ideaBlock=(I,label='Idea')=>B('Testo',[T('lab',label),SP,T('head',I.ideaHead),T('body',I.ideaBody)],{pad:28});
+const DEFAULT_PAGES=[
+  {k:'intro',name:'Intro'},
+  {k:'sfida',name:'Sfida',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Sfida',[T('lab','Sfida',{fs:18}),SP,T('big',I.challengeHead),T('body2',I.challengeBody,{fs:22})],{pad:40})]},
+  {k:'idea',name:'Idea',fmt:'11',n:1,v:0,page:{pad:24,bg:'#ffffff'},slots:(c,I)=>[B('Idea',[T('lab','Idea',{fs:18}),SP,T('big',I.ideaHead),T('cols',I.ideaBody)],{pad:40})]},
+  // Presentazione content pages: 1, 3 and 5 images with the text block (owner, 2026-10-27).
+  {k:'content1',name:'1 immagine',fmt:'169',n:TL.pres1[0],v:TL.pres1[1],page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(1),ideaBlock(I,'06 Deliverable — Output')]},
+  {k:'content',name:'3 immagini',fmt:'169',n:TL.pres3[0],v:TL.pres3[1],page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(3),ideaBlock(I,'06 Deliverable — Output')]},
+  {k:'content5',name:'5 immagini',fmt:'169',n:TL.pres5[0],v:TL.pres5[1],page:{pad:40,bg:'#ffffff'},slots:(c,I)=>[...imgs(5),ideaBlock(I,'06 Deliverable — Output')]},
+  {k:'outro',name:'Risultati e testimonial'},
+  {k:'end',name:'Chiusura',fmt:'11'},
+];
+/* The page list a page belongs to, in the format in view (case, client intro/outro, or one of the client's cases). */
+const listOf=p=>[V().case,V().client.intro,V().client.outro,...Object.values(V().others)].find(l=>l.includes(p));
+function fillDefault(p,key,mode,media){ const D=DEFAULT_PAGES.find(d=>d.k===key);
+  const imgs=[...pageMedia(p).filter(m=>!m.video).map(m=>m.id),...media.filter(m=>!m.video).map(m=>m.id)];
+  p.pad=null; Object.assign(p,D.page||{}); p.slots=D.slots(STORY[mode],clone(INTRO[mode])); itemsOf(p.slots.flatMap(b=>b.items)).forEach(it=>{ if(it.e==='img') it.m=imgs.shift()||null; });
+  resetLayout(p); p.variant=D.v; p.anim=null; p.preset=key; }
+function applyDefaultPage(p,key){ commit();
+  if(key==='intro') applyIntro(listOf(p),p,state.fmt); else if(key==='outro') applyOutro(p,state.fmt,state.mode); else if(key==='end'){ const c=closingPage(p.key); Object.assign(p,{...c,name:p.name,key:p.key}); } else fillDefault(p,key,state.mode,state.mode==='case'?doc.media:doc.cmedia);
+  select(p.key,null); }
+/* Risultati e testimonial: the case's results (number and what it measures) and its testimonial on one page,
+   in every format. Presentazione side by side; Carosello and Video one above the other. */
+/* Risultati e testimonial (Figma MAC-TF-AI, 2026-10-27). Results in a blue block, one row per result
+   (what it measures, then the number in lime, a thin line above); the client's words in a grey block.
+   Presentazione adds a visual on the left; Carosello puts the two blocks side by side; Video stacks them. */
+function applyOutro(p,fmt,mode){ const I=clone(typeof mode==='string'?INTRO[mode]:mode), m=fmt==='11'; // m: the Carosello template's sizes (Video has its own)
+  const kpis=COL(I.results.map(([v,l])=>COL([{e:'hr',n:'Linea',kpi:true},ROW([T('kpil',l,m?{fs:16}:{}),T('kpiv',v)],{cls:'kpirow'})],{cls:'kpi'})),{cls:'kpis'});
+  const res=B('Risultati',[T('lab','06 — Risultati',{color:'rgb(255 255 255 / .65)',...(m?{fs:13}:{})}),SP,kpis],{pad:28,bg:'#2977ff',ink:'#ffffff'});
+  const voice=B('Testimonianza',[T('lab','08 — Voce del cliente',{color:'rgb(1 34 52 / .65)',...(m?{fs:13}:{})}),T('voice','«'+I.quote.replace(/^[“«"]|[”»"]$/g,'')+'»'),SP,T('author',I.author,m?{fs:16}:{})],{pad:28});
+  const img=(typeof mode==='string'?(mode==='client'?CLIENT_MEDIA:MEDIA):MEDIA).find(m=>!m.video&&m.id!==I.img)||{};
+  Object.assign(p,{bg:'#ffffff',anim:null,preset:'outro',tk:null,deco:null});
+  if(fmt==='169') Object.assign(p,{pad:40,variant:TL.caro3b[1],slots:[B('Visual',[IM(img.id||null)]),res,voice]});
+  else if(fmt==='11') Object.assign(p,{pad:24,variant:0,slots:[res,voice]});
+  else { // Video: the same info section as the Video intro first, then results and testimonial
+    const info=B('Progetto',[ROW([COL([T('meta',I.meta,{fs:16}),T('name',I.client)]),BRAND]),T('xl',I.title,{fs:56}),T('sub',I.sub),HR,ROW([T('lab','Servizi'),TAGS(I.services)],{top:true})],{pad:60,padTop:220,cls:'vinfo'});
+    Object.assign(p,{pad:24,variant:TL.videoOutro[1],slots:[info,res,voice]}); } }
+/* Carosello closing page (Figma): the same for every carousel, its text editable per carousel. */
+function closingPage(key){ return {key,name:'Chiusura',section:'risultati',bg:'#ededf0',pad:0,deco:'star',preset:'end',variant:0,slots:[
+  B('Chiusura',[SP,T('ctal','Al prossimo progetto',{fs:18}),T('ctat','Non perderti i nostri progetti, continua a seguirci per scoprire tutte le novità che stiamo costruendo per voi'),SP],{bg:'transparent',pad:92})]}; }
+// Video: the results now live on Risultati e testimonial, so its old separate result page goes.
+{ const vc=doc.views['916'].case; const r=vc.findIndex(p=>p.key==='result'); if(r>=0) vc.splice(r,1); }
+FORMATS.forEach(f=>{ const v=doc.views[f]; const o=v.case.find(p=>p.key==='outro'); if(o) applyOutro(o,f,'case');
+  Object.entries(v.others).forEach(([code,list])=>{ const q=list.find(p=>p.key.endsWith('-outro')); if(q) applyOutro(q,f,OTHER_CASES[code]); }); });
+// Every carousel ends with the closing page, each its own copy.
+{ const v=doc.views['11']; v.case.push(closingPage('end')); v.client.outro.push(closingPage('c-end')); Object.entries(v.others).forEach(([code,list])=>list.push(closingPage(code.toLowerCase()+'-end'))); }
+// The sample case's result page in Presentazione is the Contenuti template.
+{ const pres=doc.views['169'].case.find(p=>p.key==='result'); fillDefault(pres,'content','case',MEDIA);
+  // Carosello: the same three images, as the "3 immagini · A" layout, so the result has its page here too.
+  const caro=doc.views['11'].case.find(p=>p.key==='result');
+  Object.assign(caro,{pad:24,bg:'#ffffff',variant:TL.caro3a[1],anim:null,preset:null,slots:pres.slots.slice(0,3).map(clone)}); }
+const dpThumb=D=>{ if(D.k==='end') return `<div class="dp"><button class="var press" data-dp="end" aria-label="Chiusura" style="grid-template:1fr/1fr;background:#ededf0"><span style="background:#defe56;border-radius:40% 0 0 0;margin:30% 0 0 45%"></span></button><small>Chiusura</small></div>`;
+  if(D.k==='outro'){ const L=state.fmt==='169'?BENTO[3][TL.caro3b[1]]:state.fmt==='11'?BENTO[2][0]:BENTO[3][TL.videoOutro[1]];
+    return `<div class="dp"><button class="var press" data-dp="outro" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${L.a.map(a=>`<span style="grid-area:${a}"></span>`).join('')}</button><small>${D.name}</small></div>`; }
+  if(D.k==='intro'){ const L=state.fmt==='169'?BENTO[5][0]:state.fmt==='916'?BENTO[2][TL.videoIntro[1]]:BENTO[1][0];
+    return `<div class="dp"><button class="var press" data-dp="intro" aria-label="Intro" style="grid-template:${frTpl(L.g)}">${L.a.map((a,j)=>`<span style="grid-area:${a};${j===0?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>Intro</small></div>`; }
+  const L=BENTO[D.n][D.v]; return `<div class="dp"><button class="var press" data-dp="${D.k}" aria-label="${D.name}" style="grid-template:${frTpl(L.g)}">${D.slots(STORY.case,INTRO.case).map((x,j)=>`<span style="grid-area:${L.a[j]};${x.items.some(i=>i.e==='img')?'background:var(--border-strong)':''}"></span>`).join('')}</button><small>${D.name}</small></div>`; };
+/* A layout with more cells adds empty blocks; with fewer it drops empty blocks, and refuses to drop filled ones. */
+function applyPreset(p,n,v){
+  const empty=b=>!b.items.length&&!b.img;
+  const extra=p.slots.length-n, emptyCount=p.slots.filter(empty).length;
+  if(extra>emptyCount){ const k=extra-emptyCount;
+    toast(k===1?'La pagina ha 1 blocco in più di questo layout: toglilo prima.':`La pagina ha ${k} blocchi in più di questo layout: toglili prima.`); return; }
+  commit();
+  if(n!==p.slots.length){ while(p.slots.length<n) p.slots.push(B('Blocco',[]));
+    for(let i=p.slots.length-1;i>=0&&p.slots.length>n;i--) if(empty(p.slots[i])) p.slots.splice(i,1);
+    resetLayout(p); }
+  p.variant=v; p.anim=null; p.preset=null; select(p.key,null); }
+function layoutsAndElements(p){
+  const full=p&&p.slots.length>=MAX_BLOCKS;
+  const cur=p&&p.slots.length&&!animOf(p)&&!p.preset?layoutOf(p):null;
+  const layouts=p?`<div class="sec-b"><p class="eyebrow">Layout</p>
+      <div class="variants">${presets().map(({n,v,L})=>`<button class="var press" draggable="true" data-var="${n}:${v}" aria-pressed="${L===cur}" aria-label="Layout da ${n} ${n===1?'blocco':'blocchi'}" title="${n} ${n===1?'blocco':'blocchi'}" ${thumbOf(L)}</button>`).join('')}</div>
+      ${presets().filter(x=>x.n===p.slots.length).length>1?`<div style="margin-top:10px"><button class="btn sm sec press" id="shuffle" style="width:100%">Mescola</button></div>`:''}
+      </div>
+      <div class="sec-b"><p class="eyebrow">Pagine di default</p>
+      <div class="variants">${DEFAULT_PAGES.filter(D=>!D.fmt||D.fmt===state.fmt).map(dpThumb).join('').replace(`data-dp="${p.preset}"`,`data-dp="${p.preset}" aria-pressed="true"`)}</div>
+      </div>`:'';
+  return layouts+`<div class="sec-b"><p class="eyebrow">Elementi</p>
+      <div class="els">${ELEMENTS.map((E,i)=>`<div class="el" draggable="true" data-el="${i}">${I(E.icon)}${E.label}</div>`).join('')}</div>
+      </div>`;
+}
+function wireDrag(el){
+  el.querySelectorAll('[data-var]').forEach(b=>b.addEventListener('dragstart',e=>{ { const [n,v]=b.dataset.var.split(':').map(Number); drag={kind:'var',n,v}; } e.dataTransfer.setData('text/plain','var'); }));
+  el.querySelectorAll('[data-el]').forEach(b=>{ b.addEventListener('dragstart',e=>{ drag={kind:'el',i:+b.dataset.el}; e.dataTransfer.setData('text/plain','el'); });
+    // Click: Blocco adds a block; an element goes into the selected block.
+    b.addEventListener('click',()=>{ const f=findSel(), p=f?f.p:pageInView(); addElement(p,+b.dataset.el,f&&f.s?state.sel.idx:null); }); });
+}
+
+function renderProps(){
+  const el=$('#props'); const f=findSel();
+  // Nothing selected: the page controls act on the page in view, so every control shows from the start.
+  const {p,s,it}=f||{p:pageInView(),s:null,it:null}; inView=f?null:p.key;
+  if(!s){
+    el.innerHTML=`<div class="sec-b" style="padding-bottom:4px"><div class="crumb">Pagina</div><div class="sel-title">${p.name}</div></div>${pageTools(p)}`;
+    wirePageTools(el,p); return; }
+  renderBlockProps(el,p,s,it);
+  // The page's tools stay under the block's own settings, so the toolbar never goes away.
+  el.insertAdjacentHTML('beforeend',`<div class="sec-b" style="padding-bottom:4px"><div class="crumb">Pagina</div><div class="sel-title">${p.name}</div></div>${pageTools(p)}`);
+  wirePageTools(el,p);
+}
+function pageTools(p){ return `<div class="fmt-${state.fmt}">${layoutsAndElements(p)}</div>
+      ${bgTools(p)}
+      <div class="sec-b"><button class="btn sm sec press" id="delpage" style="width:100%">Elimina pagina</button></div>`; }
+/* Sfondo: the selected block's background, or the page's when no block is selected. Colour or image;
+   images come from the case's and the client's media. */
+const bgTarget=p=>{ const f=findSel(); return f&&f.p===p&&f.s?{o:f.s,what:'blocco',def:'#ededf0'}:{o:p,what:'pagina',def:'#ffffff'}; };
+function bgTools(p){ const {o,what,def}=bgTarget(p), c=o.bg||def, tab=o.img?'img':(state.bgTab||'color');
+  const pool=[...doc.cmedia,...doc.media].filter(m=>!m.video);
+  return `<div class="sec-b"><p class="eyebrow">Sfondo · ${what}</p>
+    <div class="seg full" id="bgtab"><button data-bgtab="color" aria-pressed="${tab==='color'}">Tinta unita</button><button data-bgtab="img" aria-pressed="${tab==='img'}">Immagine</button></div>
+    ${tab==='color'?`<div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${c}" ${c==='transparent'?'data-none':''}></span><input value="${c==='transparent'?'Trasparente':c.toUpperCase()}"></div></div>
+      ${swatches(c,'data-bgc')}`
+    :`<div class="bg-pick">${pool.map(m=>`<button class="press" data-bgimg="${m.id}" aria-pressed="${o.img===m.id}" title="${m.name}" aria-label="${m.name}"><span class="ph ${m.g}">${m.src?mediaTag(m):''}</span></button>`).join('')}</div>
+      ${o.img?`<div style="margin-top:8px"><button class="btn sm ghost press" id="bgimgoff" style="width:100%">Togli immagine</button></div>`:''}`}</div>`; }
+function wireBgTools(el,p){ const {o}=bgTarget(p), re=()=>state.sel&&state.sel.idx!=null?select(p.key,state.sel.idx,state.sel.path):select(p.key,null);
+  el.querySelectorAll('[data-bgtab]').forEach(b=>b.onclick=()=>{ state.bgTab=b.dataset.bgtab; if(b.dataset.bgtab==='color'&&o.img){ commit(); o.img=null; } re(); });
+  el.querySelectorAll('[data-bgc]').forEach(b=>b.onclick=()=>{ commit(); o.bg=b.dataset.bgc; o.img=null; if(o===p) p.dark=DARK.includes(p.bg); re(); });
+  el.querySelectorAll('[data-bgimg]').forEach(b=>b.onclick=()=>{ commit(); o.img=b.dataset.bgimg; re(); });
+  const off=el.querySelector('#bgimgoff'); if(off) off.onclick=()=>{ commit(); o.img=null; state.bgTab='color'; re(); }; }
+function wirePageTools(el,p){
+    wireBgTools(el,p);
+    wireDrag(el);
+    const dp=$('#delpage'); if(dp) dp.onclick=()=>deletePage(p);
+    el.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>applyDefaultPage(p,b.dataset.dp));
+    el.querySelectorAll('[data-var]').forEach(b=>b.onclick=()=>{ const [n,v]=b.dataset.var.split(':').map(Number); applyPreset(p,n,v); });
+    const sh=$('#shuffle'); if(sh) sh.onclick=()=>{ const same=presets().filter(x=>x.n===p.slots.length), k=same.findIndex(x=>x.L===layoutOf(p));
+      applyPreset(p,p.slots.length,same[(k+1)%same.length].v); };
+}
+function mediaPicker(m,id,label){ return `<div style="display:flex;gap:10px;align-items:center"><div class="${m?m.g:''}" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;overflow:hidden;background-color:var(--fill-2)">${m&&m.src?`<div class="ph" style="width:100%;height:100%;position:relative">${mediaTag(m)}</div>`:''}</div>
+  <div style="min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m?m.name:'Nessuna immagine'}</div><button style="color:var(--ink);font-size:12.5px;font-weight:500" id="${id}">${label}</button></div></div>`; }
+function renderBlockProps(el,p,b,it){
+  const re=()=>select(p.key,state.sel.idx,state.sel.path);
+  if(it){ const head=`<div class="sec-b"><div class="crumb">${b.n}</div><div class="sel-title">${it.n||'Elemento'}</div></div>`;
+    const rm=`<div class="sec-b"><button class="btn sm sec press" id="rm" style="width:100%">Rimuovi elemento</button></div>`;
+    let body='';
+    if(it.e==='txt'){ const c=it.color||(b.img?'#ffffff':'#012234');
+      body=`<div class="sec-b"><p class="eyebrow">Testo · ${fmtName()}</p>
+        <div class="row"><label>Stile</label><select class="field" id="style">${Object.entries(STYLES).map(([k,v])=>`<option value="${k}" ${k===it.cls?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="row"><label>Allinea</label><div class="seg full" style="flex:1" id="align">${[['left','Sinistra'],['center','Centro'],['right','Destra']].map(([k,t])=>`<button data-al="${k}" aria-pressed="${(it.align||'left')===k}">${t}</button>`).join('')}</div></div>
+        <div class="row"><label>Colore</label><div class="field"><span class="chip" style="background:${c}" ${c==='transparent'?'data-none':''}></span><input value="${c==='transparent'?'Trasparente':c.toUpperCase()}"></div></div>
+        ${swatches(c,'data-color')}</div>`; }
+    if(it.e==='img') body=`<div class="sec-b"><p class="eyebrow">${it.video?'Video':'Immagine'}</p>${mediaPicker(mediaOf(it.m),'swap',(it.m?'Sostituisci':'Scegli')+' dai Media')}</div>
+      <div class="sec-b"><p class="eyebrow">Adattamento</p><div class="seg full" id="fit">${[['fill','Riempi'],['fit','Adatta'],['crop','Ritaglia']].map(([k,t])=>`<button data-fit="${k}" aria-pressed="${(it.fit||'fill')===k}">${t}</button>`).join('')}</div></div>`;
+    if(it.group) body=`<div class="sec-b"><p class="eyebrow">Allineamento nel blocco</p>
+        <div class="seg full icons" id="dist">${[['top','In alto'],['center','Al centro'],['bottom','In basso'],['between',`Distanziati: ${(it.split||1)===1?'il primo testo':'i primi '+it.split+' testi'} in alto, il resto in basso`]].map(([k,t])=>`<button data-dist="${k}" aria-pressed="${(it.dist||'top')===k}" aria-label="${t}" title="${t}">${I('al-'+k)}</button>`).join('')}</div></div>`;
+    if(it.e==='anim') body=`<div class="sec-b"><p class="eyebrow">Animazione</p>
+        <div class="row"><label>Tipo</label><select class="field" id="antype">${ANIMS.map(a=>`<option value="${a.k}" ${a.k===it.type?'selected':''}>${a.name}</option>`).join('')}</select></div>
+        <div class="row"><label>Media</label><span class="help">${it.items.length} file</span></div>
+        <div style="margin-top:10px"><button class="btn sm sec press" id="anedit" style="width:100%">Cambia animazione o media</button></div></div>
+      <div class="sec-b"><p class="eyebrow">Adattamento</p>
+        <div class="seg full" id="anfit">${[['fit','Adatta'],['fill','Riempi']].map(([k,t])=>`<button data-anfit="${k}" aria-pressed="${(it.fit||'fit')===k}">${t}</button>`).join('')}</div>
+        <div class="row"><label>Dimensione</label><input class="slider" type="range" min="50" max="150" step="5" value="${it.size||100}" id="ansize"><span class="readout" id="ansizeV">${it.size||100}%</span></div></div>`;
+    el.innerHTML=head+body+rm;
+    el.querySelectorAll('[data-color]').forEach(x=>x.onclick=()=>{ commit(); it.color=x.dataset.color; re(); });
+    const st=$('#style'); if(st) st.onchange=e=>{ commit(); it.cls=e.target.value; it.n=STYLES[it.cls]; delete it.fs; re(); };
+    el.querySelectorAll('[data-dist]').forEach(x=>x.onclick=()=>{ commit(); it.dist=x.dataset.dist; re(); });
+    el.querySelectorAll('[data-al]').forEach(x=>x.onclick=()=>{ commit(); it.align=x.dataset.al==='left'?null:x.dataset.al; re(); });
+    el.querySelectorAll('#fit button').forEach(x=>x.onclick=()=>{ commit(); it.fit=x.dataset.fit; re(); });
+    const sw=$('#swap'); if(sw) sw.onclick=()=>setTab('media');
+    const at=$('#antype'); if(at) at.onchange=e=>{ commit(); it.type=e.target.value; re(); };
+    el.querySelectorAll('[data-anfit]').forEach(x=>x.onclick=()=>{ commit(); it.fit=x.dataset.anfit; re(); });
+    const sz=$('#ansize'); if(sz){ sz.onpointerdown=()=>commit();
+      sz.oninput=()=>{ it.size=+sz.value; $('#ansizeV').textContent=sz.value+'%'; document.querySelector(`#p-${p.key} [data-path="${state.sel.idx}:${state.sel.path}"]`)?.style.setProperty('--as',it.size/100); saving(); }; }
+    const ae=$('#anedit'); if(ae) ae.onclick=()=>openAnim({page:p.key,idx:state.sel.idx,path:state.sel.path});
+    $('#rm').onclick=()=>removeItem(p,state.sel.idx,state.sel.path);
+    return; }
+  // A block: its background is set in Sfondo, below.
+  el.innerHTML=`<div class="sec-b"><div class="crumb">Blocco</div><div class="sel-title">${b.n}</div></div>
+    <div class="sec-b"><button class="btn sm sec press" id="rm" style="width:100%">Rimuovi blocco</button></div>`;
+  $('#rm').onclick=()=>removeBlock(p,state.sel.idx);
+}
+
+/* Page thumbnail: the page itself, drawn small (same units, so it scales exactly). */
+function miniOf(p){ const box=document.createElement('div'); box.className='mini pv'; box.style.aspectRatio={169:'16/9',11:'1/1',916:'9/16'}[state.fmt];
+  box.appendChild(renderPage(p,true)); return box.outerHTML; }
+
+function renderRight(){
+  const b=$('#rbody'); const q=$('#q').value.toLowerCase();
+  $('#dropFoot').hidden=state.tab!=='media';
+  if(state.tab==='pages'){
+    const thumb=(p,n)=>`<button class="thumb" draggable="true" data-go="${p.key}" aria-current="${!!state.sel&&state.sel.page===p.key}">${miniOf(p)}<small><b>${n}</b> · ${p.name}</small></button>`;
+    const cls=state.view==='list'?'thumbs list':'thumbs'; let h='',n=1;
+    if(state.mode==='case') Object.keys(SECTIONS).forEach(sec=>{ const ps=V().case.filter(p=>sectionOf(p)===sec);
+      if(ps.length) h+=`<div class="r-group"><p class="eyebrow">${SECTIONS[sec]}</p><div class="${cls}">${ps.map(p=>p.name.toLowerCase().includes(q)?thumb(p,V().case.indexOf(p)+1):'').join('')}</div></div>`; });
+    else{
+      h+=`<div class="r-group"><p class="eyebrow">Introduzione</p><div class="${cls}">${V().client.intro.map(p=>thumb(p,n++)).join('')}</div></div>`;
+      // The client's cases as project rows (the case's own pages are in the canvas); drag a row to reorder.
+      h+=`<div class="r-group"><p class="eyebrow">Progetti del cliente</p>${V().client.projects.filter(pr=>(pr.name+pr.code).toLowerCase().includes(q)).map(pr=>{ const ps=clientCasePages(pr); n+=ps.length;
+        return `<button class="proj" draggable="true" data-proj="${pr.code}">${ps[0]?miniOf(ps[0]).replace('class="mini pv"','class="mini pv" style="width:52px;flex-shrink:0;border-radius:6px"'):'<span class="mini"></span>'}<span><b>${pr.name}</b><small>${pr.code} · ${ps.length} ${ps.length===1?'pagina':'pagine'}</small></span></button>`; }).join('')}</div>`;
+      h+=`<div class="r-group"><p class="eyebrow">Chiusura</p><div class="${cls}">${V().client.outro.map(p=>thumb(p,n++)).join('')}</div></div>`;
+    }
+    b.innerHTML=h;
+    b.querySelectorAll('[data-go]').forEach(t=>t.onclick=()=>{ select(t.dataset.go,null); document.getElementById('p-'+t.dataset.go).scrollIntoView({behavior:'smooth',block:'center'}); });
+    // Reorder: drop a page on another page of the same list, or a case on another case.
+    let rd=null; const mark=x=>{ b.querySelectorAll('.drop-before').forEach(y=>y.classList.remove('drop-before')); if(x) x.classList.add('drop-before'); };
+    b.querySelectorAll('[data-go]').forEach(t=>{ const p=pageByKey(t.dataset.go);
+      t.addEventListener('dragstart',e=>{ rd={page:p}; e.dataTransfer.setData('text/plain','page'); });
+      t.addEventListener('dragover',e=>{ if(!rd||!rd.page||listOf(rd.page)!==listOf(p)) return; e.preventDefault(); mark(t); });
+      t.addEventListener('drop',e=>{ if(!rd||!rd.page) return; e.preventDefault(); mark(null); const list=listOf(p), from=list.indexOf(rd.page);
+        commit(); list.splice(from,1); list.splice(list.indexOf(p),0,rd.page); rd=null; renderAll(); }); });
+    b.querySelectorAll('[data-proj]').forEach(t=>{ const prs=V().client.projects, pr=prs.find(x=>x.code===t.dataset.proj);
+      t.onclick=()=>{ const g=[...document.querySelectorAll('.group-label')].find(x=>x.textContent.startsWith(pr.code)); g&&g.scrollIntoView({behavior:'smooth',block:'start'}); };
+      t.addEventListener('dragstart',e=>{ rd={proj:pr}; e.dataTransfer.setData('text/plain','proj'); });
+      t.addEventListener('dragover',e=>{ if(!rd||!rd.proj) return; e.preventDefault(); mark(t); });
+      t.addEventListener('drop',e=>{ if(!rd||!rd.proj) return; e.preventDefault(); mark(null);
+        commit(); prs.splice(prs.indexOf(rd.proj),1); prs.splice(prs.indexOf(pr),0,rd.proj); rd=null; renderAll(); }); });
+    b.addEventListener('dragend',()=>{ rd=null; mark(null); });
+    return; }
+  const inUse=new Set(pageEls().flatMap(p=>pageMedia(p).map(m=>m.id)));
+  const tiles=list=>`<div class="media ${state.view==='list'?'list':''}">${list.filter(m=>m.name.toLowerCase().includes(q)).map(m=>`<div class="mtile ${inUse.has(m.id)?'in-use':''}" data-m="${m.id}" role="button" tabindex="0" draggable="true"><span class="ph ${m.g}">${m.src?mediaTag(m):''}${m.video?`<span class="vid">▶ ${m.video}</span>`:''}</span><small>${m.name}</small><button class="star" data-star="${m.id}" aria-pressed="${!!m.fav}" aria-label="${m.fav?'Togli dai preferiti':'Aggiungi ai preferiti'}" title="${m.fav?'Togli dai preferiti':'Aggiungi ai preferiti'}"><svg class="i"><use href="#i-star"/></svg></button></div>`).join('')}</div>`;
+  let h=``;
+  if(state.mode==='client') h+=`<div class="r-group"><p class="eyebrow">Del cliente</p>${tiles(doc.cmedia)}</div><div class="r-group"><p class="eyebrow">Dalle sue case</p>${tiles(doc.media)}</div>`;
+  else h+=tiles(doc.media);
+  b.innerHTML=h;
+  $('#dropHint').textContent='Finiscono nei Media di '+(state.mode==='case'?'questa case.':'questo cliente.');
+  b.querySelectorAll('[data-star]').forEach(s=>s.onclick=e=>{ e.stopPropagation(); commit(); const m=allMedia().find(x=>x.id===s.dataset.star); m.fav=!m.fav; renderRight(); });
+  b.querySelectorAll('[data-m]').forEach(t=>{
+    t.addEventListener('dragstart',e=>{ drag={kind:'media',id:t.dataset.m}; e.dataTransfer.setData('text/plain','media'); });
+    // Click a file: it fills the selected image, or becomes the selected block's background, or is added to the selected block.
+    t.onclick=()=>{ const cur=findSel(); if(!cur||!cur.s) return; const id=t.dataset.m, m=mediaOf(id);
+      if(cur.it&&cur.it.e==='img'){ commit(); cur.it.m=id; select(cur.p.key,state.sel.idx,state.sel.path); return; }
+      commit(); cur.s.items.push(IM(id,{video:!!m.video})); select(cur.p.key,state.sel.idx,String(cur.s.items.length-1)); }; });
+}
+
+/* Panels and Anteprima. Anteprima shows the pages as they will look, without the editing tools;
+   the same button (now "Torna all'editor") goes back. */
+const work=$('.work');
+$('#panelL').onclick=()=>{ work.classList.add('hide-l'); $('#openL').focus(); };
+$('#panelR').onclick=()=>{ work.classList.add('hide-r'); $('#openR').focus(); };
+$('#openL').onclick=()=>{ work.classList.remove('hide-l'); $('#panelL').focus(); };
+$('#openR').onclick=()=>{ work.classList.remove('hide-r'); $('#panelR').focus(); };
+function stepSlide(d){ state.pvI=(state.pvI||0)+d; renderCanvas(); }
+function setPreview(on){ if(on){ const f=findSel(); state.pvI=f?Math.max(0,pageEls().indexOf(f.p)):0; } document.body.classList.toggle('previewing',on);
+  // Same button, next to the formats: an eye for Anteprima, a pencil to go back to the editor.
+  const b=$('#previewBtn'), t=on?'Torna all’editor':'Anteprima'; b.setAttribute('aria-pressed',String(on)); b.setAttribute('aria-label',t); b.title=t;
+  b.innerHTML=`<svg class="i"><use href="#i-${on?'pencil':'eye'}"/></svg>`; renderCanvas(); }
+$('#previewBtn').onclick=()=>setPreview(!document.body.classList.contains('previewing'));
+function setTab(t){ state.tab=t; document.querySelectorAll('#rtab button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===t))); renderRight(); }
+let tmr; function saving(){ $('#save').textContent='Salvataggio…'; clearTimeout(tmr); tmr=setTimeout(()=>$('#save').textContent='Salvato',600); }
+const press=(sel,b)=>document.querySelectorAll(sel).forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+
+document.querySelectorAll('#formats button').forEach(b=>b.onclick=()=>{ state.fmt=b.dataset.fmt; press('#formats button',b); renderAll(); });
+document.querySelectorAll('#rtab button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+document.querySelectorAll('#view button').forEach(b=>b.onclick=()=>{ state.view=b.dataset.view; press('#view button',b); renderRight(); });
+document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>{ state.mode=b.dataset.mode; state.sel=null; press('#mode button',b);
+  $('#docTitle').textContent=state.mode==='case'?'Lumen · Rebranding e sito':'Lumen · Pagine cliente'; $('#docCode').textContent=state.mode==='case'?'LUM-2026-01':'LUM'; renderAll(); });
+$('#q').oninput=renderRight;
+// Theme: Chiaro by default; Automatico follows the system.
+const mq=matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(t){ document.documentElement.dataset.theme=t==='system'?(mq.matches?'dark':'light'):t;
+  document.querySelectorAll('#theme button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.t===t))); }
+document.querySelectorAll('#theme button').forEach(b=>b.onclick=()=>applyTheme(b.dataset.t));
+
+renderAll();
+</script>
+</body>
+</html>
