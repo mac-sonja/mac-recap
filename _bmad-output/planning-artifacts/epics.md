@@ -36,7 +36,7 @@ FR7: Owner/designer and account/sales/social users export an approved case study
 FR8: Users sign in with one of three fixed roles (owner/designer, account/sales/social, admin). The admin adds and removes users and assigns their role, and nothing else: no case content, no permission settings, no guardrail settings. The last admin can't drop their own admin role. Every action follows the AD-11 permission matrix. Delivered in Sprint 3. (CAP-11, Stories 6.1–6.2)
 FR11 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-19): Creating a client is a wizard: details (name, sector, description, logo, context, solution and results, all required), then up to 3 files of client material with at least 2 images. Since SCP 2026-10-21 the client is added and edited in a side panel, and the intro and outro open in the configurator from the client's page. The system drafts the client's intro and outro pages from the client's name, sector, description, brief and material, and the owner/designer edits, checks and approves them in the configurator. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md); [Sprint Change Proposal 2026-10-21, client outro](sprint-change-proposal-2026-10-21-client-outro.md))
 FR12 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-21): **Modifica layout** on the client's page opens the client overview: the intro, every case study and the outro of the client in one preview. Editing a case study there edits that case study. **Modifica cliente** edits the client's data in a side panel.
-FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro, approved case studies and approved outro), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them, replacing their own outro pages; otherwise each case study keeps its own intro and outro (SCP 2026-10-26). Text edits (owner/designers only) and hidden pages in a collection apply only to that collection. Amended (SCP 2026-10-28, C28, C38): PDF A4 is dropped, so collections export Presentazione 16:9; a case's Risultati e testimonial pages stay in a client file after the client's closing is added, and only the case's own intro and Carosello Chiusura are left out.
+FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro, approved case studies and approved outro), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them, replacing their own outro pages; otherwise each case study keeps its own intro and outro (SCP 2026-10-26). Text edits (owner/designers only) and hidden pages in a collection apply only to that collection. Amended (SCP 2026-10-28, C28, C38): PDF A4 is dropped, so collections export Presentazione 16:9; a case's Risultati e testimonial pages stay in a client file after the client's closing is added, and only the case's own intro and Carosello Chiusura are left out. Amended (owner, 2026-10-28): client packs and collections come in every format (Presentazione, Carosello, Video) and are built in the configurator.
 CAP-12 (SPEC; no PRD FR number): every transition, upload, save, block check, claim edit, approval, export and link change is an append-only, timestamped event with its actor, and the generated draft is kept next to the approved version. The tool does not record hands-on time. Built by each epic as it goes, not as an epic of its own.
 
 Out of MVP scope (listed for traceability only): FR9 MAC Productive via MCP (Epic 7), FR10 text-based case studies and whitepapers (Epic 8).
@@ -130,7 +130,7 @@ UX-DR35: Clients (owner/designer). Table of clients (ID: the client code, mono; 
 UX-DR36: About the client block. Superseded (SCP 2026-10-28, C33, answer 2): it becomes the Intro's Cliente block, and the client's fields there are editable on the page and write back to the client's record. Was: Shown in every format of a case study: logo, client name, sector (2026-10-22), description, always the client's current info (drafts and approved case studies alike). Read-only in the configurator, with the hint "Modifica i dati nella pagina del cliente. Le modifiche si vedono in tutte le sue case history." Not in the Check tab list. Parts without a value are hidden; the block is hidden when the client has no description, sector or logo (since SCP 2026-10-19 all are required, so this only covers a client whose wizard isn't finished).
 UX-DR37: Client material (was Client images; SCP 2026-10-19). Up to 3 files per client, at least 2 images, in wizard step 2 **Materiale** and in **Dati cliente**: drop zone, file rows in order, **Rimuovi**; in **Dati cliente** also **Sostituisci** and drag or menu to reorder, and an image can't be removed when only 2 remain. Images PNG, JPEG or WebP ≥1600 px on the short side; other files as case material (Story 2.7 types, ≤50 MB). Copy: "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione."; a 4th file: "Massimo 3 file."
 UX-DR38: Client overview, opened by **Modifica layout** (SCP 2026-10-21). Left pane: **Introduzione** (with its status badge), then every case history of the client that has a document, newest first, each with code, name and status badge, then **Chiusura** (the outro; same document and status badge as **Introduzione**). A Bozza case history is listed greyed with "Non ancora generata". Centre: one continuous preview of the selected format, every part in that order, with a divider per part. Clicking a part in the list scrolls to it. Editing a block edits that part (status and save state shown for that part). Right pane: Edit and Check for the selected part. The top bar has the format switch, **Dati cliente** and, for the selected part, its **Approve** or **Update approved version**. Amended (SCP 2026-10-28, C38): the client's file shows the client's intro, each case's pages (without its own intro and Carosello Chiusura; Risultati e testimonial stay) and the client's closing; cases reorder by dragging their row; the client's fields are edited on the page (Story 4.12).
-UX-DR39: Collections. Library cards get a checkbox. With one or more selected, a bar shows "{n} selezionate" and **Crea raccolta**, which asks for a name and opens the collection configurator. Left pane: the parts in order, a client's case histories grouped under its computed intro and followed by its outro (both shown locked; outro per SCP 2026-10-21). Reorder groups and case histories within a group by drag handle or by the menu "Sposta su / giù". Centre: continuous preview per format. Right pane: **Testo** (edit the selected block, owner/designers only, IR-COLL-EDIT), **Pagine** (hide or show the selected page). Edited blocks show "Modificato in questa raccolta". Hidden pages show as a collapsed strip with **Mostra**. Top bar: name (editable), save state, **Esporta** and **Esporta tutto** (Presentazione 16:9; PDF A4 dropped per SCP 2026-10-28). No layout, media or typography controls. A sidebar item **Raccolte** lists collections (name, parts, updated, created by) with open, rename and delete (with confirm).
+UX-DR39: Collections. Library cards get a checkbox. With one or more selected, a bar shows "{n} selezionate" and **Crea raccolta**, which asks for a name and opens the collection configurator. Left pane: the parts in order, a client's case histories grouped under its computed intro and followed by its outro (both shown locked; outro per SCP 2026-10-21). Reorder groups and case histories within a group by drag handle or by the menu "Sposta su / giù". Centre: continuous preview per format. Right pane: **Testo** (edit the selected block, owner/designers only, IR-COLL-EDIT), **Pagine** (hide or show the selected page). Edited blocks show "Modificato in questa raccolta". Hidden pages show as a collapsed strip with **Mostra**. Top bar: name (editable), save state, **Esporta** and **Esporta tutto** (Presentazione 16:9; PDF A4 dropped per SCP 2026-10-28). No layout, media or typography controls. A sidebar item **Raccolte** lists collections (name, parts, updated, created by) with open, rename and delete (with confirm). Amended (owner, 2026-10-28, SCP 2026-10-28): a pack or collection is built in the configurator itself, in every format; the "no layout, media or typography controls" rule is replaced by a list of features hidden or locked for account/sales/social users, still to be written.
 UX-DR40: Combined download copy. The client pack and collection exports show progress and then the browser download, like UX-DR21. When a client's intro isn't approved: "L'introduzione di {client} non è ancora approvata: le sue case history usano la propria introduzione."
 
 ### Interim Rules Register
@@ -153,7 +153,7 @@ These are the rules the stories are built against. None of them is a decision; e
 | IR-A1 | A1 / C1 live edits vs claim check | PRD owner | Edits to an approved case are staged on a working head; links keep serving the approved revision until an owner/designer re-checks the edited blocks and runs **Update approved version**. **Discard changes** returns to the live version. | AD-3, AD-19, EXPERIENCE |
 | IR-A2 | A2 links before login | PRD owner | `/s/{token}` stays behind the AD-12 basic-auth gate until Epic 6; after Epic 6 it is the only unauthenticated route. | AD-12 |
 | IR-A3 | A3 `MISSING_ASPECT` | UX | Detected and shown as a warning in the configurator; it does not block approval. | AD-6 |
-| IR-A4 | A4 zero images or videos | Design team | **No interim rule.** Generation is allowed from texts or PDFs alone (NFR6 is satisfied); what the template renders for zero media is not yet supplied. Note (SCP 2026-10-28): media-count rules are gone; default pages can place image blocks the case has no image for; what such an empty block shows in an export is still open (Story 3.4). | AD-6 |
+| IR-A4 | A4 zero images or videos | Design team | **No interim rule.** Generation is allowed from texts or PDFs alone (NFR6 is satisfied); what the template renders for zero media is not yet supplied. Note (SCP 2026-10-28): media-count rules are gone; default pages can place image blocks the case has no image for; an empty image block exports transparent (owner, 2026-10-28; Story 3.4). | AD-6 |
 | IR-A5 | A5 concurrent editing | UX | The server rejects a stale write with `STALE_REVISION` / `STALE_HEAD`; the client doesn't retry and reloads the revision. No dedicated "someone else changed this" state is designed. | AD-17 |
 | IR-C3 | C3 autosave and toast not in any FR | PRD owner | Built as UX describes: autosave with save states, and an in-app polled toast when a draft is ready. No email or Slack. | EXPERIENCE, AD Deferred |
 | IR-C4 | C4 template maintenance | PRD owner | `manage templates` exists in the policy matrix, but the Templates surface and the `template_variant_state` table are **not built** unless the PRD owner adopts the UX scope. | AD-15, AD-11 |
@@ -1041,6 +1041,7 @@ So that the client intro has pictures and the AI has material to write from.
 
 Covers: FR11 (amended), NFR6 (amended), AR8 (client key prefix), AR11, UX-DR37 (amended) ([Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md))
 Order: MVP, Sprint 2: after 2.15, before 3.2 (owner, 2026-10-19).
+Amended per SCP 2026-10-28 (owner, 2026-10-28): the 3-file limit goes; client material follows the case material upload rules (FR2, assumed). The client's intro and closing use the first 3 images in upload order, and favourite images come first.
 
 **Acceptance Criteria:**
 
@@ -1195,7 +1196,7 @@ Covers: AR3 (revision model, live and editable reads), AR4, AR9 (format registry
 
 **Amended per SCP 2026-10-28** ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C28, C29, C30, answers 2 and 3). The story is done for document schema v1 (#68). The amendment changes the format registry and adds document schema v2, built as a follow-up before Story 3.4 (status stays done; the follow-up is tracked on this story). The v1 criteria below stay as the record of what was built; where they differ from the amendment criteria at the end, the amendment wins.
 ✅ Decided (owner, 2026-10-28): the AI writes three texts, one per format, each fitted to that format's space. A person's edit to one format doesn't reach the others. The claims (Story 3.6) belong to each format's own copy.
-⛔ Open: whether v2 keeps a `check` field on texts for Story 4.7 after the demo. Nothing reads or sets it for the demo (C39).
+✅ Decided (owner, 2026-10-28): no. v2 has no `check` field on texts, after the demo too (C39).
 ✅ Decided (owner, 2026-10-28): deleting is free. The Sfida, Idea and Risultati blocks and pages can be deleted and are recovered from **Pagine di default** or with ⌘Z, so v2 doesn't require them (FR3, NFR5 relaxed for v2).
 
 **Acceptance Criteria:**
@@ -1264,8 +1265,8 @@ So that a draft starts from the designed Intro, Contenuti, Risultati e testimoni
 Covers: FR3 (layouts per format), FR4 (as amended), AR15, NFR1 (template design unchanged), C30, C31, C32, C33 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 ⚑ Interim: IR-C4 (no layout on/off state)
 ✅ Decided (owner, 2026-10-28): a case's services are picked as a multiselect when the case is created and stored on the case record as a list. The Intro shows exactly those services as tags (answer 2).
-⛔ Open: the Figma template for the client's closing page in Presentazione and Video (the mockup shows a placeholder).
-⛔ Open: what an empty image block shows in an approved export (IR-A4; default pages can place image blocks the case has no image for).
+✅ Decided (owner, 2026-10-28): the client's closing page in Presentazione and Video uses the **Risultati e testimonial** template; the mockup's placeholder goes.
+✅ Decided (owner, 2026-10-28): an empty image block is transparent in an approved export: it shows nothing, and the page background shows through (IR-A4).
 Amended per SCP 2026-10-28: rewritten. Media-count rules, variants, spacing ranges, text scales S/M/L and font pairings are gone (C31, C32). The mockup `ux-designs/ux-MAC Recap-2026-10-08/mockups/configurator.html` is the reference for every value below.
 
 **Acceptance Criteria:**
@@ -1445,7 +1446,7 @@ So that the draft is built in the background without my waiting time counting ag
 
 Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, failure → `draft`), AR6 (gate in UI and worker), AR10, AR17 (`baseHeadVersion`, new revision), AR18 (manifest), AR20, UX-DR10, UX-DR4 (live status), PRD Story 3.1
 ⚑ Interim: IR-OP8, IR-OP1
-⛔ Blocked on: IR-OP2 and IR-NFR5 (via Story 3.6); what an empty image block shows in an export (IR-A4, via Story 3.4)
+⛔ Blocked on: IR-OP2 and IR-NFR5 (via Story 3.6). An empty image block exports transparent (IR-A4, decided 2026-10-28).
 Amended per SCP 2026-10-28 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C31, C33): `rendering.relayout` is retired. Generation builds each format's pages from the template's default pages and fills them with the AI's texts; the templates are the Figma file "MAC-TF-AI" (Story 3.4).
 
 **Acceptance Criteria:**
@@ -1684,9 +1685,9 @@ So that I can fix wording and arrangement without losing work.
 Covers: FR5 (editing, as amended), CAP-7, AR4 (document v2), AR17, AR20 (save, claim edit), AR24 (as amended), UX-DR13 (as amended), UX-DR20, UX-DR26 (undo/redo, Esc), C29, C30, C32, C40, answer 2 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 ⚑ Interim: IR-C3 (autosave), IR-A5 (stale writes reload; no "someone else changed this" state)
 ✅ Decided (owner, 2026-10-28): nothing stops it. Blocks and pages, including Sfida, Idea and Risultati, can be deleted freely and recovered from **Pagine di default** or with ⌘Z.
-⛔ Open: how the client's fields that aren't free text (the sector, picked from the shared list, and the logo) are edited on the page (answer 2).
-⛔ Open: the keyboard or menu alternative for dragging elements and blocks (UX-DR26); the mockup has none.
-⛔ Open: whether a person can switch a text to two columns; the mockup keeps it only from the template (C32).
+✅ Decided (owner, 2026-10-28): the sector is edited on the page as free text and saved to the client's record, so it is no longer picked from the shared list; the logo is replaced on the page by uploading a file, which also updates the client's record (answer 2).
+✅ Decided (owner, 2026-10-28): no keyboard or menu alternative to dragging elements and blocks for now; UX-DR26 is deferred for this interaction.
+✅ Decided (owner, 2026-10-28): yes. The text panel (shown when a text is selected) gets a one/two columns control (C32).
 Amended per SCP 2026-10-28: rewritten, and Story 4.6 (typography) is folded in. The About the client block is no longer read-only (answer 2).
 
 **Acceptance Criteria:**
@@ -2040,8 +2041,8 @@ So that the pages that open and close a client's file have been reviewed by a pe
 
 Covers: FR11, AR25, NFR7, UX-DR12 (client intro mode, as amended), UX-DR35, C38, C39 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md); [Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 Order: MVP, Sprint 2: after 3.9 and 4.8, before 4.9 (owner amendment 2026-10-16). Its approved-intro editing criterion closes with 4.9, which covers intros too.
-⛔ Open: the Figma template for the client's closing page in Presentazione and Video (via Story 3.4).
-⛔ Open: the Media drop zone puts files in the client's material, which allows only 3 files (Story 2.16). This story keeps that limit until the owner says otherwise.
+✅ Decided (owner, 2026-10-28): the client's closing page uses the **Risultati e testimonial** template (via Story 3.4).
+✅ Decided (owner, 2026-10-28): the 3-file limit on client material goes (Story 2.16). The intro and closing use the first 3 images in upload order; images marked as favourites come first.
 Amended per SCP 2026-10-28: the design session it was blocked on is the mockup `ux-designs/ux-MAC Recap-2026-10-08/mockups/configurator.html` ("Un cliente"). There is no Check tab (C39).
 
 **Acceptance Criteria:**
@@ -2079,7 +2080,7 @@ So that I see the client's whole story and fix any part of it in place.
 
 Covers: FR12, UX-DR38 (as amended), AR3, AR17, IR-A1, C38 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 Order: MVP, Sprint 2, last in Epic 4: after 4.9, 4.11 and 4.13 (owner amendment 2026-10-16; SCP 2026-10-28)
-⛔ Open: whether the client pack (Story 5.9) follows the case order set here, instead of newest first.
+✅ Decided (owner, 2026-10-28): the client pack lists case histories newest first by default; once the order is changed here, the pack follows it.
 Amended per SCP 2026-10-28: rewritten from C38. Case histories can now be reordered, their Risultati e testimonial pages stay, and **Dati cliente** is replaced by editing the client's fields on the page (answer 2; the client's data panel stays on the client page as **Modifica cliente**).
 
 **Acceptance Criteria:**
@@ -2146,7 +2147,7 @@ So that each format tells the case in the pages it needs, without losing a page 
 
 Covers: FR5 (as amended), AR17, AR20, C29, C36, C38 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 ⚑ Interim: IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
-⛔ Open: the keyboard or menu alternative for reordering pages by drag (UX-DR26); the mockup has none.
+✅ Decided (owner, 2026-10-28): no keyboard or menu alternative to dragging pages for now; UX-DR26 is deferred for this interaction.
 Order: after 4.5, before 4.11 and 4.12 (SCP 2026-10-28 build order). New per SCP 2026-10-28.
 
 **Acceptance Criteria:**
@@ -2460,7 +2461,7 @@ So that I can send a client's whole track record in one go.
 
 Covers: FR13, AR9 (combined export), AR11 (`list clients` read-only, `download client pack`), NFR7, UX-DR35 (amended), UX-DR40 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Order: MVP, Sprint 3: after 5.1–5.8 (needs 5.3, 5.4 and 4.11) (owner amendment 2026-10-16)
-⛔ Open: whether the client pack is also offered in Carosello (only Presentazione is left of the two formats decided on 2026-10-16).
+✅ Decided (owner, 2026-10-28): client packs and collections are offered in every format: Presentazione, Carosello and Video (Video exports after the demo, SCP answer 1). Building one opens the configurator (see Story 5.10).
 Amended per SCP 2026-10-28 (C28, C38): PDF A4 is dropped; a case's Risultati e testimonial pages stay in the client file, and only a case's own intro pages and its Carosello Chiusura are left out (reverses C23 for the outro).
 
 **Acceptance Criteria:**
@@ -2500,6 +2501,7 @@ So that I can prepare a custom case for one pitch and reuse it later.
 Covers: FR13, AR26 (AD-24), AR11 (`manage collections`), NFR7, UX-DR39, UX-DR40 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Order: MVP, Sprint 3: after 5.9 (owner amendment 2026-10-16)
 Amended per SCP 2026-10-28 (C28, C38): PDF A4 is dropped, so collections export Presentazione 16:9; a case's Risultati e testimonial pages stay after the client's closing is added.
+Amended per SCP 2026-10-28 (owner, 2026-10-28), replacing the 2026-10-16 decision that Carosello stays single-case: packs and collections come in every format (Presentazione, Carosello, Video). Building one opens the configurator itself, not a reduced collection editor. Owner/designers and account/sales/social users can both create them, and all of them sit in one shared space that every such user sees. Some configurator features are hidden or locked for account/sales/social users; which ones is still to be listed (until then IR-COLL-EDIT applies).
 
 **Acceptance Criteria:**
 
@@ -2550,6 +2552,7 @@ So that the custom case fits the pitch without changing the original case histor
 Covers: FR13, AR26, NFR7 (IR-COLL-EDIT), UX-DR39 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Rule: IR-COLL-EDIT, decided by the owner on 2026-10-16 (OP 15): only owner/designers edit text in a collection. The planned upgrade, if sales people need to change wording, is an owner/designer **Approva modifiche** before export.
 Order: MVP, Sprint 3, last in Epic 5: after 5.10 (owner amendment 2026-10-16)
+Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configurator (Story 5.10). Edits still apply only to the collection. Which tools account/sales/social users lose is still to be listed.
 
 **Acceptance Criteria:**
 

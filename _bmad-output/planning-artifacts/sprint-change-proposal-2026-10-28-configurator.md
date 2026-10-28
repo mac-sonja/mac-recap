@@ -215,6 +215,18 @@ Later the same day, the owner settled four points left open in the stories:
 7. **Services.** Picked as a **multiselect when the case is created** and stored on the case as a list. The Intro shows them as tags (Story 3.4).
 8. **Ritaglia control.** The person **drags the image inside its block** and sets the **zoom with a slider** (Story 4.5).
 
+Then the remaining nine:
+
+9. **Client closing page.** It uses the **Risultati e testimonial** template in Presentazione and Video (Stories 3.4, 4.11).
+10. **Empty image block.** It is **transparent** in an approved export (IR-A4; Stories 3.4, 3.7).
+11. **`check` field.** **No**, not after the demo either (Story 3.3).
+12. **Client fields on the page.** The sector is **free text** (no longer picked from the shared list); the logo is replaced by **uploading a file**. Both update the client's record (Story 4.3).
+13. **Keyboard alternative to dragging.** **Not for now**, for elements, blocks and pages (UX-DR26 deferred; Stories 4.3, 4.13).
+14. **Two columns.** **Yes**, as a control in the text panel (Story 4.3).
+15. **Client media.** The **3-file limit goes**. The intro and closing use the first 3 images in upload order, and favourite images come first (Stories 2.16, 4.11).
+16. **Client pack order.** **Newest first** by default; once reordered in the client configurator, the pack follows that order (Stories 4.12, 5.9).
+17. **Packs and collections.** In **every format**. Building one opens the **configurator**. Owner/designers and account/sales/social users can both create them, and all of them sit in **one shared space**. Some features are hidden or locked for account/sales/social users; the list is still to be written, and until then IR-COLL-EDIT applies (Stories 5.9–5.11, UX-DR39, FR13).
+
 ## 7. Implementation handoff
 
 - **Scope: Major.** A done story is reworked, and more than ten stories are rewritten.
