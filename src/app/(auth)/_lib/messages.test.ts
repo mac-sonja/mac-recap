@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { authMessage, signInNotice } from "./messages";
+import { authMessage, signInNotice, signUpFieldsMessage } from "./messages";
 
 describe("authMessage", () => {
   it("names the company domain when another one is used", () => {
@@ -20,5 +20,15 @@ describe("signInNotice", () => {
     expect(signInNotice("inattivo")).toContain("non è attivo");
     expect(signInNotice("toString")).toBeNull();
     expect(signInNotice(undefined)).toBeNull();
+  });
+});
+
+describe("signUpFieldsMessage", () => {
+  it("names the fields to fix, in form order", () => {
+    expect(signUpFieldsMessage(["password", "team"])).toBe("Da completare: Cosa fai in MAC, Password.");
+  });
+
+  it("falls back to the generic line", () => {
+    expect(signUpFieldsMessage(undefined)).toBe("Controlla i campi evidenziati.");
   });
 });

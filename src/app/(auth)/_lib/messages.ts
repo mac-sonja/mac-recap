@@ -39,6 +39,24 @@ export function authMessage(code: string): string {
   }
 }
 
+/** Sign-up field labels, by input name. */
+const SIGN_UP_FIELDS: Readonly<Record<string, string>> = {
+  firstName: it.auth.signUp.firstName,
+  lastName: it.auth.signUp.lastName,
+  email: it.auth.email,
+  team: it.auth.signUp.team,
+  otherTitle: it.auth.signUp.otherTitle,
+  password: it.auth.password,
+};
+
+/** "Da completare: Cosa fai in MAC, Password." for the sign-up fields that failed, in form order. */
+export function signUpFieldsMessage(fields: readonly string[] | undefined): string {
+  const labels = Object.keys(SIGN_UP_FIELDS)
+    .filter((name) => fields?.includes(name))
+    .map((name) => SIGN_UP_FIELDS[name]);
+  return labels.length === 0 ? it.auth.signUp.invalid : fill(it.auth.signUp.invalidFields, { fields: labels.join(", ") });
+}
+
 /** Notices the sign-in screen shows from its `?avviso=` parameter. */
 const NOTICES: Readonly<Record<string, string>> = {
   inattivo: it.auth.signIn.inactive,
