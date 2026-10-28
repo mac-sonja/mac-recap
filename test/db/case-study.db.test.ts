@@ -1026,7 +1026,7 @@ describe("RLS lockout", () => {
     `public.insert_client_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'p', 'f', 'application/pdf', 1, null, null, '${TEST_ACTOR_ID}')`,
     `public.delete_client_asset('${UNKNOWN_ID}')`,
     `public.delete_client('${UNKNOWN_ID}', 'x', '${TEST_ACTOR_ID}')`,
-    `public.delete_case_study('${UNKNOWN_ID}', '${TEST_ACTOR_ID}')`,
+    `public.delete_case_study('${UNKNOWN_ID}', '${TEST_ACTOR_ID}', 'draft')`,
     "public.client_code_letters('Intruder')",
     "public.client_name_key('Intruder')",
     "public.case_study_code('III', 2026, 1)",
@@ -2948,8 +2948,9 @@ describe("client delete (owner, 2026-10-19)", () => {
   });
 });
 
-describe("case delete (Story 4.1)", () => {
-  const remove = (caseId: string) => pool.query("select id from public.delete_case_study($1, $2)", [caseId, TEST_ACTOR_ID]);
+describe("case delete (Stories 4.1, 5.2)", () => {
+  const remove = (caseId: string, status = "draft") =>
+    pool.query("select id from public.delete_case_study($1, $2, $3)", [caseId, TEST_ACTOR_ID, status]);
   const row = async (id: string) =>
     (await pool.query<{ deleted_at: Date | null; status: string }>("select deleted_at, status from public.case_study where id = $1", [id])).rows[0];
   const events = async (id: string) =>
@@ -2959,11 +2960,23 @@ describe("case delete (Story 4.1)", () => {
         [id],
       )
     ).rows;
+  /** Moves a case straight to `status`, as the transition function would. */
+  const setStatus = async (id: string, status: string) => {
+    const db = await pool.connect();
+    try {
+      await db.query("begin");
+      await db.query("select pg_catalog.set_config('mac_recap.status_transition', 'on', true)");
+      await db.query("update public.case_study set status = $2 where id = $1", [id, status]);
+      await db.query("commit");
+    } finally {
+      db.release();
+    }
+  };
 
   it("soft-deletes a draft with one case_deleted event; the adapter no longer reads or lists it", async () => {
     const created = await createCase({ name: "To delete" });
     const { deleteCaseStudy, get, list } = await loadCaseStudy();
-    expect(await deleteCaseStudy(await signedInActor(), { caseId: created.id })).toEqual({ ok: true, value: undefined });
+    expect(await deleteCaseStudy(await signedInActor(), { caseId: created.id, status: "draft" })).toEqual({ ok: true, value: undefined });
     expect((await row(created.id)).deleted_at).not.toBeNull();
     expect(await events(created.id)).toEqual([
       expect.objectContaining({ type: "case_created" }),
@@ -2978,6 +2991,24 @@ describe("case delete (Story 4.1)", () => {
     expect(listed.ok && listed.value.some((c) => c.id === created.id)).toBe(false);
   });
 
+  it("soft-deletes an approved case with reason approved_deleted; the adapter no longer reads or lists it", async () => {
+    const created = await createCase({ name: "Approved to delete" });
+    await setStatus(created.id, "approved");
+    const { deleteCaseStudy, get, list } = await loadCaseStudy();
+    expect(await deleteCaseStudy(await signedInActor(), { caseId: created.id, status: "approved" })).toEqual({ ok: true, value: undefined });
+    expect(await row(created.id)).toMatchObject({ status: "approved", deleted_at: expect.any(Date) });
+    expect((await events(created.id)).at(-1)).toEqual({
+      type: CASE_DELETED,
+      actor_id: TEST_ACTOR_ID,
+      data: { reason: "approved_deleted", clientId: acme.id, code: created.code, status: "approved" },
+    });
+    expect(await get(created.id)).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    for (const scope of [{}, { status: "approved" as const }]) {
+      const listed = await list(scope);
+      expect(listed.ok && listed.value.some((c) => c.id === created.id)).toBe(false);
+    }
+  });
+
   it("answers NOT_FOUND for an unknown or already deleted case and writes nothing", async () => {
     const created = await createCase({ name: "Twice" });
     await remove(created.id);
@@ -2986,33 +3017,50 @@ describe("case delete (Story 4.1)", () => {
     expect((await events(created.id)).map((e) => e.type)).toEqual(["case_created", CASE_DELETED]);
   });
 
-  it.each(["generating", "in_review", "approved"] as const)("refuses a case in %s with CASE_NOT_DELETABLE and writes nothing", async (status) => {
-    const created = await createCase({ name: `Not a draft (${status})` });
-    const db = await pool.connect();
-    try {
-      await db.query("begin");
-      await db.query("select pg_catalog.set_config('mac_recap.status_transition', 'on', true)");
-      await db.query("update public.case_study set status = $2 where id = $1", [created.id, status]);
-      await db.query("commit");
-    } finally {
-      db.release();
-    }
-    await expect(remove(created.id)).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_DELETABLE" });
+  it.each([
+    ["generating", "draft"],
+    ["in_review", "draft"],
+    ["approved", "draft"],
+    ["generating", "approved"],
+    ["in_review", "approved"],
+    ["draft", "approved"],
+  ] as const)("refuses a case in %s stated as %s with CASE_NOT_DELETABLE and writes nothing", async (actual, stated) => {
+    const created = await createCase({ name: `Mismatch (${actual}, ${stated})` });
+    if (actual !== "draft") await setStatus(created.id, actual);
+    const before = await events(created.id);
+    await expect(remove(created.id, stated)).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_DELETABLE" });
     const { deleteCaseStudy } = await loadCaseStudy();
-    const result = await deleteCaseStudy(await signedInActor(), { caseId: created.id });
+    const result = await deleteCaseStudy(await signedInActor(), { caseId: created.id, status: stated });
     expect(result.ok || result.error.code).toBe("CASE_NOT_DELETABLE");
     expect((await row(created.id)).deleted_at).toBeNull();
-    expect((await events(created.id)).map((e) => e.type)).toEqual(["case_created"]);
+    expect(await events(created.id)).toEqual(before);
   });
 
-  it("grants delete_case_study to service_role only", async () => {
+  it.each(["generating", "in_review", "deleted", ""])("refuses a stated status of %j with CASE_NOT_DELETABLE, even when the case is in it", async (stated) => {
+    const created = await createCase({ name: `Undeletable status (${stated})` });
+    if (stated === "generating" || stated === "in_review") await setStatus(created.id, stated);
+    await expect(remove(created.id, stated)).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_DELETABLE" });
+    expect((await row(created.id)).deleted_at).toBeNull();
+  });
+
+  it("refuses a null status with CASE_NOT_DELETABLE", async () => {
+    const created = await createCase({ name: "Null status" });
+    await expect(
+      pool.query("select id from public.delete_case_study($1, $2, null)", [created.id, TEST_ACTOR_ID]),
+    ).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_DELETABLE" });
+    expect((await row(created.id)).deleted_at).toBeNull();
+  });
+
+  it("grants delete_case_study to service_role only, and the two-argument version is gone", async () => {
     const { rows } = await pool.query(
       `select has_function_privilege('service_role', $1, 'execute') as service,
               has_function_privilege('anon', $1, 'execute') as anon,
               has_function_privilege('authenticated', $1, 'execute') as authenticated`,
-      ["public.delete_case_study(uuid, uuid)"],
+      ["public.delete_case_study(uuid, uuid, text)"],
     );
     expect(rows).toEqual([{ service: true, anon: false, authenticated: false }]);
+    const { rows: old } = await pool.query("select to_regprocedure('public.delete_case_study(uuid, uuid)') as fn");
+    expect(old).toEqual([{ fn: null }]);
   });
 });
 

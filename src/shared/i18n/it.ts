@@ -145,19 +145,23 @@ export const it = {
     /** Read by screen readers while the table loads. */
     loading: "Un attimo…",
     /**
-     * Deleting a draft (Story 4.1): from its row, or from the top bar of the opened draft
-     * (owner, 2026-10-22). Only a Bozza can be deleted; the person types *elimina* first.
+     * Deleting a case: a draft from its row or the opened draft (Story 4.1, owner
+     * 2026-10-22), an approved case from its page (Story 5.2, owner 2026-10-28). The person
+     * types *elimina* first.
      */
     delete: {
       /** The row's bin icon, read by screen readers and shown on hover; `{name}` is the case name. */
       button: "Elimina {name}",
       /** The button bottom left in an opened draft, opposite Avanti. */
       barButton: "Elimina bozza",
+      /** The button bottom left of an approved case's page (Owner and Amministratore). */
+      approvedButton: "Elimina",
       /** `{name}` is the case name (the Case list row). */
       title: "Eliminare {name}?",
       /** In an opened draft, whose name may be mid-edit. */
       titleOpen: "Eliminare questa bozza?",
       description: "La bozza sparisce da ogni elenco, insieme al materiale caricato. Non si torna indietro.",
+      approvedDescription: "La case history approvata sparisce da ogni elenco, insieme al materiale caricato. Non si torna indietro.",
       /** The word to type, compared trimmed and case-insensitive. */
       word: "elimina",
       confirmLabel: "Per conferma, scrivi “elimina”",
@@ -167,6 +171,8 @@ export const it = {
       confirm: "Elimina",
       /** The case left Bozza since the page loaded (CASE_NOT_DELETABLE). */
       notDraft: "Nel frattempo non è più una bozza, quindi non si può eliminare.",
+      /** An approved case changed status since the page loaded (CASE_NOT_DELETABLE). */
+      statusChanged: "Nel frattempo il suo stato è cambiato, quindi non si può eliminare.",
       failed: "Non siamo riusciti a eliminarla. Riprova tra poco.",
     },
   },
@@ -900,8 +906,13 @@ export const it = {
     back: "Torna alle case history",
     /** Opens the configurator. */
     edit: "Modifica",
-    /** Below 1024 px, instead of the page. */
+    /** Below 1024 px, instead of the preview. */
     narrowScreen: "L’anteprima ha bisogno di uno schermo più grande.",
+    /** The collections the case appears in (filled by Story 5.10; empty until then). */
+    collections: {
+      heading: "Raccolte",
+      empty: "Non è in nessuna raccolta.",
+    },
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {

@@ -6,21 +6,22 @@ import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import { CASE_TEMPLATE } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
-import { boundValuesOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../_lib/configurator-data";
-import { CaseView } from "../../_components/case-view/case-view";
+import { boundValuesOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "@/app/(wizard)/_lib/configurator-data";
+import { CaseView } from "../_components/case-view";
 
 export interface CaseViewPageProps {
   params: Promise<{ caseId: string }>;
 }
 
 /**
- * An approved case's detail page (Story 5.2, part): full-screen and read-only, for every
- * role that may `list cases` and `view` the case. Any other status redirects: a Bozza to
- * the wizard, a Da approvare to the configurator for a role that may `edit`, anything
- * else (and an unknown, malformed or deleted id) to Case studies; any other load failure
- * throws into the wizard group's error boundary. Reads the live revision
+ * An approved case's detail page (Story 5.2, part): in the tool shell, laid out like a
+ * client's page, read-only, for every role that may `list cases` and `view` the case. Any
+ * other status redirects: a Bozza to the wizard, a Da approvare to the configurator for a
+ * role that may `edit`, anything else (and an unknown, malformed or deleted id) to Case
+ * studies; any other load failure throws into the error boundary. Reads the live revision
  * (`getLiveRevision`), never the working head; with none approved yet, it shows the
  * template's starter pages with the *Bozza di prova* note, as the configurator does.
+ * **Elimina** shows only to a role that may `delete case` an approved case (owner, 2026-10-28).
  */
 export default async function CaseViewPage({ params }: CaseViewPageProps) {
   // Any role that may list approved cases: the sales role's `list cases` is approved only.
@@ -61,6 +62,7 @@ export default async function CaseViewPage({ params }: CaseViewPageProps) {
   if (!client.ok) throw new Error(`Client could not be loaded: ${client.error.code}`);
 
   const doc = revision.value?.doc ?? null;
+  const canDelete = can(actor, "delete case", { status: "approved" });
 
   return (
     <CaseView
@@ -72,6 +74,7 @@ export default async function CaseViewPage({ params }: CaseViewPageProps) {
       values={boundValuesOf(current, info.value, client.value.logoUrl, form.value)}
       trial={doc === null}
       editHref={canEdit ? configuratorHref(id) : null}
+      deleteCaseId={canDelete ? id : null}
     />
   );
 }

@@ -6,6 +6,9 @@ import { FORMAT_IDS, starterPages, type BoundValues, type FormatId } from "@/mod
 import { fill, it as dict } from "@/shared/i18n/it";
 import { CaseView } from "./case-view";
 
+const deleteCaseStudy = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock("@/app/(tool)/case-studies/actions", () => ({ deleteCaseStudy: (input: unknown) => deleteCaseStudy(input) }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
@@ -15,7 +18,8 @@ vi.mock("next/link", () => ({
 }));
 
 const IMAGE = "bbbbbbbb-0000-4000-8000-000000000001";
-const EDIT_HREF = "/case-studies/aaaaaaaa-0000-4000-8000-000000000001/configurator";
+const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+const EDIT_HREF = `/case-studies/${CASE_ID}/configurator`;
 
 /** Each format's starter pages, with ids that differ per format. */
 function starterFormats(): Record<FormatId, Page[]> {
@@ -33,7 +37,7 @@ const VALUES: BoundValues = {
 
 const formats = starterFormats();
 
-function setup({ trial = false, editHref = EDIT_HREF as string | null } = {}) {
+function setup({ trial = false, editHref = EDIT_HREF as string | null, deleteCaseId = CASE_ID as string | null } = {}) {
   return render(
     <CaseView
       header={{ name: "Rebrand Lumen", code: "LUM-2026-01", status: "approved" }}
@@ -44,6 +48,7 @@ function setup({ trial = false, editHref = EDIT_HREF as string | null } = {}) {
       values={VALUES}
       trial={trial}
       editHref={editHref}
+      deleteCaseId={deleteCaseId}
     />,
   );
 }
@@ -54,6 +59,9 @@ const canvas = () => screen.getByRole("region", { name: dict.configurator.canvas
 const formatsGroup = () => document.querySelector<HTMLElement>(`[role="group"][aria-label="${dict.configurator.formats.label}"]`)!;
 const format = (name: string) => within(formatsGroup()).getByRole("button", { name: new RegExp(`^${name}`), hidden: true });
 const button = (name: string | RegExp) => screen.getByRole("button", { name, hidden: true });
+/** The page's Elimina, not the one inside its (closed) dialog. */
+const deleteTrigger = () =>
+  screen.getAllByRole("button", { name: dict.caseStudies.delete.approvedButton, hidden: true }).find((b) => b.closest("dialog") === null)!;
 const slideCaption = () => canvas().querySelector("[data-slideshow] p")?.textContent;
 
 beforeEach(() => {
@@ -61,14 +69,15 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  deleteCaseStudy.mockReset();
   vi.restoreAllMocks();
 });
 
 describe("CaseView", () => {
-  it("shows the top bar: back, name, code, badge, formats, Scarica and Modifica to the configurator", () => {
+  it("shows the header like a client's page: back, name, code, badge, formats, Scarica and Modifica to the configurator", () => {
     setup();
     expect(screen.getByRole("link", { name: dict.caseView.back, hidden: true }).getAttribute("href")).toBe("/case-studies");
-    expect(screen.getByText("Rebrand Lumen")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Rebrand Lumen", hidden: true })).toBeTruthy();
     expect(screen.getByText("LUM-2026-01")).toBeTruthy();
     expect(document.querySelector('[data-status="approved"]')).not.toBeNull();
     expect(within(formatsGroup()).getAllByRole("button", { hidden: true }).map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual([
@@ -83,6 +92,41 @@ describe("CaseView", () => {
     expect(screen.queryByRole("button", { name: dict.configurator.approve, hidden: true })).toBeNull();
     expect(document.querySelector("aside")).toBeNull();
     expect(screen.getByText(dict.caseView.narrowScreen)).toBeTruthy();
+  });
+
+  it("shows Raccolte with its empty line, and Elimina bottom left after it", () => {
+    setup();
+    const heading = screen.getByRole("heading", { level: 2, name: dict.caseView.collections.heading, hidden: true });
+    expect(screen.getByText(dict.caseView.collections.empty)).toBeTruthy();
+    const remove = deleteTrigger();
+    expect(heading.compareDocumentPosition(remove) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(remove.parentElement?.className).toContain("justify-start");
+  });
+
+  it("Elimina asks for the typed word and deletes the approved case", async () => {
+    deleteCaseStudy.mockResolvedValue({ ok: true, value: undefined });
+    setup();
+    fireEvent.click(deleteTrigger());
+    const dialog = screen.getByRole("dialog", { name: fill(dict.caseStudies.delete.title, { name: "Rebrand Lumen" }), hidden: true });
+    expect(dialog.textContent).toContain(dict.caseStudies.delete.approvedDescription);
+    fireEvent.change(within(dialog).getByLabelText(dict.caseStudies.delete.confirmLabel), { target: { value: "elimina" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: dict.caseStudies.delete.confirm, hidden: true }));
+    expect(deleteCaseStudy).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, status: "approved" });
+  });
+
+  it("leaves ← → inside the open Elimina dialog alone: the slide stays", () => {
+    setup();
+    fireEvent.click(format("Carosello"));
+    fireEvent.click(deleteTrigger());
+    const input = within(screen.getByRole("dialog", { name: fill(dict.caseStudies.delete.title, { name: "Rebrand Lumen" }), hidden: true })).getByLabelText(dict.caseStudies.delete.confirmLabel);
+    expect(fireEvent.keyDown(input, { key: "ArrowRight" })).toBe(true);
+    expect(slideCaption()).toContain(`1 di ${formats.carosello_1_1.length}`);
+  });
+
+  it("shows no Elimina without `delete case` on an approved case", () => {
+    setup({ deleteCaseId: null });
+    expect(screen.queryAllByRole("button", { name: dict.caseStudies.delete.approvedButton, hidden: true })).toEqual([]);
+    expect(screen.getByText(dict.caseView.collections.empty)).toBeTruthy();
   });
 
   it("shows no Modifica without `edit`", () => {
@@ -136,7 +180,7 @@ describe("CaseView", () => {
     setup();
     fireEvent.click(format("Carosello"));
     fireEvent.click(button(fill(dict.download.caseLabel, { name: "Rebrand Lumen" })));
-    const dialog = screen.getByRole("dialog", { hidden: true });
+    const dialog = screen.getByRole("dialog", { name: fill(dict.download.caseTitle, { name: "Rebrand Lumen" }), hidden: true });
     const radio = within(dialog).getAllByRole("radio", { hidden: true })[0]!;
     expect(fireEvent.keyDown(radio, { key: "ArrowRight" })).toBe(true);
     expect(slideCaption()).toContain(`1 di ${formats.carosello_1_1.length}`);

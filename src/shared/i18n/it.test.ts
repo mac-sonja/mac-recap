@@ -38,6 +38,11 @@ describe("case studies table copy", () => {
     expect(fill(t("caseStudies.delete.title"), { name: "Rebrand" })).toBe("Eliminare Rebrand?");
     expect(t("caseStudies.delete.confirm")).toBe("Elimina");
     expect(t("caseStudies.delete.barButton")).toBe("Elimina bozza");
+    expect(t("caseStudies.delete.approvedButton")).toBe("Elimina");
+    expect(t("caseStudies.delete.approvedDescription")).toBe(
+      "La case history approvata sparisce da ogni elenco, insieme al materiale caricato. Non si torna indietro.",
+    );
+    expect(t("caseStudies.delete.statusChanged")).toBe("Nel frattempo il suo stato è cambiato, quindi non si può eliminare.");
     expect(t("caseStudies.delete.word")).toBe("elimina");
     expect(t("caseStudies.search.label")).toBe("Cerca progetto o cliente");
     expect(t("caseStudies.search.placeholder")).toBe("Cerca progetto o cliente…");
@@ -224,6 +229,7 @@ describe("voice", () => {
     it.clientPanel.layout,
     it.clientPanel.delete.button,
     it.caseStudies.delete.barButton,
+    it.caseStudies.delete.approvedButton,
   ];
 
   test("calls to action are at most three words", () => {
@@ -322,6 +328,8 @@ describe("case view copy", () => {
     expect(t("caseView.back")).toBe("Torna alle case history");
     expect(t("caseView.edit")).toBe("Modifica");
     expect(t("caseView.narrowScreen")).toBe("L’anteprima ha bisogno di uno schermo più grande.");
+    expect(t("caseView.collections.heading")).toBe("Raccolte");
+    expect(t("caseView.collections.empty")).toBe("Non è in nessuna raccolta.");
     expect(t("caseStudies.table.edit")).toBe("Modifica");
     expect(fill(t("caseStudies.table.editLabel"), { name: "Rebrand" })).toBe("Modifica Rebrand");
   });

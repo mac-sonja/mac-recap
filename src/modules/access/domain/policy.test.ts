@@ -3,9 +3,9 @@ import { ROLES, type Role } from "./actor";
 import { ACTIONS, CASE_STATUSES, can, type Action, type CaseStatus } from "./policy";
 
 // The AD-11 matrix restated independently of policy.ts. Each cell is either
-// "all" (every status, and no status), "approved", "draft" or absent (denied).
+// "all" (every status, and no status), "approved", "draft or approved" or absent (denied).
 // The admin has every owner cell plus `manage users` (owner, 2026-10-28).
-type Cell = "all" | "approved" | "draft";
+type Cell = "all" | "approved" | "draft or approved";
 const EXPECTED: Record<Action, Partial<Record<Role, Cell>>> = {
   "list cases": { owner_designer: "all", admin: "all", account_sales_social: "approved" },
   "create case": { owner_designer: "all", admin: "all" },
@@ -16,7 +16,7 @@ const EXPECTED: Record<Action, Partial<Record<Role, Cell>>> = {
   "mark favourites": { owner_designer: "all", admin: "all" },
   generate: { owner_designer: "all", admin: "all" },
   edit: { owner_designer: "all", admin: "all" },
-  "delete case": { owner_designer: "draft", admin: "draft" },
+  "delete case": { owner_designer: "draft or approved", admin: "draft or approved" },
   approve: { owner_designer: "all", admin: "all" },
   "update approved version": { owner_designer: "all", admin: "all" },
   discard: { owner_designer: "all", admin: "all" },
@@ -35,6 +35,7 @@ const STATUSES: (CaseStatus | undefined)[] = [undefined, ...CASE_STATUSES];
 function expected(cell: Cell | undefined, status: CaseStatus | undefined): boolean {
   if (cell === undefined) return false;
   if (cell === "all") return true;
+  if (cell === "draft or approved") return status === "draft" || status === "approved";
   return status === cell;
 }
 

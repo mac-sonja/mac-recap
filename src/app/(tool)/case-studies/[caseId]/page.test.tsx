@@ -24,10 +24,13 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT ${path}`);
   }),
 }));
+// Elimina's dialog calls the server action; the page test never presses it.
+vi.mock("@/app/(tool)/case-studies/actions", () => ({ deleteCaseStudy: vi.fn() }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string, resource?: unknown) => requireSurface(action, resource) }));
 vi.mock("@/modules/case-study", () => ({
   get: (id: unknown) => get(id),
@@ -159,9 +162,10 @@ describe("CaseViewPage", () => {
     expect(getLiveRevision).toHaveBeenCalledWith({ kind: "case", id: ID });
     expect(getDetailsForm).toHaveBeenCalledWith({ caseId: ID });
     expect(getClient).toHaveBeenCalledWith(CLIENT_ID);
-    // The frame: back, name, code, badge, the format switch, Scarica and Modifica.
-    expect(html).toContain('aria-label="Torna alle case history"');
-    expect(html).toContain('href="/case-studies"');
+    // The client-page layout: back, name, code, badge, the format switch, Scarica and Modifica.
+    expect(html).toMatch(/href="\/case-studies"[^>]*>.*Torna alle case history<\/a>/);
+    expect(html).toMatch(/<h1[^>]*>Rebrand Lumen 2026<\/h1>/);
+    expect(html).not.toContain("h-dvh");
     expect(html).toContain("Rebrand Lumen 2026");
     expect(html).toContain("LUM-2026-01");
     expect(html).toContain('data-status="approved"');
@@ -174,6 +178,19 @@ describe("CaseViewPage", () => {
     expect(html).not.toContain('aria-label="Proprietà"');
     expect(html).not.toContain('aria-label="Anteprima"');
     expect(html).not.toContain(">Approva<");
+    // Raccolte, empty until Story 5.10, and Elimina for an Owner.
+    expect(html).toMatch(/<h2[^>]*>Raccolte<\/h2>/);
+    expect(html).toContain("Non è in nessuna raccolta.");
+    expect(html).toMatch(/<button[^>]*>Elimina<\/button>/);
+  });
+
+  it("shows Elimina to an Amministratore, and none to an Editor", async () => {
+    requireSurface.mockResolvedValue(shellFor("admin"));
+    expect(await render()).toMatch(/<button[^>]*>Elimina<\/button>/);
+    requireSurface.mockResolvedValue(shellFor("account_sales_social"));
+    const html = await render();
+    expect(html).not.toMatch(/>Elimina</);
+    expect(html).toContain("Non è in nessuna raccolta.");
   });
 
   it("draws the live revision's pages with the renderer", async () => {

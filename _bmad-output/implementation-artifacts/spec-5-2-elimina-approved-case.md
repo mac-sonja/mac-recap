@@ -53,21 +53,34 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Migration and `db.types.ts`.
-- [ ] Policy and its tests.
-- [ ] case-study module (schema → port → adapter → use case → index) and its tests.
-- [ ] `actions.ts` and `actions.test.ts`: approved ok, editor 403, missing or other status `INVALID_INPUT`.
-- [ ] `delete-case-button.tsx` and its test: approved copy and redirect, the mismatch message, draft path unchanged.
-- [ ] Move the page and `CaseView` with their tests, reshape to the client-page layout, add the empty Raccolte section and bottom-left Elimina.
-- [ ] `it.ts`: `caseView.collections` heading "Raccolte" and empty line "Non è in nessuna raccolta."; approved description "La case history approvata sparisce da ogni elenco, insieme al materiale caricato. Non si torna indietro."; `statusChanged` "Nel frattempo il suo stato è cambiato, quindi non si può eliminare."
-- [ ] DB tests as in the Code Map.
-- [ ] Planning: in `epics.md`, amend AR3 (delete in `draft` or `approved`, soft; owner 2026-10-28) and update the 5.2 note (tool shell page, Elimina built; pager/zoom/full screen and narrow viewports still backlog). Add notes on 5.5/5.7 (a deleted case's links stop working) and on 5.9/5.10 (it leaves client packs and collections; 5.10 fills the case page's Raccolte section with the collections it appears in, each linking to it). In `deferred-work.md`, mark the Elimina entry resolved.
+- [x] Migration and `db.types.ts`.
+- [x] Policy and its tests.
+- [x] case-study module (schema → port → adapter → use case → index) and its tests.
+- [x] `actions.ts` and `actions.test.ts`: approved ok, editor 403, missing or other status `INVALID_INPUT`.
+- [x] `delete-case-button.tsx` and its test: approved copy and redirect, the mismatch message, draft path unchanged.
+- [x] Move the page and `CaseView` with their tests, reshape to the client-page layout, add the empty Raccolte section and bottom-left Elimina.
+- [x] `it.ts`: `caseView.collections` heading "Raccolte" and empty line "Non è in nessuna raccolta."; approved description "La case history approvata sparisce da ogni elenco, insieme al materiale caricato. Non si torna indietro."; `statusChanged` "Nel frattempo il suo stato è cambiato, quindi non si può eliminare."
+- [x] DB tests as in the Code Map.
+- [x] Planning: in `epics.md`, amend AR3 (delete in `draft` or `approved`, soft; owner 2026-10-28) and update the 5.2 note (tool shell page, Elimina built; pager/zoom/full screen and narrow viewports still backlog). Add notes on 5.5/5.7 (a deleted case's links stop working) and on 5.9/5.10 (it leaves client packs and collections; 5.10 fills the case page's Raccolte section with the collections it appears in, each linking to it). In `deferred-work.md`, mark the Elimina entry resolved.
 
 **Acceptance Criteria:**
 - Given an Approvato row, when I open it, then the page shows inside the tool shell with the sidebar, laid out like the client page, and switching format still shows the read-only preview.
 - Given an approved case, when its page loads, then a **Raccolte** section reads "Non è in nessuna raccolta."
 - Given an approved case deleted from its page, when anyone opens its URL, then they are sent to `/case-studies`, and it is gone from the table, Home and the counts.
 - Given an open draft, when **Elimina bozza** is confirmed, then it behaves exactly as before.
+
+## Implementation Notes
+
+- The action authorizes the stated status read straight from the input (`approved`, else `draft`) and leaves validation to the use case, so it calls no module before `authorize` (the guard test) and an Editor still gets 403 for any input.
+- `src/app/(tool)/case-studies/[caseId]/loading.tsx` added: without it the Case table's skeleton showed while a case page loaded.
+- The `(tool)` group has no `error.tsx`: a failed load now reaches Next's default boundary, as the client page does.
+- `db.types.ts` edited by hand (`p_status`); no local Supabase here.
+- Migration run on a plain local Postgres 16: approved and draft deletes with their reasons, every mismatch and null refused, unknown or deleted `NOT_FOUND`, two-argument function gone, grants service role only. `npm run test:db` not run (no Supabase stack).
+- Verified: typecheck, lint, `npm test` (123 files, 3562 passed, 1 skipped), `next build`. Not checked in a browser.
+
+## Spec Change Log
+
+## Review Triage Log
 
 ## Design Notes
 
