@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-28-2026 14:00
+last_updated: 10-28-2026 16:00
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -63,13 +63,13 @@ development_status:
   3-1-background-job-queue-and-worker-loop: done  # #45; migration applied to mac-recap-dev 2026-10-16 (not staging/prod)
   3-2-display-renditions-for-uploaded-media: done  # #62; migration applied to mac-recap-dev 2026-10-20 (not staging/prod); renditions backfilled on dev
   3-3-the-case-study-document-revisions-and-the-format-registry: done  # #68 merged (status fixed 2026-10-26); About block per SCP 2026-10-16; client info read live, no snapshot (owner amendment); after 2.14; amendment per SCP 2026-10-16 client intro and collections (document kind, revision subject); stays done; per SCP 2026-10-28: follow-up for document v2 (per-format pages, blocks, elements; v1 upgraded on read) and the registry Presentazione 16:9, Carosello 1:1, Video 9:16; client and case fields bound, not copied
-  3-4-templates-as-versioned-code-with-media-count-rules: review  # About the client area per SCP 2026-10-16; amendment per SCP 2026-10-16 client intro and collections (pageKey and intro/body role); outro + Modifica layout per SCP 2026-10-21; case outro page (Risultati + Testimonial) per SCP 2026-10-26; per SCP 2026-10-28: rewritten as templates from the Figma frames (MAC-TF-AI), layout grids and default pages per format; media-count rules gone
-  3-5-one-renderer-per-format: review  # amendment per SCP 2026-10-16 client intro and collections (page keys, starting page number); outro + Modifica layout per SCP 2026-10-21; one rule for client intro and outro per SCP 2026-10-26; per SCP 2026-10-28: rewritten for document v2, Video renderer with animations, Riempi/Adatta/Ritaglia; case Risultati e testimonial stay in the client file (C38); composeParts split out by the owner (2026-10-28), tracked in deferred-work
+  3-4-templates-as-versioned-code-with-media-count-rules: done  # #107 merged; About the client area per SCP 2026-10-16; amendment per SCP 2026-10-16 client intro and collections (pageKey and intro/body role); outro + Modifica layout per SCP 2026-10-21; case outro page (Risultati + Testimonial) per SCP 2026-10-26; per SCP 2026-10-28: rewritten as templates from the Figma frames (MAC-TF-AI), layout grids and default pages per format; media-count rules gone
+  3-5-one-renderer-per-format: done  # #111 merged; amendment per SCP 2026-10-16 client intro and collections (page keys, starting page number); outro + Modifica layout per SCP 2026-10-21; one rule for client intro and outro per SCP 2026-10-26; per SCP 2026-10-28: rewritten for document v2, Video renderer with animations, Riempi/Adatta/Ritaglia; case Risultati e testimonial stay in the client file (C38); composeParts split out by the owner (2026-10-28), tracked in deferred-work
   3-6-narrative-generator-port-and-anthropic-adapter: backlog  # client info as LLM input per SCP 2026-10-16; runs after 4.8, when the narrative guidelines arrive (SCP 2026-10-20); demo (owner 2026-10-27): no "generated, not checked" marking on claims; prompt follows copywriting-case-mac.md
   3-7-generate-a-case-study: backlog  # no client snapshot; job reads current client info when it runs (SCP 2026-10-16 owner amendment)
   3-8-tell-me-when-the-draft-is-ready: backlog
   3-9-client-intro-template-and-draft: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 3.8, last in Epic 3; starts from 2.16's Crea introduzione, inputs gain industries, brief and client material (SCP 2026-10-19); outro + Modifica layout per SCP 2026-10-21; trigger is Aggiungi, background; migration and layout moved to 3.11 per SCP 2026-10-26
-  3-10-test-draft-without-ai: backlog  # dev only, no LLM (SCP 2026-10-20); after 3.5, before 4.1; per SCP 2026-10-28: fills each format's default pages from the case and the client with test text
+  3-10-test-draft-without-ai: review  # dev only, no LLM (SCP 2026-10-20); after 3.5, before 4.1; per SCP 2026-10-28: fills each format's default pages from the case and the client with test text
   3-11-client-intro-and-outro-with-test-text: backlog  # per SCP 2026-10-26: Aggiungi starts the client draft in the background with test text; client_intro migration moved here from 3.9; after 3.10, before 4.1; blocked on the client template
   epic-3-retrospective: optional
 

@@ -5,7 +5,7 @@
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
+import { TEST_ACTOR_ID } from "../helpers/db-actor";
 import { REVISION_CREATED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
 import { caseHistoryV0, caseHistoryV1, caseHistoryV2 } from "@/modules/generation/domain/document-fixtures";
 import { UPGRADE_ID_PREFIX } from "@/modules/generation";
@@ -42,8 +42,8 @@ let clientId: string;
 
 beforeAll(async () => {
   pool = new pg.Pool({ connectionString: env.SUPABASE_DB_URL, max: 4 });
-  await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
-  clientId = (await createTestClient(pool, DEV_ACTOR_ID)).id;
+  await pool.query("update public.profile set role = 'owner_designer' where id = $1", [TEST_ACTOR_ID]);
+  clientId = (await createTestClient(pool, TEST_ACTOR_ID)).id;
 });
 
 afterAll(async () => {
@@ -90,16 +90,16 @@ const backendPid = async (client: pg.Client) =>
 // Imported lazily so getEnv() (cached on first use) sees the exported env.
 const loadCaseStudy = () => import("@/modules/case-study");
 
-async function devActor() {
+async function signedInActor() {
   const { getActor } = await import("@/modules/access");
   const actor = await getActor();
-  if (!actor.ok) throw new Error(`dev actor did not resolve: ${actor.error.code}`);
+  if (!actor.ok) throw new Error(`signed-in test actor did not resolve: ${actor.error.code}`);
   return actor.value;
 }
 
 async function createCase() {
   const { create } = await loadCaseStudy();
-  const result = await create(await devActor(), { name: "Revisions", clientId, year: 2026, businessLines: ["branding"] });
+  const result = await create(await signedInActor(), { name: "Revisions", clientId, year: 2026, businessLines: ["branding"] });
   if (!result.ok) throw new Error(`setup create failed: ${result.error.code}`);
   return result.value;
 }
@@ -109,7 +109,7 @@ const META = { model: null, fellBack: false, promptVersion: null };
 
 /** Calls `create_working_revision` directly (as postgres). */
 async function createRevision(caseId: string, expected: number, doc: unknown = v2()) {
-  const { rows } = await pool.query(createSql, [caseId, JSON.stringify(doc), "{}", JSON.stringify(META), expected, DEV_ACTOR_ID]);
+  const { rows } = await pool.query(createSql, [caseId, JSON.stringify(doc), "{}", JSON.stringify(META), expected, TEST_ACTOR_ID]);
   return rows[0] as { id: string; status: string };
 }
 
@@ -222,7 +222,7 @@ describe("migration", () => {
 
 describe("table guards", () => {
   const insert = `insert into public.revision (case_id, client_intro_id, generated_doc, doc, schema_version, created_by)
-                  values ($1, $2, $3, $3, 2, '${DEV_ACTOR_ID}')`;
+                  values ($1, $2, $3, $3, 2, '${TEST_ACTOR_ID}')`;
 
   it("needs exactly one subject", async () => {
     const created = await createCase();
@@ -247,7 +247,7 @@ describe("table guards", () => {
 
   it("checks generated_doc's schemaVersion on its own", async () => {
     const created = await createCase();
-    const sql = `insert into public.revision (case_id, generated_doc, doc, schema_version, created_by) values ($1, $2, $3, 2, '${DEV_ACTOR_ID}')`;
+    const sql = `insert into public.revision (case_id, generated_doc, doc, schema_version, created_by) values ($1, $2, $3, 2, '${TEST_ACTOR_ID}')`;
     for (const version of ['"2"', "null"]) {
       await expect(
         inRolledBackTx(sql, [created.id, `{"schemaVersion": ${version}}`, JSON.stringify(v2())]),
@@ -269,7 +269,7 @@ describe("table guards", () => {
     // Another status is fine.
     await expect(
       inRolledBackTx(
-        `insert into public.revision (case_id, status, generated_doc, doc, schema_version, created_by) values ($1, 'superseded', $2, $2, 2, '${DEV_ACTOR_ID}')`,
+        `insert into public.revision (case_id, status, generated_doc, doc, schema_version, created_by) values ($1, 'superseded', $2, $2, 2, '${TEST_ACTOR_ID}')`,
         [created.id, JSON.stringify(v2())],
       ),
     ).resolves.toMatchObject({ rowCount: 1 });
@@ -362,7 +362,7 @@ describe("create_working_revision", () => {
   it("creates a working revision, sets the head, increments head_version and writes one event", async () => {
     const created = await createCase();
     const meta = { model: "claude-opus-5-5", fellBack: true, promptVersion: "narrative@1" };
-    const { rows } = await pool.query(createSql, [created.id, JSON.stringify(v2()), '{"assets": []}', JSON.stringify(meta), 0, DEV_ACTOR_ID]);
+    const { rows } = await pool.query(createSql, [created.id, JSON.stringify(v2()), '{"assets": []}', JSON.stringify(meta), 0, TEST_ACTOR_ID]);
     const revision = rows[0];
     expect(revision).toMatchObject({
       case_id: created.id,
@@ -376,13 +376,13 @@ describe("create_working_revision", () => {
       fell_back: true,
       prompt_version: "narrative@1",
       schema_version: 2,
-      created_by: DEV_ACTOR_ID,
+      created_by: TEST_ACTOR_ID,
     });
     expect(await caseRow(created.id)).toMatchObject({ head_revision_id: revision.id, approved_revision_id: null, head_version: 1 });
     expect(await revisionEvents(created.id)).toEqual([
       {
         revision_id: revision.id,
-        actor_id: DEV_ACTOR_ID,
+        actor_id: TEST_ACTOR_ID,
         data: { headVersion: 1, previousHeadRevisionId: null, supersededRevisionId: null },
       },
     ]);
@@ -429,9 +429,9 @@ describe("create_working_revision", () => {
     const b = await connection();
     try {
       await a.query("begin");
-      await a.query(createSql, [created.id, JSON.stringify(v2()), "{}", JSON.stringify(META), 0, DEV_ACTOR_ID]);
+      await a.query(createSql, [created.id, JSON.stringify(v2()), "{}", JSON.stringify(META), 0, TEST_ACTOR_ID]);
       const bPid = await backendPid(b);
-      const second = b.query(createSql, [created.id, JSON.stringify(v2()), "{}", JSON.stringify(META), 0, DEV_ACTOR_ID]).then(
+      const second = b.query(createSql, [created.id, JSON.stringify(v2()), "{}", JSON.stringify(META), 0, TEST_ACTOR_ID]).then(
         () => "ok",
         (error: { message: string }) => error.message,
       );
@@ -465,7 +465,7 @@ describe("create_working_revision", () => {
     ["a non-string model", ['{"schemaVersion": 1}', "{}", '{"model": 5}']],
   ])("refuses %s with INVALID_INPUT", async (_name, [doc, manifest, meta]) => {
     const created = await createCase();
-    await expect(pool.query(createSql, [created.id, doc, manifest, meta, 0, DEV_ACTOR_ID])).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    await expect(pool.query(createSql, [created.id, doc, manifest, meta, 0, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "INVALID_INPUT" });
     expect(await caseRow(created.id)).toMatchObject({ head_revision_id: null, head_version: 0 });
   });
 });
@@ -490,7 +490,7 @@ describe("RLS lockout", () => {
       p_manifest: {},
       p_meta: META,
       p_expected_head_version: 0,
-      p_actor_id: DEV_ACTOR_ID,
+      p_actor_id: TEST_ACTOR_ID,
     });
     expect(call.data).toBeNull();
     expect(["42501", "PGRST202"]).toContain(call.error?.code);
@@ -499,7 +499,7 @@ describe("RLS lockout", () => {
   it.each(["anon", "authenticated"])("%s may not touch revision or execute create_working_revision", async (role) => {
     await expect(inRolledBackTx("select * from public.revision", [], role)).rejects.toMatchObject({ code: "42501" });
     await expect(
-      inRolledBackTx(`select public.create_working_revision('${UNKNOWN_ID}', '{}', '{}', '{}', 0, '${DEV_ACTOR_ID}')`, [], role),
+      inRolledBackTx(`select public.create_working_revision('${UNKNOWN_ID}', '{}', '{}', '{}', 0, '${TEST_ACTOR_ID}')`, [], role),
     ).rejects.toMatchObject({ code: "42501" });
   });
 
@@ -512,7 +512,7 @@ describe("RLS lockout", () => {
     expect(update.error?.code).toBe("42501");
     const insert = await service()
       .from("revision")
-      .insert({ case_id: created.id, generated_doc: v2(), doc: v2(), schema_version: 2, created_by: DEV_ACTOR_ID });
+      .insert({ case_id: created.id, generated_doc: v2(), doc: v2(), schema_version: 2, created_by: TEST_ACTOR_ID });
     expect(insert.error?.code).toBe("42501");
     await expect(inRolledBackTx(`delete from public.revision where id = '${revision.id}'`, [], "service_role")).rejects.toMatchObject({
       code: "42501",
@@ -524,7 +524,7 @@ describe("the case-study revision use cases (real adapter)", () => {
   it("createWorkingRevision writes a validated document; a stale head writes nothing", async () => {
     const created = await createCase();
     const { createWorkingRevision } = await loadCaseStudy();
-    const actor = await devActor();
+    const actor = await signedInActor();
     const first = await createWorkingRevision(actor, { caseId: created.id, doc: v2(), expectedHeadVersion: 0 });
     expect(first).toMatchObject({ ok: true, value: { caseId: created.id, status: "working", doc: v2(), generatedDoc: v2() } });
     const stale = await createWorkingRevision(actor, { caseId: created.id, doc: v2(), expectedHeadVersion: 0 });
@@ -537,7 +537,7 @@ describe("the case-study revision use cases (real adapter)", () => {
     const { createWorkingRevision } = await loadCaseStudy();
     const meta = { model: "m", fellBack: true, promptVersion: "p@1" };
     const manifest = { refs: [{ kind: "form_field", id: "context" }], hash: "abc" };
-    const result = await createWorkingRevision(await devActor(), { caseId: created.id, doc: v2(), manifest, meta, expectedHeadVersion: 0 });
+    const result = await createWorkingRevision(await signedInActor(), { caseId: created.id, doc: v2(), manifest, meta, expectedHeadVersion: 0 });
     expect(result).toMatchObject({ ok: true, value: { manifest, ...meta, schemaVersion: 2, version: 0, status: "working" } });
     if (!result.ok) return;
     const { rows } = await pool.query(
@@ -552,7 +552,7 @@ describe("the case-study revision use cases (real adapter)", () => {
 
   it("createWorkingRevision is NOT_FOUND for an unknown case", async () => {
     const { createWorkingRevision } = await loadCaseStudy();
-    const result = await createWorkingRevision(await devActor(), { caseId: UNKNOWN_ID, doc: v2(), expectedHeadVersion: 0 });
+    const result = await createWorkingRevision(await signedInActor(), { caseId: UNKNOWN_ID, doc: v2(), expectedHeadVersion: 0 });
     expect(result).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
     const { rows } = await pool.query("select count(*)::int as n from public.revision where case_id = $1", [UNKNOWN_ID]);
     expect(rows).toEqual([{ n: 0 }]);
@@ -563,7 +563,7 @@ describe("the case-study revision use cases (real adapter)", () => {
     await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
     const before = await caseRow(created.id);
     const { createWorkingRevision } = await loadCaseStudy();
-    const result = await createWorkingRevision(await devActor(), { caseId: created.id, doc: v2(), expectedHeadVersion: 0 });
+    const result = await createWorkingRevision(await signedInActor(), { caseId: created.id, doc: v2(), expectedHeadVersion: 0 });
     expect(result).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
     expect(await caseRow(created.id)).toEqual(before);
     expect(await revisionEvents(created.id)).toEqual([]);
@@ -574,7 +574,7 @@ describe("the case-study revision use cases (real adapter)", () => {
     const { createWorkingRevision } = await loadCaseStudy();
     const doc = v2();
     delete doc.formats.video_9_16;
-    const result = await createWorkingRevision(await devActor(), { caseId: created.id, doc, expectedHeadVersion: 0 });
+    const result = await createWorkingRevision(await signedInActor(), { caseId: created.id, doc, expectedHeadVersion: 0 });
     expect(result).toMatchObject({ ok: false, error: { code: "FORMAT_NOT_IN_REVISION" } });
     expect(await caseRow(created.id)).toMatchObject({ head_revision_id: null, head_version: 0 });
   });
@@ -595,7 +595,7 @@ describe("the case-study revision use cases (real adapter)", () => {
     const { rows } = await pool.query(
       `insert into public.revision (case_id, status, generated_doc, doc, schema_version, created_by)
        values ($1, 'approved', $2, $2, $3, $4) returning id, doc, generated_doc, updated_at`,
-      [created.id, JSON.stringify(fixture()), version, DEV_ACTOR_ID],
+      [created.id, JSON.stringify(fixture()), version, TEST_ACTOR_ID],
     );
     const stored = rows[0];
     await pool.query("update public.case_study set approved_revision_id = $2 where id = $1", [created.id, stored.id]);
@@ -614,7 +614,7 @@ describe("the case-study revision use cases (real adapter)", () => {
   it("createWorkingRevision refuses a v1 document before any write", async () => {
     const created = await createCase();
     const { createWorkingRevision } = await loadCaseStudy();
-    const result = await createWorkingRevision(await devActor(), { caseId: created.id, doc: v1(), expectedHeadVersion: 0 });
+    const result = await createWorkingRevision(await signedInActor(), { caseId: created.id, doc: v1(), expectedHeadVersion: 0 });
     expect(result).toMatchObject({ ok: false, error: { code: "DOCUMENT_SCHEMA_UNSUPPORTED" } });
     expect(await caseRow(created.id)).toMatchObject({ head_revision_id: null, head_version: 0 });
   });

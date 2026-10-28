@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
+import { TEST_ACTOR_ID } from "../helpers/db-actor";
 import { assetKey } from "@/modules/material/adapters/asset-key";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
@@ -42,8 +42,8 @@ let clientId: string;
 beforeAll(async () => {
   // Enough connections for the concurrent create_asset calls.
   pool = new pg.Pool({ connectionString: env.SUPABASE_DB_URL, max: 6 });
-  await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
-  clientId = (await createTestClient(pool, DEV_ACTOR_ID)).id;
+  await pool.query("update public.profile set role = 'owner_designer' where id = $1", [TEST_ACTOR_ID]);
+  clientId = (await createTestClient(pool, TEST_ACTOR_ID)).id;
 });
 
 afterAll(async () => {
@@ -70,16 +70,16 @@ async function inRolledBackTx(sql: string, params: unknown[] = [], role?: string
 const loadCaseStudy = () => import("@/modules/case-study");
 const loadAccess = () => import("@/modules/access");
 
-async function devActor() {
+async function signedInActor() {
   const { getActor } = await loadAccess();
   const actor = await getActor();
-  if (!actor.ok) throw new Error(`dev actor did not resolve: ${actor.error.code}`);
+  if (!actor.ok) throw new Error(`signed-in test actor did not resolve: ${actor.error.code}`);
   return actor.value;
 }
 
 async function createCase() {
   const { create } = await loadCaseStudy();
-  const result = await create(await devActor(), { name: "Material", clientId, year: 2026, businessLines: ["branding"] });
+  const result = await create(await signedInActor(), { name: "Material", clientId, year: 2026, businessLines: ["branding"] });
   if (!result.ok) throw new Error(`setup create failed: ${result.error.code}`);
   return result.value;
 }
@@ -91,7 +91,7 @@ async function seedAssets(caseId: string, n: number) {
   const ids: string[] = [];
   for (let i = 0; i < n; i++) {
     const id = randomUUID();
-    await pool.query(CREATE_ASSET, [id, caseId, keyFor(caseId, id), DEV_ACTOR_ID]);
+    await pool.query(CREATE_ASSET, [id, caseId, keyFor(caseId, id), TEST_ACTOR_ID]);
     ids.push(id);
   }
   return ids;
@@ -133,7 +133,7 @@ describe("create_asset", () => {
         content_type: "image/png",
         size: 10,
         s3_key: keyFor(created.id, id),
-        created_by: DEV_ACTOR_ID,
+        created_by: TEST_ACTOR_ID,
         deleted_at: null,
       },
     ]);
@@ -143,12 +143,12 @@ describe("create_asset", () => {
     const created = await createCase();
     const ids = await seedAssets(created.id, MAX_ASSETS_PER_CASE);
     const extra = randomUUID();
-    await expect(pool.query(CREATE_ASSET, [extra, created.id, keyFor(created.id, extra), DEV_ACTOR_ID])).rejects.toMatchObject({
+    await expect(pool.query(CREATE_ASSET, [extra, created.id, keyFor(created.id, extra), TEST_ACTOR_ID])).rejects.toMatchObject({
       code: "P0001",
       message: "FILE_LIMIT_REACHED",
     });
     await pool.query("update public.asset set deleted_at = now() where id = $1", [ids[0]]);
-    await expect(pool.query(CREATE_ASSET, [extra, created.id, keyFor(created.id, extra), DEV_ACTOR_ID])).resolves.toBeDefined();
+    await expect(pool.query(CREATE_ASSET, [extra, created.id, keyFor(created.id, extra), TEST_ACTOR_ID])).resolves.toBeDefined();
     expect(await liveCount(created.id)).toBe(MAX_ASSETS_PER_CASE);
   });
 
@@ -157,8 +157,8 @@ describe("create_asset", () => {
     await seedAssets(created.id, MAX_ASSETS_PER_CASE - 1);
     const [a, b] = [randomUUID(), randomUUID()];
     const results = await Promise.allSettled([
-      pool.query(CREATE_ASSET, [a, created.id, keyFor(created.id, a), DEV_ACTOR_ID]),
-      pool.query(CREATE_ASSET, [b, created.id, keyFor(created.id, b), DEV_ACTOR_ID]),
+      pool.query(CREATE_ASSET, [a, created.id, keyFor(created.id, a), TEST_ACTOR_ID]),
+      pool.query(CREATE_ASSET, [b, created.id, keyFor(created.id, b), TEST_ACTOR_ID]),
     ]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
@@ -178,7 +178,7 @@ describe("create_asset", () => {
       originalFileName: "brief.pdf",
       contentType: "application/pdf" as const,
       sizeBytes: 2048,
-      createdBy: DEV_ACTOR_ID,
+      createdBy: TEST_ACTOR_ID,
     });
     const results = await Promise.all([repo.create(asset(randomUUID())), repo.create(asset(randomUUID()))]);
     expect(results.map((r) => (r.ok ? "OK" : r.error.code)).sort()).toEqual(["FILE_LIMIT_REACHED", "OK"]);
@@ -196,7 +196,7 @@ describe("create_asset", () => {
       originalFileName: "brief.docx",
       contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const,
       sizeBytes: 2048,
-      createdBy: DEV_ACTOR_ID,
+      createdBy: TEST_ACTOR_ID,
     };
     const first = await repo.create(input);
     expect(first.ok).toBe(true);
@@ -211,7 +211,7 @@ describe("create_asset", () => {
     const created = await createCase();
     const [first] = await seedAssets(created.id, MAX_ASSETS_PER_CASE - 1);
     await seedAssets(created.id, 1);
-    await expect(pool.query(CREATE_ASSET, [first, created.id, keyFor(created.id, first), DEV_ACTOR_ID])).rejects.toMatchObject({
+    await expect(pool.query(CREATE_ASSET, [first, created.id, keyFor(created.id, first), TEST_ACTOR_ID])).rejects.toMatchObject({
       code: "P0001",
       message: "ASSET_ALREADY_CONFIRMED",
     });
@@ -224,7 +224,7 @@ describe("create_asset", () => {
       originalFileName: "f.png",
       contentType: "image/png",
       sizeBytes: 10,
-      createdBy: DEV_ACTOR_ID,
+      createdBy: TEST_ACTOR_ID,
     });
     expect(again.ok).toBe(false);
     if (!again.ok) expect(again.error.code).toBe("ASSET_ALREADY_CONFIRMED");
@@ -233,13 +233,13 @@ describe("create_asset", () => {
 
   it("raises NOT_FOUND for an unknown or soft-deleted case", async () => {
     const id = randomUUID();
-    await expect(inRolledBackTx(CREATE_ASSET, [id, UNKNOWN_ID, keyFor(UNKNOWN_ID, id), DEV_ACTOR_ID])).rejects.toMatchObject({
+    await expect(inRolledBackTx(CREATE_ASSET, [id, UNKNOWN_ID, keyFor(UNKNOWN_ID, id), TEST_ACTOR_ID])).rejects.toMatchObject({
       code: "P0001",
       message: "NOT_FOUND",
     });
     const created = await createCase();
     await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
-    await expect(inRolledBackTx(CREATE_ASSET, [id, created.id, keyFor(created.id, id), DEV_ACTOR_ID])).rejects.toMatchObject({
+    await expect(inRolledBackTx(CREATE_ASSET, [id, created.id, keyFor(created.id, id), TEST_ACTOR_ID])).rejects.toMatchObject({
       code: "P0001",
       message: "NOT_FOUND",
     });
@@ -295,7 +295,7 @@ describe("soft delete and its compensation (undoSoftDelete / restore_asset)", ()
     // pool.query checks out a separate connection for each call.
     const results = await Promise.allSettled([
       pool.query("select public.restore_asset($1, $2) as undone", [created.id, removed]),
-      pool.query(CREATE_ASSET, [fresh, created.id, keyFor(created.id, fresh), DEV_ACTOR_ID]),
+      pool.query(CREATE_ASSET, [fresh, created.id, keyFor(created.id, fresh), TEST_ACTOR_ID]),
     ]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
@@ -413,7 +413,7 @@ describe("use cases against the real DB and case-study module (storage stubbed)"
   it("confirm → remove writes the rows and one event each; status stays draft", async () => {
     const { makeConfirmUpload } = await import("@/modules/material/application/confirm-upload");
     const { makeRemoveAsset } = await import("@/modules/material/application/remove-asset");
-    const actor = await devActor();
+    const actor = await signedInActor();
     const created = await createCase();
     const assetId = randomUUID();
     const deps = await realDeps(new Map([[assetId, { sizeBytes: 4096, contentType: "image/webp" }]]));
@@ -447,7 +447,7 @@ describe("use cases against the real DB and case-study module (storage stubbed)"
 
   it("remove whose event write fails: the asset is live again (undoSoftDelete) and the error is returned", async () => {
     const { makeRemoveAsset } = await import("@/modules/material/application/remove-asset");
-    const actor = await devActor();
+    const actor = await signedInActor();
     const created = await createCase();
     const [assetId] = await seedAssets(created.id, 1);
     const real = await realDeps(new Map());
@@ -465,7 +465,7 @@ describe("favourites", () => {
   /** Inserts one live PDF (kind `document`) through `create_asset`; returns its id. */
   async function seedDocument(caseId: string) {
     const id = randomUUID();
-    await pool.query(CREATE_DOCUMENT, [id, caseId, `cases/${caseId}/assets/${id}/original.pdf`, DEV_ACTOR_ID]);
+    await pool.query(CREATE_DOCUMENT, [id, caseId, `cases/${caseId}/assets/${id}/original.pdf`, TEST_ACTOR_ID]);
     return id;
   }
 
@@ -503,7 +503,7 @@ describe("favourites", () => {
 
   it("mark → no-op → unmark records one event per change; status unchanged in every status", async () => {
     const { makeSetFavourite } = await import("@/modules/material/application/set-favourite");
-    const actor = await devActor();
+    const actor = await signedInActor();
     for (const status of ["draft", "generating", "in_review", "approved"] as const) {
       const created = await createCase();
       await forceStatus(created.id, status);
@@ -548,7 +548,7 @@ describe("favourites", () => {
 
   it("a PDF → NOT_FAVOURITABLE, unchanged, no event; clearing it is a no-op", async () => {
     const { makeSetFavourite } = await import("@/modules/material/application/set-favourite");
-    const actor = await devActor();
+    const actor = await signedInActor();
     const created = await createCase();
     const pdf = await seedDocument(created.id);
     const set = makeSetFavourite(await realDeps());
@@ -562,7 +562,7 @@ describe("favourites", () => {
 
   it("a removed asset or another case's asset → NOT_FOUND, nothing written", async () => {
     const { makeSetFavourite } = await import("@/modules/material/application/set-favourite");
-    const actor = await devActor();
+    const actor = await signedInActor();
     const [a, b] = [await createCase(), await createCase()];
     const [removed, foreign] = [(await seedAssets(a.id, 1))[0], (await seedAssets(b.id, 1))[0]];
     await pool.query("update public.asset set deleted_at = now() where id = $1", [removed]);
@@ -601,7 +601,7 @@ describe("favourites", () => {
 
   it("an event write failure puts the flag back and returns the error", async () => {
     const { makeSetFavourite } = await import("@/modules/material/application/set-favourite");
-    const actor = await devActor();
+    const actor = await signedInActor();
     const created = await createCase();
     const [id] = await seedAssets(created.id, 1);
     const real = await realDeps();
@@ -621,7 +621,7 @@ describe("direct writes are rejected", () => {
     const created = await createCase();
     [assetId] = await seedAssets(created.id, 1);
     documentId = randomUUID();
-    await pool.query(CREATE_DOCUMENT, [documentId, created.id, `cases/${created.id}/assets/${documentId}/original.pdf`, DEV_ACTOR_ID]);
+    await pool.query(CREATE_DOCUMENT, [documentId, created.id, `cases/${created.id}/assets/${documentId}/original.pdf`, TEST_ACTOR_ID]);
   });
 
   it("deleting an asset row", async () => {
@@ -714,7 +714,7 @@ describe("RLS lockout", () => {
         p_content_type: "image/png",
         p_size_bytes: 1,
         p_s3_key: "x",
-        p_actor_id: DEV_ACTOR_ID,
+        p_actor_id: TEST_ACTOR_ID,
       },
     ],
     ["restore_asset", { p_case_id: UNKNOWN_ID, p_asset_id: UNKNOWN_ID }],
@@ -728,11 +728,11 @@ describe("RLS lockout", () => {
   const statements = {
     select: "select * from public.asset",
     insert: `insert into public.asset (case_id, kind, original_file_name, content_type, size_bytes, s3_key, created_by)
-             values ('${UNKNOWN_ID}', 'image', 'x.png', 'image/png', 1, 'x', '${DEV_ACTOR_ID}')`,
+             values ('${UNKNOWN_ID}', 'image', 'x.png', 'image/png', 1, 'x', '${TEST_ACTOR_ID}')`,
     update: "update public.asset set deleted_at = now()",
     "update is_favourite": "update public.asset set is_favourite = true",
     delete: "delete from public.asset",
-    "create_asset": `select public.create_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'image', 'x.png', 'image/png', 1, 'x', '${DEV_ACTOR_ID}')`,
+    "create_asset": `select public.create_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'image', 'x.png', 'image/png', 1, 'x', '${TEST_ACTOR_ID}')`,
     "restore_asset": `select public.restore_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}')`,
     has_material: `select public.has_material('${UNKNOWN_ID}')`,
   };
@@ -849,7 +849,7 @@ describe("details form (context_form)", () => {
 
   async function saveField(input: Record<string, unknown>) {
     const { makeSaveDetailsField } = await import("@/modules/material/application/save-details-field");
-    return makeSaveDetailsField(await formDeps())(await devActor(), input);
+    return makeSaveDetailsField(await formDeps())(await signedInActor(), input);
   }
 
   /** The client's limits, as index.ts passes them (Story 2.21). */
@@ -866,12 +866,12 @@ describe("details form (context_form)", () => {
 
   async function saveResults(input: Record<string, unknown>) {
     const { makeSaveCaseResults } = await import("@/modules/material/application/save-case-results");
-    return makeSaveCaseResults(await formDeps(), await storyLimits())(await devActor(), input);
+    return makeSaveCaseResults(await formDeps(), await storyLimits())(await signedInActor(), input);
   }
 
   async function saveTestimonial(input: Record<string, unknown>) {
     const { makeSaveCaseTestimonial } = await import("@/modules/material/application/save-case-testimonial");
-    return makeSaveCaseTestimonial(await formDeps(), await storyLimits())(await devActor(), input);
+    return makeSaveCaseTestimonial(await formDeps(), await storyLimits())(await signedInActor(), input);
   }
 
   async function readForm(caseId: string) {
@@ -898,7 +898,7 @@ describe("details form (context_form)", () => {
   const codeOf = (result: { ok: boolean; error?: { code: string } }) => (result.ok ? "OK" : result.error?.code);
 
   it("first save → next save → unchanged → clear: one row, one details_saved { field } per change; status unchanged", async () => {
-    const actor = await devActor();
+    const actor = await signedInActor();
     const created = await createCase();
     const caseId = created.id;
 
@@ -934,17 +934,17 @@ describe("details form (context_form)", () => {
   it("save_context_field returns the previous text; a first save of '' creates no row", async () => {
     const created = await createCase();
     const repo = createSupabaseDetailsFormRepository();
-    expect(await repo.saveField(created.id, "solution", "", DEV_ACTOR_ID)).toEqual({ ok: true, value: "" });
+    expect(await repo.saveField(created.id, "solution", "", TEST_ACTOR_ID)).toEqual({ ok: true, value: "" });
     expect(await formRow(created.id)).toEqual([]);
-    expect(await repo.saveField(created.id, "solution", "App", DEV_ACTOR_ID)).toEqual({ ok: true, value: "" });
-    expect(await repo.saveField(created.id, "solution", "Sito", DEV_ACTOR_ID)).toEqual({ ok: true, value: "App" });
+    expect(await repo.saveField(created.id, "solution", "App", TEST_ACTOR_ID)).toEqual({ ok: true, value: "" });
+    expect(await repo.saveField(created.id, "solution", "Sito", TEST_ACTOR_ID)).toEqual({ ok: true, value: "App" });
   });
 
   it("an unknown field → UNKNOWN_FIELD; nothing written", async () => {
     const created = await createCase();
     expect(codeOf(await saveField({ caseId: created.id, field: "budget", text: "x" }))).toBe("UNKNOWN_FIELD");
     await expect(
-      pool.query("select public.save_context_field($1, 'budget', 'x', $2)", [created.id, DEV_ACTOR_ID]),
+      pool.query("select public.save_context_field($1, 'budget', 'x', $2)", [created.id, TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "P0001", message: "UNKNOWN_FIELD" });
     expect(await formRow(created.id)).toEqual([]);
   });
@@ -953,7 +953,7 @@ describe("details form (context_form)", () => {
     const created = await createCase();
     expect(codeOf(await saveField({ caseId: created.id, field: "results", text: "x" }))).toBe("UNKNOWN_FIELD");
     await expect(
-      pool.query("select public.save_context_field($1, 'results', 'x', $2)", [created.id, DEV_ACTOR_ID]),
+      pool.query("select public.save_context_field($1, 'results', 'x', $2)", [created.id, TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "P0001", message: "UNKNOWN_FIELD" });
     expect(await formRow(created.id)).toEqual([]);
   });
@@ -965,10 +965,10 @@ describe("details form (context_form)", () => {
     expect(codeOf(tooLong)).toBe("INVALID_INPUT");
     if (!tooLong.ok) expect((tooLong.error.details as { fields: string[] }).fields).toEqual(["text"]);
     await expect(
-      inRolledBackTx("select public.save_context_field($1, 'context', $2, $3)", [created.id, "x".repeat(5_001), DEV_ACTOR_ID]),
+      inRolledBackTx("select public.save_context_field($1, 'context', $2, $3)", [created.id, "x".repeat(5_001), TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "23514" });
     const repo = createSupabaseDetailsFormRepository();
-    const viaAdapter = await repo.saveField(created.id, "solution", "x".repeat(5_001), DEV_ACTOR_ID);
+    const viaAdapter = await repo.saveField(created.id, "solution", "x".repeat(5_001), TEST_ACTOR_ID);
     expect(codeOf(viaAdapter)).toBe("INVALID_INPUT");
     expect((await formRow(created.id))[0]).toMatchObject({ context: "è".repeat(5_000), solution: "" });
   });
@@ -979,9 +979,9 @@ describe("details form (context_form)", () => {
     expect(codeOf(await saveField({ caseId: created.id, field: "context", text: "x" }))).toBe("NOT_FOUND");
     expect(codeOf(await readForm(created.id))).toBe("NOT_FOUND");
     await expect(
-      pool.query("select public.save_context_field($1, 'context', 'x', $2)", [created.id, DEV_ACTOR_ID]),
+      pool.query("select public.save_context_field($1, 'context', 'x', $2)", [created.id, TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
-    expect(await createSupabaseDetailsFormRepository().saveField(created.id, "context", "x", DEV_ACTOR_ID)).toMatchObject({
+    expect(await createSupabaseDetailsFormRepository().saveField(created.id, "context", "x", TEST_ACTOR_ID)).toMatchObject({
       ok: false,
       error: { code: "NOT_FOUND" },
     });
@@ -1027,7 +1027,7 @@ describe("details form (context_form)", () => {
     pool.query<{ previous: unknown }>("select public.save_case_results($1, $2::jsonb, $3) as previous", [
       caseId,
       JSON.stringify(results),
-      DEV_ACTOR_ID,
+      TEST_ACTOR_ID,
     ]);
 
   it("the old results text column is gone; results is jsonb with the client's check, and the testimonial columns exist", async () => {
@@ -1044,7 +1044,7 @@ describe("details form (context_form)", () => {
   });
 
   it("save_case_results: 2 complete rows stored in order, one details_saved { field: 'results' }; the same list again writes nothing", async () => {
-    const actor = await devActor();
+    const actor = await signedInActor();
     const created = await createCase();
     expect(await saveResults({ caseId: created.id, results: TWO })).toEqual({ ok: true, value: { results: TWO } });
     expect((await formRow(created.id))[0]).toMatchObject({ results: TWO, updated_by: actor.id });
@@ -1076,7 +1076,7 @@ describe("details form (context_form)", () => {
     ["not an array", { label: "a", value: "1" }],
   ])("context_form_results_check refuses %s; nothing written", async (_label, results) => {
     const created = await createCase();
-    await expect(inRolledBackTx("select public.save_case_results($1, $2::jsonb, $3)", [created.id, JSON.stringify(results), DEV_ACTOR_ID])).rejects.toMatchObject({
+    await expect(inRolledBackTx("select public.save_case_results($1, $2::jsonb, $3)", [created.id, JSON.stringify(results), TEST_ACTOR_ID])).rejects.toMatchObject({
       code: "23514",
       message: expect.stringContaining("context_form_results_check"),
     });
@@ -1085,14 +1085,14 @@ describe("details form (context_form)", () => {
   it("over the limit: the use case refuses with INVALID_INPUT; the adapter maps the check to INVALID_INPUT naming results", async () => {
     const created = await createCase();
     expect(codeOf(await saveResults({ caseId: created.id, results: [{ label: "a", value: "x".repeat(21) }] }))).toBe("INVALID_INPUT");
-    const viaAdapter = await createSupabaseDetailsFormRepository().saveResults(created.id, [{ label: "a", value: "x".repeat(21) }], DEV_ACTOR_ID);
+    const viaAdapter = await createSupabaseDetailsFormRepository().saveResults(created.id, [{ label: "a", value: "x".repeat(21) }], TEST_ACTOR_ID);
     expect(viaAdapter).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", details: { fields: ["results"] } } });
     expect(await formRow(created.id)).toEqual([]);
     expect(await detailsEvents(created.id)).toEqual([]);
   });
 
   it("save_case_testimonial: stores the pair, returns the previous one, one details_saved { field: 'testimonial' }", async () => {
-    const actor = await devActor();
+    const actor = await signedInActor();
     const created = await createCase();
     expect(await saveTestimonial({ caseId: created.id, quote: " Un lavoro chiaro. ", author: "Anna Rossi, CMO" })).toEqual({
       ok: true,
@@ -1101,14 +1101,14 @@ describe("details form (context_form)", () => {
     expect((await formRow(created.id))[0]).toMatchObject({ testimonial_quote: "Un lavoro chiaro.", testimonial_author: "Anna Rossi, CMO" });
     expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "Un lavoro chiaro.", author: "Anna Rossi, CMO" }))).toBe("OK");
     expect(await detailsEvents(created.id)).toEqual([{ type: "details_saved", actor_id: actor.id, data: { field: "testimonial" } }]);
-    const { rows } = await pool.query("select public.save_case_testimonial($1, '', '', $2) as previous", [created.id, DEV_ACTOR_ID]);
+    const { rows } = await pool.query("select public.save_case_testimonial($1, '', '', $2) as previous", [created.id, TEST_ACTOR_ID]);
     expect(rows).toEqual([{ previous: { quote: "Un lavoro chiaro.", author: "Anna Rossi, CMO" } }]);
     expect(await readForm(created.id)).toMatchObject({ ok: true, value: { testimonialQuote: "", testimonialAuthor: "" } });
   });
 
   it("save_case_testimonial('', '') on a case with no row returns the empty pair and inserts nothing", async () => {
     const created = await createCase();
-    const { rows } = await pool.query("select public.save_case_testimonial($1, '', '', $2) as previous", [created.id, DEV_ACTOR_ID]);
+    const { rows } = await pool.query("select public.save_case_testimonial($1, '', '', $2) as previous", [created.id, TEST_ACTOR_ID]);
     expect(rows).toEqual([{ previous: { quote: "", author: "" } }]);
     expect(await formRow(created.id)).toEqual([]);
     expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "", author: "" }))).toBe("OK");
@@ -1119,11 +1119,11 @@ describe("details form (context_form)", () => {
   it("an author without a quote is refused by the use case and by context_form_testimonial_check", async () => {
     const created = await createCase();
     expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "", author: "Anna" }))).toBe("INVALID_INPUT");
-    await expect(inRolledBackTx("select public.save_case_testimonial($1, '', 'Anna', $2)", [created.id, DEV_ACTOR_ID])).rejects.toMatchObject({
+    await expect(inRolledBackTx("select public.save_case_testimonial($1, '', 'Anna', $2)", [created.id, TEST_ACTOR_ID])).rejects.toMatchObject({
       code: "23514",
       message: expect.stringContaining("context_form_testimonial_check"),
     });
-    const viaAdapter = await createSupabaseDetailsFormRepository().saveTestimonial(created.id, "", "Anna", DEV_ACTOR_ID);
+    const viaAdapter = await createSupabaseDetailsFormRepository().saveTestimonial(created.id, "", "Anna", TEST_ACTOR_ID);
     expect(viaAdapter).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", details: { fields: ["quote"] } } });
     expect(await formRow(created.id)).toEqual([]);
   });
@@ -1132,10 +1132,10 @@ describe("details form (context_form)", () => {
     const created = await createCase();
     expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "è".repeat(600), author: "a".repeat(120) }))).toBe("OK");
     await expect(
-      inRolledBackTx("select public.save_case_testimonial($1, $2, '', $3)", [created.id, "x".repeat(601), DEV_ACTOR_ID]),
+      inRolledBackTx("select public.save_case_testimonial($1, $2, '', $3)", [created.id, "x".repeat(601), TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "23514", message: expect.stringContaining("context_form_testimonial_quote_check") });
     await expect(
-      inRolledBackTx("select public.save_case_testimonial($1, 'Sì.', $2, $3)", [created.id, "x".repeat(121), DEV_ACTOR_ID]),
+      inRolledBackTx("select public.save_case_testimonial($1, 'Sì.', $2, $3)", [created.id, "x".repeat(121), TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "23514", message: expect.stringContaining("context_form_testimonial_author_check") });
   });
 
@@ -1146,9 +1146,9 @@ describe("details form (context_form)", () => {
     expect(codeOf(await saveTestimonial({ caseId: created.id, quote: "Sì.", author: "" }))).toBe("NOT_FOUND");
     await expect(resultsSql(created.id, TWO)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
     await expect(
-      pool.query("select public.save_case_testimonial($1, 'Sì.', '', $2)", [created.id, DEV_ACTOR_ID]),
+      pool.query("select public.save_case_testimonial($1, 'Sì.', '', $2)", [created.id, TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
-    expect(await createSupabaseDetailsFormRepository().saveResults(created.id, TWO, DEV_ACTOR_ID)).toMatchObject({
+    expect(await createSupabaseDetailsFormRepository().saveResults(created.id, TWO, TEST_ACTOR_ID)).toMatchObject({
       ok: false,
       error: { code: "NOT_FOUND" },
     });
@@ -1169,14 +1169,14 @@ describe("details form (context_form)", () => {
   });
 
   it("the browser key is refused calling save_case_results and save_case_testimonial", async () => {
-    const results = await browser().rpc("save_case_results", { p_case_id: UNKNOWN_ID, p_results: [], p_actor_id: DEV_ACTOR_ID });
+    const results = await browser().rpc("save_case_results", { p_case_id: UNKNOWN_ID, p_results: [], p_actor_id: TEST_ACTOR_ID });
     expect(results.data).toBeNull();
     expect(["42501", "PGRST202"]).toContain(results.error?.code);
     const testimonial = await browser().rpc("save_case_testimonial", {
       p_case_id: UNKNOWN_ID,
       p_quote: "",
       p_author: "",
-      p_actor_id: DEV_ACTOR_ID,
+      p_actor_id: TEST_ACTOR_ID,
     });
     expect(testimonial.data).toBeNull();
     expect(["42501", "PGRST202"]).toContain(testimonial.error?.code);
@@ -1209,7 +1209,7 @@ describe("details form (context_form)", () => {
       p_case_id: UNKNOWN_ID,
       p_field: "context",
       p_text: "x",
-      p_actor_id: DEV_ACTOR_ID,
+      p_actor_id: TEST_ACTOR_ID,
     });
     expect(data).toBeNull();
     expect(["42501", "PGRST202"]).toContain(error?.code);
@@ -1217,12 +1217,12 @@ describe("details form (context_form)", () => {
 
   const statements = {
     select: "select * from public.context_form",
-    insert: `insert into public.context_form (case_id, updated_by) values ('${UNKNOWN_ID}', '${DEV_ACTOR_ID}')`,
+    insert: `insert into public.context_form (case_id, updated_by) values ('${UNKNOWN_ID}', '${TEST_ACTOR_ID}')`,
     update: "update public.context_form set context = 'x'",
     delete: "delete from public.context_form",
-    save_context_field: `select public.save_context_field('${UNKNOWN_ID}', 'context', 'x', '${DEV_ACTOR_ID}')`,
-    save_case_results: `select public.save_case_results('${UNKNOWN_ID}', '[]'::jsonb, '${DEV_ACTOR_ID}')`,
-    save_case_testimonial: `select public.save_case_testimonial('${UNKNOWN_ID}', '', '', '${DEV_ACTOR_ID}')`,
+    save_context_field: `select public.save_context_field('${UNKNOWN_ID}', 'context', 'x', '${TEST_ACTOR_ID}')`,
+    save_case_results: `select public.save_case_results('${UNKNOWN_ID}', '[]'::jsonb, '${TEST_ACTOR_ID}')`,
+    save_case_testimonial: `select public.save_case_testimonial('${UNKNOWN_ID}', '', '', '${TEST_ACTOR_ID}')`,
   };
   const roleCases = (["anon", "authenticated"] as const).flatMap((role) =>
     Object.entries(statements).map(([verb, sql]) => [role, verb, sql] as const),
@@ -1280,7 +1280,7 @@ describe("material storage bucket", () => {
     const { makeConfirmUpload } = await import("@/modules/material/application/confirm-upload");
     const { makeListAssets } = await import("@/modules/material/application/list-assets");
     const caseStudy = await loadCaseStudy();
-    const actor = await devActor();
+    const actor = await signedInActor();
     const { target, path } = await freshTarget("image/png");
 
     const presigned = await storage().presignUpload(target, MAX_FILE_BYTES);
@@ -1377,7 +1377,7 @@ describe("material storage bucket", () => {
       storage: storage(),
       cases: { get: caseStudy.get, recordEvent: caseStudy.recordEvent },
       newId: randomUUID,
-    })(await devActor(), { caseId: target.caseId, assetId: target.assetId, contentType: "image/png", fileName: "x.png" });
+    })(await signedInActor(), { caseId: target.caseId, assetId: target.assetId, contentType: "image/png", fileName: "x.png" });
     expect(confirmed.ok).toBe(false);
     if (!confirmed.ok) expect(confirmed.error.code).toBe("UPLOAD_NOT_FOUND");
     expect(await liveCount(target.caseId)).toBe(0);
