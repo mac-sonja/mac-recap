@@ -44,10 +44,10 @@ describe("can", () => {
     expect(can(actor("account_sales_social"), "create case")).toBe(false);
     expect(can(actor("account_sales_social"), "list cases")).toBe(false);
     expect(can(actor("account_sales_social"), "list cases", { status: "approved" })).toBe(true);
-    expect(can(actor("admin"), "list cases")).toBe(false);
+    expect(can(actor("admin"), "list cases")).toBe(true);
     expect(can(actor("owner_designer"), "list clients")).toBe(true);
     expect(can(actor("account_sales_social"), "list clients")).toBe(false);
-    expect(can(actor("admin"), "list clients")).toBe(false);
+    expect(can(actor("admin"), "list clients")).toBe(true);
   });
 });
 

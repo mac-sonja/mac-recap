@@ -1,6 +1,7 @@
 import type { Actor, Profile } from "@/modules/access/domain/actor";
 import {
   addUserInputSchema,
+  changeJobTitleInputSchema,
   changeRoleInputSchema,
   removeUserInputSchema,
   wouldRemoveLastAdmin,
@@ -28,7 +29,7 @@ const lastAdmin = () =>
 /**
  * The admin's Users use cases (Story 6.3). The caller has already authorized
  * `manage users`; `actor` is that admin. Nothing here reads or changes cases,
- * permissions or guardrails: only `profile.role` and `profile.disabled_at`.
+ * permissions or guardrails: only `profile.role`, `profile.job_title` and `profile.disabled_at`.
  */
 export function makeUsers({ profiles, authAdmin }: { profiles: ProfileRepository; authAdmin: AuthAdmin }) {
   /** An enabled, non-system profile to act on, or `NOT_FOUND`. */
@@ -59,17 +60,17 @@ export function makeUsers({ profiles, authAdmin }: { profiles: ProfileRepository
     async add(_actor: Actor, raw: unknown, origin: string): Promise<Result<AddedUser>> {
       const parsed = addUserInputSchema.safeParse(raw);
       if (!parsed.success) return invalid(fieldsOf(parsed.error.issues));
-      const { firstName, lastName, email, role } = parsed.data;
+      const { firstName, lastName, email, role, jobTitle } = parsed.data;
       const displayName = `${firstName} ${lastName}`;
 
       const existing = await profiles.findByEmail(email);
       if (!existing.ok) return existing;
       let user: Result<Profile>;
       if (existing.value === null) {
-        user = await profiles.create({ email, displayName, role, jobTitle: null, designerRequestedAt: null });
+        user = await profiles.create({ email, displayName, role, jobTitle, designerRequestedAt: null });
         if (!user.ok && user.error.code === "PROFILE_EXISTS") return err({ code: "USER_EXISTS", message: "This email has an account." });
       } else if (existing.value.disabledAt !== null && existing.value.role !== "system") {
-        user = await profiles.enable(existing.value.id, displayName, role);
+        user = await profiles.enable(existing.value.id, displayName, role, jobTitle);
       } else {
         return err({ code: "USER_EXISTS", message: "This email has an account." });
       }
@@ -89,6 +90,15 @@ export function makeUsers({ profiles, authAdmin }: { profiles: ProfileRepository
       const guard = await guardLastAdmin(found.value, parsed.data.role);
       if (!guard.ok) return guard;
       return profiles.setRole(found.value.id, parsed.data.role);
+    },
+
+    /** **Ruolo**: sets the free-text job title; it grants nothing. */
+    async changeJobTitle(_actor: Actor, raw: unknown): Promise<Result<Profile>> {
+      const parsed = changeJobTitleInputSchema.safeParse(raw);
+      if (!parsed.success) return invalid(fieldsOf(parsed.error.issues));
+      const found = await target(parsed.data.profileId);
+      if (!found.ok) return found;
+      return profiles.setJobTitle(found.value.id, parsed.data.jobTitle);
     },
 
     /** Remove user: sets `disabled_at`; their cases, links and events stay. */

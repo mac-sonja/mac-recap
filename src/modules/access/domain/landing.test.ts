@@ -6,7 +6,7 @@ describe("landingFor", () => {
   it.each([
     ["owner_designer", "/home"],
     ["account_sales_social", "/library"],
-    ["admin", "/users"],
+    ["admin", "/home"],
     ["system", null],
   ] as const)("%s lands on %s", (role, path) => {
     expect(landingFor(role)).toBe(path);

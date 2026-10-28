@@ -53,31 +53,33 @@ describe("ToolLayout", () => {
     expect(html).toContain('href="/home"');
     expect(html).toContain('href="/case-studies"');
     expect(html).toContain('href="/clients"');
-    expect(html).toContain("Designer");
+    expect(html).not.toContain('href="/organization"');
+    expect(html).toContain("Owner");
     expect(html).toContain("content");
   });
 
-  it.each([
-    ["account_sales_social", "Account"],
-    ["admin", "Amministratore"],
-  ] as const)("shows neither nav item for %s", async (role, label) => {
-    getActor.mockResolvedValue(ok(actor(role)));
+  it("shows neither nav item to account/sales/social (Editor)", async () => {
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
     const html = await renderLayout();
     expect(html).not.toContain("Nuova case");
     expect(html).not.toContain('href="/case-studies"');
     expect(html).not.toContain('href="/clients"');
-    expect(html).toContain(label);
+    expect(html).toContain("Editor");
   });
 
-  it("shows only Utenti to the admin, and Libreria only to account/sales/social", async () => {
+  it("shows the admin every owner page plus Organizzazione, and Libreria only to account/sales/social", async () => {
     getActor.mockResolvedValue(ok(actor("admin")));
     const admin = await renderLayout();
-    expect(admin).toContain('href="/users"');
+    expect(admin).toContain("Nuova case history");
+    expect(admin).toContain('href="/case-studies"');
+    expect(admin).toContain('href="/clients"');
+    expect(admin).toContain('href="/organization"');
+    expect(admin).toContain("Amministratore");
     expect(admin).not.toContain('href="/library"');
     getActor.mockResolvedValue(ok(actor("account_sales_social")));
     const account = await renderLayout();
     expect(account).toContain('href="/library"');
-    expect(account).not.toContain('href="/users"');
+    expect(account).not.toContain('href="/organization"');
   });
 
   it("shows the cases to review after Case and the client count after Clienti", async () => {

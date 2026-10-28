@@ -12,7 +12,7 @@ const render = (show: {
   showCaseStudies: boolean;
   showClients?: boolean;
   showLibrary?: boolean;
-  showUsers?: boolean;
+  showOrganization?: boolean;
   toReviewCount?: number;
   theme?: "system" | "light" | "dark";
 }) =>
@@ -59,14 +59,16 @@ describe("Sidebar", () => {
     expect(render({ showNewCaseStudy: false, showCaseStudies: false })).not.toContain('role="search"');
   });
 
-  it("has no Templates or Users entries, and offers Esci (Story 6.1)", () => {
+  it("has no Templates or Organizzazione entries, and offers Esci (Story 6.1)", () => {
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });
-    expect(html).not.toMatch(/Template|Utenti|\/users|\/templates|\/review/i);
+    expect(html).not.toMatch(/Template|Organizzazione|\/organization|\/templates|\/review/i);
     expect(html).toContain('aria-label="Esci"');
   });
 
-  it("shows Utenti only when asked (admin)", () => {
-    expect(render({ showNewCaseStudy: false, showCaseStudies: false, showUsers: true })).toContain('href="/users"');
+  it("shows Organizzazione only when asked (admin), right under Clienti", () => {
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true, showOrganization: true });
+    expect(html).toContain("Organizzazione");
+    expect(html.indexOf('href="/organization"')).toBeGreaterThan(html.indexOf('href="/clients"'));
   });
 
   it("shows Libreria only when asked (account/sales/social)", () => {

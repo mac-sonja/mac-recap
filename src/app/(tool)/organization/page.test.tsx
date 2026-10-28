@@ -39,7 +39,7 @@ beforeEach(() => {
   listUsers.mockReset().mockResolvedValue(ok([user({}), user({ id: "00000000-0000-4000-8000-0000000000a1", displayName: "Ada", role: "admin", designerRequestedAt: null, jobTitle: null })]));
 });
 
-describe("UsersPage", () => {
+describe("Organizzazione page", () => {
   it.each(["owner_designer", "account_sales_social"] as const)("sends %s to its landing", async (role) => {
     getActor.mockResolvedValue(ok(actor(role)));
     await expect(UsersPage()).rejects.toThrow("REDIRECT /");
@@ -56,11 +56,23 @@ describe("UsersPage", () => {
     expect(html).toContain("(tu)");
   });
 
+  it("shows the free-text Ruolo as an editable field and the Permessi as Owner, Editor, Amministratore", async () => {
+    getActor.mockResolvedValue(ok(actor("admin")));
+    const html = renderToStaticMarkup(await UsersPage());
+    expect(html).toContain("Organizzazione");
+    expect(html).toContain(">Ruolo<");
+    expect(html).toContain(">Permessi<");
+    expect(html).toContain('aria-label="Ruolo di Bea Neri"');
+    expect(html).toMatch(/value="Designer"/);
+    expect(html).toContain('aria-label="Permessi di Bea Neri"');
+    expect(html).toMatch(/>Owner<\/option>[\s\S]*>Editor<\/option>[\s\S]*>Amministratore<\/option>/);
+  });
+
   it("flags a designer request with Approva, and never offers the system role", async () => {
     getActor.mockResolvedValue(ok(actor("admin")));
     const html = renderToStaticMarkup(await UsersPage());
-    expect(html).toContain("Chiede di essere designer");
-    expect(html).toContain('aria-label="Approva Bea Neri come designer"');
+    expect(html).toContain("Chiede i permessi Owner");
+    expect(html).toContain('aria-label="Dai a Bea Neri i permessi Owner"');
     expect(html).not.toMatch(/value="system"/);
   });
 });

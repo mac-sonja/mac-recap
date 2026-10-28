@@ -93,7 +93,7 @@ export function getSystemActor(): Promise<Result<Actor>> {
 }
 
 // Users (Story 6.3). Callers authorize `manage users` first; these change only
-// `profile.role` and `profile.disabled_at`.
+// `profile.role`, `profile.job_title` and `profile.disabled_at`.
 const users = () => makeUsers({ profiles: createSupabaseProfileRepository(), authAdmin: createSupabaseAuthAdmin() });
 
 /** Enabled, non-system users, oldest first. */
@@ -101,7 +101,7 @@ export function listUsers(): Promise<Result<ListedUser[]>> {
   return users().list();
 }
 
-/** **Aggiungi utente**: `{ firstName, lastName, email, role }`; sends the invite whose link returns to `origin`. */
+/** **Aggiungi utente**: `{ firstName, lastName, email, role, jobTitle? }`; sends the invite whose link returns to `origin`. */
 export function addUser(actor: Actor, input: unknown, origin: string): Promise<Result<AddedUser>> {
   return users().add(actor, input, origin);
 }
@@ -109,6 +109,11 @@ export function addUser(actor: Actor, input: unknown, origin: string): Promise<R
 /** Changes a role, or approves a designer: `{ profileId, role }`. `LAST_ADMIN` keeps one admin. */
 export function changeUserRole(actor: Actor, input: unknown): Promise<Result<Profile>> {
   return users().changeRole(actor, input);
+}
+
+/** **Ruolo**: `{ profileId, jobTitle }`; free text, empty clears it. */
+export function changeUserJobTitle(actor: Actor, input: unknown): Promise<Result<Profile>> {
+  return users().changeJobTitle(actor, input);
 }
 
 /** **Rimuovi**: `{ profileId }`; sets `disabled_at`. `LAST_ADMIN` keeps one admin. */

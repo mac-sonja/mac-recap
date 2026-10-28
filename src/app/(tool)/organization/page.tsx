@@ -6,9 +6,9 @@ import { AddUserButton } from "./_components/add-user-button";
 import { UsersTable } from "./_components/users-table";
 
 /**
- * The admin's Users screen (Story 6.3): every enabled, non-system user with name,
- * email, role and added-on date; change a role, approve a designer, remove a
- * user, add one. Only `manage users` (admin) reaches it; anyone else goes to their
+ * The admin's Organizzazione screen (Story 6.3): every enabled, non-system user
+ * with name, email, Ruolo (free text), Permessi (the role) and added-on date;
+ * change either, approve an Owner request, remove a user, add one. Only `manage users` (admin) reaches it; anyone else goes to their
  * landing. A failed load throws into Next's error boundary.
  */
 export default async function UsersPage() {

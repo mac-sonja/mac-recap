@@ -9,15 +9,16 @@ import type { AssignableRole, ListedUser } from "@/modules/access";
 import { formatDate } from "@/shared/i18n/format";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import { changeRole, removeUser } from "../actions";
+import { changeJobTitle, changeRole, removeUser } from "../actions";
 import { roleName, usersError } from "./user-messages";
 
 const SMALL_ACTION = "h-8 px-3 text-xs";
 
 /**
- * The Users list: name (job title and a pending designer request under it),
- * email, role dropdown, added-on date and **Rimuovi**. A role change applies at
- * that user's next request; **Approva** grants owner/designer. Failures (the last
+ * The Organizzazione list: name (a pending Owner request under it), email, the
+ * free-text **Ruolo** (saved when the field loses focus or on Enter), the
+ * **Permessi** dropdown, added-on date and **Rimuovi**. A change of Permessi
+ * applies at that user's next request; **Approva** grants Owner. Failures (the last
  * admin, above all) show one line above the table and the list reloads.
  * Below 1024 px the table scrolls sideways inside its card.
  */
@@ -54,6 +55,11 @@ export function UsersTable({
 
   const setRole = (user: ListedUser, role: AssignableRole) => run(user.id, () => changeRole({ profileId: user.id, role }));
 
+  function saveJobTitle(user: ListedUser, value: string) {
+    if (value.trim() === (user.jobTitle ?? "")) return;
+    void run(user.id, () => changeJobTitle({ profileId: user.id, jobTitle: value }));
+  }
+
   async function confirmRemove() {
     if (removing === null) return;
     const user = removing;
@@ -70,11 +76,12 @@ export function UsersTable({
         {users.length === 0 ? (
           <p className="px-6 py-10 text-center font-body text-sm text-foreground-muted">{it.users.empty}</p>
         ) : (
-          <table className="w-full min-w-[720px] text-left">
+          <table className="w-full min-w-[880px] text-left">
             <thead className="border-b">
               <tr>
                 <th className={TH}>{it.users.columns.name}</th>
                 <th className={TH}>{it.users.columns.email}</th>
+                <th className={TH}>{it.users.columns.jobTitle}</th>
                 <th className={TH}>{it.users.columns.role}</th>
                 <th className={TH}>{it.users.columns.added}</th>
                 <th className={cn(TH, "text-right")}>
@@ -95,7 +102,6 @@ export function UsersTable({
                           <span className="ml-1.5 font-normal text-foreground-muted">({it.users.you})</span>
                         ) : null}
                       </p>
-                      {user.jobTitle ? <p className="font-body text-xs text-foreground-muted">{user.jobTitle}</p> : null}
                       {pending ? (
                         <p className="mt-1 flex items-center gap-1.5 font-label text-xs font-medium text-primary-ink">
                           <span aria-hidden="true" className="size-1.5 rounded-full bg-primary-ink" />
@@ -104,6 +110,23 @@ export function UsersTable({
                       ) : null}
                     </td>
                     <td className="px-4 py-3.5 align-top font-body text-sm break-all text-foreground">{user.email}</td>
+                    <td className="px-4 py-3 align-top">
+                      <input
+                        // Remounts after a save or a reload, so the field shows what is stored.
+                        key={user.jobTitle ?? ""}
+                        defaultValue={user.jobTitle ?? ""}
+                        maxLength={60}
+                        autoComplete="off"
+                        placeholder={it.users.jobTitlePlaceholder}
+                        aria-label={fill(it.users.jobTitleLabel, { name: user.displayName })}
+                        disabled={busy === user.id}
+                        onBlur={(event) => saveJobTitle(user, event.currentTarget.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") event.currentTarget.blur();
+                        }}
+                        className={cn(FIELD, "w-auto min-w-40 py-1.5")}
+                      />
+                    </td>
                     <td className="px-4 py-3 align-top">
                       <select
                         aria-label={fill(it.users.roleLabel, { name: user.displayName })}

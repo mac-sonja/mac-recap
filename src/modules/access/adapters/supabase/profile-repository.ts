@@ -133,6 +133,21 @@ export function createSupabaseProfileRepository(
       return toProfile(data);
     },
 
+    async setJobTitle(id, jobTitle) {
+      const { data, error } = await client()
+        .from("profile")
+        .update({ job_title: jobTitle })
+        .eq("id", id)
+        .neq("role", "system")
+        .select(COLUMNS)
+        .single();
+      if (error) {
+        log.error(`profile job title update failed: ${error.code}`, { actorId: id });
+        return err({ code: "PROFILE_WRITE_FAILED", message: "Could not save the profile." });
+      }
+      return toProfile(data);
+    },
+
     async disable(id) {
       const { error } = await client()
         .from("profile")
@@ -147,10 +162,10 @@ export function createSupabaseProfileRepository(
       return ok(undefined);
     },
 
-    async enable(id, displayName, role) {
+    async enable(id, displayName, role, jobTitle) {
       const { data, error } = await client()
         .from("profile")
-        .update({ disabled_at: null, display_name: displayName, role, designer_requested_at: null })
+        .update({ disabled_at: null, display_name: displayName, role, job_title: jobTitle, designer_requested_at: null })
         .eq("id", id)
         .neq("role", "system")
         .select(COLUMNS)

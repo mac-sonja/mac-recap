@@ -23,6 +23,7 @@ function fakeRepository(rows: Profile[]): ProfileRepository & { findById: Return
     listUsers: vi.fn(),
     countEnabledAdmins: vi.fn(),
     setRole: vi.fn(),
+    setJobTitle: vi.fn(),
     disable: vi.fn(),
     enable: vi.fn(),
   };

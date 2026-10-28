@@ -14,8 +14,8 @@ import { roleName, usersError } from "./user-messages";
 const FORM_ID = "add-user-form";
 
 /**
- * **Aggiungi utente**: a dialog with name, surname, email and exactly one role
- * (never `system`). On success the list refreshes and a line says the invite went
+ * **Aggiungi utente**: a dialog with name, surname, email, an optional free-text
+ * **Ruolo** and exactly one set of **Permessi** (a role, never `system`). On success the list refreshes and a line says the invite went
  * out (or that the person already has a login).
  */
 /** `roles`: the assignable roles, from the server (`system` is never among them). */
@@ -37,7 +37,7 @@ export function AddUserButton({ roles }: { roles: readonly AssignableRole[] }) {
     event.preventDefault();
     if (pending) return;
     const form = new FormData(event.currentTarget);
-    const input = Object.fromEntries(["firstName", "lastName", "email", "role"].map((k) => [k, String(form.get(k) ?? "")]));
+    const input = Object.fromEntries(["firstName", "lastName", "email", "jobTitle", "role"].map((k) => [k, String(form.get(k) ?? "")]));
     setPending(true);
     setFailure(null);
     try {
@@ -103,6 +103,17 @@ export function AddUserButton({ roles }: { roles: readonly AssignableRole[] }) {
           <label className="flex flex-col gap-1.5">
             <span className={FIELD_LABEL}>{copy.email}</span>
             <input name="email" type="email" required autoComplete="off" aria-invalid={invalid("email")} className={FIELD} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={FIELD_LABEL}>{copy.jobTitle}</span>
+            <input
+              name="jobTitle"
+              maxLength={60}
+              autoComplete="off"
+              placeholder={copy.jobTitlePlaceholder}
+              aria-invalid={invalid("jobTitle")}
+              className={FIELD}
+            />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className={FIELD_LABEL}>{copy.role}</span>

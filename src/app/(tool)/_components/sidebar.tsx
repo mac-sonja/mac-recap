@@ -21,8 +21,8 @@ export interface SidebarProps {
   showClients: boolean;
   /** Account/sales/social: the Libreria item (approved cases only). */
   showLibrary?: boolean;
-  /** `manage users` (admin): the Utenti item, the admin's only surface. */
-  showUsers?: boolean;
+  /** `manage users` (admin): the Organizzazione item, right after Clienti. */
+  showOrganization?: boolean;
   displayName: string;
   roleLabel: string;
   /** Cases waiting for a review, shown after Case; nothing when 0 or unknown. */
@@ -122,7 +122,7 @@ export function Sidebar({
   showCaseStudies,
   showClients,
   showLibrary = false,
-  showUsers = false,
+  showOrganization = false,
   displayName,
   roleLabel,
   toReviewCount = null,
@@ -172,9 +172,6 @@ export function Sidebar({
         {showLibrary && (
           <NavLink href="/library" icon={Library} label={it.shell.nav.library} active={pathname === "/library"} />
         )}
-        {showUsers && (
-          <NavLink href="/users" icon={Users} label={it.shell.nav.users} active={pathname === "/users"} />
-        )}
         {showClients && (
           <NavLink
             href="/clients"
@@ -182,6 +179,14 @@ export function Sidebar({
             label={it.shell.nav.clients}
             active={isClients}
             meta={clientCount === null ? null : String(clientCount)}
+          />
+        )}
+        {showOrganization && (
+          <NavLink
+            href="/organization"
+            icon={Users}
+            label={it.shell.nav.organization}
+            active={pathname === "/organization"}
           />
         )}
       </nav>

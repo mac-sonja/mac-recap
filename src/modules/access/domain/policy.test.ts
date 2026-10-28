@@ -4,27 +4,28 @@ import { ACTIONS, CASE_STATUSES, can, type Action, type CaseStatus } from "./pol
 
 // The AD-11 matrix restated independently of policy.ts. Each cell is either
 // "all" (every status, and no status), "approved", "draft" or absent (denied).
+// The admin has every owner cell plus `manage users` (owner, 2026-10-28).
 type Cell = "all" | "approved" | "draft";
 const EXPECTED: Record<Action, Partial<Record<Role, Cell>>> = {
-  "list cases": { owner_designer: "all", account_sales_social: "approved" },
-  "create case": { owner_designer: "all" },
-  "list clients": { owner_designer: "all" },
-  "manage clients": { owner_designer: "all" },
-  upload: { owner_designer: "all" },
-  "fill details": { owner_designer: "all" },
-  "mark favourites": { owner_designer: "all" },
-  generate: { owner_designer: "all" },
-  edit: { owner_designer: "all" },
-  "delete case": { owner_designer: "draft" },
-  approve: { owner_designer: "all" },
-  "update approved version": { owner_designer: "all" },
-  discard: { owner_designer: "all" },
-  view: { owner_designer: "approved", account_sales_social: "approved" },
-  export: { owner_designer: "approved", account_sales_social: "approved" },
+  "list cases": { owner_designer: "all", admin: "all", account_sales_social: "approved" },
+  "create case": { owner_designer: "all", admin: "all" },
+  "list clients": { owner_designer: "all", admin: "all" },
+  "manage clients": { owner_designer: "all", admin: "all" },
+  upload: { owner_designer: "all", admin: "all" },
+  "fill details": { owner_designer: "all", admin: "all" },
+  "mark favourites": { owner_designer: "all", admin: "all" },
+  generate: { owner_designer: "all", admin: "all" },
+  edit: { owner_designer: "all", admin: "all" },
+  "delete case": { owner_designer: "draft", admin: "draft" },
+  approve: { owner_designer: "all", admin: "all" },
+  "update approved version": { owner_designer: "all", admin: "all" },
+  discard: { owner_designer: "all", admin: "all" },
+  view: { owner_designer: "approved", admin: "approved", account_sales_social: "approved" },
+  export: { owner_designer: "approved", admin: "approved", account_sales_social: "approved" },
   "job work": { system: "all" },
-  "create link": { owner_designer: "approved", account_sales_social: "approved" },
-  "turn off link": { owner_designer: "all", account_sales_social: "all" },
-  "manage templates": { owner_designer: "all" },
+  "create link": { owner_designer: "approved", admin: "approved", account_sales_social: "approved" },
+  "turn off link": { owner_designer: "all", admin: "all", account_sales_social: "all" },
+  "manage templates": { owner_designer: "all", admin: "all" },
   "manage users": { admin: "all" },
   "change permissions or guardrails": {},
 };
@@ -71,9 +72,9 @@ describe("AD-11 permission matrix", () => {
     }
   });
 
-  it("lets only owner/designer list and manage clients", () => {
+  it("lets only owner/designer and admin list and manage clients", () => {
     for (const action of ["list clients", "manage clients"] as const) {
-      expect(ROLES.filter((role) => can(role, action))).toEqual(["owner_designer"]);
+      expect(ROLES.filter((role) => can(role, action))).toEqual(["owner_designer", "admin"]);
     }
   });
 

@@ -8,7 +8,7 @@ describe("listScopeFor", () => {
   it.each([
     ["owner_designer", {}],
     ["account_sales_social", { status: "approved" }],
-    ["admin", null],
+    ["admin", {}],
     ["system", null],
   ] as const)("%s → %j", (role, scope) => {
     expect(listScopeFor(actor(role))).toEqual(scope);

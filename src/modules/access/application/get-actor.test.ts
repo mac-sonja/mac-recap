@@ -23,6 +23,7 @@ function fakeRepository(rows: Profile[]) {
     listUsers: vi.fn(),
     countEnabledAdmins: vi.fn(),
     setRole: vi.fn(),
+    setJobTitle: vi.fn(),
     disable: vi.fn(),
     enable: vi.fn(),
   } satisfies ProfileRepository;

@@ -16,10 +16,12 @@ export interface ProfileRepository {
   countEnabledAdmins(): Promise<Result<number>>;
   /** Sets the role and clears a pending designer request. `LAST_ADMIN` from the database backstop. */
   setRole(id: string, role: AssignableRole): Promise<Result<Profile>>;
+  /** Sets the free-text job title (**Ruolo**); `null` clears it. */
+  setJobTitle(id: string, jobTitle: string | null): Promise<Result<Profile>>;
   /** Sets `disabled_at` (Remove user); records keep pointing at the profile. */
   disable(id: string): Promise<Result<void>>;
-  /** Re-enables a removed profile with a new name and role (Add user on a removed address). */
-  enable(id: string, displayName: string, role: AssignableRole): Promise<Result<Profile>>;
+  /** Re-enables a removed profile with a new name, role and job title (Add user on a removed address). */
+  enable(id: string, displayName: string, role: AssignableRole, jobTitle: string | null): Promise<Result<Profile>>;
 }
 
 /** Admin-side Supabase Auth (service role). Implemented by `adapters/supabase/auth-admin.ts`. */

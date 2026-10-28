@@ -25,8 +25,11 @@ function setup(rows: Profile[], invited = true) {
     listUsers: vi.fn(),
     countEnabledAdmins: vi.fn(async () => ok(rows.filter((r) => r.role === "admin" && r.disabledAt === null).length)),
     setRole: vi.fn(async (id: string, role) => ok({ ...rows.find((r) => r.id === id)!, role, designerRequestedAt: null })),
+    setJobTitle: vi.fn(async (id: string, jobTitle: string | null) => ok({ ...rows.find((r) => r.id === id)!, jobTitle })),
     disable: vi.fn(async () => ok(undefined)),
-    enable: vi.fn(async (id: string, displayName: string, role) => ok({ ...rows.find((r) => r.id === id)!, displayName, role, disabledAt: null })),
+    enable: vi.fn(async (id: string, displayName: string, role, jobTitle: string | null) =>
+      ok({ ...rows.find((r) => r.id === id)!, displayName, role, jobTitle, disabledAt: null }),
+    ),
   } satisfies ProfileRepository;
   const authAdmin = { invite: vi.fn(async () => ok(invited)) } satisfies AuthAdmin;
   return { profiles, authAdmin, users: makeUsers({ profiles, authAdmin }) };
@@ -49,6 +52,12 @@ describe("add", () => {
     expect(authAdmin.invite).toHaveBeenCalledWith("luca@cliente.it", "https://recap.example/auth/confirm");
   });
 
+  it("keeps the free-text Ruolo, trimmed", async () => {
+    const { users, profiles } = setup([]);
+    await users.add(admin, { ...input, jobTitle: "  Art director " }, "https://recap.example");
+    expect(profiles.create).toHaveBeenCalledWith(expect.objectContaining({ jobTitle: "Art director" }));
+  });
+
   it("refuses the system role and names invalid fields", async () => {
     const { users, profiles } = setup([]);
     const result = await users.add(admin, { ...input, role: "system", email: "x" }, "https://x");
@@ -66,7 +75,7 @@ describe("add", () => {
     const removed = row("luca", { email: "luca@cliente.it", disabledAt: "2026-10-01T00:00:00Z" });
     const { users, profiles } = setup([removed], false);
     const result = await users.add(admin, { ...input, role: "owner_designer" }, "https://x");
-    expect(profiles.enable).toHaveBeenCalledWith(removed.id, "Luca Bianchi", "owner_designer");
+    expect(profiles.enable).toHaveBeenCalledWith(removed.id, "Luca Bianchi", "owner_designer", null);
     expect(result.ok && result.value.invited).toBe(false);
   });
 });
@@ -133,5 +142,26 @@ describe("remove", () => {
     profiles.disable.mockResolvedValueOnce(err({ code: "LAST_ADMIN", message: "m" }) as never);
     const result = await users.remove(admin, { profileId: a1.id });
     expect(!result.ok && result.error.code).toBe("LAST_ADMIN");
+  });
+});
+
+describe("changeJobTitle", () => {
+  it("sets the free-text Ruolo and clears it when empty", async () => {
+    const luca = row("luca");
+    const { users, profiles } = setup([luca]);
+    const set = await users.changeJobTitle(admin, { profileId: luca.id, jobTitle: " Copywriter " });
+    expect(set.ok && set.value.jobTitle).toBe("Copywriter");
+    await users.changeJobTitle(admin, { profileId: luca.id, jobTitle: "   " });
+    expect(profiles.setJobTitle).toHaveBeenLastCalledWith(luca.id, null);
+  });
+
+  it("refuses a title over 60 characters and an unknown or removed user", async () => {
+    const gone = row("gone", { disabledAt: "2026-10-01T00:00:00Z" });
+    const { users, profiles } = setup([gone]);
+    const long = await users.changeJobTitle(admin, { profileId: gone.id, jobTitle: "x".repeat(61) });
+    expect(!long.ok && long.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["jobTitle"] } });
+    const removed = await users.changeJobTitle(admin, { profileId: gone.id, jobTitle: "Copy" });
+    expect(!removed.ok && removed.error.code).toBe("NOT_FOUND");
+    expect(profiles.setJobTitle).not.toHaveBeenCalled();
   });
 });

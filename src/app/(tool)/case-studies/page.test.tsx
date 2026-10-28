@@ -94,8 +94,8 @@ describe("CaseStudiesPage", () => {
   });
 
   it("queries nothing for a role the policy grants no list scope", async () => {
-    requireSurface.mockResolvedValue(shell("admin", "/users"));
-    await expect(CaseStudiesPage()).rejects.toThrow("REDIRECT /users");
+    requireSurface.mockResolvedValue(shell("system", "/home"));
+    await expect(CaseStudiesPage()).rejects.toThrow("REDIRECT /home");
     expect(list).not.toHaveBeenCalled();
   });
 

@@ -2,15 +2,22 @@
 
 import { failure, type ActionResult } from "@/app/_lib/action-result";
 import { requestOrigin } from "@/app/_lib/origin";
-import { addUser as addAccessUser, authorize, changeUserRole, getActor, removeUser as removeAccessUser } from "@/modules/access";
+import {
+  addUser as addAccessUser,
+  authorize,
+  changeUserJobTitle,
+  changeUserRole,
+  getActor,
+  removeUser as removeAccessUser,
+} from "@/modules/access";
 import type { AddedUser, Profile } from "@/modules/access";
 
-// The admin's Users screen (Story 6.3). Every action resolves the actor and
+// The admin's Organizzazione screen (Story 6.3). Every action resolves the actor and
 // authorizes `manage users` (admin only) before the use case runs.
 
 /**
- * Adds a user: `{ firstName, lastName, email, role }` (owner/designer,
- * account/sales/social or admin) and sends the invite. 400 `INVALID_INPUT`
+ * Adds a user: `{ firstName, lastName, email, role, jobTitle? }` (role: owner/designer,
+ * account/sales/social or admin; jobTitle: the free-text **Ruolo**) and sends the invite. 400 `INVALID_INPUT`
  * naming the fields; 409 `USER_EXISTS`; 502 `INVITE_FAILED`.
  */
 export async function addUser(input: unknown): Promise<ActionResult<AddedUser>> {
@@ -29,6 +36,16 @@ export async function changeRole(input: unknown): Promise<ActionResult<Profile>>
   const decision = authorize(actor.value, "manage users");
   if (!decision.ok) return failure(decision.error);
   const changed = await changeUserRole(actor.value, input);
+  return changed.ok ? changed : failure(changed.error);
+}
+
+/** Sets the free-text **Ruolo**: `{ profileId, jobTitle }`. 404 `NOT_FOUND`. */
+export async function changeJobTitle(input: unknown): Promise<ActionResult<Profile>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage users");
+  if (!decision.ok) return failure(decision.error);
+  const changed = await changeUserJobTitle(actor.value, input);
   return changed.ok ? changed : failure(changed.error);
 }
 
