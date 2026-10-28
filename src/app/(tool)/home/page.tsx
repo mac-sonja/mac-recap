@@ -39,7 +39,7 @@ interface HomeCase {
   updatedAt: string;
   /** When a Da approvare case entered that status; null otherwise. */
   inReviewSince: string | null;
-  /** Where the row opens (`caseHref`): the wizard, the configurator, or nothing. */
+  /** Where the row opens (`caseHref`): the wizard, the configurator, the detail page, or nothing. */
   href: string | null;
 }
 

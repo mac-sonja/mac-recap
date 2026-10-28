@@ -36,6 +36,44 @@ export interface TopBarProps {
 }
 
 /**
+ * The top bar's left side: back, name, code and status badge. Shared with an approved
+ * case's detail page (Story 5.2).
+ */
+export function DocumentHeading({ header, back }: Pick<TopBarProps, "header" | "back">) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <Link
+        href={back.href}
+        aria-label={back.label}
+        className="grid size-8 shrink-0 place-items-center rounded-full text-foreground transition-[background-color,transform] duration-150 hover:bg-surface-hover active:scale-[0.94]"
+      >
+        <ArrowLeft aria-hidden="true" className="size-[18px]" />
+      </Link>
+      <span className="ml-1 min-w-0 truncate font-label text-sm font-semibold text-foreground-strong">{header.name}</span>
+      <span className="shrink-0 font-mono text-xs text-foreground-muted">
+        <span className="sr-only">{`${it.configurator.codeLabel} `}</span>
+        {header.code}
+      </span>
+      <StatusBadge status={header.status} className="shrink-0" />
+    </div>
+  );
+}
+
+/** The format switch, one segment per registry format with its ratio. Shared with the detail page. */
+export function FormatSwitch({ formatId, onFormat }: Pick<TopBarProps, "formatId" | "onFormat">) {
+  return (
+    <div role="group" aria-label={it.configurator.formats.label} className={SEG}>
+      {FORMATS.map((format) => (
+        <button key={format.id} type="button" aria-pressed={format.id === formatId} onClick={() => onFormat(format.id)} className={SEG_BUTTON}>
+          {it.configurator.formats[format.id]}
+          <small className="font-mono text-[11.5px] font-normal text-foreground-muted">{format.ratio}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
  * The configurator's top bar (mockup `.top`): back, name, code and status badge on the
  * left; the format switch and the Anteprima eye in the centre (a pencil, *Torna
  * all’editor*, while in Anteprima); the save state, undo, redo and **Approva** on the
@@ -46,37 +84,10 @@ export function TopBar({ header, back, formatId, onFormat, onSoon, preview, onPr
   const previewLabel = preview ? it.configurator.preview.leave : it.configurator.preview.enter;
   return (
     <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-border bg-surface-sidebar px-3">
-      <div className="flex min-w-0 items-center gap-2">
-        <Link
-          href={back.href}
-          aria-label={back.label}
-          className="grid size-8 shrink-0 place-items-center rounded-full text-foreground transition-[background-color,transform] duration-150 hover:bg-surface-hover active:scale-[0.94]"
-        >
-          <ArrowLeft aria-hidden="true" className="size-[18px]" />
-        </Link>
-        <span className="ml-1 min-w-0 truncate font-label text-sm font-semibold text-foreground-strong">{header.name}</span>
-        <span className="shrink-0 font-mono text-xs text-foreground-muted">
-          <span className="sr-only">{`${it.configurator.codeLabel} `}</span>
-          {header.code}
-        </span>
-        <StatusBadge status={header.status} className="shrink-0" />
-      </div>
+      <DocumentHeading header={header} back={back} />
 
       <div className="flex items-center gap-2">
-        <div role="group" aria-label={it.configurator.formats.label} className={SEG}>
-          {FORMATS.map((format) => (
-            <button
-              key={format.id}
-              type="button"
-              aria-pressed={format.id === formatId}
-              onClick={() => onFormat(format.id)}
-              className={SEG_BUTTON}
-            >
-              {it.configurator.formats[format.id]}
-              <small className="font-mono text-[11.5px] font-normal text-foreground-muted">{format.ratio}</small>
-            </button>
-          ))}
-        </div>
+        <FormatSwitch formatId={formatId} onFormat={onFormat} />
         {/* Anteprima: an eye; in Anteprima the same button is a pencil back to the editor (mockup `#previewBtn`). */}
         <button
           ref={previewRef}

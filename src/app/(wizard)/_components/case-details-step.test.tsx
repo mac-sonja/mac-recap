@@ -151,6 +151,7 @@ function clickLink(name: string) {
 function renderWithLink(step: ReactNode) {
   return render(
     <>
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a plain link stands in for the back arrow */}
       <a href="/case-studies">Indietro</a>
       {step}
     </>,
@@ -718,6 +719,7 @@ describe("CaseDetailsStep, an existing draft", () => {
     updateCaseStudyDetails.mockReturnValue(pending.promise);
     render(
       <>
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a plain link stands in for the back arrow */}
         <a href="/case-studies">Indietro</a>
         <CaseDetailsStep
           caseStudy={EXISTING}
@@ -963,6 +965,7 @@ describe("CaseDetailsStep, an existing draft", () => {
     it("leaves link clicks alone when everything is saved", async () => {
       render(
         <>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a plain link stands in for the back arrow */}
           <a href="/case-studies">Indietro</a>
           <CaseDetailsStep
             caseStudy={EXISTING}

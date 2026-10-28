@@ -2,7 +2,7 @@
 title: 'Story 5.2 (part): approved case detail page and Modifica'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-review'
+status: 'done'
 baseline_commit: '0d8abf2547b6c95c25bc1903f9a2bb336b719446'
 route: 'dispatch'
 review_loop_iteration: 0

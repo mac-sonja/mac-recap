@@ -316,3 +316,13 @@ describe("configurator copy", () => {
     expect(t("configurator.textAnimation")).toBe("Animazione testi");
   });
 });
+
+describe("case view copy", () => {
+  test("has the approved strings", () => {
+    expect(t("caseView.back")).toBe("Torna alle case history");
+    expect(t("caseView.edit")).toBe("Modifica");
+    expect(t("caseView.narrowScreen")).toBe("L’anteprima ha bisogno di uno schermo più grande.");
+    expect(t("caseStudies.table.edit")).toBe("Modifica");
+    expect(fill(t("caseStudies.table.editLabel"), { name: "Rebrand" })).toBe("Modifica Rebrand");
+  });
+});

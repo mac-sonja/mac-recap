@@ -64,6 +64,12 @@ describe("requireSurface", () => {
     await expect(requireSurface("list cases")).rejects.toThrow("REDIRECT /library");
   });
 
+  it("checks the policy against a resource when given one (an approved case's detail page)", async () => {
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
+    expect(await requireSurface("list cases", { status: "approved" })).toMatchObject({ landing: "/library" });
+    await expect(requireSurface("list cases", { status: "draft" })).rejects.toThrow("REDIRECT /library");
+  });
+
   it("returns null when the profile can't be read, without redirecting", async () => {
     getActor.mockResolvedValue(err({ code: "PROFILE_LOOKUP_FAILED", message: "m" }));
     expect(await requireSurface("list cases")).toBeNull();

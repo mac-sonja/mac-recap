@@ -1572,6 +1572,7 @@ So that nothing sits waiting and I can clear out drafts I don't need.
 
 Covers: FR5 (dashboard), CAP-6, AR3 (delete only in `draft`, soft), UX-DR1 (To review entry), UX-DR4 (status filter, Delete row action), UX-DR5, UX-DR28 (Delete confirm), PRD Story 4.1
 Note (owner, 2026-10-20, Story 2.17): the segmented status filter (without counts) already ships in Story 2.17; this story adds the counts, row actions, delete and the To review queue.
+Note (owner, 2026-10-28): the row Delete criterion is dropped. No table row has Delete: a draft is deleted only inside the draft (Story 2.20), and an approved case's **Elimina** goes on its detail page (Story 5.2). The sidebar **To review** entry shipped as the sidebar's Da approvare note, which opens the queue (#115). Story 4.1 is done.
 ⚑ Interim: IR-OP8
 
 **Acceptance Criteria:**
@@ -2237,6 +2238,7 @@ I want to page through each format of an approved case study,
 So that I know what I'm sending before I export or share it.
 
 Covers: FR7, CAP-9 (no entry point for unapproved content), NFR7, AR3, AR9, UX-DR21 (view, pager, zoom, full screen, Edit), UX-DR4 (View row action), UX-DR2
+Note (owner, 2026-10-28, spec-5-2-approved-case-detail-and-edit): a first part is built. An Approvato row, from the Case table and from Home, opens a full-screen, read-only detail page at `/case-studies/{id}` for every role: back, name, code, badge, the format switch, **Scarica** (the inactive picker) and, with `edit`, **Modifica** to the configurator; below, the configurator's Anteprima pieces (Presentazione stacked, Carosello and Video as a slideshow with ← →, the Instagram overlay on Video). It reads the live revision; with none approved yet (before Story 4.8) it shows the starter pages with the *Bozza di prova* note instead of returning to the landing. The table shows **Modifica** next to **Scarica** on Approvato rows, with `edit`. Still backlog: the pager, zoom, full screen, the 1024–1279 px dropdown and the preview below 1024 px (a larger-screen message shows for now), Share, a working Export, and **Elimina** (next spec).
 ⚑ Interim: IR-OP1
 
 **Acceptance Criteria:**
