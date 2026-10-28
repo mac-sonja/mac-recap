@@ -11,6 +11,7 @@ import pg from "pg";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
+import { TEST_ACTOR_ID, TEST_ACTOR_NAME } from "../helpers/db-actor";
 import { CASE_DELETED, CASE_DETAILS_UPDATED } from "@/modules/case-study/domain/case-event";
 import { BUSINESS_LINES, LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
 import { CASE_STATUSES, type CaseStatus } from "@/shared/case-status";
@@ -43,8 +44,8 @@ let acme: TestClient;
 beforeAll(async () => {
   pool = new pg.Pool({ connectionString: env.SUPABASE_DB_URL, max: 2 });
   // Undo a role change left behind by an interrupted "Forbidden" run.
-  await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
-  acme = await createTestClient(pool, DEV_ACTOR_ID);
+  await pool.query("update public.profile set role = 'owner_designer' where id = $1", [TEST_ACTOR_ID]);
+  acme = await createTestClient(pool, TEST_ACTOR_ID);
 });
 
 afterAll(async () => {
@@ -126,23 +127,23 @@ const createSupabaseAdmin = () =>
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 
-async function devActor() {
+async function signedInActor() {
   const { getActor } = await loadAccess();
   const actor = await getActor();
-  if (!actor.ok) throw new Error(`dev actor did not resolve: ${actor.error.code}`);
+  if (!actor.ok) throw new Error(`signed-in test actor did not resolve: ${actor.error.code}`);
   return actor.value;
 }
 
 async function createCase(input: Record<string, unknown> = {}) {
   const { create } = await loadCaseStudy();
-  const result = await create(await devActor(), { name: "Rebrand", clientId: acme.id, year: 2026, businessLines: ["branding"], ...input });
+  const result = await create(await signedInActor(), { name: "Rebrand", clientId: acme.id, year: 2026, businessLines: ["branding"], ...input });
   if (!result.ok) throw new Error(`setup create failed: ${result.error.code}`);
   return result.value;
 }
 
 describe("create", () => {
   it("writes a draft case (locale it, created_by the actor) and exactly one case_created event", async () => {
-    const actor = await devActor();
+    const actor = await signedInActor();
     const { create } = await loadCaseStudy();
     const result = await create(actor, { name: "  Rebrand ", clientId: acme.id, year: 2026, businessLines: ["social_media"] });
     expect(result.ok).toBe(true);
@@ -202,7 +203,7 @@ describe("create", () => {
     const result = await createCaseStudy({ name: "Action case", clientId: acme.id, year: 2025, businessLines: ["video"] });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toMatchObject({ name: "Action case", status: "draft", createdBy: DEV_ACTOR_ID, client: acme });
+      expect(result.value).toMatchObject({ name: "Action case", status: "draft", createdBy: TEST_ACTOR_ID, client: acme });
       expect(result.value.code).toMatch(new RegExp(`^${acme.code}-2025-\\d{2,}$`));
     }
   });
@@ -230,7 +231,7 @@ describe("invalid input writes nothing", () => {
   ])("%s → INVALID_INPUT naming %j", async (_label, over, fields) => {
     const { create } = await loadCaseStudy();
     const before = await counts();
-    const result = await create(await devActor(), { name: "R", clientId: acme.id, year: 2026, businessLines: ["eventi"], ...over });
+    const result = await create(await signedInActor(), { name: "R", clientId: acme.id, year: 2026, businessLines: ["eventi"], ...over });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("INVALID_INPUT");
@@ -241,7 +242,7 @@ describe("invalid input writes nothing", () => {
 
   it("creates a case without a business line (the new-case dialog: client only)", async () => {
     const { create } = await loadCaseStudy();
-    const result = await create(await devActor(), { name: "R", clientId: acme.id, year: 2026 });
+    const result = await create(await signedInActor(), { name: "R", clientId: acme.id, year: 2026 });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.businessLines).toEqual([]);
   });
@@ -254,7 +255,7 @@ describe("invalid input writes nothing", () => {
     ["number below 1", `${INSERT} values ('R', $2, 0, 'ZZZ-1', 2026, 'it', $1)`],
     ["business line outside the list", `insert into public.case_study (name, client_id, number, code, year, locale, business_lines, created_by) values ('R', $2, 9999, 'ZZZ-1', 2026, 'it', array['moda'], $1)`],
   ])("the table checks reject a %s as a backstop", async (_label, sql) => {
-    await expect(inRolledBackTx(sql, [DEV_ACTOR_ID, acme.id])).rejects.toMatchObject({ code: "23514" });
+    await expect(inRolledBackTx(sql, [TEST_ACTOR_ID, acme.id])).rejects.toMatchObject({ code: "23514" });
   });
 });
 
@@ -262,14 +263,14 @@ describe("forbidden", () => {
   it("returns 403 FORBIDDEN for a role that cannot create cases, and writes nothing", async () => {
     const { createCaseStudy } = await loadActions();
     // getActor() reads through PostgREST on its own connection: change, then always restore.
-    await pool.query("update public.profile set role = 'account_sales_social' where id = $1", [DEV_ACTOR_ID]);
+    await pool.query("update public.profile set role = 'account_sales_social' where id = $1", [TEST_ACTOR_ID]);
     try {
       const before = await counts();
       const result = await createCaseStudy({ name: "Rebrand", clientId: acme.id, year: 2026, businessLines: ["branding"] });
       expect(result).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
       expect(await counts()).toEqual(before);
     } finally {
-      await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
+      await pool.query("update public.profile set role = 'owner_designer' where id = $1", [TEST_ACTOR_ID]);
     }
   });
 });
@@ -284,8 +285,8 @@ describe("clients page (Story 2.13)", () => {
   }
 
   it("counts only non-deleted cases; a client with only soft-deleted cases counts 0", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
-    const onlyDeleted = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
+    const onlyDeleted = await createTestClient(pool, TEST_ACTOR_ID);
     await createCase({ name: "Count live 1", clientId: client.id });
     await createCase({ name: "Count live 2", clientId: client.id });
     const deleted = await createCase({ name: "Count deleted", clientId: client.id });
@@ -297,7 +298,7 @@ describe("clients page (Story 2.13)", () => {
   });
 
   it("lists one client's non-deleted cases when the scope names it", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const mine = await createCase({ name: "Scoped mine", clientId: client.id });
     const gone = await createCase({ name: "Scoped gone", clientId: client.id });
     await pool.query("update public.case_study set deleted_at = now() where id = $1", [gone.id]);
@@ -314,7 +315,7 @@ describe("clients page (Story 2.13)", () => {
     if (!added.ok) throw new Error(`createClient failed: ${added.error.code}`);
     expect(added.value).toMatchObject({ name, industry: "lusso", description: "Brand.", logoId: null });
     const created = await createCase({ name: "Rename keeps codes", clientId: added.value.id });
-    const logoId = await addTestLogo(pool, added.value.id, DEV_ACTOR_ID);
+    const logoId = await addTestLogo(pool, added.value.id, TEST_ACTOR_ID);
 
     const before = await counts();
     const duplicate = await createClient({ name: name.toUpperCase().replace(" ", "  "), industry: "lusso", description: "Brand." });
@@ -355,8 +356,10 @@ describe("clients page (Story 2.13)", () => {
       listClientMaterial,
       removeClientMaterial,
     } = await loadClientActions();
-    for (const role of ["account_sales_social", "admin"]) {
-      await pool.query("update public.profile set role = $2 where id = $1", [DEV_ACTOR_ID, role]);
+    // The admin holds every owner permission (AD-11, 2026-10-28), so only
+    // account/sales/social is refused here; test/permissions.test.ts covers every role.
+    for (const role of ["account_sales_social"]) {
+      await pool.query("update public.profile set role = $2 where id = $1", [TEST_ACTOR_ID, role]);
       try {
         const before = await counts();
         const forbidden = { ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } };
@@ -381,7 +384,7 @@ describe("clients page (Story 2.13)", () => {
         const { rows } = await pool.query("select name, industry, description, logo_id from public.client where id = $1", [acme.id]);
         expect(rows[0]).toMatchObject({ name: acme.name });
       } finally {
-        await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
+        await pool.query("update public.profile set role = 'owner_designer' where id = $1", [TEST_ACTOR_ID]);
       }
     }
   });
@@ -415,7 +418,7 @@ describe("list", () => {
   /** A committed case walked to `approved` through the real transition use case. */
   async function approvedCase(input: Record<string, unknown> = {}) {
     const { transition } = await loadCaseStudy();
-    const actor = await devActor();
+    const actor = await signedInActor();
     const created = await createCase(input);
     for (const event of ["generate", "generation_succeeded", "approve"]) {
       const moved = await transition(created.id, event, actor);
@@ -484,7 +487,7 @@ describe("list", () => {
 describe("listActivity (the Dashboard's Attività)", () => {
   it("reads the newest events first with the actor's name and the case, only the kinds it shows, and honours the scope", async () => {
     const created = await createCase({ name: "Activity case" });
-    const actor = await devActor();
+    const actor = await signedInActor();
     const { recordEvent, listActivity } = await loadCaseStudy();
     await recordEvent(actor, { caseId: created.id, type: "asset_uploaded", data: { assetId: "a1" } });
     await recordEvent(actor, { caseId: created.id, type: "asset_favourited", data: { assetId: "a1" } });
@@ -493,7 +496,7 @@ describe("listActivity (the Dashboard's Attività)", () => {
     if (!result.ok) return;
     const mine = result.value.filter((e) => e.case.id === created.id);
     expect(mine.map((e) => e.type)).toEqual(["asset_uploaded", "case_created"]);
-    expect(mine[0]).toMatchObject({ actorName: "Dev owner/designer", case: { name: "Activity case", code: created.code, status: "draft" } });
+    expect(mine[0]).toMatchObject({ actorName: TEST_ACTOR_NAME, case: { name: "Activity case", code: created.code, status: "draft" } });
     // An approved-only scope (account/sales/social) never sees a draft's events.
     const approvedOnly = await listActivity({ status: "approved" });
     expect(approvedOnly.ok && approvedOnly.value.some((e) => e.case.id === created.id)).toBe(false);
@@ -503,7 +506,7 @@ describe("listActivity (the Dashboard's Attività)", () => {
 describe("recordEvent", () => {
   it("appends one case_event row with the actor, type and data", async () => {
     const created = await createCase();
-    const actor = await devActor();
+    const actor = await signedInActor();
     const { recordEvent } = await loadCaseStudy();
     const result = await recordEvent(actor, { caseId: created.id, type: "text_added", data: { textItemId: "t1" } });
     expect(result.ok).toBe(true);
@@ -528,10 +531,10 @@ describe("recordEvent", () => {
     const { createWorkingRevision, recordEvent } = await loadCaseStudy();
     const { caseHistoryV2 } = await import("@/modules/generation");
     const { FORMAT_IDS } = await import("@/modules/rendering");
-    const revision = await createWorkingRevision(await devActor(), { caseId: created.id, doc: caseHistoryV2(FORMAT_IDS), expectedHeadVersion: 0 });
+    const revision = await createWorkingRevision(await signedInActor(), { caseId: created.id, doc: caseHistoryV2(FORMAT_IDS), expectedHeadVersion: 0 });
     if (!revision.ok) throw new Error(`setup revision failed: ${revision.error.code}`);
     const revisionId = revision.value.id;
-    const result = await recordEvent(await devActor(), { caseId: created.id, type: "text_added", revisionId });
+    const result = await recordEvent(await signedInActor(), { caseId: created.id, type: "text_added", revisionId });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.revisionId).toBe(revisionId);
     const { rows } = await pool.query(
@@ -545,7 +548,7 @@ describe("recordEvent", () => {
     const created = await createCase();
     const { recordEvent } = await loadCaseStudy();
     const before = await counts();
-    const result = await recordEvent(await devActor(), { caseId: created.id, type: "text_added", revisionId: UNKNOWN_ID });
+    const result = await recordEvent(await signedInActor(), { caseId: created.id, type: "text_added", revisionId: UNKNOWN_ID });
     expect(result).toMatchObject({ ok: false, error: { code: "REVISION_NOT_FOUND" } });
     expect(await counts()).toEqual(before);
   });
@@ -553,7 +556,7 @@ describe("recordEvent", () => {
   it("returns NOT_FOUND for an unknown case and writes nothing", async () => {
     const { recordEvent } = await loadCaseStudy();
     const before = await counts();
-    const result = await recordEvent(await devActor(), { caseId: UNKNOWN_ID, type: "text_added" });
+    const result = await recordEvent(await signedInActor(), { caseId: UNKNOWN_ID, type: "text_added" });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("NOT_FOUND");
     expect(await counts()).toEqual(before);
@@ -663,7 +666,7 @@ describe("business line and details (Story 2.17)", () => {
   /** Moves a case out of draft the only allowed way (`transition_case_study`). */
   async function generate(caseId: string) {
     const { transition } = await loadCaseStudy();
-    const moved = await transition(caseId, "generate", await devActor());
+    const moved = await transition(caseId, "generate", await signedInActor());
     if (!moved.ok) throw new Error(`setup transition failed: ${moved.error.code}`);
   }
   const eventsOf = async (caseId: string) =>
@@ -690,21 +693,21 @@ describe("business line and details (Story 2.17)", () => {
     const insert = (line: string) =>
       inRolledBackTx(
         "insert into public.case_study (name, client_id, number, code, year, locale, business_lines, created_by) values ('R', $2, 9999, 'ZZZ-1', 2026, 'it', $3, $1) returning business_lines",
-        [DEV_ACTOR_ID, acme.id, [line]],
+        [TEST_ACTOR_ID, acme.id, [line]],
       );
     await expect(insert("sviluppo")).resolves.toMatchObject({ rows: [{ business_lines: ["sviluppo"] }] });
     await expect(insert("moda")).rejects.toMatchObject({ code: "23514" });
     const { create } = await loadCaseStudy();
-    const created = await create(await devActor(), { name: "R", clientId: acme.id, year: 2026, businessLines: ["sviluppo"] });
+    const created = await create(await signedInActor(), { name: "R", clientId: acme.id, year: 2026, businessLines: ["sviluppo"] });
     expect(created.ok && created.value.businessLines).toEqual(["sviluppo"]);
   });
 
   it("create_case_study takes a null business line (material first, 2026-10-21) and refuses one outside the list", async () => {
-    const { rows } = await pool.query("select (public.create_case_study('R', $1, 2026, 'it', null, $2)).business_lines", [acme.id, DEV_ACTOR_ID]);
+    const { rows } = await pool.query("select (public.create_case_study('R', $1, 2026, 'it', null, $2)).business_lines", [acme.id, TEST_ACTOR_ID]);
     expect(rows).toEqual([{ business_lines: [] }]);
     const before = await counts();
     await expect(
-      pool.query("select public.create_case_study('R', $1, 2026, 'it', array['moda'], $2)", [acme.id, DEV_ACTOR_ID]),
+      pool.query("select public.create_case_study('R', $1, 2026, 'it', array['moda'], $2)", [acme.id, TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "23514" });
     expect(await counts()).toEqual(before);
   });
@@ -723,7 +726,7 @@ describe("business line and details (Story 2.17)", () => {
     const created = await createCase();
     await pool.query("update public.case_study set business_lines = '{}' where id = $1", [created.id]);
     const { updateDetails } = await loadCaseStudy();
-    const result = await updateDetails(await devActor(), details(created.id, { name: " Rebrand 2 ", locale: "en", businessLines: ["social_media"] }));
+    const result = await updateDetails(await signedInActor(), details(created.id, { name: " Rebrand 2 ", locale: "en", businessLines: ["social_media"] }));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toMatchObject({
@@ -740,7 +743,7 @@ describe("business line and details (Story 2.17)", () => {
     const events = await eventsOf(created.id);
     expect(events.at(-1)).toEqual({
       type: CASE_DETAILS_UPDATED,
-      actor_id: DEV_ACTOR_ID,
+      actor_id: TEST_ACTOR_ID,
       data: { name: "Rebrand 2", clientId: acme.id, year: 2026, locale: "en", businessLines: ["social_media"] },
     });
   });
@@ -749,7 +752,7 @@ describe("business line and details (Story 2.17)", () => {
     const created = await createCase();
     const { updateDetails } = await loadCaseStudy();
     const before = await counts();
-    const result = await updateDetails(await devActor(), details(created.id));
+    const result = await updateDetails(await signedInActor(), details(created.id));
     expect(result.ok).toBe(true);
     expect(await counts()).toEqual(before);
     expect((await eventsOf(created.id)).map((e) => e.type)).toEqual(["case_created"]);
@@ -766,7 +769,7 @@ describe("business line and details (Story 2.17)", () => {
     if (code === "STALE_STATUS") await generate(id);
     const { updateDetails } = await loadCaseStudy();
     const before = await counts();
-    const result = await updateDetails(await devActor(), details(id, { name: "Changed" }));
+    const result = await updateDetails(await signedInActor(), details(id, { name: "Changed" }));
     expect(result.ok ? null : result.error.code).toBe(code);
     expect(await counts()).toEqual(before);
   });
@@ -778,7 +781,7 @@ describe("business line and details (Story 2.17)", () => {
     const created = await createCase();
     const { updateDetails } = await loadCaseStudy();
     const before = await counts();
-    const result = await updateDetails(await devActor(), details(created.id, over));
+    const result = await updateDetails(await signedInActor(), details(created.id, over));
     expect(result.ok ? null : result.error).toMatchObject({ code: "INVALID_INPUT", details: { fields: ["businessLines"] } });
     expect(await counts()).toEqual(before);
   });
@@ -786,10 +789,10 @@ describe("business line and details (Story 2.17)", () => {
   it("update_case_study_details itself refuses a null or unknown business line", async () => {
     const created = await createCase();
     await expect(
-      pool.query("select public.update_case_study_details($1, 'R', $3, 2026, 'it', '{}', $2)", [created.id, DEV_ACTOR_ID, acme.id]),
+      pool.query("select public.update_case_study_details($1, 'R', $3, 2026, 'it', '{}', $2)", [created.id, TEST_ACTOR_ID, acme.id]),
     ).rejects.toMatchObject({ code: "P0001", message: "INVALID_INPUT" });
     await expect(
-      pool.query("select public.update_case_study_details($1, 'R', $3, 2026, 'it', array['moda'], $2)", [created.id, DEV_ACTOR_ID, acme.id]),
+      pool.query("select public.update_case_study_details($1, 'R', $3, 2026, 'it', array['moda'], $2)", [created.id, TEST_ACTOR_ID, acme.id]),
     ).rejects.toMatchObject({ code: "23514" });
   });
 
@@ -799,14 +802,14 @@ describe("business line and details (Story 2.17)", () => {
         .rows[0]?.last_number ?? null;
 
     it("takes the next number of the new year, advances its counter, and never reuses the old number", async () => {
-      const client = await createTestClient(pool, DEV_ACTOR_ID);
+      const client = await createTestClient(pool, TEST_ACTOR_ID);
       const earlier = await createCase({ clientId: client.id, year: 2025 });
       await createCase({ clientId: client.id, year: 2026 });
       const moved = await createCase({ clientId: client.id, year: 2026 });
       expect([earlier.code, moved.code]).toEqual([`${client.code}-2025-01`, `${client.code}-2026-02`]);
 
       const { updateDetails } = await loadCaseStudy();
-      const result = await updateDetails(await devActor(), details(moved.id, { clientId: client.id, year: 2025 }));
+      const result = await updateDetails(await signedInActor(), details(moved.id, { clientId: client.id, year: 2025 }));
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value).toMatchObject({ id: moved.id, year: 2025, number: 2, code: `${client.code}-2025-02` });
@@ -814,7 +817,7 @@ describe("business line and details (Story 2.17)", () => {
       expect(await counterOf(client.id, 2026)).toBe(2);
       expect((await eventsOf(moved.id)).at(-1)).toEqual({
         type: CASE_DETAILS_UPDATED,
-        actor_id: DEV_ACTOR_ID,
+        actor_id: TEST_ACTOR_ID,
         data: {
           name: "Rebrand",
           clientId: client.id,
@@ -830,15 +833,15 @@ describe("business line and details (Story 2.17)", () => {
       // 2026's 02 is not reused: the next 2026 case is 03.
       expect((await createCase({ clientId: client.id, year: 2026 })).code).toBe(`${client.code}-2026-03`);
       // Moving back takes a new 2026 number too.
-      const back = await updateDetails(await devActor(), details(moved.id, { clientId: client.id, year: 2026 }));
+      const back = await updateDetails(await signedInActor(), details(moved.id, { clientId: client.id, year: 2026 }));
       expect(back.ok && back.value.code).toBe(`${client.code}-2026-04`);
     });
 
     it("a client change (owner, 2026-10-21) takes the new client's next number and code; the case id stays", async () => {
-      const other = await createTestClient(pool, DEV_ACTOR_ID);
+      const other = await createTestClient(pool, TEST_ACTOR_ID);
       const created = await createCase();
       const { updateDetails } = await loadCaseStudy();
-      const result = await updateDetails(await devActor(), details(created.id, { clientId: other.id }));
+      const result = await updateDetails(await signedInActor(), details(created.id, { clientId: other.id }));
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value).toMatchObject({ id: created.id, client: { id: other.id }, number: 1, code: `${other.code}-2026-01` });
@@ -854,7 +857,7 @@ describe("business line and details (Story 2.17)", () => {
       const created = await createCase();
       const { updateDetails } = await loadCaseStudy();
       const before = await counts();
-      const result = await updateDetails(await devActor(), details(created.id, { clientId: "cccccccc-0000-4000-8000-00000000ffff" }));
+      const result = await updateDetails(await signedInActor(), details(created.id, { clientId: "cccccccc-0000-4000-8000-00000000ffff" }));
       expect(result.ok ? null : result.error.code).toBe("CLIENT_NOT_FOUND");
       expect(await counts()).toEqual(before);
     });
@@ -862,7 +865,7 @@ describe("business line and details (Story 2.17)", () => {
     it("keeps number and code when only other fields change", async () => {
       const created = await createCase();
       const { updateDetails } = await loadCaseStudy();
-      const result = await updateDetails(await devActor(), details(created.id, { name: "Altro nome", businessLines: ["video"] }));
+      const result = await updateDetails(await signedInActor(), details(created.id, { name: "Altro nome", businessLines: ["video"] }));
       expect(result.ok && [result.value.code, result.value.number]).toEqual([created.code, created.number]);
       const data = (await eventsOf(created.id)).at(-1)?.data;
       expect(data).not.toHaveProperty("previousCode");
@@ -871,7 +874,7 @@ describe("business line and details (Story 2.17)", () => {
     it("still refuses a direct change of code or number after the function ran", async () => {
       const created = await createCase();
       const { updateDetails } = await loadCaseStudy();
-      await updateDetails(await devActor(), details(created.id, { year: 2024 }));
+      await updateDetails(await signedInActor(), details(created.id, { year: 2024 }));
       await expect(inRolledBackTx("update public.case_study set code = 'ZZZ-2024-01' where id = $1", [created.id])).rejects.toMatchObject({
         code: "P0001",
         message: expect.stringMatching(/immutable/),
@@ -880,7 +883,7 @@ describe("business line and details (Story 2.17)", () => {
       const db = await pool.connect();
       try {
         await db.query("begin");
-        await db.query("select public.update_case_study_details($1, 'R', $3, 2023, 'it', array['branding'], $2)", [created.id, DEV_ACTOR_ID, acme.id]);
+        await db.query("select public.update_case_study_details($1, 'R', $3, 2023, 'it', array['branding'], $2)", [created.id, TEST_ACTOR_ID, acme.id]);
         await expect(db.query("update public.case_study set number = number + 1000 where id = $1", [created.id])).rejects.toMatchObject({
           code: "P0001",
           message: expect.stringMatching(/immutable/),
@@ -892,12 +895,12 @@ describe("business line and details (Story 2.17)", () => {
     });
 
     it("refuses a year change on a case that is no longer a draft, writing nothing", async () => {
-      const client = await createTestClient(pool, DEV_ACTOR_ID);
+      const client = await createTestClient(pool, TEST_ACTOR_ID);
       const created = await createCase({ clientId: client.id, year: 2026 });
       await generate(created.id);
       const { updateDetails } = await loadCaseStudy();
       const before = await counts();
-      const result = await updateDetails(await devActor(), details(created.id, { year: 2025 }));
+      const result = await updateDetails(await signedInActor(), details(created.id, { year: 2025 }));
       expect(result.ok ? null : result.error.code).toBe("STALE_STATUS");
       expect(await counts()).toEqual(before);
       expect(await counterOf(client.id, 2025)).toBeNull();
@@ -934,7 +937,7 @@ describe("RLS lockout", () => {
       p_year: 2026,
       p_locale: "it",
       p_business_lines: ["branding"],
-      p_actor_id: DEV_ACTOR_ID,
+      p_actor_id: TEST_ACTOR_ID,
     });
     expect(data).toBeNull();
     // Permission denied, or PostgREST hiding a function the role may not execute.
@@ -951,13 +954,13 @@ describe("RLS lockout", () => {
     | "client_asset"
     | "case_number_counter";
   const INSERTS: Record<Table, string> = {
-    case_study: `insert into public.case_study (name, client_id, number, code, year, created_by) values ('I', '${UNKNOWN_ID}', 1, 'I', 2026, '${DEV_ACTOR_ID}')`,
-    case_event: `insert into public.case_event (case_id, actor_id, type) values ('${UNKNOWN_ID}', '${DEV_ACTOR_ID}', 'x')`,
-    client: `insert into public.client (name, name_key, code, created_by) values ('I', 'i', 'III', '${DEV_ACTOR_ID}')`,
+    case_study: `insert into public.case_study (name, client_id, number, code, year, created_by) values ('I', '${UNKNOWN_ID}', 1, 'I', 2026, '${TEST_ACTOR_ID}')`,
+    case_event: `insert into public.case_event (case_id, actor_id, type) values ('${UNKNOWN_ID}', '${TEST_ACTOR_ID}', 'x')`,
+    client: `insert into public.client (name, name_key, code, created_by) values ('I', 'i', 'III', '${TEST_ACTOR_ID}')`,
     client_sector: "insert into public.client_sector (key, label, label_key, position) values ('i', 'Intruder', 'intruder', 999)",
-    client_logo: `insert into public.client_logo (client_id, path, mime_type, size_bytes, created_by) values ('${UNKNOWN_ID}', 'p', 'image/png', 1, '${DEV_ACTOR_ID}')`,
-    client_brief: `insert into public.client_brief (client_id, updated_by) values ('${UNKNOWN_ID}', '${DEV_ACTOR_ID}')`,
-    client_asset: `insert into public.client_asset (client_id, position, path, file_name, mime_type, size_bytes, created_by) values ('${UNKNOWN_ID}', 1, 'p', 'f', 'application/pdf', 1, '${DEV_ACTOR_ID}')`,
+    client_logo: `insert into public.client_logo (client_id, path, mime_type, size_bytes, created_by) values ('${UNKNOWN_ID}', 'p', 'image/png', 1, '${TEST_ACTOR_ID}')`,
+    client_brief: `insert into public.client_brief (client_id, updated_by) values ('${UNKNOWN_ID}', '${TEST_ACTOR_ID}')`,
+    client_asset: `insert into public.client_asset (client_id, position, path, file_name, mime_type, size_bytes, created_by) values ('${UNKNOWN_ID}', 1, 'p', 'f', 'application/pdf', 1, '${TEST_ACTOR_ID}')`,
     case_number_counter: `insert into public.case_number_counter (client_id, year, last_number) values ('${UNKNOWN_ID}', 2026, 1)`,
   };
   const UPDATES: Record<Table, string> = {
@@ -987,21 +990,21 @@ describe("RLS lockout", () => {
   });
 
   const FUNCTIONS = [
-    `public.create_case_study('I', '${UNKNOWN_ID}'::uuid, 2026, 'it', array['branding'], '${DEV_ACTOR_ID}')`,
-    `public.update_case_study_details('${UNKNOWN_ID}'::uuid, 'I', '${UNKNOWN_ID}'::uuid, 2026, 'it', array['branding'], '${DEV_ACTOR_ID}')`,
-    `public.create_client('Intruder', null, null, '${DEV_ACTOR_ID}')`,
-    `public.update_client('${UNKNOWN_ID}', 'Intruder', null, null, null, '${DEV_ACTOR_ID}')`,
-    `public.add_client_sector('Intruder', '${DEV_ACTOR_ID}')`,
-    `public.save_client_brief_field('${UNKNOWN_ID}', 'context', 'x', '${DEV_ACTOR_ID}')`,
-    `public.save_client_results('${UNKNOWN_ID}', '[]'::jsonb, '${DEV_ACTOR_ID}')`,
-    `public.save_client_testimonial('${UNKNOWN_ID}', 'q', 'a', '${DEV_ACTOR_ID}')`,
+    `public.create_case_study('I', '${UNKNOWN_ID}'::uuid, 2026, 'it', array['branding'], '${TEST_ACTOR_ID}')`,
+    `public.update_case_study_details('${UNKNOWN_ID}'::uuid, 'I', '${UNKNOWN_ID}'::uuid, 2026, 'it', array['branding'], '${TEST_ACTOR_ID}')`,
+    `public.create_client('Intruder', null, null, '${TEST_ACTOR_ID}')`,
+    `public.update_client('${UNKNOWN_ID}', 'Intruder', null, null, null, '${TEST_ACTOR_ID}')`,
+    `public.add_client_sector('Intruder', '${TEST_ACTOR_ID}')`,
+    `public.save_client_brief_field('${UNKNOWN_ID}', 'context', 'x', '${TEST_ACTOR_ID}')`,
+    `public.save_client_results('${UNKNOWN_ID}', '[]'::jsonb, '${TEST_ACTOR_ID}')`,
+    `public.save_client_testimonial('${UNKNOWN_ID}', 'q', 'a', '${TEST_ACTOR_ID}')`,
     "public.client_brief_results_valid('[]'::jsonb)",
     "public.client_info_text(' x ')",
     `public.delete_client_logo('${UNKNOWN_ID}')`,
-    `public.insert_client_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'p', 'f', 'application/pdf', 1, null, null, '${DEV_ACTOR_ID}')`,
+    `public.insert_client_asset('${UNKNOWN_ID}', '${UNKNOWN_ID}', 'p', 'f', 'application/pdf', 1, null, null, '${TEST_ACTOR_ID}')`,
     `public.delete_client_asset('${UNKNOWN_ID}')`,
-    `public.delete_client('${UNKNOWN_ID}', 'x', '${DEV_ACTOR_ID}')`,
-    `public.delete_case_study('${UNKNOWN_ID}', '${DEV_ACTOR_ID}')`,
+    `public.delete_client('${UNKNOWN_ID}', 'x', '${TEST_ACTOR_ID}')`,
+    `public.delete_case_study('${UNKNOWN_ID}', '${TEST_ACTOR_ID}')`,
     "public.client_code_letters('Intruder')",
     "public.client_name_key('Intruder')",
     "public.case_study_code('III', 2026, 1)",
@@ -1014,26 +1017,26 @@ describe("RLS lockout", () => {
   );
 
   it("the old create_client, update_client and rename_client signatures are gone (the sector list ones included)", async () => {
-    await expect(inRolledBackTx(`select public.create_client('I', '${DEV_ACTOR_ID}'::uuid)`)).rejects.toMatchObject({ code: "42883" });
+    await expect(inRolledBackTx(`select public.create_client('I', '${TEST_ACTOR_ID}'::uuid)`)).rejects.toMatchObject({ code: "42883" });
     await expect(
-      inRolledBackTx(`select public.create_client('I', array['lusso']::text[], 'D'::text, '${DEV_ACTOR_ID}'::uuid)`),
+      inRolledBackTx(`select public.create_client('I', array['lusso']::text[], 'D'::text, '${TEST_ACTOR_ID}'::uuid)`),
     ).rejects.toMatchObject({ code: "42883" });
     await expect(
       inRolledBackTx(
-        `select public.update_client('${UNKNOWN_ID}'::uuid, 'I', array['lusso']::text[], 'D'::text, null::uuid, '${DEV_ACTOR_ID}'::uuid)`,
+        `select public.update_client('${UNKNOWN_ID}'::uuid, 'I', array['lusso']::text[], 'D'::text, null::uuid, '${TEST_ACTOR_ID}'::uuid)`,
       ),
     ).rejects.toMatchObject({ code: "42883" });
     await expect(
-      inRolledBackTx(`select public.rename_client('${UNKNOWN_ID}'::uuid, 'I', '${DEV_ACTOR_ID}'::uuid)`),
+      inRolledBackTx(`select public.rename_client('${UNKNOWN_ID}'::uuid, 'I', '${TEST_ACTOR_ID}'::uuid)`),
     ).rejects.toMatchObject({ code: "42883" });
   });
 
   it("the old free-text and pre-2.17 create_case_study signatures are gone", async () => {
     await expect(
-      inRolledBackTx(`select public.create_case_study('I', 'X'::text, 2026, 'it', '${DEV_ACTOR_ID}'::uuid)`),
+      inRolledBackTx(`select public.create_case_study('I', 'X'::text, 2026, 'it', '${TEST_ACTOR_ID}'::uuid)`),
     ).rejects.toMatchObject({ code: "42883" });
     await expect(
-      inRolledBackTx(`select public.create_case_study('I', '${UNKNOWN_ID}'::uuid, 2026, 'it', '${DEV_ACTOR_ID}'::uuid)`),
+      inRolledBackTx(`select public.create_case_study('I', '${UNKNOWN_ID}'::uuid, 2026, 'it', '${TEST_ACTOR_ID}'::uuid)`),
     ).rejects.toMatchObject({ code: "42883" });
   });
 });
@@ -1049,7 +1052,7 @@ describe("transition", () => {
 
   async function caseIn(status: CaseStatus) {
     const { transition } = await loadCaseStudy();
-    const actor = await devActor();
+    const actor = await signedInActor();
     const created = await createCase();
     for (const event of PATH[status]) {
       const moved = await transition(created.id, event, actor);
@@ -1084,7 +1087,7 @@ describe("transition", () => {
   ] as const)("%s --%s--> %s writes the status and one transition event with the actor", async (from, event, to) => {
     const id = await caseIn(from);
     const before = await transitionEvents(id);
-    const actor = await devActor();
+    const actor = await signedInActor();
     const { transition } = await loadCaseStudy();
     const result = await transition(id, event, actor);
     expect(result.ok).toBe(true);
@@ -1108,7 +1111,7 @@ describe("transition", () => {
     const id = await caseIn(status);
     const { transition } = await loadCaseStudy();
     const before = await counts();
-    await expectRefused(await transition(id, event, await devActor()), "INVALID_TRANSITION");
+    await expectRefused(await transition(id, event, await signedInActor()), "INVALID_TRANSITION");
     expect(await statusOf(id)).toBe(status);
     expect(await counts()).toEqual(before);
   });
@@ -1123,7 +1126,7 @@ describe("transition", () => {
       event: "generate",
       from: "draft",
       to: "generating",
-      actorId: DEV_ACTOR_ID,
+      actorId: TEST_ACTOR_ID,
     });
     await expectRefused(result, "STALE_STATUS");
     expect(await statusOf(id)).toBe("generating");
@@ -1149,7 +1152,7 @@ describe("transition", () => {
       event: "generate",
       from: "draft",
       to: "generating",
-      actorId: DEV_ACTOR_ID,
+      actorId: TEST_ACTOR_ID,
     });
     await expectRefused(result, "NOT_FOUND");
     expect(await counts()).toEqual(before);
@@ -1170,7 +1173,7 @@ describe("transition", () => {
     const id = await setup();
     const { transition } = await loadCaseStudy();
     const before = await counts();
-    await expectRefused(await transition(id, "generate", await devActor()), "NOT_FOUND");
+    await expectRefused(await transition(id, "generate", await signedInActor()), "NOT_FOUND");
     expect(await counts()).toEqual(before);
   });
 
@@ -1180,7 +1183,7 @@ describe("transition", () => {
     it("raises STALE_STATUS when status is not p_from, writing nothing", async () => {
       const id = await caseIn("generating");
       const before = await counts();
-      await expect(inRolledBackTx(call, [id, "generate", "draft", "generating", DEV_ACTOR_ID])).rejects.toMatchObject({
+      await expect(inRolledBackTx(call, [id, "generate", "draft", "generating", TEST_ACTOR_ID])).rejects.toMatchObject({
         code: "P0001",
         message: "STALE_STATUS",
       });
@@ -1188,13 +1191,13 @@ describe("transition", () => {
     });
 
     it("raises NOT_FOUND for an unknown or soft-deleted case", async () => {
-      await expect(inRolledBackTx(call, [UNKNOWN_ID, "generate", "draft", "generating", DEV_ACTOR_ID])).rejects.toMatchObject({
+      await expect(inRolledBackTx(call, [UNKNOWN_ID, "generate", "draft", "generating", TEST_ACTOR_ID])).rejects.toMatchObject({
         code: "P0001",
         message: "NOT_FOUND",
       });
       const id = await caseIn("draft");
       await pool.query("update public.case_study set deleted_at = now() where id = $1", [id]);
-      await expect(inRolledBackTx(call, [id, "generate", "draft", "generating", DEV_ACTOR_ID])).rejects.toMatchObject({
+      await expect(inRolledBackTx(call, [id, "generate", "draft", "generating", TEST_ACTOR_ID])).rejects.toMatchObject({
         code: "P0001",
         message: "NOT_FOUND",
       });
@@ -1203,7 +1206,7 @@ describe("transition", () => {
 
     it("raises INVALID_TRANSITION when from equals to, so no event without a status change", async () => {
       const id = await caseIn("draft");
-      await expect(inRolledBackTx(call, [id, "generate", "draft", "draft", DEV_ACTOR_ID])).rejects.toMatchObject({
+      await expect(inRolledBackTx(call, [id, "generate", "draft", "draft", TEST_ACTOR_ID])).rejects.toMatchObject({
         code: "P0001",
         message: "INVALID_TRANSITION",
       });
@@ -1212,7 +1215,7 @@ describe("transition", () => {
 
     it("rejects a status outside the check constraint, writing no event", async () => {
       const id = await caseIn("draft");
-      await expect(inRolledBackTx(call, [id, "generate", "draft", "archived", DEV_ACTOR_ID])).rejects.toMatchObject({
+      await expect(inRolledBackTx(call, [id, "generate", "draft", "archived", TEST_ACTOR_ID])).rejects.toMatchObject({
         code: "23514",
       });
       expect(await transitionEvents(id)).toEqual([]);
@@ -1223,7 +1226,7 @@ describe("transition", () => {
       const client = await pool.connect();
       try {
         await client.query("begin");
-        await client.query(call, [id, "generate", "draft", "generating", DEV_ACTOR_ID]);
+        await client.query(call, [id, "generate", "draft", "generating", TEST_ACTOR_ID]);
         await expect(client.query("update public.case_study set status = 'approved' where id = $1", [id])).rejects.toMatchObject({
           code: "P0001",
           message: expect.stringMatching(/only through transition_case_study/),
@@ -1237,7 +1240,7 @@ describe("transition", () => {
 
     it.each(["anon", "authenticated"])("%s may not execute it", async (role) => {
       await expect(
-        inRolledBackTx(`select public.transition_case_study('${UNKNOWN_ID}', 'generate', 'draft', 'generating', '${DEV_ACTOR_ID}')`, [], role),
+        inRolledBackTx(`select public.transition_case_study('${UNKNOWN_ID}', 'generate', 'draft', 'generating', '${TEST_ACTOR_ID}')`, [], role),
       ).rejects.toMatchObject({ code: "42501" });
     });
 
@@ -1250,7 +1253,7 @@ describe("transition", () => {
         p_event: "generate",
         p_from: "draft",
         p_to: "generating",
-        p_actor_id: DEV_ACTOR_ID,
+        p_actor_id: TEST_ACTOR_ID,
       });
       expect(data).toBeNull();
       expect(["42501", "PGRST202"]).toContain(error?.code);
@@ -1307,7 +1310,7 @@ describe("clients and readable case history codes (AD-21)", () => {
       const codes = await rolledBack(async (client) => {
         const out: string[] = [];
         for (const name of ["Lumen Srl", "Lumina S.p.A.", "Lume", "Città di Torino", "A2A", "3M"]) {
-          out.push((await client.query<TestClient>(createClientSql, [name, DEV_ACTOR_ID])).rows[0].code);
+          out.push((await client.query<TestClient>(createClientSql, [name, TEST_ACTOR_ID])).rows[0].code);
         }
         return out;
       });
@@ -1329,10 +1332,10 @@ describe("clients and readable case history codes (AD-21)", () => {
 
     it.each(["lumen  srl", " LÙMEN SRL ", "Lumen\tSrl"])("rejects %j after 'Lumen Srl' with CLIENT_NAME_TAKEN; nothing written", async (dup) => {
       await rolledBack(async (client) => {
-        await client.query(createClientSql, ["Lumen Srl", DEV_ACTOR_ID]);
+        await client.query(createClientSql, ["Lumen Srl", TEST_ACTOR_ID]);
         const before = (await client.query("select count(*)::int as n from public.client")).rows[0].n;
         await client.query("savepoint dup");
-        await expect(client.query(createClientSql, [dup, DEV_ACTOR_ID])).rejects.toMatchObject({
+        await expect(client.query(createClientSql, [dup, TEST_ACTOR_ID])).rejects.toMatchObject({
           code: "P0001",
           message: "CLIENT_NAME_TAKEN",
         });
@@ -1343,16 +1346,16 @@ describe("clients and readable case history codes (AD-21)", () => {
 
     it("stores the name with whitespace collapsed and trimmed, on create and on rename", async () => {
       await rolledBack(async (client) => {
-        const created = (await client.query<TestClient>(createClientSql, ["\t Lumen \n  Srl  ", DEV_ACTOR_ID])).rows[0];
+        const created = (await client.query<TestClient>(createClientSql, ["\t Lumen \n  Srl  ", TEST_ACTOR_ID])).rows[0];
         expect(created.name).toBe("Lumen Srl");
-        const logoId = await addTestLogo(client, created.id, DEV_ACTOR_ID);
+        const logoId = await addTestLogo(client, created.id, TEST_ACTOR_ID);
         const { rows } = await client.query("select name, name_key from public.update_client($1, $2, $3, $4, $5, $6)", [
           created.id,
           "  Lumen\t\tGroup \n",
           TEST_INDUSTRY,
           TEST_DESCRIPTION,
           logoId,
-          DEV_ACTOR_ID,
+          TEST_ACTOR_ID,
         ]);
         expect(rows).toEqual([{ name: "Lumen Group", name_key: "lumen group" }]);
       });
@@ -1361,14 +1364,14 @@ describe("clients and readable case history codes (AD-21)", () => {
     it("fails with CLIENT_CODE_EXHAUSTED once the first 3, first 4 and first 3 + A–Z are taken; nothing written", async () => {
       await rolledBack(async (client) => {
         const prefix = await freshPrefix(client);
-        const made = [(await createTestClient(client, DEV_ACTOR_ID, nameWithLetters(prefix))).code];
+        const made = [(await createTestClient(client, TEST_ACTOR_ID, nameWithLetters(prefix))).code];
         for (const letter of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
-          made.push((await createTestClient(client, DEV_ACTOR_ID, nameWithLetters(prefix + letter))).code);
+          made.push((await createTestClient(client, TEST_ACTOR_ID, nameWithLetters(prefix + letter))).code);
         }
         expect(made).toEqual([prefix, ...[..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].map((l) => prefix + l)]);
         const before = (await client.query("select count(*)::int as n from public.client")).rows[0].n;
         await client.query("savepoint all_taken");
-        await expect(client.query(createClientSql, [nameWithLetters(`${prefix}QQ`), DEV_ACTOR_ID])).rejects.toMatchObject({
+        await expect(client.query(createClientSql, [nameWithLetters(`${prefix}QQ`), TEST_ACTOR_ID])).rejects.toMatchObject({
           code: "P0001",
           message: "CLIENT_CODE_EXHAUSTED",
         });
@@ -1384,9 +1387,9 @@ describe("clients and readable case history codes (AD-21)", () => {
         const bPid = await backendPid(b);
         await a.query("begin");
         await b.query("begin");
-        const first = (await a.query<TestClient>(createClientSql, [nameWithLetters(prefix), DEV_ACTOR_ID])).rows[0];
+        const first = (await a.query<TestClient>(createClientSql, [nameWithLetters(prefix), TEST_ACTOR_ID])).rows[0];
         // Blocks on the advisory lock until `a` commits.
-        const second = b.query<TestClient>(createClientSql, [nameWithLetters(prefix), DEV_ACTOR_ID]);
+        const second = b.query<TestClient>(createClientSql, [nameWithLetters(prefix), TEST_ACTOR_ID]);
         await waitUntilBlocked(bPid);
         await a.query("commit");
         const secondCode = (await second).rows[0].code;
@@ -1404,7 +1407,7 @@ describe("clients and readable case history codes (AD-21)", () => {
 
   describe("case codes", () => {
     it("numbers per client and year, restarting each year, padded to 2 digits with no upper limit", async () => {
-      const client = await createTestClient(pool, DEV_ACTOR_ID);
+      const client = await createTestClient(pool, TEST_ACTOR_ID);
       const codes = [];
       for (const year of [2025, 2025, 2026]) codes.push((await createCase({ clientId: client.id, year })).code);
       expect(codes).toEqual([`${client.code}-2025-01`, `${client.code}-2025-02`, `${client.code}-2026-01`]);
@@ -1416,15 +1419,15 @@ describe("clients and readable case history codes (AD-21)", () => {
     });
 
     it("gives two parallel creates for the same client and year consecutive numbers", async () => {
-      const client = await createTestClient(pool, DEV_ACTOR_ID);
+      const client = await createTestClient(pool, TEST_ACTOR_ID);
       const [a, b] = [await connection(), await connection()];
       try {
         const bPid = await backendPid(b);
         await a.query("begin");
         await b.query("begin");
-        const first = (await a.query(createCaseSql, [client.id, 2026, DEV_ACTOR_ID])).rows[0];
+        const first = (await a.query(createCaseSql, [client.id, 2026, TEST_ACTOR_ID])).rows[0];
         // Blocks on the counter row until `a` commits.
-        const second = b.query(createCaseSql, [client.id, 2026, DEV_ACTOR_ID]);
+        const second = b.query(createCaseSql, [client.id, 2026, TEST_ACTOR_ID]);
         await waitUntilBlocked(bPid);
         await a.query("commit");
         const secondRow = (await second).rows[0];
@@ -1440,9 +1443,9 @@ describe("clients and readable case history codes (AD-21)", () => {
     });
 
     it("a rolled-back create leaves no gap", async () => {
-      const client = await createTestClient(pool, DEV_ACTOR_ID);
+      const client = await createTestClient(pool, TEST_ACTOR_ID);
       await rolledBack(async (tx) => {
-        expect((await tx.query(createCaseSql, [client.id, 2026, DEV_ACTOR_ID])).rows[0].number).toBe(1);
+        expect((await tx.query(createCaseSql, [client.id, 2026, TEST_ACTOR_ID])).rows[0].number).toBe(1);
       });
       expect((await createCase({ clientId: client.id })).code).toBe(`${client.code}-2026-01`);
     });
@@ -1450,32 +1453,32 @@ describe("clients and readable case history codes (AD-21)", () => {
     it("an unknown client → CLIENT_NOT_FOUND; nothing written", async () => {
       const { create } = await loadCaseStudy();
       const before = await counts();
-      const result = await create(await devActor(), { name: "R", clientId: UNKNOWN_ID, year: 2026, businessLines: ["branding"] });
+      const result = await create(await signedInActor(), { name: "R", clientId: UNKNOWN_ID, year: 2026, businessLines: ["branding"] });
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.code).toBe("CLIENT_NOT_FOUND");
       expect(await counts()).toEqual(before);
     });
 
     it("a create that fails after the counter (bad locale) rolls the counter back", async () => {
-      const client = await createTestClient(pool, DEV_ACTOR_ID);
+      const client = await createTestClient(pool, TEST_ACTOR_ID);
       await expect(
-        pool.query("select public.create_case_study('R', $1, 2026, 'de', array['branding'], $2)", [client.id, DEV_ACTOR_ID]),
+        pool.query("select public.create_case_study('R', $1, 2026, 'de', array['branding'], $2)", [client.id, TEST_ACTOR_ID]),
       ).rejects.toMatchObject({ code: "23514" });
       expect((await createCase({ clientId: client.id })).number).toBe(1);
     });
 
     it("reads show the client's current name after a rename; codes stay", async () => {
-      const client = await createTestClient(pool, DEV_ACTOR_ID);
+      const client = await createTestClient(pool, TEST_ACTOR_ID);
       const created = await createCase({ clientId: client.id });
       const renamed = `${client.name} Group`;
-      const logoId = await addTestLogo(pool, client.id, DEV_ACTOR_ID);
+      const logoId = await addTestLogo(pool, client.id, TEST_ACTOR_ID);
       const { rows } = await pool.query("select name, code from public.update_client($1, $2, $3, $4, $5, $6)", [
         client.id,
         renamed,
         TEST_INDUSTRY,
         TEST_DESCRIPTION,
         logoId,
-        DEV_ACTOR_ID,
+        TEST_ACTOR_ID,
       ]);
       expect(rows).toEqual([{ name: renamed, code: client.code }]);
       const { get } = await loadCaseStudy();
@@ -1489,7 +1492,7 @@ describe("clients and readable case history codes (AD-21)", () => {
     let client: TestClient;
 
     beforeAll(async () => {
-      client = await createTestClient(pool, DEV_ACTOR_ID);
+      client = await createTestClient(pool, TEST_ACTOR_ID);
       caseId = (await createCase({ clientId: client.id })).id;
     });
 
@@ -1501,7 +1504,7 @@ describe("clients and readable case history codes (AD-21)", () => {
     });
 
     it("keeps code and number when the case's year or client changes", async () => {
-      const other = await createTestClient(pool, DEV_ACTOR_ID);
+      const other = await createTestClient(pool, TEST_ACTOR_ID);
       const { rows } = await inRolledBackTx(
         "update public.case_study set year = 2030, client_id = $2 where id = $1 returning code, number",
         [caseId, other.id],
@@ -1532,10 +1535,10 @@ describe("clients and readable case history codes (AD-21)", () => {
 
     it("update_client refuses an unknown client and a taken name", async () => {
       await expect(
-        inRolledBackTx("select public.update_client($1, 'x', null, null, null, $2)", [UNKNOWN_ID, DEV_ACTOR_ID]),
+        inRolledBackTx("select public.update_client($1, 'x', null, null, null, $2)", [UNKNOWN_ID, TEST_ACTOR_ID]),
       ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
       await expect(
-        inRolledBackTx("select public.update_client($1, $2, null, null, null, $3)", [client.id, ` ${acme.name.toUpperCase()} `, DEV_ACTOR_ID]),
+        inRolledBackTx("select public.update_client($1, $2, null, null, null, $3)", [client.id, ` ${acme.name.toUpperCase()} `, TEST_ACTOR_ID]),
       ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NAME_TAKEN" });
     });
   });
@@ -1574,7 +1577,7 @@ describe("client info (Story 2.14, AD-22)", () => {
     const id = randomUUID();
     await pool.query(
       "insert into public.client_logo (id, client_id, path, mime_type, size_bytes, created_by) values ($1, $2, $3, 'image/png', 2048, $4)",
-      [id, clientId, `clients/${clientId}/logos/${id}.png`, DEV_ACTOR_ID],
+      [id, clientId, `clients/${clientId}/logos/${id}.png`, TEST_ACTOR_ID],
     );
     return id;
   }
@@ -1601,7 +1604,7 @@ describe("client info (Story 2.14, AD-22)", () => {
   });
 
   it.each([["description", 400]])("accepts a %s of %i characters (emoji = 1) and refuses one more", async (column, max) => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const { rows } = await inRolledBackTx(`update public.client set ${column} = $2 where id = $1 returning char_length(${column}) as n`, [
       client.id,
       "😀".repeat(max),
@@ -1616,11 +1619,11 @@ describe("client info (Story 2.14, AD-22)", () => {
   });
 
   it("create_client and update_client store trimmed info", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const logoId = await insertLogo(client.id);
     const { rows } = await inRolledBackTx(
       "select industry, description from public.update_client($1, $2, $3, $4, $5, $6)",
-      [client.id, client.name, "energia", "\n Brand di moda.  ", logoId, DEV_ACTOR_ID],
+      [client.id, client.name, "energia", "\n Brand di moda.  ", logoId, TEST_ACTOR_ID],
     );
     expect(rows).toEqual([{ industry: "energia", description: "Brand di moda." }]);
   });
@@ -1657,7 +1660,7 @@ describe("client info (Story 2.14, AD-22)", () => {
     for (const mime of ["image/png", "image/jpeg", "image/webp", "image/svg+xml"]) {
       const { rowCount } = await inRolledBackTx(
         "insert into public.client_logo (client_id, path, mime_type, size_bytes, created_by) values ($1, $2, $3, 2048, $4)",
-        [acme.id, `clients/${acme.id}/logos/${randomUUID()}.x`, mime, DEV_ACTOR_ID],
+        [acme.id, `clients/${acme.id}/logos/${randomUUID()}.x`, mime, TEST_ACTOR_ID],
       );
       expect(rowCount, mime).toBe(1);
     }
@@ -1679,13 +1682,13 @@ describe("client info (Story 2.14, AD-22)", () => {
     await expect(
       inRolledBackTx(
         "insert into public.client_logo (client_id, path, mime_type, size_bytes, created_by) values ($1, $2, $3, $4, $5)",
-        [acme.id, `clients/${acme.id}/logos/${randomUUID()}.x`, mime, size, DEV_ACTOR_ID],
+        [acme.id, `clients/${acme.id}/logos/${randomUUID()}.x`, mime, size, TEST_ACTOR_ID],
       ),
     ).rejects.toMatchObject({ code: "23514" });
   });
 
   it("client_logo rows can now be updated and deleted directly (no append-only guard)", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const logoId = await insertLogo(client.id);
     const { rows } = await inRolledBackTx("update public.client_logo set path = 'x' where id = $1 returning path", [logoId]);
     expect(rows).toEqual([{ path: "x" }]);
@@ -1698,7 +1701,7 @@ describe("client info (Story 2.14, AD-22)", () => {
   });
 
   it("delete_client_logo deletes a logo no client shows, and refuses one in use with CLIENT_LOGO_IN_USE", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const first = await insertLogo(client.id);
     const second = await insertLogo(client.id);
     await pool.query("select public.update_client($1, $2, $3, $4, $5, $6)", [
@@ -1707,7 +1710,7 @@ describe("client info (Story 2.14, AD-22)", () => {
       TEST_INDUSTRY,
       TEST_DESCRIPTION,
       second,
-      DEV_ACTOR_ID,
+      TEST_ACTOR_ID,
     ]);
 
     await expect(pool.query("select public.delete_client_logo($1)", [second])).rejects.toMatchObject({
@@ -1760,18 +1763,18 @@ describe("client info (Story 2.14, AD-22)", () => {
     ["another client's logo", true],
     ["an unknown logo", false],
   ])("update_client refuses %s with CLIENT_LOGO_INVALID; nothing written", async (_label, foreign) => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
-    const other = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
+    const other = await createTestClient(pool, TEST_ACTOR_ID);
     const logoId = foreign ? await insertLogo(other.id) : randomUUID();
     await expect(
-      pool.query("select public.update_client($1, 'Renamed too', $2, 'Brand.', $3, $4)", [client.id, "energia", logoId, DEV_ACTOR_ID]),
+      pool.query("select public.update_client($1, 'Renamed too', $2, 'Brand.', $3, $4)", [client.id, "energia", logoId, TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_LOGO_INVALID" });
     const { rows } = await pool.query("select name, industry, logo_id from public.client where id = $1", [client.id]);
     expect(rows).toEqual([{ name: client.name, industry: TEST_INDUSTRY, logo_id: null }]);
   });
 
   it("getClientInfoForCase returns the client's current values and brief; a deleted or unknown case is NOT_FOUND", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const logoId = await insertLogo(client.id);
     const created = await createCase({ clientId: client.id });
     const { getClientInfoForCase } = await loadCaseStudy();
@@ -1780,11 +1783,11 @@ describe("client info (Story 2.14, AD-22)", () => {
       ok: true,
       value: { brief: { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" } },
     });
-    await pool.query("select public.update_client($1, $2, $3, 'Brand.', $4, $5)", [client.id, client.name, "energia", logoId, DEV_ACTOR_ID]);
+    await pool.query("select public.update_client($1, $2, $3, 'Brand.', $4, $5)", [client.id, client.name, "energia", logoId, TEST_ACTOR_ID]);
     await pool.query("select public.save_client_results($1, $2::jsonb, $3)", [
       client.id,
       JSON.stringify([{ label: "Più clienti", value: "+20%" }]),
-      DEV_ACTOR_ID,
+      TEST_ACTOR_ID,
     ]);
     // Read live: the edit shows at once.
     expect(await getClientInfoForCase(created.id)).toEqual({
@@ -1905,29 +1908,29 @@ describe("client info (Story 2.14, AD-22)", () => {
 
 describe("client wizard (Story 2.15)", () => {
   const save = (clientId: string, field: string, text: string, db: pg.Pool | pg.PoolClient = pool) =>
-    db.query<{ previous: string }>("select public.save_client_brief_field($1, $2, $3, $4) as previous", [clientId, field, text, DEV_ACTOR_ID]);
+    db.query<{ previous: string }>("select public.save_client_brief_field($1, $2, $3, $4) as previous", [clientId, field, text, TEST_ACTOR_ID]);
 
   it("create_client refuses a blank description with P0001 CLIENT_FIELD_INVALID naming it", async () => {
     await expect(
-      pool.query("select public.create_client($1, $2, '  ', $3)", [nameWithLetters(await freshPrefix(pool)), "lusso", DEV_ACTOR_ID]),
+      pool.query("select public.create_client($1, $2, '  ', $3)", [nameWithLetters(await freshPrefix(pool)), "lusso", TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_FIELD_INVALID", detail: "description" });
   });
 
   it("update_client refuses an unknown sector, a blank description and a null logo; nothing written", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
-    const logoId = await addTestLogo(pool, client.id, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
+    const logoId = await addTestLogo(pool, client.id, TEST_ACTOR_ID);
     const sql = "select public.update_client($1, $2, $3, $4, $5, $6)";
-    await expect(pool.query(sql, [client.id, client.name, "moda", "Brand.", logoId, DEV_ACTOR_ID])).rejects.toMatchObject({
+    await expect(pool.query(sql, [client.id, client.name, "moda", "Brand.", logoId, TEST_ACTOR_ID])).rejects.toMatchObject({
       code: "P0001",
       message: "CLIENT_FIELD_INVALID",
       detail: "industry",
     });
-    await expect(pool.query(sql, [client.id, client.name, "lusso", "", logoId, DEV_ACTOR_ID])).rejects.toMatchObject({
+    await expect(pool.query(sql, [client.id, client.name, "lusso", "", logoId, TEST_ACTOR_ID])).rejects.toMatchObject({
       code: "P0001",
       message: "CLIENT_FIELD_INVALID",
       detail: "description",
     });
-    await expect(pool.query(sql, [client.id, client.name, "lusso", "Brand.", null, DEV_ACTOR_ID])).rejects.toMatchObject({
+    await expect(pool.query(sql, [client.id, client.name, "lusso", "Brand.", null, TEST_ACTOR_ID])).rejects.toMatchObject({
       code: "P0001",
       message: "CLIENT_FIELD_INVALID",
       detail: "logoId",
@@ -1950,25 +1953,25 @@ describe("client wizard (Story 2.15)", () => {
       "updated_at",
       "updated_by",
     ]);
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     for (const field of ["context", "solution"]) {
       const at = await inRolledBackTx(
         `insert into public.client_brief (client_id, ${field}, updated_by) values ($1, $2, $3) returning char_length(${field}) as n`,
-        [client.id, ` ${"😀".repeat(5000)} `, DEV_ACTOR_ID],
+        [client.id, ` ${"😀".repeat(5000)} `, TEST_ACTOR_ID],
       );
       expect(at.rows).toEqual([{ n: 5002 }]);
       await expect(
         inRolledBackTx(`insert into public.client_brief (client_id, ${field}, updated_by) values ($1, $2, $3)`, [
           client.id,
           "x".repeat(5001),
-          DEV_ACTOR_ID,
+          TEST_ACTOR_ID,
         ]),
       ).rejects.toMatchObject({ code: "23514", message: expect.stringContaining(`client_brief_${field}_check`) });
     }
   });
 
   it("save_client_brief_field creates the row on the first change, updates one field, and returns the previous text", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     expect((await save(client.id, "context", "")).rows).toEqual([{ previous: "" }]);
     expect((await pool.query("select count(*)::int as n from public.client_brief where client_id = $1", [client.id])).rows[0].n).toBe(0);
     expect((await save(client.id, "context", "Primo.")).rows).toEqual([{ previous: "" }]);
@@ -1979,11 +1982,11 @@ describe("client wizard (Story 2.15)", () => {
     const { rows } = await pool.query("select context, solution, results, updated_by, updated_at from public.client_brief where client_id = $1", [
       client.id,
     ]);
-    expect(rows).toEqual([{ context: "Primo.", solution: "Esiti.", results: [], updated_by: DEV_ACTOR_ID, updated_at: first.updated_at }]);
+    expect(rows).toEqual([{ context: "Primo.", solution: "Esiti.", results: [], updated_by: TEST_ACTOR_ID, updated_at: first.updated_at }]);
   });
 
   it("save_client_brief_field refuses an unknown client, an unknown field and an over-long text; nothing written", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const before = await counts();
     await expect(save(UNKNOWN_ID, "context", "x")).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
     await expect(save(client.id, "sector", "x")).rejects.toMatchObject({ code: "P0001", message: "UNKNOWN_FIELD" });
@@ -2029,7 +2032,7 @@ describe("client wizard (Story 2.15)", () => {
       expect(await saveClientBriefField({ clientId, field, text: `${field}.` })).toEqual({ ok: true, value: { field, text: `${field}.` } });
     }
     expect(await summary()).toMatchObject({ complete: false });
-    const logoId = await addTestLogo(pool, clientId, DEV_ACTOR_ID);
+    const logoId = await addTestLogo(pool, clientId, TEST_ACTOR_ID);
     expect(await updateClient({ clientId, name: added.value.name, industry: "energia", description: "Brand.", logoId })).toMatchObject({
       ok: true,
     });
@@ -2042,9 +2045,9 @@ describe("client wizard (Story 2.15)", () => {
 
 describe("client results and testimonial (2026-10-22)", () => {
   const saveResults = (clientId: string, results: unknown, db: pg.Pool | pg.PoolClient = pool) =>
-    db.query<{ changed: boolean }>("select public.save_client_results($1, $2::jsonb, $3) as changed", [clientId, JSON.stringify(results), DEV_ACTOR_ID]);
+    db.query<{ changed: boolean }>("select public.save_client_results($1, $2::jsonb, $3) as changed", [clientId, JSON.stringify(results), TEST_ACTOR_ID]);
   const saveTestimonial = (clientId: string, quote: string, author: string) =>
-    pool.query<{ changed: boolean }>("select public.save_client_testimonial($1, $2, $3, $4) as changed", [clientId, quote, author, DEV_ACTOR_ID]);
+    pool.query<{ changed: boolean }>("select public.save_client_testimonial($1, $2, $3, $4) as changed", [clientId, quote, author, TEST_ACTOR_ID]);
   const brief = async (clientId: string) =>
     (
       await pool.query("select results, testimonial_quote, testimonial_author, updated_by from public.client_brief where client_id = $1", [clientId])
@@ -2064,12 +2067,12 @@ describe("client results and testimonial (2026-10-22)", () => {
   });
 
   it("client_brief_results_check accepts at most 3 trimmed label + value pairs within 80 and 20 characters", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const insert = (results: unknown) =>
       inRolledBackTx("insert into public.client_brief (client_id, results, updated_by) values ($1, $2::jsonb, $3)", [
         client.id,
         JSON.stringify(results),
-        DEV_ACTOR_ID,
+        TEST_ACTOR_ID,
       ]);
     const row = { label: "Visite", value: "2,4M" };
     for (const good of [[], [row], [row, row, row], [{ label: "😀".repeat(80), value: "😀".repeat(20) }]]) {
@@ -2093,13 +2096,13 @@ describe("client results and testimonial (2026-10-22)", () => {
   });
 
   it("the testimonial checks: quote ≤ 600, author ≤ 120 (trimmed), and no author without a quote", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const insert = (quote: string, author: string) =>
       inRolledBackTx("insert into public.client_brief (client_id, testimonial_quote, testimonial_author, updated_by) values ($1, $2, $3, $4)", [
         client.id,
         quote,
         author,
-        DEV_ACTOR_ID,
+        TEST_ACTOR_ID,
       ]);
     await expect(insert(` ${"😀".repeat(600)} `, ` ${"😀".repeat(120)} `)).resolves.toBeTruthy();
     await expect(insert("Frase.", "")).resolves.toBeTruthy();
@@ -2109,7 +2112,7 @@ describe("client results and testimonial (2026-10-22)", () => {
   });
 
   it("save_client_results creates the row on the first change, replaces the list, and says whether it changed", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     expect((await saveResults(client.id, [])).rows).toEqual([{ changed: false }]);
     expect(await brief(client.id)).toEqual([]);
     const two = [
@@ -2118,16 +2121,16 @@ describe("client results and testimonial (2026-10-22)", () => {
     ];
     expect((await saveResults(client.id, two)).rows).toEqual([{ changed: true }]);
     expect((await saveResults(client.id, two)).rows).toEqual([{ changed: false }]);
-    expect(await brief(client.id)).toEqual([{ results: two, testimonial_quote: "", testimonial_author: "", updated_by: DEV_ACTOR_ID }]);
+    expect(await brief(client.id)).toEqual([{ results: two, testimonial_quote: "", testimonial_author: "", updated_by: TEST_ACTOR_ID }]);
     expect((await saveResults(client.id, [])).rows).toEqual([{ changed: true }]);
     expect(await brief(client.id)).toMatchObject([{ results: [] }]);
   });
 
   it("save_client_testimonial creates the row on the first change, keeps the other fields, and says whether it changed", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     expect((await saveTestimonial(client.id, "", "")).rows).toEqual([{ changed: false }]);
     expect(await brief(client.id)).toEqual([]);
-    await pool.query("select public.save_client_brief_field($1, 'context', 'Contesto.', $2)", [client.id, DEV_ACTOR_ID]);
+    await pool.query("select public.save_client_brief_field($1, 'context', 'Contesto.', $2)", [client.id, TEST_ACTOR_ID]);
     expect((await saveTestimonial(client.id, "Ci hanno capiti.", "")).rows).toEqual([{ changed: true }]);
     expect((await saveTestimonial(client.id, "Ci hanno capiti.", "Ada Rossi, CEO")).rows).toEqual([{ changed: true }]);
     expect((await saveTestimonial(client.id, "Ci hanno capiti.", "Ada Rossi, CEO")).rows).toEqual([{ changed: false }]);
@@ -2136,14 +2139,14 @@ describe("client results and testimonial (2026-10-22)", () => {
   });
 
   it("refuses an unknown or deleted client, a malformed list and a lone author; nothing written", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const before = await counts();
     await expect(saveResults(UNKNOWN_ID, [])).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
     await expect(saveTestimonial(UNKNOWN_ID, "Frase.", "")).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
     await expect(saveResults(client.id, [{ label: "Visite", value: "" }])).rejects.toMatchObject({ code: "23514" });
     await expect(saveTestimonial(client.id, "", "Ada Rossi")).rejects.toMatchObject({ code: "23514" });
     expect(await counts()).toEqual(before);
-    await pool.query("select public.delete_client($1, $2, $3)", [client.id, client.name, DEV_ACTOR_ID]);
+    await pool.query("select public.delete_client($1, $2, $3)", [client.id, client.name, TEST_ACTOR_ID]);
     await expect(saveResults(client.id, [{ label: "Visite", value: "1" }])).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
     await expect(saveTestimonial(client.id, "Frase.", "")).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
   });
@@ -2203,7 +2206,7 @@ describe("client sector, one from a shared list (2026-10-22)", () => {
   const add = (label: string, db: pg.Pool | pg.PoolClient = pool) =>
     db.query<{ key: string; label: string; label_key: string; position: number; created_by: string | null }>(
       "select key, label, label_key, position, created_by from public.add_client_sector($1, $2)",
-      [label, DEV_ACTOR_ID],
+      [label, TEST_ACTOR_ID],
     );
   const tag = () => String(randomUUID().replace(/\D/g, "")).slice(0, 8);
 
@@ -2242,7 +2245,7 @@ describe("client sector, one from a shared list (2026-10-22)", () => {
         label: `Nautica da diporto ${n}`,
         label_key: `nautica da diporto ${n}`,
         position: max.max + 1,
-        created_by: DEV_ACTOR_ID,
+        created_by: TEST_ACTOR_ID,
       },
     ]);
   });
@@ -2304,7 +2307,7 @@ describe("client sector, one from a shared list (2026-10-22)", () => {
     ["null", null],
   ])("add_client_sector refuses %s with P0001 SECTOR_LABEL_INVALID; nothing written", async (_label, label) => {
     const { rows: [{ count: before }] } = await pool.query<{ count: number }>("select count(*)::int as count from public.client_sector");
-    await expect(pool.query("select public.add_client_sector($1, $2)", [label, DEV_ACTOR_ID])).rejects.toMatchObject({
+    await expect(pool.query("select public.add_client_sector($1, $2)", [label, TEST_ACTOR_ID])).rejects.toMatchObject({
       code: "P0001",
       message: "SECTOR_LABEL_INVALID",
     });
@@ -2316,7 +2319,7 @@ describe("client sector, one from a shared list (2026-10-22)", () => {
     const before = await counts();
     for (const industry of [null, "moda_inesistente"]) {
       await expect(
-        pool.query("select public.create_client($1, $2, 'Brand.', $3)", [nameWithLetters(await freshPrefix(pool)), industry, DEV_ACTOR_ID]),
+        pool.query("select public.create_client($1, $2, 'Brand.', $3)", [nameWithLetters(await freshPrefix(pool)), industry, TEST_ACTOR_ID]),
       ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_FIELD_INVALID", detail: "industry" });
     }
     expect(await counts()).toEqual(before);
@@ -2349,9 +2352,9 @@ describe("client sector, one from a shared list (2026-10-22)", () => {
       /alter table public\.client disable trigger client_touch_updated_at;[\s\S]*?alter table public\.client enable trigger client_touch_updated_at;/,
     )?.[0];
     expect(backfill).toBeDefined();
-    const multi = await createTestClient(pool, DEV_ACTOR_ID);
-    const single = await createTestClient(pool, DEV_ACTOR_ID);
-    const empty = await createTestClient(pool, DEV_ACTOR_ID);
+    const multi = await createTestClient(pool, TEST_ACTOR_ID);
+    const single = await createTestClient(pool, TEST_ACTOR_ID);
+    const empty = await createTestClient(pool, TEST_ACTOR_ID);
     const db = await pool.connect();
     try {
       await db.query("begin");
@@ -2380,7 +2383,7 @@ describe("client sector, one from a shared list (2026-10-22)", () => {
   it("the migration's backfill picks Energia for a client that had Lusso and Energia", async () => {
     const backfill = readFileSync(SECTOR_MIGRATION, "utf8").match(/update public\.client\s+set industry = case[\s\S]*?;/)?.[0];
     expect(backfill).toBeDefined();
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const db = await pool.connect();
     try {
       await db.query("begin");
@@ -2404,7 +2407,7 @@ describe("client material (Story 2.16)", () => {
     const image = mime.startsWith("image/");
     return db.query<{ id: string; position: number }>(
       "select id, position from public.insert_client_asset($1, $2, $3, ' foto.jpg ', $4, 2048, $5, $6, $7)",
-      [id, clientId, `clients/${clientId}/material/${id}.x`, mime, over.width === undefined ? (image ? 2400 : null) : over.width, over.height === undefined ? (image ? 1600 : null) : over.height, DEV_ACTOR_ID],
+      [id, clientId, `clients/${clientId}/material/${id}.x`, mime, over.width === undefined ? (image ? 2400 : null) : over.width, over.height === undefined ? (image ? 1600 : null) : over.height, TEST_ACTOR_ID],
     );
   };
   const positions = async (clientId: string) =>
@@ -2449,22 +2452,22 @@ describe("client material (Story 2.16)", () => {
     ["an image without pixels", "width = null, height = null"],
     ["one side only", "height = null"],
   ])("checks refuse %s", async (_label, set) => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const { rows } = await insert(client.id);
     await expect(inRolledBackTx(`update public.client_asset set ${set} where id = $1`, [rows[0].id])).rejects.toMatchObject({ code: "23514" });
   });
 
   it("checks refuse pixels on a non-image and accept every case material type", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     await expect(insert(client.id, { mime: "application/pdf", width: 10, height: 10 })).rejects.toMatchObject({ code: "23514" });
     for (const mime of ["video/mp4", "video/quicktime", "application/pdf", "text/plain", "text/markdown", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]) {
-      const other = await createTestClient(pool, DEV_ACTOR_ID);
+      const other = await createTestClient(pool, TEST_ACTOR_ID);
       expect((await insert(other.id, { mime })).rows[0].position).toBe(1);
     }
   });
 
   it("insert_client_asset takes the lowest free position and refuses a 4th with CLIENT_MATERIAL_LIMIT; nothing written", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const first = (await insert(client.id)).rows[0];
     expect(first.position).toBe(1);
     // The name is stored trimmed.
@@ -2482,7 +2485,7 @@ describe("client material (Story 2.16)", () => {
 
   it("insert_client_asset refuses an unknown client and an id confirmed twice", async () => {
     await expect(insert(UNKNOWN_ID)).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NOT_FOUND" });
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const id = randomUUID();
     await insert(client.id, { id });
     await expect(insert(client.id, { id })).rejects.toMatchObject({ code: "P0001", message: "ASSET_ALREADY_CONFIRMED" });
@@ -2490,18 +2493,18 @@ describe("client material (Story 2.16)", () => {
   });
 
   it("keeps (client_id, position) unique", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     await insert(client.id);
     await expect(
       inRolledBackTx(
         "insert into public.client_asset (client_id, position, path, file_name, mime_type, size_bytes, created_by) values ($1, 1, 'dup', 'f', 'application/pdf', 1, $2)",
-        [client.id, DEV_ACTOR_ID],
+        [client.id, TEST_ACTOR_ID],
       ),
     ).rejects.toMatchObject({ code: "23505" });
   });
 
   it("gives four parallel confirms positions 1–3 and refuses exactly one", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const parallel = new pg.Pool({ connectionString: env.SUPABASE_DB_URL, max: 4 });
     try {
       const results = await Promise.allSettled([0, 1, 2, 3].map(() => insert(client.id, {}, parallel)));
@@ -2531,7 +2534,7 @@ describe("client material (Story 2.16)", () => {
   it("round trip through the actions: two images and a PDF, the button rule, a 4th file, removal and the listing", async () => {
     const { requestClientMaterialUpload, confirmClientMaterialUpload, listClientMaterial, removeClientMaterial } = await loadClientActions();
     const { getClient } = await loadCaseStudy();
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const clientId = client.id;
     const upload = async (bytes: Buffer, contentType: string, fileName = "foto.jpg") => {
       const presigned = await requestClientMaterialUpload({ clientId, contentType, sizeBytes: bytes.byteLength });
@@ -2591,7 +2594,7 @@ describe("client material (Story 2.16)", () => {
     ["a stored type that is not the declared one", () => jpeg(2400, 1600), "image/png", "UPLOAD_REJECTED"],
   ])("confirm refuses %s with %s and writes no row", async (_label, make, contentType, code) => {
     const { requestClientMaterialUpload, confirmClientMaterialUpload } = await loadClientActions();
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const bytes = await make();
     const presigned = await requestClientMaterialUpload({ clientId: client.id, contentType, sizeBytes: bytes.byteLength });
     if (!presigned.ok) throw new Error(`presign failed: ${presigned.error.code}`);
@@ -2623,7 +2626,7 @@ describe("client material (Story 2.16)", () => {
 
 describe("client delete (owner, 2026-10-19)", () => {
   const remove = (clientId: string, confirmName: string, db: pg.Pool | pg.PoolClient = pool) =>
-    db.query<{ deleted: number }>("select public.delete_client($1, $2, $3) as deleted", [clientId, confirmName, DEV_ACTOR_ID]);
+    db.query<{ deleted: number }>("select public.delete_client($1, $2, $3) as deleted", [clientId, confirmName, TEST_ACTOR_ID]);
 
   /** Moves a case to `approved` the way only `transition_case_study` may (the status flag). */
   async function approve(caseId: string) {
@@ -2658,7 +2661,7 @@ describe("client delete (owner, 2026-10-19)", () => {
 
   it("writes the case_deleted type (CASE_DELETED) and no other event type per deleted case", async () => {
     expect(CASE_DELETED).toBe("case_deleted");
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const created = await createCase({ name: "Event type", clientId: client.id });
     await remove(client.id, client.name);
     const { rows } = await pool.query<{ type: string }>("select type from public.case_event where case_id = $1 order by at, id", [created.id]);
@@ -2679,7 +2682,7 @@ describe("client delete (owner, 2026-10-19)", () => {
   });
 
   it("deletes a client with 2 cases (1 approved): both cases and the client get deleted_at, with one deleted event each", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const draft = await createCase({ name: "Delete draft", clientId: client.id });
     const approved = await createCase({ name: "Delete approved", clientId: client.id });
     await approve(approved.id);
@@ -2689,25 +2692,25 @@ describe("client delete (owner, 2026-10-19)", () => {
 
     expect((await remove(client.id, client.name)).rows).toEqual([{ deleted: 2 }]);
 
-    expect(await clientRow(client.id)).toEqual({ deleted_at: expect.any(Date), deleted_by: DEV_ACTOR_ID });
+    expect(await clientRow(client.id)).toEqual({ deleted_at: expect.any(Date), deleted_by: TEST_ACTOR_ID });
     const rows = await caseRows(client.id);
     expect(rows.map((r) => r.deleted_at)).toEqual([expect.any(Date), expect.any(Date), new Date("2026-01-01T00:00:00Z")]);
     expect(rows.find((r) => r.id === approved.id)?.status).toBe("approved");
     const events = await deletedEvents([draft.id, approved.id, earlier.id]);
     expect(events.map((e) => e.case_id).sort()).toEqual([draft.id, approved.id].sort());
     for (const event of events) {
-      expect(event).toMatchObject({ type: CASE_DELETED, actor_id: DEV_ACTOR_ID, data: { reason: "client_deleted", clientId: client.id, clientCode: client.code } });
+      expect(event).toMatchObject({ type: CASE_DELETED, actor_id: TEST_ACTOR_ID, data: { reason: "client_deleted", clientId: client.id, clientCode: client.code } });
     }
   });
 
   it("deletes a client with no cases and returns 0", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     expect((await remove(client.id, client.name)).rows).toEqual([{ deleted: 0 }]);
     expect((await clientRow(client.id)).deleted_at).toBeInstanceOf(Date);
   });
 
   it("refuses a wrong name with CLIENT_DELETE_NAME_MISMATCH; nothing written", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID, `${nameWithLetters(await freshPrefix(pool))} S.r.l.`);
+    const client = await createTestClient(pool, TEST_ACTOR_ID, `${nameWithLetters(await freshPrefix(pool))} S.r.l.`);
     await createCase({ name: "Mismatch", clientId: client.id });
     const before = await counts();
     await expect(remove(client.id, client.name.split(" ")[0])).rejects.toMatchObject({ code: "P0001", message: "CLIENT_DELETE_NAME_MISMATCH" });
@@ -2718,13 +2721,13 @@ describe("client delete (owner, 2026-10-19)", () => {
   });
 
   it("accepts the name with extra ASCII whitespace, trimmed and collapsed", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const spaced = ` \t${client.name.replace(" ", " \n  ")}\r `;
     expect((await remove(client.id, spaced)).rows).toEqual([{ deleted: 0 }]);
   });
 
   it("does not count a no-break space as a space (the browser rule, normalizeClientConfirmName)", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     await expect(remove(client.id, client.name.replace(" ", "\u00a0"))).rejects.toMatchObject({
       code: "P0001",
       message: "CLIENT_DELETE_NAME_MISMATCH",
@@ -2732,7 +2735,7 @@ describe("client delete (owner, 2026-10-19)", () => {
   });
 
   it("waits for a case being created for the client, then deletes it too", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     await createCase({ name: "Before", clientId: client.id });
     const creator = await connection();
     const deleter = await connection();
@@ -2740,10 +2743,10 @@ describe("client delete (owner, 2026-10-19)", () => {
       await creator.query("begin");
       const { rows: [created] } = await creator.query<{ id: string }>(
         "select id from public.create_case_study('During', $1, 2026, 'it', array['branding'], $2)",
-        [client.id, DEV_ACTOR_ID],
+        [client.id, TEST_ACTOR_ID],
       );
       const deleterPid = await backendPid(deleter);
-      const pending = deleter.query<{ deleted: number }>("select public.delete_client($1, $2, $3) as deleted", [client.id, client.name, DEV_ACTOR_ID]);
+      const pending = deleter.query<{ deleted: number }>("select public.delete_client($1, $2, $3) as deleted", [client.id, client.name, TEST_ACTOR_ID]);
       await waitUntilBlocked(deleterPid);
       await creator.query("commit");
       expect((await pending).rows).toEqual([{ deleted: 2 }]);
@@ -2758,7 +2761,7 @@ describe("client delete (owner, 2026-10-19)", () => {
   });
 
   it("refuses an unknown or already deleted client with CLIENT_NOT_FOUND; nothing changes", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     await createCase({ name: "Twice", clientId: client.id });
     await remove(client.id, client.name);
     const deletedAt = (await clientRow(client.id)).deleted_at;
@@ -2772,25 +2775,25 @@ describe("client delete (owner, 2026-10-19)", () => {
   it("lets a new client take a deleted client's name, with a new code; the code is never reused", async () => {
     const prefix = await freshPrefix(pool);
     const name = nameWithLetters(prefix);
-    const first = await createTestClient(pool, DEV_ACTOR_ID, name);
-    await expect(createTestClient(pool, DEV_ACTOR_ID, name)).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NAME_TAKEN" });
+    const first = await createTestClient(pool, TEST_ACTOR_ID, name);
+    await expect(createTestClient(pool, TEST_ACTOR_ID, name)).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NAME_TAKEN" });
     await remove(first.id, first.name);
-    const second = await createTestClient(pool, DEV_ACTOR_ID, name);
+    const second = await createTestClient(pool, TEST_ACTOR_ID, name);
     expect(second.id).not.toBe(first.id);
     expect(second.name).toBe(first.name);
     expect(second.code).not.toBe(first.code);
     expect(second.code.startsWith(prefix)).toBe(true);
     // Renaming another client to the name is refused again while `second` holds it.
-    const other = await createTestClient(pool, DEV_ACTOR_ID);
-    const logoId = await addTestLogo(pool, other.id, DEV_ACTOR_ID);
+    const other = await createTestClient(pool, TEST_ACTOR_ID);
+    const logoId = await addTestLogo(pool, other.id, TEST_ACTOR_ID);
     await expect(
-      pool.query("select public.update_client($1, $2, $3, $4, $5, $6)", [other.id, name, TEST_INDUSTRY, TEST_DESCRIPTION, logoId, DEV_ACTOR_ID]),
+      pool.query("select public.update_client($1, $2, $3, $4, $5, $6)", [other.id, name, TEST_INDUSTRY, TEST_DESCRIPTION, logoId, TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ code: "P0001", message: "CLIENT_NAME_TAKEN" });
   });
 
   it("hides a deleted client from list, listWithCaseCounts, findById (getClient) and the case wizard's picker", async () => {
     const { listClients, listClientSummaries, getClient } = await loadCaseStudy();
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     expect((await getClient(client.id)).ok).toBe(true);
     await remove(client.id, client.name);
     const listed = await listClients();
@@ -2802,7 +2805,7 @@ describe("client delete (owner, 2026-10-19)", () => {
 
   it("hides a deleted client's cases from the table, get and getClientInfoForCase", async () => {
     const { list, get, getClientInfoForCase } = await loadCaseStudy();
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     const created = await createCase({ name: "Hidden", clientId: client.id });
     await approve(created.id);
     await remove(client.id, client.name);
@@ -2815,23 +2818,23 @@ describe("client delete (owner, 2026-10-19)", () => {
   });
 
   it("refuses every client write on a deleted client with CLIENT_NOT_FOUND; nothing written", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
-    const logoId = await addTestLogo(pool, client.id, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
+    const logoId = await addTestLogo(pool, client.id, TEST_ACTOR_ID);
     const assetId = randomUUID();
     await pool.query("select public.insert_client_asset($1, $2, $3, 'a.pdf', 'application/pdf', 10, null, null, $4)", [
       assetId,
       client.id,
       `clients/${client.id}/material/${assetId}.pdf`,
-      DEV_ACTOR_ID,
+      TEST_ACTOR_ID,
     ]);
     await remove(client.id, client.name);
     const before = await counts();
     const notFound = { code: "P0001", message: "CLIENT_NOT_FOUND" };
     await expect(
-      pool.query("select public.update_client($1, $2, $3, $4, $5, $6)", [client.id, client.name, TEST_INDUSTRY, TEST_DESCRIPTION, logoId, DEV_ACTOR_ID]),
+      pool.query("select public.update_client($1, $2, $3, $4, $5, $6)", [client.id, client.name, TEST_INDUSTRY, TEST_DESCRIPTION, logoId, TEST_ACTOR_ID]),
     ).rejects.toMatchObject(notFound);
     await expect(
-      pool.query("select public.save_client_brief_field($1, 'context', 'x', $2)", [client.id, DEV_ACTOR_ID]),
+      pool.query("select public.save_client_brief_field($1, 'context', 'x', $2)", [client.id, TEST_ACTOR_ID]),
     ).rejects.toMatchObject(notFound);
     const newAsset = randomUUID();
     await expect(
@@ -2839,21 +2842,21 @@ describe("client delete (owner, 2026-10-19)", () => {
         newAsset,
         client.id,
         `clients/${client.id}/material/${newAsset}.pdf`,
-        DEV_ACTOR_ID,
+        TEST_ACTOR_ID,
       ]),
     ).rejects.toMatchObject(notFound);
     await expect(pool.query("select public.delete_client_asset($1)", [assetId])).rejects.toMatchObject(notFound);
     await expect(pool.query("select public.delete_client_logo($1)", [logoId])).rejects.toMatchObject(notFound);
     await expect(
-      pool.query("select public.create_case_study('Late', $1, 2026, 'it', array['branding'], $2)", [client.id, DEV_ACTOR_ID]),
+      pool.query("select public.create_case_study('Late', $1, 2026, 'it', array['branding'], $2)", [client.id, TEST_ACTOR_ID]),
     ).rejects.toMatchObject(notFound);
     expect(await counts()).toEqual(before);
   });
 
   it("refuses every client action on a deleted client (a stale wizard tab) with CLIENT_NOT_FOUND", async () => {
     const actions = await loadClientActions();
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
-    const logoId = await addTestLogo(pool, client.id, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
+    const logoId = await addTestLogo(pool, client.id, TEST_ACTOR_ID);
     await remove(client.id, client.name);
     const clientId = client.id;
     const results = [
@@ -2875,7 +2878,7 @@ describe("client delete (owner, 2026-10-19)", () => {
 
   it("deletes through the action and reports the count", async () => {
     const { deleteClient } = await loadClientActions();
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     await createCase({ name: "Via action", clientId: client.id });
     expect(await deleteClient({ clientId: client.id, confirmName: "nope" })).toMatchObject({
       ok: false,
@@ -2885,11 +2888,13 @@ describe("client delete (owner, 2026-10-19)", () => {
     expect(await deleteClient({ clientId: client.id, confirmName: ` ${client.name} ` })).toEqual({ ok: true, value: { deletedCases: 1 } });
   });
 
-  it("returns 403 FORBIDDEN to any other role and writes nothing", async () => {
+  it("returns 403 FORBIDDEN to account/sales/social and writes nothing", async () => {
     const { deleteClient } = await loadClientActions();
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
-    for (const role of ["account_sales_social", "admin"]) {
-      await pool.query("update public.profile set role = $2 where id = $1", [DEV_ACTOR_ID, role]);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
+    // The admin holds every owner permission (AD-11, 2026-10-28), so only
+    // account/sales/social is refused here; test/permissions.test.ts covers every role.
+    for (const role of ["account_sales_social"]) {
+      await pool.query("update public.profile set role = $2 where id = $1", [TEST_ACTOR_ID, role]);
       try {
         const before = await counts();
         expect(await deleteClient({ clientId: client.id, confirmName: client.name })).toMatchObject({
@@ -2899,7 +2904,7 @@ describe("client delete (owner, 2026-10-19)", () => {
         });
         expect(await counts()).toEqual(before);
       } finally {
-        await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
+        await pool.query("update public.profile set role = 'owner_designer' where id = $1", [TEST_ACTOR_ID]);
       }
     }
     expect((await clientRow(client.id)).deleted_at).toBeNull();
@@ -2916,13 +2921,13 @@ describe("client delete (owner, 2026-10-19)", () => {
   });
 
   it("keeps the client delete and truncate triggers: a hard delete is still refused", async () => {
-    const client = await createTestClient(pool, DEV_ACTOR_ID);
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
     await expect(inRolledBackTx("delete from public.client where id = $1", [client.id])).rejects.toThrow(/never deleted/);
   });
 });
 
 describe("case delete (Story 4.1)", () => {
-  const remove = (caseId: string) => pool.query("select id from public.delete_case_study($1, $2)", [caseId, DEV_ACTOR_ID]);
+  const remove = (caseId: string) => pool.query("select id from public.delete_case_study($1, $2)", [caseId, TEST_ACTOR_ID]);
   const row = async (id: string) =>
     (await pool.query<{ deleted_at: Date | null; status: string }>("select deleted_at, status from public.case_study where id = $1", [id])).rows[0];
   const events = async (id: string) =>
@@ -2936,13 +2941,13 @@ describe("case delete (Story 4.1)", () => {
   it("soft-deletes a draft with one case_deleted event; the adapter no longer reads or lists it", async () => {
     const created = await createCase({ name: "To delete" });
     const { deleteCaseStudy, get, list } = await loadCaseStudy();
-    expect(await deleteCaseStudy(await devActor(), { caseId: created.id })).toEqual({ ok: true, value: undefined });
+    expect(await deleteCaseStudy(await signedInActor(), { caseId: created.id })).toEqual({ ok: true, value: undefined });
     expect((await row(created.id)).deleted_at).not.toBeNull();
     expect(await events(created.id)).toEqual([
       expect.objectContaining({ type: "case_created" }),
       {
         type: CASE_DELETED,
-        actor_id: DEV_ACTOR_ID,
+        actor_id: TEST_ACTOR_ID,
         data: { reason: "draft_deleted", clientId: acme.id, code: created.code, status: "draft" },
       },
     ]);
@@ -2972,7 +2977,7 @@ describe("case delete (Story 4.1)", () => {
     }
     await expect(remove(created.id)).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_DELETABLE" });
     const { deleteCaseStudy } = await loadCaseStudy();
-    const result = await deleteCaseStudy(await devActor(), { caseId: created.id });
+    const result = await deleteCaseStudy(await signedInActor(), { caseId: created.id });
     expect(result.ok || result.error.code).toBe("CASE_NOT_DELETABLE");
     expect((await row(created.id)).deleted_at).toBeNull();
     expect((await events(created.id)).map((e) => e.type)).toEqual(["case_created"]);
@@ -2998,6 +3003,7 @@ describe("the 2.12 data migration (scratch database)", () => {
   ];
   const STORY_2_12 = "20261015120000_case_study_clients_and_codes.sql";
   const read = (file: string) => readFileSync(join(MIGRATIONS, file), "utf8");
+  // A pre-2.12 schema holds only the seeded profiles, so the legacy cases are the dev owner/designer's.
 
   /** The free-text cases a pre-2.12 environment may hold, soft-deleted and name-key duplicates included. */
   const LEGACY_CASES = `

@@ -8,7 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
+import { TEST_ACTOR_ID } from "../helpers/db-actor";
 import type { Job } from "@/modules/jobs";
 import { assetKey, renditionKey } from "@/modules/material/adapters/asset-key";
 import { createSupabaseAdminClient } from "@/modules/material/adapters/supabase/admin";
@@ -37,8 +37,8 @@ let clientId: string;
 
 beforeAll(async () => {
   pool = new pg.Pool({ connectionString: env.SUPABASE_DB_URL, max: 4 });
-  await pool.query("update public.profile set role = 'owner_designer' where id = $1", [DEV_ACTOR_ID]);
-  clientId = (await createTestClient(pool, DEV_ACTOR_ID)).id;
+  await pool.query("update public.profile set role = 'owner_designer' where id = $1", [TEST_ACTOR_ID]);
+  clientId = (await createTestClient(pool, TEST_ACTOR_ID)).id;
 });
 
 afterAll(async () => {
@@ -58,16 +58,16 @@ async function inRolledBackTx(sql: string, params: unknown[] = [], role?: string
   }
 }
 
-async function devActor() {
+async function signedInActor() {
   const { getActor } = await import("@/modules/access");
   const actor = await getActor();
-  if (!actor.ok) throw new Error(`dev actor did not resolve: ${actor.error.code}`);
+  if (!actor.ok) throw new Error(`signed-in test actor did not resolve: ${actor.error.code}`);
   return actor.value;
 }
 
 async function createCase() {
   const { create } = await import("@/modules/case-study");
-  const result = await create(await devActor(), { name: "Renditions", clientId, year: 2026, businessLines: ["branding"] });
+  const result = await create(await signedInActor(), { name: "Renditions", clientId, year: 2026, businessLines: ["branding"] });
   if (!result.ok) throw new Error(`setup create failed: ${result.error.code}`);
   return result.value;
 }
@@ -83,7 +83,7 @@ async function seedAsset(kind: "image" | "video" | "document" = "image") {
     kind,
     contentType,
     assetKey(created.id, id, contentType),
-    DEV_ACTOR_ID,
+    TEST_ACTOR_ID,
   ]);
   return { caseId: created.id, assetId: id, contentType };
 }
