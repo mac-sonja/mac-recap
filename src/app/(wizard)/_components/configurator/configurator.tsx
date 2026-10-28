@@ -1,13 +1,14 @@
 "use client";
 
 import { PanelLeft, PanelRight } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import type { Page } from "@/modules/generation";
 import { FORMAT_IDS, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { Canvas } from "./canvas";
+import type { InstagramView } from "./instagram-overlay";
 import { LeftPanel } from "./left-panel";
 import { RightPanel } from "./right-panel";
 import { resolveSelection, stepOut, type Selection } from "./selection";
@@ -34,9 +35,10 @@ export interface ConfiguratorProps {
 /** Whether the person asked for reduced motion (a jump instead of a smooth scroll). */
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
-/** A key press that belongs to a field being typed in, not to the canvas. */
+/** A key press that belongs to a field being typed in, not to the canvas (a checkbox or radio is not typed in). */
 const typing = (target: EventTarget | null) =>
-  target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select") !== null);
+  target instanceof HTMLElement &&
+  (target.isContentEditable || target.closest('input:not([type="checkbox"], [type="radio"]), textarea, select') !== null);
 
 /**
  * The configurator frame (Story 4.2a, C40, mockup `configurator.html`): full screen,
@@ -47,6 +49,11 @@ const typing = (target: EventTarget | null) =>
  * element to block to page to nothing. Messages show at the top of the canvas for a
  * few seconds (`role="status"`). Below 1024 px only the larger-screen message shows.
  * Nothing is edited or saved here (Stories 4.3 onwards).
+ *
+ * Anteprima (Story 4.2b, C37): the top bar's eye shows the same canvas without the
+ * panels or the selection (kept for the return); Carosello and Video become one
+ * slideshow (← →), and Video can show Instagram's Reel or Story over the page (C34).
+ * Esc goes back to the editor. In the Video editor, **Animazione testi** stops the loop.
  */
 export function Configurator({ header, back, template, formats, assets, values, trial, theme }: ConfiguratorProps) {
   const [formatId, setFormatId] = useState<FormatId>(FORMAT_IDS[0]);
@@ -55,12 +62,21 @@ export function Configurator({ header, back, template, formats, assets, values, 
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [message, say] = useStatusMessage();
+  const [preview, setPreview] = useState(false);
+  const [slide, setSlide] = useState(0);
+  const [instagram, setInstagram] = useState<InstagramView>("off");
+  const [textAnim, setTextAnim] = useState(true);
+  /** Reduced motion, read when Anteprima opens: the slideshow then switches without a transition. */
+  const [still, setStill] = useState(false);
 
   const canvasRef = useRef<HTMLElement>(null);
   const hideLeft = useRef<HTMLButtonElement>(null);
   const hideRight = useRef<HTMLButtonElement>(null);
   const showLeft = useRef<HTMLButtonElement>(null);
   const showRight = useRef<HTMLButtonElement>(null);
+  const previewButton = useRef<HTMLButtonElement>(null);
+  /** On entering or leaving Anteprima: the page to bring back to the middle, and whether Esc moved focus. */
+  const previewAnchor = useRef<{ pageKey: string | null; focus: boolean } | null>(null);
   /** The button to focus once the panel toggle has rendered. */
   const focusNext = useRef<RefObject<HTMLButtonElement | null> | null>(null);
 
@@ -69,6 +85,7 @@ export function Configurator({ header, back, template, formats, assets, values, 
   // The page tools act on the selected page, else on the page in view, else on the first.
   const toolPage = selectedPage ?? pages.find((p) => p.pageKey === inView) ?? pages[0];
 
+  const slideshow = preview && formatId !== "presentazione_16_9";
   const soon = useCallback((tool: string) => say(fill(it.configurator.soonMessage, { tool })), [say]);
 
   function pickFormat(next: FormatId) {
@@ -76,8 +93,44 @@ export function Configurator({ header, back, template, formats, assets, values, 
     setFormatId(next);
     setSelection(null);
     setInView(null);
+    setSlide(0);
     canvasRef.current?.scrollTo?.({ top: 0 });
   }
+
+  function togglePreview(on: boolean, focus = false) {
+    // Keep the canvas on the same page: leaving a slideshow, the page it showed; otherwise
+    // the selected page, else the page in view.
+    const shown = slideshow ? pages[Math.max(0, Math.min(pages.length - 1, slide))]?.pageKey : undefined;
+    previewAnchor.current = { pageKey: shown ?? selectedPage?.pageKey ?? inView, focus };
+    if (on) {
+      // The slideshow starts at the selected page, else at the first.
+      setSlide(Math.max(0, selectedPage === undefined ? 0 : pages.indexOf(selectedPage)));
+      setStill(reducedMotion());
+    }
+    setPreview(on);
+  }
+
+  /** The latest `togglePreview(false, true)`, for the key handler. */
+  const leavePreview = useRef(() => {});
+  useEffect(() => {
+    leavePreview.current = () => togglePreview(false, true);
+  });
+
+  const step = useCallback(
+    (delta: -1 | 1) => setSlide((current) => Math.max(0, Math.min(pages.length - 1, current + delta))),
+    [pages.length],
+  );
+
+  useLayoutEffect(() => {
+    const anchor = previewAnchor.current;
+    previewAnchor.current = null;
+    if (anchor === null) return;
+    if (anchor.pageKey !== null) {
+      canvasRef.current?.querySelector(`[data-canvas-page="${anchor.pageKey}"]`)?.scrollIntoView?.({ block: "center", behavior: "auto" });
+    }
+    // Esc unmounted the focused slideshow or Instagram button: focus goes to the eye.
+    if (anchor.focus) previewButton.current?.focus();
+  }, [preview]);
 
   function selectPage(pageKey: string) {
     setSelection({ pageKey });
@@ -103,12 +156,23 @@ export function Configurator({ header, back, template, formats, assets, values, 
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape" || event.defaultPrevented || typing(event.target)) return;
-      setSelection((current) => stepOut(current));
+      if (event.defaultPrevented || typing(event.target)) return;
+      if (preview) {
+        // In Anteprima Esc goes back to the editor, never a selection step; ← → step the slideshow.
+        if (event.key === "Escape") leavePreview.current();
+        else if (slideshow && (event.key === "ArrowRight" || event.key === "ArrowLeft")) {
+          // ⌥/⌘/Ctrl + arrow belongs to the browser (back, forward, word jumps).
+          if (event.altKey || event.metaKey || event.ctrlKey) return;
+          event.preventDefault();
+          step(event.key === "ArrowRight" ? 1 : -1);
+        }
+        return;
+      }
+      if (event.key === "Escape") setSelection((current) => stepOut(current));
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [preview, slideshow, step]);
 
   return (
     <div className="flex h-dvh flex-col bg-surface text-foreground">
@@ -118,15 +182,27 @@ export function Configurator({ header, back, template, formats, assets, values, 
         <span id={SOON_ID} hidden>
           {it.configurator.soon}
         </span>
-        <TopBar header={header} back={back} formatId={formatId} onFormat={pickFormat} onSoon={soon} />
+        <TopBar
+          header={header}
+          back={back}
+          formatId={formatId}
+          onFormat={pickFormat}
+          onSoon={soon}
+          preview={preview}
+          onPreview={togglePreview}
+          previewRef={previewButton}
+        />
 
         <main
           className="grid min-h-0 flex-1"
-          style={{ gridTemplateColumns: `${leftOpen ? "312px" : "0px"} minmax(0,1fr) ${rightOpen ? "224px" : "0px"}`, gridTemplateRows: "minmax(0,1fr)" }}
+          style={{
+            gridTemplateColumns: `${leftOpen && !preview ? "312px" : "0px"} minmax(0,1fr) ${rightOpen && !preview ? "224px" : "0px"}`,
+            gridTemplateRows: "minmax(0,1fr)",
+          }}
         >
-          {/* Hidden, not unmounted: the theme switch and the panels' own state survive a hide. */}
+          {/* Hidden, not unmounted: the theme switch and the panels' own state survive a hide and Anteprima. */}
           <LeftPanel
-            hidden={!leftOpen}
+            hidden={!leftOpen || preview}
             formatId={formatId}
             template={template}
             page={toolPage}
@@ -150,9 +226,18 @@ export function Configurator({ header, back, template, formats, assets, values, 
               onPageInView={setInView}
               trial={trial}
               scrollRef={canvasRef}
+              preview={preview}
+              slide={slide}
+              onStep={step}
+              instagram={instagram}
+              onInstagram={setInstagram}
+              caption={header.name}
+              animateTexts={textAnim}
+              onAnimateTexts={setTextAnim}
+              reducedMotion={still}
             />
             <StatusMessage message={message} />
-            {!leftOpen && (
+            {!leftOpen && !preview && (
               <button
                 ref={showLeft}
                 type="button"
@@ -164,7 +249,7 @@ export function Configurator({ header, back, template, formats, assets, values, 
                 <PanelLeft aria-hidden="true" className="size-4" />
               </button>
             )}
-            {!rightOpen && (
+            {!rightOpen && !preview && (
               <button
                 ref={showRight}
                 type="button"
@@ -179,7 +264,7 @@ export function Configurator({ header, back, template, formats, assets, values, 
           </div>
 
           <RightPanel
-            hidden={!rightOpen}
+            hidden={!rightOpen || preview}
             formatId={formatId}
             template={template}
             pages={pages}
