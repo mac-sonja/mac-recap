@@ -248,7 +248,7 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 | download client pack | approved content | approved content | — | — |
 | manage collections: create, rename, reorder cases and pages, add/remove cases, delete, export | ✓ | ✓ | — | — |
 | delete (hide) pages in a collection, tag a collection | ✓ | ✓ (owner, 2026-10-28) | — | — |
-| any other configurator tool in a collection (left panel, Media, add pages) | ✓ | — (owner, 2026-10-28) | — | — |
+| any other configurator tool in a collection (left panel, Media, add pages, delete blocks or elements) | ✓ | — (owner, 2026-10-28) | — | — |
 | edit collection text | ✓ | ✓ (IR-COLL-EDIT amended 2026-10-28; edits stay in the collection) | — | — |
 | delete case | any `draft` case | — | — | — |
 | approve, update approved version, discard | any case (AD-19) | — | — | — |

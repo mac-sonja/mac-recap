@@ -2603,6 +2603,7 @@ Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configura
 **When** the configurator opens
 **Then** the left panel isn't shown at all and can't be reopened from the canvas edge, the right panel shows **Pagine** with no **Media** tab, and the canvas preview and Anteprima work as for an owner/designer
 **And** they edit a text by double-clicking it on the canvas
+**And** they can't delete a block or an element from a page: no delete in any menu, and Delete or Backspace on a selected block or element does nothing (owner, 2026-10-28)
 **And** in **Pagine** they reorder pages by drag or "Sposta su / giù", and the new order is stored in the collection (`collection_page_order`), never in the case history; they delete pages from the collection (above) and add or remove case histories (Story 5.10), but can't add new pages
 **And** a direct call to any other configurator action fails with `FORBIDDEN`
 
