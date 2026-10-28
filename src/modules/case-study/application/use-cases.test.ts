@@ -147,7 +147,8 @@ function fakeRepository() {
               (scope.status === undefined || row.status === scope.status) &&
               (scope.clientId === undefined || row.client.id === scope.clientId),
           )
-          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+          .map((row) => ({ ...row, inReviewSince: null })),
       ),
     ),
     appendEvent: vi.fn<CaseStudyRepository["appendEvent"]>(async (event) => {

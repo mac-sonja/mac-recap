@@ -444,6 +444,13 @@ export const caseStudySchema = z.object({
 });
 export type CaseStudy = z.infer<typeof caseStudySchema>;
 
+/**
+ * A case as the lists read it (Story 4.1). `inReviewSince` is when a Da approvare case
+ * entered that status: the time of its latest `generation_succeeded` transition event.
+ * Null for every other status, and for a Da approvare case without that event.
+ */
+export type ListedCaseStudy = CaseStudy & { inReviewSince: string | null };
+
 const requiredText = z.string().trim().min(1, "Required.");
 
 const yearSchema = z.number().int("Must be a whole number.").min(YEAR_MIN).max(YEAR_MAX);

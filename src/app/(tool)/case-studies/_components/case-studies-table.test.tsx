@@ -458,6 +458,41 @@ describe("CaseStudiesTable", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("starts on ?stato=in_review as the To review queue: Da approvare only, longest waiting first", async () => {
+    const user = userEvent.setup();
+    // Prima was updated later but has waited longer: the time it entered Da approvare wins.
+    const waiting: CaseStudyRow[] = [
+      { ...rows[2], inReviewSince: "2026-10-04T10:00:00+00:00" },
+      { ...rows[2], id: "eeeeeeee-0000-4000-8000-000000000006", name: "Prima", updatedAt: "2026-10-09T10:00:00+00:00", inReviewSince: "2026-10-02T10:00:00+00:00" },
+    ];
+    render(<CaseStudiesTable rows={[...rows.slice(0, 2), ...waiting]} canCreate initialStatus="in_review" />);
+    expect(segment(SEGMENTS.statuses.in_review).getAttribute("aria-checked")).toBe("true");
+    expect(names()).toEqual(["Prima", "Émile"]);
+    // No column owns the queue's order; a header click switches to that column's sort.
+    expect(screen.getAllByRole("columnheader").some((th) => th.hasAttribute("aria-sort"))).toBe(false);
+    await user.click(within(header(COLUMNS.updated)).getByRole("button"));
+    expect(names()).toEqual(["Émile", "Prima"]);
+  });
+
+  it("keeps ?stato= in step with the filter when asked, leaving ?q= alone", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/case-studies?q=lumen");
+    render(<CaseStudiesTable rows={rows} canCreate statusInUrl />);
+    await user.click(segment(SEGMENTS.statuses.approved));
+    expect(window.location.search).toBe("?q=lumen&stato=approved");
+    await user.click(segment(SEGMENTS.all));
+    expect(window.location.search).toBe("?q=lumen");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("leaves the address alone by default (a client's page)", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/clients/x");
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    await user.click(segment(SEGMENTS.statuses.approved));
+    expect(window.location.search).toBe("");
+  });
+
   it("opens nothing for a case In elaborazione", async () => {
     const user = userEvent.setup();
     const generating: CaseStudyRow = { ...rows[2], id: "dddddddd-0000-4000-8000-000000000005", name: "Gamma", clientName: "Gamma Srl", status: "generating" };

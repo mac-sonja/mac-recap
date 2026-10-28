@@ -294,4 +294,25 @@ describe("configurator copy", () => {
       "Mostra il pannello a sinistra",
     ]);
   });
+
+  test("has the Anteprima, Instagram and Animazione testi strings", () => {
+    expect([t("configurator.preview.enter"), t("configurator.preview.leave")]).toEqual(["Anteprima", "Torna all’editor"]);
+    expect([t("configurator.preview.previous"), t("configurator.preview.next")]).toEqual(["Pagina precedente", "Pagina successiva"]);
+    expect(fill(t("configurator.preview.slide"), { i: 3, n: 7, name: "La sfida" })).toBe("3 di 7 · La sfida");
+    expect(it.configurator.preview.instagram).toEqual({
+      label: "Anteprima Instagram",
+      off: "Nessuna",
+      reel: "Reel",
+      story: "Storia",
+      account: "mac.creativetech",
+      avatar: "mac",
+      clock: "9:41",
+      follow: "Segui",
+      forYou: "Per te",
+      friends: "Amici",
+      message: "Invia messaggio…",
+      time: "9 min",
+    });
+    expect(t("configurator.textAnimation")).toBe("Animazione testi");
+  });
 });
