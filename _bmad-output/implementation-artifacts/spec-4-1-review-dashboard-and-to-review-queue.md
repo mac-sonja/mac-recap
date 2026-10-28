@@ -1,9 +1,10 @@
 ---
-title: 'Story 4.1: To review queue, no counts in the sidebar'
+title: 'Story 4.1: Da approvare queue in the Case table; no client count in the sidebar'
 type: 'feature'
 created: '2026-10-28'
-status: 'draft'
+status: 'in-progress'
 route: 'dispatch'
+baseline_commit: 'e494a9525550c5fb97b11bd63b669f521e8762a9'
 review_loop_iteration: 0
 context:
   - '{project-root}/.claude/skills/mac-recap-ui/SKILL.md'
@@ -13,67 +14,68 @@ context:
 
 ## Intent
 
-**Problem:** Cases waiting for approval have no place of their own: the only signal is a "{n} da approvare" note next to Case in the sidebar, and the sidebar also shows a client count the owner does not want. Nothing lists the waiting cases oldest first.
+**Problem:** Cases waiting for approval have no queue: the Case table's Da approvare filter sorts them by last update, so the case waiting longest can sit anywhere. The sidebar also shows a client count the owner does not want.
 
-**Approach:** A **Da approvare** sidebar item (no number) opens `/to-review`: the Case table showing only cases in Da approvare, oldest first by when each entered Da approvare, with "Niente da approvare." when empty. Every number goes from the sidebar.
+**Approach:** When the Case table's status filter is Da approvare and no column header has been clicked, rows sort oldest first by when each case entered Da approvare; empty, it says "Niente da approvare.". `/case-studies?status=in_review` opens the page with that filter selected. The sidebar loses the client count.
 
 ## Boundaries & Constraints
 
 **Always:**
-- Owner decision 2026-10-28: no number next to any sidebar item, now or later (Case, Clienti, Da approvare, all).
-- Same policy as the Case page: the item shows and the page opens only with `list cases` on every status (`listScopeFor` + `authorize`); an actor scoped to approved only (Libreria) gets neither, and `/to-review` sends them to their landing.
-- "Entered Da approvare" = the `at` of the case's latest `transition` event whose `data.to` is `in_review`; a case with no such event falls back to `updatedAt`. Ties keep `id` order.
-- Any owner/designer sees every waiting case; no assignment or claiming.
+- Owner decision 2026-10-28: the sidebar keeps the "{n} da approvare" note next to Case exactly as today; the number next to Clienti goes; no new sidebar item.
+- "Entered Da approvare" = the `at` of the case's latest `transition` event whose `data.to` is `in_review`; a case with no such event, or when the event read fails (logged), falls back to its `updatedAt`. Ties keep incoming order.
+- A header click sorts by that column as today, and keeps doing so when the filter changes. Every other filter's default stays Updated, newest first.
+- Same policy and scope as today (`listScopeFor` + `authorize`); any owner/designer sees every waiting case; no assignment or claiming.
 - Italian copy via `it.ts`; house UI rules from the mac-recap-ui skill.
 
 **Never:**
-- No migration and no new table or column.
-- No Delete row action in the table: owner decision 2026-10-22 keeps **Elimina bozza** inside the opened draft (already built, with `CASE_NOT_DELETABLE` in `case-study.deleteCase`).
-- Do not touch configurator files (`src/app/(wizard)/_components/configurator/**`, `[caseId]/configurator/**`): 4.2a/4.2b are in flight. Rows on `/to-review` are not links yet; 4.2's `canEdit` will make them open the configurator once it merges.
-- No change to the Case table's status filter counts (they stay) or to the Home dashboard.
+- No migration, no new table, column or route, no new sidebar item.
+- No Delete row action: owner decision 2026-10-22 keeps **Elimina bozza** inside the opened draft (already built, with `CASE_NOT_DELETABLE`).
+- Do not touch configurator files (`src/app/(wizard)/_components/configurator/**`, `[caseId]/configurator/**`) nor the row `href` logic in the table: 4.2a/4.2b edit it.
+- No change to the status filter counts or the Home dashboard.
 
 ## I/O & Edge-Case Matrix
 
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|--------------|---------------------------|----------------|
-| Queue order | A entered Da approvare Mon, B Tue, C (no event) updated Wed | `/to-review` rows A, B, C | N/A |
-| Re-entered | A went in_review → (later back) → in_review again Thu | A sorts by Thu | N/A |
-| Empty | no case in Da approvare | "Niente da approvare." card, no table | N/A |
-| Approved-only actor | account/sales/social | no sidebar item; `/to-review` redirects to landing | N/A |
-| Event read fails | case_event query errors | every row falls back to `updatedAt`; page still renders | logged |
+| Queue order | Da approvare filter; A entered Mon, B Tue, C no event (updated Wed) | rows A, B, C | N/A |
+| Re-entered | A entered Mon, left, entered again Thu; B entered Tue | rows B, A | N/A |
+| Header click | queue shown, user clicks Nome | sorted by name; stays so on switching filter | N/A |
+| Other filter | Tutti / Bozza, no click | Updated newest first, as today | N/A |
+| Empty queue | no case in Da approvare, no search | "Niente da approvare." | N/A |
+| Deep link | `?status=in_review` (`?status=bogus` → Tutti) | filter preselected | invalid value ignored |
+| Event read fails | case_event query errors | every row uses `updatedAt`; page renders | logged |
 
 </frozen-after-approval>
 
 ## Code Map
 
-- `src/app/(tool)/_components/sidebar.tsx` -- `NavLink.meta`, `toReviewCount`, `clientCount` props: remove all three; add a Da approvare item (icon `Inbox`) right after Case, active on `/to-review`, shown with `showCaseStudies`.
-- `src/app/(tool)/layout.tsx` -- `sidebarCounts` exists only for those numbers: delete it and the two props.
-- `src/app/(tool)/case-studies/page.tsx` -- pattern to copy for the new page (requireSurface, listScopeFor, row mapping).
-- `src/app/(tool)/case-studies/_components/case-studies-table.tsx` -- reuse with two new optional props: `showStatusFilter` (default true) and `initialSort: SortState | null` (null = keep incoming order until a header click). 4.2a edits the `href` line here; keep changes away from it.
-- `src/app/(tool)/case-studies/_components/filter-sort.ts` -- `sortRows`, `DEFAULT_SORT`; no change expected beyond typing `null`.
-- `src/modules/case-study/adapters/supabase/case-study-repository.ts` + `ports/case-study-repository.ts` -- add `reviewSince(caseIds)` → `Map<caseId, at>` from `case_event` (`type = 'transition'`, `data->>to = 'in_review'`, newest per case).
-- `src/modules/case-study/index.ts` -- export `listToReview(scope)`: `list(scope)` filtered to `in_review`, each with `reviewSince`, sorted oldest first.
-- `src/shared/i18n/it.ts` -- `shell.nav.toReview` becomes the item label "Da approvare"; add `toReview.heading/lead/empty`.
-- `src/app/(tool)/_components/sidebar.test.tsx`, `layout.test.tsx` -- update for no counts.
+- `src/app/(tool)/_components/sidebar.tsx` -- drop the `clientCount` prop and the Clienti `meta`; keep `NavLink.meta` and `toReviewCount`.
+- `src/app/(tool)/layout.tsx` -- `sidebarCounts`: stop listing clients; keep the to-review count.
+- `src/modules/case-study/{ports,adapters/supabase}/case-study-repository.ts` -- add `reviewSince(caseIds)` → `Map<caseId, at>` from `case_event` (`type = 'transition'`, `data->>to = 'in_review'`, newest per case; `CASE_EVENT_COLUMNS` has `at`).
+- `src/modules/case-study/application/` + `index.ts` -- export `reviewSince(cases)`: for each `in_review` case, the event `at` or `updatedAt`; read failure → all fallback, logged, never an error result.
+- `src/app/(tool)/case-studies/page.tsx` -- read `?status=` (one of `CASE_STATUSES`), call `reviewSince`, put `reviewSince` on each row, pass `initialStatus`.
+- `src/app/(tool)/case-studies/_components/filter-sort.ts` -- optional `CaseStudyRow.reviewSince?: string`; a review-order sort (ascending, fallback `updatedAt`).
+- `src/app/(tool)/case-studies/_components/case-studies-table.tsx` -- `sort` state becomes `SortState | null` (null = not clicked: review order on Da approvare, `DEFAULT_SORT` otherwise; header shows no arrow on review order); `initialStatus` prop; empty Da approvare message. Shared with `clients/[clientId]/page.tsx` (rows without `reviewSince` fall back).
+- `src/shared/i18n/it.ts` -- add `caseStudies.noneToReview: "Niente da approvare."`.
 
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/case-study/{ports,adapters/supabase}/case-study-repository.ts`, `application/list-to-review.ts`, `index.ts` -- `listToReview` with unit tests for order, re-entry, fallback and event-read failure -- the queue's order lives in the module, not the page.
-- [ ] `src/app/(tool)/to-review/page.tsx` (+ `page.test.tsx`) -- server page: policy as Case page, `PageHeader`, `CaseStudiesTable` with `showStatusFilter={false}`, `initialSort={null}`, `showCreate={false}`, `emptyMessage` from `it` -- the queue view.
-- [ ] `case-studies-table.tsx` (+ test) -- the two props -- reuse without forking the table.
-- [ ] `sidebar.tsx`, `layout.tsx` (+ tests) -- remove counts, add the item -- owner ask.
+- [ ] case-study module (repository port + Supabase adapter + application + index) with unit tests for the matrix's order, re-entry and read-failure rows -- the source of the queue order.
+- [ ] `filter-sort.ts` (+ `filter-sort.test.ts`) -- review-order sort.
+- [ ] `case-studies-table.tsx` (+ test) -- null sort, `initialStatus`, empty message.
+- [ ] `case-studies/page.tsx` (+ `page.test.tsx`) -- `?status=`, `reviewSince` on rows.
+- [ ] `sidebar.tsx`, `layout.tsx` (+ tests) -- no client count.
 - [ ] `src/shared/i18n/it.ts` -- copy.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.4, 3.5, 6.1, 6.2, 6.3 → done (merged); 4.1 tracked by the build flow.
+- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.4, 3.5, 6.1, 6.2, 6.3 → done (merged).
 
 **Acceptance Criteria:**
-- Given any role, when the sidebar renders, then no item shows a number.
-- Given an owner/designer, when they open **Da approvare**, then they see only Da approvare cases, oldest first, and the item is marked current.
-- Given the queue, when a header is clicked, then the table sorts by that column like the Case page.
+- Given any role, when the sidebar renders, then Clienti shows no number and Case still shows "{n} da approvare" when n > 0.
+- Given an approved-only actor (Libreria), when nothing changes for them, then their pages behave as before.
 
 ## Design Notes
 
-Ordering by event, not `updated_at`: edits in the configurator (4.3) will touch the case while it waits, which would reshuffle the queue.
+Ordering by event, not `updated_at`: configurator edits (4.3) will touch a case while it waits and would reshuffle the queue.
 
 ## Verification
 
@@ -83,5 +85,7 @@ Ordering by event, not `updated_at`: edits in the configurator (4.3) will touch 
 ## Implementation Notes
 
 ## Spec Change Log
+
+- 2026-10-28, owner at approval: keep the "{n} da approvare" note next to Case; no Da approvare sidebar item. The `/to-review` page is dropped; the queue lives in the Case table's Da approvare filter, reachable by `?status=in_review`.
 
 ## Review Triage Log
