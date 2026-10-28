@@ -208,3 +208,6 @@
 - source_spec: none
   summary: Story 3.5's `composeParts` (client file order: client intro, each case's pages without its own intro and Carosello Chiusura, Risultati e testimonial kept, then the client's closing; case pages read from the case's revision, never copied).
   evidence: Split from Story 3.5 by the owner (2026-10-28): the renderers ship first; composeParts is an independent pure function, built right after.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-5-compose-parts-client-file.md`
+  summary: Decide in Story 4.13 how `composeParts` recognises a case's Carosello Chiusura if pages can be duplicated or re-keyed; it now matches `pageKey === "closing"`.
+  evidence: Review (maybe-false, medium if true): a second or renamed Chiusura would stay in the client file; today default pages restore only lost pages and keep their key, so it can't happen yet.
