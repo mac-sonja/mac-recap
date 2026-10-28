@@ -3,7 +3,7 @@ name: MAC Recap
 description: Visual identity of the MAC Recap tool UI (not the case study templates). Dark, neutral-grey chrome on black; lime for the main calls to action and a few details, blue for secondary emphasis. shadcn/ui (new-york, neutral base) on Next.js + Tailwind; tokens below override the shadcn defaults.
 status: final
 created: 2026-10-08
-updated: 2026-10-20
+updated: 2026-10-28
 colors:
   # Surfaces: black page, neutral grey ramp sampled from imports/ui-refs. No navy anywhere in the UI.
   surface: '#000000'
@@ -238,6 +238,33 @@ Rounded but tight. `{rounded.sm}` for segments inside a track, `{rounded.md}` fo
 - **Focus indicator:** 2px `{colors.focus-ring}` lime outline (17.8:1 on black, 15.5:1 on panels).
 - **Selectable card** (library multi-select; [Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md)): a checkbox in the card's top-left corner. Selected cards get `{colors.surface-selected}` and a 1px `{colors.border-strong}` border. No new token.
 - **Sortable list row** (client overview and collection left panes): a row with a drag handle on the left and an overflow menu with *Sposta su* / *Sposta giù* as the keyboard alternative; the focused row shows the focus indicator. No new token.
+
+## Case study pages: text styles and palette
+
+Added 2026-10-28 ([Sprint Change Proposal 2026-10-28, configurator](../../sprint-change-proposal-2026-10-28-configurator.md), C32). These are the values of the **template output**, the case study pages drawn on the configurator canvas and in exports. They are not tool UI tokens, and the tool tokens above never style them. Source: the design team's Figma file "MAC-TF-AI" and the configurator mockup [`mockups/configurator.html`](mockups/configurator.html), which sets them in Inter.
+
+**Seven text styles.** Sizes in px at the template's Figma frame (Presentazione 1920 wide; Carosello 1000; Video 1080). Desktop is Presentazione; mobile is Carosello and Video.
+
+| Style | Desktop (Presentazione) | Mobile (Carosello, Video) |
+|---|---|---|
+| Etichetta | 13 Semibold, uppercase | 16 |
+| Titolo XL | 56 Bold | 68 |
+| Titolo | 26 Semibold | 30 |
+| Sottotitolo | 20 | 26 |
+| Testo | 16 / 24 | 18 |
+| Numero | 56 Bold | 75 |
+| Citazione | 39 Medium | 40 |
+
+- A text keeps its template's Figma size where that differs from its style, until the style is changed.
+- Colour, alignment (left, centre, right) and two columns are settings of the text.
+- Texts wrap to their block and grow in height. Only a result's number stays on one line.
+- There are no font pairings and no S / M / L scale.
+
+**Palette.** White `#FFFFFF`, grey `#EDEDF0`, navy `#012234`, lime `#DEFE56`, blue `#2977FF`, and transparent, plus a field for any other colour.
+
+- Text defaults to `#012234` (white on a photo background).
+- A page's background defaults to white; a block's to `#EDEDF0`. Either can also be transparent or an image from the case's or the client's media.
+- The Risultati e testimonial template uses a blue `#2977FF` results block with the numbers in lime `#DEFE56`.
 
 ## Do's and Don'ts
 
