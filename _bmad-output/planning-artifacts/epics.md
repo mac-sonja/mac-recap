@@ -1194,9 +1194,9 @@ Covers: AR3 (revision model, live and editable reads), AR4, AR9 (format registry
 ⚑ Interim: IR-OP8, IR-OP13 (`generated_doc` is kept next to the approved `doc` for the measures). IR-OP1 is resolved (SCP 2026-10-28, C28); until then the registry held Deck 16:9, Social carousel 4:5 and PDF A4.
 
 **Amended per SCP 2026-10-28** ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C28, C29, C30, answers 2 and 3). The story is done for document schema v1 (#68). The amendment changes the format registry and adds document schema v2, built as a follow-up before Story 3.4 (status stays done; the follow-up is tracked on this story). The v1 criteria below stay as the record of what was built; where they differ from the amendment criteria at the end, the amendment wins.
-⛔ Open: how the AI's claims (Story 3.6) map onto texts that now exist once per format: one set shared by the three formats' copies, or one per copy.
+✅ Decided (owner, 2026-10-28): the AI writes three texts, one per format, each fitted to that format's space. A person's edit to one format doesn't reach the others. The claims (Story 3.6) belong to each format's own copy.
 ⛔ Open: whether v2 keeps a `check` field on texts for Story 4.7 after the demo. Nothing reads or sets it for the demo (C39).
-⛔ Open: v1 rejects a document missing challenge, approach or result. In v2 that narrative sits in the Intro's Sfida and Idea blocks and the Risultati e testimonial page, which a person can delete (C30, C36); whether the schema still requires them is for the owner (FR3, NFR5).
+✅ Decided (owner, 2026-10-28): deleting is free. The Sfida, Idea and Risultati blocks and pages can be deleted and are recovered from **Pagine di default** or with ⌘Z, so v2 doesn't require them (FR3, NFR5 relaxed for v2).
 
 **Acceptance Criteria:**
 
@@ -1263,7 +1263,7 @@ So that a draft starts from the designed Intro, Contenuti, Risultati e testimoni
 
 Covers: FR3 (layouts per format), FR4 (as amended), AR15, NFR1 (template design unchanged), C30, C31, C32, C33 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 ⚑ Interim: IR-C4 (no layout on/off state)
-⛔ Open: where the case's services are stored. The Intro shows them as tags bound to the case record (answer 2), but a case has only one business line today.
+✅ Decided (owner, 2026-10-28): a case's services are picked as a multiselect when the case is created and stored on the case record as a list. The Intro shows exactly those services as tags (answer 2).
 ⛔ Open: the Figma template for the client's closing page in Presentazione and Video (the mockup shows a placeholder).
 ⛔ Open: what an empty image block shows in an approved export (IR-A4; default pages can place image blocks the case has no image for).
 Amended per SCP 2026-10-28: rewritten. Media-count rules, variants, spacing ranges, text scales S/M/L and font pairings are gone (C31, C32). The mockup `ux-designs/ux-MAC Recap-2026-10-08/mockups/configurator.html` is the reference for every value below.
@@ -1397,7 +1397,7 @@ So that every claim in the draft has something I can check it against.
 Covers: FR3, CAP-5, AR6 (aspects, MISSING_ASPECT), AR7, AR18 (manifest, limits, no Files API), AR19 (provenance, validated sourceRefs), NFR1, NFR2 (no "verified"), NFR5, NFR13 (narrative language)
 ⚑ Interim: IR-A3 (`MISSING_ASPECT` is recorded, not blocking), IR-OP14 (favourites are in the manifest but ignored)
 ⛔ Blocked on: IR-OP2 (which material types the LLM reads and how each becomes input), IR-NFR5 (quality checklist content for the prompt)
-⛔ Open: how the AI's texts map onto the per-format copies of document v2; see the matching open point in Story 3.3.
+✅ Decided (owner, 2026-10-28): the AI writes one text per format, fitted to that format's space (see Story 3.3). Each format's copy is then edited on its own.
 Amended per SCP 2026-10-28 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C39, owner 2026-10-27): for the demo, claims carry no check workflow. Nothing sets or reads a `check`, there is no "generated, not checked" marking, and the output stays text only; Story 3.7 places it in each format's pages. The prompt follows the copywriting guide (#100).
 
 **Acceptance Criteria:**
@@ -1683,7 +1683,7 @@ So that I can fix wording and arrangement without losing work.
 
 Covers: FR5 (editing, as amended), CAP-7, AR4 (document v2), AR17, AR20 (save, claim edit), AR24 (as amended), UX-DR13 (as amended), UX-DR20, UX-DR26 (undo/redo, Esc), C29, C30, C32, C40, answer 2 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 ⚑ Interim: IR-C3 (autosave), IR-A5 (stale writes reload; no "someone else changed this" state)
-⛔ Open: v1 locked the challenge, approach and result sections (FR3, NFR5). Blocks and pages can now be deleted (C30, C36); whether anything stops a person deleting the Sfida, Idea or Risultati content is for the owner.
+✅ Decided (owner, 2026-10-28): nothing stops it. Blocks and pages, including Sfida, Idea and Risultati, can be deleted freely and recovered from **Pagine di default** or with ⌘Z.
 ⛔ Open: how the client's fields that aren't free text (the sector, picked from the shared list, and the logo) are edited on the page (answer 2).
 ⛔ Open: the keyboard or menu alternative for dragging elements and blocks (UX-DR26); the mockup has none.
 ⛔ Open: whether a person can switch a text to two columns; the mockup keeps it only from the template (C32).
@@ -1823,7 +1823,7 @@ So that the best visuals lead and nothing from outside the project creeps in.
 
 Covers: FR5 (media, as amended), CAP-7, NFR1, AR3 (generation only from `draft`), AR14 (favourites), AR18 (refs from own material; upload never changes status), UX-DR15 (as amended), UX-DR34 (as amended), C30, C35 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 ⚑ Interim: IR-OP8 (status kept when material is added), IR-C3 and IR-A5 (saves through the Story 4.3 autosave path)
-⛔ Open: how the visible part of an image set to **Ritaglia** is chosen (the mockup applies a fixed zoom).
+✅ Decided (owner, 2026-10-28): with **Ritaglia** a person drags the image inside its block to choose the visible part and sets the zoom with a slider.
 Amended per SCP 2026-10-28: rewritten. Media can be cropped (answer 4); files are added from the **Media** tab's drop zone, which replaces the earlier **Add material** link to the wizard; animations are new (C35).
 
 **Acceptance Criteria:**

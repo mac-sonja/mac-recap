@@ -208,6 +208,13 @@ Type: new requirements from the stakeholder, decided by building them. Evidence:
 3. **Carosello.** For now only **1080×1080**. The 4:5 carousel and PDF A4 are dropped from the registry.
 4. **Ritaglia.** **Yes**: images can be cropped (Riempi, Ritaglia), reversing IR-OP12.
 
+Later the same day, the owner settled four points left open in the stories:
+
+5. **Deleting.** Blocks and pages, including Sfida, Idea and Risultati, can be deleted freely. They are recovered from **Pagine di default** or with ⌘Z, so document v2 doesn't require them (Stories 3.3, 4.3).
+6. **AI texts per format.** The AI writes **three texts, one per format**, each fitted to that format's space. An edit in one format doesn't reach the others, and each copy carries its own claims (Stories 3.3, 3.5, 3.6).
+7. **Services.** Picked as a **multiselect when the case is created** and stored on the case as a list. The Intro shows them as tags (Story 3.4).
+8. **Ritaglia control.** The person **drags the image inside its block** and sets the **zoom with a slider** (Story 4.5).
+
 ## 7. Implementation handoff
 
 - **Scope: Major.** A done story is reworked, and more than ten stories are rewritten.
