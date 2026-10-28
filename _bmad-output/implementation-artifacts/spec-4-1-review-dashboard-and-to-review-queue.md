@@ -87,6 +87,7 @@ Ordering by event, not `updated_at`: configurator edits (4.3) will touch a case 
 - Queue order comes from `case-study.reviewSince(cases)` (new `application/review-since.ts`, adapter queries `case_event` in chunks of 100). The page always calls it; it never fails.
 - Table `sort` is `SortState | null`; null + Da approvare = `sortByReviewOrder`, no header arrow.
 - Real-DB test added in `test/db/case-study.db.test.ts`; not run locally (no Docker), runs in CI (`npm run test:db`).
+- Owner 2026-10-28 (after review): the "{n} da approvare" note is its own link to `/case-studies?status=in_review`, laid over the Case item (links can't nest).
 - Lint, typecheck and `vitest run` pass under Node 22 (`package.json` asks for 24; installed with `--engine-strict=false`).
 
 ## Spec Change Log

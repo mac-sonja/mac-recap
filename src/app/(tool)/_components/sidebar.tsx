@@ -31,6 +31,9 @@ export interface SidebarProps {
   theme?: ThemeChoice;
 }
 
+/** The "{n} da approvare" note opens the Case page on the Da approvare queue (Story 4.1, owner 2026-10-28). */
+const TO_REVIEW_HREF = "/case-studies?status=in_review";
+
 /** Full labels at ≥1280 px; icons only at 1024–1279 px, labels kept for screen readers. */
 const LABEL = "sr-only xl:not-sr-only";
 
@@ -40,6 +43,7 @@ function NavLink({
   label,
   active,
   meta,
+  metaHref,
 }: {
   href: string;
   icon: LucideIcon;
@@ -47,8 +51,10 @@ function NavLink({
   active: boolean;
   /** A short note after the label (a count), hidden when the sidebar is collapsed. */
   meta?: string | null;
+  /** Where the note goes, when it is a link of its own, laid over the item's right end (links can't nest). */
+  metaHref?: string;
 }) {
-  return (
+  const link = (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
@@ -60,12 +66,24 @@ function NavLink({
     >
       <Icon aria-hidden="true" className="size-[18px] shrink-0" strokeWidth={1.75} />
       <span className={LABEL}>{label}</span>
-      {meta ? (
+      {meta && metaHref === undefined ? (
         <span className="ml-auto hidden font-label text-xs font-normal text-foreground-muted tabular-nums xl:inline">
           {meta}
         </span>
       ) : null}
     </Link>
+  );
+  if (!meta || metaHref === undefined) return link;
+  return (
+    <div className="relative">
+      {link}
+      <Link
+        href={metaHref}
+        className="absolute inset-y-1.5 right-1.5 hidden items-center rounded-sm px-1 font-label text-xs font-normal text-foreground-muted tabular-nums transition-colors duration-150 hover:text-foreground hover:underline underline-offset-2 xl:flex"
+      >
+        {meta}
+      </Link>
+    </div>
   );
 }
 
@@ -164,6 +182,7 @@ export function Sidebar({
             label={it.shell.nav.caseStudies}
             active={isCaseStudies}
             meta={toReviewCount ? fill(it.shell.nav.toReview, { n: toReviewCount }) : null}
+            metaHref={TO_REVIEW_HREF}
           />
         )}
         {showLibrary && (
