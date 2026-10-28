@@ -86,6 +86,16 @@ describe("CaseStudiesPage", () => {
     expect(html).toMatch(/<input[^>]*type="search"[^>]*value="lumen"/);
   });
 
+  it("starts the status filter from ?stato= and ignores an unknown one", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(ok([caseStudy({ status: "in_review" })]));
+    const checked = (html: string) => html.match(/<button[^>]*role="radio"[^>]*aria-checked="true"[^>]*>([^<]*)/)?.[1];
+    const queue = renderToStaticMarkup(await CaseStudiesPage({ searchParams: Promise.resolve({ stato: "in_review" }) }));
+    expect(checked(queue)).toBe(dict.caseStudies.filter.statuses.in_review);
+    const unknown = renderToStaticMarkup(await CaseStudiesPage({ searchParams: Promise.resolve({ stato: "nope" }) }));
+    expect(checked(unknown)).toBe(dict.caseStudies.filter.all);
+  });
+
   it("queries approved cases only for account/sales/social", async () => {
     requireSurface.mockResolvedValue(shell("account_sales_social", "/library"));
     list.mockResolvedValue(ok([caseStudy({ status: "approved" })]));

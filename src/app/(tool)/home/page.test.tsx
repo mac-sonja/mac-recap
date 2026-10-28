@@ -2,11 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
-import type { CaseActivity, CaseStudy, ListScope } from "@/modules/case-study";
+import type { CaseActivity, ListedCaseStudy, ListScope } from "@/modules/case-study";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
-const list = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
+const list = vi.fn<(scope: ListScope) => Promise<Result<ListedCaseStudy[]>>>();
 const listActivity = vi.fn<(scope: ListScope) => Promise<Result<CaseActivity[]>>>();
 
 vi.mock("next/navigation", () => ({
@@ -28,7 +28,7 @@ const shell = (role: Role, displayName = "Sonja Castillo"): ShellActor => ({
 });
 
 let n = 0;
-const caseStudy = (over: Partial<CaseStudy>): CaseStudy => ({
+const caseStudy = (over: Partial<ListedCaseStudy>): ListedCaseStudy => ({
   id: `aaaaaaaa-0000-4000-8000-00000000000${++n}`,
   code: `LUM-2026-0${n}`,
   number: n,
@@ -46,6 +46,7 @@ const caseStudy = (over: Partial<CaseStudy>): CaseStudy => ({
   createdAt: "2026-10-01T10:00:00+00:00",
   updatedAt: "2026-10-13T07:05:00+00:00",
   deletedAt: null,
+  inReviewSince: null,
   ...over,
 });
 
@@ -88,14 +89,41 @@ describe("HomePage", () => {
     ]);
   });
 
-  it("links drafts back to the wizard and leaves other cases unlinked", async () => {
+  it("links drafts back to the wizard and cases to approve to the configurator", async () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     const draft = caseStudy({ status: "draft" });
-    list.mockResolvedValue(ok([draft, caseStudy({ status: "in_review" })]));
+    const waiting = caseStudy({ status: "in_review" });
+    list.mockResolvedValue(ok([draft, waiting]));
     const html = await renderPage();
     expect(html).toContain(`href="/case-studies/new?caseId=${draft.id}"`);
     expect(html.match(/href="\/case-studies\/new\?caseId=/g)).toHaveLength(1); // in A metà strada
+    expect(html.match(new RegExp(`href="/case-studies/${waiting.id}/configurator"`, "g"))).toHaveLength(1); // in Da approvare
   });
+
+  it("lists Da approvare longest waiting first, not by last update", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(
+      ok([
+        // Newest update first would put Recente on top; it has waited less.
+        caseStudy({ status: "in_review", name: "Recente", updatedAt: "2026-10-12T10:00:00+00:00", inReviewSince: "2026-10-09T10:00:00+00:00" }),
+        caseStudy({ status: "in_review", name: "In attesa", updatedAt: "2026-10-03T10:00:00+00:00", inReviewSince: "2026-10-02T10:00:00+00:00" }),
+      ]),
+    );
+    const html = await renderPage();
+    const review = html.slice(html.indexOf('id="home-review"'), html.indexOf('id="home-drafts"'));
+    expect(review.indexOf("In attesa")).toBeLessThan(review.indexOf("Recente"));
+  });
+
+  it("opens the To review queue from Da approvare, only when something waits", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(ok([caseStudy({ status: "in_review" })]));
+    const html = await renderPage();
+    expect(html).toMatch(/href="\/case-studies\?stato=in_review"[^>]*>Tutte da approvare/);
+
+    list.mockResolvedValue(ok([caseStudy({ status: "draft" })]));
+    expect(await renderPage()).not.toContain("stato=in_review");
+  });
+
 
   const event = (over: Partial<CaseActivity>): CaseActivity => ({
     id: `eeeeeeee-0000-4000-8000-00000000000${++n}`,
@@ -129,8 +157,9 @@ describe("HomePage", () => {
       "Giulia Riva ha creato Showroom in tasca.",
     ]);
     expect(html).toContain('<strong class="font-semibold text-foreground-strong">Mattoni</strong>');
-    // A draft's line opens its wizard; an approved case has no page yet.
+    // A draft's line opens its wizard; an approved case's opens its configurator.
     expect(activity?.[2].match(/href="\/case-studies\/new\?caseId=aaaaaaaa-0000-4000-8000-000000000001"/g)).toHaveLength(2);
+    expect(activity?.[2].match(/href="\/case-studies\/aaaaaaaa-0000-4000-8000-000000000009\/configurator"/g)).toHaveLength(1);
     expect(activity?.[2].match(/<svg/g)).toHaveLength(3);
   });
 

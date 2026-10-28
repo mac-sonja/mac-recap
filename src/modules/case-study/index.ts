@@ -67,6 +67,7 @@ import type {
   ClientSector,
   CaseClientInfo,
   ClientSummary,
+  ListedCaseStudy,
   ListScope,
 } from "@/modules/case-study/domain/case-study";
 import type { ListedClientAsset } from "@/modules/case-study/domain/client-material";
@@ -103,6 +104,7 @@ export {
 export type {
   BusinessLine,
   CaseStudy,
+  ListedCaseStudy,
   Client,
   ClientBrief,
   ClientBriefField,
@@ -201,13 +203,14 @@ export function get(id: unknown): Promise<Result<CaseStudy>> {
 }
 
 /**
- * The non-deleted case studies within exactly `scope`, newest `updated_at` first:
+ * The non-deleted case studies within exactly `scope`, newest `updated_at` first,
+ * each Da approvare case with `inReviewSince` (when it entered that status):
  * `{}` lists every status, `{ status: "approved" }` approved only; `clientId`
  * limits it to that client's cases. Derive the status scope
  * from the `list cases` policy and authorize it first, so no scope the policy
  * denies is ever queried. A malformed scope is `INVALID_INPUT`.
  */
-export function list(scope: ListScope): Promise<Result<CaseStudy[]>> {
+export function list(scope: ListScope): Promise<Result<ListedCaseStudy[]>> {
   return makeListCaseStudies(createSupabaseCaseStudyRepository())(scope);
 }
 
