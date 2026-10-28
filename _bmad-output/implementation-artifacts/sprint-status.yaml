@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-28-2026 14:00
+last_updated: 10-28-2026 16:00
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -69,7 +69,7 @@ development_status:
   3-7-generate-a-case-study: backlog  # no client snapshot; job reads current client info when it runs (SCP 2026-10-16 owner amendment)
   3-8-tell-me-when-the-draft-is-ready: backlog
   3-9-client-intro-template-and-draft: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 3.8, last in Epic 3; starts from 2.16's Crea introduzione, inputs gain industries, brief and client material (SCP 2026-10-19); outro + Modifica layout per SCP 2026-10-21; trigger is Aggiungi, background; migration and layout moved to 3.11 per SCP 2026-10-26
-  3-10-test-draft-without-ai: backlog  # dev only, no LLM (SCP 2026-10-20); after 3.5, before 4.1; per SCP 2026-10-28: fills each format's default pages from the case and the client with test text
+  3-10-test-draft-without-ai: in-progress  # dev only, no LLM (SCP 2026-10-20); after 3.5, before 4.1; per SCP 2026-10-28: fills each format's default pages from the case and the client with test text
   3-11-client-intro-and-outro-with-test-text: backlog  # per SCP 2026-10-26: Aggiungi starts the client draft in the background with test text; client_intro migration moved here from 3.9; after 3.10, before 4.1; blocked on the client template
   epic-3-retrospective: optional
 

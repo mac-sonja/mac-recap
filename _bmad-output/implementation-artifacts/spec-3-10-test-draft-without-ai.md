@@ -2,7 +2,8 @@
 title: 'Story 3.10: test draft without AI (dev only)'
 type: 'feature'
 created: '2026-10-28'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: '9477c610a9264de404215289118e983883a1815a'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
