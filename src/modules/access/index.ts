@@ -16,7 +16,7 @@ export { authorize } from "@/modules/access/application/authorize";
 export type { Actor, Profile, Role } from "@/modules/access/domain/actor";
 export { landingFor } from "@/modules/access/domain/landing";
 export { MIN_PASSWORD_LENGTH, SIGN_UP_DOMAIN, TEAMS, type Team } from "@/modules/access/domain/sign-up";
-export { refreshSession } from "@/modules/access/adapters/supabase/proxy-session";
+export { hasSessionCookie, refreshSession } from "@/modules/access/adapters/supabase/proxy-session";
 export type { EmailLink, EmailLinkType } from "@/modules/access/application/ports";
 export type { SessionState } from "@/modules/access/application/session";
 export type { AddedUser } from "@/modules/access/application/users";
