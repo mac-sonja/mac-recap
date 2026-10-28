@@ -17,6 +17,9 @@ export default mergeConfig(
       exclude: [...configDefaults.exclude],
       // Tests share one database and mutate seed rows; run files one at a time.
       fileParallelism: false,
+      // Every file acts as a signed-in test owner/designer (test/helpers/db-actor.ts).
+      globalSetup: ["test/db/global-setup.ts"],
+      setupFiles: ["test/db/setup.ts"],
     },
   },
 );

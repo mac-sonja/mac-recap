@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEV_ACTOR_ID, ROLES, SYSTEM_ACTOR_ID } from "@/modules/access/domain/actor";
+import { TEST_ACTOR_EMAIL, TEST_ACTOR_ID, TEST_ACTOR_NAME } from "../helpers/db-actor";
 
 const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -21,8 +22,6 @@ let pool: pg.Pool;
 
 beforeAll(async () => {
   pool = new pg.Pool({ connectionString: env.SUPABASE_DB_URL, max: 2 });
-  // Undo a disable left behind by an interrupted run (the seed value is null).
-  await pool.query("update public.profile set disabled_at = null where id = $1", [DEV_ACTOR_ID]);
 });
 
 afterAll(async () => {
@@ -47,9 +46,11 @@ async function asRole(role: string, sql: string) {
 }
 
 describe("seed rows", () => {
-  it("has exactly the system and dev owner/designer profiles", async () => {
+  it("has exactly the system and dev owner/designer profiles, the dev one disabled at the sign-in cutover", async () => {
+    // Seeded rows carry the reserved `.invalid` addresses; the test user and any
+    // profile added through the app use real ones.
     const { rows } = await pool.query(
-      "select id, email, display_name, role, disabled_at from public.profile order by id",
+      "select id, email, display_name, role, disabled_at from public.profile where email like '%@mac-recap.invalid' order by id",
     );
     expect(rows).toEqual([
       {
@@ -64,7 +65,7 @@ describe("seed rows", () => {
         email: "dev-owner-designer@mac-recap.invalid",
         display_name: "Dev owner/designer",
         role: "owner_designer",
-        disabled_at: null,
+        disabled_at: expect.any(Date),
       },
     ]);
   });
@@ -90,7 +91,8 @@ describe("schema guards", () => {
       `select pg_catalog.pg_get_constraintdef(oid) as def from pg_catalog.pg_constraint
        where conrelid = 'public.profile'::regclass and contype = 'c'`,
     );
-    const roleChecks = rows.map(({ def }) => def).filter((def) => /\brole\b/.test(def));
+    // The list check only: `profile_system_role_only_seeded` (Story 6.3) also names role.
+    const roleChecks = rows.map(({ def }) => def).filter((def) => /\brole = ANY\b/.test(def));
     expect(roleChecks).toHaveLength(1);
     expect([...roleChecks[0].matchAll(/'([^']+)'/g)].map((m) => m[1])).toEqual([...ROLES]);
   });
@@ -137,36 +139,36 @@ describe("real adapter", () => {
   // Imported lazily so getEnv() (cached on first use) sees the exported env.
   const loadAccess = () => import("@/modules/access");
 
-  it("getActor() resolves the dev owner/designer", async () => {
+  it("getActor() resolves the signed-in test owner/designer from its session", async () => {
     const { getActor } = await loadAccess();
     expect(await getActor()).toEqual({
       ok: true,
       value: {
-        id: DEV_ACTOR_ID,
-        email: "dev-owner-designer@mac-recap.invalid",
-        displayName: "Dev owner/designer",
+        id: TEST_ACTOR_ID,
+        email: TEST_ACTOR_EMAIL,
+        displayName: TEST_ACTOR_NAME,
         role: "owner_designer",
       },
     });
   });
 
-  it("getActor() is UNAUTHENTICATED while the dev profile is disabled", async () => {
+  it("getActor() is UNAUTHENTICATED while the signed-in profile is disabled", async () => {
     const { getActor } = await loadAccess();
     // getActor() reads through PostgREST on its own connection, so a rolled-back
     // transaction would be invisible to it: disable, then always restore.
     const { rows } = await pool.query<{ disabled_at: Date | null }>(
       "select disabled_at from public.profile where id = $1",
-      [DEV_ACTOR_ID],
+      [TEST_ACTOR_ID],
     );
     expect(rows).toHaveLength(1);
     const original = rows[0].disabled_at;
     try {
-      await pool.query("update public.profile set disabled_at = now() where id = $1", [DEV_ACTOR_ID]);
+      await pool.query("update public.profile set disabled_at = now() where id = $1", [TEST_ACTOR_ID]);
       const result = await getActor();
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.code).toBe("UNAUTHENTICATED");
     } finally {
-      await pool.query("update public.profile set disabled_at = $2 where id = $1", [DEV_ACTOR_ID, original]);
+      await pool.query("update public.profile set disabled_at = $2 where id = $1", [TEST_ACTOR_ID, original]);
     }
   });
 });

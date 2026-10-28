@@ -103,6 +103,15 @@ export type {
   VideoElement,
 } from "@/modules/generation/domain/document";
 
+/** Story 3.10's test draft and the document builder Story 3.7 reuses with the AI's texts (pure). */
+export {
+  buildCaseDocument,
+  buildTestDraft,
+  TEST_DRAFT_MARKER,
+  testDraftTexts,
+} from "@/modules/generation/application/test-draft";
+export type { CaseDocumentInput, DraftText, TestDraftForm, TestDraftInput } from "@/modules/generation/application/test-draft";
+
 /** The uuid prefix of the ids an upgrade gives the template's pages; a 12-digit counter per format follows. */
 export const UPGRADE_ID_PREFIX = "00000000-0000-4000-8000-";
 

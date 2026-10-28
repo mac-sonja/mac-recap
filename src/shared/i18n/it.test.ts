@@ -247,3 +247,72 @@ describe("voice", () => {
     expect([it.shell.theme.system, it.shell.theme.light, it.shell.theme.dark]).toEqual(["Automatico", "Chiaro", "Scuro"]);
   });
 });
+
+describe("configurator copy", () => {
+  test("has the approved strings", () => {
+    expect(t("configurator.back")).toBe("Torna alle case history");
+    expect(t("configurator.narrowScreen")).toBe("Il configuratore ha bisogno di uno schermo più grande.");
+    expect([it.configurator.formats.presentazione_16_9, it.configurator.formats.carosello_1_1, it.configurator.formats.video_9_16]).toEqual([
+      "Presentazione",
+      "Carosello",
+      "Video",
+    ]);
+    expect([t("configurator.saved"), t("configurator.undo"), t("configurator.redo"), t("configurator.approve")]).toEqual([
+      "Salvato",
+      "Annulla",
+      "Ripeti",
+      "Approva",
+    ]);
+    expect(t("configurator.soon")).toBe("Arriva presto");
+    expect(fill(t("configurator.soonMessage"), { tool: "Layout" })).toBe("Layout arriva presto.");
+    expect(t("configurator.trial.title")).toBe("Bozza di prova");
+    expect(fill(t("configurator.canvas.pageLabel"), { n: 2, name: "La sfida" })).toBe("2 · La sfida");
+    expect(t("configurator.canvas.move")).toBe("⠿ Sposta");
+    expect(Object.values(it.configurator.sections)).toEqual(["Intro", "Output", "Risultati"]);
+    expect([
+      t("configurator.tools.layout"),
+      t("configurator.tools.defaultPages"),
+      t("configurator.tools.elements"),
+      t("configurator.tools.background"),
+      t("configurator.tools.deletePage"),
+    ]).toEqual(["Layout", "Pagine di default", "Elementi", "Sfondo", "Elimina pagina"]);
+    expect(Object.values(it.configurator.elements)).toEqual([
+      "Blocco",
+      "Testi",
+      "Titolo",
+      "Testo",
+      "Numero",
+      "Citazione",
+      "Etichetta",
+      "Immagine",
+      "Video",
+      "Animazione",
+    ]);
+    expect([t("configurator.tabs.pages"), t("configurator.tabs.media"), t("configurator.search.placeholder")]).toEqual(["Pagine", "Media", "Cerca"]);
+    expect([t("configurator.panels.hideLeft"), t("configurator.panels.showLeft")]).toEqual([
+      "Nascondi il pannello a sinistra",
+      "Mostra il pannello a sinistra",
+    ]);
+  });
+
+  test("has the Anteprima, Instagram and Animazione testi strings", () => {
+    expect([t("configurator.preview.enter"), t("configurator.preview.leave")]).toEqual(["Anteprima", "Torna all’editor"]);
+    expect([t("configurator.preview.previous"), t("configurator.preview.next")]).toEqual(["Pagina precedente", "Pagina successiva"]);
+    expect(fill(t("configurator.preview.slide"), { i: 3, n: 7, name: "La sfida" })).toBe("3 di 7 · La sfida");
+    expect(it.configurator.preview.instagram).toEqual({
+      label: "Anteprima Instagram",
+      off: "Nessuna",
+      reel: "Reel",
+      story: "Storia",
+      account: "mac.creativetech",
+      avatar: "mac",
+      clock: "9:41",
+      follow: "Segui",
+      forYou: "Per te",
+      friends: "Amici",
+      message: "Invia messaggio…",
+      time: "9 min",
+    });
+    expect(t("configurator.textAnimation")).toBe("Animazione testi");
+  });
+});

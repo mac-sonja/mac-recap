@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-28-2026 15:05
+last_updated: 10-28-2026 17:00
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -63,20 +63,20 @@ development_status:
   3-1-background-job-queue-and-worker-loop: done  # #45; migration applied to mac-recap-dev 2026-10-16 (not staging/prod)
   3-2-display-renditions-for-uploaded-media: done  # #62; migration applied to mac-recap-dev 2026-10-20 (not staging/prod); renditions backfilled on dev
   3-3-the-case-study-document-revisions-and-the-format-registry: done  # #68 merged (status fixed 2026-10-26); About block per SCP 2026-10-16; client info read live, no snapshot (owner amendment); after 2.14; amendment per SCP 2026-10-16 client intro and collections (document kind, revision subject); stays done; per SCP 2026-10-28: follow-up for document v2 (per-format pages, blocks, elements; v1 upgraded on read) and the registry Presentazione 16:9, Carosello 1:1, Video 9:16; client and case fields bound, not copied
-  3-4-templates-as-versioned-code-with-media-count-rules: review  # About the client area per SCP 2026-10-16; amendment per SCP 2026-10-16 client intro and collections (pageKey and intro/body role); outro + Modifica layout per SCP 2026-10-21; case outro page (Risultati + Testimonial) per SCP 2026-10-26; per SCP 2026-10-28: rewritten as templates from the Figma frames (MAC-TF-AI), layout grids and default pages per format; media-count rules gone
-  3-5-one-renderer-per-format: review  # amendment per SCP 2026-10-16 client intro and collections (page keys, starting page number); outro + Modifica layout per SCP 2026-10-21; one rule for client intro and outro per SCP 2026-10-26; per SCP 2026-10-28: rewritten for document v2, Video renderer with animations, Riempi/Adatta/Ritaglia; case Risultati e testimonial stay in the client file (C38); composeParts split out by the owner (2026-10-28), built in spec-3-5-compose-parts-client-file (composeParts + renderComposed)
+  3-4-templates-as-versioned-code-with-media-count-rules: done  # #107 merged; About the client area per SCP 2026-10-16; amendment per SCP 2026-10-16 client intro and collections (pageKey and intro/body role); outro + Modifica layout per SCP 2026-10-21; case outro page (Risultati + Testimonial) per SCP 2026-10-26; per SCP 2026-10-28: rewritten as templates from the Figma frames (MAC-TF-AI), layout grids and default pages per format; media-count rules gone
+  3-5-one-renderer-per-format: done  # #111 merged; amendment per SCP 2026-10-16 client intro and collections (page keys, starting page number); outro + Modifica layout per SCP 2026-10-21; one rule for client intro and outro per SCP 2026-10-26; per SCP 2026-10-28: rewritten for document v2, Video renderer with animations, Riempi/Adatta/Ritaglia; case Risultati e testimonial stay in the client file (C38); composeParts split out by the owner (2026-10-28), built in spec-3-5-compose-parts-client-file (composeParts + renderComposed, #112)
   3-6-narrative-generator-port-and-anthropic-adapter: backlog  # client info as LLM input per SCP 2026-10-16; runs after 4.8, when the narrative guidelines arrive (SCP 2026-10-20); demo (owner 2026-10-27): no "generated, not checked" marking on claims; prompt follows copywriting-case-mac.md
   3-7-generate-a-case-study: backlog  # no client snapshot; job reads current client info when it runs (SCP 2026-10-16 owner amendment)
   3-8-tell-me-when-the-draft-is-ready: backlog
   3-9-client-intro-template-and-draft: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 3.8, last in Epic 3; starts from 2.16's Crea introduzione, inputs gain industries, brief and client material (SCP 2026-10-19); outro + Modifica layout per SCP 2026-10-21; trigger is Aggiungi, background; migration and layout moved to 3.11 per SCP 2026-10-26
-  3-10-test-draft-without-ai: backlog  # dev only, no LLM (SCP 2026-10-20); after 3.5, before 4.1; per SCP 2026-10-28: fills each format's default pages from the case and the client with test text
+  3-10-test-draft-without-ai: review  # dev only, no LLM (SCP 2026-10-20); after 3.5, before 4.1; per SCP 2026-10-28: fills each format's default pages from the case and the client with test text
   3-11-client-intro-and-outro-with-test-text: backlog  # per SCP 2026-10-26: Aggiungi starts the client draft in the background with test text; client_intro migration moved here from 3.9; after 3.10, before 4.1; blocked on the client template
   epic-3-retrospective: optional
 
-  epic-4: backlog
-  4-1-review-dashboard-and-to-review-queue: backlog  # after 3.10, before 3.6 (SCP 2026-10-20); build on the Home dashboard from 2.19 (its "Ti aspettano" list is the start of the to-review queue)
-  4-2-open-a-draft-in-the-configurator: backlog  # amendment per SCP 2026-10-16 client intro and collections (read by subject); Bento designed with the owner first (SCP 2026-10-20); per SCP 2026-10-28: rewritten from the mockup (frame C40, Anteprima C37, three formats)
-  4-3-edit-generated-text-in-place-with-autosave: backlog  # per SCP 2026-10-28: rewritten (texts, elements and blocks per format; seven text styles; client fields editable on the page); 4.6 folded in
+  epic-4: in-progress
+  4-1-review-dashboard-and-to-review-queue: in-progress  # Home rows and Attività open Da approvare/Approvato cases in the configurator; ?stato= filter on the Case table, kept in the URL, ?stato=in_review = To review queue, longest waiting first by the latest generation_succeeded event (read from case_event, no migration), opened from Home's Tutte da approvare; still to do: sidebar To review entry, row Delete (settle with the owner: 2.20 moved delete inside the draft); after 3.10, before 3.6 (SCP 2026-10-20); build on the Home dashboard from 2.19 (its "Ti aspettano" list is the start of the to-review queue)
+  4-2-open-a-draft-in-the-configurator: review  # 4.2a merged (#114), 4.2b in review (spec-4-2b-anteprima-instagram-overlay-and-text-animation); split by the owner 2026-10-28: 4.2a frame, canvas, panels (spec-4-2-open-a-draft-in-the-configurator); 4.2b Anteprima, Instagram overlay, Animazione testi (deferred-work); amendment per SCP 2026-10-16 client intro and collections (read by subject); Bento designed with the owner first (SCP 2026-10-20); per SCP 2026-10-28: rewritten from the mockup (frame C40, Anteprima C37, three formats)
+  4-3-edit-generated-text-in-place-with-autosave: backlog  # per SCP 2026-10-28: rewritten (texts, elements and blocks per format; seven text styles; client fields editable on the page); 4.6 folded in; Anteprima texts editable too (4.2b, owner 2026-10-28)
   4-4-adjust-the-layout-per-format: backlog  # per SCP 2026-10-28: rewritten (Layout grids, Mescola, resize, Pagine di default, Sfondo); variants, Shuffle, spacing and Reset gone
   4-5-replace-reorder-and-remove-media: backlog  # per SCP 2026-10-28: rewritten (Media tab with drop zone, Riempi/Adatta/Ritaglia, animations)
   4-6-choose-typography-per-format: backlog  # per SCP 2026-10-28: folded into 4.3 (C32); nothing left to build
@@ -92,15 +92,15 @@ development_status:
   epic-5: backlog
   5-1-library-of-approved-case-studies: backlog  # multi-select added by 5.10 (SCP 2026-10-16 client intro and collections)
   5-2-preview-an-approved-case-study-in-every-format: backlog
-  5-3-export-a-format-as-a-file: backlog  # amendment per SCP 2026-10-16 client intro and collections (parts list, content-hash export key); per SCP 2026-10-28: Presentazione PDF, Carosello PNGs; Video MP4 or WebM after the demo
-  5-4-export-every-format-at-once: backlog  # per SCP 2026-10-28: Video joins Export all after the demo
+  5-3-export-a-format-as-a-file: backlog  # amendment per SCP 2026-10-16 client intro and collections (parts list, content-hash export key); per SCP 2026-10-28: Presentazione PDF, Carosello PNGs; Video MP4 or WebM after the demo; owner 2026-10-28: Export opens a dialog to tick formats, the same for cases, client packs and collections
+  5-4-export-every-format-at-once: backlog  # per SCP 2026-10-28: Video joins after the demo; owner 2026-10-28: no Export all button, several formats ticked in the export dialog download as one ZIP
   5-5-create-a-shareable-link: backlog
   5-6-the-shared-link-page: backlog
   5-7-turn-off-a-shareable-link: backlog
   5-8-guardrail-test-suite-for-the-end-of-sprint-2-check: backlog
-  5-9-combined-export-and-client-pack-download: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.8; outro + Modifica layout per SCP 2026-10-21; client outro only with 2+ case histories per SCP 2026-10-26; per SCP 2026-10-28: PDF A4 dropped; case Risultati e testimonial pages stay in the client file (C38)
-  5-10-collections: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.9; outro + Modifica layout per SCP 2026-10-21; client outro only with 2+ case histories per SCP 2026-10-26; per SCP 2026-10-28: Presentazione 16:9 only; case Risultati e testimonial pages stay (C38)
-  5-11-edit-texts-and-remove-pages-in-a-collection: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.10, last in Epic 5
+  5-9-combined-export-and-client-pack-download: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.8; outro + Modifica layout per SCP 2026-10-21; client outro only with 2+ case histories per SCP 2026-10-26; per SCP 2026-10-28: PDF A4 dropped; case Risultati e testimonial pages stay in the client file (C38); owner 2026-10-28: Scarica opens the same export dialog (tick formats)
+  5-10-collections: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.9; outro + Modifica layout per SCP 2026-10-21; client outro only with 2+ case histories per SCP 2026-10-26; per SCP 2026-10-28 (owner): every format, Presentazione PDF and Carosello PNGs, Video after the demo; owner 2026-10-28: tags (business lines, industries) at creation, Esporta opens a format picker, Aggiungi casi dialog in Pagine with suggestions and search; case Risultati e testimonial pages stay (C38)
+  5-11-edit-texts-and-remove-pages-in-a-collection: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.10, last in Epic 5; owner 2026-10-28: account/sales/social edit text too, export with no approval step, edits never change the case or client (IR-COLL-EDIT, NFR7 amended); account/sales/social reorder and delete pages (collection only), add/remove cases and edit texts: no left panel, no Media tab, no deleting blocks or elements
   epic-5-retrospective: optional
 
   epic-6: in-progress

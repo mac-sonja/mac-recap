@@ -1,5 +1,5 @@
 import type { CaseEvent } from "@/modules/case-study/domain/case-event";
-import type { CaseStudy, CreateCaseStudyInput, ListScope, UpdateCaseStudyDetailsInput } from "@/modules/case-study/domain/case-study";
+import type { CaseStudy, CreateCaseStudyInput, ListedCaseStudy, ListScope, UpdateCaseStudyDetailsInput } from "@/modules/case-study/domain/case-study";
 import type { TransitionEvent } from "@/modules/case-study/domain/transition";
 import type { CaseStatus } from "@/shared/case-status";
 import type { Result } from "@/shared/result";
@@ -28,9 +28,10 @@ export interface CaseStudyRepository {
   findById(id: string): Promise<Result<CaseStudy | null>>;
   /**
    * Every non-deleted case within `scope` (only `scope.status` when given), newest
-   * `updated_at` first; `err` only when the read fails or a row fails validation.
+   * `updated_at` first, each Da approvare case with the time it entered that status;
+   * `err` only when a read fails or a row fails validation.
    */
-  list(scope: ListScope): Promise<Result<CaseStudy[]>>;
+  list(scope: ListScope): Promise<Result<ListedCaseStudy[]>>;
   /** Appends one event; `ok(null)` when no case has `caseId`; `err REVISION_NOT_FOUND` for an unknown `revisionId`; otherwise `err` only when the write fails. */
   appendEvent(event: NewCaseEvent): Promise<Result<CaseEvent | null>>;
   /**

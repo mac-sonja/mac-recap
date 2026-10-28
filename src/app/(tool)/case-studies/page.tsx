@@ -7,16 +7,21 @@ import { PageHeader } from "@/app/_components/page-header";
 import { it } from "@/shared/i18n/it";
 import { formatDateTime } from "@/shared/i18n/format";
 import { CaseStudiesTable } from "./_components/case-studies-table";
-import type { CaseStudyRow } from "./_components/filter-sort";
+import { parseStatusFilter, type CaseStudyRow } from "./_components/filter-sort";
 
 /**
  * The Case studies table. The scope comes from the `list cases` policy (every
  * status, or approved only) and is passed as is to `case-study.list`, so no scope
  * the policy denies is ever queried. The list loads once; search and sort run in
  * the browser. A failed load throws into Next's error boundary: no partial table.
+ * `?stato=` starts the status filter on one status; `?stato=in_review` is the To review queue.
  */
-export default async function CaseStudiesPage({ searchParams }: { searchParams?: Promise<{ q?: string | string[] }> } = {}) {
-  const q = (await searchParams)?.q;
+export default async function CaseStudiesPage({
+  searchParams,
+}: { searchParams?: Promise<{ q?: string | string[]; stato?: string | string[] }> } = {}) {
+  const params = await searchParams;
+  const q = params?.q;
+  const initialStatus = parseStatusFilter(params?.stato);
   // The sidebar search lands here with `?q=`; the key restarts the table's search when it changes.
   const initialQuery = typeof q === "string" ? q.slice(0, 200) : "";
   const shell = await requireSurface("list cases");
@@ -40,17 +45,21 @@ export default async function CaseStudiesPage({ searchParams }: { searchParams?:
     businessLines: c.businessLines,
     updatedAt: c.updatedAt,
     updatedLabel: formatDateTime(c.updatedAt),
+    inReviewSince: c.inReviewSince,
   }));
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={it.caseStudies.heading} lead={it.caseStudies.lead} />
       <CaseStudiesTable
-        key={initialQuery}
+        key={`${initialQuery}\u0000${initialStatus}`}
         rows={rows}
         canCreate={can(actor, "create case")}
+        canEdit={can(actor, "edit")}
         showCreate={can(actor, "create case")}
         initialQuery={initialQuery}
+        initialStatus={initialStatus}
+        statusInUrl
       />
     </div>
   );

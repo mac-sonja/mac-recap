@@ -246,8 +246,10 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 | manage clients (add, edit, material; SCP 2026-10-19) | ✓ | — | — | — |
 | generate, edit, approve a client intro | ✓ | — | — | — |
 | download client pack | approved content | approved content | — | — |
-| manage collections: create, rename, reorder, add/remove, hide pages, delete, export | ✓ | ✓ | — | — |
-| edit collection text | ✓ | — (IR-COLL-EDIT, OP 15 resolved 2026-10-16) | — | — |
+| manage collections: create, rename, reorder cases and pages, add/remove cases, delete, export | ✓ | ✓ | — | — |
+| delete (hide) pages in a collection, tag a collection | ✓ | ✓ (owner, 2026-10-28) | — | — |
+| any other configurator tool in a collection (left panel, Media, add pages, delete blocks or elements) | ✓ | — (owner, 2026-10-28) | — | — |
+| edit collection text | ✓ | ✓ (IR-COLL-EDIT amended 2026-10-28; edits stay in the collection) | — | — |
 | delete case | any `draft` case | — | — | — |
 | approve, update approved version, discard | any case (AD-19) | — | — | — |
 | view, export | any approved | any approved | — | — |
@@ -407,11 +409,11 @@ UI labels follow whichever OP 8 option is chosen. `[ASSUMPTION]` Interim, from E
 - **Binds:** FR13, NFR7, `collection`, `rendering` ([Sprint Change Proposal 2026-10-16, client intro and collections](../../sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 - **Prevents:** collection edits changing a case history, unapproved content leaving the tool through a collection, two copies of a case history's text drifting silently
 - **Rule:**
-  1. A collection stores a name, an ordered list of case ids, its text edits (by part and `blockId`, with the original text's hash) and hidden pages (by part, format and `pageKey`). It never stores or writes a revision.
+  1. A collection stores a name, its tags (business lines and industries; owner, 2026-10-28), an ordered list of case ids, its text edits (by part and `blockId`, with the original text's hash), its page order (by part, format and `pageKey`; owner, 2026-10-28) and hidden pages (by part, format and `pageKey`). It never stores or writes a revision.
   2. It always reads `getLiveRevision`; a case with no approved revision is shown as unavailable and left out.
   3. The intro rule is computed: a client with 2+ case histories in the collection gets its approved intro before them, its case histories stay together as a group, and their `intro` pages are left out. Its approved outro comes once after its last case history in the collection, and their `outro` pages are left out; a client with one case history keeps that case history's own outro (SCP 2026-10-26). Amended 2026-10-28 (C38): their Risultati e testimonial pages stay; only their own intro pages and Carosello Chiusura are left out.
-  4. Text edits apply to a copy of the document at render time. Only owner/designers can make them (`edit collection text`, IR-COLL-EDIT). Untouched text follows the live approved version; a changed original under an edit is flagged, never merged silently.
-  5. Layout, media, typography, sections and the About block can't be changed in a collection.
+  4. Text edits apply to a copy of the document at render time. Every user who manages collections can make them (`edit collection text`, IR-COLL-EDIT as amended 2026-10-28), and they export with no separate approval (NFR7 amended). They never write a revision or a client row. Untouched text follows the live approved version; a changed original under an edit is flagged, never merged silently.
+  5. Layout, media, typography, sections and the About block can't be changed in a collection. Account/sales/social users only reorder and delete pages, add or remove case histories and edit texts there; the configurator hides its left panel and the Media tab for them, and the server refuses every other configurator action (owner, 2026-10-28).
   6. Every user who can manage collections sees and changes every collection; `created_by` is shown.
 
 ### AD-25 — A client's file references its cases' pages and never copies them

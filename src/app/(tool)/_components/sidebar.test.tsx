@@ -81,6 +81,25 @@ describe("Sidebar", () => {
     expect(render({ showNewCaseStudy: true, showCaseStudies: true, toReviewCount: 0 })).not.toContain("da approvare");
   });
 
+  it("opens the Da approvare queue from the note, a link of its own beside Case (owner, 2026-10-28)", () => {
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, toReviewCount: 2 });
+    expect(html).toMatch(/<a [^>]*href="\/case-studies\?stato=in_review"[^>]*>2 da approvare<\/a>/);
+    // Case itself still goes to the whole list, and no link sits inside another.
+    const caseLink = html.match(/<a [^>]*title="Case history"[^>]*>.*?<\/a>/s)?.[0] ?? "";
+    expect(caseLink).toContain('href="/case-studies"');
+    expect(caseLink).not.toContain("da approvare");
+    expect(render({ showNewCaseStudy: true, showCaseStudies: true, toReviewCount: 0 })).not.toContain("stato=in_review");
+  });
+
+  it("shows no number after Clienti (owner, 2026-10-28)", () => {
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true, toReviewCount: 2 });
+    const clients = html.match(/<a [^>]*href="\/clients"[^>]*>.*?<\/a>/)?.[0] ?? "";
+    expect(clients).toContain("Clienti");
+    expect(clients).not.toContain("tabular-nums");
+    expect(clients.replace(/<[^>]*>/g, "")).toBe("Clienti");
+    expect(html).toContain("2 da approvare");
+  });
+
   it("marks Home active on /home", () => {
     pathname.current = "/home";
     const html = render({ showNewCaseStudy: true, showCaseStudies: true });

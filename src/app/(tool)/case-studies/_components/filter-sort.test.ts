@@ -5,6 +5,8 @@ import {
   filterRows,
   nextSort,
   normalizeForSearch,
+  parseStatusFilter,
+  REVIEW_QUEUE_SORT,
   sortRows,
   type CaseStudyRow,
 } from "./filter-sort";
@@ -141,5 +143,27 @@ describe("sort", () => {
     const copy = [...same];
     expect(sortRows(same, { key: "name", direction: "desc" }).map((r) => r.id)).toEqual(["1", "2", "3"]);
     expect(same).toEqual(copy);
+  });
+});
+
+describe("parseStatusFilter", () => {
+  it("takes one case status and falls back to every status for anything else", () => {
+    expect(parseStatusFilter("in_review")).toBe("in_review");
+    expect(parseStatusFilter("draft")).toBe("draft");
+    expect(parseStatusFilter("all")).toBe("all");
+    expect(parseStatusFilter("deleted")).toBe("all");
+    expect(parseStatusFilter(["in_review", "draft"])).toBe("all");
+    expect(parseStatusFilter(undefined)).toBe("all");
+  });
+});
+
+describe("REVIEW_QUEUE_SORT", () => {
+  it("puts the longest waiting first; a row without the time falls back to its last update", () => {
+    const rows = [
+      row({ id: "late", status: "in_review", updatedAt: "2026-10-01T10:00:00+00:00", inReviewSince: "2026-10-09T10:00:00+00:00" }),
+      row({ id: "early", status: "in_review", updatedAt: "2026-10-10T10:00:00+00:00", inReviewSince: "2026-10-02T10:00:00+00:00" }),
+      row({ id: "none", status: "in_review", updatedAt: "2026-10-05T10:00:00+00:00", inReviewSince: null }),
+    ];
+    expect(sortRows(rows, REVIEW_QUEUE_SORT).map((r) => r.id)).toEqual(["early", "none", "late"]);
   });
 });

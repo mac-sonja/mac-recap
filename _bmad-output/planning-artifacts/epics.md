@@ -36,7 +36,7 @@ FR7: Owner/designer and account/sales/social users export an approved case study
 FR8: Users sign in with one of three fixed roles (owner/designer, account/sales/social, admin). The admin adds and removes users and assigns their role, and nothing else: no case content, no permission settings, no guardrail settings. The last admin can't drop their own admin role. Every action follows the AD-11 permission matrix. Delivered in Sprint 3. (CAP-11, Stories 6.1–6.2)
 FR11 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-19): Creating a client is a wizard: details (name, sector, description, logo, context, solution and results, all required), then up to 3 files of client material with at least 2 images. Since SCP 2026-10-21 the client is added and edited in a side panel, and the intro and outro open in the configurator from the client's page. The system drafts the client's intro and outro pages from the client's name, sector, description, brief and material, and the owner/designer edits, checks and approves them in the configurator. ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md); [Sprint Change Proposal 2026-10-19](sprint-change-proposal-2026-10-19.md); [Sprint Change Proposal 2026-10-21, client outro](sprint-change-proposal-2026-10-21-client-outro.md))
 FR12 (MVP, before the demo; owner amendment 2026-10-16; amended by SCP 2026-10-21): **Modifica layout** on the client's page opens the client overview: the intro, every case study and the outro of the client in one preview. Editing a case study there edits that case study. **Modifica cliente** edits the client's data in a side panel.
-FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro, approved case studies and approved outro), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them, replacing their own outro pages; otherwise each case study keeps its own intro and outro (SCP 2026-10-26). Text edits (owner/designers only) and hidden pages in a collection apply only to that collection. Amended (SCP 2026-10-28, C28, C38): PDF A4 is dropped, so collections export Presentazione 16:9; a case's Risultati e testimonial pages stay in a client file after the client's closing is added, and only the case's own intro and Carosello Chiusura are left out. Amended (owner, 2026-10-28): client packs and collections come in every format (Presentazione, Carosello, Video) and are built in the configurator.
+FR13 (MVP, before the demo; owner amendment 2026-10-16): Owner/designer and account/sales/social users download a client pack (the client's approved intro, approved case studies and approved outro), or build, save and export named collections of approved case studies (Deck 16:9 and PDF A4). A client with 2 or more case studies in a file gets its intro in front of them; otherwise each case study keeps its own intro. Its approved outro comes once after the last of them, replacing their own outro pages; otherwise each case study keeps its own intro and outro (SCP 2026-10-26). Text edits (any user who manages collections; owner, 2026-10-28) and hidden pages in a collection apply only to that collection, never to the original case studies or client. Amended (SCP 2026-10-28, C28, C38): PDF A4 is dropped; a case's Risultati e testimonial pages stay in a client file after the client's closing is added, and only the case's own intro and Carosello Chiusura are left out. Amended (owner, 2026-10-28): client packs and collections come in every format (Presentazione, Carosello, Video) and are built in the configurator.
 CAP-12 (SPEC; no PRD FR number): every transition, upload, save, block check, claim edit, approval, export and link change is an append-only, timestamped event with its actor, and the generated draft is kept next to the approved version. The tool does not record hands-on time. Built by each epic as it goes, not as an epic of its own.
 
 Out of MVP scope (listed for traceability only): FR9 MAC Productive via MCP (Epic 7), FR10 text-based case studies and whitepapers (Epic 8).
@@ -49,7 +49,7 @@ NFR3 (guardrail): No role can view or change the guardrails, admin included. The
 NFR4: Owner/designer hands-on time from upload to approval is at most 20 minutes, target 15. If the claim check needs more time, NFR2 wins. Waiting for generation doesn't count; generation time has no limit. Counter-metric: time must not fall by shortening the review.
 NFR5: The narrative follows challenge, approach and result, meets the Sprint 2 quality checklist, and covers both the technical and the graphic side.
 NFR6 (guardrail): With no material, nothing is generated. The details form alone is not enough. For a client intro, the same rule: fewer than 2 client images, no intro (SCP 2026-10-19).
-NFR7 (guardrail): Nothing is exported or shared before review and approval by an owner/designer. This includes client intros, client packs and collections; a collection contains only approved content and text written by an owner/designer (OP 15, resolved 2026-10-16).
+NFR7 (guardrail): Nothing is exported or shared before review and approval by an owner/designer. This includes client intros, client packs and collections; a collection contains only approved content and text written in the collection. Amended (owner, 2026-10-28): text written in a collection by any user who manages collections, account/sales/social included, is exported without a separate owner/designer approval; it never changes the original case study or client.
 NFR8 (constraint): Data lives in Supabase and files in a private Supabase Storage bucket, both in the EU. Standalone from MAC Productive.
 NFR9 (constraint): Until login ships in Sprint 3, every deployed environment, shareable links included, is gated (AD-12), because real client material is in use.
 NFR10 (constraint): Epics run one after another, never in parallel. Sprints due Oct 14, 21, 28; demo Oct 30, 2026.
@@ -113,7 +113,7 @@ UX-DR17: Check tab. Not for the demo (owner 2026-10-27; SCP 2026-10-28, C39; Sto
 UX-DR18: Approve confirm dialog with the specified copy (for the demo without "Every claim has been checked against the material", C39); on confirm, status Approvato, toast "Approved. It's now in the library.", navigate to To review if items are waiting, otherwise Case studies.
 UX-DR19: Editing an approved case. Banner "Approved, with {n} live links. Changes go live when you update the approved version."; edits autosave to a working copy; Update approved version enabled when nothing overflows and the material is present (no per-block check; SCP 2026-10-28 C39); confirm "{n} links will show the new version."; Discard changes.
 UX-DR20: Autosave state. "Saved" / "Saving…" / "Not saved. Retrying…"; after 3 failures a banner "Changes aren't saving. Keep this tab open." No Save draft button, no version history.
-UX-DR21: Case study view. Top bar Back, name, badge, Share, Export (+ Edit for owner/designer); format list matching the configurator; pager ("Slide 1 of 12"), zoom − / 100% / +, fit, full screen; Export selected format with progress and browser download; Export all as one ZIP; "Export didn't finish." toast with Try again; format list becomes a dropdown at 1024–1279 px.
+UX-DR21: Case study view. Top bar Back, name, badge, Share, Export (+ Edit for owner/designer); format list matching the configurator; pager ("Slide 1 of 12"), zoom − / 100% / +, fit, full screen; **Export** opens the export dialog (owner, 2026-10-28; the same for a case study, a client pack and a collection): a checkbox per format (Presentazione, Carosello; Video shown disabled as "Dopo la demo" until it has an export), **Esporta** disabled until one is ticked; one format downloads its file, several download as one ZIP, with progress and browser download (replaces Export selected format and Export all); "Export didn't finish." toast with Try again; format list becomes a dropdown at 1024–1279 px.
 UX-DR22: Share dialog. Choose a format (default Presentazione 16:9; SCP 2026-10-28); link auto-copied with "Link copied" toast; plain "who can open it" sentence above the link; link list with format, created by, created on, Copy, Turn off link (with confirm).
 UX-DR23: Shared link page. Full-screen presentation of one format, pager, arrow keys, full screen; no app chrome, no sign-in prompt under the interim mode, no download; fully responsive with swipe on phones; slide text available to screen readers; turned-off or expired copy "This case study is no longer available. Contact the person who shared it."
 UX-DR24: Users (admin). List (name, email, role, added on); Add user (email + one role); role dropdown per row, effective at the user's next page load; Remove user with confirm (their cases and links stay); last-admin guard; no permission matrix, guardrail settings or case access.
@@ -130,7 +130,7 @@ UX-DR35: Clients (owner/designer). Table of clients (ID: the client code, mono; 
 UX-DR36: About the client block. Superseded (SCP 2026-10-28, C33, answer 2): it becomes the Intro's Cliente block, and the client's fields there are editable on the page and write back to the client's record. Was: Shown in every format of a case study: logo, client name, sector (2026-10-22), description, always the client's current info (drafts and approved case studies alike). Read-only in the configurator, with the hint "Modifica i dati nella pagina del cliente. Le modifiche si vedono in tutte le sue case history." Not in the Check tab list. Parts without a value are hidden; the block is hidden when the client has no description, sector or logo (since SCP 2026-10-19 all are required, so this only covers a client whose wizard isn't finished).
 UX-DR37: Client material (was Client images; SCP 2026-10-19). Up to 3 files per client, at least 2 images, in wizard step 2 **Materiale** and in **Dati cliente**: drop zone, file rows in order, **Rimuovi**; in **Dati cliente** also **Sostituisci** and drag or menu to reorder, and an image can't be removed when only 2 remain. Images PNG, JPEG or WebP ≥1600 px on the short side; other files as case material (Story 2.7 types, ≤50 MB). Copy: "Carica fino a 3 file, almeno 2 immagini. Le immagini servono per le pagine di introduzione."; a 4th file: "Massimo 3 file."
 UX-DR38: Client overview, opened by **Modifica layout** (SCP 2026-10-21). Left pane: **Introduzione** (with its status badge), then every case history of the client that has a document, newest first, each with code, name and status badge, then **Chiusura** (the outro; same document and status badge as **Introduzione**). A Bozza case history is listed greyed with "Non ancora generata". Centre: one continuous preview of the selected format, every part in that order, with a divider per part. Clicking a part in the list scrolls to it. Editing a block edits that part (status and save state shown for that part). Right pane: Edit and Check for the selected part. The top bar has the format switch, **Dati cliente** and, for the selected part, its **Approve** or **Update approved version**. Amended (SCP 2026-10-28, C38): the client's file shows the client's intro, each case's pages (without its own intro and Carosello Chiusura; Risultati e testimonial stay) and the client's closing; cases reorder by dragging their row; the client's fields are edited on the page (Story 4.12).
-UX-DR39: Collections. Library cards get a checkbox. With one or more selected, a bar shows "{n} selezionate" and **Crea raccolta**, which asks for a name and opens the collection configurator. Left pane: the parts in order, a client's case histories grouped under its computed intro and followed by its outro (both shown locked; outro per SCP 2026-10-21). Reorder groups and case histories within a group by drag handle or by the menu "Sposta su / giù". Centre: continuous preview per format. Right pane: **Testo** (edit the selected block, owner/designers only, IR-COLL-EDIT), **Pagine** (hide or show the selected page). Edited blocks show "Modificato in questa raccolta". Hidden pages show as a collapsed strip with **Mostra**. Top bar: name (editable), save state, **Esporta** and **Esporta tutto** (Presentazione 16:9; PDF A4 dropped per SCP 2026-10-28). No layout, media or typography controls. A sidebar item **Raccolte** lists collections (name, parts, updated, created by) with open, rename and delete (with confirm). Amended (owner, 2026-10-28, SCP 2026-10-28): a pack or collection is built in the configurator itself, in every format; the "no layout, media or typography controls" rule is replaced by a list of features hidden or locked for account/sales/social users, still to be written.
+UX-DR39: Collections. Library cards get a checkbox. With one or more selected, a bar shows "{n} selezionate" and **Crea raccolta**, which asks for a name and opens the collection configurator. Left pane: the parts in order, a client's case histories grouped under its computed intro and followed by its outro (both shown locked; outro per SCP 2026-10-21). Reorder groups and case histories within a group by drag handle or by the menu "Sposta su / giù". Centre: continuous preview per format. Right pane: **Testo** (edit the selected block, any user who manages collections, IR-COLL-EDIT as amended 2026-10-28), **Pagine** (hide or show the selected page). Edited blocks show "Modificato in questa raccolta". Hidden pages show as a collapsed strip with **Mostra**. Top bar: name (editable), save state, **Esporta** and **Esporta tutto** (every format: Presentazione PDF, Carosello PNGs, Video after the demo; PDF A4 dropped per SCP 2026-10-28). No layout, media or typography controls. A sidebar item **Raccolte** lists collections (name, parts, updated, created by) with open, rename and delete (with confirm). Amended (owner, 2026-10-28, SCP 2026-10-28): a pack or collection is built in the configurator itself, in every format; the "no layout, media or typography controls" rule is replaced by a list of features hidden or locked for account/sales/social users, still to be written.
 UX-DR40: Combined download copy. The client pack and collection exports show progress and then the browser download, like UX-DR21. When a client's intro isn't approved: "L'introduzione di {client} non è ancora approvata: le sue case history usano la propria introduzione."
 
 ### Interim Rules Register
@@ -157,7 +157,7 @@ These are the rules the stories are built against. None of them is a decision; e
 | IR-A5 | A5 concurrent editing | UX | The server rejects a stale write with `STALE_REVISION` / `STALE_HEAD`; the client doesn't retry and reloads the revision. No dedicated "someone else changed this" state is designed. | AD-17 |
 | IR-C3 | C3 autosave and toast not in any FR | PRD owner | Built as UX describes: autosave with save states, and an in-app polled toast when a draft is ready. No email or Slack. | EXPERIENCE, AD Deferred |
 | IR-C4 | C4 template maintenance | PRD owner | `manage templates` exists in the policy matrix, but the Templates surface and the `template_variant_state` table are **not built** unless the PRD owner adopts the UX scope. | AD-15, AD-11 |
-| IR-COLL-EDIT | OP 15 who may edit collection text | PRD owner | **Resolved 2026-10-16** (owner, SCP 2026-10-16 client intro and collections): only owner/designers can edit text in a collection. Account/sales/social can reorder, hide pages and export. Collection exports contain only text from approved revisions or written by an owner/designer. Planned upgrade if needed: an owner/designer **Approva modifiche** for edits made by others. Assumption: "PM" in the owner's request means an owner/designer in the tool. | NFR7, AD-24 |
+| IR-COLL-EDIT | OP 15 who may edit collection text | PRD owner | **Resolved 2026-10-16** (owner, SCP 2026-10-16 client intro and collections): only owner/designers can edit text in a collection. Account/sales/social can reorder, hide pages and export. Collection exports contain only text from approved revisions or written by an owner/designer. Planned upgrade if needed: an owner/designer **Approva modifiche** for edits made by others. Assumption: "PM" in the owner's request means an owner/designer in the tool. **Amended 2026-10-28** (owner): account/sales/social can also edit text in a collection and export it straight away, with no **Approva modifiche** step; edits apply only to the collection and never change the original case study or client (NFR7 amended). | NFR7, AD-24 |
 | IR-PERM | Turn off any link | PRD owner (assumption) | Anyone who can share can turn off any link. | AD-11 `[ASSUMPTION]`, SPEC Assumptions |
 
 ### FR Coverage Map
@@ -2281,9 +2281,13 @@ Note (2026-10-19, owner): a client logo may be an SVG ([spec](../implementation-
 **Then** an `export` table exists, unique and immutable on `content_hash` (a hash of the ordered parts, their revision ids, each part's client info, any collection edits and hidden pages, and the format; AD-9, AD-22), with storage keys `exports/{contentHash}/{format}.{ext}` built only by `rendering` adapters, and RLS denying `anon` and `authenticated` (amendment, SCP 2026-10-16 client intro and collections)
 **And** the export job's payload is `{ parts: [{ subject, revisionId }], format }`; the MVP always sends one part
 
-**Given** an approved case in the view with a format selected
+**Given** an approved case in the view
 **When** I press **Export** (or **Export** in an Approvato row's overflow menu)
-**Then** the server checks `case-study.isRevisionApproved` on the live revision and that the format is in it, then enqueues an `export` job; the button shows progress and I can keep browsing
+**Then** the export dialog (owner, 2026-10-28; the same for a case study, a client pack and a collection): a checkbox per format (Presentazione, Carosello; Video shown disabled as "Dopo la demo" until it has an export), **Esporta** disabled until one is ticked; one format downloads its file, several download as one ZIP; the format selected in the view is ticked by default
+
+**Given** the export dialog with formats ticked
+**When** I press **Esporta**
+**Then** for each ticked format the server checks `case-study.isRevisionApproved` on the live revision and that the format is in it, then enqueues an `export` job; the button shows progress and I can keep browsing
 **And** for a case with no approved revision, or a format not in the revision, it fails with `NOT_APPROVED` or `FORMAT_NOT_IN_REVISION` and nothing is enqueued
 
 **Given** the worker runs the export
@@ -2320,16 +2324,18 @@ IR-OP1 resolved (SCP 2026-10-28, C28). Amended per SCP 2026-10-28: Export all ho
 
 **Acceptance Criteria:**
 
-**Given** an approved case in the view
-**When** I press **Export all**
-**Then** the server ensures an export of every exportable format of the live revision (Story 5.3: Presentazione and Carosello for the demo; Video after it), then builds one ZIP stored as export `(revision_id, 'all')` from exactly those files, and the browser downloads it
+Amended (owner, 2026-10-28): there is no **Export all** button; the export dialog (Story 5.3) handles several formats.
 
-**Given** an `all` export already exists for the revision
-**When** I press **Export all** again
+**Given** the export dialog with two or more formats ticked
+**When** I press **Esporta**
+**Then** the server ensures an export of each ticked format of the live revision (Story 5.3: Presentazione and Carosello for the demo; Video after it), then builds one ZIP stored as an export keyed by the revision and the ticked formats from exactly those files, and the browser downloads it
+
+**Given** a ZIP for the same revision and the same ticked formats already exists
+**When** I export them again
 **Then** the existing ZIP is returned
 
 **Given** one format's export fails
-**When** Export all runs
+**When** a multi-format export runs
 **Then** no partial ZIP is stored, and the "Export didn't finish." toast with **Try again** appears
 
 ### Story 5.5: Create a shareable link
@@ -2479,8 +2485,9 @@ Amended per SCP 2026-10-28 (C28, C38): PDF A4 is dropped; a case's Risultati e t
 **Then** it shows **Clienti**, listing only clients with at least one approved case history, read-only (no add, no edit, no overview), with **Scarica** per row and on the client page
 
 **Given** **Scarica** on a client
-**When** I pick a format (Presentazione 16:9; it was Deck 16:9 or PDF A4, owner decision 2026-10-16, and PDF A4 is dropped by C28) and confirm
-**Then** the server builds the parts: the client's approved intro (if any), then its approved case histories newest first, using the intro rule (2+ case histories → the client intro replaces their own intro pages; 1 → its own intro), then, with 2 or more case histories, the client's approved closing once after the last of them, with each case's Risultati e testimonial pages kept (C38); with one, that case history's own pages as they are, and enqueues one `export` job
+**When** I press it
+**Then** the same export dialog as a case study opens (Story 5.3; owner, 2026-10-28), and I tick the formats I need (Presentazione, Carosello; Video after the demo; PDF A4 dropped by C28) and press **Esporta**
+**And** for each ticked format the server builds the parts: the client's approved intro (if any), then its approved case histories newest first, using the intro rule (2+ case histories → the client intro replaces their own intro pages; 1 → its own intro), then, with 2 or more case histories, the client's approved closing once after the last of them, with each case's Risultati e testimonial pages kept (C38); with one, that case history's own pages as they are, and enqueues one `export` job; several formats download as one ZIP
 **And** if the intro and outro aren't approved, every case history keeps its own intro and outro, and the dialog says so (UX-DR40)
 **And** a client with no approved case history has no **Scarica**, and a direct call fails with `NOT_APPROVED`
 
@@ -2500,39 +2507,48 @@ So that I can prepare a custom case for one pitch and reuse it later.
 
 Covers: FR13, AR26 (AD-24), AR11 (`manage collections`), NFR7, UX-DR39, UX-DR40 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
 Order: MVP, Sprint 3: after 5.9 (owner amendment 2026-10-16)
-Amended per SCP 2026-10-28 (C28, C38): PDF A4 is dropped, so collections export Presentazione 16:9; a case's Risultati e testimonial pages stay after the client's closing is added.
-Amended per SCP 2026-10-28 (owner, 2026-10-28), replacing the 2026-10-16 decision that Carosello stays single-case: packs and collections come in every format (Presentazione, Carosello, Video). Building one opens the configurator itself, not a reduced collection editor. Owner/designers and account/sales/social users can both create them, and all of them sit in one shared space that every such user sees. Some configurator features are hidden or locked for account/sales/social users; which ones is still to be listed (until then IR-COLL-EDIT applies).
+Amended per SCP 2026-10-28 (C28, C38): PDF A4 is dropped; a case's Risultati e testimonial pages stay after the client's closing is added.
+Amended per SCP 2026-10-28 (owner, 2026-10-28), replacing the 2026-10-16 decision that Carosello stays single-case: packs and collections come in every format (Presentazione, Carosello, Video). Building one opens the configurator itself, not a reduced collection editor. Owner/designers and account/sales/social users can both create them, and all of them sit in one shared space that every such user sees. Some configurator features are hidden for account/sales/social users. In a collection, account/sales/social users only reorder pages, delete pages from the collection, add or remove case histories and edit texts (owner, 2026-10-28): the left panel (block and element settings, Layout, Pagine di default, Elementi, Sfondo, Elimina pagina) is not shown at all, the right panel shows **Pagine** for reordering only and no **Media** tab, and the canvas preview, Anteprima and editing a text on the canvas (double click) stay.
 
 **Acceptance Criteria:**
 
 **Given** the forward migration for this story
 **When** it runs
-**Then** `collection` and `collection_item` exist, owned by the `collection` module, with RLS denying `anon` and `authenticated`
+**Then** `collection`, `collection_item` and `collection_tag` (business lines and industries; owner, 2026-10-28) exist, owned by the `collection` module, with RLS denying `anon` and `authenticated`
 
 **Given** the library with cards selected
-**When** I press **Crea raccolta** and enter a name (1–120 characters)
-**Then** a collection is saved with those case histories in selection order, and the collection configurator opens
+**When** I press **Crea raccolta**, enter a name (1–120 characters) and pick its tags: one or more business lines and one or more industries, from the same lists as the case wizard and the client panel (owner, 2026-10-28)
+**Then** a collection is saved with those case histories in selection order and those tags, and the collection configurator opens
+**And** the tags can be changed later from the collection's top bar
 
 **Given** the collection configurator
 **When** it loads
-**Then** the left pane lists the parts in order: for each client with 2 or more case histories in the collection, its approved intro comes before the first of them, shown locked, its approved closing comes once after the last of them, shown locked, and their own Risultati e testimonial pages stay (SCP 2026-10-21; C38 replaces the SCP 2026-10-26 rule that removed them), and that client's case histories are kept together as a group, and I reorder groups and case histories within a group (owner decision 2026-10-16); the centre shows the continuous preview per format through `composeParts`
+**Then** the **Pagine** panel (C40, right panel) lists the parts in order: for each client with 2 or more case histories in the collection, its approved intro comes before the first of them, shown locked, its approved closing comes once after the last of them, shown locked, and their own Risultati e testimonial pages stay (SCP 2026-10-21; C38 replaces the SCP 2026-10-26 rule that removed them), and that client's case histories are kept together as a group, and I reorder groups and case histories within a group (owner decision 2026-10-16); the centre shows the continuous preview per format through `composeParts`
 
 **Given** I move a case history (drag handle, or the menu "Sposta su / giù")
 **When** the move is saved
 **Then** the order and the computed intros update, with compare-and-set on `collection.version`
 
-**Given** I add or remove case histories (from the left pane's **Aggiungi** picker, approved only)
+**Given** **Aggiungi casi** in the **Pagine** panel (owner, 2026-10-28; any user who manages collections)
+**When** I press it
+**Then** a dialog lists approved case histories not yet in the collection, suggested first by the collection's tags (matching business line or client industry), with a search bar using the library's search rules (Story 5.1)
+**And** I select one or more and press **Aggiungi**; they join the collection, grouped with their client
+**And** removing a case history is in its menu in **Pagine** (**Rimuovi dalla raccolta**), with confirm
+
+**Given** I add or remove case histories
 **When** a client crosses from 1 to 2 case histories, or back
 **Then** its intro appears or disappears, and that client's case histories switch between their own intro pages and the client intro
 
 **Given** **Raccolte** in the sidebar
 **When** I open it
-**Then** I see every collection (name, number of case histories, updated, created by) and can open, rename or delete one (with confirm; delete is soft)
+**Then** I see every collection (name, tags, number of case histories, updated, created by), filterable by business line and industry, and can open, rename or delete one (with confirm; delete is soft)
 **And** every user who can manage collections sees every collection and can change it, and "created by" is shown (owner decision 2026-10-16)
 
-**Given** **Esporta** or **Esporta tutto** in a collection
+**Given** **Esporta** in a collection (one button; **Esporta tutto** is gone; owner, 2026-10-28)
 **When** I press it
-**Then** it exports through the Story 5.9 pipeline as a Presentazione 16:9 PDF (PDF A4 dropped by C28; it was Deck 16:9 PDF and PDF A4); Carosello stays a single-case-history format (owner decision 2026-10-16), and Video has no export before the demo (answer 1)
+**Then** the same export dialog as a case study and a client pack opens (Story 5.3), and I tick the formats I need and press **Esporta**
+**And** it exports each ticked format through the Story 5.9 pipeline: Presentazione as a PDF, Carosello as a ZIP of PNGs (owner, 2026-10-28, replacing the 2026-10-16 decision that Carosello stays single-case), and Video as MP4 or WebM after the demo (answer 1); PDF A4 is dropped by C28
+**And** with more than one format ticked, the files download together as one ZIP
 
 **Given** a case history in a collection
 **When** its approved version is updated, or the client is edited
@@ -2550,9 +2566,9 @@ I want to change wording and drop pages only in this collection,
 So that the custom case fits the pitch without changing the original case histories.
 
 Covers: FR13, AR26, NFR7 (IR-COLL-EDIT), UX-DR39 ([Sprint Change Proposal 2026-10-16, client intro and collections](sprint-change-proposal-2026-10-16-client-intro-and-collections.md))
-Rule: IR-COLL-EDIT, decided by the owner on 2026-10-16 (OP 15): only owner/designers edit text in a collection. The planned upgrade, if sales people need to change wording, is an owner/designer **Approva modifiche** before export.
+Rule: IR-COLL-EDIT, decided by the owner on 2026-10-16 (OP 15), amended by the owner on 2026-10-28: every user who manages collections, account/sales/social included, edits text in a collection and exports it with no **Approva modifiche** step. Edits stay in the collection and never change the original case study or client (NFR7 amended).
 Order: MVP, Sprint 3, last in Epic 5: after 5.10 (owner amendment 2026-10-16)
-Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configurator (Story 5.10). Edits still apply only to the collection. Which tools account/sales/social users lose is still to be listed.
+Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configurator (Story 5.10). Edits still apply only to the collection. In a collection, account/sales/social users only reorder pages, delete pages from the collection, add or remove case histories and edit texts (owner, 2026-10-28): the left panel (block and element settings, Layout, Pagine di default, Elementi, Sfondo, Elimina pagina) is not shown at all, the right panel shows **Pagine** for reordering only and no **Media** tab, and the canvas preview, Anteprima and editing a text on the canvas (double click) stay.
 
 **Acceptance Criteria:**
 
@@ -2560,18 +2576,19 @@ Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configura
 **When** it runs
 **Then** `collection_text_edit` and `collection_hidden_page` exist, owned by the `collection` module, with RLS on
 
-**Given** an owner/designer in a collection
-**When** they edit a text block in place
-**Then** a `collection_text_edit` row stores the new text with the hash of the original text, the block shows "Modificato in questa raccolta", and the original case history's revisions are unchanged (a test proves no revision is written)
+**Given** any user who can manage collections (owner/designer or account/sales/social; owner, 2026-10-28)
+**When** they edit a text block in place, on a case history's page or on a client intro or outro page
+**Then** a `collection_text_edit` row stores the new text with the hash of the original text, the block shows "Modificato in questa raccolta", and the original case history's revisions and the client's info and intro are unchanged (a test proves no revision and no client row is written)
 **And** **Ripristina testo originale** removes the edit
 
-**Given** an account/sales/social user in a collection
-**When** they select a text block
-**Then** it isn't editable, and a hint says "Solo i designer possono modificare i testi. Puoi nascondere le pagine o riordinare." (IR-COLL-EDIT)
+**Given** an export of a collection with text edits by any role
+**When** it runs
+**Then** it needs no owner/designer approval of those edits (IR-COLL-EDIT as amended 2026-10-28)
 
-**Given** any user who can manage collections
-**When** they choose **Nascondi pagina** on a page
-**Then** a `collection_hidden_page` row (part, format, `pageKey`) is stored, the page leaves the preview and the exports for that format, and **Mostra** brings it back
+**Given** any user who can manage collections (owner, 2026-10-28)
+**When** they choose **Elimina dalla raccolta** on a page in **Pagine**
+**Then** a `collection_hidden_page` row (part, format, `pageKey`) is stored, the page leaves the preview and the exports for that format, and the original case history and client are unchanged (a test proves no revision and no client row is written)
+**And** a collapsed strip with **Ripristina** brings it back
 **And** a client intro or outro page can be hidden like any other
 
 **Given** the original block's text changed after it was edited in the collection
@@ -2582,8 +2599,16 @@ Amended per SCP 2026-10-28 (owner, 2026-10-28): editing happens in the configura
 **When** I look for layout, media, typography, About block or section controls
 **Then** none exists; the About the client block and section structure can't be edited or hidden as text
 
+**Given** an account/sales/social user in a collection
+**When** the configurator opens
+**Then** the left panel isn't shown at all and can't be reopened from the canvas edge, the right panel shows **Pagine** with no **Media** tab, and the canvas preview and Anteprima work as for an owner/designer
+**And** they edit a text by double-clicking it on the canvas
+**And** they can't delete a block or an element from a page: no delete in any menu, and Delete or Backspace on a selected block or element does nothing (owner, 2026-10-28)
+**And** in **Pagine** they reorder pages by drag or "Sposta su / giù", and the new order is stored in the collection (`collection_page_order`), never in the case history; they delete pages from the collection (above) and add or remove case histories (Story 5.10), but can't add new pages
+**And** a direct call to any other configurator action fails with `FORBIDDEN`
+
 **Given** an export
-**When** the collection has text edits or hidden pages
+**When** the collection has text edits, a page order or hidden pages
 **Then** the export applies them to a copy of the documents, and its `content_hash` includes them
 
 ## Epic 6: Sign in, users and fixed permissions
@@ -2754,7 +2779,7 @@ How: extend `test/permissions.test.ts` (built in Story 6.4), which runs every se
 **Given** signed-in test users of each role
 **When** the permission suite runs
 **Then** every new matrix cell (section 4.3) is checked end to end: allowed actions succeed, denied ones return 403
-**And** it proves account/sales/social can't edit collection text (IR-COLL-EDIT), can't edit clients or intros, and see only clients with an approved case history
+**And** it proves account/sales/social can edit collection text (IR-COLL-EDIT as amended 2026-10-28) without writing any revision or client row, can't edit clients or intros, and see only clients with an approved case history
 
 **Given** the client intro, client pack and collection actions
 **When** they are added to `test/permissions.test.ts`

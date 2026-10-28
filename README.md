@@ -70,12 +70,25 @@ The HTTP basic-auth gate is now opt-in, in every `NODE_ENV`:
 | `npm run build` | Production build: `next build` (`.next/standalone`), then `build:dist` |
 | `npm run build:dist` | esbuild bundles `dist/worker.js` and `dist/preflight.js` (Node 24, CJS, deps inlined except the native `sharp`, resolved from `node_modules`) |
 | `npm run dev:renditions-backfill` | Dev only: enqueues `rendition` jobs for every live case image/video missing a current rendition (refuses the production project; runs on mac-recap-dev or local, reads `.env.local`) |
+| `npm run dev:test-draft -- <caseId>` | Dev only, no AI: builds a test draft of a Bozza case with material (each format's default pages, texts marked "[bozza di prova]"), writes it as a new working revision and moves the case to Da approvare (refuses the production project; runs on mac-recap-dev or local, reads `.env.local`) |
 | `npm run lint` | ESLint, including the module-boundary rules |
 | `npm run typecheck` | Generates Next route types, then `tsc --noEmit` |
 | `npm test` | Vitest unit tests and lint-boundary fixtures (no Docker; skips `test/db/**`) |
 | `npm run test:db` | DB tests in `test/db/**` against the running local stack (see Database tests) |
 | `npm run db:start` | `supabase start` (needs Docker) |
 | `npm run db:types` | `supabase gen types` from the local DB into `src/shared/db.types.ts` |
+
+### Test draft (dev only)
+
+Until the AI generator (Stories 3.6, 3.7) exists, `npm run dev:test-draft -- <caseId>`
+gives a case a draft to open in the configurator. The case must be in Bozza and have
+material. The command builds each format's default pages from the case (images oldest
+first, Risultati and testimonial from the details form; client and case values stay
+bindings) with test texts marked "[bozza di prova]" that cite the form answers or the
+case's first file. It writes them as a new working revision as the `system` actor and
+moves the case to Da approvare; if the write fails the case goes back to Bozza. It
+calls no LLM and refuses anything but mac-recap-dev or a local stack. Exit code 0 on
+success, 1 otherwise (the error code is logged).
 
 CI (`.github/workflows/ci.yml`) has three jobs: `check` runs `npm ci`, lint, typecheck,
 tests and the build on Node 24 (no Docker); `image` builds the Docker image and runs

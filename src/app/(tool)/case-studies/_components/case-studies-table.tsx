@@ -8,12 +8,13 @@ import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-style
 import { CARD, SEARCH_FIELD, SEARCH_ICON, TH } from "@/app/_components/field-styles";
 import { DownloadButton } from "@/app/_components/download-button";
 import { StatusBadge } from "@/app/_components/status-badge";
-import { wizardHref } from "@/app/_lib/routes";
+import { caseHref } from "@/app/_lib/routes";
 import { CASE_STATUSES } from "@/shared/case-status";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import {
   DEFAULT_SORT,
+  REVIEW_QUEUE_SORT,
   businessLineLabel,
   filterRows,
   nextSort,
@@ -29,6 +30,8 @@ export interface CaseStudiesTableProps {
   rows: CaseStudyRow[];
   /** Policy decision (`create case`): whether the empty state offers "Nuova case history". */
   canCreate: boolean;
+  /** Policy decision (`edit`): whether Da approvare and Approvato rows open the configurator. */
+  canEdit?: boolean;
   /** The empty-state line; defaults to the Case history page's. */
   emptyMessage?: string;
   /** Where the empty state's call to action goes; defaults to the wizard's step 0. */
@@ -42,6 +45,13 @@ export interface CaseStudiesTableProps {
   showCreate?: boolean;
   /** The search text to start with (the sidebar search's `?q=`). */
   initialQuery?: string;
+  /**
+   * The status filter to start with (the Case page's `?stato=`). Da approvare starts sorted by
+   * Updated, oldest first: the To review queue (Story 4.1).
+   */
+  initialStatus?: StatusFilter;
+  /** Keeps `?stato=` in the address in step with the filter (the Case page only), so reload and back keep it. */
+  statusInUrl?: boolean;
 }
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -149,19 +159,32 @@ function isTextField(el: Element | null): boolean {
 export function CaseStudiesTable({
   rows,
   canCreate,
+  canEdit = false,
   emptyMessage = it.caseStudies.empty,
   newHref = "/case-studies/new",
   emptyAction = it.caseStudies.emptyAction,
   showCreate = false,
   initialQuery = "",
+  initialStatus = "all",
+  statusInUrl = false,
 }: CaseStudiesTableProps) {
   const router = useRouter();
   const searchId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
   const [input, setInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
-  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
-  const [status, setStatus] = useState<StatusFilter>("all");
+  const [sort, setSort] = useState<SortState>(initialStatus === "in_review" ? REVIEW_QUEUE_SORT : DEFAULT_SORT);
+  const [status, setStatusState] = useState<StatusFilter>(initialStatus);
+
+  function setStatus(next: StatusFilter) {
+    setStatusState(next);
+    if (!statusInUrl) return;
+    // replaceState, not the router: the list is already here, so no server round trip.
+    const url = new URL(window.location.href);
+    if (next === "all") url.searchParams.delete("stato");
+    else url.searchParams.set("stato", next);
+    window.history.replaceState(window.history.state, "", url);
+  }
 
   useEffect(() => {
     if (input === query) return;
@@ -308,8 +331,7 @@ export function CaseStudiesTable({
             </thead>
             <tbody>
               {visible.map((row) => {
-                // A Bozza reopens the wizard with no step: it picks the first incomplete one.
-                const href = row.status === "draft" ? wizardHref(row.id) : null;
+                const href = caseHref(row.id, row.status, canEdit);
                 return (
                   <tr
                     key={row.id}

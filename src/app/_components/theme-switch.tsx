@@ -20,12 +20,13 @@ export function applyTheme(choice: ThemeChoice) {
 }
 
 /**
- * The appearance switch at the bottom of the sidebar: Automatico (follows the
- * system), Chiaro, Scuro, as a radiogroup of icon segments. The switch is instant:
- * no animation on something people toggle on purpose and want to see right away.
- * Vertical when the sidebar is collapsed to icons (below 1280 px).
+ * The appearance switch at the bottom of the sidebar and of the configurator's left
+ * panel: Automatico (follows the system), Chiaro, Scuro, as a radiogroup of icon
+ * segments. The switch is instant: no animation on something people toggle on purpose
+ * and want to see right away. In the sidebar (`layout="sidebar"`) it is vertical while
+ * the sidebar is collapsed to icons (below 1280 px); `row` keeps it horizontal.
  */
-export function ThemeSwitch({ initial }: { initial: ThemeChoice }) {
+export function ThemeSwitch({ initial, layout = "sidebar" }: { initial: ThemeChoice; layout?: "sidebar" | "row" }) {
   const [choice, setChoice] = useState<ThemeChoice>(initial);
 
   function pick(next: ThemeChoice) {
@@ -37,7 +38,10 @@ export function ThemeSwitch({ initial }: { initial: ThemeChoice }) {
     <div
       role="radiogroup"
       aria-label={it.shell.theme.label}
-      className="flex w-fit flex-col gap-0.5 self-center rounded-full bg-surface-control p-[3px] xl:flex-row xl:self-start"
+      className={cn(
+        "flex w-fit gap-0.5 rounded-full bg-surface-control p-[3px]",
+        layout === "sidebar" ? "flex-col self-center xl:flex-row xl:self-start" : "flex-row",
+      )}
     >
       {THEME_CHOICES.map((value) => {
         const Icon = ICON[value];

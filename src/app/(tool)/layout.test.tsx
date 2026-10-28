@@ -82,17 +82,18 @@ describe("ToolLayout", () => {
     expect(account).not.toContain('href="/organization"');
   });
 
-  it("shows the cases to review after Case and the client count after Clienti", async () => {
+  it("shows the cases to review after Case and no count after Clienti (owner, 2026-10-28)", async () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     const html = await renderLayout();
     expect(html).toContain("2 da approvare");
-    expect(html).toMatch(/>3<\/span>/);
+    expect(html).not.toMatch(/>3<\/span>/);
+    expect(html.match(/<a [^>]*href="\/clients"[^>]*>.*?<\/a>/)?.[0]).not.toMatch(/tabular-nums/);
+    expect(listClients).not.toHaveBeenCalled();
   });
 
   it("keeps the shell when the counts can't be read", async () => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     list.mockResolvedValue(err({ code: "CASE_STUDY_READ_FAILED", message: "m" }));
-    listClients.mockResolvedValue(err({ code: "CLIENT_READ_FAILED", message: "m" }));
     const html = await renderLayout();
     expect(html).toContain("<nav");
     expect(html).not.toContain("da approvare");
