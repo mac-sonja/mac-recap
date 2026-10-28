@@ -208,6 +208,9 @@
 - source_spec: none
   summary: Story 3.5's `composeParts` (client file order: client intro, each case's pages without its own intro and Carosello Chiusura, Risultati e testimonial kept, then the client's closing; case pages read from the case's revision, never copied).
   evidence: Split from Story 3.5 by the owner (2026-10-28): the renderers ship first; composeParts is an independent pure function, built right after.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-5-compose-parts-client-file.md`
+  summary: Decide in Story 4.13 how `composeParts` recognises a case's Carosello Chiusura if pages can be duplicated or re-keyed; it now matches `pageKey === "closing"`.
+  evidence: Review (maybe-false, medium if true): a second or renamed Chiusura would stay in the client file; today default pages restore only lost pages and keep their key, so it can't happen yet.
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-2-open-a-draft-in-the-configurator.md`
   summary: Resolved by Story 4.2b (`spec-4-2b-anteprima-instagram-overlay-and-text-animation.md`; texts in Anteprima become editable with Story 4.3, owner 2026-10-28). Was: Story 4.2b: Anteprima in the configurator (eye ↔ "Torna all’editor", Esc back, Presentazione stacked, Carosello and Video as one slideshow with ‹ ›, dots, "{i} di {n} · {name}" and arrow keys, texts editable but nothing selectable), the Video Instagram overlay (Nessuna / Reel / Storia, `mac.creativetech`, counts blanked) and the editor's "Animazione testi" switch.
   evidence: Split from Story 4.2 by the owner (2026-10-28) to keep each PR reviewable; built right after 4.2a on the same frame.
