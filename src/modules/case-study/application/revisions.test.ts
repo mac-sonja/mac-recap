@@ -4,7 +4,7 @@ import type { CaseStudy } from "@/modules/case-study/domain/case-study";
 import type { Revision } from "@/modules/case-study/domain/revision";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import type { RevisionRepository } from "@/modules/case-study/ports/revision-repository";
-import { caseHistoryV0, caseHistoryV1 } from "@/modules/generation";
+import { caseHistoryV0, caseHistoryV1, caseHistoryV2 } from "@/modules/generation";
 import { FORMAT_IDS } from "@/modules/rendering";
 import { err, ok } from "@/shared/result";
 import { makeCreateWorkingRevision, makeGetEditableRevision, makeGetLiveRevision } from "./revisions";
@@ -76,7 +76,7 @@ function fakes(found: CaseStudy | null, rows: Revision[] = []) {
 }
 
 describe("createWorkingRevision", () => {
-  const input = () => ({ caseId: CASE_ID, doc: caseHistoryV1(FORMAT_IDS), expectedHeadVersion: 0 });
+  const input = () => ({ caseId: CASE_ID, doc: caseHistoryV2(FORMAT_IDS), expectedHeadVersion: 0 });
 
   it("validates the document, then writes it once with the actor and defaults", async () => {
     const deps = fakes(caseStudy());
@@ -85,13 +85,13 @@ describe("createWorkingRevision", () => {
     expect(deps.revisions.createWorking).toHaveBeenCalledTimes(1);
     expect(deps.revisions.createWorking).toHaveBeenCalledWith({
       caseId: CASE_ID,
-      doc: caseHistoryV1(FORMAT_IDS),
+      doc: caseHistoryV2(FORMAT_IDS),
       manifest: {},
       meta: { model: null, fellBack: false, promptVersion: null },
       expectedHeadVersion: 0,
       actorId: actor.id,
     });
-    if (result.ok) expect(result.value.doc).toEqual(caseHistoryV1(FORMAT_IDS));
+    if (result.ok) expect(result.value.doc).toEqual(caseHistoryV2(FORMAT_IDS));
   });
 
   it("passes manifest and meta through", async () => {
@@ -102,19 +102,21 @@ describe("createWorkingRevision", () => {
   });
 
   it.each([
-    ["formats missing pdf_a4", () => {
-      const doc = caseHistoryV1(FORMAT_IDS);
-      delete doc.formats.pdf_a4;
+    ["formats missing video_9_16", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      delete doc.formats.video_9_16;
       return doc;
     }, "FORMAT_NOT_IN_REVISION"],
     ["formats with story_9_16", () => {
-      const doc = caseHistoryV1(FORMAT_IDS);
-      doc.formats.story_9_16 = doc.formats.pdf_a4;
+      const doc = caseHistoryV2(FORMAT_IDS);
+      doc.formats.story_9_16 = doc.formats.video_9_16;
       return doc;
     }, "FORMAT_NOT_IN_REVISION"],
-    ["a client value", () => ({ ...caseHistoryV1(FORMAT_IDS), about: { name: "Acme" } }), "DOCUMENT_INVALID"],
-    ["a future version", () => ({ ...caseHistoryV1(FORMAT_IDS), schemaVersion: 99 }), "DOCUMENT_SCHEMA_UNSUPPORTED"],
-    ["a v0 document", () => caseHistoryV0(FORMAT_IDS), "DOCUMENT_SCHEMA_UNSUPPORTED"],
+    ["a client value", () => ({ ...caseHistoryV2(FORMAT_IDS), about: { name: "Acme" } }), "DOCUMENT_INVALID"],
+    ["a future version", () => ({ ...caseHistoryV2(FORMAT_IDS), schemaVersion: 99 }), "DOCUMENT_SCHEMA_UNSUPPORTED"],
+    ["a v1 document", () => caseHistoryV1(), "DOCUMENT_SCHEMA_UNSUPPORTED"],
+    ["a v1 document keyed by the registry", () => caseHistoryV1(FORMAT_IDS), "DOCUMENT_SCHEMA_UNSUPPORTED"],
+    ["a v0 document", () => caseHistoryV0(), "DOCUMENT_SCHEMA_UNSUPPORTED"],
   ])("refuses %s before any write", async (_name, doc, code) => {
     const deps = fakes(caseStudy());
     const result = await makeCreateWorkingRevision(deps)(actor, { ...input(), doc: doc() });
@@ -153,13 +155,21 @@ describe("createWorkingRevision", () => {
 });
 
 describe("getLiveRevision and getEditableRevision", () => {
-  const v1 = caseHistoryV1(FORMAT_IDS);
-  const v0 = caseHistoryV0(FORMAT_IDS);
+  const v2 = caseHistoryV2(FORMAT_IDS);
+  const v1 = caseHistoryV1();
+  const v0 = caseHistoryV0();
+  /** What a stored v1 or v0 case history reads as, until Story 3.4 gives the templates default pages. */
+  const upgradedV2 = {
+    schemaVersion: 2,
+    kind: "case_history",
+    template: "mac-case@1",
+    formats: { presentazione_16_9: { pages: [] }, carosello_1_1: { pages: [] }, video_9_16: { pages: [] } },
+  };
 
   it("live is the approved revision, editable is the head", async () => {
     const deps = fakes(caseStudy({ headRevisionId: HEAD_ID, approvedRevisionId: APPROVED_ID, headVersion: 2 }), [
-      stored(HEAD_ID, v1),
-      stored(APPROVED_ID, v1, { status: "approved" }),
+      stored(HEAD_ID, v2),
+      stored(APPROVED_ID, v2, { status: "approved" }),
     ]);
     const live = await makeGetLiveRevision(deps)({ kind: "case", id: CASE_ID });
     const editable = await makeGetEditableRevision(deps)({ kind: "case", id: CASE_ID });
@@ -168,7 +178,7 @@ describe("getLiveRevision and getEditableRevision", () => {
   });
 
   it("live is null with only a working head; editable is that head", async () => {
-    const deps = fakes(caseStudy({ headRevisionId: HEAD_ID, headVersion: 1 }), [stored(HEAD_ID, v1)]);
+    const deps = fakes(caseStudy({ headRevisionId: HEAD_ID, headVersion: 1 }), [stored(HEAD_ID, v2)]);
     expect(await makeGetLiveRevision(deps)({ kind: "case", id: CASE_ID })).toEqual({ ok: true, value: null });
     expect(await makeGetEditableRevision(deps)({ kind: "case", id: CASE_ID })).toMatchObject({ ok: true, value: { id: HEAD_ID } });
   });
@@ -180,22 +190,39 @@ describe("getLiveRevision and getEditableRevision", () => {
     expect(deps.revisions.findById).not.toHaveBeenCalled();
   });
 
-  it("upgrades a stored v0 document on read and never writes it back", async () => {
-    const row = stored(APPROVED_ID, v0, { status: "approved" });
+  it("returns a stored v2 document as it is", async () => {
+    const deps = fakes(caseStudy({ headRevisionId: HEAD_ID }), [stored(HEAD_ID, v2)]);
+    expect(await makeGetEditableRevision(deps)({ kind: "case", id: CASE_ID })).toMatchObject({ ok: true, value: { doc: v2, generatedDoc: v2, schemaVersion: 2 } });
+  });
+
+  it.each([
+    ["v1", v1, 1],
+    ["v0", v0, 0],
+  ] as const)("upgrades a stored %s document to v2 on read and never writes it back", async (_name, doc, version) => {
+    const row = stored(APPROVED_ID, doc, { status: "approved" });
     const before = structuredClone(row);
     const deps = fakes(caseStudy({ approvedRevisionId: APPROVED_ID }), [row]);
     const live = await makeGetLiveRevision(deps)({ kind: "case", id: CASE_ID });
     expect(live.ok).toBe(true);
     if (!live.ok || live.value === null) return;
-    expect(live.value.doc).toMatchObject({ schemaVersion: 1, template: "mac-case@1" });
-    expect(live.value.generatedDoc).toMatchObject({ schemaVersion: 1, template: "mac-case@1" });
-    expect(live.value.schemaVersion).toBe(0);
+    expect(live.value.doc).toEqual(upgradedV2);
+    expect(live.value.generatedDoc).toEqual(upgradedV2);
+    expect(live.value.schemaVersion).toBe(version);
+    expect(row).toEqual(before);
+    expect(deps.revisions.createWorking).not.toHaveBeenCalled();
+  });
+
+  it("upgrades a stored v1 head on the editable read too", async () => {
+    const row = stored(HEAD_ID, v1);
+    const before = structuredClone(row);
+    const deps = fakes(caseStudy({ headRevisionId: HEAD_ID }), [row]);
+    expect(await makeGetEditableRevision(deps)({ kind: "case", id: CASE_ID })).toMatchObject({ ok: true, value: { id: HEAD_ID, doc: upgradedV2, schemaVersion: 1 } });
     expect(row).toEqual(before);
     expect(deps.revisions.createWorking).not.toHaveBeenCalled();
   });
 
   it("refuses a stored document of an unknown version", async () => {
-    const deps = fakes(caseStudy({ headRevisionId: HEAD_ID }), [stored(HEAD_ID, { ...v1, schemaVersion: 99 })]);
+    const deps = fakes(caseStudy({ headRevisionId: HEAD_ID }), [stored(HEAD_ID, { ...v2, schemaVersion: 99 })]);
     expect(await makeGetEditableRevision(deps)({ kind: "case", id: CASE_ID })).toMatchObject({
       ok: false,
       error: { code: "DOCUMENT_SCHEMA_UNSUPPORTED", details: { revisionId: HEAD_ID, document: "doc" } },
@@ -204,7 +231,7 @@ describe("getLiveRevision and getEditableRevision", () => {
 
   it.each([makeGetLiveRevision, makeGetEditableRevision])("skips a soft-deleted (or unknown) case: NOT_FOUND", async (make) => {
     // The repository's findById never returns soft-deleted cases.
-    const deps = fakes(null, [stored(HEAD_ID, v1)]);
+    const deps = fakes(null, [stored(HEAD_ID, v2)]);
     expect(await make(deps)({ kind: "case", id: CASE_ID })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
     expect(deps.revisions.findById).not.toHaveBeenCalled();
   });
@@ -220,18 +247,18 @@ describe("getLiveRevision and getEditableRevision", () => {
   });
 
   it("matches an uppercase subject id", async () => {
-    const deps = fakes(caseStudy({ headRevisionId: HEAD_ID }), [stored(HEAD_ID, v1)]);
+    const deps = fakes(caseStudy({ headRevisionId: HEAD_ID }), [stored(HEAD_ID, v2)]);
     expect(await makeGetEditableRevision(deps)({ kind: "case", id: CASE_ID.toUpperCase() })).toMatchObject({ ok: true, value: { id: HEAD_ID } });
     expect(deps.cases.findById).toHaveBeenCalledWith(CASE_ID);
   });
 
   it.each([
     ["the head is missing", makeGetEditableRevision, { headRevisionId: HEAD_ID }, []],
-    ["the head is another case's", makeGetEditableRevision, { headRevisionId: HEAD_ID }, [stored(HEAD_ID, caseHistoryV1(FORMAT_IDS), { caseId: "11111111-0000-4000-8000-000000000009" })]],
+    ["the head is another case's", makeGetEditableRevision, { headRevisionId: HEAD_ID }, [stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { caseId: "11111111-0000-4000-8000-000000000009" })]],
     ["the approved revision is missing", makeGetLiveRevision, { approvedRevisionId: APPROVED_ID }, []],
-    ["the approved revision is another case's", makeGetLiveRevision, { approvedRevisionId: APPROVED_ID }, [stored(APPROVED_ID, caseHistoryV1(FORMAT_IDS), { status: "approved", caseId: "11111111-0000-4000-8000-000000000009" })]],
-    ["the approved pointer is at a working revision", makeGetLiveRevision, { approvedRevisionId: APPROVED_ID }, [stored(APPROVED_ID, caseHistoryV1(FORMAT_IDS))]],
-    ["the approved pointer is at a superseded revision", makeGetLiveRevision, { approvedRevisionId: APPROVED_ID }, [stored(APPROVED_ID, caseHistoryV1(FORMAT_IDS), { status: "superseded" })]],
+    ["the approved revision is another case's", makeGetLiveRevision, { approvedRevisionId: APPROVED_ID }, [stored(APPROVED_ID, caseHistoryV2(FORMAT_IDS), { status: "approved", caseId: "11111111-0000-4000-8000-000000000009" })]],
+    ["the approved pointer is at a working revision", makeGetLiveRevision, { approvedRevisionId: APPROVED_ID }, [stored(APPROVED_ID, caseHistoryV2(FORMAT_IDS))]],
+    ["the approved pointer is at a superseded revision", makeGetLiveRevision, { approvedRevisionId: APPROVED_ID }, [stored(APPROVED_ID, caseHistoryV2(FORMAT_IDS), { status: "superseded" })]],
   ] as const)("REVISION_POINTER_INVALID when %s, logged with the case id", async (_name, make, pointers, rows) => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     try {
@@ -248,7 +275,7 @@ describe("getLiveRevision and getEditableRevision", () => {
 
   it("editable may be a working, approved or superseded head", async () => {
     for (const status of ["working", "approved", "superseded"] as const) {
-      const deps = fakes(caseStudy({ headRevisionId: HEAD_ID }), [stored(HEAD_ID, v1, { status })]);
+      const deps = fakes(caseStudy({ headRevisionId: HEAD_ID }), [stored(HEAD_ID, v2, { status })]);
       expect(await makeGetEditableRevision(deps)({ kind: "case", id: CASE_ID })).toMatchObject({ ok: true, value: { status } });
     }
   });

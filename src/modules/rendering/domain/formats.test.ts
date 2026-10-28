@@ -1,26 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { FORMAT_IDS, FORMATS, getFormat, isFormatId, requireFormat } from "./formats";
+import { FILE_TYPES, FORMAT_IDS, FORMATS, getFormat, isFormatId, requireFormat } from "./formats";
 
 describe("format registry", () => {
-  it("lists exactly the three MVP formats, in registry order", () => {
-    expect(FORMATS.map((f) => f.id)).toEqual(["deck_16_9", "social_carousel_4_5", "pdf_a4"]);
+  it("lists exactly the three formats, in registry order (C28)", () => {
+    expect(FORMATS.map((f) => f.id)).toEqual(["presentazione_16_9", "carosello_1_1", "video_9_16"]);
     expect(FORMATS.map((f) => f.id)).toEqual([...FORMAT_IDS]);
   });
 
-  it("gives each format its name, size, page model and file type, all static", () => {
+  it("gives each format its name, size, page model, file type and motion", () => {
     expect(FORMATS).toEqual([
-      { id: "deck_16_9", name: "Deck 16:9", ratio: "16:9", pixelSize: { width: 1920, height: 1080 }, pageModel: "slides", fileType: "pdf", static: true },
       {
-        id: "social_carousel_4_5",
-        name: "Carosello social 4:5",
-        ratio: "4:5",
-        pixelSize: { width: 1080, height: 1350 },
+        id: "presentazione_16_9",
+        name: "Presentazione",
+        ratio: "16:9",
+        pixelSize: { width: 1920, height: 1080 },
         pageModel: "slides",
-        fileType: "zip_png",
-        static: true,
+        fileType: "pdf",
+        motion: false,
       },
-      { id: "pdf_a4", name: "PDF A4", ratio: "210:297", pixelSize: { width: 2480, height: 3508 }, pageModel: "pages", fileType: "pdf", static: true },
+      { id: "carosello_1_1", name: "Carosello", ratio: "1:1", pixelSize: { width: 1080, height: 1080 }, pageModel: "slides", fileType: "zip_png", motion: false },
+      { id: "video_9_16", name: "Video", ratio: "9:16", pixelSize: { width: 1080, height: 1920 }, pageModel: "slides", fileType: "mp4_webm", motion: true },
     ]);
+  });
+
+  it("lists every file type a format uses", () => {
+    for (const f of FORMATS) expect(FILE_TYPES).toContain(f.fileType);
   });
 
   it("has pixel sizes that match each ratio", () => {
@@ -39,8 +43,8 @@ describe("format registry", () => {
   });
 
   it("looks formats up by id", () => {
-    expect(getFormat("pdf_a4").name).toBe("PDF A4");
-    expect(isFormatId("deck_16_9")).toBe(true);
+    expect(getFormat("video_9_16").name).toBe("Video");
+    expect(isFormatId("carosello_1_1")).toBe(true);
     expect(isFormatId("story_9_16")).toBe(false);
     expect(isFormatId("toString")).toBe(false);
     expect(isFormatId(undefined)).toBe(false);
@@ -48,13 +52,13 @@ describe("format registry", () => {
 });
 
 describe("requireFormat", () => {
-  const revision = { doc: { formats: { deck_16_9: { variant: "a" }, pdf_a4: { variant: "b" } } } };
+  const revision = { doc: { formats: { presentazione_16_9: { pages: ["a"] }, video_9_16: { pages: ["b"] } } } };
 
   it("returns the revision's entry for a format it has", () => {
-    expect(requireFormat(revision, "deck_16_9")).toEqual({ ok: true, value: { variant: "a" } });
+    expect(requireFormat(revision, "presentazione_16_9")).toEqual({ ok: true, value: { pages: ["a"] } });
   });
 
-  it.each(["social_carousel_4_5", "story_9_16", "toString", "__proto__", 42, undefined])("refuses %s with FORMAT_NOT_IN_REVISION", (id) => {
+  it.each(["carosello_1_1", "story_9_16", "toString", "__proto__", 42, undefined])("refuses %s with FORMAT_NOT_IN_REVISION", (id) => {
     const result = requireFormat(revision, id);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("FORMAT_NOT_IN_REVISION");

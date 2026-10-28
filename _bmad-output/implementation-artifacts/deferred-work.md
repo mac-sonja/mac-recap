@@ -195,3 +195,10 @@
 - source_spec: `spec-2-21-case-results-and-testimonial.md`
   summary: The case page's mapping of the client limits onto `storyLimits` has no test against the real constants.
   evidence: page.test.tsx mocks the constants and asserts no limit-driven output.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-3-v2-document-model-and-format-registry.md`
+  summary: Decide how static formats (Presentazione PDF, Carosello PNG) draw `video` and `animation` elements (poster frame, first frame or not allowed), in Story 3.5.
+  evidence: Schema v2 allows them in every format; the registry's `motion` flag isn't checked against element types (review, unverified medium).
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-3-v2-document-model-and-format-registry.md`
+  summary: Remove the remaining `rendering.relayout` and "Deck 16:9 and PDF A4" mentions from ARCHITECTURE-SPINE.md (L55, L132, L210, L401).
+  evidence: SCP 2026-10-28 retired relayout and those formats; the spine still names them.

@@ -602,15 +602,13 @@ export const it = {
     /** Read by screen readers: names the list of formats. */
     formats: "Formato",
     soon: "In arrivo",
-    /** The formats we render today, keyed by `FormatId`. */
+    /** The formats the picker offers today, keyed by `FormatId` (Video is still upcoming). */
     format: {
-      deck_16_9: { name: "Deck 16:9", hint: "Per presentazioni e call" },
-      pdf_a4: { name: "PDF A4", hint: "Da allegare e stampare" },
-      social_carousel_4_5: { name: "Carosello 1080×1350", hint: "Instagram e LinkedIn" },
+      presentazione_16_9: { name: "Presentazione", hint: "Per presentazioni e call" },
+      carosello_1_1: { name: "Carosello 1080×1080", hint: "Instagram e LinkedIn" },
     },
     /** Formats shown greyed out with *In arrivo*. */
     upcoming: {
-      post: "Post 1080×1080",
       video: "Video 1080×1920",
       linkedinCover: "Cover LinkedIn 1200×675",
       pngPack: "Pack PNG HD + ZIP",
