@@ -2,7 +2,7 @@
 title: 'Story 5.2 (part): approved case page in the tool shell, with Raccolte and Elimina'
 type: 'feature'
 created: '2026-10-28'
-status: 'draft'
+status: 'in-progress'
 baseline_commit: '621af054fa028ee5e6e938ee082b6c5b81d7d7a3'
 route: 'dispatch'
 review_loop_iteration: 0
