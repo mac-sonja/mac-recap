@@ -9,9 +9,13 @@ export interface ShellActor {
   landing: string;
 }
 
+/** The sign-in screen; every page without a session or an enabled profile goes here (Story 6.1). */
+export const SIGN_IN_PATH = "/sign-in";
+
 /**
- * Resolves the request's actor for a page. `null` when there is no usable actor
- * (`getActor()` failed, or the role has no UI); the caller shows the no-actor page.
+ * Resolves the request's actor for a page. With no session, or a session whose
+ * profile is missing or disabled, it redirects to sign-in. `null` when the
+ * profile could not be read, or the role has no UI; the caller shows the no-actor page.
  * `connection()` keeps every tool page dynamic: rendered per request, never at build.
  * `cache` dedupes the profile read between the layout and the page of one request
  * only; the next request reads `profile` again.
@@ -19,7 +23,10 @@ export interface ShellActor {
 export const resolveShellActor = cache(async (): Promise<ShellActor | null> => {
   await connection();
   const result = await getActor();
-  if (!result.ok) return null;
+  if (!result.ok) {
+    if (result.error.code === "UNAUTHENTICATED") redirect(SIGN_IN_PATH);
+    return null;
+  }
   const landing = landingFor(result.value.role);
   if (landing === null) return null;
   return { actor: result.value, landing };

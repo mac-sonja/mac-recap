@@ -15,6 +15,8 @@ export const it = {
       home: "Dashboard",
       caseStudies: "Case history",
       clients: "Clienti",
+      /** Account/sales/social: the library of approved cases (Story 5.1). */
+      library: "Libreria",
       /** Above Nuova case history: searches the case list and opens it filtered. */
       search: {
         label: "Cerca progetto o cliente",
@@ -25,6 +27,7 @@ export const it = {
     },
     userMenu: {
       button: "Il tuo profilo",
+      signOut: "Esci",
     },
     /** The appearance switch at the bottom of the sidebar. */
     theme: {
@@ -616,6 +619,70 @@ export const it = {
       pngPack: "Pack PNG HD + ZIP",
     },
   },
+  /** Sign-in, sign-up and passwords (Story 6.1; open sign-up per owner, 2026-10-28). */
+  auth: {
+    email: "Email",
+    password: "Password",
+    signIn: {
+      title: "Bentornato",
+      lead: "Accedi con la tua email e la tua password.",
+      submit: "Accedi",
+      forgot: "Password dimenticata?",
+      noAccount: "Prima volta qui?",
+      toSignUp: "Registrati",
+      invalidCredentials: "Email o password non corrette. Riprova.",
+      notConfirmed: "Conferma prima la tua email: ti abbiamo mandato un link.",
+      inactive: "Il tuo account non è attivo. Scrivi a un amministratore.",
+      linkInvalid: "Il link è scaduto o è già stato usato. Accedi, oppure chiedi un nuovo link.",
+    },
+    signUp: {
+      title: "Crea il tuo account",
+      lead: "Per chi ha un indirizzo @{domain}. Gli altri li aggiunge un amministratore.",
+      firstName: "Nome",
+      lastName: "Cognome",
+      team: "Cosa fai in MAC",
+      teamPlaceholder: "Scegli",
+      teams: {
+        designer: "Designer",
+        account: "Account",
+        commerciale: "Commerciale",
+        altro: "Altro",
+      },
+      otherTitle: "Il tuo ruolo",
+      otherTitlePlaceholder: "Per esempio: video editor",
+      designerHint: "Un amministratore approva i designer. Intanto vedi i case approvati.",
+      passwordHint: "Almeno {n} caratteri.",
+      submit: "Crea account",
+      haveAccount: "Hai già un account?",
+      toSignIn: "Accedi",
+      domainNotAllowed: "Usa il tuo indirizzo @{domain}. Se non ce l'hai, chiedi a un amministratore di aggiungerti.",
+      invalid: "Controlla i campi evidenziati.",
+      /** `{fields}`: the labels of the fields to fix, e.g. "Cosa fai in MAC, Password". */
+      invalidFields: "Da completare: {fields}.",
+      sentTitle: "Controlla la posta",
+      sent: "Ti abbiamo mandato un link a {email}. Aprilo per confermare l'indirizzo e entrare.",
+    },
+    forgot: {
+      title: "Nuova password",
+      lead: "Scrivi la tua email: ti mandiamo un link per sceglierne una nuova.",
+      submit: "Invia il link",
+      sent: "Se l'indirizzo ha un account, ti è appena arrivato un link. Controlla anche lo spam.",
+      back: "Torna all'accesso",
+    },
+    setPassword: {
+      title: "Scegli la password",
+      lead: "La userai per accedere a MAC Recap con {email}.",
+      submit: "Salva password",
+    },
+    rateLimited: "Troppi tentativi. Aspetta qualche minuto e riprova.",
+    failed: "Non siamo riusciti a completare l'operazione. Riprova tra poco.",
+  },
+  /** Library of approved cases (Story 5.1); until it ships, a placeholder. */
+  library: {
+    title: "Libreria",
+    lead: "Qui troverai i case approvati, pronti da scaricare e condividere.",
+    soon: "La libreria è in arrivo. Ti avvisiamo appena è pronta.",
+  },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {
     draft: "Bozza",
@@ -623,10 +690,10 @@ export const it = {
     in_review: "Da approvare",
     approved: "Approvato",
   },
-  /** Role labels for people, keyed by `Role`; `system` is never shown. */
+  /** Role labels for people, keyed by `Role`; `system` is never shown. One word each (owner, 2026-10-28). */
   role: {
-    owner_designer: "Owner/designer",
-    account_sales_social: "Account/sales/social",
+    owner_designer: "Designer",
+    account_sales_social: "Account",
     admin: "Amministratore",
   },
 } as const;

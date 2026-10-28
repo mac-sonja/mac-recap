@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Folder, LayoutDashboard, Plus, Search, type LucideIcon } from "lucide-react";
+import { Building2, Folder, LayoutDashboard, Library, Plus, Search, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
@@ -19,6 +19,8 @@ export interface SidebarProps {
   showCaseStudies: boolean;
   /** `list clients`: the Clienti item, right after Case. */
   showClients: boolean;
+  /** Account/sales/social: the Libreria item (approved cases only). */
+  showLibrary?: boolean;
   displayName: string;
   roleLabel: string;
   /** Cases waiting for a review, shown after Case; nothing when 0 or unknown. */
@@ -117,6 +119,7 @@ export function Sidebar({
   showNewCaseStudy,
   showCaseStudies,
   showClients,
+  showLibrary = false,
   displayName,
   roleLabel,
   toReviewCount = null,
@@ -162,6 +165,9 @@ export function Sidebar({
             active={isCaseStudies}
             meta={toReviewCount ? fill(it.shell.nav.toReview, { n: toReviewCount }) : null}
           />
+        )}
+        {showLibrary && (
+          <NavLink href="/library" icon={Library} label={it.shell.nav.library} active={pathname === "/library"} />
         )}
         {showClients && (
           <NavLink

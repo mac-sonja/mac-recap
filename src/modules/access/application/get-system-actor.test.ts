@@ -10,11 +10,17 @@ const system: Profile = {
   displayName: "System",
   role: "system",
   disabledAt: null,
+  jobTitle: null,
+  designerRequestedAt: null,
 };
 
 function fakeRepository(rows: Profile[]): ProfileRepository & { findById: ReturnType<typeof vi.fn> } {
   const byId = new Map(rows.map((r) => [r.id, r]));
-  return { findById: vi.fn(async (id: string) => ok(byId.get(id) ?? null)) };
+  return {
+    findById: vi.fn(async (id: string) => ok(byId.get(id) ?? null)),
+    findByEmail: vi.fn(),
+    create: vi.fn(),
+  };
 }
 
 describe("getSystemActor", () => {
@@ -46,6 +52,6 @@ describe("getSystemActor", () => {
 
   it("passes a repository failure through", async () => {
     const failure = err({ code: "PROFILE_LOOKUP_FAILED", message: "down" });
-    expect(await makeGetSystemActor({ findById: async () => failure })()).toEqual(failure);
+    expect(await makeGetSystemActor({ ...fakeRepository([]), findById: async () => failure })()).toEqual(failure);
   });
 });

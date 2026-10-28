@@ -103,8 +103,8 @@ development_status:
   5-11-edit-texts-and-remove-pages-in-a-collection: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 3: after 5.10, last in Epic 5
   epic-5-retrospective: optional
 
-  epic-6: backlog
-  6-1-sign-in-with-a-fixed-role: backlog
+  epic-6: in-progress
+  6-1-sign-in-with-a-fixed-role: review  # owner 2026-10-28: email + password, open sign-up for @menatcode.it, role from a menu (designer read-only until an admin approves, Altro with free text), others invited by an admin; migration 20261028120000 not yet applied anywhere; Supabase Auth settings in docs/auth-setup.md
   6-2-retire-the-basic-auth-gate-and-open-shared-links-to-their-au: backlog
   6-3-manage-users-and-their-roles: backlog
   6-4-guardrail-and-permission-check-after-login: backlog

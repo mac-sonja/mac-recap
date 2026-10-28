@@ -13,14 +13,18 @@ export const profileSchema = z.object({
   displayName: z.string(),
   role: roleSchema,
   disabledAt: z.string().nullable(),
+  /** What the person does in the team (picked at sign-up); grants nothing. */
+  jobTitle: z.string().nullable(),
+  /** Set while a sign-up as designer waits for an admin's approval. */
+  designerRequestedAt: z.string().nullable(),
 });
 export type Profile = z.infer<typeof profileSchema>;
 
 /** Who is performing a request: an enabled profile. */
-export const actorSchema = profileSchema.omit({ disabledAt: true });
+export const actorSchema = profileSchema.pick({ id: true, email: true, displayName: true, role: true });
 export type Actor = z.infer<typeof actorSchema>;
 
 /** Seeded by `supabase/migrations/20261009120000_access_profile.sql`; keep in sync. */
 export const SYSTEM_ACTOR_ID = "00000000-0000-4000-8000-000000000001";
-/** The dev owner/designer that `getActor()` resolves until Epic 6 swaps the resolver. */
+/** The dev owner/designer `getActor()` resolved before Epic 6; disabled at the sign-in cutover. */
 export const DEV_ACTOR_ID = "00000000-0000-4000-8000-000000000002";

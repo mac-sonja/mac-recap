@@ -19,6 +19,18 @@ export interface Violation {
 const HTTP_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 // Access helpers that resolve the actor or answer a failed resolution.
 const ALLOWED_BEFORE_AUTHORIZE = new Set(["getActor", "respondToAppError", "httpStatusFor"]);
+// Session entry points (Story 6.1): sign-in, sign-up and email links run before
+// there is an actor. An export whose module calls are all among these (from
+// `@/modules/access`) needs no authorize.
+const SESSION_ENTRY_POINTS = new Set([
+  "sessionState",
+  "signIn",
+  "signUp",
+  "signOut",
+  "confirmEmailLink",
+  "requestPasswordReset",
+  "setPassword",
+]);
 
 const isRouteFile = (file: string) => /(^|[\\/])route\.(ts|tsx|js|mjs)$/.test(file);
 
@@ -90,6 +102,10 @@ function checkFunction(fn: FunctionLike, imports: ReturnType<typeof moduleImport
   };
   visit(fn.body, false);
   calls.sort((a, b) => a.pos - b.pos);
+
+  if (calls.length > 0 && calls.every((c) => c.from === "@/modules/access" && SESSION_ENTRY_POINTS.has(c.name))) {
+    return null;
+  }
 
   const isAuthorize = (c: (typeof calls)[number]) =>
     c.name === "authorize" && c.from === "@/modules/access" && !c.nested;

@@ -2597,13 +2597,18 @@ I want to sign in and land on the screen for my role,
 So that I see and do only what my role allows.
 
 Covers: FR8, CAP-11, AR11 (resolver swap, role read per request, dev profile disabled at cutover), UX-DR25, UX-DR2 (landing per role), PRD Story 6.1
-Open (spine *Deferred*, not an OP): the sign-in method, Supabase Auth email and password or magic link, is chosen when this story starts. Microsoft SSO can come later without changing AR11.
+Decided (owner, 2026-10-28): Supabase Auth email + password, with open sign-up limited to `@menatcode.it` addresses (email confirmed first). The sign-up form asks what the person does (Designer, Account, Commerciale, or Altro with a text field); everyone starts as account/sales/social, and a designer stays read-only until an admin grants owner/designer (Story 6.3). People without a company address are added by an admin and set their password from the invite. This replaces "no self-sign-up link" below. Microsoft SSO can come later without changing AR11.
 
 **Acceptance Criteria:**
 
 **Given** the sign-in screen
 **When** I open the app without a session
-**Then** I see one sign-in screen in Italian with no self-sign-up link, and after signing in with Supabase Auth I land on my role's page: owner/designer → Case studies table, account/sales/social → library, admin → Users
+**Then** I see one sign-in screen in Italian, with a link to sign up (company addresses only, owner 2026-10-28), and after signing in with Supabase Auth I land on my role's page: owner/designer → Case studies table (the Home dashboard since 2026-10-20), account/sales/social → library, admin → Users
+
+**Given** the sign-up screen
+**When** I sign up with an address outside `@menatcode.it`
+**Then** it is refused before anything is sent, and the message says an admin can add me
+**And** a confirmed company sign-up gets a profile as account/sales/social with its job title, and a designer is marked as waiting for approval; the role is never taken from the form or the session
 
 **Given** a signed-in user
 **When** any server action or route handler runs

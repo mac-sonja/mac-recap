@@ -13,7 +13,7 @@
   summary: The profile table lets any row hold the system role.
   evidence: The role check allows 'system' on every row; Story 6.3 manage users must not assign it (add a constraint tying system to SYSTEM_ACTOR_ID).
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-actor-and-policy-seam-with-a-dev-owner-designer.md`
-  summary: profile.email uniqueness is case-sensitive.
+  summary: Resolved by Story 6.1 (`profile_email_lower_key` on lower(email); getActor matches the session email case-insensitively). Was: profile.email uniqueness is case-sensitive.
   evidence: email text unique allows A@x and a@x; Epic 6 matches session emails to profiles, so use citext or a lower(email) unique index then.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-actor-and-policy-seam-with-a-dev-owner-designer.md`
   summary: Resolved by Story 3.1 (`access.getSystemActor()` resolves the seeded system profile; the worker calls it at start and `SYSTEM_ACTOR_ID` stays inside `access`, checked by `test/system-actor.test.ts`). Was: the worker has no way to obtain the system actor from @/modules/access.

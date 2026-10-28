@@ -15,4 +15,10 @@ describe("UserMenu", () => {
     expect(html).toContain("sr-only");
     expect(html).toContain("xl:not-sr-only");
   });
+
+  it("offers Esci, which submits the sign-out action", () => {
+    const html = renderToStaticMarkup(<UserMenu displayName="Sonja" roleLabel="Owner/designer" />);
+    expect(html).toContain('aria-label="Esci"');
+    expect(html).toContain('type="submit"');
+  });
 });

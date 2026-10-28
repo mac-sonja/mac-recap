@@ -8,6 +8,8 @@ const row = {
   display_name: "Dev owner/designer",
   role: "owner_designer",
   disabled_at: null,
+  job_title: null,
+  designer_requested_at: null,
 };
 
 const profile = {
@@ -16,6 +18,8 @@ const profile = {
   displayName: row.display_name,
   role: "owner_designer",
   disabledAt: null,
+  jobTitle: null,
+  designerRequestedAt: null,
 };
 
 describe("toProfile", () => {

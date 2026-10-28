@@ -7,6 +7,11 @@ import { err, ok, type Result } from "@/shared/result";
 const getActor = vi.fn<() => Promise<Result<Actor>>>();
 
 vi.mock("next/server", () => ({ connection: vi.fn(async () => undefined) }));
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn((path: string) => {
+    throw new Error(`REDIRECT ${path}`);
+  }),
+}));
 vi.mock("@/modules/access", async () => {
   const actual = await vi.importActual<typeof import("@/modules/access")>("@/modules/access");
   return { ...actual, getActor: () => getActor() };
@@ -31,8 +36,13 @@ describe("WizardLayout", () => {
     expect(html).not.toContain("<aside");
   });
 
-  it("renders only the no-actor message on UNAUTHENTICATED", async () => {
+  it("redirects to sign-in on UNAUTHENTICATED", async () => {
     getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "m" }));
+    await expect(renderLayout()).rejects.toThrow("REDIRECT /sign-in");
+  });
+
+  it("renders only the no-actor message when the profile can't be read", async () => {
+    getActor.mockResolvedValue(err({ code: "PROFILE_LOOKUP_FAILED", message: "m" }));
     const html = await renderLayout();
     expect(html).toContain(NO_ACTOR);
     expect(html).not.toContain("content");

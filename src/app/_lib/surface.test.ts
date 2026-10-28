@@ -32,11 +32,13 @@ describe("resolveShellActor", () => {
     expect(await resolveShellActor()).toEqual({ actor: actor("owner_designer"), landing: "/home" });
   });
 
-  it.each([
-    ["UNAUTHENTICATED", err({ code: "UNAUTHENTICATED", message: "m" })],
-    ["a lookup error", err({ code: "PROFILE_LOOKUP_FAILED", message: "m" })],
-  ] as const)("is null on %s", async (_, result) => {
-    getActor.mockResolvedValue(result);
+  it("redirects to sign-in on UNAUTHENTICATED (no session, or no enabled profile)", async () => {
+    getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "m" }));
+    await expect(resolveShellActor()).rejects.toThrow("REDIRECT /sign-in");
+  });
+
+  it("is null on a lookup error", async () => {
+    getActor.mockResolvedValue(err({ code: "PROFILE_LOOKUP_FAILED", message: "m" }));
     expect(await resolveShellActor()).toBeNull();
   });
 
@@ -62,8 +64,8 @@ describe("requireSurface", () => {
     await expect(requireSurface("list cases")).rejects.toThrow("REDIRECT /library");
   });
 
-  it("returns null with no actor, without redirecting", async () => {
-    getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "m" }));
+  it("returns null when the profile can't be read, without redirecting", async () => {
+    getActor.mockResolvedValue(err({ code: "PROFILE_LOOKUP_FAILED", message: "m" }));
     expect(await requireSurface("list cases")).toBeNull();
   });
 });
