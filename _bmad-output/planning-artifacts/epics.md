@@ -1263,7 +1263,6 @@ So that a draft starts from the designed Intro, Contenuti, Risultati e testimoni
 
 Covers: FR3 (layouts per format), FR4 (as amended), AR15, NFR1 (template design unchanged), C30, C31, C32, C33 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md))
 ⚑ Interim: IR-C4 (no layout on/off state)
-⛔ Open: how the case's typed **Risultati** (Story 2.21, one text field) become result rows of a number and what it measures (C33).
 ⛔ Open: where the case's services are stored. The Intro shows them as tags bound to the case record (answer 2), but a case has only one business line today.
 ⛔ Open: the Figma template for the client's closing page in Presentazione and Video (the mockup shows a placeholder).
 ⛔ Open: what an empty image block shows in an approved export (IR-A4; default pages can place image blocks the case has no image for).
@@ -1307,7 +1306,7 @@ Amended per SCP 2026-10-28: rewritten. Media-count rules, variants, spacing rang
 **When** it is laid out
 **Then** a blue (`#2977FF`) block "06 — Risultati" holds one row per result: what it measures, and the number in lime (`#DEFE56`) under a thin line; a grey block "08 — Voce del cliente" holds the testimonial and its author
 **And** Presentazione adds a visual on the left, Carosello shows the two blocks, and Video starts with the Intro's info block above them
-**And** its texts come from Story 2.21 as typed, with no AI text; a case with neither results nor a testimonial has no such page (C24, SCP 2026-10-26)
+**And** its texts come from Story 2.21 as typed, with no AI text: the page reads the case's Risultati rows directly (up to 3, each a label and a value, `context_form.results`, saved by `save_case_results`), one result row per stored row with the label as what it measures and the value as the number, and the Testimonial's quote and author; a case with neither results nor a testimonial has no such page (C24, SCP 2026-10-26)
 
 **Given** the Chiusura template (Carosello only, C33)
 **When** a carousel is laid out
@@ -1398,6 +1397,8 @@ So that every claim in the draft has something I can check it against.
 Covers: FR3, CAP-5, AR6 (aspects, MISSING_ASPECT), AR7, AR18 (manifest, limits, no Files API), AR19 (provenance, validated sourceRefs), NFR1, NFR2 (no "verified"), NFR5, NFR13 (narrative language)
 ⚑ Interim: IR-A3 (`MISSING_ASPECT` is recorded, not blocking), IR-OP14 (favourites are in the manifest but ignored)
 ⛔ Blocked on: IR-OP2 (which material types the LLM reads and how each becomes input), IR-NFR5 (quality checklist content for the prompt)
+⛔ Open: how the AI's texts map onto the per-format copies of document v2; see the matching open point in Story 3.3.
+Amended per SCP 2026-10-28 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C39, owner 2026-10-27): for the demo, claims carry no check workflow. Nothing sets or reads a `check`, there is no "generated, not checked" marking, and the output stays text only; Story 3.7 places it in each format's pages. The prompt follows the copywriting guide (#100).
 
 **Acceptance Criteria:**
 
@@ -1419,7 +1420,7 @@ Covers: FR3, CAP-5, AR6 (aspects, MISSING_ASPECT), AR7, AR18 (manifest, limits, 
 **Given** the model's response
 **When** it is parsed
 **Then** the output contains only narrative text fields (blocks, claims with `aspect` and optional `sourceRefs`); no layout, template, asset or slot field exists in the output schema
-**And** every claim gets `provenance: generated` and `check: null`
+**And** every claim gets `provenance: generated`; it carries no check state for the demo (C39)
 **And** any `sourceRef` not in the manifest fails validation and the attempt fails; `client_field` refs (`description`, `industry`, `context`, `solution` or `results`; SCP 2026-10-19) are allowed, and a `client_field` ref is never material
 **And** the output schema has no `about` field; the LLM never writes or rewrites the About block
 
@@ -1444,7 +1445,8 @@ So that the draft is built in the background without my waiting time counting ag
 
 Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, failure → `draft`), AR6 (gate in UI and worker), AR10, AR17 (`baseHeadVersion`, new revision), AR18 (manifest), AR20, UX-DR10, UX-DR4 (live status), PRD Story 3.1
 ⚑ Interim: IR-OP8, IR-OP1
-⛔ Blocked on: IR-A4 (a case with text or PDFs only, until the template's zero-media rule exists, via Story 3.4); IR-OP2 and IR-NFR5 (via Story 3.6); the graphic template layouts and final templates (via Stories 3.4 and 3.5)
+⛔ Blocked on: IR-OP2 and IR-NFR5 (via Story 3.6); what an empty image block shows in an export (IR-A4, via Story 3.4)
+Amended per SCP 2026-10-28 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C31, C33): `rendering.relayout` is retired. Generation builds each format's pages from the template's default pages and fills them with the AI's texts; the templates are the Figma file "MAC-TF-AI" (Story 3.4).
 
 **Acceptance Criteria:**
 
@@ -1466,7 +1468,8 @@ Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, f
 
 **Given** the worker claims the job
 **When** it runs
-**Then** it checks the NFR6 gate again, runs the narrative filter (Story 3.6, with the client's current name, sector, description and brief: context, solution, results; SCP 2026-10-19) and then `rendering.relayout` (Story 3.4), and creates a **new** `working` revision with `generated_doc` and `doc` set to the same document and the manifest stored
+**Then** it checks the NFR6 gate again, runs the narrative filter (Story 3.6, with the client's current name, sector, description and brief: context, solution, results; SCP 2026-10-19), and builds a document v2 (Story 3.3) with one page list per format from that format's default pages (Story 3.4, C31, C33), as for the sample case in Story 3.10 but with the AI's texts in place of the test text: the title, subtitle, Sfida and Idea texts in the Intro, the case's images in the image blocks and animations, Risultati e testimonial from Story 2.21 as typed, and the client's and case's fields bound to their records
+**And** it creates a **new** `working` revision with `generated_doc` and `doc` set to the same document and the manifest stored
 **And** it sets the head by compare-and-set against `baseHeadVersion`, transitions the case to `in_review`, and emits `job_ok`
 
 **Given** the head changed since the job was enqueued
@@ -1487,8 +1490,8 @@ Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, f
 
 **Given** the client is edited after the draft was generated or approved
 **When** the configurator, the case study view, a new export or a shared link renders the case
-**Then** the About block shows the client's current info, with no new generation and no new approval (AD-22)
-**And** the revision stores no client values (the rule hiding the About block when description, sector and logo are all empty is removed, because they can't be empty; SCP 2026-10-19)
+**Then** the client's fields on the pages (the Intro's Cliente block, which replaces the About block; C33) show the client's current info, with no new generation and no new approval (AD-22)
+**And** the revision stores no client values, only bindings (Story 3.3)
 **And** client info never enables Generate (NFR6): a case with only client info and the form still has no material
 
 ### Story 3.8: Tell me when the draft is ready
@@ -1963,12 +1966,13 @@ Covers: FR6 (as amended for the demo), CAP-8, NFR7, AR3 (`in_review` → `approv
 ### Story 4.9: Edit an approved case and update the approved version
 
 As an owner/designer,
-I want to fix an approved case without unchecked text reaching anyone,
-So that a correction goes live only after I've checked it.
+I want to fix an approved case without the change reaching anyone before I publish it,
+So that a correction goes live only when I choose.
 
-Covers: FR6 (approved stays approved), CAP-8, NFR2, NFR7, AR3 (fork, live vs editable, update, discard, `superseded`), AR17 (`forkHead`), AR19 (unedited blocks keep their checks), AR20, UX-DR19, UX-DR28, PRD Story 4.3 (last criterion, staged reading)
+Covers: FR6 (approved stays approved, as amended for the demo), CAP-8, NFR7, AR3 (fork, live vs editable, update, discard, `superseded`), AR17 (`forkHead`), AR20, UX-DR19 (as amended), UX-DR28, PRD Story 4.3 (last criterion, staged reading), C39
 ⚑ Interim: IR-A1 (edits are staged until **Update approved version**), IR-OP8 (no path back from Approvato), IR-C3 and IR-A5 (edits save through the Story 4.3 autosave path)
 Note: the live-link count in the banner and dialog is added by Story 5.5, when links exist.
+Amended per SCP 2026-10-28 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C39, owner 2026-10-27): there is no per-block check and no re-ticking. **Update approved version** follows the Story 4.8 rules: no overflow in any format and no referenced material deleted.
 
 **Acceptance Criteria:**
 
@@ -1979,12 +1983,12 @@ Note: the live-link count in the banner and dialog is added by Story 5.5, when l
 **Given** my first edit
 **When** it is saved
 **Then** `case-study.forkHead(caseId, expectedHeadVersion)` creates one `working` revision copied from `approved_revision_id` (or returns the existing one), and the edit goes there
-**And** blocks I didn't edit keep their checks; edited blocks are unticked
 **And** the case status stays `approved` and every live read (`getLiveRevision`) still returns the approved revision
 
 **Given** the head differs from the approved revision
-**When** every edited block is ticked again and nothing overflows
-**Then** **Update approved version** is enabled; confirming runs the same `approve` use case on the head, the head becomes `approved`, the previous approved revision becomes `superseded`, and the status stays Approvato
+**When** nothing overflows in any format and no referenced material is deleted
+**Then** **Update approved version** is enabled; otherwise it is disabled and names what's left, as **Approva** does in Story 4.8
+**And** confirming runs the same `approve` use case on the head (overflow-free result per format, `MATERIAL_MISSING`, `STALE_REVISION`, `STALE_HEAD`), the head becomes `approved`, the previous approved revision becomes `superseded`, and the status stays Approvato
 
 **Given** the head differs from the approved revision
 **When** I choose **Discard changes**
@@ -2001,23 +2005,28 @@ Note: the live-link count in the banner and dialog is added by Story 5.5, when l
 ### Story 4.10 (conditional, not scheduled): Template maintenance
 
 As an owner/designer,
-I want to browse templates, turn variants on and off, and see where each is used,
-So that generation and Shuffle only use variants we want.
+I want to browse templates, turn layout grids and default pages on and off, and see where each is used,
+So that generation and the configurator only offer layouts we want.
 
-Covers: UX-DR32, AR15 (conditional `template_variant_state`), AR11 (`manage templates`)
+Covers: UX-DR32 (as amended), AR15 (as amended; conditional on-off state), AR11 (`manage templates`)
 ⛔ Blocked on: IR-C4. Built only if the PRD owner adopts the UX scope for "maintain templates"; otherwise dropped. Not counted in Sprint 2.
+Amended per SCP 2026-10-28 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C31): variants and Shuffle are replaced by each format's layout grids, **Mescola** and default pages (Stories 3.4 and 4.4).
 
 **Acceptance Criteria:**
 
 **Given** the PRD owner adopted the C4 scope
 **When** I open **Templates** in the sidebar
-**Then** I see each template's variants per format with sample content and how many case studies use each variant
+**Then** I see, per format, each template's layout grids and default pages with sample content, and how many case studies use each grid
 **And** below 1024 px the list stays readable (UX-DR30)
 
-**Given** a variant
+**Given** a layout grid
 **When** I turn it off
-**Then** a `template_variant_state` row owned by `rendering` records it, and `listVariants` stops returning it for generation and Shuffle
-**And** turning off the last enabled variant of a format is refused
+**Then** a row owned by `rendering` (`template_variant_state`, or a renamed table) records it, and the format's layout list (Story 3.4) stops returning it to generation, the **Layout** section and **Mescola**
+**And** turning off the last enabled grid of a format is refused
+
+**Given** a default page
+**When** I look for an on-off control
+**Then** there is none: default pages restore lost template pages (C31) and always stay available
 
 **Given** the Templates surface
 **When** I look for design controls
