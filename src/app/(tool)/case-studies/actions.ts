@@ -4,6 +4,8 @@ import { failure, type ActionResult } from "@/app/_lib/action-result";
 import { authorize, getActor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import type { CaseStudy } from "@/modules/case-study";
+import { generateInputHash } from "@/modules/generation";
+import * as jobs from "@/modules/jobs";
 import * as material from "@/modules/material";
 import type {
   Asset,
@@ -191,4 +193,55 @@ export async function getDetailsForm(input: unknown): Promise<ActionResult<Detai
   if (!decision.ok) return failure(decision.error);
   const form = await material.getDetailsForm(input);
   return form.ok ? form : failure(form.error);
+}
+
+/**
+ * Generates a draft case study (Story 3.7a): input `{ caseId }`. Re-checks the gate (at
+ * least one non-deleted file), enqueues one `generate` job with the material manifest and the
+ * head version, and moves the case to `generating`; the worker builds the document and moves
+ * it to `in_review`. A second press with the same material returns the same job. Returns `{ jobId }`.
+ * 403 `FORBIDDEN` unless the role may `generate`; 400 `INVALID_INPUT`; 404 `NOT_FOUND`;
+ * 409 `STALE_STATUS` unless the case is a draft; 409 `NO_MATERIAL` without a file (the form
+ * alone is not enough; no job, no transition). Nothing is written on those errors.
+ */
+export async function generateCaseStudy(input: unknown): Promise<ActionResult<{ jobId: string }>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "generate", { status: "draft" });
+  if (!decision.ok) return failure(decision.error);
+
+  const caseId = typeof input === "object" && input !== null ? (input as { caseId?: unknown }).caseId : undefined;
+  if (typeof caseId !== "string") {
+    return failure({ code: "INVALID_INPUT", message: "Invalid or missing: caseId.", details: { fields: ["caseId"] } });
+  }
+  const found = await caseStudy.get(caseId);
+  if (!found.ok) return failure(found.error);
+  if (found.value.status !== "draft") {
+    return failure({ code: "STALE_STATUS", message: "Only a draft can be generated.", details: { status: found.value.status } });
+  }
+  const gate = await material.hasMaterial(found.value.id);
+  if (!gate.ok) return failure(gate.error);
+  if (!gate.value) return failure({ code: "NO_MATERIAL", message: "The case has no material to generate from." });
+
+  const manifest = await material.buildManifest(found.value.id);
+  if (!manifest.ok) return failure(manifest.error);
+  const baseHeadVersion = found.value.headVersion;
+  const enqueued = await jobs.enqueue({
+    kind: "generate",
+    subjectId: found.value.id,
+    inputHash: generateInputHash(found.value.id, baseHeadVersion, manifest.value),
+    payload: { baseHeadVersion, manifest: manifest.value },
+  });
+  if (!enqueued.ok) return failure(enqueued.error);
+
+  const moved = await caseStudy.transition(found.value.id, "generate", actor.value);
+  if (moved.ok) return { ok: true, value: { jobId: enqueued.value.id } };
+  // A double click: the other press already moved the case and the job it returned is still live.
+  if (moved.error.code === "INVALID_TRANSITION" || moved.error.code === "STALE_STATUS") {
+    const again = await caseStudy.get(found.value.id);
+    if (again.ok && again.value.status === "generating" && ["queued", "running"].includes(enqueued.value.status)) {
+      return { ok: true, value: { jobId: enqueued.value.id } };
+    }
+  }
+  return failure(moved.error);
 }

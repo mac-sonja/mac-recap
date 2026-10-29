@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
-import { ok } from "@/shared/result";
+import { err, ok } from "@/shared/result";
 
 const m = vi.hoisted(() => ({
   get: vi.fn(),
@@ -245,7 +245,32 @@ describe("material index wiring", () => {
     expect(m.repo.hasMaterial).toHaveBeenCalledWith(CASE_ID);
   });
 
+  it("buildManifest lists the live assets with size and content type, plus a sha256 of the form values", async () => {
+    const first = await material.buildManifest(CASE_ID);
+    expect(first).toEqual(
+      ok({ assets: [{ id: ASSET_ID, sizeBytes: 10, contentType: "image/png" }], formHash: expect.stringMatching(/^[0-9a-f]{64}$/) }),
+    );
+    expect(m.get).toHaveBeenCalledWith(CASE_ID);
+    // Same values, same hash; a changed form value, another one. Favourites do not count.
+    m.repo.listLive.mockResolvedValueOnce(
+      ok([{ id: ASSET_ID, caseId: CASE_ID, kind: "image", originalFileName: "b.png", contentType: "image/png", sizeBytes: 10, createdBy: actor.id, createdAt: "x", deletedAt: null, isFavourite: true }]),
+    );
+    expect(await material.buildManifest(CASE_ID)).toEqual(first);
+    m.form.read.mockResolvedValueOnce(ok({ context: "Altro", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" }));
+    const changed = await material.buildManifest(CASE_ID);
+    expect(changed.ok && first.ok && changed.value.formHash !== first.value.formHash).toBe(true);
+  });
+
+  it("buildManifest passes on an unknown case, a bad id and a failed read", async () => {
+    expect((await material.buildManifest("nope")).ok).toBe(false);
+    m.get.mockResolvedValueOnce(err({ code: "NOT_FOUND", message: "x" }));
+    expect(await material.buildManifest(CASE_ID)).toEqual(err({ code: "NOT_FOUND", message: "x" }));
+    m.repo.listLive.mockResolvedValueOnce(err({ code: "ASSET_LOOKUP_FAILED", message: "x" }));
+    expect(await material.buildManifest(CASE_ID)).toEqual(err({ code: "ASSET_LOOKUP_FAILED", message: "x" }));
+  });
+
   it.each([
+    ["buildManifest", () => material.buildManifest(CASE_ID)],
     ["hasMaterial", () => material.hasMaterial(CASE_ID)],
     ["saveDetailsField", () => material.saveDetailsField(actor, detailsInput)],
     ["getDetailsForm", () => material.getDetailsForm({ caseId: CASE_ID })],

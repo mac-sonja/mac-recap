@@ -326,6 +326,62 @@ describe("failures", () => {
     await loop.stop();
   });
 
+  describe("onPermanentFailure (Story 3.7)", () => {
+    it("is called once with the failed job, after job_failed, when the last attempt fails", async () => {
+      const j = job({ kind: "generate", attempts: 3 });
+      const repo = fakeRepo([ok(j)]);
+      const onPermanentFailure = vi.fn(async () => undefined);
+      const { deps, loop } = setup(repo, {
+        generate: { run: async () => err({ code: "X_FAILED", message: "m" }), caseIdOf: () => CASE_ID, onPermanentFailure },
+      });
+      await flush();
+      expect(onPermanentFailure).toHaveBeenCalledTimes(1);
+      expect(onPermanentFailure).toHaveBeenCalledWith(expect.objectContaining({ id: j.id, status: "failed" }));
+      expect(vi.mocked(deps.recordEvent).mock.invocationCallOrder[0]).toBeLessThan(onPermanentFailure.mock.invocationCallOrder[0]);
+      await loop.stop();
+    });
+
+    it("is called for a non-retryable error on the first attempt and for a lease that expired on the last attempt", async () => {
+      const first = job({ kind: "generate", attempts: 1 });
+      const expired = job({ kind: "generate", status: "failed", attempts: 3, error: { code: "LEASE_EXPIRED", message: "m" } });
+      const repo = fakeRepo([ok(first), ok(expired)]);
+      const onPermanentFailure = vi.fn(async () => undefined);
+      const { loop } = setup(repo, {
+        generate: { run: async () => err({ code: "NO_MATERIAL", message: "m", retryable: false }), onPermanentFailure },
+      });
+      await flush();
+      expect(onPermanentFailure.mock.calls.map((c) => (c as unknown as [Job])[0].id)).toEqual([first.id, expired.id]);
+      await loop.stop();
+    });
+
+    it("is not called while attempts are left, nor when the job succeeds", async () => {
+      const retry = job({ kind: "generate", attempts: 1 });
+      const fine = job({ kind: "generate", attempts: 1 });
+      const repo = fakeRepo([ok(retry), ok(fine)]);
+      const onPermanentFailure = vi.fn(async () => undefined);
+      const outcomes = [err({ code: "X_FAILED", message: "m" }), ok_()];
+      const { loop } = setup(repo, { generate: { run: async () => outcomes.shift() as JobOutcome, onPermanentFailure } });
+      await flush();
+      expect(onPermanentFailure).not.toHaveBeenCalled();
+      await loop.stop();
+    });
+
+    it("a throwing cleanup is logged and the loop keeps going", async () => {
+      const a = job({ kind: "generate", attempts: 3 });
+      const b = job({ kind: "generate", attempts: 3 });
+      const repo = fakeRepo([ok(a), ok(b)]);
+      const onPermanentFailure = vi.fn(async () => {
+        throw new Error("secret text");
+      });
+      const { loop } = setup(repo, { generate: { run: async () => err({ code: "X_FAILED", message: "m" }), onPermanentFailure } });
+      await flush();
+      expect(onPermanentFailure).toHaveBeenCalledTimes(2);
+      expect(logged().some((l) => l.msg === "job onPermanentFailure threw")).toBe(true);
+      expect(JSON.stringify(logged())).not.toContain("secret text");
+      await loop.stop();
+    });
+  });
+
   it("a job jobs_claim failed after its last lease expired is reported as job_failed (LEASE_EXPIRED), not run", async () => {
     const j = job({ status: "failed", attempts: 3, error: { code: "LEASE_EXPIRED", message: "m" } });
     const repo = fakeRepo([ok(j)]);

@@ -163,8 +163,19 @@ export function makeStartJobLoop(deps: JobLoopDeps) {
       else log.info("job released", { jobId: lease.id, actorId });
     }
 
-    /** Writes `job_failed` on the job's case when its handler maps it to one; otherwise only logs. */
+    /** Writes `job_failed` on the job's case when its handler maps it to one; otherwise only logs. Then lets the handler clean up. */
     async function reportFailed(job: Job): Promise<void> {
+      await recordJobFailed(job);
+      const cleanup = handlers[job.kind]?.onPermanentFailure;
+      if (cleanup === undefined) return;
+      try {
+        await cleanup.call(handlers[job.kind], job);
+      } catch {
+        log.error("job onPermanentFailure threw", { jobId: job.id, actorId });
+      }
+    }
+
+    async function recordJobFailed(job: Job): Promise<void> {
       const code = job.error?.code ?? "UNKNOWN";
       let caseId: string | null = null;
       try {

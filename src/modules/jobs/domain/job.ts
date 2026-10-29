@@ -121,6 +121,13 @@ export type JobOutcome = Result<void, JobFailure>;
 export interface JobHandler {
   run(job: Job, signal: AbortSignal): Promise<JobOutcome>;
   caseIdOf?(job: Job): string | null;
+  /**
+   * Called once after the job failed for good (attempts used up, a non-retryable
+   * error, or a lease that expired on the last attempt), after `job_failed` is
+   * written. Undoes what the job left half done (e.g. a case stuck in `generating`).
+   * A throw is logged and ignored; the job stays failed.
+   */
+  onPermanentFailure?(job: Job): Promise<void>;
 }
 
 /** One handler per kind; the worker claims only kinds that have one. */

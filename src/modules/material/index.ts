@@ -10,6 +10,7 @@ import { createSupabaseAssetRepository } from "@/modules/material/adapters/supab
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
 import { createSupabaseObjectStorage } from "@/modules/material/adapters/supabase/object-storage";
 import { createSupabaseRenditionRepository } from "@/modules/material/adapters/supabase/rendition-repository";
+import { makeBuildManifest, type MaterialManifest } from "@/modules/material/application/build-manifest";
 import { makeConfirmUpload } from "@/modules/material/application/confirm-upload";
 import type { MaterialDeps } from "@/modules/material/application/deps";
 import { makeGetDetailsForm } from "@/modules/material/application/get-details-form";
@@ -60,6 +61,7 @@ export {
 export type { AllowedContentType, AssetKind } from "@/modules/material/domain/files";
 export { RENDITION_NOT_READY, RENDITION_SPEC_NAMES } from "@/modules/material/domain/rendition";
 export type { RenditionLink, RenditionSpecName } from "@/modules/material/domain/rendition";
+export type { MaterialManifest } from "@/modules/material/application/build-manifest";
 export type { PresignedAssetUpload } from "@/modules/material/application/presign-upload";
 
 /** One Supabase Storage adapter, built on first use and reused across requests. */
@@ -156,6 +158,16 @@ export function setFavourite(actor: Actor, input: unknown): Promise<Result<void>
  */
 export function hasMaterial(caseId: unknown): Promise<Result<boolean>> {
   return makeHasMaterial(storagelessDeps())(caseId);
+}
+
+/**
+ * The material manifest of a case now (Story 3.7): `{ assets: [{ id, sizeBytes, contentType }]
+ * (non-deleted, oldest first), formHash }` where `formHash` is a sha256 of the details-form
+ * values. A generate job stores it and the worker reads only those assets. Reads only; never
+ * touches storage. Errors: `INVALID_INPUT`, `NOT_FOUND`, `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`.
+ */
+export function buildManifest(caseId: unknown): Promise<Result<MaterialManifest>> {
+  return makeBuildManifest(storagelessDeps())(caseId);
 }
 
 /**

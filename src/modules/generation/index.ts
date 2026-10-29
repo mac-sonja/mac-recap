@@ -112,6 +112,12 @@ export {
 } from "@/modules/generation/application/test-draft";
 export type { CaseDocumentInput, DraftText, TestDraftForm, TestDraftInput } from "@/modules/generation/application/test-draft";
 
+/** Story 3.7: the generate job's payload, input hash and the text-source seam Story 3.6 replaces (pure; the handler is in `worker.ts`). */
+export { generateInputHash, generatePayloadSchema, JOB_OK } from "@/modules/generation/application/generate-case";
+export type { GenerateManifest, GeneratePayload } from "@/modules/generation/application/generate-case";
+export { testDraftTextSource } from "@/modules/generation/application/text-source";
+export type { TextSource, TextSourceInput } from "@/modules/generation/application/text-source";
+
 /** The uuid prefix of the ids an upgrade gives the template's pages; a 12-digit counter per format follows. */
 export const UPGRADE_ID_PREFIX = "00000000-0000-4000-8000-";
 

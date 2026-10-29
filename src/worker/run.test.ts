@@ -57,11 +57,14 @@ afterEach(() => {
 });
 
 describe("workerHandlers", () => {
-  it("registers exactly the rendition handler (Story 3.2)", () => {
+  it("registers the rendition (Story 3.2) and generate (Story 3.7) handlers", () => {
     const handlers = workerHandlers();
-    expect(Object.keys(handlers)).toEqual(["rendition"]);
+    expect(Object.keys(handlers).sort()).toEqual(["generate", "rendition"]);
     expect(typeof handlers.rendition?.run).toBe("function");
     expect(typeof handlers.rendition?.caseIdOf).toBe("function");
+    expect(typeof handlers.generate?.run).toBe("function");
+    expect(typeof handlers.generate?.caseIdOf).toBe("function");
+    expect(typeof handlers.generate?.onPermanentFailure).toBe("function");
   });
 });
 

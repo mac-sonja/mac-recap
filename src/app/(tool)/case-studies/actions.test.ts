@@ -17,6 +17,11 @@ const {
   getDetailsUseCase,
   listAssetsUseCase,
   setFavouriteUseCase,
+  getCaseUseCase,
+  transitionUseCase,
+  hasMaterialUseCase,
+  buildManifestUseCase,
+  enqueueUseCase,
 } = vi.hoisted(() => ({
   getActor: vi.fn(),
   create: vi.fn(),
@@ -31,6 +36,11 @@ const {
   getDetailsUseCase: vi.fn(),
   listAssetsUseCase: vi.fn(),
   setFavouriteUseCase: vi.fn(),
+  getCaseUseCase: vi.fn(),
+  transitionUseCase: vi.fn(),
+  hasMaterialUseCase: vi.fn(),
+  buildManifestUseCase: vi.fn(),
+  enqueueUseCase: vi.fn(),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -38,7 +48,14 @@ vi.mock("@/modules/access", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/modules/access")>()),
   getActor,
 }));
-vi.mock("@/modules/case-study", () => ({ create, updateDetails, deleteCaseStudy: deleteCaseStudyUseCase }));
+vi.mock("@/modules/case-study", () => ({
+  create,
+  updateDetails,
+  deleteCaseStudy: deleteCaseStudyUseCase,
+  get: getCaseUseCase,
+  transition: transitionUseCase,
+}));
+vi.mock("@/modules/jobs", () => ({ enqueue: enqueueUseCase }));
 vi.mock("@/modules/material", () => ({
   presignUpload,
   confirmUpload,
@@ -49,6 +66,8 @@ vi.mock("@/modules/material", () => ({
   getDetailsForm: getDetailsUseCase,
   listAssets: listAssetsUseCase,
   setFavourite: setFavouriteUseCase,
+  hasMaterial: hasMaterialUseCase,
+  buildManifest: buildManifestUseCase,
 }));
 
 const {
@@ -64,6 +83,7 @@ const {
   getDetailsForm,
   listAssets,
   setAssetFavourite,
+  generateCaseStudy,
 } = await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({
@@ -499,5 +519,127 @@ describe("setAssetFavourite action", () => {
       status: 400,
       error: { code: "INVALID_INPUT", message: "Invalid or missing: isFavourite.", fields: ["isFavourite"] },
     });
+  });
+});
+
+describe("generateCaseStudy action (Story 3.7a)", () => {
+  const CASE_ID = "11111111-1111-4111-8111-111111111111";
+  const draft = { ...created, id: CASE_ID, status: "draft" as const, headVersion: 4 };
+  const manifest = { assets: [{ id: "22222222-2222-4222-8222-222222222222", sizeBytes: 10, contentType: "image/png" }], formHash: "h" };
+  const job = (status: "queued" | "running" | "succeeded" = "queued") => ({ id: "33333333-3333-4333-8333-333333333333", status });
+
+  beforeEach(() => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    getCaseUseCase.mockResolvedValue(ok(draft));
+    hasMaterialUseCase.mockResolvedValue(ok(true));
+    buildManifestUseCase.mockResolvedValue(ok(manifest));
+    enqueueUseCase.mockResolvedValue(ok(job()));
+    transitionUseCase.mockResolvedValue(ok({ ...draft, status: "generating" }));
+  });
+
+  it("enqueues one generate job with the manifest and head version, then moves the case to generating", async () => {
+    expect(await generateCaseStudy({ caseId: CASE_ID })).toEqual({ ok: true, value: { jobId: job().id } });
+    expect(enqueueUseCase).toHaveBeenCalledExactlyOnceWith({
+      kind: "generate",
+      subjectId: CASE_ID,
+      inputHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      payload: { baseHeadVersion: 4, manifest },
+    });
+    expect(transitionUseCase).toHaveBeenCalledExactlyOnceWith(CASE_ID, "generate", actor("owner_designer"));
+    expect(enqueueUseCase.mock.invocationCallOrder[0]).toBeLessThan(transitionUseCase.mock.invocationCallOrder[0]);
+  });
+
+  it("gives the same input hash to the same case, head and manifest, and another one when any changes", async () => {
+    const hashOf = async () => {
+      enqueueUseCase.mockClear();
+      await generateCaseStudy({ caseId: CASE_ID });
+      return enqueueUseCase.mock.calls[0][0].inputHash as string;
+    };
+    const first = await hashOf();
+    expect(await hashOf()).toBe(first);
+    getCaseUseCase.mockResolvedValue(ok({ ...draft, headVersion: 5 }));
+    expect(await hashOf()).not.toBe(first);
+    getCaseUseCase.mockResolvedValue(ok(draft));
+    buildManifestUseCase.mockResolvedValue(ok({ ...manifest, formHash: "other" }));
+    expect(await hashOf()).not.toBe(first);
+  });
+
+  it("a double click: both calls get the same job, and the second transition finding the case generating is success", async () => {
+    transitionUseCase.mockResolvedValueOnce(ok({})).mockResolvedValueOnce(err({ code: "STALE_STATUS", message: "m" }));
+    const first = await generateCaseStudy({ caseId: CASE_ID });
+    getCaseUseCase.mockResolvedValueOnce(ok(draft)).mockResolvedValueOnce(ok({ ...draft, status: "generating" }));
+    const second = await generateCaseStudy({ caseId: CASE_ID });
+    expect(second).toEqual(first);
+    expect(enqueueUseCase.mock.calls[0][0]).toEqual(enqueueUseCase.mock.calls[1][0]);
+  });
+
+  it("INVALID_TRANSITION with the case generating and the job live is success too", async () => {
+    transitionUseCase.mockResolvedValue(err({ code: "INVALID_TRANSITION", message: "m" }));
+    getCaseUseCase.mockResolvedValueOnce(ok(draft)).mockResolvedValueOnce(ok({ ...draft, status: "generating" }));
+    expect(await generateCaseStudy({ caseId: CASE_ID })).toEqual({ ok: true, value: { jobId: job().id } });
+  });
+
+  it("a failed transition with the case not generating is the error", async () => {
+    transitionUseCase.mockResolvedValue(err({ code: "STALE_STATUS", message: "m" }));
+    getCaseUseCase.mockResolvedValueOnce(ok(draft)).mockResolvedValueOnce(ok({ ...draft, status: "in_review" }));
+    expect(await generateCaseStudy({ caseId: CASE_ID })).toEqual({ ok: false, status: 409, error: { code: "STALE_STATUS", message: "m" } });
+  });
+
+  it("a failed transition with a finished job is the error, not success", async () => {
+    enqueueUseCase.mockResolvedValue(ok(job("succeeded")));
+    transitionUseCase.mockResolvedValue(err({ code: "STALE_STATUS", message: "m" }));
+    getCaseUseCase.mockResolvedValueOnce(ok(draft)).mockResolvedValueOnce(ok({ ...draft, status: "generating" }));
+    expect((await generateCaseStudy({ caseId: CASE_ID })).ok).toBe(false);
+  });
+
+  it("other transition errors are returned", async () => {
+    transitionUseCase.mockResolvedValue(err({ code: "CASE_STUDY_WRITE_FAILED", message: "m" }));
+    expect(await generateCaseStudy({ caseId: CASE_ID })).toEqual({ ok: false, status: 500, error: { code: "CASE_STUDY_WRITE_FAILED", message: "m" } });
+  });
+
+  it("without material: NO_MATERIAL (409), no job, no transition", async () => {
+    hasMaterialUseCase.mockResolvedValue(ok(false));
+    expect(await generateCaseStudy({ caseId: CASE_ID })).toMatchObject({ ok: false, status: 409, error: { code: "NO_MATERIAL" } });
+    expect(enqueueUseCase).not.toHaveBeenCalled();
+    expect(transitionUseCase).not.toHaveBeenCalled();
+  });
+
+  it.each(["generating", "in_review", "approved"] as const)("a %s case is rejected with STALE_STATUS and nothing is written", async (status) => {
+    getCaseUseCase.mockResolvedValue(ok({ ...draft, status }));
+    expect(await generateCaseStudy({ caseId: CASE_ID })).toMatchObject({ ok: false, status: 409, error: { code: "STALE_STATUS" } });
+    expect(hasMaterialUseCase).not.toHaveBeenCalled();
+    expect(enqueueUseCase).not.toHaveBeenCalled();
+    expect(transitionUseCase).not.toHaveBeenCalled();
+  });
+
+  it.each(["account_sales_social", "system"] as const)("%s gets 403 before anything is read", async (role) => {
+    getActor.mockResolvedValue(ok(actor(role)));
+    expect(await generateCaseStudy({ caseId: CASE_ID })).toMatchObject({ ok: false, status: 403, error: { code: "FORBIDDEN" } });
+    expect(getCaseUseCase).not.toHaveBeenCalled();
+    expect(enqueueUseCase).not.toHaveBeenCalled();
+  });
+
+  it("admin may generate", async () => {
+    getActor.mockResolvedValue(ok(actor("admin")));
+    expect((await generateCaseStudy({ caseId: CASE_ID })).ok).toBe(true);
+  });
+
+  it("a missing or non-string caseId is INVALID_INPUT naming caseId", async () => {
+    for (const bad of [undefined, null, {}, { caseId: 5 }]) {
+      expect(await generateCaseStudy(bad)).toEqual({
+        ok: false,
+        status: 400,
+        error: { code: "INVALID_INPUT", message: "Invalid or missing: caseId.", fields: ["caseId"] },
+      });
+    }
+    expect(getCaseUseCase).not.toHaveBeenCalled();
+  });
+
+  it("an unknown case is 404 and a failed enqueue is returned", async () => {
+    getCaseUseCase.mockResolvedValueOnce(err({ code: "NOT_FOUND", message: "m" }));
+    expect(await generateCaseStudy({ caseId: CASE_ID })).toMatchObject({ ok: false, status: 404 });
+    enqueueUseCase.mockResolvedValue(err({ code: "JOB_WRITE_FAILED", message: "m" }));
+    expect(await generateCaseStudy({ caseId: CASE_ID })).toMatchObject({ ok: false, status: 500 });
+    expect(transitionUseCase).not.toHaveBeenCalled();
   });
 });
