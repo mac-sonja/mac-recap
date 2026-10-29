@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
-import type { CaseClientInfo, CaseStudy, CaseStudyRevision, ClientDetail } from "@/modules/case-study";
+import type { CaseActivity, CaseClientInfo, CaseStudy, CaseStudyRevision, ClientDetail } from "@/modules/case-study";
 import { caseHistoryV2 } from "@/modules/generation";
 import type { DetailsForm, ListedAsset, RenditionLink } from "@/modules/material";
 import { FORMAT_IDS } from "@/modules/rendering";
@@ -12,6 +12,7 @@ const get = vi.fn<(id: unknown) => Promise<Result<CaseStudy>>>();
 const getLiveRevision = vi.fn<(subject: unknown) => Promise<Result<CaseStudyRevision | null>>>();
 const getClientInfoForCase = vi.fn<(id: unknown) => Promise<Result<CaseClientInfo>>>();
 const getClient = vi.fn<(id: unknown) => Promise<Result<ClientDetail>>>();
+const listCaseActivity = vi.fn<(id: unknown) => Promise<Result<CaseActivity[]>>>();
 const getDetailsForm = vi.fn<(input: unknown) => Promise<Result<DetailsForm>>>();
 const listAssets = vi.fn<(input: unknown) => Promise<Result<ListedAsset[]>>>();
 const getRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Result<RenditionLink>>>();
@@ -24,16 +25,20 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT ${path}`);
   }),
 }));
+// Elimina's dialog calls the server action; the page test never presses it.
+vi.mock("@/app/(tool)/case-studies/actions", () => ({ deleteCaseStudy: vi.fn() }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string, resource?: unknown) => requireSurface(action, resource) }));
 vi.mock("@/modules/case-study", () => ({
   get: (id: unknown) => get(id),
   getLiveRevision: (subject: unknown) => getLiveRevision(subject),
   getClientInfoForCase: (id: unknown) => getClientInfoForCase(id),
   getClient: (id: unknown) => getClient(id),
+  listCaseActivity: (id: unknown) => listCaseActivity(id),
 }));
 vi.mock("@/modules/material", () => ({
   getDetailsForm: (input: unknown) => getDetailsForm(input),
@@ -137,7 +142,8 @@ const link = (url: string): Result<RenditionLink> => ok({ url, width: 100, heigh
 const render = async (caseId = ID) => renderToStaticMarkup(await CaseViewPage({ params: Promise.resolve({ caseId }) }));
 
 beforeEach(() => {
-  for (const fn of [requireSurface, get, getLiveRevision, getClientInfoForCase, getClient, getDetailsForm, listAssets, getRendition]) fn.mockReset();
+  for (const fn of [requireSurface, get, getLiveRevision, getClientInfoForCase, getClient, getDetailsForm, listAssets, getRendition, listCaseActivity]) fn.mockReset();
+  listCaseActivity.mockResolvedValue(ok([]));
   requireSurface.mockResolvedValue(shell);
   get.mockResolvedValue(ok(approved));
   getLiveRevision.mockResolvedValue(ok(revision));
@@ -159,9 +165,10 @@ describe("CaseViewPage", () => {
     expect(getLiveRevision).toHaveBeenCalledWith({ kind: "case", id: ID });
     expect(getDetailsForm).toHaveBeenCalledWith({ caseId: ID });
     expect(getClient).toHaveBeenCalledWith(CLIENT_ID);
-    // The frame: back, name, code, badge, the format switch, Scarica and Modifica.
-    expect(html).toContain('aria-label="Torna alle case history"');
-    expect(html).toContain('href="/case-studies"');
+    // The client-page layout: back, name, code, badge, the format switch, Scarica and Modifica.
+    expect(html).toMatch(/href="\/case-studies"[^>]*>.*Torna alle case history<\/a>/);
+    expect(html).toMatch(/<h1[^>]*>Rebrand Lumen 2026<\/h1>/);
+    expect(html).not.toContain("h-dvh");
     expect(html).toContain("Rebrand Lumen 2026");
     expect(html).toContain("LUM-2026-01");
     expect(html).toContain('data-status="approved"');
@@ -174,13 +181,81 @@ describe("CaseViewPage", () => {
     expect(html).not.toContain('aria-label="Proprietà"');
     expect(html).not.toContain('aria-label="Anteprima"');
     expect(html).not.toContain(">Approva<");
+    // Raccolte, empty until Story 5.10, and Elimina for an Owner.
+    expect(html).toMatch(/<h2[^>]*>Raccolte<\/h2>/);
+    expect(html).toContain("Non è in nessuna raccolta.");
+    expect(html).toMatch(/<button[^>]*>Elimina<\/button>/);
+  });
+
+  it("lists this case's Attività as Home phrases it, newest first, between Raccolte and Elimina, with no links", async () => {
+    const event = (n: number, over: Partial<CaseActivity>): CaseActivity => ({
+      id: `eeeeeeee-0000-4000-8000-00000000000${n}`,
+      type: "transition",
+      at: `2026-10-14T1${n}:00:00Z`,
+      data: {},
+      actorName: "Giulia Riva",
+      case: { id: ID, name: approved.name, code: approved.code, status: "approved" },
+      ...over,
+    });
+    listCaseActivity.mockResolvedValue(
+      ok([
+        event(5, { data: { event: "approve" } }),
+        event(4, { actorName: null, data: { event: "generation_succeeded" } }),
+        event(3, { data: { event: "generate" } }),
+        event(2, { type: "asset_uploaded" }),
+        event(1, { type: "asset_uploaded" }),
+        event(0, { type: "case_created" }),
+      ]),
+    );
+    requireSurface.mockResolvedValue(shellFor("account_sales_social"));
+    const html = await render();
+    expect(listCaseActivity).toHaveBeenCalledWith(ID);
+    const card = html.match(/<section aria-labelledby="case-activity-heading"[^>]*>(.*?)<\/section>/)?.[1] ?? "";
+    expect(card).toMatch(/<h2 id="case-activity-heading"[^>]*>Attività<\/h2>/);
+    const text = [...card.matchAll(/<li [^>]*>(.*?)<\/li>/g)].map((m) => m[1].replace(/<time[^>]*>.*?<\/time>/, "").replace(/<[^>]+>/g, ""));
+    expect(text).toEqual([
+      "Giulia Riva ha approvato Rebrand Lumen 2026.",
+      "La bozza di Rebrand Lumen 2026 è pronta da rivedere.",
+      "Giulia Riva ha avviato la bozza di Rebrand Lumen 2026.",
+      "Giulia Riva ha caricato 2 file in Rebrand Lumen 2026.",
+      "Giulia Riva ha creato Rebrand Lumen 2026.",
+    ]);
+    expect(card).not.toContain("<a ");
+    expect(html.indexOf(">Raccolte<")).toBeLessThan(html.indexOf("case-activity-heading"));
+    requireSurface.mockResolvedValue(shell);
+    const owner = await render();
+    expect(owner.indexOf("case-activity-heading")).toBeLessThan(owner.search(/<button[^>]*>Elimina<\/button>/));
+  });
+
+  it("shows its empty line when the case has no events", async () => {
+    expect(await render()).toContain("Ancora nessuna attività.");
+  });
+
+  it.each(["CASE_ACTIVITY_LOOKUP_FAILED", "CASE_ACTIVITY_INVALID"] as const)("shows Home's failed line on %s and still renders the rest", async (code) => {
+    listCaseActivity.mockResolvedValue(err({ code, message: "x" }));
+    const html = await render();
+    expect(html).toContain("Non siamo riusciti a caricare le attività. Ricarica la pagina per riprovare.");
+    expect(html).toContain("Non è in nessuna raccolta.");
+    expect(html).toMatch(/data-canvas-page="[^"]+"/);
+  });
+
+  it("shows Elimina to an Amministratore, and none to an Editor", async () => {
+    requireSurface.mockResolvedValue(shellFor("admin"));
+    expect(await render()).toMatch(/<button[^>]*>Elimina<\/button>/);
+    requireSurface.mockResolvedValue(shellFor("account_sales_social"));
+    const html = await render();
+    expect(html).not.toMatch(/>Elimina</);
+    expect(html).toContain("Non è in nessuna raccolta.");
   });
 
   it("draws the live revision's pages with the renderer", async () => {
     const html = await render();
     expect(html).toContain('data-template="mac-case@1"');
     expect(html).toMatch(/data-canvas-page="[^"]+"/);
-    expect(html).toContain("1 · ");
+    // One slide at a time, under the viewer's counter.
+    expect(html.match(/data-canvas-page="/g)).toHaveLength(1);
+    const pages = revision.doc.formats.presentazione_16_9!.pages;
+    expect(html).toContain(`1 di ${pages.length} · ${pages[0]!.name}`);
   });
 
   it("gives the renderer only ready renditions and a video its ready poster", async () => {
@@ -202,9 +277,7 @@ describe("CaseViewPage", () => {
     getLiveRevision.mockResolvedValue(ok(null));
     const html = await render();
     expect(html).toContain("Bozza di prova");
-    expect(html).toContain("1 · Intro");
-    expect(html).toContain("2 · Contenuti");
-    expect(html).toContain("3 · Risultati e testimonial");
+    expect(html).toContain("1 di 3 · Intro");
     expect(html).toContain("Illuminazione");
     expect(html).toContain("Web design");
   });

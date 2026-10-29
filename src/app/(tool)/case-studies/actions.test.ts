@@ -166,18 +166,35 @@ describe("updateCaseStudyDetails", () => {
 });
 
 describe("deleteCaseStudy", () => {
-  it("deletes the draft for an owner/designer, passing the input unchanged", async () => {
-    getActor.mockResolvedValue(ok(actor("owner_designer")));
+  it.each(["owner_designer", "admin"] as const)("deletes a draft or an approved case for %s, passing the input unchanged", async (role) => {
+    getActor.mockResolvedValue(ok(actor(role)));
     deleteCaseStudyUseCase.mockResolvedValue(ok(undefined));
-    expect(await deleteCaseStudy({ caseId: created.id })).toEqual({ ok: true, value: undefined });
-    expect(deleteCaseStudyUseCase).toHaveBeenCalledWith(actor("owner_designer"), { caseId: created.id });
+    for (const status of ["draft", "approved"] as const) {
+      expect(await deleteCaseStudy({ caseId: created.id, status })).toEqual({ ok: true, value: undefined });
+      expect(deleteCaseStudyUseCase).toHaveBeenLastCalledWith(actor(role), { caseId: created.id, status });
+    }
   });
 
   it.each(["account_sales_social", "system"] as const)("returns 403 FORBIDDEN for %s and never calls the use case", async (role) => {
     getActor.mockResolvedValue(ok(actor(role)));
-    const result = await deleteCaseStudy({ caseId: created.id });
-    expect(result).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
+    for (const payload of [{ caseId: created.id, status: "draft" }, { caseId: created.id, status: "approved" }, {}, null]) {
+      const result = await deleteCaseStudy(payload);
+      expect(result).toEqual({ ok: false, status: 403, error: { code: "FORBIDDEN", message: expect.any(String) } });
+    }
     expect(deleteCaseStudyUseCase).not.toHaveBeenCalled();
+  });
+
+  it("authorizes a missing or other status as a draft and leaves its rejection to the use case", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    deleteCaseStudyUseCase.mockResolvedValue(err({ code: "INVALID_INPUT", message: "Invalid or missing: status.", details: { fields: ["status"] } }));
+    for (const payload of [{ caseId: created.id }, { caseId: created.id, status: "in_review" }]) {
+      expect(await deleteCaseStudy(payload)).toEqual({
+        ok: false,
+        status: 400,
+        error: { code: "INVALID_INPUT", message: "Invalid or missing: status.", fields: ["status"] },
+      });
+      expect(deleteCaseStudyUseCase).toHaveBeenLastCalledWith(actor("owner_designer"), payload);
+    }
   });
 
   it.each([
@@ -187,7 +204,7 @@ describe("deleteCaseStudy", () => {
   ] as const)("maps %s to %i", async (code, status) => {
     getActor.mockResolvedValue(ok(actor("owner_designer")));
     deleteCaseStudyUseCase.mockResolvedValue(err({ code, message: "m", details: { id: created.id } }));
-    expect(await deleteCaseStudy({ caseId: created.id })).toEqual({ ok: false, status, error: { code, message: "m" } });
+    expect(await deleteCaseStudy({ caseId: created.id, status: "approved" })).toEqual({ ok: false, status, error: { code, message: "m" } });
   });
 });
 

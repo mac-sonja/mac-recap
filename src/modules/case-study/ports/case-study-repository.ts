@@ -1,5 +1,12 @@
 import type { CaseEvent } from "@/modules/case-study/domain/case-event";
-import type { CaseStudy, CreateCaseStudyInput, ListedCaseStudy, ListScope, UpdateCaseStudyDetailsInput } from "@/modules/case-study/domain/case-study";
+import type {
+  CaseStudy,
+  CreateCaseStudyInput,
+  DeletableStatus,
+  ListedCaseStudy,
+  ListScope,
+  UpdateCaseStudyDetailsInput,
+} from "@/modules/case-study/domain/case-study";
 import type { TransitionEvent } from "@/modules/case-study/domain/transition";
 import type { CaseStatus } from "@/shared/case-status";
 import type { Result } from "@/shared/result";
@@ -42,12 +49,12 @@ export interface CaseStudyRepository {
    */
   transition(change: StatusChange): Promise<Result<CaseStudy>>;
   /**
-   * Soft-deletes a non-deleted draft (`deleted_at`) and appends its `case_deleted` event
-   * atomically. `err NOT_FOUND` (unknown or already deleted), `err CASE_NOT_DELETABLE`
-   * (no longer a draft), otherwise `err` only when the write fails. Nothing is written
-   * on any `err`; no row or object is ever removed.
+   * Soft-deletes a non-deleted case in `status` (`deleted_at`) and appends its `case_deleted`
+   * event (reason `{status}_deleted`) atomically. `err NOT_FOUND` (unknown or already
+   * deleted), `err CASE_NOT_DELETABLE` (the case is no longer in `status`), otherwise `err`
+   * only when the write fails. Nothing is written on any `err`; no row or object is ever removed.
    */
-  softDelete(caseId: string, actorId: string): Promise<Result<void>>;
+  softDelete(caseId: string, status: DeletableStatus, actorId: string): Promise<Result<void>>;
 }
 
 export interface StatusChange {

@@ -42,10 +42,10 @@ const UPDATE_DETAILS_REFUSALS: Refusals = {
   INVALID_INPUT: { code: "INVALID_INPUT", message: "businessLines: Required." },
   CLIENT_NOT_FOUND: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
 };
-/** `delete_case_study` raises these (Story 4.1); nothing is written then. */
+/** `delete_case_study` raises these (Stories 4.1, 5.2); nothing is written then. */
 const DELETE_REFUSALS: Refusals = {
   NOT_FOUND: { code: "NOT_FOUND", message: "No case study with this id." },
-  CASE_NOT_DELETABLE: { code: "CASE_NOT_DELETABLE", message: "Only a draft can be deleted." },
+  CASE_NOT_DELETABLE: { code: "CASE_NOT_DELETABLE", message: "The case study is no longer in the status being deleted." },
 };
 /** Postgres check_violation, and the constraint naming a business line outside the list. */
 const CHECK_VIOLATION = "23514";
@@ -289,12 +289,12 @@ export function createSupabaseCaseStudyRepository(
       return reread(data.id, { actorId: change.actorId, what: "transition" });
     },
 
-    async softDelete(caseId, actorId) {
-      // One Postgres function checks the draft, sets `deleted_at` and appends `case_deleted` atomically.
-      const { error } = await client().rpc("delete_case_study", { p_case_id: caseId, p_actor_id: actorId });
+    async softDelete(caseId, status, actorId) {
+      // One Postgres function checks the status, sets `deleted_at` and appends `case_deleted` atomically.
+      const { error } = await client().rpc("delete_case_study", { p_case_id: caseId, p_actor_id: actorId, p_status: status });
       if (error) {
         const refused = refusalOf(error, DELETE_REFUSALS);
-        if (refused) return err({ ...refused, details: { id: caseId } });
+        if (refused) return err({ ...refused, details: { id: caseId, status } });
         log.error(`case_study delete failed: ${error.code}`, { caseId, actorId });
         return err({ code: "CASE_STUDY_WRITE_FAILED", message: "Could not delete the case study.", details: { caseId } });
       }

@@ -218,7 +218,7 @@
   summary: Keyboard selection of blocks and elements on the configurator canvas (today pages are reachable by keyboard through the Pagine thumbnails; blocks and elements only by pointer).
   evidence: Review of 4.2a (maybe-false, medium if keyboard selection is required): `CanvasPage` handles clicks only; settle with the owner before 4.3 makes selection the way into editing.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
-  summary: Elimina on an approved case's detail page (owner 2026-10-28): soft delete confirmed by typing *elimina*, Owner and Amministratore only (`delete case` covers draft or approved), new migration redefining `delete_case_study` (reason `approved_deleted`), AR3 amended; its links stop working (note on 5.5/5.7) and it leaves client packs and collections (note on 5.9/5.10).
+  summary: Resolved by `spec-5-2-elimina-approved-case.md` (2026-10-28). Was: Elimina on an approved case's detail page (owner 2026-10-28): soft delete confirmed by typing *elimina*, Owner and Amministratore only (`delete case` covers draft or approved), new migration redefining `delete_case_study` (reason `approved_deleted`), AR3 amended; its links stop working (note on 5.5/5.7) and it leaves client packs and collections (note on 5.9/5.10).
   evidence: Split from the detail-page spec at the owner's choice (2026-10-28) to keep each spec under the size limit; built right after it, on the same page.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
   summary: On the approved case detail page (and the configurator), one rendition failure other than "not ready" (e.g. `STORAGE_FAILED`) throws the whole page into the error boundary, even for an asset the revision doesn't use; draw it as an empty cell instead, or sign only referenced assets.
@@ -226,3 +226,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-7-generate-a-case-study.md`
   summary: Story 3.7b — the screens for Generate: wizard step 3 (counter "{n} file, {m} di 3 dettagli", Genera disabled without material with its reason linked by aria-describedby, the generating screen with "Torna ai casi", the failure state with Riprova that runs the same action), the wizard page rendering a generating case instead of redirecting, the Case table refreshing while a row is generating, and "Ancora in elaborazione" when an In elaborazione row is clicked; all copy in it.ts.
   evidence: Split from Story 3.7 at the owner's choice (2026-10-29) to keep the spec under the size limit; 3.7a ships the action, the generate job handler and the failure path first, with no UI.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
+  summary: Resolved by `spec-5-2-preview-controls.md` (2026-10-29). Was: Story 5.2 preview controls on the approved case detail page: pager ("Slide 1 of 12"), zoom − / 100% / +, fit and full screen.
+  evidence: Split from the remaining Story 5.2 scope at the owner's choice (2026-10-28); Elimina goes first, this is independently shippable.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
+  summary: Story 5.2 narrow viewports on the approved case detail page: the format list as a dropdown at 1024–1279 px, and a working preview below 1024 px (replacing the larger-screen message).
+  evidence: Split from the remaining Story 5.2 scope at the owner's choice (2026-10-28); Elimina goes first, this is independently shippable.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-elimina-approved-case.md`
+  summary: Resolved by `spec-5-2-case-activity-log.md` (2026-10-29). Was: activity log on the approved case detail page: Home's *Attività* lines (same sentences and icons, from `case_event`) filtered to this case, below the preview.
+  evidence: Asked by the owner (2026-10-28) while planning Elimina; split at the owner's choice to keep the spec under the size limit; built right after it, on the same page.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-elimina-approved-case.md`
+  summary: Once no running image calls `delete_case_study` with two arguments, a migration may drop the `p_status` default (`draft`) so every caller states the status.
+  evidence: The default keeps the migration compatible with the previous image during a deploy (README, Migrations: add before you remove).

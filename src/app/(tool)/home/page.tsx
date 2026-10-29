@@ -1,16 +1,4 @@
-import {
-  ArrowRight,
-  Check,
-  ChevronRight,
-  CircleAlert,
-  FilePlus2,
-  NotebookPen,
-  PenLine,
-  Sparkles,
-  Trash2,
-  Upload,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -22,10 +10,11 @@ import { caseHref, caseStudiesHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
 import { authorize, can, type CaseStatus } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
-import { formatDateTime, formatRelative } from "@/shared/i18n/format";
+import { formatDateTime } from "@/shared/i18n/format";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import { activityLines, type ActivityKind, type ActivityLine } from "./_lib/activity-lines";
+import { ActivityCard } from "../_components/activity-card";
+import { activityLines } from "../_lib/activity-lines";
 
 /** How many cases each list on the Dashboard shows before *Vedi tutte*. */
 const LIST_SIZE = 5;
@@ -126,93 +115,6 @@ function CaseList({
   );
 }
 
-/** The icon in front of each *Attività* line, by what happened (owner, 2026-10-21). */
-const ACTIVITY_ICON: Readonly<Record<ActivityKind, LucideIcon>> = {
-  created: FilePlus2,
-  detailsUpdated: PenLine,
-  storyWritten: NotebookPen,
-  uploaded: Upload,
-  removed: Trash2,
-  generate: Sparkles,
-  generated: Sparkles,
-  generationFailed: CircleAlert,
-  approved: Check,
-};
-
-/** An *Attività* sentence with the case name in bold where the template says `{name}`. */
-function ActivitySentence({ template, name }: { template: string; name: string }) {
-  const [before, after] = template.split("{name}");
-  return (
-    <>
-      {before}
-      <strong className="font-semibold text-foreground-strong">{name}</strong>
-      {after}
-    </>
-  );
-}
-
-/**
- * The event log as short sentences: an icon by kind, who did what to which case,
- * and how long ago. Scrolls inside its card. `lines` is null when the log could not be read.
- */
-function Activity({ lines, more, canEdit }: { lines: readonly ActivityLine[] | null; more?: ReactNode; canEdit: boolean }) {
-  return (
-    <section aria-labelledby="home-activity" className={cn(CARD, "flex flex-col")}>
-      <div className="flex items-center justify-between gap-4 px-5 pt-4 pb-2">
-        <h2 id="home-activity" className="font-heading text-[15px] font-semibold text-foreground-strong">
-          {it.home.activity.heading}
-        </h2>
-        {more}
-      </div>
-      {lines === null || lines.length === 0 ? (
-        <p className="px-5 pt-2 pb-6 font-body text-sm text-foreground-muted">
-          {lines === null ? it.home.activity.failed : it.home.activity.empty}
-        </p>
-      ) : (
-        // Three entries tall (owner, 2026-10-21; a one-line entry is 67 px), the rest
-        // scrolls inside the card; focusable so it scrolls from the keyboard too.
-        <ul
-          tabIndex={0}
-          aria-labelledby="home-activity"
-          className="flex max-h-[201px] flex-col overflow-y-auto overscroll-contain px-5 pb-2 focus-visible:outline-offset-[-2px]"
-        >
-          {lines.map((line) => {
-            const Icon = ACTIVITY_ICON[line.kind];
-            const href = caseHref(line.caseId, line.caseStatus, canEdit);
-            const content = (
-              <>
-                <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-foreground-muted" strokeWidth={1.75} />
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="font-body text-sm text-foreground">
-                    <ActivitySentence template={line.template} name={line.caseName} />
-                  </span>
-                  <time dateTime={line.at} title={formatDateTime(line.at)} className="font-label text-xs text-foreground-muted">
-                    {formatRelative(line.at)}
-                  </time>
-                </span>
-              </>
-            );
-            return (
-              <li key={line.id} className="border-b border-border last:border-b-0">
-                {href === null ? (
-                  <div className="flex items-start gap-3 py-3.5">{content}</div>
-                ) : (
-                  <Link
-                    href={href}
-                    className="-mx-2 flex items-start gap-3 rounded-md px-2 py-3.5 transition-colors duration-150 hover:bg-surface-hover"
-                  >
-                    {content}
-                  </Link>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 /**
  * The Dashboard (owner/designer landing at `/home`, 2026-10-21): a greeting,
  * three numbers (to approve, being written, open drafts), the cases waiting for
@@ -229,10 +131,12 @@ export default async function HomePage() {
 
   const [listed, activity] = await Promise.all([caseStudy.list(scope), caseStudy.listActivity(scope)]);
   if (!listed.ok) throw new Error(`Case studies could not be listed: ${listed.error.code}`);
-  // A log that can't be read leaves the rest of the Dashboard working: Attività says so.
-  const lines = activity.ok ? activityLines(activity.value) : null;
-
   const canEdit = can(actor, "edit");
+  // A log that can't be read leaves the rest of the Dashboard working: Attività says so.
+  const lines = activity.ok
+    ? activityLines(activity.value).map((line) => ({ ...line, href: caseHref(line.caseId, line.caseStatus, canEdit) }))
+    : null;
+
   const cases: HomeCase[] = listed.value
     .map((c) => ({
       id: c.id,
@@ -297,7 +201,12 @@ export default async function HomePage() {
       </div>
 
       <div className={cn("grid gap-4", canCreate && "xl:grid-cols-[1fr_20rem]")}>
-        <Activity lines={lines} more={cases.length > 0 ? seeAll : undefined} canEdit={canEdit} />
+        <ActivityCard
+          headingId="home-activity"
+          empty={it.home.activity.empty}
+          lines={lines}
+          more={cases.length > 0 ? seeAll : undefined}
+        />
         {canCreate && (
           <section
             aria-labelledby="home-start"

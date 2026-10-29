@@ -72,7 +72,7 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   const wizardCase = { id, code, name, status, clientName: client.name };
   // **Elimina bozza** bottom left of every step, opposite Avanti (owner, 2026-10-22), for a role that may delete drafts.
   const deleteDraft = can(shell.actor, "delete case", { status: "draft" }) ? (
-    <DeleteCaseButton caseId={id} name={name} variant="bar" />
+    <DeleteCaseButton caseId={id} name={name} status="draft" variant="bar" />
   ) : undefined;
 
   // The opening step, the gate on step 3, and the stepper links.

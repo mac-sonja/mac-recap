@@ -4,8 +4,9 @@
 // `clients/{clientId}/logos/**` and `clients/{clientId}/material/**` (AD-1, AD-22):
 // nobody else writes them.
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import type { Actor } from "@/modules/access";
-import { listCaseActivity } from "@/modules/case-study/adapters/supabase/case-activity";
+import { listActivityOfCase, listScopeActivity } from "@/modules/case-study/adapters/supabase/case-activity";
 import { ACTIVITY_LIMIT, type CaseActivity } from "@/modules/case-study/domain/case-activity";
 import { listScopeSchema } from "@/modules/case-study/domain/case-study";
 import { parseInput } from "@/modules/case-study/domain/validation";
@@ -186,12 +187,14 @@ export function updateDetails(actor: Actor, input: unknown): Promise<Result<Case
 }
 
 /**
- * Deletes a draft (Story 4.1, AR3): input `{ caseId }`. The case gets `deleted_at` and
- * one `case_deleted` event with the actor, in one transaction; it then disappears from
- * every list and read. Nothing is hard-deleted: rows, material, events and its number
- * stay. Call only after `authorize(actor, 'delete case', { status: 'draft' })`.
- * `INVALID_INPUT`, `NOT_FOUND` (unknown or already deleted), `CASE_NOT_DELETABLE` (no
- * longer a draft); nothing is written on any error.
+ * Deletes a draft or an approved case (Stories 4.1, 5.2; AR3 amended 2026-10-28): input
+ * `{ caseId, status }`, `status` being `draft` or `approved`, the status the person
+ * confirmed. The case gets `deleted_at` and one `case_deleted` event (reason
+ * `{status}_deleted`) with the actor, in one transaction; it then disappears from every
+ * list and read. Nothing is hard-deleted: rows, material, events and its number stay.
+ * Call only after `authorize(actor, 'delete case', { status })`. `INVALID_INPUT`, `NOT_FOUND` (unknown or
+ * already deleted), `CASE_NOT_DELETABLE` (no longer in `status`); nothing is written on
+ * any error.
  */
 export function deleteCaseStudy(actor: Actor, input: unknown): Promise<Result<void>> {
   return makeDeleteCaseStudy(createSupabaseCaseStudyRepository())(actor, input);
@@ -222,7 +225,18 @@ export function list(scope: ListScope): Promise<Result<ListedCaseStudy[]>> {
 export async function listActivity(scope: ListScope): Promise<Result<CaseActivity[]>> {
   const parsed = parseInput(listScopeSchema, scope);
   if (!parsed.ok) return parsed;
-  return listCaseActivity(parsed.value, ACTIVITY_LIMIT);
+  return listScopeActivity(parsed.value, ACTIVITY_LIMIT);
+}
+
+/**
+ * The approved case page's *Attività*: the newest events of the case `caseId`, read
+ * as `listActivity` reads them; nothing for a deleted case. Call only after the page
+ * authorized `view` for the case. A malformed id is `INVALID_INPUT`.
+ */
+export async function listCaseActivity(caseId: string): Promise<Result<CaseActivity[]>> {
+  const parsed = parseInput(z.uuid(), caseId);
+  if (!parsed.ok) return parsed;
+  return listActivityOfCase(parsed.value, ACTIVITY_LIMIT);
 }
 
 /**

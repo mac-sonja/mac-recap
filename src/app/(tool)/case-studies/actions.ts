@@ -50,16 +50,21 @@ export async function updateCaseStudyDetails(input: unknown): Promise<ActionResu
 }
 
 /**
- * Deletes a draft (Story 4.1 row action): input `{ caseId }`. The case is soft-deleted
- * with a `case_deleted` event and disappears from every list. 403 `FORBIDDEN` unless the
- * role may `delete case` for a draft; 400 `INVALID_INPUT`; 404 `NOT_FOUND` (unknown or
- * already deleted); 409 `CASE_NOT_DELETABLE` once the case is no longer a draft (checked
- * in the same transaction as the delete). Nothing is written on any error.
+ * Deletes a draft (Story 4.1, **Elimina bozza**) or an approved case (Story 5.2,
+ * **Elimina**): input `{ caseId, status }`, `status` being the one the person confirmed
+ * (`draft` or `approved`). The case is soft-deleted with a `case_deleted` event and
+ * disappears from every list. 400 `INVALID_INPUT` (a missing or other status included);
+ * 403 `FORBIDDEN` unless the role may `delete case` in that status; 404 `NOT_FOUND`
+ * (unknown or already deleted); 409 `CASE_NOT_DELETABLE` once the case is no longer in
+ * that status (checked in the same transaction as the delete). Nothing is written on any error.
  */
 export async function deleteCaseStudy(input: unknown): Promise<ActionResult<void>> {
   const actor = await getActor();
   if (!actor.ok) return failure(actor.error);
-  const decision = authorize(actor.value, "delete case", { status: "draft" });
+  // The status the person confirmed is what gets authorized; anything but `approved` is
+  // authorized as a draft, and the use case rejects a missing or other status as INVALID_INPUT.
+  const stated = typeof input === "object" && input !== null && "status" in input ? input.status : undefined;
+  const decision = authorize(actor.value, "delete case", { status: stated === "approved" ? "approved" : "draft" });
   if (!decision.ok) return failure(decision.error);
   const deleted = await caseStudy.deleteCaseStudy(actor.value, input);
   return deleted.ok ? deleted : failure(deleted.error);

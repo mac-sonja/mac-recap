@@ -6,8 +6,9 @@ export const CASE_CREATED = "case_created";
 /**
  * The event written with every soft delete, in the same transaction. For each case of
  * a deleted client (owner, 2026-10-19) `data` is `{ reason: "client_deleted", clientId,
- * clientCode, code, status }`; for a deleted draft (Story 4.1) it is `{ reason:
- * "draft_deleted", clientId, code, status }`.
+ * clientCode, code, status }`; for a deleted draft (Story 4.1) or approved case (Story 5.2,
+ * owner 2026-10-28) it is `{ reason: "draft_deleted" | "approved_deleted", clientId, code,
+ * status }`.
  */
 export const CASE_DELETED = "case_deleted";
 
