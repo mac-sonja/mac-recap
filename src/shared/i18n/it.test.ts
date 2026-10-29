@@ -296,6 +296,27 @@ describe("configurator copy", () => {
     expect([t("configurator.undoHint"), t("configurator.redoHint")]).toEqual(["Annulla (⌘Z)", "Ripeti (⇧⌘Z)"]);
     expect(t("configurator.overflow")).toBe("Il testo non entra");
     expect(t("configurator.editSoon")).toBe("Questo testo si potrà modificare presto.");
+    expect(fill(t("configurator.text.heading"), { format: "Carosello" })).toBe("Testo · Carosello");
+    expect([t("configurator.text.style"), t("configurator.text.align"), t("configurator.text.colour"), t("configurator.text.columns")]).toEqual([
+      "Stile",
+      "Allinea",
+      "Colore",
+      "Colonne",
+    ]);
+    expect([t("configurator.text.alignLeft"), t("configurator.text.alignCentre"), t("configurator.text.alignRight")]).toEqual(["Sinistra", "Centro", "Destra"]);
+    expect([t("configurator.text.transparent"), t("configurator.text.oneColumn"), t("configurator.text.twoColumns")]).toEqual([
+      "Trasparente",
+      "Una colonna",
+      "Due colonne",
+    ]);
+    expect([t("configurator.group.heading"), t("configurator.group.top"), t("configurator.group.centre"), t("configurator.group.bottom")]).toEqual([
+      "Allineamento nel blocco",
+      "In alto",
+      "Al centro",
+      "In basso",
+    ]);
+    expect(t("configurator.group.splitOne")).toBe("Distanziati: il primo testo in alto, il resto in basso");
+    expect(fill(t("configurator.group.splitMany"), { n: 2 })).toBe("Distanziati: i primi 2 testi in alto, il resto in basso");
     expect(fill(t("configurator.soonMessage"), { tool: "Layout" })).toBe("Layout arriva presto.");
     expect(t("configurator.trial.title")).toBe("Bozza di prova");
     expect(fill(t("configurator.canvas.pageLabel"), { n: 2, name: "La sfida" })).toBe("2 · La sfida");
