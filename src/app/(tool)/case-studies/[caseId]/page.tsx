@@ -7,6 +7,7 @@ import * as material from "@/modules/material";
 import { CASE_TEMPLATE } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
 import { boundValuesOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "@/app/(wizard)/_lib/configurator-data";
+import { activityLines } from "../../_lib/activity-lines";
 import { CaseView } from "../_components/case-view";
 
 export interface CaseViewPageProps {
@@ -22,6 +23,8 @@ export interface CaseViewPageProps {
  * (`getLiveRevision`), never the working head; with none approved yet, it shows the
  * template's starter pages with the *Bozza di prova* note, as the configurator does.
  * **Elimina** shows only to a role that may `delete case` an approved case (owner, 2026-10-28).
+ * **Attività** lists this case's events as Home does, without links; a log that can't be
+ * read shows Home's failed line and the rest of the page still renders.
  */
 export default async function CaseViewPage({ params }: CaseViewPageProps) {
   // Any role that may list approved cases: the sales role's `list cases` is approved only.
@@ -44,11 +47,13 @@ export default async function CaseViewPage({ params }: CaseViewPageProps) {
     redirect("/case-studies");
   }
 
-  const [revision, info, form, listed] = await Promise.all([
+  const [revision, info, form, listed, activity] = await Promise.all([
     caseStudy.getLiveRevision({ kind: "case", id }),
     caseStudy.getClientInfoForCase(id),
     material.getDetailsForm({ caseId: id }),
     material.listAssets({ caseId: id }),
+    // `view` is authorized above.
+    caseStudy.listCaseActivity(id),
   ]);
   if (!revision.ok) throw new Error(`Revision could not be loaded: ${revision.error.code}`);
   if (!info.ok) throw new Error(`Client info could not be loaded: ${info.error.code}`);
@@ -63,6 +68,8 @@ export default async function CaseViewPage({ params }: CaseViewPageProps) {
 
   const doc = revision.value?.doc ?? null;
   const canDelete = can(actor, "delete case", { status: "approved" });
+  // A log that can't be read leaves the rest of the page working: Attività says so. No line links.
+  const lines = activity.ok ? activityLines(activity.value).map((line) => ({ ...line, href: null })) : null;
 
   return (
     <CaseView
@@ -75,6 +82,8 @@ export default async function CaseViewPage({ params }: CaseViewPageProps) {
       trial={doc === null}
       editHref={canEdit ? configuratorHref(id) : null}
       deleteCaseId={canDelete ? id : null}
+      activity={lines}
+      now={new Date().toISOString()}
     />
   );
 }

@@ -913,6 +913,8 @@ export const it = {
       heading: "Raccolte",
       empty: "Non è in nessuna raccolta.",
     },
+    /** *Attività* for this case (Home's sentences, heading and failed line); this is its empty line. */
+    activityEmpty: "Ancora nessuna attività.",
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
 import type { CaseActivity, ListedCaseStudy, ListScope } from "@/modules/case-study";
+import { it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
@@ -178,6 +179,7 @@ describe("HomePage", () => {
     const html = await renderPage();
     expect(html).toContain("Niente da approvare. Goditi il momento.");
     expect(html).toContain("Nessuna bozza in sospeso.");
+    expect(html).toContain(dict.home.activity.empty);
     expect(html).not.toContain("Vedi tutte");
   });
 

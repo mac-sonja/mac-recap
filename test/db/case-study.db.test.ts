@@ -525,6 +525,39 @@ describe("listActivity (the Dashboard's Attività)", () => {
   });
 });
 
+describe("listCaseActivity (the approved case page's Attività)", () => {
+  it("reads only this case's events, newest first, of the kinds Attività shows", async () => {
+    const created = await createCase({ name: "One case's activity" });
+    const other = await createCase({ name: "Someone else's case" });
+    const actor = await signedInActor();
+    const { recordEvent, listCaseActivity } = await loadCaseStudy();
+    await recordEvent(actor, { caseId: created.id, type: "asset_uploaded", data: { assetId: "a1" } });
+    await recordEvent(actor, { caseId: created.id, type: "asset_favourited", data: { assetId: "a1" } });
+    await recordEvent(actor, { caseId: created.id, type: "transition", data: { event: "approve" } });
+    await recordEvent(actor, { caseId: other.id, type: "asset_uploaded", data: { assetId: "b1" } });
+    const result = await listCaseActivity(created.id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.every((e) => e.case.id === created.id)).toBe(true);
+    expect(result.value.map((e) => e.type)).toEqual(["transition", "asset_uploaded", "case_created"]);
+    expect(result.value[0]).toMatchObject({ actorName: TEST_ACTOR_NAME, data: { event: "approve" }, case: { name: "One case's activity" } });
+  });
+
+  it("reads nothing for a deleted case", async () => {
+    const created = await createCase();
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [created.id]);
+    const { listCaseActivity } = await loadCaseStudy();
+    expect(await listCaseActivity(created.id)).toEqual({ ok: true, value: [] });
+  });
+
+  it("rejects a malformed id without querying", async () => {
+    const { listCaseActivity } = await loadCaseStudy();
+    const result = await listCaseActivity("not-a-uuid");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
+  });
+});
+
 describe("recordEvent", () => {
   it("appends one case_event row with the actor, type and data", async () => {
     const created = await createCase();

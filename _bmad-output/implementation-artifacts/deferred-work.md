@@ -230,7 +230,7 @@
   summary: Story 5.2 narrow viewports on the approved case detail page: the format list as a dropdown at 1024–1279 px, and a working preview below 1024 px (replacing the larger-screen message).
   evidence: Split from the remaining Story 5.2 scope at the owner's choice (2026-10-28); Elimina goes first, this is independently shippable.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-elimina-approved-case.md`
-  summary: Activity log on the approved case detail page: Home's *Attività* lines (same sentences and icons, from `case_event`) filtered to this case, below the preview.
+  summary: Resolved by `spec-5-2-case-activity-log.md` (2026-10-29). Was: activity log on the approved case detail page: Home's *Attività* lines (same sentences and icons, from `case_event`) filtered to this case, below the preview.
   evidence: Asked by the owner (2026-10-28) while planning Elimina; split at the owner's choice to keep the spec under the size limit; built right after it, on the same page.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-elimina-approved-case.md`
   summary: Once no running image calls `delete_case_study` with two arguments, a migration may drop the `p_status` default (`draft`) so every caller states the status.
