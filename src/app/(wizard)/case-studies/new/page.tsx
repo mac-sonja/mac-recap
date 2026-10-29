@@ -1,22 +1,18 @@
 import { redirect } from "next/navigation";
-import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
-import { STEP_HEADING } from "@/app/_components/field-styles";
 import { DeleteCaseButton } from "@/app/(tool)/case-studies/_components/delete-case-button";
 import { wizardHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
 import { authorize, can } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
+import * as jobs from "@/modules/jobs";
 import * as material from "@/modules/material";
 import { currentYear } from "@/shared/i18n/format";
-import { it } from "@/shared/i18n/it";
-import { cn } from "@/shared/utils";
 import { CaseDetailsStep } from "../../_components/case-details-step";
+import { GenerateStep } from "../../_components/generate-step";
+import { GeneratingScreen } from "../../_components/generating-screen";
 import { MaterialStep } from "../../_components/material-step";
 import { NewCaseDialog } from "../../_components/new-case-dialog";
-import { WizardFooter, WizardFrame } from "../../_components/wizard-frame";
-
-/** The step 3 placeholder line; it is also the reason the inactive Avanti gives. */
-const STEP_NOTE_ID = "wizard-step-note";
+import { WizardFrame } from "../../_components/wizard-frame";
 
 export interface NewCaseStudyPageProps {
   searchParams: Promise<{ caseId?: string | string[]; step?: string | string[]; clientId?: string | string[] }>;
@@ -38,6 +34,9 @@ export interface NewCaseStudyPageProps {
  * (or an unknown one) the wizard opens the first incomplete step: Materiale without a
  * file, else Dettagli without a business line, else Genera. Materiale and Dettagli are
  * always open; `step=3` needs both, otherwise it redirects to the first step it lacks.
+ * A `generating` case shows the waiting screen instead (Story 3.7b; it refreshes itself, so
+ * the page then follows these rules). Step 3 shows the file and detail counts and **Genera**,
+ * or **Riprova** with the failure when the newest `generate` job of the draft failed.
  * On every step of an existing draft the top bar offers **Elimina bozza** to a role that
  * may `delete case` (owner, 2026-10-22); after the delete the browser goes to Case studies.
  */
@@ -66,10 +65,18 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
     if (found.error.code === "NOT_FOUND") redirect("/case-studies");
     throw new Error(`Case study could not be loaded: ${found.error.code}`);
   }
-  // The wizard edits drafts only; any other status goes back to Case studies.
-  if (found.value.status !== "draft") redirect("/case-studies");
   const { id, code, name, status, year, locale, businessLines, client } = found.value;
   const wizardCase = { id, code, name, status, clientName: client.name };
+  // A generating case waits here; the screen refreshes itself until the case leaves `generating`.
+  if (status === "generating") {
+    return (
+      <WizardFrame caseStudy={wizardCase} current={3}>
+        <GeneratingScreen />
+      </WizardFrame>
+    );
+  }
+  // The wizard edits drafts otherwise only; any other status goes back to Case studies.
+  if (status !== "draft") redirect("/case-studies");
   // **Elimina bozza** bottom left of every step, opposite Avanti (owner, 2026-10-22), for a role that may delete drafts.
   const deleteDraft = can(shell.actor, "delete case", { status: "draft" }) ? (
     <DeleteCaseButton caseId={id} name={name} status="draft" variant="bar" />
@@ -117,24 +124,25 @@ export default async function NewCaseStudyPage({ searchParams }: NewCaseStudyPag
   }
 
   if (requested === 3) {
+    const [files, form, listed] = await Promise.all([
+      material.listAssets({ caseId: id }),
+      material.getDetailsForm({ caseId: id }),
+      jobs.getJobsFor(id),
+    ]);
+    if (!files.ok) throw new Error(`Material could not be loaded: ${files.error.code}`);
+    if (!form.ok) throw new Error(`Details could not be loaded: ${form.error.code}`);
+    // The newest generate job (newest first); a lookup error shows no failure.
+    const lastRun = listed.ok ? listed.value.find((job) => job.kind === "generate") : undefined;
+    const filled = material.FORM_FIELDS.filter((field) => form.value[field].trim() !== "").length;
     return (
       <WizardFrame caseStudy={wizardCase} current={3} reachable={reachable} footerLead={deleteDraft}>
-        <h2 className={STEP_HEADING}>{it.wizard.steps.generate}</h2>
-        <p id={STEP_NOTE_ID} className="mt-1.5 font-body text-sm text-foreground-muted">
-          {it.wizard.generatePlaceholder}
-        </p>
-        {/* Step 3 content arrives with Epic 3. */}
-        <WizardFooter
-          action={
-            <button
-              type="button"
-              aria-disabled="true"
-              aria-describedby={STEP_NOTE_ID}
-              className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, "cursor-not-allowed h-10 px-5")}
-            >
-              {it.wizard.next}
-            </button>
-          }
+        <GenerateStep
+          key={id}
+          caseId={id}
+          fileCount={files.value.length}
+          filled={filled}
+          total={material.FORM_FIELDS.length}
+          failed={lastRun?.status === "failed"}
         />
       </WizardFrame>
     );

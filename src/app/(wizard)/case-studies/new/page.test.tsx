@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { CaseStudy, ClientRef } from "@/modules/case-study";
+import type { JobSummary } from "@/modules/jobs";
 import type { DetailsForm, ListedAsset } from "@/modules/material";
 import { err, ok, type Result } from "@/shared/result";
 
@@ -11,6 +12,7 @@ const listAssets = vi.fn<(input: unknown) => Promise<Result<ListedAsset[]>>>();
 const hasMaterial = vi.fn<(caseId: unknown) => Promise<Result<boolean>>>();
 const getDetailsForm = vi.fn<(input: unknown) => Promise<Result<DetailsForm>>>();
 const listClients = vi.fn<() => Promise<Result<ClientRef[]>>>();
+const getJobsFor = vi.fn<(subjectId: unknown) => Promise<Result<JobSummary[]>>>();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -38,12 +40,15 @@ vi.mock("@/modules/material", () => ({
   listAssets: (input: unknown) => listAssets(input),
   hasMaterial: (caseId: unknown) => hasMaterial(caseId),
   getDetailsForm: (input: unknown) => getDetailsForm(input),
+  FORM_FIELDS: ["context", "solution"],
   MAX_ASSETS_PER_CASE: 20,
   MAX_FORM_FIELD_CHARS: 5000,
   MAX_FILE_BYTES: 50 * 1024 * 1024,
   ALLOWED_CONTENT_TYPES: ["image/png", "application/pdf"],
 }));
+vi.mock("@/modules/jobs", () => ({ getJobsFor: (subjectId: unknown) => getJobsFor(subjectId) }));
 vi.mock("@/app/(tool)/case-studies/actions", () => ({
+  generateCaseStudy: vi.fn(),
   createCaseStudy: vi.fn(),
   updateCaseStudyDetails: vi.fn(),
   presignAssetUpload: vi.fn(),
@@ -115,12 +120,30 @@ beforeEach(() => {
   hasMaterial.mockReset();
   getDetailsForm.mockReset();
   listClients.mockReset();
+  getJobsFor.mockReset();
   requireSurface.mockResolvedValue(shell);
   listClients.mockResolvedValue(ok(clients));
+  getJobsFor.mockResolvedValue(ok([]));
   get.mockResolvedValue(ok(draft));
   listAssets.mockResolvedValue(ok([]));
   hasMaterial.mockResolvedValue(ok(false));
   getDetailsForm.mockResolvedValue(ok({ context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" }));
+});
+
+const job = (overrides: Partial<JobSummary> = {}): JobSummary => ({
+  id: "dddddddd-0000-4000-8000-000000000001",
+  kind: "generate",
+  subjectId: ID,
+  inputHash: "h",
+  status: "failed",
+  attempts: 3,
+  maxAttempts: 3,
+  lockedUntil: null,
+  error: { code: "GENERATION_FAILED", message: "boom" },
+  createdAt: "2026-10-29T10:00:00+00:00",
+  updatedAt: "2026-10-29T10:00:00+00:00",
+  finishedAt: "2026-10-29T10:00:00+00:00",
+  ...overrides,
 });
 
 const legacy: CaseStudy = { ...draft, businessLines: [] };
@@ -381,14 +404,60 @@ describe("NewCaseStudyPage", () => {
   });
 
   describe("step 3 Genera", () => {
-    it("opens the placeholder with a file: inactive Avanti tied to its reason", async () => {
+    it("shows the counter and an enabled Genera with a file and the details filled", async () => {
       hasMaterial.mockResolvedValue(ok(true));
+      listAssets.mockResolvedValue(ok([asset, { ...asset, id: "bbbbbbbb-0000-4000-8000-000000000002" }]));
+      getDetailsForm.mockResolvedValue(ok({ context: "Il contesto.", solution: "  ", results: [{ label: "a", value: "b" }], testimonialQuote: "q", testimonialAuthor: "" }));
       const html = await render({ caseId: ID, step: "3" });
       expect(html).toMatch(/<li data-step="3" aria-current="step"/);
-      expect(html).toContain('<p id="wizard-step-note" class="mt-1.5 font-body text-sm text-foreground-muted">La generazione arriva nella prossima versione. Ci stiamo lavorando.</p>');
-      expect(html).toMatch(/<button type="button" aria-disabled="true" aria-describedby="wizard-step-note"[^>]*>Avanti<\/button>/);
-      expect(getDetailsForm).not.toHaveBeenCalled();
-      expect(listAssets).not.toHaveBeenCalled();
+      // Only Contesto and Soluzione count; a blank text does not.
+      expect(html).toContain("2 file, 1 di 2 dettagli compilati");
+      expect(html).toMatch(/<button type="button" aria-disabled="false"[^>]*>Genera<\/button>/);
+      expect(html).not.toContain("wizard-step-note");
+      expect(listAssets).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
+      expect(getDetailsForm).toHaveBeenCalledExactlyOnceWith({ caseId: ID });
+      expect(getJobsFor).toHaveBeenCalledExactlyOnceWith(ID);
+      expect(html).not.toContain("L’ultima generazione");
+    });
+
+    it("shows the failure and Riprova when the newest generate job failed", async () => {
+      hasMaterial.mockResolvedValue(ok(true));
+      getJobsFor.mockResolvedValue(ok([job(), job({ id: "dddddddd-0000-4000-8000-000000000002", status: "succeeded" as JobSummary["status"] })]));
+      const html = await render({ caseId: ID, step: "3" });
+      expect(html).toContain("L’ultima generazione non è andata a buon fine.");
+      expect(html).toMatch(/>Riprova<\/button>/);
+      expect(html).not.toMatch(/>Genera<\/button>/);
+    });
+
+    it("shows no failure when the newest generate job is not failed, or there is none", async () => {
+      hasMaterial.mockResolvedValue(ok(true));
+      getJobsFor.mockResolvedValue(ok([job({ kind: "export" as JobSummary["kind"] }), job({ status: "succeeded" as JobSummary["status"] }), job()]));
+      expect(await render({ caseId: ID, step: "3" })).not.toContain("L’ultima generazione");
+      getJobsFor.mockResolvedValue(ok([]));
+      expect(await render({ caseId: ID, step: "3" })).not.toContain("L’ultima generazione");
+    });
+
+    it("shows no failure when the job lookup fails", async () => {
+      hasMaterial.mockResolvedValue(ok(true));
+      getJobsFor.mockResolvedValue(err({ code: "JOB_LOOKUP_FAILED", message: "down" }));
+      const html = await render({ caseId: ID, step: "3" });
+      expect(html).toMatch(/>Genera<\/button>/);
+      expect(html).not.toContain("L’ultima generazione");
+    });
+
+    it("throws into the error boundary when the files or the details cannot be loaded", async () => {
+      hasMaterial.mockResolvedValue(ok(true));
+      listAssets.mockResolvedValue(err({ code: "ASSET_LOOKUP_FAILED", message: "down" }));
+      await expect(render({ caseId: ID, step: "3" })).rejects.toThrow(/ASSET_LOOKUP_FAILED/);
+      listAssets.mockResolvedValue(ok([asset]));
+      getDetailsForm.mockResolvedValue(err({ code: "DETAILS_LOOKUP_FAILED", message: "down" }));
+      await expect(render({ caseId: ID, step: "3" })).rejects.toThrow(/DETAILS_LOOKUP_FAILED/);
+    });
+
+    it("looks up neither files nor jobs on the other steps", async () => {
+      hasMaterial.mockResolvedValue(ok(true));
+      await render({ caseId: ID, step: "2" });
+      expect(getJobsFor).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -406,9 +475,21 @@ describe("NewCaseStudyPage", () => {
     });
   });
 
-  it.each(["generating", "in_review", "approved"] as const)("redirects a %s case to Case studies", async (status) => {
+  it.each(["in_review", "approved"] as const)("redirects a %s case to Case studies", async (status) => {
     get.mockResolvedValue(ok({ ...draft, status }));
     await expect(render({ caseId: ID })).rejects.toThrow("REDIRECT /case-studies");
+  });
+
+  it.each([undefined, "1", "3"])("a generating case shows the waiting screen instead of redirecting (step %s)", async (step) => {
+    get.mockResolvedValue(ok({ ...draft, status: "generating" }));
+    const html = await render({ caseId: ID, step });
+    expect(html).toContain("Stiamo scrivendo la case history");
+    expect(html).toMatch(/<a [^>]*href="\/case-studies"[^>]*>Torna alle case history<\/a>/);
+    expect(html).toContain(">In elaborazione</span>");
+    expect(html).not.toContain("Elimina bozza");
+    expect(html).not.toContain(">Genera</button>");
+    expect(hasMaterial).not.toHaveBeenCalled();
+    expect(getJobsFor).not.toHaveBeenCalled();
   });
 
   it.each([

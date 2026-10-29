@@ -9,7 +9,7 @@ import { CARD, SEARCH_FIELD, SEARCH_ICON, TH } from "@/app/_components/field-sty
 import { DownloadButton } from "@/app/_components/download-button";
 import { StatusBadge } from "@/app/_components/status-badge";
 import { caseHref, configuratorHref } from "@/app/_lib/routes";
-import { CASE_STATUSES } from "@/shared/case-status";
+import { CASE_STATUSES, GENERATING_REFRESH_MS } from "@/shared/case-status";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import {
@@ -157,7 +157,8 @@ function isTextField(el: Element | null): boolean {
  * focus is already in a text field. A Bozza row opens
  * `/case-studies/new?caseId={id}`; a Da approvare row opens the configurator with `edit`
  * (otherwise it is not a link); an Approvato row opens its detail page for every role;
- * In elaborazione is not a link. The actions column holds Scarica on Approvato rows, with
+ * In elaborazione is not a link: a click on it says "Ancora in elaborazione" in the status region, and
+ * the table refreshes itself every few seconds while any row is In elaborazione. The actions column holds Scarica on Approvato rows, with
  * **Modifica** to the configurator next to it with `edit`. A draft is deleted from inside it (**Elimina bozza**,
  * owner 2026-10-22), not from the list.
  */
@@ -180,6 +181,20 @@ export function CaseStudiesTable({
   const [query, setQuery] = useState(initialQuery);
   const [sort, setSort] = useState<SortState>(initialStatus === "in_review" ? REVIEW_QUEUE_SORT : DEFAULT_SORT);
   const [status, setStatusState] = useState<StatusFilter>(initialStatus);
+  /** Said politely in the status region when a click lands on an In elaborazione row. */
+  const [rowNote, setRowNote] = useState<string | null>(null);
+
+  // While a row is In elaborazione the list asks the server again every few seconds, and stops once none is.
+  const anyGenerating = rows.some((row) => row.status === "generating");
+  const refresh = useRef(router.refresh);
+  useEffect(() => {
+    refresh.current = router.refresh;
+  });
+  useEffect(() => {
+    if (!anyGenerating) return;
+    const timer = setInterval(() => refresh.current(), GENERATING_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [anyGenerating]);
 
   function setStatus(next: StatusFilter) {
     setStatusState(next);
@@ -258,6 +273,12 @@ export function CaseStudiesTable({
     router.push(href);
   }
 
+  function noteGenerating(event: MouseEvent<HTMLTableRowElement>) {
+    // Links and buttons inside the row act on their own.
+    if ((event.target as Element).closest("a, button, dialog")) return;
+    setRowNote(it.caseStudies.table.stillGenerating);
+  }
+
   function sortHeader({ key, label }: (typeof COLUMNS)[number]) {
     const active = sort.key === key;
     const Arrow = sort.direction === "asc" ? ArrowUp : ArrowDown;
@@ -308,7 +329,7 @@ export function CaseStudiesTable({
 
       {/* Always mounted, so screen readers announce the no-results message when it appears. */}
       <div role="status" className="font-body text-[15px] text-foreground empty:hidden">
-        {visible.length === 0 ? noResults : null}
+        {visible.length === 0 ? noResults : anyGenerating ? rowNote : null}
       </div>
 
       {visible.length === 0 ? (
@@ -341,7 +362,9 @@ export function CaseStudiesTable({
                   <tr
                     key={row.id}
                     data-case-id={row.id}
-                    onClick={href === null ? undefined : (event) => openRow(event, href)}
+                    onClick={
+                      href !== null ? (event) => openRow(event, href) : row.status === "generating" ? noteGenerating : undefined
+                    }
                     className={cn(
                       "border-b border-border transition-colors duration-150 last:border-b-0",
                       href !== null && "cursor-pointer hover:bg-surface-hover",

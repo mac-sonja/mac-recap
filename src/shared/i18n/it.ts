@@ -113,6 +113,8 @@ export const it = {
       edit: "Modifica",
       /** Its accessible name; `{name}` is the case name. */
       editLabel: "Modifica {name}",
+      /** Said politely when a click lands on an In elaborazione row, which has nowhere to go. */
+      stillGenerating: "Ancora in elaborazione",
     },
     search: {
       label: "Cerca progetto o cliente",
@@ -333,8 +335,28 @@ export const it = {
       /** Polite live-region line when a save fails; `{field}` is the field label, `{message}` its error. */
       announceError: "{field}: {message}",
     },
-    /** Step 3 until Epic 3; also the reason the inactive Avanti gives. */
-    generatePlaceholder: "La generazione arriva nella prossima versione. Ci stiamo lavorando.",
+    /** Step 3, Genera (Story 3.7b): the material summary, the action, the waiting screen and a failed run. */
+    generate: {
+      /** `{n}` files, `{m}` of `{total}` details (Contesto and Soluzione, like step 2's counter). */
+      counter: "{n} file, {m} di {total} dettagli compilati",
+      action: "Genera",
+      retry: "Riprova",
+      /** Why Genera is inactive with no file. */
+      noMaterial: "Aggiungi almeno un file per poter generare.",
+      /** Polite status line while the request is sent. */
+      starting: "Stiamo avviando la generazione.",
+      errors: {
+        /** Any other failure: nothing was started. */
+        generic: "Non siamo riusciti ad avviare la generazione. Riprova tra qualche istante.",
+      },
+      /** The last generation did not finish; material and details are untouched. */
+      failed: "L’ultima generazione non è andata a buon fine. Il materiale e i dettagli sono al sicuro: riprova.",
+      /** The screen shown while the case is In elaborazione. */
+      waiting: {
+        heading: "Stiamo scrivendo la case history",
+        body: "Ci vuole un po’. Puoi restare qui o tornare all’elenco: la ritrovi in “Da approvare” appena è pronta.",
+      },
+    },
   },
   /**
    * Risultati and Testimonial, each in its own card: in the client panel and in the case
