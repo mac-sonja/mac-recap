@@ -144,7 +144,8 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const isHome = pathname === "/home";
-  const isCaseStudies = pathname === "/case-studies";
+  // The list and every approved case's page.
+  const isCaseStudies = pathname === "/case-studies" || pathname.startsWith("/case-studies/");
   // The list and every client's page.
   const isClients = pathname === "/clients" || pathname.startsWith("/clients/");
 

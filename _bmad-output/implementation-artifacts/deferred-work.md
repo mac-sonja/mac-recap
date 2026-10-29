@@ -218,8 +218,20 @@
   summary: Keyboard selection of blocks and elements on the configurator canvas (today pages are reachable by keyboard through the Pagine thumbnails; blocks and elements only by pointer).
   evidence: Review of 4.2a (maybe-false, medium if keyboard selection is required): `CanvasPage` handles clicks only; settle with the owner before 4.3 makes selection the way into editing.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
-  summary: Elimina on an approved case's detail page (owner 2026-10-28): soft delete confirmed by typing *elimina*, Owner and Amministratore only (`delete case` covers draft or approved), new migration redefining `delete_case_study` (reason `approved_deleted`), AR3 amended; its links stop working (note on 5.5/5.7) and it leaves client packs and collections (note on 5.9/5.10).
+  summary: Resolved by `spec-5-2-elimina-approved-case.md` (2026-10-28). Was: Elimina on an approved case's detail page (owner 2026-10-28): soft delete confirmed by typing *elimina*, Owner and Amministratore only (`delete case` covers draft or approved), new migration redefining `delete_case_study` (reason `approved_deleted`), AR3 amended; its links stop working (note on 5.5/5.7) and it leaves client packs and collections (note on 5.9/5.10).
   evidence: Split from the detail-page spec at the owner's choice (2026-10-28) to keep each spec under the size limit; built right after it, on the same page.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
   summary: On the approved case detail page (and the configurator), one rendition failure other than "not ready" (e.g. `STORAGE_FAILED`) throws the whole page into the error boundary, even for an asset the revision doesn't use; draw it as an empty cell instead, or sign only referenced assets.
   evidence: Review of Story 5.2 part (medium): `renderAssetsOf` runs over every listed asset and rethrows; `page.test.tsx` asserts the throw.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
+  summary: Story 5.2 preview controls on the approved case detail page: pager ("Slide 1 of 12"), zoom − / 100% / +, fit and full screen.
+  evidence: Split from the remaining Story 5.2 scope at the owner's choice (2026-10-28); Elimina goes first, this is independently shippable.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
+  summary: Story 5.2 narrow viewports on the approved case detail page: the format list as a dropdown at 1024–1279 px, and a working preview below 1024 px (replacing the larger-screen message).
+  evidence: Split from the remaining Story 5.2 scope at the owner's choice (2026-10-28); Elimina goes first, this is independently shippable.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-elimina-approved-case.md`
+  summary: Activity log on the approved case detail page: Home's *Attività* lines (same sentences and icons, from `case_event`) filtered to this case, below the preview.
+  evidence: Asked by the owner (2026-10-28) while planning Elimina; split at the owner's choice to keep the spec under the size limit; built right after it, on the same page.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-elimina-approved-case.md`
+  summary: Once no running image calls `delete_case_study` with two arguments, a migration may drop the `p_status` default (`draft`) so every caller states the status.
+  evidence: The default keeps the migration compatible with the previous image during a deploy (README, Migrations: add before you remove).

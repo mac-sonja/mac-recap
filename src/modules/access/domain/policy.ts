@@ -46,7 +46,8 @@ export interface Resource {
 type Rule = true | ((resource: Resource) => boolean);
 
 const approved: Rule = (r) => r.status === "approved";
-const draft: Rule = (r) => r.status === "draft";
+// AR3 (owner, 2026-10-28): a case may be deleted (soft) as a draft or once approved.
+const draftOrApproved: Rule = (r) => r.status === "draft" || r.status === "approved";
 
 /**
  * The admin sees and does everything an owner does, plus `manage users`
@@ -67,7 +68,7 @@ const MATRIX: Readonly<Record<Action, Readonly<Partial<Record<Role, Rule>>>>> = 
   "mark favourites": { ...owners(true) },
   generate: { ...owners(true) },
   edit: { ...owners(true) },
-  "delete case": { ...owners(draft) },
+  "delete case": { ...owners(draftOrApproved) },
   approve: { ...owners(true) },
   "update approved version": { ...owners(true) },
   discard: { ...owners(true) },

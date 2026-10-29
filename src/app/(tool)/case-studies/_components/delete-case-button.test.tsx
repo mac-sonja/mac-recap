@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionResult } from "@/app/_lib/action-result";
@@ -26,17 +26,26 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const open = async (variant: "row" | "bar" = "row") => {
+type Kind = "row" | "bar" | "approved";
+
+const open = async (kind: Kind = "row") => {
   const user = userEvent.setup();
-  render(<DeleteCaseButton caseId={CASE_ID} name={NAME} variant={variant} />);
-  await user.click(screen.getByRole("button", { name: variant === "bar" ? copy.barButton : fill(copy.button, { name: NAME }) }));
-  const dialog = await screen.findByRole("dialog", { name: variant === "bar" ? copy.titleOpen : fill(copy.title, { name: NAME }) });
-  return { user, dialog, input: screen.getByLabelText(copy.confirmLabel), confirm: screen.getByRole("button", { name: copy.confirm }) };
+  render(
+    kind === "approved" ? (
+      <DeleteCaseButton caseId={CASE_ID} name={NAME} status="approved" />
+    ) : (
+      <DeleteCaseButton caseId={CASE_ID} name={NAME} status="draft" variant={kind} />
+    ),
+  );
+  const trigger = kind === "bar" ? copy.barButton : kind === "approved" ? copy.approvedButton : fill(copy.button, { name: NAME });
+  await user.click(screen.getByRole("button", { name: trigger }));
+  const dialog = await screen.findByRole("dialog", { name: kind === "bar" ? copy.titleOpen : fill(copy.title, { name: NAME }) });
+  return { user, dialog, input: screen.getByLabelText(copy.confirmLabel), confirm: within(dialog).getByRole("button", { name: copy.confirm }) };
 };
 
 /** Opens the dialog and types the confirmation word. */
-const ready = async (variant: "row" | "bar" = "row") => {
-  const opened = await open(variant);
+const ready = async (kind: Kind = "row") => {
+  const opened = await open(kind);
   await opened.user.type(opened.input, "elimina");
   return opened;
 };
@@ -71,13 +80,13 @@ describe("DeleteCaseButton", () => {
   it("deletes on Enter once the word is typed", async () => {
     const { user, input } = await ready();
     await user.type(input, "{Enter}");
-    expect(deleteCaseStudy).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID });
+    expect(deleteCaseStudy).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, status: "draft" });
   });
 
   it("row: deletes the case on Elimina, closes the dialog and reloads the list", async () => {
     const { user, confirm } = await ready();
     await user.click(confirm);
-    expect(deleteCaseStudy).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID });
+    expect(deleteCaseStudy).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, status: "draft" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(refresh).toHaveBeenCalledOnce();
     expect(push).not.toHaveBeenCalled();
@@ -89,6 +98,32 @@ describe("DeleteCaseButton", () => {
     await user.click(confirm);
     await waitFor(() => expect(push).toHaveBeenCalledExactlyOnceWith("/case-studies"));
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("approved: shows Elimina, names the case, says the approved case goes and, after the delete, goes to the Case list", async () => {
+    const { user, confirm, dialog } = await ready("approved");
+    expect(dialog.textContent).toContain(copy.approvedDescription);
+    expect(dialog.textContent).not.toContain(copy.description);
+    await user.click(confirm);
+    expect(deleteCaseStudy).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, status: "approved" });
+    await waitFor(() => expect(push).toHaveBeenCalledExactlyOnceWith("/case-studies"));
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("approved: a case already gone (NOT_FOUND) goes to the Case list too", async () => {
+    deleteCaseStudy.mockResolvedValue({ ok: false, status: 404, error: { code: "NOT_FOUND", message: "m" } });
+    const { user, confirm } = await ready("approved");
+    await user.click(confirm);
+    await waitFor(() => expect(push).toHaveBeenCalledExactlyOnceWith("/case-studies"));
+  });
+
+  it("approved: says the status changed and reloads the page when CASE_NOT_DELETABLE", async () => {
+    deleteCaseStudy.mockResolvedValue({ ok: false, status: 409, error: { code: "CASE_NOT_DELETABLE", message: "m" } });
+    const { user, confirm } = await ready("approved");
+    await user.click(confirm);
+    expect((await screen.findByRole("alert")).textContent).toBe(copy.statusChanged);
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("treats a case already gone (NOT_FOUND) as deleted", async () => {

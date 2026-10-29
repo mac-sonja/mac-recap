@@ -35,10 +35,7 @@ export interface TopBarProps {
   previewRef?: Ref<HTMLButtonElement>;
 }
 
-/**
- * The top bar's left side: back, name, code and status badge. Shared with an approved
- * case's detail page (Story 5.2).
- */
+/** The top bar's left side: back, name, code and status badge. */
 export function DocumentHeading({ header, back }: Pick<TopBarProps, "header" | "back">) {
   return (
     <div className="flex min-w-0 items-center gap-2">
@@ -59,7 +56,7 @@ export function DocumentHeading({ header, back }: Pick<TopBarProps, "header" | "
   );
 }
 
-/** The format switch, one segment per registry format with its ratio. Shared with the detail page. */
+/** The format switch, one segment per registry format with its ratio. Shared with an approved case's page (Story 5.2). */
 export function FormatSwitch({ formatId, onFormat }: Pick<TopBarProps, "formatId" | "onFormat">) {
   return (
     <div role="group" aria-label={it.configurator.formats.label} className={SEG}>

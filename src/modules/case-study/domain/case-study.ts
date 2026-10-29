@@ -487,11 +487,19 @@ export const updateCaseStudyDetailsInputSchema = z.object({
 });
 export type UpdateCaseStudyDetailsInput = z.infer<typeof updateCaseStudyDetailsInputSchema>;
 
-/** What a person supplies to delete a draft (Story 4.1 row action): only its id. */
+/** The statuses a case may be deleted in (AR3, amended by the owner on 2026-10-28). */
+export const DELETABLE_STATUSES = ["draft", "approved"] as const;
+
+/**
+ * What a person supplies to delete a case (Story 4.1 draft, Story 5.2 approved): its id and
+ * the status they confirmed deleting. The delete refuses when the case is no longer in it.
+ */
 export const deleteCaseStudyInputSchema = z.object({
   caseId: z.uuid("Required."),
+  status: z.enum(DELETABLE_STATUSES, "Required."),
 });
 export type DeleteCaseStudyInput = z.infer<typeof deleteCaseStudyInputSchema>;
+export type DeletableStatus = DeleteCaseStudyInput["status"];
 
 /**
  * The scope of a list, as authorized by `list cases`: `{}` is every status,

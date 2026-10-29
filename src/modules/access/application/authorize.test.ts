@@ -19,15 +19,19 @@ function handle(a: Actor, action: Action, resource: Resource, runUseCase: () => 
 }
 
 describe("authorize", () => {
-  it("allows owner/designer to delete a draft case", () => {
-    expect(authorize(actor("owner_designer"), "delete case", { status: "draft" })).toEqual({
-      ok: true,
-      value: undefined,
-    });
+  it.each<[Role, Resource]>([
+    ["owner_designer", { status: "draft" }],
+    ["owner_designer", { status: "approved" }],
+    ["admin", { status: "approved" }],
+  ])("allows %s to delete a case %o", (role, resource) => {
+    expect(authorize(actor(role), "delete case", resource)).toEqual({ ok: true, value: undefined });
   });
 
   it.each<[Role, Action, Resource]>([
-    ["owner_designer", "delete case", { status: "approved" }],
+    ["owner_designer", "delete case", { status: "in_review" }],
+    ["owner_designer", "delete case", { status: "generating" }],
+    ["owner_designer", "delete case", {}],
+    ["account_sales_social", "delete case", { status: "approved" }],
     ["account_sales_social", "view", { status: "in_review" }],
     ["account_sales_social", "export", { status: "draft" }],
     ["account_sales_social", "create link", { status: "generating" }],
