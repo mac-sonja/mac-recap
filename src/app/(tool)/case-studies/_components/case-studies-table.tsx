@@ -186,6 +186,13 @@ export function CaseStudiesTable({
 
   // While a row is In elaborazione the list asks the server again every few seconds, and stops once none is.
   const anyGenerating = rows.some((row) => row.status === "generating");
+  // The note belongs to the click that raised it: once nothing is generating it goes, so it cannot
+  // come back for a row that starts generating later (reset while rendering, not in an effect).
+  const [sawGenerating, setSawGenerating] = useState(anyGenerating);
+  if (sawGenerating !== anyGenerating) {
+    setSawGenerating(anyGenerating);
+    if (!anyGenerating) setRowNote(null);
+  }
   const refresh = useRef(router.refresh);
   useEffect(() => {
     refresh.current = router.refresh;

@@ -539,6 +539,17 @@ describe("CaseStudiesTable", () => {
       expect(push).not.toHaveBeenCalled();
     });
 
+    it("does not bring the note back for a row that starts generating later", async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<CaseStudiesTable rows={[generating]} canCreate canEdit />);
+      await user.click(within(screen.getByRole("table")).getByText("Gamma Srl"));
+      expect(screen.getByRole("status").textContent).toBe(dict.caseStudies.table.stillGenerating);
+      rerender(<CaseStudiesTable rows={[{ ...generating, status: "in_review" }]} canCreate canEdit />);
+      expect(screen.getByRole("status").textContent).toBe("");
+      rerender(<CaseStudiesTable rows={[generating]} canCreate canEdit />);
+      expect(screen.getByRole("status").textContent).toBe("");
+    });
+
     it("says nothing when a row with a link is clicked", async () => {
       const user = userEvent.setup();
       render(<CaseStudiesTable rows={[rows[1]]} canCreate canEdit />);

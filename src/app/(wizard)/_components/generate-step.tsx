@@ -67,7 +67,7 @@ export function GenerateStep({ caseId, fileCount, filled, total, failed }: Gener
   }
 
   return (
-    <div aria-busy={pending || undefined}>
+    <div>
       <h2 className={STEP_HEADING}>{it.wizard.steps.generate}</h2>
       <p className="mt-1.5 font-mono text-sm text-foreground-muted">{fill(copy.counter, { n: fileCount, m: filled, total })}</p>
 

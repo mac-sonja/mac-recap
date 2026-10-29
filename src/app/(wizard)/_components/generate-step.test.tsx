@@ -59,9 +59,19 @@ describe("GenerateStep", () => {
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
   });
 
+  it("keeps the starting announcement outside any aria-busy container, so it is read out", async () => {
+    const user = userEvent.setup();
+    generateCaseStudy.mockReturnValue(new Promise(() => {}));
+    const { container } = render(<GenerateStep caseId={CASE_ID} fileCount={1} filled={0} total={2} failed={false} />);
+    await user.click(button(copy.action));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(copy.starting));
+    expect(container.querySelector("[aria-busy] [role=status]")).toBeNull();
+  });
+
   it.each([
     ["NO_MATERIAL", copy.noMaterial],
     ["STALE_STATUS", dict.wizard.errors.notDraft],
+    ["NOT_FOUND", dict.wizard.errors.notDraft],
     ["CASE_STUDY_WRITE_FAILED", copy.errors.generic],
   ])("shows %s in the alert line and stays on the step", async (code, message) => {
     const user = userEvent.setup();

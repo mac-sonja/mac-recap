@@ -2,7 +2,7 @@
 title: 'Story 3.7b: Generate a case study, screens'
 type: 'feature'
 created: '2026-10-29'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 baseline_commit: 'dab4a0375a9bb12808fb08bed410a20c7e69f2bf'
 review_loop_iteration: 0
@@ -62,10 +62,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `it.ts` + `it.test.ts` -- copy.
-- [ ] `generate-step.tsx`, `generating-screen.tsx` + tests for every matrix row.
-- [ ] wizard `page.tsx` + `page.test.tsx` -- step 3, generating render, failure lookup.
-- [ ] `case-studies-table.tsx` + test -- refresh and message.
+- [x] `it.ts` + `it.test.ts` -- copy.
+- [x] `generate-step.tsx`, `generating-screen.tsx` + tests for every matrix row.
+- [x] wizard `page.tsx` + `page.test.tsx` -- step 3, generating render, failure lookup.
+- [x] `case-studies-table.tsx` + test -- refresh and message.
 
 **Acceptance Criteria:**
 - Given a draft with material at step 3, when I press Genera and reload, then I still see the waiting screen until the case leaves `generating`.
@@ -86,3 +86,21 @@ context:
 - 2026-10-29, owner at approval: the counter counts two details (option B), like step 2.
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence / route |
+|---|-------|---------|---------|------------------|
+| 1 | blind, edge | Genera stays busy if `router.refresh()` does not move the page after an ok result | low | The action awaits the transition before returning, so the refresh reads `generating`; only a failed refresh leaves it, and a reload fixes it. Rejected. |
+| 2 | edge | STALE_STATUS / NOT_FOUND should also refresh the page | low | The message is accurate and a reload moves on. Rejected. |
+| 3 | verification-gap, blind | `NOT_FOUND` mapping has no test | medium | Same pattern as the details step, but unpinned. patch: row added to the `it.each`. |
+| 4 | blind | `aria-busy` wrapper may silence the "starting" announcement | medium | Confirmed: the `role="status"` line sat inside the busy wrapper. patch: wrapper attribute removed (the button keeps its own), test added. |
+| 5 | blind, edge, verification-gap | Table `rowNote` is never cleared and comes back for a later generating row | medium | Confirmed in code (`anyGenerating ? rowNote : null`). patch: reset while rendering when nothing generates, test added. |
+| 6 | blind, edge | Generating rows are mouse only | low | The status badge already says In elaborazione; the spec asks for a click. Rejected. |
+| 7 | blind, edge | Polling ignores hidden tabs, overlaps, never ends; duplicated refresh code | low | Cheap, short-lived refresh; rejected. |
+| 8 | blind | Step 3 never checks the actor may generate | false | The wizard is behind `requireSurface("create case")` and the action authorizes `generate`; both are owner/designer. |
+| 9 | blind, edge | Error codes collapse to the generic message | low | Rejected. |
+| 10 | blind | Page relies on newest-first jobs; lookup throws | false | `job-repository.test.ts` pins the ordering; statuses are only queued, running, succeeded, failed. |
+| 11 | blind | Redundant `hasMaterial` + `listAssets` queries | low | Rejected. |
+| 12 | blind | "Da approvare" hard-coded in waiting copy; copy tests incomplete | low | Rejected. |
+| 13 | edge | After a failure, a generating case opened with `?step=1/2` lands on that step | low | The failure shows on step 3; rejected. |
+| 14 | edge | Waiting-screen link reads "Torna alle case history", spec says "Torna ai casi" | low | The spec's own Code Map points at `it.wizard.back`; reported to the owner, no change. |
+| 15 | blind | `failedId` unused | low | Dead attribute, harmless. Rejected. |
