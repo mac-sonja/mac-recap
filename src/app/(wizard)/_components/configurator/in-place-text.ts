@@ -26,14 +26,16 @@ const LINE_ELEMENTS = new Set(["DIV", "P"]);
  * capitals). A `<br>` is a line break, and a line the browser wrapped in a `<div>` or
  * `<p>` starts a new line.
  */
-export function typedText(node: Node): string {
+export function typedText(node: Node, top = true): string {
   let out = "";
   node.childNodes.forEach((child, i) => {
     if (child.nodeType === Node.TEXT_NODE) out += child.nodeValue ?? "";
-    else if (child.nodeName === "BR") out += "\n";
+    // The text's own last <br> is the browser's placeholder for an empty last line, not a typed break
+    // (inside a wrapped line, a lone <br> is an empty line).
+    else if (child.nodeName === "BR") out += top && i === node.childNodes.length - 1 ? "" : "\n";
     else if (child.nodeType === Node.ELEMENT_NODE) {
       if (LINE_ELEMENTS.has(child.nodeName) && i > 0 && !out.endsWith("\n")) out += "\n";
-      out += typedText(child);
+      out += typedText(child, false);
     }
   });
   return out;

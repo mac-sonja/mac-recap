@@ -748,9 +748,42 @@ describe("Configurator editing", () => {
   it("the trial pages take no typing", () => {
     setup(true);
     const page = formats.presentazione_16_9.find((p) => ownTextIds(p).length > 0);
-    if (page === undefined) return;
-    const id = ownTextIds(page)[0]!;
+    expect(page).toBeDefined();
+    const id = ownTextIds(page!)[0]!;
+    fireEvent.doubleClick(textNode(page!.pageKey, id));
+    expect(textNode(page!.pageKey, id).hasAttribute("contenteditable")).toBe(false);
+  });
+
+  it("a double-click inside the text being typed in keeps one editing session (one undo step)", () => {
+    const pages = fixture();
+    setup(false, pages);
+    const { page, id } = ownText(pages.presentazione_16_9);
+    const before = textNode(page.pageKey, id).textContent;
     fireEvent.doubleClick(textNode(page.pageKey, id));
-    expect(textNode(page.pageKey, id).hasAttribute("contenteditable")).toBe(false);
+    type(textNode(page.pageKey, id), "uno");
+    fireEvent.doubleClick(textNode(page.pageKey, id));
+    type(textNode(page.pageKey, id), "uno due");
+    fireEvent.keyDown(textNode(page.pageKey, id), { key: "Escape" });
+    fireEvent.click(button(dict.configurator.undo));
+    expect(textNode(page.pageKey, id).textContent).toBe(before);
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("in Anteprima of Carosello the slide's own texts take typing, saved to Carosello", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    fireEvent.click(button(/Carosello/));
+    fireEvent.click(button(dict.configurator.preview.enter));
+    const { page, id } = ownText(pages.carosello_1_1.slice(0, 1));
+    const node = canvas().querySelector<HTMLElement>(`[data-slide] [data-element-id="${id}"]`)!;
+    expect(node.getAttribute("contenteditable")).toBe("plaintext-only");
+    node.focus();
+    type(node, "Dal carosello");
+    node.blur();
+    await advance(0);
+    const sent = onSave.mock.calls[0]![0].doc.formats;
+    expect(textElementAt(sent.carosello_1_1.pages, page.pageKey, id)?.text).toBe("Dal carosello");
+    expect(sent.presentazione_16_9.pages).toEqual(pages.presentazione_16_9);
   });
 });

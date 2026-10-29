@@ -20,6 +20,8 @@ describe("typedText", () => {
     ["a <br>", "riga uno<br>riga due", "riga uno\nriga due"],
     ["lines wrapped in <div>", "riga uno<div>riga due</div><div>riga tre</div>", "riga uno\nriga due\nriga tre"],
     ["an empty line as <div><br></div>", "uno<div><br></div><div>tre</div>", "uno\n\ntre"],
+    ["the browser's last placeholder <br>", "riga uno<br>riga due<br>", "riga uno\nriga due"],
+    ["an emptied text holding only the placeholder", "<br>", ""],
   ])("reads %s as line breaks", (_name, html, expected) => {
     expect(typedText(node(html))).toBe(expected);
   });

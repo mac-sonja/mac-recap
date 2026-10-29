@@ -740,6 +740,30 @@ describe("save_revision_doc", () => {
     await expect(pool.query(saveSql, [revisionId, doc, 0, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "INVALID_INPUT" });
   });
 
+  it.each([
+    ["STALE_HEAD", async (caseId: string) => void (await createRevision(caseId, 1))],
+    ["REVISION_NOT_WRITABLE", async (_caseId: string, revisionId: string) => void (await pool.query("update public.revision set status = 'approved' where id = $1", [revisionId]))],
+    ["NOT_FOUND", async (caseId: string) => void (await pool.query("update public.case_study set deleted_at = now() where id = $1", [caseId]))],
+  ] as const)("saveRevisionDoc maps the refusal %s through the adapter", async (code, arrange) => {
+    const { caseId, revisionId } = await editableCase();
+    await arrange(caseId, revisionId);
+    const { saveRevisionDoc } = await loadCaseStudy();
+    expect(await saveRevisionDoc(await signedInActor(), { caseId, revisionId, doc: edited(), expectedVersion: 0 })).toMatchObject({
+      ok: false,
+      error: { code },
+    });
+  });
+
+  it("saveRevisionDoc maps CASE_NOT_EDITABLE through the adapter", async () => {
+    const created = await createCase();
+    const revision = await createRevision(created.id, 0);
+    const { saveRevisionDoc } = await loadCaseStudy();
+    expect(await saveRevisionDoc(await signedInActor(), { caseId: created.id, revisionId: revision.id, doc: edited(), expectedVersion: 0 })).toMatchObject({
+      ok: false,
+      error: { code: "CASE_NOT_EDITABLE" },
+    });
+  });
+
   it("saveRevisionDoc saves through the module and maps a stale save", async () => {
     const { caseId, revisionId } = await editableCase();
     const { saveRevisionDoc } = await loadCaseStudy();

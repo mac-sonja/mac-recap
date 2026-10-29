@@ -517,13 +517,13 @@ export function createWorkingRevision(actor: Actor, input: unknown): Promise<Res
  * document as it should be and `expectedVersion` the revision `version` it was based
  * on. Writes `doc` (never `generatedDoc`) by compare-and-set on `version`, increments
  * it and records one `revision_saved` case event `{ version }`, in one transaction;
- * returns the saved revision. Call only after `authorize(actor, 'edit', { status })`
- * for this case.
+ * returns the saved revision. Call only after `authorize(actor, 'edit')`; the write
+ * itself refuses a case that is not `in_review` and a revision of another case.
  *
  * Errors, with nothing written: `INVALID_INPUT`, `DOCUMENT_INVALID`,
  * `DOCUMENT_SCHEMA_UNSUPPORTED`, `FORMAT_NOT_IN_REVISION`, `NOT_FOUND` (unknown
  * revision, another case's, or the case unknown or deleted), `ASSET_NOT_ALLOWED` (an
- * asset the stored `doc` does not reference), `STALE_HEAD` (no longer the head),
+ * asset neither the stored `doc` nor `generatedDoc` references), `STALE_HEAD` (no longer the head),
  * `CASE_NOT_EDITABLE` (the case is not `in_review`), `REVISION_NOT_WRITABLE` (not
  * `working`), `STALE_REVISION` (saved by someone else since it was read).
  * `REVISION_WRITE_FAILED` may come after the write committed: re-read the head.

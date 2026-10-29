@@ -69,8 +69,11 @@ const boxIn = (host: HTMLElement, target: Element): Box => {
   return { top: inner.top - outer.top, left: inner.left - outer.left, width: inner.width, height: inner.height };
 };
 
-/** A text open for typing: a text cursor, and no browser outline (the selection frames it). */
+/** A text open for typing in the editor: a text cursor, and no browser outline (the selection frames it). */
 const TYPING = "[&_[contenteditable]]:cursor-text [&_[contenteditable]]:outline-none";
+/** In Anteprima no selection frames it: the focused text gets the focus ring. */
+const TYPING_PREVIEW =
+  "[&_[contenteditable]]:cursor-text [&_[contenteditable]]:outline-none [&_[contenteditable]:focus]:outline-2 [&_[contenteditable]:focus]:outline-offset-2 [&_[contenteditable]:focus]:outline-focus-ring";
 
 const sameBoxes = (a: readonly Box[], b: readonly Box[]) =>
   a.length === b.length && a.every((x, i) => x.top === b[i]!.top && x.left === b[i]!.left && x.width === b[i]!.width && x.height === b[i]!.height);
@@ -159,11 +162,17 @@ function CanvasPage({
       setOverflow((prev) => (sameBoxes(prev, boxes) ? prev : boxes));
     };
     measure();
+    // Web fonts arriving change the text's size without resizing the page.
+    let live = true;
+    void document.fonts?.ready.then(() => {
+      if (live) measure();
+    });
     // Typing reflows the text in place; a resize reflows the whole page.
     el.addEventListener("input", measure);
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     observer?.observe(el);
     return () => {
+      live = false;
       el.removeEventListener("input", measure);
       observer?.disconnect();
     };
@@ -195,6 +204,8 @@ function CanvasPage({
   }
 
   function onDoubleClick(event: MouseEvent<HTMLDivElement>) {
+    // A double-click inside the text being typed in selects a word; it opens nothing.
+    if ((event.target as Element).closest?.("[contenteditable]")) return;
     const target = selectionAt(event.target as Element, page.pageKey);
     if (target.elementId !== undefined) onEditRequest(page.pageKey, target.elementId);
   }
@@ -216,7 +227,7 @@ function CanvasPage({
         className={cn(
           "relative w-full shrink-0 shadow-page transition-shadow duration-150 data-selected:ring-2 data-selected:ring-accent",
           // The text being typed in is framed by the selection; no second outline (mockup).
-          TYPING,
+          preview ? TYPING_PREVIEW : TYPING,
           !preview && "cursor-pointer",
           width,
         )}
@@ -481,7 +492,7 @@ function Slide({
     onDone: (elementId) => onTextDone(page.pageKey, elementId),
   });
   return (
-    <div ref={host} data-canvas-page={page.pageKey} className={TYPING}>
+    <div ref={host} data-canvas-page={page.pageKey} className={TYPING_PREVIEW}>
       <RenderedPage key={renderKey} formatId={formatId} template={template} page={shown} number={number} assets={assets} values={values} animateTexts />
     </div>
   );

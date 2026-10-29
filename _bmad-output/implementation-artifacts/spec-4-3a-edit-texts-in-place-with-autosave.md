@@ -2,7 +2,7 @@
 title: 'Story 4.3a: edit texts in place, with autosave, undo/redo and the overflow marker'
 type: 'feature'
 created: '2026-10-29'
-status: 'in-review'
+status: 'done'
 baseline_commit: '151e3a6652d843cf41976950933cc23b8c8f9582'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -123,6 +123,36 @@ The rendered page is the renderer's markup. Editing switches the node's `content
   - Esc inside a text doesn't leave Anteprima;
   - the banner appears with save requests aborted and clears when saving recovers;
   - the overflow marker, in light and dark.
+
+## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Save state stuck on "Salvataggio…" after undoing back to the saved document (blind, edge) | medium | `show()` set "saving"; `run()` returned early on `current === saved` without resetting it | patch |
+| 2 | Deterministic refusals (`DOCUMENT_INVALID`, `ASSET_NOT_ALLOWED`, a text over 5,000 characters) retried forever (blind, edge) | medium | Every non-stale refusal entered the backoff loop; the same document fails each time | patch (no timed retry; the next edit tries again) |
+| 3 | Leaving through the in-app back link inside the debounce drops the edit; a save in flight could reload after unmount (verify-gap other, edge) | medium | Unmount cleared the timers without sending; `beforeunload` doesn't fire on client navigation | patch |
+| 4 | Double-click inside the open text splits the session into several undo steps (blind, edge) | low | `onDoubleClick` lacked the `[contenteditable]` guard that `onClick` has; direct fix | patch |
+| 5 | No focus indicator on a text typed in during Anteprima (blind) | medium | `TYPING` removed the outline there, and Anteprima draws no selection frame | patch (focus ring in Anteprima) |
+| 6 | Overflow measured before web fonts load (blind) | low | Font swap changes the text's size without resizing the host; direct fix (`document.fonts.ready`) | patch |
+| 7 | Asset allow-list from the stored doc only: an undo bringing back a removed asset is refused (blind, edge) | low | No 4.3a path removes assets; a one-line union with `generatedDoc` | patch |
+| 8 | Browser placeholder `<br>` saved as a trailing newline, an emptied text as "\n" (edge) | low | `typedText` counted every `<br>`; direct fix at the text's top level | patch |
+| 9 | `undo()` after a stale stop pops and drops a step (edge) | low | Order of the checks; direct fix | patch |
+| 10 | `saveRevisionDoc` JSDoc asks for `authorize(…, { status })`, the action authorizes `edit` alone (blind) | low | The guard forbids a module call before `authorize`; the database enforces `in_review`; doc corrected | patch |
+| 11 | Missing tests: Carosello Anteprima typing, adapter refusal mapping, `beforeunload`, `NOT_FOUND` reload, a vacuous trial test (verify-gap, blind) | medium | Each could regress without a failing test | patch (tests added) |
+| 12 | A stale save silently drops unsaved edits with no message (blind) | false | Required by the spec (IR-A5: reload, no "someone else changed this" state) | reject |
+| 13 | Remount key includes `head.version` (blind) | false | Only a stale reload refreshes the page; without the version a stale reload of the same head would not reset the stopped document | reject |
+| 14 | Action authorizes without the case's status (blind) | false | `edit` has no status rule; `save_revision_doc` refuses a case not `in_review`; the use case refuses another case's revision | reject |
+| 15 | Leaving a text without typing marks it `human_edited` (blind) | false | `typedText` reads the text nodes the renderer wrote from `text`; `withText` returns the same pages for the same words | reject |
+| 16 | `REVISION_WRITE_FAILED` after a commit leads to `STALE_REVISION` and a reload (blind) | low | Rare; the reload shows what was committed; handling needs a re-read path | reject |
+| 17 | Esc drops focus to `<body>` (blind) | low | Enter and ⌘Z still work from `<body>`; restoring focus needs a focusable page | reject |
+| 18 | Undo/redo hints show ⌘ only (blind) | low | Mockup copy; platform detection adds code | reject |
+| 19 | Undo/redo natively `disabled`, Approva `aria-disabled` (blind) | low | Undo/redo are real controls now; Approva is a placeholder until 4.8 | reject |
+| 20 | Save state announced on every save (blind) | low | `aria-live="polite"` on a short label; quieter announcing needs another region | reject |
+| 21 | One `revision_saved` event per save (blind) | false | The spec asks for an event per save; it is not shown in Attività | reject |
+| 22 | Hidden still copy repeats ids inside the host (verify-gap other) | low | It comes after the visible copy, so `querySelector` finds the visible one; `pointer-events: none` | reject |
+| 23 | Edit cleared while focused leaves a stuck session (edge) | false | Every way to clear it (format switch, undo button) moves focus first, firing `focusout`; ⌘Z is ignored while typing | reject |
+| 24 | `editing` set for an element missing from the host (edge) | low | `requestEdit` only opens elements found in the rendered page | reject |
+| 25 | `flush()` waits while failing (edge) | low | By design: the retry timer paces saves | reject |
 
 ## Verification
 

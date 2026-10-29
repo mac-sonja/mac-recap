@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { Page } from "@/modules/generation";
@@ -38,7 +38,10 @@ async function advance(ms: number) {
 }
 
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("useDocument", () => {
   it("saves the whole document after the debounce with the version, then the returned one", async () => {
@@ -89,8 +92,8 @@ describe("useDocument", () => {
     await advance(RETRY_DELAYS_MS[1]);
     expect(save).toHaveBeenCalledTimes(BANNER_AFTER);
     expect(hook.result.current.banner).toBe(true);
-    // A refusal that isn't stale (e.g. ASSET_NOT_ALLOWED) counts as a failure too.
-    save.mockResolvedValueOnce(refused("ASSET_NOT_ALLOWED", 400));
+    // A server failure that isn't stale or about the document counts as a failure too.
+    save.mockResolvedValueOnce(refused("REVISION_WRITE_FAILED", 500));
     await advance(RETRY_DELAYS_MS[2]);
     expect(save).toHaveBeenCalledTimes(4);
     save.mockImplementation(okSave);
@@ -101,7 +104,7 @@ describe("useDocument", () => {
     expect(hook.result.current).toMatchObject({ save: "saved", banner: false });
   });
 
-  it.each(["STALE_REVISION", "STALE_HEAD", "REVISION_NOT_WRITABLE", "CASE_NOT_EDITABLE"])("reloads on %s and never retries", async (code) => {
+  it.each(["STALE_REVISION", "STALE_HEAD", "REVISION_NOT_WRITABLE", "CASE_NOT_EDITABLE", "NOT_FOUND"])("reloads on %s and never retries", async (code) => {
     const save = vi.fn<Save>().mockResolvedValue(refused(code));
     const { hook, onStale } = setup({ save });
     act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
@@ -151,5 +154,66 @@ describe("useDocument", () => {
     act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
     await advance(DEBOUNCE_MS);
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it("reads Salvato again when an edit is undone back to what the server holds", async () => {
+    const { hook, save } = setup();
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    expect(hook.result.current.save).toBe("saving");
+    act(() => {
+      hook.result.current.undo();
+    });
+    await advance(DEBOUNCE_MS);
+    expect(save).not.toHaveBeenCalled();
+    expect(hook.result.current.save).toBe("saved");
+  });
+
+  it.each(["DOCUMENT_INVALID", "ASSET_NOT_ALLOWED", "INVALID_INPUT"])("does not retry a %s refusal; the next edit tries again", async (code) => {
+    const save = vi.fn<Save>().mockResolvedValueOnce(refused(code, 400)).mockImplementation(okSave);
+    const { hook } = setup({ save });
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(hook.result.current).toMatchObject({ save: "retrying", banner: true });
+    await advance(60_000);
+    expect(save).toHaveBeenCalledTimes(1);
+    act(() => hook.result.current.change(formatsNamed("b"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(hook.result.current).toMatchObject({ save: "saved", banner: false });
+  });
+
+  it("asks before the tab closes while an edit is unsaved, and not once it is saved", async () => {
+    const { hook } = setup();
+    const unload = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(unload()).toBe(false);
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    expect(unload()).toBe(true);
+    await advance(DEBOUNCE_MS);
+    expect(unload()).toBe(false);
+  });
+
+  it("sends an edit still waiting for its debounce when it unmounts (leaving in the app)", () => {
+    const { hook, save } = setup();
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    hook.unmount();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.calls[0]![0].doc.formats.presentazione_16_9.pages).toEqual([page("a")]);
+  });
+
+  it("does not reload or retry after it unmounts with a save in flight", async () => {
+    let finish: (value: ActionResult<{ version: number }>) => void = () => {};
+    const save = vi.fn<Save>().mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+    const { hook, onStale } = setup({ save });
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    hook.unmount();
+    await act(async () => finish(refused("STALE_REVISION")));
+    await advance(60_000);
+    expect(onStale).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledTimes(1);
   });
 });

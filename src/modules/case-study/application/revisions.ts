@@ -133,8 +133,9 @@ export function referencedAssetIds(doc: unknown): Set<string> {
  * Saves an edited `doc` of a case's head revision (Story 4.3a) by compare-and-set on
  * `version`. The revision must be `revisionId` of `caseId` (else `NOT_FOUND`), `doc`
  * must pass `generation.validateNewDocument`, and it may reference only assets the
- * stored `doc` references (`ASSET_NOT_ALLOWED`; Story 4.5 brings the media guardrail).
- * The caller has authorized the actor to `edit` this case.
+ * stored `doc` or `generatedDoc` references (`ASSET_NOT_ALLOWED`; Story 4.5 brings the
+ * media guardrail). The caller has authorized the actor to `edit`; the database checks
+ * the case is `in_review`.
  */
 export function makeSaveRevisionDoc(deps: { revisions: RevisionRepository }) {
   return async function saveRevisionDoc(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
@@ -151,7 +152,8 @@ export function makeSaveRevisionDoc(deps: { revisions: RevisionRepository }) {
     }
     const current = upgraded(found.value);
     if (!current.ok) return current;
-    const allowed = referencedAssetIds(current.value.doc);
+    // What the revision uses now or was generated with (an undo may bring a removed one back).
+    const allowed = new Set([...referencedAssetIds(current.value.doc), ...referencedAssetIds(current.value.generatedDoc)]);
     const foreign = [...referencedAssetIds(valid.value)].filter((id) => !allowed.has(id));
     if (foreign.length > 0) {
       return err({

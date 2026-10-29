@@ -358,6 +358,17 @@ describe("saveRevisionDoc", () => {
     expect(deps.revisions.saveDoc).not.toHaveBeenCalled();
   });
 
+  it("allows an asset only the generated document references (an undo bringing it back)", async () => {
+    const generated = caseHistoryV2(FORMAT_IDS);
+    const kept = stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { version: 3, generatedDoc: generated });
+    const removedId = "99999999-0000-4000-8000-000000000002";
+    generated.formats.presentazione_16_9!.pages[0]!.background = { kind: "image", assetId: removedId };
+    const deps = fakes(caseStudy(), [kept]);
+    const doc = edited();
+    doc.formats.presentazione_16_9!.pages[0]!.background = { kind: "image", assetId: removedId };
+    expect((await makeSaveRevisionDoc(deps)(actor, input({ doc }))).ok).toBe(true);
+  });
+
   it("allows removing assets", async () => {
     const deps = fakes(caseStudy(), [head()]);
     const doc = edited();

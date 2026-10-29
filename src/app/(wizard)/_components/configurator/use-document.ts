@@ -69,6 +69,9 @@ export const RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 15_000] as const;
 /** After this many failures in a row the banner shows. */
 export const BANNER_AFTER = 3;
 
+/** Refusals a retry of the same document can't fix: no timed retry; the next edit tries again (e.g. a text made shorter). */
+const PERMANENT_CODES = new Set(["INVALID_INPUT", "DOCUMENT_INVALID", "DOCUMENT_SCHEMA_UNSUPPORTED", "FORMAT_NOT_IN_REVISION", "ASSET_NOT_ALLOWED", "FORBIDDEN"]);
+
 /** Refusals a retry can't fix because the server holds something newer: read it again instead. */
 const STALE_CODES = new Set(["STALE_REVISION", "STALE_HEAD", "REVISION_NOT_WRITABLE", "CASE_NOT_EDITABLE", "NOT_FOUND"]);
 
@@ -101,6 +104,8 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
   const group = useRef<string | undefined>(undefined);
   const inFlight = useRef(false);
   const failures = useRef(0);
+  /** The last save was refused for its content: nothing retries until the next edit. */
+  const blocked = useRef(false);
   const stopped = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -120,7 +125,11 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
   const run = useCallback(async function run(): Promise<void> {
     const { caseId, revision, base, save, onStale } = latest.current;
     if (stopped.current || revision === null || !revision.editable || inFlight.current) return;
-    if (current.current === saved.current) return;
+    if (current.current === saved.current) {
+      // Undone back to what the server holds: nothing to send.
+      if (failures.current === 0) setSaveState("saved");
+      return;
+    }
     if (timer.current !== null) clearTimeout(timer.current);
     if (retry.current !== null) clearTimeout(retry.current);
     timer.current = null;
@@ -156,13 +165,23 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
     }
     failures.current += 1;
     setSaveState("retrying");
+    if (result !== null && PERMANENT_CODES.has(result.error.code)) {
+      // The same document would be refused again: wait for the next edit.
+      blocked.current = true;
+      setBanner(true);
+      return;
+    }
     if (failures.current >= BANNER_AFTER) setBanner(true);
     const wait = RETRY_DELAYS_MS[Math.min(failures.current, RETRY_DELAYS_MS.length) - 1];
     retry.current = setTimeout(() => void run(), wait);
   }, []);
 
   const schedule = useCallback(() => {
-    // While failing, the retry timer paces the saves.
+    // While failing, the retry timer paces the saves; a refused document waits for this edit.
+    if (blocked.current) {
+      blocked.current = false;
+      failures.current = 0;
+    }
     if (failures.current > 0) return;
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = setTimeout(() => void run(), DEBOUNCE_MS);
@@ -196,8 +215,9 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
 
   const step = useCallback(
     (from: { current: Step[] }, to: { current: Step[] }): FormatId | undefined => {
+      if (stopped.current) return undefined;
       const target = from.current.pop();
-      if (target === undefined || stopped.current) return undefined;
+      if (target === undefined) return undefined;
       to.current.push({ formats: current.current, formatId: target.formatId });
       group.current = undefined;
       show(target.formats);
@@ -223,6 +243,13 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
       clearTimers();
+      // Leaving in the app (no beforeunload) with an edit not yet sent: send it, best effort.
+      const { caseId, revision, base, save } = latest.current;
+      if (!stopped.current && !inFlight.current && current.current !== saved.current && revision?.editable === true) {
+        void save({ caseId, revisionId: revision.id, doc: { ...base, formats: stored(current.current) }, expectedVersion: version.current }).catch(() => undefined);
+      }
+      // A save still in flight must not retry or reload after unmount.
+      stopped.current = true;
     };
   }, []);
 
