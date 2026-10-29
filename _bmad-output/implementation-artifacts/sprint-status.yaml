@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-29-2026 08:05
+last_updated: 10-29-2026 08:40
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -91,7 +91,7 @@ development_status:
 
   epic-5: in-progress
   5-1-library-of-approved-case-studies: backlog  # multi-select added by 5.10 (SCP 2026-10-16 client intro and collections)
-  5-2-preview-an-approved-case-study-in-every-format: in-progress  # parts (owner 2026-10-28): detail page + Modifica in spec-5-2-approved-case-detail-and-edit; tool-shell page, empty Raccolte and Elimina in spec-5-2-elimina-approved-case; Attività in spec-5-2-case-activity-log; rest backlog (pager, zoom, full screen, narrow viewports)
+  5-2-preview-an-approved-case-study-in-every-format: in-progress  # parts (owner 2026-10-28): detail page + Modifica in spec-5-2-approved-case-detail-and-edit; tool-shell page, empty Raccolte and Elimina in spec-5-2-elimina-approved-case; Attività in spec-5-2-case-activity-log; pager, zoom and full screen in spec-5-2-preview-controls; rest backlog (narrow viewports)
   5-3-export-a-format-as-a-file: backlog  # amendment per SCP 2026-10-16 client intro and collections (parts list, content-hash export key); per SCP 2026-10-28: Presentazione PDF, Carosello PNGs; Video MP4 or WebM after the demo; owner 2026-10-28: Export opens a dialog to tick formats, the same for cases, client packs and collections
   5-4-export-every-format-at-once: backlog  # per SCP 2026-10-28: Video joins after the demo; owner 2026-10-28: no Export all button, several formats ticked in the export dialog download as one ZIP
   5-5-create-a-shareable-link: backlog

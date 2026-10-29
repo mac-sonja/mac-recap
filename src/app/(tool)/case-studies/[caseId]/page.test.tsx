@@ -252,7 +252,10 @@ describe("CaseViewPage", () => {
     const html = await render();
     expect(html).toContain('data-template="mac-case@1"');
     expect(html).toMatch(/data-canvas-page="[^"]+"/);
-    expect(html).toContain("1 · ");
+    // One slide at a time, under the viewer's counter.
+    expect(html.match(/data-canvas-page="/g)).toHaveLength(1);
+    const pages = revision.doc.formats.presentazione_16_9!.pages;
+    expect(html).toContain(`1 di ${pages.length} · ${pages[0]!.name}`);
   });
 
   it("gives the renderer only ready renditions and a video its ready poster", async () => {
@@ -274,9 +277,7 @@ describe("CaseViewPage", () => {
     getLiveRevision.mockResolvedValue(ok(null));
     const html = await render();
     expect(html).toContain("Bozza di prova");
-    expect(html).toContain("1 · Intro");
-    expect(html).toContain("2 · Contenuti");
-    expect(html).toContain("3 · Risultati e testimonial");
+    expect(html).toContain("1 di 3 · Intro");
     expect(html).toContain("Illuminazione");
     expect(html).toContain("Web design");
   });

@@ -21,7 +21,8 @@ export interface SlideshowProps {
   children: ReactNode;
 }
 
-const NAV =
+/** The round ‹ › button (also the approved case page's pager). */
+export const NAV =
   "grid size-[52px] shrink-0 place-items-center rounded-full bg-foreground-strong font-label text-[26px] leading-none text-surface shadow-popover transition-[background-color,color,transform] duration-150 ease-out hover:bg-accent hover:text-accent-foreground active:scale-[0.97] aria-disabled:cursor-default aria-disabled:bg-surface-control aria-disabled:text-foreground-muted aria-disabled:shadow-none aria-disabled:hover:bg-surface-control aria-disabled:hover:text-foreground-muted aria-disabled:active:scale-100";
 
 /**

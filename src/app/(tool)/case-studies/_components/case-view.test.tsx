@@ -94,7 +94,7 @@ const button = (name: string | RegExp) => screen.getByRole("button", { name, hid
 /** The page's Elimina, not the one inside its (closed) dialog. */
 const deleteTrigger = () =>
   screen.getAllByRole("button", { name: dict.caseStudies.delete.approvedButton, hidden: true }).find((b) => b.closest("dialog") === null)!;
-const slideCaption = () => canvas().querySelector("[data-slideshow] p")?.textContent;
+const slideCaption = () => document.querySelector("[data-pager] p[aria-live]")?.textContent;
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -200,16 +200,27 @@ describe("CaseView", () => {
     expect(button(fill(dict.download.caseLabel, { name: "Rebrand Lumen" }))).toBeTruthy();
   });
 
-  it("stacks Presentazione's pages, and a click selects nothing", () => {
+  it("shows the preview in the viewer, not the configurator's canvas: Presentazione one slide at a time, and a click selects nothing", () => {
     setup();
+    expect(document.querySelector("[data-viewer] [data-viewer-toolbar]")?.contains(formatsGroup())).toBe(true);
     const pages = canvas().querySelectorAll<HTMLElement>("[data-canvas-page]");
-    expect(pages).toHaveLength(formats.presentazione_16_9.length);
+    expect(pages).toHaveLength(1);
     expect(canvas().querySelector("[data-slideshow]")).toBeNull();
     fireEvent.click(pages[0]!.querySelector("[data-block-id]") ?? pages[0]!);
-    fireEvent.click(pages[1]!);
     expect(canvas().querySelector("[data-selected]")).toBeNull();
     expect(canvas().querySelector("[data-frame]")).toBeNull();
     expect(pages[0]!.className).not.toContain("cursor-pointer");
+  });
+
+  it("pages Presentazione with → too: twice shows the third slide", () => {
+    setup();
+    const n = formats.presentazione_16_9.length;
+    expect(fireEvent.keyDown(document, { key: "ArrowRight" })).toBe(false);
+    fireEvent.keyDown(document, { key: "ArrowRight" });
+    expect(slideCaption()).toBe(fill(preview.slide, { i: 3, n, name: formats.presentazione_16_9[2]!.name }));
+    expect(canvas().querySelector("[data-slide]")?.getAttribute("data-slide")).toBe(formats.presentazione_16_9[2]!.pageKey);
+    fireEvent.keyDown(document, { key: "ArrowLeft" });
+    expect(slideCaption()).toContain(`2 di ${n}`);
   });
 
   it("shows Carosello as a slideshow that ← → step through, leaving modified arrows to the browser", () => {
@@ -231,14 +242,15 @@ describe("CaseView", () => {
     expect(canvas().querySelector("[data-selected], [data-frame]")).toBeNull();
   });
 
-  it("restarts the slideshow on its first page when the format changes, and Presentazione ignores the arrows", () => {
+  it("restarts on the first slide when the format changes", () => {
     setup();
     fireEvent.click(format("Carosello"));
     fireEvent.keyDown(document, { key: "ArrowRight" });
     fireEvent.click(format("Video"));
     expect(slideCaption()).toContain(`1 di ${formats.video_9_16.length}`);
+    fireEvent.keyDown(document, { key: "ArrowRight" });
     fireEvent.click(format("Presentazione"));
-    expect(fireEvent.keyDown(document, { key: "ArrowRight" })).toBe(true);
+    expect(slideCaption()).toContain(`1 di ${formats.presentazione_16_9.length}`);
   });
 
   it("leaves ← → inside the open Scarica dialog to its radios: the slide stays", () => {
@@ -281,6 +293,6 @@ describe("CaseView", () => {
 
   it("shows the Bozza di prova note with the starter pages", () => {
     setup({ trial: true });
-    expect(canvas().textContent).toContain(dict.configurator.trial.title);
+    expect(document.querySelector("[data-viewer]")?.textContent).toContain(dict.configurator.trial.title);
   });
 });
