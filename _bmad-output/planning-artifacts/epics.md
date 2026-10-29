@@ -140,15 +140,15 @@ These are the rules the stories are built against. None of them is a decision; e
 | ID | Open point / conflict | Owner | Interim rule used by the stories | Source |
 | --- | --- | --- | --- | --- |
 | IR-OP1 | OP 1 export formats | PRD owner | **Resolved 2026-10-28** (SCP 2026-10-28, C28, answers 1 and 3): Presentazione 16:9 (1920×1080, PDF), Carosello 1:1 (1080×1080, ZIP of PNGs), Video 9:16 (1080×1920; Anteprima only for the demo, MP4 or WebM after it). Was: Format registry holds UX Option A only: Deck 16:9 (1920×1080, PDF), Social carousel 4:5 (1080×1350, ZIP of PNGs), PDF A4 portrait (PDF). Adding formats means adding registry entries and template renderers. | SPEC CAP-9, ui-flows, AD-9 |
-| IR-OP2 | OP 2 data processing logic | PRD owner | **No interim rule.** Stable regardless: the `NarrativeGenerator` port, `MaterialRef`s and the manifest shape (AD-18). Which material types the LLM reads, and how each is turned into input, is open. | AD-7, AD-18 |
+| IR-OP2 | OP 2 data processing logic | PRD owner | **Decided (owner, 2026-10-29).** The details form and the client info go as text; images as their `image.display` renditions, at most 20, favourites first; PDFs whole while they fit the request (32 MB, 600 pages), else as their extracted text; DOCX, TXT and MD as text extracted on our side; videos skipped for now. Built in Story 3.6. | AD-7, AD-18 |
 | IR-OP3 | OP 3 taxonomy values | PRD owner | **Resolved 2026-10-14:** no taxonomy. Tags, properties and flags are dropped; favourites replace them (AR14). No interim rule remains. | PRD OP 3, AD-14 |
 | IR-OP4 | OP 4 account/sales/social browsing | PRD owner | UX proposal: card library with search, Client / Year facets, paginated at 24, approved only. | EXPERIENCE (library view) |
 | IR-OP8 | OP 8 status lifecycle | PRD owner | Option A: `draft` Bozza → `generating` In elaborazione → `in_review` Da approvare → `approved` Approvato. Links are a count, not a status. No path back from Approvato. | AD-3, EXPERIENCE |
 | IR-OP11 | OP 11 link access | PRD owner | `accessMode = unlisted` (anyone with the link), with `expiresAt` present but unused in the UI. Share dialog says "Anyone with the link can view." Combined with IR-A2 until Epic 6. | AD-13, FR7 |
 | IR-OP12 | OP 12 what counts as altering | Design team | **Reversed in part 2026-10-28** (SCP 2026-10-28, answer 4, C31): a person sets each image to Riempi, Adatta or Ritaglia; media-count adaptation and Shuffle are gone. Still true: renditions only downscale whole images, and no AI alters media. Was: Renditions only downscale whole images (no upscaling, crop, recolour or filter) and make video poster frames/transcodes. Media are placed whole (fit). No crop or focal point. Media-count adaptation and Shuffle pick only among designed variants. | AD-5, AD-15, EXPERIENCE |
 | IR-OP13 | OP 13 recording the measures | PRD owner | The tool records no hands-on time and has no timer UI; it keeps the append-only `case_event` log and `generated_doc` next to the approved `doc`. | AD-20, UX Q3 |
-| IR-OP14 | OP 14 what a favourite means for generation (Epic 3) | PRD owner | Favourites are stored and shown, not used by generation. | AD-14, PRD OP 14 |
-| IR-NFR5 | NFR5 quality checklist (Sprint 2 deliverable) | Non-dev, Sprint 2 | **No interim rule.** The schema enforces challenge / approach / result and both aspects are tagged; the checklist content for prompts is open. | SPEC Open Questions |
+| IR-OP14 | OP 14 what a favourite means for generation (Epic 3) | PRD owner | **Decided (owner, 2026-10-29):** favourite images go to the AI first (at most 20 images). Nothing else uses them. | AD-14, PRD OP 14 |
+| IR-NFR5 | NFR5 quality checklist (Sprint 2 deliverable) | Non-dev, Sprint 2 | **Decided (owner, 2026-10-29).** `copywriting-case-mac.md` (bozza 2, §7 examples as they are) is the checklist; the prompt `case-narrative@1` carries it (Story 3.6). | SPEC Open Questions |
 | IR-HOST | Container host | Team, end of Sprint 1 | **No interim rule.** Any EU host that runs one image with two processes. | Spine Deferred, AR22 |
 | IR-A1 | A1 / C1 live edits vs claim check | PRD owner | Edits to an approved case are staged on a working head; links keep serving the approved revision until an owner/designer re-checks the edited blocks and runs **Update approved version**. **Discard changes** returns to the live version. | AD-3, AD-19, EXPERIENCE |
 | IR-A2 | A2 links before login | PRD owner | `/s/{token}` stays behind the AD-12 basic-auth gate until Epic 6; after Epic 6 it is the only unauthenticated route. | AD-12 |
@@ -1396,8 +1396,8 @@ I want the narrative written only from my case's material and form answers,
 So that every claim in the draft has something I can check it against.
 
 Covers: FR3, CAP-5, AR6 (aspects, MISSING_ASPECT), AR7, AR18 (manifest, limits, no Files API), AR19 (provenance, validated sourceRefs), NFR1, NFR2 (no "verified"), NFR5, NFR13 (narrative language)
-⚑ Interim: IR-A3 (`MISSING_ASPECT` is recorded, not blocking), IR-OP14 (favourites are in the manifest but ignored)
-⛔ Blocked on: IR-OP2 (which material types the LLM reads and how each becomes input), IR-NFR5 (quality checklist content for the prompt)
+⚑ Interim: IR-A3 (`MISSING_ASPECT` is recorded, not blocking; on the `job_ok` event as `missingAspect`). IR-OP14 decided 2026-10-29: favourite images go to the AI first.
+✅ Unblocked (owner, 2026-10-29): IR-OP2 and IR-NFR5 decided; built before 4.8 since the demo moved ([spec](../implementation-artifacts/spec-3-6-narrative-generator-port-and-anthropic-adapter.md)).
 ✅ Decided (owner, 2026-10-28): the AI writes one text per format, fitted to that format's space (see Story 3.3). Each format's copy is then edited on its own.
 Amended per SCP 2026-10-28 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C39, owner 2026-10-27): for the demo, claims carry no check workflow. Nothing sets or reads a `check`, there is no "generated, not checked" marking, and the output stays text only; Story 3.7 places it in each format's pages. The prompt follows the copywriting guide (#100).
 
@@ -1446,7 +1446,7 @@ So that the draft is built in the background without my waiting time counting ag
 
 Covers: FR3, CAP-4, NFR6, NFR4, AR3 (`draft` → `generating` → `in_review`, failure → `draft`), AR6 (gate in UI and worker), AR10, AR17 (`baseHeadVersion`, new revision), AR18 (manifest), AR20, UX-DR10, UX-DR4 (live status), PRD Story 3.1
 ⚑ Interim: IR-OP8, IR-OP1
-⛔ Blocked on: IR-OP2 and IR-NFR5 (via Story 3.6). An empty image block exports transparent (IR-A4, decided 2026-10-28).
+Unblocked with Story 3.6 (owner, 2026-10-29). An empty image block exports transparent (IR-A4, decided 2026-10-28).
 Amended per SCP 2026-10-28 ([Sprint Change Proposal 2026-10-28, configurator](sprint-change-proposal-2026-10-28-configurator.md); C31, C33): `rendering.relayout` is retired. Generation builds each format's pages from the template's default pages and fills them with the AI's texts; the templates are the Figma file "MAC-TF-AI" (Story 3.4).
 
 **Acceptance Criteria:**

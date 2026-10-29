@@ -278,9 +278,50 @@ describe("material index wiring", () => {
     ["saveCaseResults", () => material.saveCaseResults(actor, { caseId: CASE_ID, results: [] })],
     ["saveCaseTestimonial", () => material.saveCaseTestimonial(actor, { caseId: CASE_ID, quote: "", author: "" })],
     ["setFavourite", () => material.setFavourite(actor, { ...ref, isFavourite: true })],
+    ["listGenerationAssets", () => material.listGenerationAssets(CASE_ID)],
   ])("%s never touches storage", async (_name, call) => {
     expect((await call()).ok).toBe(true);
     expect(m.createSupabaseObjectStorage).not.toHaveBeenCalled();
     for (const fn of Object.values(m.storage)) expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe("generation reads (Story 3.6)", () => {
+  it("listGenerationAssets lists the live assets with kind, type, size and favourite flag, never the file name", async () => {
+    expect(await material.listGenerationAssets(CASE_ID)).toEqual(
+      ok([{ id: ASSET_ID, kind: "image", contentType: "image/png", sizeBytes: 10, isFavourite: false }]),
+    );
+    m.get.mockResolvedValueOnce(err({ code: "NOT_FOUND", message: "x" }));
+    expect(await material.listGenerationAssets(CASE_ID)).toEqual(err({ code: "NOT_FOUND", message: "x" }));
+    expect((await material.listGenerationAssets("nope")).ok).toBe(false);
+  });
+
+  it("readAssetBytes downloads the original by its key", async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    m.storage.download.mockResolvedValueOnce(ok(bytes));
+    expect(await material.readAssetBytes({ caseId: CASE_ID, assetId: ASSET_ID, variant: "original" })).toEqual(ok({ bytes, contentType: "image/png" }));
+    expect(m.storage.download).toHaveBeenCalledWith(`cases/${CASE_ID}/assets/${ASSET_ID}/original.png`);
+  });
+
+  it("readAssetBytes reads an image's display rendition, or says it is not ready", async () => {
+    const bytes = new Uint8Array([9]);
+    m.renditions.get.mockResolvedValueOnce(ok({ assetId: ASSET_ID, path: "cases/x/renditions/display.webp", contentType: "image/webp", width: 10, height: 10 }));
+    m.storage.download.mockResolvedValueOnce(ok(bytes));
+    expect(await material.readAssetBytes({ caseId: CASE_ID, assetId: ASSET_ID, variant: "image.display" })).toEqual(ok({ bytes, contentType: "image/webp" }));
+    expect(m.storage.download).toHaveBeenCalledWith("cases/x/renditions/display.webp");
+    m.renditions.get.mockResolvedValueOnce(ok(null));
+    expect(await material.readAssetBytes({ caseId: CASE_ID, assetId: ASSET_ID, variant: "image.display" })).toMatchObject({ ok: false, error: { code: "RENDITION_NOT_READY" } });
+  });
+
+  it("readAssetBytes: NOT_FOUND for a removed asset, a missing object or a display copy of a non-image", async () => {
+    m.repo.get.mockResolvedValueOnce(ok(null));
+    expect(await material.readAssetBytes({ caseId: CASE_ID, assetId: ASSET_ID, variant: "original" })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    m.storage.download.mockResolvedValueOnce(ok(null));
+    expect(await material.readAssetBytes({ caseId: CASE_ID, assetId: ASSET_ID, variant: "original" })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    m.repo.get.mockResolvedValueOnce(
+      ok({ id: ASSET_ID, caseId: CASE_ID, kind: "document", originalFileName: "a.pdf", contentType: "application/pdf", sizeBytes: 10, createdBy: actor.id, createdAt: "x", deletedAt: null, isFavourite: false }),
+    );
+    expect(await material.readAssetBytes({ caseId: CASE_ID, assetId: ASSET_ID, variant: "image.display" })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect((await material.readAssetBytes({ caseId: "x", assetId: ASSET_ID, variant: "original" })).ok).toBe(false);
   });
 });

@@ -24,6 +24,11 @@ const VENDOR_SDK = {
   regex: "^(@supabase/|@aws-sdk/|@anthropic-ai/|@playwright/|playwright(-core)?(/|$)|sharp(/|$))",
   message: "Vendor SDKs are imported only in src/modules/<module>/adapters/ (AD-1).",
 };
+// Story 3.6 (AR7): the narrative generator is the only LLM caller, so only its adapter imports the Anthropic SDK.
+const ANTHROPIC_SDK = {
+  regex: "^@anthropic-ai/",
+  message: "Only src/modules/generation/adapters/anthropic/ imports the Anthropic SDK (AR7).",
+};
 const RESERVED_INTEGRATION = {
   regex: "^(@modelcontextprotocol/|@/modules/integration(/|$))",
   message: "MAC Productive / MCP is reached only through src/modules/integration, reserved for Epic 7 (AD-16).",
@@ -168,7 +173,8 @@ const SHARED = [
   ALIAS_DOTDOT,
 ];
 const application = (internals) => [VENDOR_SDK, RESERVED_INTEGRATION, DB_TYPES, internals, WORKER_ENTRY, DOTDOT_SEGMENT];
-const adapters = (internals) => [RESERVED_INTEGRATION, internals, WORKER_ENTRY, DOTDOT_SEGMENT];
+const adapters = (internals) => [RESERVED_INTEGRATION, internals, WORKER_ENTRY, DOTDOT_SEGMENT, ANTHROPIC_SDK];
+const anthropicAdapter = (internals) => [RESERVED_INTEGRATION, internals, WORKER_ENTRY, DOTDOT_SEGMENT];
 const domain = (m, opts) => [domainImports(m, opts), DB_TYPES, DOTDOT_SEGMENT];
 const DOMAIN_TEST = "*.test.{ts,tsx,mts,cts}";
 
@@ -225,6 +231,7 @@ export default defineConfig(
       { ignores: [`src/modules/${m}/domain/**`, `src/modules/${m}/adapters/**`] },
     ),
     layer([`src/modules/${m}/adapters/**/${SOURCE}`], adapters(otherModuleInternals(m))),
+    ...(m === "generation" ? [layer([`src/modules/${m}/adapters/anthropic/**/${SOURCE}`], anthropicAdapter(otherModuleInternals(m)))] : []),
     layer([`src/modules/${m}/domain/**/${SOURCE}`], domain(m)),
     layer([`src/modules/${m}/domain/**/${DOMAIN_TEST}`], domain(m, { test: true })),
   ]),

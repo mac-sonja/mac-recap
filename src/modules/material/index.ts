@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { Actor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import * as jobs from "@/modules/jobs";
+import { assetKey } from "@/modules/material/adapters/asset-key";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
 import { createSupabaseObjectStorage } from "@/modules/material/adapters/supabase/object-storage";
@@ -17,6 +18,12 @@ import { makeGetDetailsForm } from "@/modules/material/application/get-details-f
 import { makeGetRendition } from "@/modules/material/application/get-rendition";
 import { makeHasMaterial } from "@/modules/material/application/has-material";
 import { makeListAssets } from "@/modules/material/application/list-assets";
+import {
+  makeListGenerationAssets,
+  makeReadAssetBytes,
+  type AssetBytesVariant,
+  type GenerationAsset,
+} from "@/modules/material/application/read-for-generation";
 import { makePresignUpload, type PresignedAssetUpload } from "@/modules/material/application/presign-upload";
 import { makeRemoveAsset } from "@/modules/material/application/remove-asset";
 import { makeResolveRefs } from "@/modules/material/application/resolve-refs";
@@ -62,6 +69,8 @@ export type { AllowedContentType, AssetKind } from "@/modules/material/domain/fi
 export { RENDITION_NOT_READY, RENDITION_SPEC_NAMES } from "@/modules/material/domain/rendition";
 export type { RenditionLink, RenditionSpecName } from "@/modules/material/domain/rendition";
 export type { MaterialManifest } from "@/modules/material/application/build-manifest";
+export { ASSET_BYTES_VARIANTS } from "@/modules/material/application/read-for-generation";
+export type { AssetBytesVariant, GenerationAsset } from "@/modules/material/application/read-for-generation";
 export type { PresignedAssetUpload } from "@/modules/material/application/presign-upload";
 
 /** One Supabase Storage adapter, built on first use and reused across requests. */
@@ -144,7 +153,7 @@ export function removeAsset(actor: Actor, input: unknown): Promise<Result<void>>
  * `mark favourites` first. Errors: `INVALID_INPUT`, `NOT_FOUND`, `NOT_FAVOURITABLE`,
  * `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`, `ASSET_WRITE_FAILED`, and the event-write
  * error (the flag is then put back).
- * Any status; status never changes; never touches storage. Generation ignores the flag.
+ * Any status; status never changes; never touches storage. Generation sends favourite images to the AI first (Story 3.6).
  */
 export function setFavourite(actor: Actor, input: unknown): Promise<Result<void>> {
   return makeSetFavourite(storagelessDeps())(actor, input);
@@ -168,6 +177,25 @@ export function hasMaterial(caseId: unknown): Promise<Result<boolean>> {
  */
 export function buildManifest(caseId: unknown): Promise<Result<MaterialManifest>> {
   return makeBuildManifest(storagelessDeps())(caseId);
+}
+
+/**
+ * The live assets of a case for generation (Story 3.6): `[{ id, kind, contentType, sizeBytes,
+ * isFavourite }]`, oldest first. Module-only (the generate job); reads only, never touches
+ * storage. Errors: `INVALID_INPUT`, `NOT_FOUND`, `ASSET_LOOKUP_FAILED`, `ASSET_INVALID`.
+ */
+export function listGenerationAssets(caseId: unknown): Promise<Result<GenerationAsset[]>> {
+  return makeListGenerationAssets(storagelessDeps())(caseId);
+}
+
+/**
+ * The bytes of one live asset (`{ caseId, assetId, variant: 'original' | 'image.display' }`),
+ * for the generate job (Story 3.6) to send to the AI. Module-only: no server action, no
+ * signed link. Errors: `INVALID_INPUT`, `NOT_FOUND`, `RENDITION_NOT_READY`,
+ * `STORAGE_NOT_CONFIGURED`, the lookup and download errors.
+ */
+export function readAssetBytes(input: { caseId: string; assetId: string; variant: AssetBytesVariant }): Promise<Result<{ bytes: Uint8Array; contentType: string }>> {
+  return makeReadAssetBytes(deps(), (asset) => assetKey(asset.caseId, asset.id, asset.contentType))(input);
 }
 
 /**
