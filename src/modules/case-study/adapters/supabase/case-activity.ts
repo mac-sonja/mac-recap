@@ -13,18 +13,39 @@ const ACTIVITY_COLUMNS =
  * as `list`), newest first, of the `ACTIVITY_TYPES` only, each with its actor's name
  * (`null` for the `system` role) and its case. A malformed row fails the whole read.
  */
-export async function listCaseActivity(
+export function listCaseActivity(
   scope: ListScope,
   limit: number,
   client = createSupabaseAdminClient(),
+): Promise<Result<CaseActivity[]>> {
+  return readActivity({ ...scope }, limit, client);
+}
+
+/**
+ * The newest `limit` events of the case `caseId`, read exactly as `listCaseActivity`
+ * reads them (same types, order and parsing); nothing when the case is deleted.
+ */
+export function listActivityOfCase(
+  caseId: string,
+  limit: number,
+  client = createSupabaseAdminClient(),
+): Promise<Result<CaseActivity[]>> {
+  return readActivity({ caseId }, limit, client);
+}
+
+async function readActivity(
+  filter: ListScope & { caseId?: string },
+  limit: number,
+  client: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<Result<CaseActivity[]>> {
   let query = client
     .from("case_event")
     .select(ACTIVITY_COLUMNS)
     .in("type", [...ACTIVITY_TYPES])
     .is("case.deleted_at", null);
-  if (scope.status !== undefined) query = query.eq("case.status", scope.status);
-  if (scope.clientId !== undefined) query = query.eq("case.client_id", scope.clientId);
+  if (filter.caseId !== undefined) query = query.eq("case_id", filter.caseId);
+  if (filter.status !== undefined) query = query.eq("case.status", filter.status);
+  if (filter.clientId !== undefined) query = query.eq("case.client_id", filter.clientId);
   // `id` breaks ties so events written in one transaction keep a stable order.
   const { data, error } = await query.order("at", { ascending: false }).order("id", { ascending: true }).limit(limit);
   if (error) {

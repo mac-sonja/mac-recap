@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Page } from "@/modules/generation";
 import { FORMAT_IDS, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
 import { fill, it as dict } from "@/shared/i18n/it";
+import type { ActivityCardLine } from "../../_components/activity-card";
 import { CaseView } from "./case-view";
 
 const deleteCaseStudy = vi.fn();
@@ -37,7 +38,36 @@ const VALUES: BoundValues = {
 
 const formats = starterFormats();
 
-function setup({ trial = false, editHref = EDIT_HREF as string | null, deleteCaseId = CASE_ID as string | null } = {}) {
+const NOW = "2026-10-29T12:00:00Z";
+const LINES: ActivityCardLine[] = [
+  {
+    id: "eeeeeeee-0000-4000-8000-000000000002",
+    kind: "approved",
+    template: "Giulia Riva ha approvato {name}.",
+    caseId: CASE_ID,
+    caseName: "Rebrand Lumen",
+    caseStatus: "approved",
+    at: "2026-10-29T10:00:00Z",
+    href: null,
+  },
+  {
+    id: "eeeeeeee-0000-4000-8000-000000000001",
+    kind: "created",
+    template: "Giulia Riva ha creato {name}.",
+    caseId: CASE_ID,
+    caseName: "Rebrand Lumen",
+    caseStatus: "approved",
+    at: "2026-10-26T10:00:00Z",
+    href: null,
+  },
+];
+
+function setup({
+  trial = false,
+  editHref = EDIT_HREF as string | null,
+  deleteCaseId = CASE_ID as string | null,
+  activity = LINES as ActivityCardLine[] | null,
+} = {}) {
   return render(
     <CaseView
       header={{ name: "Rebrand Lumen", code: "LUM-2026-01", status: "approved" }}
@@ -49,6 +79,8 @@ function setup({ trial = false, editHref = EDIT_HREF as string | null, deleteCas
       trial={trial}
       editHref={editHref}
       deleteCaseId={deleteCaseId}
+      activity={activity}
+      now={NOW}
     />,
   );
 }
@@ -101,6 +133,39 @@ describe("CaseView", () => {
     const remove = deleteTrigger();
     expect(heading.compareDocumentPosition(remove) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(remove.parentElement?.className).toContain("justify-start");
+  });
+
+  it("shows Attività after Raccolte and before Elimina: Home's sentences, newest first, no links", () => {
+    setup();
+    const collections = screen.getByRole("heading", { level: 2, name: dict.caseView.collections.heading, hidden: true });
+    const heading = screen.getByRole("heading", { level: 2, name: dict.home.activity.heading, hidden: true });
+    const card = heading.closest("section")!;
+    expect(collections.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(heading.compareDocumentPosition(deleteTrigger()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const items = within(card).getAllByRole("listitem", { hidden: true });
+    expect(items.map((li) => li.querySelector("span > span")?.textContent)).toEqual([
+      "Giulia Riva ha approvato Rebrand Lumen.",
+      "Giulia Riva ha creato Rebrand Lumen.",
+    ]);
+    expect(items.map((li) => li.querySelector("time")?.textContent)).toEqual(["2 ore fa", "3 giorni fa"]);
+    expect(items[0].querySelector("time")?.getAttribute("title")).toBe("29 ott, 11:00");
+    expect(within(card).queryAllByRole("link", { hidden: true })).toEqual([]);
+    expect(card.querySelectorAll("svg")).toHaveLength(2);
+  });
+
+  it("shows Home's failed line in Attività when the log could not be read, and the rest of the page", () => {
+    setup({ activity: null });
+    const card = screen.getByRole("heading", { level: 2, name: dict.home.activity.heading, hidden: true }).closest("section")!;
+    expect(card.textContent).toContain(dict.home.activity.failed);
+    expect(screen.getByText(dict.caseView.collections.empty)).toBeTruthy();
+    expect(deleteTrigger()).toBeTruthy();
+  });
+
+  it("shows its own empty line in Attività when the case has no events", () => {
+    setup({ activity: [] });
+    const card = screen.getByRole("heading", { level: 2, name: dict.home.activity.heading, hidden: true }).closest("section")!;
+    expect(card.textContent).toContain(dict.caseView.activityEmpty);
+    expect(within(card).queryByRole("list", { hidden: true })).toBeNull();
   });
 
   it("Elimina asks for the typed word and deletes the approved case", async () => {

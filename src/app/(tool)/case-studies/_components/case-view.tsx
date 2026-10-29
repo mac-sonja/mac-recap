@@ -12,6 +12,7 @@ import { FormatSwitch, type ConfiguratorHeader } from "@/app/(wizard)/_component
 import type { Page } from "@/modules/generation";
 import { FORMAT_IDS, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
+import { ActivityCard, type ActivityCardLine } from "../../_components/activity-card";
 import { DeleteCaseButton } from "./delete-case-button";
 
 export interface CaseViewProps {
@@ -31,6 +32,10 @@ export interface CaseViewProps {
   editHref: string | null;
   /** The case's id for **Elimina**; `null` for a role that may not `delete case` an approved case, which sees no Elimina. */
   deleteCaseId: string | null;
+  /** This case's *Attività*, newest first, with no links; `null` when the log could not be read. */
+  activity: readonly ActivityCardLine[] | null;
+  /** The server's "now" (ISO): the relative times read the same on the server and after hydration. */
+  now: string;
 }
 
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
@@ -64,10 +69,22 @@ const ignore = () => {};
  * canvas, read-only, in a panel of fixed height: Presentazione stacked, Carosello and Video
  * as a slideshow (← →), with Instagram's interface over Video. Nothing on it can be selected
  * or edited; below 1024 px a message shows instead. Then **Raccolte**, the collections the
- * case appears in (empty until Story 5.10), and bottom left **Elimina** for a role that may
- * delete an approved case.
+ * case appears in (empty until Story 5.10), **Attività** (this case's event log, as on Home,
+ * without links), and bottom left **Elimina** for a role that may delete an approved case.
  */
-export function CaseView({ header, back, template, formats, assets, values, trial, editHref, deleteCaseId }: CaseViewProps) {
+export function CaseView({
+  header,
+  back,
+  template,
+  formats,
+  assets,
+  values,
+  trial,
+  editHref,
+  deleteCaseId,
+  activity,
+  now,
+}: CaseViewProps) {
   const [formatId, setFormatId] = useState<FormatId>(FORMAT_IDS[0]);
   const [slide, setSlide] = useState(0);
   const [instagram, setInstagram] = useState<InstagramView>("off");
@@ -177,6 +194,8 @@ export function CaseView({ header, back, template, formats, assets, values, tria
         </h2>
         <p className="font-body text-[15px] text-foreground-muted">{it.caseView.collections.empty}</p>
       </section>
+
+      <ActivityCard headingId="case-activity-heading" empty={it.caseView.activityEmpty} lines={activity} now={now} />
 
       {deleteCaseId !== null && (
         <div className="flex justify-start">

@@ -2,7 +2,7 @@
 title: 'Story 5.2 (part): activity log on the approved case page'
 type: 'feature'
 created: '2026-10-29'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'beef910934a754f61808470bd80335191758b408'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -50,11 +50,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Adapter, index and use-case wiring, with a DB test: only this case's events, newest first, nothing from another case, nothing for a deleted case, and only `ACTIVITY_TYPES`.
-- [ ] Move `activityLines` and its test, and extract `ActivityCard` from the Home page. Home's tests keep passing unchanged.
-- [ ] Page and `CaseView`, with tests: the card renders lines, the failed line and the empty line; it sits after Raccolte and before Elimina; it has no links.
-- [ ] `it.ts`: `activityEmpty`.
-- [ ] Planning: the 5.2 note in `epics.md` says the activity log is built. Mark the deferred-work entry resolved.
+- [x] Adapter, index and use-case wiring, with a DB test: only this case's events, newest first, nothing from another case, nothing for a deleted case, and only `ACTIVITY_TYPES`.
+- [x] Move `activityLines` and its test, and extract `ActivityCard` from the Home page. Home's tests keep passing unchanged.
+- [x] Page and `CaseView`, with tests: the card renders lines, the failed line and the empty line; it sits after Raccolte and before Elimina; it has no links.
+- [x] `it.ts`: `activityEmpty`.
+- [x] Planning: the 5.2 note in `epics.md` says the activity log is built. Mark the deferred-work entry resolved.
 
 **Acceptance Criteria:**
 - Given an approved case that was created, given material, generated and approved, when its page loads, then **Attività** lists those steps as Home phrases them, newest first.
