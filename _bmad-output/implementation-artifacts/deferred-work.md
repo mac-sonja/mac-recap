@@ -224,7 +224,7 @@
   summary: On the approved case detail page (and the configurator), one rendition failure other than "not ready" (e.g. `STORAGE_FAILED`) throws the whole page into the error boundary, even for an asset the revision doesn't use; draw it as an empty cell instead, or sign only referenced assets.
   evidence: Review of Story 5.2 part (medium): `renderAssetsOf` runs over every listed asset and rethrows; `page.test.tsx` asserts the throw.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
-  summary: Story 5.2 preview controls on the approved case detail page: pager ("Slide 1 of 12"), zoom − / 100% / +, fit and full screen.
+  summary: Resolved by `spec-5-2-preview-controls.md` (2026-10-29). Was: Story 5.2 preview controls on the approved case detail page: pager ("Slide 1 of 12"), zoom − / 100% / +, fit and full screen.
   evidence: Split from the remaining Story 5.2 scope at the owner's choice (2026-10-28); Elimina goes first, this is independently shippable.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
   summary: Story 5.2 narrow viewports on the approved case detail page: the format list as a dropdown at 1024–1279 px, and a working preview below 1024 px (replacing the larger-screen message).

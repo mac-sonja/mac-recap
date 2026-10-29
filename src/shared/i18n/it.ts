@@ -915,6 +915,19 @@ export const it = {
     },
     /** *Attività* for this case (Home's sentences, heading and failed line); this is its empty line. */
     activityEmpty: "Ancora nessuna attività.",
+    /** The preview panel's toolbar: zoom and full screen (the pager reuses the configurator's slideshow copy). */
+    viewer: {
+      zoomOut: "Riduci",
+      zoomIn: "Ingrandisci",
+      /** The middle of the zoom control: the current size, 100% being Adatta. */
+      zoom: "{n}%",
+      /** Where the slide fits the panel; the % returns to it. */
+      fit: "Adatta",
+      /** The %'s accessible name. */
+      zoomReset: "Zoom {n}%, torna ad Adatta",
+      fullscreen: "Schermo intero",
+      exitFullscreen: "Esci dallo schermo intero",
+    },
   },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {

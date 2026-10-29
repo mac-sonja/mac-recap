@@ -2,7 +2,7 @@
 title: 'Story 5.2 (part): pager, zoom and full screen on the approved case page'
 type: 'feature'
 created: '2026-10-29'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'fe0e315eedd0185e794e83e38688728ef7a2ddf8'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -59,11 +59,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Add the exports in `canvas.tsx` and `slideshow.tsx`, with no behaviour change.
-- [ ] Write `case-viewer.tsx` and its test: paging and the ends, the dots and counter, zoom steps and limits, clicking the % to return to Adatta, a format change resetting slide and zoom, the Instagram overlay on Video, the trial note, the empty format, full screen entering and leaving (stubbed API), and hiding the button without the API.
-- [ ] Wire `case-view.tsx` and update its test: the viewer replaces `Canvas`, and ← → page Presentazione too.
-- [ ] Add the `it.ts` copy.
-- [ ] Planning: update the 5.2 note in `epics.md` (pager, zoom and full screen built) and mark the deferred-work entry resolved.
+- [x] Add the exports in `canvas.tsx` and `slideshow.tsx`, with no behaviour change.
+- [x] Write `case-viewer.tsx` and its test: paging and the ends, the dots and counter, zoom steps and limits, clicking the % to return to Adatta, a format change resetting slide and zoom, the Instagram overlay on Video, the trial note, the empty format, full screen entering and leaving (stubbed API), and hiding the button without the API.
+- [x] Wire `case-view.tsx` and update its test: the viewer replaces `Canvas`, and ← → page Presentazione too.
+- [x] Add the `it.ts` copy.
+- [x] Planning: update the 5.2 note in `epics.md` (pager, zoom and full screen built) and mark the deferred-work entry resolved.
 
 **Acceptance Criteria:**
 - Given an approved case's Presentazione, when I press → twice, then the third slide shows and the counter reads "3 di N · {name}".

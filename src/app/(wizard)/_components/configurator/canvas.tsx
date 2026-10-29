@@ -56,7 +56,7 @@ const boxIn = (host: HTMLElement, target: Element): Box => {
 };
 
 /** One page drawn by the format's renderer (Story 3.5). Memoised: a selection change never redraws it. */
-const RenderedPage = memo(function RenderedPage({
+export const RenderedPage = memo(function RenderedPage({
   formatId,
   template,
   page,
@@ -338,7 +338,7 @@ function SlideshowOf({
 }
 
 /** Anteprima of Video: Nessuna, Reel or Storia over the page (mockup `.ig-switch`). */
-function InstagramSwitch({ value, onChange }: { value: InstagramView; onChange: (view: InstagramView) => void }) {
+export function InstagramSwitch({ value, onChange }: { value: InstagramView; onChange: (view: InstagramView) => void }) {
   const copy = it.configurator.preview.instagram;
   return (
     <div
