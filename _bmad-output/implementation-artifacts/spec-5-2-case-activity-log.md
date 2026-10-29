@@ -2,7 +2,7 @@
 title: 'Story 5.2 (part): activity log on the approved case page'
 type: 'feature'
 created: '2026-10-29'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'beef910934a754f61808470bd80335191758b408'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -59,6 +59,33 @@ context:
 **Acceptance Criteria:**
 - Given an approved case that was created, given material, generated and approved, when its page loads, then **Attività** lists those steps as Home phrases them, newest first.
 - Given Home, when it loads, then its *Attività* looks and links exactly as before.
+
+## Implementation Notes
+
+- `CaseView` and `ActivityCard` take a `now` (the server's time) so the page and the browser format "how long ago" alike; Home passes none and is unchanged. Times don't tick while the page stays open.
+- `epic-5-context.md` was recompiled for this spec (it also picks up the Elimina changes merged in #121).
+- Verified: typecheck, lint, `npm test`. The new DB suite runs in CI (no Supabase here). Not checked in a browser.
+
+## Spec Change Log
+
+## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | No Home test checks the empty *Attività* line, now a caller prop (verification) | medium | `ActivityCard` takes `empty`; no Home assertion reads it | patch |
+| 2 | Adapter `listCaseActivity(scope)` clashes with the module's `listCaseActivity(caseId)`, aliased to the helper's name (blind) | low | Two functions, one name, different arguments; a rename is direct | patch (`listScopeActivity`; `{ ...scope }` dropped) |
+| 3 | `epics.md` 2026-10-29 note glued to the previous note's line (blind) | low | Direct correction | patch |
+| 4 | `epic-5-context.md` still calls the activity log the next spec (blind, edge) | low | Direct correction | patch |
+| 5 | `listCaseActivity(caseId)` trusts the caller to have authorized `view` (blind) | false | Same contract as `listActivity`, `list` and `get`: module reads take no actor; pages and actions authorize first | reject |
+| 6 | `INVALID_INPUT` not in the matrix or page tests (blind) | low | Unreachable after `get(id)` succeeded; the page shows the failed line anyway | reject |
+| 7 | No test at the 100-event limit; a run cut by it undercounts (blind) | low | Same limit and behaviour as Home; a case rarely reaches 100 shown events | reject |
+| 8 | `ActivityCard` heading and failed text still under `it.home` (blind) | low | Same words on both pages; moving keys is churn | reject |
+| 9 | Frozen `now` keeps relative times from ticking (blind) | low | Accepted for hydration; noted above | reject |
+| 10 | Tests read `span > span`, count `svg`s and assume Europe/Rome (blind) | low | Brittle but correct; `format.ts` fixes the zone | reject |
+| 11 | Bookkeeping: deferred-work resolved entry format, stale Code Map lines (blind) | low | Matches the file's existing resolved entries; Code Map is planning-time | reject |
+| 12 | Unlinked rows lack `-mx-2 px-2`; list labelled twice (blind) | low | Carried over unchanged from Home | reject |
+| 13 | Unparsable `now` would throw (edge) | false | Only the page passes it, always `toISOString()` | reject |
+| 14 | Case deleted between `get` and the activity read shows an empty card (edge) | low | Needs a delete racing the load; the next navigation redirects | reject |
 
 ## Verification
 

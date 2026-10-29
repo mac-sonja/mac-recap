@@ -13,16 +13,16 @@ const ACTIVITY_COLUMNS =
  * as `list`), newest first, of the `ACTIVITY_TYPES` only, each with its actor's name
  * (`null` for the `system` role) and its case. A malformed row fails the whole read.
  */
-export function listCaseActivity(
+export function listScopeActivity(
   scope: ListScope,
   limit: number,
   client = createSupabaseAdminClient(),
 ): Promise<Result<CaseActivity[]>> {
-  return readActivity({ ...scope }, limit, client);
+  return readActivity(scope, limit, client);
 }
 
 /**
- * The newest `limit` events of the case `caseId`, read exactly as `listCaseActivity`
+ * The newest `limit` events of the case `caseId`, read exactly as `listScopeActivity`
  * reads them (same types, order and parsing); nothing when the case is deleted.
  */
 export function listActivityOfCase(
