@@ -20,7 +20,9 @@ vi.mock("next/navigation", () => ({
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT ${path}`);
   }),
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
+vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => (name === "mac-theme" ? { value: "dark" } : undefined) }) }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
 vi.mock("@/modules/case-study", () => ({
@@ -225,9 +227,19 @@ describe("ConfiguratorPage", () => {
     expect(getEditableRevision).not.toHaveBeenCalled();
   });
 
-  it("opens an approved case", async () => {
+  it("opens an approved case, not editable until Story 4.9", async () => {
     get.mockResolvedValue(ok({ ...inReview, status: "approved" }));
-    expect(await render()).toContain('data-status="approved"');
+    const html = await render();
+    expect(html).toContain('data-status="approved"');
+    expect(html).toContain('data-editable="false"');
+  });
+
+  it("lets the working head of an In revisione case be edited, and nothing else (Story 4.3a)", async () => {
+    expect(await render()).toContain('data-editable="true"');
+    getEditableRevision.mockResolvedValue(ok({ ...revision, status: "approved" }));
+    expect(await render()).toContain('data-editable="false"');
+    getEditableRevision.mockResolvedValue(ok(null));
+    expect(await render()).toContain('data-editable="false"');
   });
 
   it("returns to Case studies for an unknown id", async () => {

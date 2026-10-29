@@ -2,10 +2,12 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FORMAT_IDS, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
-import type { Page } from "@/modules/generation";
+import { caseHistoryV2, validateNewDocument, type Page } from "@/modules/generation";
 import { it as dict } from "@/shared/i18n/it";
-import { Configurator } from "./configurator";
+import { Configurator, type ConfiguratorProps } from "./configurator";
+import { ownTextIds } from "./in-place-text";
 import { STATUS_MESSAGE_MS } from "./status-message";
+import { textElementAt } from "./text-editing";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -15,7 +17,12 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+
 const IMAGE = "bbbbbbbb-0000-4000-8000-000000000001";
+const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+const REVISION_ID = "dddddddd-0000-4000-8000-000000000001";
 
 /** Each format's starter pages, with ids that differ per format. */
 function starterFormats(): Record<FormatId, Page[]> {
@@ -33,9 +40,19 @@ const VALUES: BoundValues = {
 
 const formats = starterFormats();
 
-function setup(trial = false, pagesByFormat: Record<FormatId, Page[]> = formats) {
+type SaveFn = ConfiguratorProps["onSave"];
+const savedOk: SaveFn = async (input) => ({ ok: true, value: { version: input.expectedVersion + 1 } });
+
+function setup(
+  trial = false,
+  pagesByFormat: Record<FormatId, Page[]> = formats,
+  { editable = true, onSave = vi.fn(savedOk) }: { editable?: boolean; onSave?: SaveFn } = {},
+) {
   return render(
     <Configurator
+      caseId={CASE_ID}
+      revision={trial ? null : { id: REVISION_ID, version: 4, editable, kind: "case_history" }}
+      onSave={onSave}
       header={{ name: "Rebrand Lumen", code: "LUM-2026-01", status: "in_review" }}
       back={{ href: "/case-studies", label: dict.configurator.back }}
       template="mac-case@1"
@@ -78,9 +95,9 @@ describe("Configurator", () => {
       ["Video9:16", "false"],
     ]);
     expect(screen.getByText(dict.configurator.saved)).toBeTruthy();
-    for (const name of [dict.configurator.undo, dict.configurator.redo, dict.configurator.approve]) {
-      expect(button(name).getAttribute("aria-disabled")).toBe("true");
-    }
+    // Nothing to undo or redo yet; Approva arrives with Story 4.8.
+    for (const name of [dict.configurator.undo, dict.configurator.redo]) expect(button(name).hasAttribute("disabled")).toBe(true);
+    expect(button(dict.configurator.approve).getAttribute("aria-disabled")).toBe("true");
     expect(screen.getByText(dict.configurator.narrowScreen)).toBeTruthy();
   });
 
@@ -551,5 +568,222 @@ describe("Configurator · Anteprima (Story 4.2b)", () => {
     fireEvent.keyDown(within(rightPanel()).getByRole("searchbox", { hidden: true }), { key: "Escape" });
     expect(eye().getAttribute("aria-pressed")).toBe("false");
     expect(pageNode(page.pageKey).querySelector('[data-frame="block"]')).not.toBeNull();
+  });
+});
+
+/** Story 4.3a: texts typed in on the page, the autosave, undo/redo and the overflow marker. */
+describe("Configurator editing", () => {
+  const fixture = () => {
+    const doc = caseHistoryV2(FORMAT_IDS);
+    return Object.fromEntries(FORMAT_IDS.map((id) => [id, doc.formats[id]!.pages])) as Record<FormatId, Page[]>;
+  };
+  /** The first page of `pages` with an own text, and that text's id. */
+  const ownText = (pages: readonly Page[]) => {
+    for (const page of pages) {
+      const id = ownTextIds(page)[0];
+      if (id !== undefined) return { page, id };
+    }
+    throw new Error("no own text in the fixture");
+  };
+  /** The first text bound to the client or the case. */
+  const boundText = (pages: readonly Page[]) => {
+    for (const page of pages) {
+      const own = new Set(ownTextIds(page));
+      for (const node of pageNode(page.pageKey).querySelectorAll<HTMLElement>(".mr-txt[data-element-id]")) {
+        if (!own.has(node.dataset.elementId!)) return { page, id: node.dataset.elementId! };
+      }
+    }
+    throw new Error("no bound text in the fixture");
+  };
+  const textNode = (pageKey: string, id: string) => pageNode(pageKey).querySelector<HTMLElement>(`[data-element-id="${id}"]`)!;
+  const saveState = () => document.querySelector<HTMLElement>("[data-save-state]")!;
+
+  function type(node: HTMLElement, text: string) {
+    node.textContent = text;
+    fireEvent.input(node);
+  }
+
+  async function advance(ms: number) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    refresh.mockClear();
+  });
+
+  it("a double-click types in a generated text; Esc finishes; it saves as human_edited with the version", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const { page, id } = ownText(pages.presentazione_16_9);
+    fireEvent.doubleClick(textNode(page.pageKey, id));
+    const node = textNode(page.pageKey, id);
+    expect(node.getAttribute("contenteditable")).toBe("plaintext-only");
+    expect(document.activeElement).toBe(node);
+    type(node, "Parole nuove\nsu due righe");
+    fireEvent.keyDown(node, { key: "Escape" });
+    expect(textNode(page.pageKey, id).hasAttribute("contenteditable")).toBe(false);
+    expect(textNode(page.pageKey, id).textContent).toBe("Parole nuove\nsu due righe");
+    await advance(0);
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const sent = onSave.mock.calls[0]![0];
+    expect(sent).toMatchObject({ caseId: CASE_ID, revisionId: REVISION_ID, expectedVersion: 4, doc: { schemaVersion: 2, kind: "case_history", template: "mac-case@1" } });
+    expect(textElementAt(sent.doc.formats.presentazione_16_9.pages, page.pageKey, id)).toMatchObject({ text: "Parole nuove\nsu due righe", provenance: "human_edited" });
+    // Only the format in view changes, and the document is what the server validates.
+    expect(sent.doc.formats.carosello_1_1.pages).toEqual(pages.carosello_1_1);
+    expect(validateNewDocument(sent.doc)).toMatchObject({ ok: true });
+    expect(saveState().textContent).toBe(dict.configurator.saved);
+  });
+
+  it("Enter on a selected text types in it; Esc inside it doesn't step the selection out", () => {
+    const pages = fixture();
+    setup(false, pages);
+    const { page, id } = ownText(pages.presentazione_16_9);
+    fireEvent.click(textNode(page.pageKey, id));
+    fireEvent.keyDown(document.body, { key: "Enter" });
+    const node = textNode(page.pageKey, id);
+    expect(node.getAttribute("contenteditable")).toBe("plaintext-only");
+    fireEvent.keyDown(node, { key: "Escape" });
+    expect(pageNode(page.pageKey).querySelector('[data-frame="element"]')).not.toBeNull();
+  });
+
+  it("a failed save says Non salvato. Nuovo tentativo…, and after 3 failures the banner shows", async () => {
+    const pages = fixture();
+    const onSave = vi.fn<SaveFn>().mockRejectedValue(new Error("offline"));
+    setup(false, pages, { onSave });
+    const { page, id } = ownText(pages.presentazione_16_9);
+    fireEvent.doubleClick(textNode(page.pageKey, id));
+    type(textNode(page.pageKey, id), "x");
+    fireEvent.keyDown(textNode(page.pageKey, id), { key: "Escape" });
+    await advance(0);
+    expect(saveState().textContent).toBe(dict.configurator.retrying);
+    expect(screen.queryByRole("alert", { hidden: true })).toBeNull();
+    await advance(2_000);
+    await advance(4_000);
+    expect(onSave).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole("alert", { hidden: true }).textContent).toBe(dict.configurator.saveBanner);
+  });
+
+  it.each(["STALE_REVISION", "CASE_NOT_EDITABLE"])("%s reloads the page from the server, with no retry", async (code) => {
+    const pages = fixture();
+    const onSave = vi.fn<SaveFn>().mockResolvedValue({ ok: false, status: 409, error: { code, message: "m" } });
+    setup(false, pages, { onSave });
+    const { page, id } = ownText(pages.presentazione_16_9);
+    fireEvent.doubleClick(textNode(page.pageKey, id));
+    type(textNode(page.pageKey, id), "x");
+    fireEvent.keyDown(textNode(page.pageKey, id), { key: "Escape" });
+    await advance(30_000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("⌘Z after switching format goes back to the format, restores the text and saves; ⇧⌘Z redoes", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const { page, id } = ownText(pages.presentazione_16_9);
+    const before = textNode(page.pageKey, id).textContent;
+    fireEvent.doubleClick(textNode(page.pageKey, id));
+    type(textNode(page.pageKey, id), "Cambiato");
+    fireEvent.keyDown(textNode(page.pageKey, id), { key: "Escape" });
+    fireEvent.click(button(/Carosello/));
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(false);
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(button(/Presentazione/).getAttribute("aria-pressed")).toBe("true");
+    expect(textNode(page.pageKey, id).textContent).toBe(before);
+    await advance(1_000);
+    const last = onSave.mock.calls.at(-1)![0];
+    expect(textElementAt(last.doc.formats.presentazione_16_9.pages, page.pageKey, id)?.text).toBe(before);
+    fireEvent.click(button(dict.configurator.redo));
+    expect(textNode(page.pageKey, id).textContent).toBe("Cambiato");
+  });
+
+  it.each([
+    ["a text bound to the client or the case", true],
+    ["any text of a case that can't be edited (approved)", false],
+  ] as const)("a double-click on %s says it can't be edited yet", (_name, editable) => {
+    const pages = fixture();
+    setup(false, pages, { editable });
+    const { page, id } = editable ? boundText(pages.presentazione_16_9) : ownText(pages.presentazione_16_9);
+    fireEvent.doubleClick(textNode(page.pageKey, id));
+    expect(textNode(page.pageKey, id).hasAttribute("contenteditable")).toBe(false);
+    expect(status().textContent).toBe(dict.configurator.editSoon);
+  });
+
+  it("marks a block whose text doesn't fit, in the editor only", () => {
+    const pages = fixture();
+    const { page, id } = ownText(pages.presentazione_16_9);
+    const blockId = page.blocks.find((b) => JSON.stringify(b).includes(id))!.blockId;
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.dataset?.blockId === blockId ? 500 : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(100);
+    setup(false, pages);
+    const marks = pageNode(page.pageKey).querySelectorAll('[data-frame="overflow"]');
+    expect(marks).toHaveLength(1);
+    expect(marks[0]!.textContent).toBe(dict.configurator.overflow);
+    expect(canvas().querySelectorAll('[data-frame="overflow"]')).toHaveLength(1);
+    fireEvent.click(button(dict.configurator.preview.enter));
+    expect(canvas().querySelectorAll('[data-frame="overflow"]')).toHaveLength(0);
+  });
+
+  it("in Anteprima every own text takes typing, and it saves", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    fireEvent.click(button(dict.configurator.preview.enter));
+    const { page, id } = ownText(pages.presentazione_16_9);
+    const node = textNode(page.pageKey, id);
+    expect(node.getAttribute("contenteditable")).toBe("plaintext-only");
+    node.focus();
+    type(node, "Dall’anteprima");
+    node.blur();
+    await advance(0);
+    expect(textElementAt(onSave.mock.calls[0]![0].doc.formats.presentazione_16_9.pages, page.pageKey, id)?.text).toBe("Dall’anteprima");
+  });
+
+  it("the trial pages take no typing", () => {
+    setup(true);
+    const page = formats.presentazione_16_9.find((p) => ownTextIds(p).length > 0);
+    expect(page).toBeDefined();
+    const id = ownTextIds(page!)[0]!;
+    fireEvent.doubleClick(textNode(page!.pageKey, id));
+    expect(textNode(page!.pageKey, id).hasAttribute("contenteditable")).toBe(false);
+  });
+
+  it("a double-click inside the text being typed in keeps one editing session (one undo step)", () => {
+    const pages = fixture();
+    setup(false, pages);
+    const { page, id } = ownText(pages.presentazione_16_9);
+    const before = textNode(page.pageKey, id).textContent;
+    fireEvent.doubleClick(textNode(page.pageKey, id));
+    type(textNode(page.pageKey, id), "uno");
+    fireEvent.doubleClick(textNode(page.pageKey, id));
+    type(textNode(page.pageKey, id), "uno due");
+    fireEvent.keyDown(textNode(page.pageKey, id), { key: "Escape" });
+    fireEvent.click(button(dict.configurator.undo));
+    expect(textNode(page.pageKey, id).textContent).toBe(before);
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("in Anteprima of Carosello the slide's own texts take typing, saved to Carosello", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    fireEvent.click(button(/Carosello/));
+    fireEvent.click(button(dict.configurator.preview.enter));
+    const { page, id } = ownText(pages.carosello_1_1.slice(0, 1));
+    const node = canvas().querySelector<HTMLElement>(`[data-slide] [data-element-id="${id}"]`)!;
+    expect(node.getAttribute("contenteditable")).toBe("plaintext-only");
+    node.focus();
+    type(node, "Dal carosello");
+    node.blur();
+    await advance(0);
+    const sent = onSave.mock.calls[0]![0].doc.formats;
+    expect(textElementAt(sent.carosello_1_1.pages, page.pageKey, id)?.text).toBe("Dal carosello");
+    expect(sent.presentazione_16_9.pages).toEqual(pages.presentazione_16_9);
   });
 });

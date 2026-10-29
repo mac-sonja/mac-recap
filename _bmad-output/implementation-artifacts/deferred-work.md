@@ -238,3 +238,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-elimina-approved-case.md`
   summary: Once no running image calls `delete_case_study` with two arguments, a migration may drop the `p_status` default (`draft`) so every caller states the status.
   evidence: The default keeps the migration compatible with the previous image during a deploy (README, Migrations: add before you remove).
+- source_spec: none
+  summary: Story 4.3b: the text panel ("Testo · {format}"): Stile (seven styles), Allinea, Colore (palette, Trasparente, typed colour), one/two columns, and Testi group "Allineamento nel blocco" (In alto, Al centro, In basso, Distanziati); saved through 4.3a's autosave.
+  evidence: Split from Story 4.3 at the owner's choice (2026-10-29) to keep each PR reviewable; built after 4.3a, which owns the save path.
+- source_spec: none
+  summary: Story 4.3c: Elementi and blocks: drag or click elements into a block, move elements within or across blocks and pages, add a block (6-block limit, layout restarts from the first grid), swap blocks with "⠿ Sposta", ⌘C/⌘X/⌘V on blocks, remove with Backspace/Delete or Rimuovi elemento/blocco, with their messages.
+  evidence: Split from Story 4.3 at the owner's choice (2026-10-29); independently shippable on top of 4.3a's save and undo.
+- source_spec: none
+  summary: Story 4.3d: client and case fields edited on the page (client name, sector as free text, logo by upload; case year and services) through the client's and case's own update use cases, shown at once everywhere; the document keeps only the binding.
+  evidence: Split from Story 4.3 at the owner's choice (2026-10-29); touches the client and case modules, not the document save path.

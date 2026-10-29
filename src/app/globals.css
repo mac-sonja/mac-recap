@@ -50,6 +50,9 @@
   --color-info: #0a55c8;
   --color-danger: #d92d20;
   --color-danger-foreground: #ffffff;
+  /* Configurator: a block whose text no longer fits (Story 4.3a), a refused resize (4.4). */
+  --color-warning: #e07800;
+  --color-warning-foreground: #ffffff;
   /* Destructive buttons: white label (owner, 2026-10-20) on a deep red (5.6:1). */
   --color-danger-strong: #cf1322;
   --color-danger-strong-foreground: #ffffff;
@@ -193,6 +196,8 @@
     --color-info: #9cc8ff;
     --color-danger: #ff5c5c;
     --color-danger-foreground: #000000;
+    --color-warning: #ffa031;
+    --color-warning-foreground: #000000;
     --color-focus-ring: #cbff00;
     --color-status-draft: #8a8a8a;
     --color-status-draft-foreground: #d6d6d6;
@@ -237,6 +242,8 @@
       --color-info: #9cc8ff;
       --color-danger: #ff5c5c;
       --color-danger-foreground: #000000;
+      --color-warning: #ffa031;
+      --color-warning-foreground: #000000;
       --color-focus-ring: #cbff00;
       --color-status-draft: #8a8a8a;
       --color-status-draft-foreground: #d6d6d6;

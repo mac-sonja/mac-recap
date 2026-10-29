@@ -132,6 +132,12 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   NO_MATERIAL: 409,
   // Delete (Story 4.1): only a draft may be deleted.
   CASE_NOT_DELETABLE: 409,
+  // Configurator saves (Story 4.3a): a compare-and-set lost, or the revision or case is no longer editable.
+  STALE_HEAD: 409,
+  STALE_REVISION: 409,
+  REVISION_NOT_WRITABLE: 409,
+  CASE_NOT_EDITABLE: 409,
+  ASSET_NOT_ALLOWED: 400,
   // Clients and case history codes (Story 2.12, AD-21).
   CLIENT_NOT_FOUND: 404,
   CLIENT_NAME_TAKEN: 409,

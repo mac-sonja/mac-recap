@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TEST_ACTOR_ID } from "../helpers/db-actor";
-import { REVISION_CREATED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
+import { REVISION_CREATED, REVISION_SAVED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
 import { caseHistoryV0, caseHistoryV1, caseHistoryV2 } from "@/modules/generation/domain/document-fixtures";
 import { UPGRADE_ID_PREFIX } from "@/modules/generation";
 import { FORMAT_IDS, starterPages } from "@/modules/rendering";
@@ -632,5 +632,147 @@ describe("the case-study revision use cases (real adapter)", () => {
     const { getEditableRevision, getLiveRevision } = await loadCaseStudy();
     expect(await getLiveRevision({ kind: "client_intro", id: UNKNOWN_ID })).toMatchObject({ ok: false, error: { code: "SUBJECT_NOT_SUPPORTED" } });
     expect(await getEditableRevision({ kind: "client_intro", id: UNKNOWN_ID })).toMatchObject({ ok: false, error: { code: "SUBJECT_NOT_SUPPORTED" } });
+  });
+});
+
+// Story 4.3a: the configurator's autosave.
+describe("save_revision_doc", () => {
+  const saveSql = "select * from public.save_revision_doc($1, $2, $3, $4)";
+  const edited = () => {
+    const doc = v2();
+    doc.formats.presentazione_16_9!.pages[0]!.name = "Copertina nuova";
+    return doc;
+  };
+
+  /** Calls `save_revision_doc` directly (as postgres). */
+  async function save(revisionId: string, expected: number, doc: unknown = edited()) {
+    const { rows } = await pool.query(saveSql, [revisionId, JSON.stringify(doc), expected, TEST_ACTOR_ID]);
+    return rows[0] as { id: string; version: number; doc: unknown; generated_doc: unknown; schema_version: number };
+  }
+
+  /** A fresh case moved to `in_review` with a working head revision. */
+  async function editableCase() {
+    const created = await createCase();
+    const revision = await createRevision(created.id, 0);
+    const { transition } = await loadCaseStudy();
+    const actor = await signedInActor();
+    for (const event of ["generate", "generation_succeeded"] as const) {
+      const moved = await transition(created.id, event, actor);
+      if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
+    }
+    return { caseId: created.id, revisionId: revision.id };
+  }
+
+  async function revisionRow(id: string) {
+    const { rows } = await pool.query("select doc, generated_doc, version, status from public.revision where id = $1", [id]);
+    return rows[0];
+  }
+
+  async function savedEvents(caseId: string) {
+    const { rows } = await pool.query("select revision_id, actor_id, data from public.case_event where case_id = $1 and type = $2 order by at", [
+      caseId,
+      REVISION_SAVED,
+    ]);
+    return rows;
+  }
+
+  it("is security definer with an empty search_path, executable by service_role only", async () => {
+    const { rows } = await pool.query(
+      `select p.prosecdef, p.proconfig,
+              has_function_privilege('service_role', p.oid, 'execute') as service,
+              has_function_privilege('authenticated', p.oid, 'execute') as authed,
+              has_function_privilege('anon', p.oid, 'execute') as anon
+         from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'save_revision_doc'`,
+    );
+    expect(rows).toEqual([{ prosecdef: true, proconfig: ["search_path=\"\""], service: true, authed: false, anon: false }]);
+  });
+
+  it("writes doc, increments version, leaves generated_doc and writes one event", async () => {
+    const { caseId, revisionId } = await editableCase();
+    const saved = await save(revisionId, 0);
+    expect(saved).toMatchObject({ id: revisionId, version: 1, doc: edited(), generated_doc: v2(), schema_version: 2 });
+    expect(await savedEvents(caseId)).toEqual([{ revision_id: revisionId, actor_id: TEST_ACTOR_ID, data: { version: 1 } }]);
+    expect((await save(revisionId, 1, v2())).version).toBe(2);
+  });
+
+  it("refuses a stale version with STALE_REVISION and writes nothing", async () => {
+    const { caseId, revisionId } = await editableCase();
+    await save(revisionId, 0);
+    const before = await revisionRow(revisionId);
+    await expect(save(revisionId, 0, v2())).rejects.toMatchObject({ code: "P0001", message: "STALE_REVISION" });
+    expect(await revisionRow(revisionId)).toEqual(before);
+    expect(await savedEvents(caseId)).toHaveLength(1);
+  });
+
+  it("refuses a case that is not in_review with CASE_NOT_EDITABLE", async () => {
+    const created = await createCase();
+    const revision = await createRevision(created.id, 0);
+    await expect(save(revision.id, 0)).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_EDITABLE" });
+    expect(await revisionRow(revision.id)).toMatchObject({ version: 0, doc: v2() });
+  });
+
+  it("refuses a revision that is no longer the head with STALE_HEAD", async () => {
+    const { caseId, revisionId } = await editableCase();
+    await createRevision(caseId, 1);
+    await expect(save(revisionId, 0)).rejects.toMatchObject({ code: "P0001", message: "STALE_HEAD" });
+  });
+
+  it("refuses a head that is not working with REVISION_NOT_WRITABLE", async () => {
+    const { revisionId } = await editableCase();
+    await pool.query("update public.revision set status = 'approved' where id = $1", [revisionId]);
+    await expect(save(revisionId, 0)).rejects.toMatchObject({ code: "P0001", message: "REVISION_NOT_WRITABLE" });
+  });
+
+  it("refuses an unknown revision or a deleted case with NOT_FOUND", async () => {
+    await expect(save(UNKNOWN_ID, 0)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+    const { caseId, revisionId } = await editableCase();
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [caseId]);
+    await expect(save(revisionId, 0)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+  });
+
+  it.each([
+    ["a non-object doc", "[]"],
+    ["a doc without schemaVersion", "{}"],
+    ["a string schemaVersion", '{"schemaVersion": "2"}'],
+  ])("refuses %s with INVALID_INPUT", async (_name, doc) => {
+    const { revisionId } = await editableCase();
+    await expect(pool.query(saveSql, [revisionId, doc, 0, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "INVALID_INPUT" });
+  });
+
+  it.each([
+    ["STALE_HEAD", async (caseId: string) => void (await createRevision(caseId, 1))],
+    ["REVISION_NOT_WRITABLE", async (_caseId: string, revisionId: string) => void (await pool.query("update public.revision set status = 'approved' where id = $1", [revisionId]))],
+    ["NOT_FOUND", async (caseId: string) => void (await pool.query("update public.case_study set deleted_at = now() where id = $1", [caseId]))],
+  ] as const)("saveRevisionDoc maps the refusal %s through the adapter", async (code, arrange) => {
+    const { caseId, revisionId } = await editableCase();
+    await arrange(caseId, revisionId);
+    const { saveRevisionDoc } = await loadCaseStudy();
+    expect(await saveRevisionDoc(await signedInActor(), { caseId, revisionId, doc: edited(), expectedVersion: 0 })).toMatchObject({
+      ok: false,
+      error: { code },
+    });
+  });
+
+  it("saveRevisionDoc maps CASE_NOT_EDITABLE through the adapter", async () => {
+    const created = await createCase();
+    const revision = await createRevision(created.id, 0);
+    const { saveRevisionDoc } = await loadCaseStudy();
+    expect(await saveRevisionDoc(await signedInActor(), { caseId: created.id, revisionId: revision.id, doc: edited(), expectedVersion: 0 })).toMatchObject({
+      ok: false,
+      error: { code: "CASE_NOT_EDITABLE" },
+    });
+  });
+
+  it("saveRevisionDoc saves through the module and maps a stale save", async () => {
+    const { caseId, revisionId } = await editableCase();
+    const { saveRevisionDoc } = await loadCaseStudy();
+    const actor = await signedInActor();
+    const saved = await saveRevisionDoc(actor, { caseId, revisionId, doc: edited(), expectedVersion: 0 });
+    expect(saved).toMatchObject({ ok: true, value: { version: 1, doc: edited(), generatedDoc: v2() } });
+    expect(await saveRevisionDoc(actor, { caseId, revisionId, doc: v2(), expectedVersion: 0 })).toMatchObject({
+      ok: false,
+      error: { code: "STALE_REVISION" },
+    });
   });
 });

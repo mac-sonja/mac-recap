@@ -1,9 +1,11 @@
 "use client";
 
-import { PanelLeft, PanelRight } from "lucide-react";
+import { PanelLeft, PanelRight, TriangleAlert } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
-import type { Page } from "@/modules/generation";
+import { CURRENT_SCHEMA_VERSION, type DocumentKind, type Page } from "@/modules/generation";
 import { FORMAT_IDS, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -11,10 +13,12 @@ import { Canvas } from "./canvas";
 import type { InstagramView } from "./instagram-overlay";
 import { LeftPanel } from "./left-panel";
 import { RightPanel } from "./right-panel";
-import { resolveSelection, stepOut, type Selection } from "./selection";
+import { findElement, resolveSelection, stepOut, type Selection } from "./selection";
 import { StatusMessage, useStatusMessage } from "./status-message";
 import { ICON_BUTTON, SOON_ID } from "./styles";
+import { isOwnText, textElementAt, withText } from "./text-editing";
 import { TopBar, type ConfiguratorHeader } from "./top-bar";
+import { useDocument, type EditedRevision, type Formats, type SaveInput } from "./use-document";
 
 export interface ConfiguratorProps {
   /** The top bar's document: name, code and status (a case today; a client's intro or file later). */
@@ -30,6 +34,12 @@ export interface ConfiguratorProps {
   /** No revision yet: the starter pages, with the *Bozza di prova* note. */
   trial: boolean;
   theme: ThemeChoice;
+  /** The case whose head revision is edited (Story 4.3a). */
+  caseId: string;
+  /** The head revision and its document kind; null with no revision (the trial pages). */
+  revision: (EditedRevision & { kind: DocumentKind }) | null;
+  /** The autosave's server action. */
+  onSave: (input: SaveInput) => Promise<ActionResult<{ version: number }>>;
 }
 
 /** Whether the person asked for reduced motion (a jump instead of a smooth scroll). */
@@ -54,8 +64,28 @@ const typing = (target: EventTarget | null) =>
  * panels or the selection (kept for the return); Carosello and Video become one
  * slideshow (← →), and Video can show Instagram's Reel or Story over the page (C34).
  * Esc goes back to the editor. In the Video editor, **Animazione testi** stops the loop.
+ *
+ * Editing (Story 4.3a): a double-click on a text, or Enter with it selected, types in it
+ * on the page; in Anteprima a click does. Only the format in view changes. The document
+ * saves itself (`useDocument`), ⌘Z and ⇧⌘Z (or the top bar) undo and redo every edit,
+ * and a block whose text no longer fits shows a marker. Texts bound to the client or
+ * the case, and an approved case, are not edited yet: they say so.
  */
-export function Configurator({ header, back, template, formats, assets, values, trial, theme }: ConfiguratorProps) {
+export function Configurator({ header, back, template, formats: initial, assets, values, trial, theme, caseId, revision, onSave }: ConfiguratorProps) {
+  const router = useRouter();
+  const doc = useDocument({
+    caseId,
+    revision,
+    base: { schemaVersion: CURRENT_SCHEMA_VERSION, kind: revision?.kind ?? "case_history", template },
+    initial: initial as Formats,
+    save: onSave,
+    onStale: () => router.refresh(),
+  });
+  const formats = doc.formats;
+  const editable = revision !== null && revision.editable && !trial;
+  const [editing, setEditing] = useState<{ pageKey: string; elementId: string } | null>(null);
+  /** One text editing session: its changes are one undo step. */
+  const session = useRef(0);
   const [formatId, setFormatId] = useState<FormatId>(FORMAT_IDS[0]);
   const [selection, setSelection] = useState<Selection>(null);
   const [inView, setInView] = useState<string | null>(null);
@@ -90,6 +120,7 @@ export function Configurator({ header, back, template, formats, assets, values, 
 
   function pickFormat(next: FormatId) {
     if (next === formatId) return;
+    setEditing(null);
     setFormatId(next);
     setSelection(null);
     setInView(null);
@@ -154,9 +185,64 @@ export function Configurator({ header, back, template, formats, assets, values, 
     target?.current?.focus();
   }, [leftOpen, rightOpen]);
 
+  /** A double-click (or Enter) on an element: a text with its own words opens for typing; any other text says it can't yet. */
+  const requestEdit = useCallback(
+    (pageKey: string, elementId: string) => {
+      const text = textElementAt(formats[formatId], pageKey, elementId);
+      if (text === undefined) return;
+      if (!editable || !isOwnText(text)) {
+        say(it.configurator.editSoon);
+        return;
+      }
+      session.current += 1;
+      setSelection((current) => (current?.pageKey === pageKey && current.elementId === elementId ? current : selectionOf(formats[formatId], pageKey, elementId)));
+      setEditing({ pageKey, elementId });
+    },
+    [editable, formatId, formats, say],
+  );
+
+  const textInput = useCallback(
+    (pageKey: string, elementId: string, text: string) => {
+      const pages = formats[formatId];
+      const next = withText(pages, pageKey, elementId, text);
+      if (next === pages) return;
+      doc.change({ ...formats, [formatId]: next }, formatId, `text-${session.current}-${pageKey}-${elementId}`);
+    },
+    [doc, formatId, formats],
+  );
+
+  const textDone = useCallback(() => {
+    session.current += 1;
+    setEditing(null);
+    doc.flush();
+  }, [doc]);
+
+  const undo = useCallback(() => {
+    const changed = doc.undo();
+    if (changed !== undefined && changed !== formatId) pickFormat(changed);
+  }, [doc, formatId]); // eslint-disable-line react-hooks/exhaustive-deps -- pickFormat reads only state set here
+
+  const redo = useCallback(() => {
+    const changed = doc.redo();
+    if (changed !== undefined && changed !== formatId) pickFormat(changed);
+  }, [doc, formatId]); // eslint-disable-line react-hooks/exhaustive-deps -- as undo
+
+  /** The latest handlers, for the key listener. */
+  const keys = useRef({ undo, redo, requestEdit, element, selection });
+  useEffect(() => {
+    keys.current = { undo, redo, requestEdit, element, selection };
+  });
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || typing(event.target)) return;
+      // ⌘Z / ⇧⌘Z (Ctrl elsewhere), in the editor and in Anteprima; inside a text the browser's own undo applies.
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) keys.current.redo();
+        else keys.current.undo();
+        return;
+      }
       if (preview) {
         // In Anteprima Esc goes back to the editor, never a selection step; ← → step the slideshow.
         if (event.key === "Escape") leavePreview.current();
@@ -169,13 +255,20 @@ export function Configurator({ header, back, template, formats, assets, values, 
         return;
       }
       if (event.key === "Escape") setSelection((current) => stepOut(current));
+      // Enter on a selected text types in it.
+      const { element: selected, selection: at } = keys.current;
+      const onControl = event.target instanceof Element && event.target.closest("button, a, [role='button']") !== null;
+      if (event.key === "Enter" && !onControl && selected?.type === "text" && at?.elementId !== undefined) {
+        event.preventDefault();
+        keys.current.requestEdit(at.pageKey, at.elementId);
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [preview, slideshow, step]);
 
   return (
-    <div className="flex h-dvh flex-col bg-surface text-foreground">
+    <div data-editable={editable} className="flex h-dvh flex-col bg-surface text-foreground">
       <p className="m-auto max-w-prose p-8 text-center font-body text-base text-foreground lg:hidden">{it.configurator.narrowScreen}</p>
 
       <div className="hidden min-h-0 flex-1 flex-col lg:flex">
@@ -191,7 +284,21 @@ export function Configurator({ header, back, template, formats, assets, values, 
           preview={preview}
           onPreview={togglePreview}
           previewRef={previewButton}
+          save={doc.save}
+          canUndo={doc.canUndo}
+          canRedo={doc.canRedo}
+          onUndo={undo}
+          onRedo={redo}
         />
+        {doc.banner && (
+          <p
+            role="alert"
+            className="flex shrink-0 items-center justify-center gap-2 border-b border-border bg-surface-raised px-4 py-2 font-label text-[13px] font-medium text-danger"
+          >
+            <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
+            {it.configurator.saveBanner}
+          </p>
+        )}
 
         <main
           className="grid min-h-0 flex-1"
@@ -235,6 +342,11 @@ export function Configurator({ header, back, template, formats, assets, values, 
               animateTexts={textAnim}
               onAnimateTexts={setTextAnim}
               reducedMotion={still}
+              editable={editable}
+              editing={preview ? null : editing}
+              onEditRequest={requestEdit}
+              onTextInput={textInput}
+              onTextDone={textDone}
             />
             <StatusMessage message={message} />
             {!leftOpen && !preview && (
@@ -280,4 +392,11 @@ export function Configurator({ header, back, template, formats, assets, values, 
       </div>
     </div>
   );
+}
+
+/** The selection of element `elementId` of page `pageKey`, with its block. */
+function selectionOf(pages: readonly Page[], pageKey: string, elementId: string): Selection {
+  const page = pages.find((p) => p.pageKey === pageKey);
+  const block = page?.blocks.find((b) => findElement(b.elements, elementId) !== undefined);
+  return block === undefined ? { pageKey } : { pageKey, blockId: block.blockId, elementId };
 }

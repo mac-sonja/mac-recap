@@ -8,6 +8,7 @@ import { CASE_TEMPLATE } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
 import { boundValuesOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../../_lib/configurator-data";
 import { Configurator } from "../../../_components/configurator/configurator";
+import { saveRevisionDoc } from "./actions";
 
 export interface ConfiguratorPageProps {
   params: Promise<{ caseId: string }>;
@@ -21,6 +22,10 @@ export interface ConfiguratorPageProps {
  * and, with none yet, shows the template's starter pages as a *Bozza di prova*
  * (nothing is saved). The pages, the asset URLs (a rendition that isn't ready is left
  * out) and the bound values go to one client component.
+ *
+ * Story 4.3a: the head revision's id and `version` go with them, and whether it can be
+ * edited (a `working` head of an In revisione case; an approved case waits for 4.9). The
+ * component is keyed by both, so a refresh after a stale save starts it afresh.
  */
 export default async function ConfiguratorPage({ params }: ConfiguratorPageProps) {
   const shell = await requireSurface("edit");
@@ -53,11 +58,17 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
   ]);
   if (!client.ok) throw new Error(`Client could not be loaded: ${client.error.code}`);
 
-  const doc = revision.value?.doc ?? null;
+  const head = revision.value;
+  const doc = head?.doc ?? null;
+  const editable = head !== null && head.status === "working" && current.status === "in_review";
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
 
   return (
     <Configurator
+      key={head === null ? "trial" : `${head.id}:${head.version}:${editable}`}
+      revision={head === null ? null : { id: head.id, version: head.version, editable, kind: head.doc.kind }}
+      caseId={id}
+      onSave={saveRevisionDoc}
       header={{ name: current.name, code: current.code, status: current.status }}
       back={{ href: "/case-studies", label: it.configurator.back }}
       template={doc?.template ?? CASE_TEMPLATE}

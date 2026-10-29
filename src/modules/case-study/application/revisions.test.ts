@@ -7,7 +7,7 @@ import type { RevisionRepository } from "@/modules/case-study/ports/revision-rep
 import { caseHistoryV0, caseHistoryV1, caseHistoryV2, UPGRADE_ID_PREFIX } from "@/modules/generation";
 import { FORMAT_IDS, starterPages } from "@/modules/rendering";
 import { err, ok } from "@/shared/result";
-import { makeCreateWorkingRevision, makeGetEditableRevision, makeGetLiveRevision } from "./revisions";
+import { makeCreateWorkingRevision, makeGetEditableRevision, makeGetLiveRevision, makeSaveRevisionDoc, referencedAssetIds } from "./revisions";
 
 const actor: Actor = {
   id: "00000000-0000-4000-8000-000000000002",
@@ -71,6 +71,10 @@ function fakes(found: CaseStudy | null, rows: Revision[] = []) {
     createWorking: vi.fn<RevisionRepository["createWorking"]>(async (input) =>
       ok(stored(HEAD_ID, input.doc, { manifest: input.manifest, model: input.meta.model, fellBack: input.meta.fellBack, promptVersion: input.meta.promptVersion })),
     ),
+    saveDoc: vi.fn<RevisionRepository["saveDoc"]>(async (input) => {
+      const row = byId.get(input.revisionId)!;
+      return ok({ ...row, doc: input.doc, version: input.expectedVersion + 1 });
+    }),
   };
   return { cases, revisions };
 }
@@ -284,5 +288,109 @@ describe("getLiveRevision and getEditableRevision", () => {
       const deps = fakes(caseStudy({ headRevisionId: HEAD_ID }), [stored(HEAD_ID, v2, { status })]);
       expect(await makeGetEditableRevision(deps)({ kind: "case", id: CASE_ID })).toMatchObject({ ok: true, value: { status } });
     }
+  });
+});
+
+describe("saveRevisionDoc", () => {
+  const edited = () => {
+    const doc = caseHistoryV2(FORMAT_IDS);
+    doc.formats.presentazione_16_9!.pages[0]!.name = "Copertina nuova";
+    return doc;
+  };
+  const input = (over: Record<string, unknown> = {}) => ({ caseId: CASE_ID, revisionId: HEAD_ID, doc: edited(), expectedVersion: 3, ...over });
+  const head = () => stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { version: 3 });
+
+  it("validates the document, then saves it once with the actor and the expected version", async () => {
+    const deps = fakes(caseStudy(), [head()]);
+    const result = await makeSaveRevisionDoc(deps)(actor, input());
+    expect(deps.revisions.saveDoc).toHaveBeenCalledTimes(1);
+    expect(deps.revisions.saveDoc).toHaveBeenCalledWith({ revisionId: HEAD_ID, doc: edited(), expectedVersion: 3, actorId: actor.id });
+    expect(result).toMatchObject({ ok: true, value: { version: 4, doc: edited() } });
+  });
+
+  it("lowercases the ids it is given", async () => {
+    const deps = fakes(caseStudy(), [head()]);
+    const result = await makeSaveRevisionDoc(deps)(actor, input({ caseId: CASE_ID.toUpperCase(), revisionId: HEAD_ID.toUpperCase() }));
+    expect(result.ok).toBe(true);
+  });
+
+  it.each([
+    ["an unknown revision", [] as Revision[]],
+    ["another case's revision", [stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { caseId: "11111111-0000-4000-8000-000000000009" })]],
+  ])("refuses %s with NOT_FOUND before any write", async (_name, rows) => {
+    const deps = fakes(caseStudy(), rows);
+    expect(await makeSaveRevisionDoc(deps)(actor, input())).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect(deps.revisions.saveDoc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a client value", () => ({ ...caseHistoryV2(FORMAT_IDS), about: { name: "Acme" } }), "DOCUMENT_INVALID"],
+    ["a v1 document", () => caseHistoryV1(), "DOCUMENT_SCHEMA_UNSUPPORTED"],
+    ["a missing format", () => {
+      const doc = caseHistoryV2(FORMAT_IDS);
+      delete doc.formats.video_9_16;
+      return doc;
+    }, "FORMAT_NOT_IN_REVISION"],
+  ])("refuses %s before any write", async (_name, doc, code) => {
+    const deps = fakes(caseStudy(), [head()]);
+    expect(await makeSaveRevisionDoc(deps)(actor, input({ doc: doc() }))).toMatchObject({ ok: false, error: { code } });
+    expect(deps.revisions.saveDoc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a negative version", { expectedVersion: -1 }],
+    ["a version past the Postgres integer range", { expectedVersion: 2_147_483_648 }],
+    ["a malformed revision id", { revisionId: "x" }],
+    ["an unknown key", { status: "approved" }],
+  ])("refuses %s with INVALID_INPUT", async (_name, over) => {
+    const deps = fakes(caseStudy(), [head()]);
+    expect(await makeSaveRevisionDoc(deps)(actor, input(over))).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+    expect(deps.revisions.saveDoc).not.toHaveBeenCalled();
+  });
+
+  it("refuses an asset the stored document does not reference with ASSET_NOT_ALLOWED", async () => {
+    const deps = fakes(caseStudy(), [head()]);
+    const doc = edited();
+    const foreign = "99999999-0000-4000-8000-000000000001";
+    doc.formats.presentazione_16_9!.pages[0]!.background = { kind: "image", assetId: foreign };
+    const result = await makeSaveRevisionDoc(deps)(actor, input({ doc }));
+    expect(result).toMatchObject({ ok: false, error: { code: "ASSET_NOT_ALLOWED", details: { assetIds: [foreign] } } });
+    expect(deps.revisions.saveDoc).not.toHaveBeenCalled();
+  });
+
+  it("allows an asset only the generated document references (an undo bringing it back)", async () => {
+    const generated = caseHistoryV2(FORMAT_IDS);
+    const kept = stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { version: 3, generatedDoc: generated });
+    const removedId = "99999999-0000-4000-8000-000000000002";
+    generated.formats.presentazione_16_9!.pages[0]!.background = { kind: "image", assetId: removedId };
+    const deps = fakes(caseStudy(), [kept]);
+    const doc = edited();
+    doc.formats.presentazione_16_9!.pages[0]!.background = { kind: "image", assetId: removedId };
+    expect((await makeSaveRevisionDoc(deps)(actor, input({ doc }))).ok).toBe(true);
+  });
+
+  it("allows removing assets", async () => {
+    const deps = fakes(caseStudy(), [head()]);
+    const doc = edited();
+    for (const format of Object.values(doc.formats)) for (const page of format.pages) page.blocks = [];
+    expect((await makeSaveRevisionDoc(deps)(actor, input({ doc }))).ok).toBe(true);
+  });
+
+  it("passes a refusal from the repository through", async () => {
+    const deps = fakes(caseStudy(), [head()]);
+    deps.revisions.saveDoc.mockResolvedValueOnce(err({ code: "STALE_REVISION", message: "m" }));
+    expect(await makeSaveRevisionDoc(deps)(actor, input())).toMatchObject({ ok: false, error: { code: "STALE_REVISION" } });
+  });
+});
+
+describe("referencedAssetIds", () => {
+  it("finds media, backgrounds, animations and asset source refs, lowercased", () => {
+    const ids = referencedAssetIds({
+      a: { kind: "image", assetId: "AAAA" },
+      b: [{ type: "animation", assetIds: ["bbbb", "cccc"] }],
+      c: { sourceRefs: [{ kind: "asset", id: "dddd" }, { kind: "form_field", id: "results" }] },
+      d: { assetId: null },
+    });
+    expect([...ids].sort()).toEqual(["aaaa", "bbbb", "cccc", "dddd"]);
   });
 });
