@@ -3,6 +3,10 @@
 -- function from 20261021170000_case_study_delete.sql is dropped and replaced, with a third
 -- argument, the status the person confirmed. No table changes.
 --
+-- Compatible with the running image (README, Migrations): `p_status` defaults to `draft`,
+-- so the previous image's two-argument call keeps its exact meaning (delete a draft only)
+-- until the new image is out. A later migration may drop the default.
+--
 -- The caller states the status it is deleting, and the case must still be in it: so
 -- **Elimina bozza** never deletes an approved case and **Elimina** never deletes a draft,
 -- even when the status changed after the page loaded. Generating and Da approvare cases
@@ -16,7 +20,7 @@ drop function public.delete_case_study(uuid, uuid);
 -- status change either waits for the delete or makes it refuse. Raises P0001 `NOT_FOUND`
 -- (unknown or already deleted case) or `CASE_NOT_DELETABLE` (`p_status` is not deletable,
 -- or the case is not in `p_status`); nothing is written then. Service role only.
-create function public.delete_case_study(p_case_id uuid, p_actor_id uuid, p_status text)
+create function public.delete_case_study(p_case_id uuid, p_actor_id uuid, p_status text default 'draft')
 returns public.case_study
 language plpgsql
 security invoker

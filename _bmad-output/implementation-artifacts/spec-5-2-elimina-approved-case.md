@@ -74,7 +74,7 @@ context:
 - The action authorizes the stated status read straight from the input (`approved`, else `draft`) and leaves validation to the use case, so it calls no module before `authorize` (the guard test) and an Editor still gets 403 for any input.
 - `src/app/(tool)/case-studies/[caseId]/loading.tsx` added: without it the Case table's skeleton showed while a case page loaded.
 - `src/app/(tool)/case-studies/[caseId]/error.tsx` added: a failed load shows the wizard's message (`it.wizard.loadFailed`) and a link back to Case studies inside the tool shell, instead of Next's default page.
-- `db.types.ts` edited by hand (`p_status`); no local Supabase here.
+- The migration gives `p_status` the default `draft`, so the previous image's two-argument call keeps its meaning during a deploy (README, Migrations). `db.types.ts` edited by hand (`p_status?`); no local Supabase here.
 - Migration run on a plain local Postgres 16: approved and draft deletes with their reasons, every mismatch and null refused, unknown or deleted `NOT_FOUND`, two-argument function gone, grants service role only. `npm run test:db` not run (no Supabase stack).
 - Verified: typecheck, lint, `npm test` (123 files, 3562 passed, 1 skipped), `next build`. Not checked in a browser.
 
@@ -87,7 +87,7 @@ context:
 | 1 | Page moved out of `(wizard)`: load failures reach Next's default error page (blind, edge, verification) | medium | `(tool)` had no `error.tsx`; the page throws on revision, client, material and rendition failures | patch |
 | 2 | Sidebar marks nothing active on `/case-studies/{id}` (blind) | low | `isCaseStudies` matched only `/case-studies`; `isClients` already matches child paths; one-line correction | patch |
 | 3 | Two new deferred-work entries have `source_spec: none` (blind) | low | Both split from spec-5-2-approved-case-detail-and-edit; direct correction | patch |
-| 4 | Dropping the 2-arg `delete_case_study` breaks draft deletes while old code still runs (blind, edge) | low | Internal tool; migration and app ship together; a compat overload adds surface for a seconds-long window | reject |
+| 4 | Dropping the 2-arg `delete_case_study` breaks draft deletes while old code still runs (blind, edge) | medium | README Migrations: a migration must stay compatible with the running image. Rejected at first; reversed before merge | patch (`p_status` defaults to `draft`, so the old 2-arg call keeps deleting drafts only) |
 | 5 | `epic-5-context.md` still says full-screen and Elimina next (blind) | low | Cached context; it is recompiled when `epics.md` (changed here) is newer | reject |
 | 6 | Approved confirmation doesn't say links stop and it leaves packs/collections (blind) | low | Those features don't exist; 5.5/5.7/5.9/5.10 notes in `epics.md` carry it | reject |
 | 7 | `statusChanged` can vanish when the refresh redirects (blind) | low | Same as the existing draft path; the redirect lands on the case's current page, which shows its status | reject |

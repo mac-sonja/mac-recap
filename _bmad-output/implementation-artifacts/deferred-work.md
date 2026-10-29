@@ -232,3 +232,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-elimina-approved-case.md`
   summary: Activity log on the approved case detail page: Home's *Attività* lines (same sentences and icons, from `case_event`) filtered to this case, below the preview.
   evidence: Asked by the owner (2026-10-28) while planning Elimina; split at the owner's choice to keep the spec under the size limit; built right after it, on the same page.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-elimina-approved-case.md`
+  summary: Once no running image calls `delete_case_study` with two arguments, a migration may drop the `p_status` default (`draft`) so every caller states the status.
+  evidence: The default keeps the migration compatible with the previous image during a deploy (README, Migrations: add before you remove).

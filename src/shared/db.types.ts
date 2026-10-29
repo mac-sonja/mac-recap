@@ -503,7 +503,7 @@ isOneToOne: false
         isSetofReturn: false
       } },
 "delete_case_study":
-{ Args: { "p_actor_id": string,"p_case_id": string,"p_status": string }; Returns: {
+{ Args: { "p_actor_id": string,"p_case_id": string,"p_status"?: string }; Returns: {
               "approved_revision_id": string | null,
 "business_lines": (string)[],
 "client_id": string,

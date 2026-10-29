@@ -3051,7 +3051,20 @@ describe("case delete (Stories 4.1, 5.2)", () => {
     expect((await row(created.id)).deleted_at).toBeNull();
   });
 
-  it("grants delete_case_study to service_role only, and the two-argument version is gone", async () => {
+  it("keeps the previous image's two-argument call deleting drafts only", async () => {
+    const draft = await createCase({ name: "Two-argument draft" });
+    const approved = await createCase({ name: "Two-argument approved" });
+    await setStatus(approved.id, "approved");
+    await expect(pool.query("select id from public.delete_case_study($1, $2)", [approved.id, TEST_ACTOR_ID])).rejects.toMatchObject({
+      code: "P0001",
+      message: "CASE_NOT_DELETABLE",
+    });
+    expect((await row(approved.id)).deleted_at).toBeNull();
+    await pool.query("select id from public.delete_case_study($1, $2)", [draft.id, TEST_ACTOR_ID]);
+    expect((await row(draft.id)).deleted_at).not.toBeNull();
+  });
+
+  it("grants delete_case_study to service_role only, with one signature", async () => {
     const { rows } = await pool.query(
       `select has_function_privilege('service_role', $1, 'execute') as service,
               has_function_privilege('anon', $1, 'execute') as anon,
@@ -3059,8 +3072,8 @@ describe("case delete (Stories 4.1, 5.2)", () => {
       ["public.delete_case_study(uuid, uuid, text)"],
     );
     expect(rows).toEqual([{ service: true, anon: false, authenticated: false }]);
-    const { rows: old } = await pool.query("select to_regprocedure('public.delete_case_study(uuid, uuid)') as fn");
-    expect(old).toEqual([{ fn: null }]);
+    const { rows: count } = await pool.query("select count(*)::int as n from pg_proc where proname = 'delete_case_study'");
+    expect(count).toEqual([{ n: 1 }]);
   });
 });
 
