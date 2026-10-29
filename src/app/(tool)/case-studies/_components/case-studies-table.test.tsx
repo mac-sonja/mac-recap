@@ -2,11 +2,13 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GENERATING_REFRESH_MS } from "@/shared/case-status";
 import { fill, it as dict } from "@/shared/i18n/it";
 import type { CaseStudyRow } from "./filter-sort";
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh: vi.fn() }) }));
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
 vi.mock("@/app/(tool)/case-studies/actions", () => ({ deleteCaseStudy: vi.fn() }));
 
 const { CaseStudiesTable, SEARCH_DEBOUNCE_MS } = await import("./case-studies-table");
@@ -53,7 +55,10 @@ const rows: CaseStudyRow[] = [
   },
 ];
 
-beforeEach(() => push.mockReset());
+beforeEach(() => {
+  push.mockReset();
+  refresh.mockReset();
+});
 
 afterEach(() => {
   cleanup();
@@ -520,5 +525,63 @@ describe("CaseStudiesTable", () => {
     expect(within(table).queryAllByRole("link").filter((a) => a.getAttribute("href")?.startsWith("/case-studies"))).toEqual([]);
     await user.click(within(table).getByText("Gamma Srl"));
     expect(push).not.toHaveBeenCalled();
+  });
+
+  describe("a row In elaborazione (Story 3.7b)", () => {
+    const generating: CaseStudyRow = { ...rows[2], id: "dddddddd-0000-4000-8000-000000000005", name: "Gamma", clientName: "Gamma Srl", status: "generating" };
+
+    it("says it is still generating, politely, when the row is clicked", async () => {
+      const user = userEvent.setup();
+      render(<CaseStudiesTable rows={[generating]} canCreate canEdit />);
+      expect(screen.getByRole("status").textContent).toBe("");
+      await user.click(within(screen.getByRole("table")).getByText("Gamma Srl"));
+      expect(screen.getByRole("status").textContent).toBe(dict.caseStudies.table.stillGenerating);
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it("does not bring the note back for a row that starts generating later", async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<CaseStudiesTable rows={[generating]} canCreate canEdit />);
+      await user.click(within(screen.getByRole("table")).getByText("Gamma Srl"));
+      expect(screen.getByRole("status").textContent).toBe(dict.caseStudies.table.stillGenerating);
+      rerender(<CaseStudiesTable rows={[{ ...generating, status: "in_review" }]} canCreate canEdit />);
+      expect(screen.getByRole("status").textContent).toBe("");
+      rerender(<CaseStudiesTable rows={[generating]} canCreate canEdit />);
+      expect(screen.getByRole("status").textContent).toBe("");
+    });
+
+    it("says nothing when a row with a link is clicked", async () => {
+      const user = userEvent.setup();
+      render(<CaseStudiesTable rows={[rows[1]]} canCreate canEdit />);
+      await user.click(within(screen.getByRole("table")).getByText("Acme"));
+      expect(screen.getByRole("status").textContent).toBe("");
+    });
+
+    it("refreshes about every 5 seconds while a row is generating", () => {
+      vi.useFakeTimers();
+      render(<CaseStudiesTable rows={[generating, ...rows]} canCreate />);
+      expect(refresh).not.toHaveBeenCalled();
+      act(() => void vi.advanceTimersByTime(GENERATING_REFRESH_MS));
+      expect(refresh).toHaveBeenCalledTimes(1);
+      act(() => void vi.advanceTimersByTime(GENERATING_REFRESH_MS * 2));
+      expect(refresh).toHaveBeenCalledTimes(3);
+    });
+
+    it("never refreshes when no row is generating", () => {
+      vi.useFakeTimers();
+      render(<CaseStudiesTable rows={rows} canCreate />);
+      act(() => void vi.advanceTimersByTime(GENERATING_REFRESH_MS * 3));
+      expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it("stops refreshing once none is generating", () => {
+      vi.useFakeTimers();
+      const { rerender } = render(<CaseStudiesTable rows={[generating]} canCreate />);
+      act(() => void vi.advanceTimersByTime(GENERATING_REFRESH_MS));
+      expect(refresh).toHaveBeenCalledTimes(1);
+      rerender(<CaseStudiesTable rows={[{ ...generating, status: "in_review" }]} canCreate />);
+      act(() => void vi.advanceTimersByTime(GENERATING_REFRESH_MS * 3));
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
   });
 });

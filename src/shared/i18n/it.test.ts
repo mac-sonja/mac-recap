@@ -149,7 +149,6 @@ describe("wizard copy", () => {
     expect(t("wizard.errors.clientNotFound")).toMatch(/^Questo cliente non c’è più\. Ricarica la pagina/);
     expect(fill(t("wizard.errors.year"), { min: 1900, max: 2100 })).toBe("Scrivi un anno tra il 1900 e il 2100.");
     expect(t("wizard.errors.generic")).toMatch(/^Non siamo riusciti a creare la case history\./);
-    expect(t("wizard.generatePlaceholder")).toBe("La generazione arriva nella prossima versione. Ci stiamo lavorando.");
     expect(t("wizard.stepper.goTo")).toBe("vai a");
     expect(t("wizard.loadFailed")).toBe("Non riusciamo ad aprire questa case history. Riprova tra qualche istante.");
   });
@@ -209,6 +208,25 @@ describe("wizard details copy", () => {
     expect(fill(t("wizard.details.counter"), { n: 2, total: 2 })).toBe("2 di 2 compilati");
     expect(t("wizard.details.errors.saveFailed")).toBe("Non salvato. Modifica il testo per riprovare.");
     expect(fill(t("wizard.details.errors.tooLong"), { max: 5000 })).toBe("Al massimo 5000 caratteri.");
+  });
+});
+
+describe("wizard generate copy", () => {
+  test("has the approved strings", () => {
+    expect("generatePlaceholder" in it.wizard).toBe(false);
+    expect(fill(t("wizard.generate.counter"), { n: 3, m: 1, total: 2 })).toBe("3 file, 1 di 2 dettagli compilati");
+    expect(t("wizard.generate.action")).toBe("Genera");
+    expect(t("wizard.generate.retry")).toBe("Riprova");
+    expect(t("wizard.generate.noMaterial")).toBe("Aggiungi almeno un file per poter generare.");
+    expect(t("wizard.generate.waiting.heading")).toBe("Stiamo scrivendo la case history");
+    expect(t("wizard.generate.failed")).toMatch(/^L’ultima generazione non è andata a buon fine\./);
+    expect(t("caseStudies.table.stillGenerating")).toBe("Ancora in elaborazione");
+  });
+
+  test("the new calls to action are at most three words", () => {
+    for (const label of [it.wizard.generate.action, it.wizard.generate.retry]) {
+      expect(label.split(/\s+/).length, label).toBeLessThanOrEqual(3);
+    }
   });
 });
 

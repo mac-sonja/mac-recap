@@ -6,3 +6,6 @@
  */
 export const CASE_STATUSES = ["draft", "generating", "in_review", "approved"] as const;
 export type CaseStatus = (typeof CASE_STATUSES)[number];
+
+/** How often a screen that shows a `generating` case asks the server again (Story 3.7b). */
+export const GENERATING_REFRESH_MS = 5_000;

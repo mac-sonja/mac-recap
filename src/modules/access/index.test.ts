@@ -18,6 +18,7 @@ describe("respondToAppError", () => {
     ["FILE_TYPE_NOT_ALLOWED", 400],
     ["FILE_TOO_LARGE", 400],
     ["FILE_LIMIT_REACHED", 409],
+    ["NO_MATERIAL", 409],
     ["UPLOAD_NOT_FOUND", 404],
     ["UPLOAD_REJECTED", 400],
     ["ASSET_ALREADY_CONFIRMED", 409],
