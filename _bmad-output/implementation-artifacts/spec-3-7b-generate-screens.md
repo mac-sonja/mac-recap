@@ -2,8 +2,9 @@
 title: 'Story 3.7b: Generate a case study, screens'
 type: 'feature'
 created: '2026-10-29'
-status: 'draft'
+status: 'in-progress'
 route: 'dispatch'
+baseline_commit: 'dab4a0375a9bb12808fb08bed410a20c7e69f2bf'
 review_loop_iteration: 0
 context:
   - '{project-root}/.claude/skills/mac-recap-ui/SKILL.md'
@@ -21,6 +22,7 @@ context:
 ## Boundaries & Constraints
 
 **Always:**
+- The step 3 counter reads "{n} file, {m} di 2 dettagli compilati": Contesto and Soluzione, the same two as step 2's counter (owner, 2026-10-29); Risultati and Testimonial are not counted.
 - Genera is disabled without material, its reason linked by `aria-describedby`; client info never enables it. The action re-checks everything.
 - Riprova runs the same `generateCaseStudy` action; nothing is re-uploaded.
 - The wizard page, for a `generating` case, renders the waiting screen instead of redirecting; other non-drafts still redirect to `/case-studies`. The waiting screen refreshes itself, so when the case leaves `generating` the page follows the existing rules (done → `/case-studies`; failed → draft, step 3 with the failure).
@@ -47,10 +49,6 @@ context:
 | Click In elaborazione row | no href | polite message "Ancora in elaborazione" in the table's status region | N/A |
 
 </frozen-after-approval>
-
-## Open Questions
-
-- What does the step 3 counter count as "details"? The AC says "{m} of 3 details filled", but step 2's own counter now reads "n di 2 compilati" (Contesto and Soluzione; Risultati and Testimonial are optional cards). Options: **A)** Contesto, Soluzione, Risultati (filled when at least one result row exists), shown "di 3", as the AC says, which no longer matches step 2's number. **B)** Contesto and Soluzione only, shown "di 2", the same as step 2 (recommended: one number across both screens).
 
 ## Code Map
 
@@ -84,5 +82,7 @@ context:
 ## Implementation Notes
 
 ## Spec Change Log
+
+- 2026-10-29, owner at approval: the counter counts two details (option B), like step 2.
 
 ## Review Triage Log
