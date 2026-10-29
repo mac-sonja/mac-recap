@@ -791,9 +791,21 @@ export const it = {
       video_9_16: "Video",
     },
     saved: "Salvato",
+    /** The top bar's save state while a save runs, and after a failed one (Story 4.3a). */
+    saving: "Salvataggio…",
+    retrying: "Non salvato. Nuovo tentativo…",
+    /** After 3 failed saves in a row, above the canvas until a save goes through. */
+    saveBanner: "Le modifiche non si salvano. Tieni aperta questa scheda.",
     undo: "Annulla",
     redo: "Ripeti",
+    /** Keyboard hints on undo and redo. */
+    undoHint: "Annulla (⌘Z)",
+    redoHint: "Ripeti (⇧⌘Z)",
     approve: "Approva",
+    /** A block whose text no longer fits (Story 4.3a). */
+    overflow: "Il testo non entra",
+    /** Double-click on a text that can't be edited yet: bound to the client or the case (4.3d), or an approved case (4.9). */
+    editSoon: "Questo testo si potrà modificare presto.",
     /** The hint on a tool that arrives with a later story. */
     soon: "Arriva presto",
     /** The canvas message when a tool that isn't here yet is pressed. */

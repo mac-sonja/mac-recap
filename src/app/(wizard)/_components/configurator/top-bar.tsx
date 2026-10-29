@@ -33,7 +33,22 @@ export interface TopBarProps {
   onPreview: (on: boolean) => void;
   /** The eye/pencil button, for focus to land on when Esc leaves Anteprima. */
   previewRef?: Ref<HTMLButtonElement>;
+  /** The autosave's state (Story 4.3a). */
+  save: SaveState;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 }
+
+/** *Salvato*, *Salvataggio…*, or *Non salvato. Nuovo tentativo…* after a failed save. */
+export type SaveState = "saved" | "saving" | "retrying";
+
+const SAVE_LABEL: Readonly<Record<SaveState, string>> = {
+  saved: it.configurator.saved,
+  saving: it.configurator.saving,
+  retrying: it.configurator.retrying,
+};
 
 /** The top bar's left side: back, name, code and status badge. */
 export function DocumentHeading({ header, back }: Pick<TopBarProps, "header" | "back">) {
@@ -74,10 +89,11 @@ export function FormatSwitch({ formatId, onFormat }: Pick<TopBarProps, "formatId
  * The configurator's top bar (mockup `.top`): back, name, code and status badge on the
  * left; the format switch and the Anteprima eye in the centre (a pencil, *Torna
  * all’editor*, while in Anteprima); the save state, undo, redo and **Approva** on the
- * right. Undo, redo and **Approva** arrive with Stories 4.3 and 4.8: they show,
- * inactive, and say so when pressed. Nothing is saved yet, so the state reads *Salvato*.
+ * right. The save state follows the autosave (Story 4.3a); undo and redo are disabled
+ * with nothing to undo or redo. **Approva** arrives with Story 4.8: it shows, inactive,
+ * and says so when pressed.
  */
-export function TopBar({ header, back, formatId, onFormat, onSoon, preview, onPreview, previewRef }: TopBarProps) {
+export function TopBar({ header, back, formatId, onFormat, onSoon, preview, onPreview, previewRef, save, canUndo, canRedo, onUndo, onRedo }: TopBarProps) {
   const previewLabel = preview ? it.configurator.preview.leave : it.configurator.preview.enter;
   return (
     <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-border bg-surface-sidebar px-3">
@@ -103,26 +119,32 @@ export function TopBar({ header, back, formatId, onFormat, onSoon, preview, onPr
       </div>
 
       <div className="flex min-w-0 items-center justify-end gap-2">
-        <span className="mr-1 font-label text-[12.5px] text-foreground-muted">{it.configurator.saved}</span>
+        <span
+          aria-live="polite"
+          data-save-state={save}
+          className={cn("mr-1 truncate font-label text-[12.5px] text-foreground-muted", save === "retrying" && "text-danger")}
+        >
+          {SAVE_LABEL[save]}
+        </span>
         <button
           type="button"
-          aria-disabled="true"
+          disabled={!canUndo}
           aria-label={it.configurator.undo}
-          aria-describedby={SOON_ID}
-          title={it.configurator.soon}
-          onClick={() => onSoon(it.configurator.undo)}
-          className={ICON_BUTTON}
+          aria-keyshortcuts="Meta+Z Control+Z"
+          title={it.configurator.undoHint}
+          onClick={onUndo}
+          className={cn(ICON_BUTTON, "disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground-muted")}
         >
           <Undo2 aria-hidden="true" className="size-4" />
         </button>
         <button
           type="button"
-          aria-disabled="true"
+          disabled={!canRedo}
           aria-label={it.configurator.redo}
-          aria-describedby={SOON_ID}
-          title={it.configurator.soon}
-          onClick={() => onSoon(it.configurator.redo)}
-          className={ICON_BUTTON}
+          aria-keyshortcuts="Meta+Shift+Z Control+Shift+Z"
+          title={it.configurator.redoHint}
+          onClick={onRedo}
+          className={cn(ICON_BUTTON, "disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground-muted")}
         >
           <Redo2 aria-hidden="true" className="size-4" />
         </button>

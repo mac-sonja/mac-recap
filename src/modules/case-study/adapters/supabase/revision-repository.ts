@@ -18,6 +18,16 @@ const CREATE_REFUSALS: Refusals = {
   INVALID_INPUT: { code: "INVALID_INPUT", message: "The revision is malformed." },
 };
 
+/** `save_revision_doc` raises these as P0001; nothing is written then. */
+const SAVE_REFUSALS: Refusals = {
+  NOT_FOUND: { code: "NOT_FOUND", message: "No revision of a case study with this id." },
+  STALE_HEAD: { code: "STALE_HEAD", message: "The revision is no longer the case study's head." },
+  CASE_NOT_EDITABLE: { code: "CASE_NOT_EDITABLE", message: "The case study cannot be edited in its current status." },
+  REVISION_NOT_WRITABLE: { code: "REVISION_NOT_WRITABLE", message: "Only a working revision can be edited." },
+  STALE_REVISION: { code: "STALE_REVISION", message: "The revision changed since it was read." },
+  INVALID_INPUT: { code: "INVALID_INPUT", message: "The document is malformed." },
+};
+
 /** Maps a `revision` row to the domain shape (documents as stored), rejecting values outside the domain. */
 export function toRevision(row: RevisionRow): Result<Revision> {
   const parsed = storedRevisionSchema.safeParse({
@@ -65,6 +75,26 @@ export function createSupabaseRevisionRepository(
       if (data === null) {
         log.error("revision create failed: no row returned", { caseId: input.caseId, actorId: input.actorId });
         return err({ code: "REVISION_WRITE_FAILED", message: "Could not create the revision.", details: { caseId: input.caseId } });
+      }
+      return toRevision(data);
+    },
+
+    async saveDoc(input) {
+      const { data, error } = await client().rpc("save_revision_doc", {
+        p_revision_id: input.revisionId,
+        p_doc: input.doc as Json,
+        p_expected_version: input.expectedVersion,
+        p_actor_id: input.actorId,
+      });
+      if (error) {
+        const refused = refusalOf(error, SAVE_REFUSALS);
+        if (refused) return err({ ...refused, details: { revisionId: input.revisionId, expectedVersion: input.expectedVersion } });
+        log.error(`revision save failed: ${error.code}`, { actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not save the revision.", details: { revisionId: input.revisionId } });
+      }
+      if (data === null) {
+        log.error("revision save failed: no row returned", { actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not save the revision.", details: { revisionId: input.revisionId } });
       }
       return toRevision(data);
     },

@@ -2,9 +2,10 @@
 
 import { memo, useLayoutEffect, useRef, useState, type MouseEvent, type RefObject } from "react";
 import type { Page } from "@/modules/generation";
-import { renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
+import { measureOverflow, renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
+import { useInPlaceText } from "./in-place-text";
 import { INSTAGRAM_VIEWS, InstagramOverlay, type InstagramView } from "./instagram-overlay";
 import { selectionAt, type Selection } from "./selection";
 import { Slideshow } from "./slideshow";
@@ -39,7 +40,20 @@ export interface CanvasProps {
   onAnimateTexts: (on: boolean) => void;
   /** Reduced motion: the slideshow switches without a transition. */
   reducedMotion: boolean;
+  /** Texts can be typed in (Story 4.3a): a `working` head of an In revisione case. */
+  editable: boolean;
+  /** The text being edited in the editor, if any. */
+  editing: { pageKey: string; elementId: string } | null;
+  /** A double-click on an element: the configurator decides whether it can be edited. */
+  onEditRequest: (pageKey: string, elementId: string) => void;
+  /** The words of a text as typed so far. */
+  onTextInput: (pageKey: string, elementId: string, text: string) => void;
+  /** A text editing session ended. */
+  onTextDone: (pageKey: string, elementId: string) => void;
 }
+
+/** What a page needs to let its texts be typed in. */
+type TextEditing = Pick<CanvasProps, "editable" | "onTextInput" | "onTextDone">;
 
 /** A frame's box in its page, in px. */
 interface Box {
@@ -54,6 +68,12 @@ const boxIn = (host: HTMLElement, target: Element): Box => {
   const inner = target.getBoundingClientRect();
   return { top: inner.top - outer.top, left: inner.left - outer.left, width: inner.width, height: inner.height };
 };
+
+/** A text open for typing: a text cursor, and no browser outline (the selection frames it). */
+const TYPING = "[&_[contenteditable]]:cursor-text [&_[contenteditable]]:outline-none";
+
+const sameBoxes = (a: readonly Box[], b: readonly Box[]) =>
+  a.length === b.length && a.every((x, i) => x.top === b[i]!.top && x.left === b[i]!.left && x.width === b[i]!.width && x.height === b[i]!.height);
 
 /** One page drawn by the format's renderer (Story 3.5). Memoised: a selection change never redraws it. */
 export const RenderedPage = memo(function RenderedPage({
@@ -95,12 +115,59 @@ function CanvasPage({
   onSelect,
   preview,
   animateTexts,
-}: Pick<CanvasProps, "formatId" | "template" | "assets" | "values" | "onSelect" | "preview" | "animateTexts"> & {
-  page: Page;
-  number: number;
-  selection: Selection;
-}) {
+  editable,
+  editing,
+  onEditRequest,
+  onTextInput,
+  onTextDone,
+}: Pick<CanvasProps, "formatId" | "template" | "assets" | "values" | "onSelect" | "preview" | "animateTexts" | "onEditRequest"> &
+  TextEditing & {
+    page: Page;
+    number: number;
+    selection: Selection;
+    /** The element of this page being edited in the editor. */
+    editing: string | null;
+  }) {
   const host = useRef<HTMLDivElement>(null);
+  const still = useRef<HTMLDivElement>(null);
+  const { shown, renderKey } = useInPlaceText({
+    host,
+    page,
+    mode: !editable ? null : preview ? { kind: "preview" } : { kind: "editor", editing },
+    onInput: (elementId, text) => onTextInput(page.pageKey, elementId, text),
+    onDone: (elementId) => onTextDone(page.pageKey, elementId),
+  });
+  // Video's texts mid-loop are translated: its overflow is measured on a still copy (renderer's rule).
+  const measureStill = formatId === "video_9_16" && animateTexts && !preview;
+  const [overflow, setOverflow] = useState<Box[]>([]);
+
+  useLayoutEffect(() => {
+    const el = host.current;
+    if (el === null || preview) return;
+    const root = measureStill ? still.current : el;
+    if (root === null) return;
+    const measure = () => {
+      const report = measureOverflow(root);
+      const boxes: Box[] = [];
+      for (const pageReport of report.pages) {
+        for (const block of pageReport.blocks) {
+          if (!block.overflow) continue;
+          const node = root.querySelector(`[data-block-id="${block.blockId}"]`);
+          if (node !== null) boxes.push(boxIn(el, node));
+        }
+      }
+      setOverflow((prev) => (sameBoxes(prev, boxes) ? prev : boxes));
+    };
+    measure();
+    // Typing reflows the text in place; a resize reflows the whole page.
+    el.addEventListener("input", measure);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(el);
+    return () => {
+      el.removeEventListener("input", measure);
+      observer?.disconnect();
+    };
+  }, [page, renderKey, formatId, preview, measureStill]);
   // Anteprima shows no frames; the selection is kept and shows again in the editor.
   const mine = !preview && selection !== null && selection.pageKey === page.pageKey ? selection : null;
   const blockId = mine?.blockId;
@@ -122,7 +189,14 @@ function CanvasPage({
   }, [blockId, elementId, page, formatId]);
 
   function onClick(event: MouseEvent<HTMLDivElement>) {
+    // A click inside the text being typed in moves the caret; it selects nothing new.
+    if ((event.target as Element).closest?.("[contenteditable]")) return;
     onSelect(selectionAt(event.target as Element, page.pageKey));
+  }
+
+  function onDoubleClick(event: MouseEvent<HTMLDivElement>) {
+    const target = selectionAt(event.target as Element, page.pageKey);
+    if (target.elementId !== undefined) onEditRequest(page.pageKey, target.elementId);
   }
 
   const pageSelected = mine !== null && blockId === undefined;
@@ -138,21 +212,44 @@ function CanvasPage({
         data-canvas-page={page.pageKey}
         data-selected={pageSelected ? "" : undefined}
         onClick={preview ? undefined : onClick}
+        onDoubleClick={preview ? undefined : onDoubleClick}
         className={cn(
           "relative w-full shrink-0 shadow-page transition-shadow duration-150 data-selected:ring-2 data-selected:ring-accent",
+          // The text being typed in is framed by the selection; no second outline (mockup).
+          TYPING,
           !preview && "cursor-pointer",
           width,
         )}
       >
         <RenderedPage
+          key={renderKey}
           formatId={formatId}
           template={template}
-          page={page}
+          page={shown}
           number={number}
           assets={assets}
           values={values}
           animateTexts={animateTexts}
         />
+        {measureStill && (
+          <div ref={still} aria-hidden="true" inert className="pointer-events-none invisible absolute inset-0 overflow-hidden">
+            <RenderedPage formatId={formatId} template={template} page={page} number={number} assets={assets} values={values} animateTexts={false} />
+          </div>
+        )}
+        {!preview &&
+          overflow.map((box, i) => (
+            <div
+              key={i}
+              aria-hidden="true"
+              data-frame="overflow"
+              className="pointer-events-none absolute z-10 rounded-lg border-2 border-warning"
+              style={{ top: box.top - 2, left: box.left - 2, width: box.width + 4, height: box.height + 4 }}
+            >
+              <span className="absolute bottom-1.5 left-1.5 inline-flex h-[22px] items-center rounded-full bg-warning px-2.5 font-label text-[11.5px] leading-none font-semibold whitespace-nowrap text-warning-foreground shadow-control">
+                {it.configurator.overflow}
+              </span>
+            </div>
+          ))}
         {frames.block !== null && (
           <div
             aria-hidden="true"
@@ -210,6 +307,11 @@ export function Canvas({
   animateTexts,
   onAnimateTexts,
   reducedMotion,
+  editable,
+  editing,
+  onEditRequest,
+  onTextInput,
+  onTextDone,
 }: CanvasProps) {
   const frame = useRef<number | null>(null);
   const video = formatId === "video_9_16";
@@ -271,6 +373,9 @@ export function Canvas({
           instagram={video ? instagram : "off"}
           caption={caption}
           reducedMotion={reducedMotion}
+          editable={editable}
+          onTextInput={onTextInput}
+          onTextDone={onTextDone}
         />
       )}
       {/* The editor, and Anteprima of Presentazione: the pages stacked. */}
@@ -303,6 +408,11 @@ export function Canvas({
             onSelect={onSelect}
             preview={preview}
             animateTexts={animate}
+            editable={editable}
+            editing={editing !== null && editing.pageKey === page.pageKey ? editing.elementId : null}
+            onEditRequest={onEditRequest}
+            onTextInput={onTextInput}
+            onTextDone={onTextDone}
           />,
         ];
       })}
@@ -322,18 +432,58 @@ function SlideshowOf({
   instagram,
   caption,
   reducedMotion,
-}: Pick<CanvasProps, "template" | "pages" | "assets" | "values" | "slide" | "onStep" | "instagram" | "caption" | "reducedMotion"> & {
-  formatId: Exclude<FormatId, "presentazione_16_9">;
-}) {
+  editable,
+  onTextInput,
+  onTextDone,
+}: Pick<CanvasProps, "template" | "pages" | "assets" | "values" | "slide" | "onStep" | "instagram" | "caption" | "reducedMotion"> &
+  TextEditing & {
+    formatId: Exclude<FormatId, "presentazione_16_9">;
+  }) {
   const index = Math.max(0, Math.min(pages.length - 1, slide));
   const page = pages[index]!;
   return (
     <Slideshow formatId={formatId} index={index} count={pages.length} name={page.name} pageKey={page.pageKey} onStep={onStep} still={reducedMotion}>
-      <div data-canvas-page={page.pageKey}>
-        <RenderedPage formatId={formatId} template={template} page={page} number={index + 1} assets={assets} values={values} animateTexts />
-      </div>
+      <Slide
+        key={page.pageKey}
+        formatId={formatId}
+        template={template}
+        page={page}
+        number={index + 1}
+        assets={assets}
+        values={values}
+        editable={editable}
+        onTextInput={onTextInput}
+        onTextDone={onTextDone}
+      />
       {instagram !== "off" && <InstagramOverlay view={instagram} caption={caption} />}
     </Slideshow>
+  );
+}
+
+/** One slide of Anteprima: its texts take a click and typing (C37). */
+function Slide({
+  formatId,
+  template,
+  page,
+  number,
+  assets,
+  values,
+  editable,
+  onTextInput,
+  onTextDone,
+}: Pick<CanvasProps, "formatId" | "template" | "assets" | "values"> & TextEditing & { page: Page; number: number }) {
+  const host = useRef<HTMLDivElement>(null);
+  const { shown, renderKey } = useInPlaceText({
+    host,
+    page,
+    mode: editable ? { kind: "preview" } : null,
+    onInput: (elementId, text) => onTextInput(page.pageKey, elementId, text),
+    onDone: (elementId) => onTextDone(page.pageKey, elementId),
+  });
+  return (
+    <div ref={host} data-canvas-page={page.pageKey} className={TYPING}>
+      <RenderedPage key={renderKey} formatId={formatId} template={template} page={shown} number={number} assets={assets} values={values} animateTexts />
+    </div>
   );
 }
 

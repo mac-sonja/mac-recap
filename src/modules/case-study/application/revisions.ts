@@ -2,6 +2,7 @@ import type { Actor } from "@/modules/access";
 import {
   createWorkingRevisionInputSchema,
   revisionSubjectSchema,
+  saveRevisionDocInputSchema,
   type Revision,
   type RevisionSubject,
 } from "@/modules/case-study/domain/revision";
@@ -104,3 +105,64 @@ export const makeGetLiveRevision = (deps: { cases: CaseStudyRepository; revision
 /** The head revision of a subject (what is edited next), or `null` when it has none. */
 export const makeGetEditableRevision = (deps: { cases: CaseStudyRepository; revisions: RevisionRepository }) =>
   makeSubjectRead("headRevisionId", deps);
+
+/**
+ * Every asset id a document references: media and backgrounds (`assetId`), animations
+ * (`assetIds`) and texts' `{ kind: "asset", id }` source refs. Walks the JSON so a new
+ * element type with an asset is covered without a change here.
+ */
+export function referencedAssetIds(doc: unknown): Set<string> {
+  const found = new Set<string>();
+  const walk = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item);
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    if (typeof record.assetId === "string") found.add(record.assetId.toLowerCase());
+    if (Array.isArray(record.assetIds)) for (const id of record.assetIds) if (typeof id === "string") found.add(id.toLowerCase());
+    if (record.kind === "asset" && typeof record.id === "string") found.add(record.id.toLowerCase());
+    for (const child of Object.values(record)) walk(child);
+  };
+  walk(doc);
+  return found;
+}
+
+/**
+ * Saves an edited `doc` of a case's head revision (Story 4.3a) by compare-and-set on
+ * `version`. The revision must be `revisionId` of `caseId` (else `NOT_FOUND`), `doc`
+ * must pass `generation.validateNewDocument`, and it may reference only assets the
+ * stored `doc` references (`ASSET_NOT_ALLOWED`; Story 4.5 brings the media guardrail).
+ * The caller has authorized the actor to `edit` this case.
+ */
+export function makeSaveRevisionDoc(deps: { revisions: RevisionRepository }) {
+  return async function saveRevisionDoc(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+    const parsed = parseInput(saveRevisionDocInputSchema, input);
+    if (!parsed.ok) return parsed;
+    const { caseId, revisionId, doc, expectedVersion } = parsed.value;
+    const valid = validateNewDocument(doc);
+    if (!valid.ok) return valid;
+
+    const found = await deps.revisions.findById(revisionId);
+    if (!found.ok) return found;
+    if (found.value === null || found.value.caseId?.toLowerCase() !== caseId) {
+      return err({ code: "NOT_FOUND", message: "No revision of this case study with this id.", details: { caseId, revisionId } });
+    }
+    const current = upgraded(found.value);
+    if (!current.ok) return current;
+    const allowed = referencedAssetIds(current.value.doc);
+    const foreign = [...referencedAssetIds(valid.value)].filter((id) => !allowed.has(id));
+    if (foreign.length > 0) {
+      return err({
+        code: "ASSET_NOT_ALLOWED",
+        message: "The document references an asset this revision does not use.",
+        details: { revisionId, assetIds: foreign.slice(0, 10) },
+      });
+    }
+
+    const saved = await deps.revisions.saveDoc({ revisionId, doc: valid.value, expectedVersion, actorId: actor.id });
+    if (!saved.ok) return saved;
+    return upgraded(saved.value);
+  };
+}

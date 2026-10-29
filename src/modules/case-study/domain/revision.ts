@@ -7,6 +7,9 @@ export type RevisionStatus = (typeof REVISION_STATUSES)[number];
 /** The case event written with every new revision, in the same transaction (`revision_id` set). */
 export const REVISION_CREATED = "revision_created";
 
+/** The case event written with every save of an edited `doc` (Story 4.3a), `{ version }` the new version. */
+export const REVISION_SAVED = "revision_saved";
+
 /**
  * Whose revision it is: a case study, or a client intro (Story 3.9; until then
  * every read for it is `SUBJECT_NOT_SUPPORTED`).
@@ -93,3 +96,17 @@ export const createWorkingRevisionInputSchema = z.strictObject({
   expectedHeadVersion: z.number().int().nonnegative().max(2_147_483_647),
 });
 export type CreateWorkingRevisionInput = z.infer<typeof createWorkingRevisionInputSchema>;
+
+/**
+ * What the configurator's autosave sends (Story 4.3a): the whole edited `doc` of the
+ * head revision and the `version` it was based on. `doc` is validated separately
+ * (`generation.validateNewDocument`).
+ */
+export const saveRevisionDocInputSchema = z.strictObject({
+  caseId: z.uuid().transform((id) => id.toLowerCase()),
+  revisionId: z.uuid().transform((id) => id.toLowerCase()),
+  doc: z.unknown(),
+  // Postgres integer range.
+  expectedVersion: z.number().int().nonnegative().max(2_147_483_647),
+});
+export type SaveRevisionDocInput = z.infer<typeof saveRevisionDocInputSchema>;

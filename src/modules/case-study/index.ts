@@ -39,6 +39,7 @@ import {
   makeCreateWorkingRevision,
   makeGetEditableRevision,
   makeGetLiveRevision,
+  makeSaveRevisionDoc,
   type CaseStudyRevision,
 } from "@/modules/case-study/application/revisions";
 import { createSupabaseRevisionRepository } from "@/modules/case-study/adapters/supabase/revision-repository";
@@ -149,13 +150,14 @@ export type {
 } from "@/modules/case-study/application/save-client-brief-field";
 export type { ClientDeleted } from "@/modules/case-study/application/delete-client";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
-export { REVISION_CREATED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
+export { REVISION_CREATED, REVISION_SAVED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
 export type {
   CreateWorkingRevisionInput,
   RevisionManifest,
   RevisionMeta,
   RevisionStatus,
   RevisionSubject,
+  SaveRevisionDocInput,
 } from "@/modules/case-study/domain/revision";
 export type { CaseStudyRevision } from "@/modules/case-study/application/revisions";
 export type { TransitionEvent } from "@/modules/case-study/domain/transition";
@@ -507,6 +509,27 @@ function revisionDeps() {
  */
 export function createWorkingRevision(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
   return makeCreateWorkingRevision(revisionDeps())(actor, input);
+}
+
+/**
+ * Saves the edited document of a case's head revision (Story 4.3a, the configurator's
+ * autosave): input `{ caseId, revisionId, doc, expectedVersion }`, `doc` the whole
+ * document as it should be and `expectedVersion` the revision `version` it was based
+ * on. Writes `doc` (never `generatedDoc`) by compare-and-set on `version`, increments
+ * it and records one `revision_saved` case event `{ version }`, in one transaction;
+ * returns the saved revision. Call only after `authorize(actor, 'edit', { status })`
+ * for this case.
+ *
+ * Errors, with nothing written: `INVALID_INPUT`, `DOCUMENT_INVALID`,
+ * `DOCUMENT_SCHEMA_UNSUPPORTED`, `FORMAT_NOT_IN_REVISION`, `NOT_FOUND` (unknown
+ * revision, another case's, or the case unknown or deleted), `ASSET_NOT_ALLOWED` (an
+ * asset the stored `doc` does not reference), `STALE_HEAD` (no longer the head),
+ * `CASE_NOT_EDITABLE` (the case is not `in_review`), `REVISION_NOT_WRITABLE` (not
+ * `working`), `STALE_REVISION` (saved by someone else since it was read).
+ * `REVISION_WRITE_FAILED` may come after the write committed: re-read the head.
+ */
+export function saveRevisionDoc(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+  return makeSaveRevisionDoc(revisionDeps())(actor, input);
 }
 
 /**

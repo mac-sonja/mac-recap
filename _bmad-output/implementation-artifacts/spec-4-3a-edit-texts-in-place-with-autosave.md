@@ -2,7 +2,8 @@
 title: 'Story 4.3a: edit texts in place, with autosave, undo/redo and the overflow marker'
 type: 'feature'
 created: '2026-10-29'
-status: 'ready-for-dev'
+status: 'in-review'
+baseline_commit: '151e3a6652d843cf41976950933cc23b8c8f9582'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -89,14 +90,14 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Migration + DB test.
-- [ ] case-study port, adapter, use case (+ `revisions.test.ts`), index, db types.
-- [ ] access status codes (+ test).
-- [ ] configurator `actions.ts` (+ test; `test/authorize-guard.test.ts` passes), `page.tsx` (+ test).
-- [ ] `it.ts` / `it.test.ts`.
-- [ ] `use-document.ts`, `text-editing.ts` (+ unit tests: queue, backoff, stale, history cap, provenance).
-- [ ] canvas editing, overflow marker, top bar, keys (+ `configurator.test.tsx` for every matrix row).
-- [ ] `sprint-status.yaml` -- 4.3 in progress, note the 4.3a–d split.
+- [x] Migration + DB test.
+- [x] case-study port, adapter, use case (+ `revisions.test.ts`), index, db types.
+- [x] access status codes (+ test).
+- [x] configurator `actions.ts` (+ test; `test/authorize-guard.test.ts` passes), `page.tsx` (+ test).
+- [x] `it.ts` / `it.test.ts`.
+- [x] `use-document.ts`, `text-editing.ts` (+ unit tests: queue, backoff, stale, history cap, provenance).
+- [x] canvas editing, overflow marker, top bar, keys (+ `configurator.test.tsx` for every matrix row).
+- [x] `sprint-status.yaml` -- 4.3 in progress, note the 4.3a–d split.
 
 **Acceptance Criteria:**
 - Given Story 4.3's criteria for in-place text editing, save, provenance, undo/redo, overflow, save failure, stale save and `generating` in `epics.md`, when checked on the running page, then each is met.
@@ -107,6 +108,21 @@ context:
 The rendered page is the renderer's markup. Editing switches the node's `contentEditable` imperatively. On finishing, the new text goes into the doc state and the page remounts (key bump), so React rebuilds that markup from the doc.
 
 ## Implementation Notes
+
+- Owner (2026-10-29): subagents only for the review step, so the implementation was done in the main session.
+- Action: `authorize(actor, "edit")` with no status. `test/authorize-guard.test.ts` forbids any module call (such as `caseStudy.get`) before `authorize`, and `edit` doesn't depend on status. `save_revision_doc` enforces `in_review` (`CASE_NOT_EDITABLE`), and the use case refuses a revision of another case (`NOT_FOUND`).
+- The client keeps each format as a page list. A save sends each format as `{ pages }`, as stored. A browser check caught this (every save was `DOCUMENT_INVALID`), and `configurator.test.tsx` now runs the sent document through `validateNewDocument`.
+- The typed words are read from the DOM (`typedText`: text nodes, `<br>`, wrapped `<div>`), not `innerText`, which applies the template's CSS: an Etichetta was saved in capitals.
+- The overflow marker uses a new `warning` token (`#e07800` light, `#ffa031` dark, in all three theme blocks).
+- From the first unsaved edit the save state reads "Salvataggio…", during the debounce too, so "Salvato" always means saved.
+- Line breaks show only in a `text`-style text (the renderer's `white-space: pre-line`). In a title they are saved but don't show. That's renderer behaviour (Story 3.5), unchanged here.
+- Verified in Chromium against the local stack (`next dev` on localhost):
+  - typing in place with line breaks, saved and reloaded;
+  - ⌘Z and ⇧⌘Z saved;
+  - typing in Anteprima on Carosello;
+  - Esc inside a text doesn't leave Anteprima;
+  - the banner appears with save requests aborted and clears when saving recovers;
+  - the overflow marker, in light and dark.
 
 ## Verification
 

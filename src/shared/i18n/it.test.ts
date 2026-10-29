@@ -288,6 +288,14 @@ describe("configurator copy", () => {
       "Approva",
     ]);
     expect(t("configurator.soon")).toBe("Arriva presto");
+    expect([t("configurator.saving"), t("configurator.retrying"), t("configurator.saveBanner")]).toEqual([
+      "Salvataggio…",
+      "Non salvato. Nuovo tentativo…",
+      "Le modifiche non si salvano. Tieni aperta questa scheda.",
+    ]);
+    expect([t("configurator.undoHint"), t("configurator.redoHint")]).toEqual(["Annulla (⌘Z)", "Ripeti (⇧⌘Z)"]);
+    expect(t("configurator.overflow")).toBe("Il testo non entra");
+    expect(t("configurator.editSoon")).toBe("Questo testo si potrà modificare presto.");
     expect(fill(t("configurator.soonMessage"), { tool: "Layout" })).toBe("Layout arriva presto.");
     expect(t("configurator.trial.title")).toBe("Bozza di prova");
     expect(fill(t("configurator.canvas.pageLabel"), { n: 2, name: "La sfida" })).toBe("2 · La sfida");
