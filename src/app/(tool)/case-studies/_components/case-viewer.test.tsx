@@ -274,6 +274,46 @@ describe("CaseViewer", () => {
     expect(controls().hasAttribute("data-hidden")).toBe(false);
   });
 
+  it("moves focus to the exit button entering full screen, and back to Schermo intero leaving", () => {
+    stubFullscreen();
+    render(<Harness />);
+    fireEvent.click(button(copy.fullscreen));
+    expect(document.activeElement).toBe(button(copy.exitFullscreen));
+    fireEvent.click(button(copy.exitFullscreen));
+    expect(document.activeElement).toBe(button(copy.fullscreen));
+  });
+
+  it("shows the hidden full-screen controls again when the slide changes", () => {
+    stubFullscreen();
+    vi.useFakeTimers();
+    render(<Harness />);
+    fireEvent.click(button(copy.fullscreen));
+    act(() => vi.advanceTimersByTime(2100));
+    const controls = () => document.querySelector<HTMLElement>("[data-viewer-controls]")!;
+    expect(controls().hasAttribute("data-hidden")).toBe(true);
+    // A programmatic click on the inert › stands in for the page's →: both call `onStep`.
+    act(() => button(preview.next).click());
+    expect(controls().hasAttribute("data-hidden")).toBe(false);
+    expect(controls().querySelector("p[aria-live]")?.textContent).toContain("2 di");
+    act(() => vi.advanceTimersByTime(2100));
+    expect(controls().hasAttribute("data-hidden")).toBe(true);
+  });
+
+  it("makes the hidden full-screen controls inert, moving focus out of them first", () => {
+    stubFullscreen();
+    vi.useFakeTimers();
+    render(<Harness />);
+    fireEvent.click(button(copy.fullscreen));
+    const controls = () => document.querySelector<HTMLElement>("[data-viewer-controls]")!;
+    expect(controls().hasAttribute("inert")).toBe(false);
+    expect(controls().contains(document.activeElement)).toBe(true);
+    act(() => vi.advanceTimersByTime(2100));
+    expect(controls().hasAttribute("inert")).toBe(true);
+    expect(document.activeElement).toBe(document.querySelector("[data-viewer]"));
+    fireEvent.mouseMove(document.querySelector("[data-viewer]")!);
+    expect(controls().hasAttribute("inert")).toBe(false);
+  });
+
   it("keeps the full-screen controls visible with reduced motion", () => {
     stubFullscreen();
     vi.useFakeTimers();

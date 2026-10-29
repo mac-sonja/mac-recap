@@ -1,7 +1,7 @@
 "use client";
 
 import { Maximize, Minimize, Minus, Plus } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { InstagramSwitch, RenderedPage } from "@/app/(wizard)/_components/configurator/canvas";
 import { InstagramOverlay, type InstagramView } from "@/app/(wizard)/_components/configurator/instagram-overlay";
 import { NAV } from "@/app/(wizard)/_components/configurator/slideshow";
@@ -80,6 +80,10 @@ export function CaseViewer({
   const nav = it.configurator.preview;
   const root = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLElement>(null);
+  const controls = useRef<HTMLDivElement>(null);
+  const enterButton = useRef<HTMLButtonElement>(null);
+  const exitButton = useRef<HTMLButtonElement>(null);
+  const wasFull = useRef(false);
   const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [zoom, setZoom] = useState<number>(FIT);
   const [instagram, setInstagram] = useState<InstagramView>("off");
@@ -102,7 +106,8 @@ export function CaseViewer({
   const { width: w, height: h } = getFormat(formatId).pixelSize;
   const pad = full ? 0 : PAD;
   const fit = Math.max(0, Math.min(size.width - 2 * pad, (size.height - 2 * pad) * (w / h)));
-  const slideWidth = fit > 0 ? Math.round((fit * zoom) / FIT) : undefined;
+  // Floored: Adatta never spills past the panel by a rounding pixel.
+  const slideWidth = fit > 0 ? Math.floor((fit * zoom) / FIT) : undefined;
 
   useLayoutEffect(() => {
     const el = stage.current;
@@ -115,33 +120,61 @@ export function CaseViewer({
     return () => observer.disconnect();
   }, [full]);
 
+  // The controls fade after a still moment. Focus inside them moves to the viewer first,
+  // since hidden controls are inert; ← → keep working from there.
+  const restartIdle = useCallback(() => {
+    if (idle.current !== null) clearTimeout(idle.current);
+    idle.current = setTimeout(() => {
+      idle.current = null;
+      if (controls.current?.contains(document.activeElement)) root.current?.focus({ preventScroll: true });
+      setAwake(false);
+    }, IDLE_MS);
+  }, []);
+
   function wake() {
     setAwake(true);
-    if (idle.current !== null) clearTimeout(idle.current);
-    idle.current = setTimeout(() => setAwake(false), IDLE_MS);
+    restartIdle();
   }
 
-  // Entering or leaving full screen (the button, Esc or the browser's own exit) returns to
-  // Adatta. Entering, the controls show, then fade after a still moment; leaving keeps them on.
+  // A new slide in full screen (‹ ›, or the page's ← →) shows the controls again.
+  const [shownIndex, setShownIndex] = useState(index);
+  if (shownIndex !== index) {
+    setShownIndex(index);
+    if (full) setAwake(true);
+  }
   useEffect(() => {
-    const stopIdle = () => {
-      if (idle.current !== null) clearTimeout(idle.current);
-      idle.current = null;
-    };
+    if (full) restartIdle();
+  }, [full, index, restartIdle]);
+
+  // Entering or leaving full screen (the button, Esc or the browser's own exit) returns to
+  // Adatta, with the controls showing.
+  useEffect(() => {
     function onChange() {
-      const entered = root.current !== null && document.fullscreenElement === root.current;
-      setFull(entered);
+      setFull(root.current !== null && document.fullscreenElement === root.current);
       setZoom(FIT);
       setAwake(true);
-      stopIdle();
-      if (entered) idle.current = setTimeout(() => setAwake(false), IDLE_MS);
+      if (idle.current !== null) clearTimeout(idle.current);
+      idle.current = null;
     }
     document.addEventListener("fullscreenchange", onChange);
     return () => {
       document.removeEventListener("fullscreenchange", onChange);
-      stopIdle();
+      if (idle.current !== null) clearTimeout(idle.current);
     };
   }, []);
+
+  // The button that was pressed goes away: focus the exit button entering, Schermo intero leaving.
+  useEffect(() => {
+    if (full === wasFull.current) return;
+    wasFull.current = full;
+    (full ? exitButton : enterButton).current?.focus();
+  }, [full]);
+
+  // A new slide or zoom starts at the top left, not at the previous scroll offset.
+  const pageKey = page?.pageKey;
+  useEffect(() => {
+    stage.current?.scrollTo?.({ top: 0, left: 0 });
+  }, [pageKey, zoom]);
 
   function pickFormat(next: FormatId) {
     if (next === formatId) return;
@@ -189,11 +222,12 @@ export function CaseViewer({
   return (
     <div
       ref={root}
+      tabIndex={-1}
       data-viewer=""
       data-fullscreen={full ? "" : undefined}
       onMouseMove={full ? wake : undefined}
       className={cn(
-        "relative flex flex-col overflow-hidden",
+        "relative flex flex-col overflow-hidden focus-visible:outline-none",
         full ? "size-full bg-scrim" : "h-[calc(100dvh-16rem)] min-h-[560px] rounded-xl border border-border bg-surface",
         hidden && "cursor-none",
       )}
@@ -223,6 +257,7 @@ export function CaseViewer({
             </div>
             {canFull && (
               <button
+                ref={enterButton}
                 type="button"
                 aria-label={copy.fullscreen}
                 title={copy.fullscreen}
@@ -249,7 +284,7 @@ export function CaseViewer({
         ref={stage}
         aria-label={it.configurator.canvas.label}
         data-zoom={zoom}
-        className={cn("grid min-h-0 flex-1 overflow-auto", full ? "p-0" : "p-6")}
+        className={cn("grid min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable_both-edges]", full ? "p-0" : "p-6")}
       >
         {page === null ? (
           <p className="m-auto font-label text-sm text-foreground-muted">{it.configurator.canvas.empty}</p>
@@ -270,14 +305,17 @@ export function CaseViewer({
 
       {full ? (
         <div
+          ref={controls}
           data-viewer-controls=""
           data-hidden={hidden ? "" : undefined}
+          inert={hidden}
           onFocus={wake}
           className={cn("pointer-events-none absolute inset-0", !reducedMotion && "transition-opacity duration-300 ease-out", hidden && "opacity-0")}
         >
           <div className="pointer-events-auto absolute top-1/2 left-6 -translate-y-1/2">{prev}</div>
           <div className="pointer-events-auto absolute top-1/2 right-6 -translate-y-1/2">{next}</div>
           <button
+            ref={exitButton}
             type="button"
             aria-label={copy.exitFullscreen}
             title={copy.exitFullscreen}

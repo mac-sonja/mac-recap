@@ -2,7 +2,7 @@
 title: 'Story 5.2 (part): pager, zoom and full screen on the approved case page'
 type: 'feature'
 created: '2026-10-29'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'fe0e315eedd0185e794e83e38688728ef7a2ddf8'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -70,6 +70,35 @@ context:
 - Given + pressed twice, when I click the %, then the slide is back at Adatta.
 - Given full screen, when I press →, then the next slide shows filling the screen; Esc returns to the page.
 - Given the configurator's Anteprima, when I use it, then it looks and works exactly as before.
+
+## Implementation Notes
+
+- The %'s accessible name is its own key, `caseView.viewer.zoomReset` ("Zoom {n}%, torna ad Adatta"); "Adatta" is its tooltip.
+- Pager buttons are `NAV` at 40 px in the panel, 52 px in full screen; full screen also has an exit button next to the counter.
+- Full screen focuses the exit button on entry and Schermo intero on exit; hidden controls are `inert`, and focus moves to the viewer root first.
+- `bg-scrim` is the solid black token (`--color-scrim: #000000`, the same in both themes); Tailwind's palette is cleared in `globals.css`.
+- Verified: typecheck, lint, `npm test` (125 files, 3595 passed, 1 skipped). happy-dom does no layout: fit, panning and full-screen sizing are unchecked in a browser.
+
+## Spec Change Log
+
+## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Page tests accept any page count (`1 di \d+`) (verification) | medium | Old per-name checks dropped; a page losing slides would pass | patch (literal counts) |
+| 2 | Scrollbar shrinks `clientWidth` when zoomed, so fit can oscillate; `Math.round` overflows at Adatta (blind, edge) | medium | Stage is `overflow-auto` and measured by `ResizeObserver` | patch (`scrollbar-gutter: stable`, `Math.floor`) |
+| 3 | Focus falls to `<body>` entering and leaving full screen (blind, edge) | medium | The focused toolbar or controls unmount | patch |
+| 4 | ← → in full screen never wake the controls; hidden controls stay clickable and tabbable (blind, edge) | medium | `wake` only on mouse move; `opacity-0` only | patch (wake on slide change, `inert`) |
+| 5 | A new slide or zoom keeps the previous scroll offset (edge) | low | Direct correction | patch |
+| 6 | Full screen uses `bg-scrim`, not black (blind) | false | `--color-scrim: #000000` in both themes | reject |
+| 7 | Zoomed slide can't be panned from the keyboard (blind, edge) | low | ← → page by design; fit, − and full screen remain; scoping arrows to the stage adds modes | reject |
+| 8 | Text animations ignore reduced motion (blind) | false | `Canvas` also always animated the slideshow's texts; behaviour unchanged | reject |
+| 9 | Many pages overflow the dots (blind) | low | 7 px dots, ~1000 px panel; decks are far below the overflow count | reject |
+| 10 | % stays active at Adatta (blind) | low | Clicking it is a no-op there | reject |
+| 11 | Spec names `fit` but code adds `zoomReset` (blind) | low | Fix edits this spec; recorded above | reject |
+| 12 | Planning says built while in review (blind) | low | Lands with the merge | reject |
+| 13 | Slide has no width before the first measure (edge) | low | One layout effect before paint on the client; SSR shows it briefly | reject |
+| 14 | Format change no longer resets scroll (edge) | low | Covered by #5's reset on slide change | reject |
 
 ## Verification
 
