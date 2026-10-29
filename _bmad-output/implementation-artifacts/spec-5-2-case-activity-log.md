@@ -2,7 +2,7 @@
 title: 'Story 5.2 (part): activity log on the approved case page'
 type: 'feature'
 created: '2026-10-29'
-status: 'draft'
+status: 'in-progress'
 baseline_commit: 'beef910934a754f61808470bd80335191758b408'
 route: 'dispatch'
 review_loop_iteration: 0
