@@ -2,7 +2,7 @@
 title: 'Story 5.2 (part): pager, zoom and full screen on the approved case page'
 type: 'feature'
 created: '2026-10-29'
-status: 'draft'
+status: 'in-progress'
 baseline_commit: 'fe0e315eedd0185e794e83e38688728ef7a2ddf8'
 route: 'dispatch'
 review_loop_iteration: 0
