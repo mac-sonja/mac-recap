@@ -1,6 +1,7 @@
 import {
   CURRENT_SCHEMA_VERSION,
   type Block,
+  type ClaimAspect,
   type CaseStudyDocument,
   type DocumentElement,
   type DocumentMaterialRef,
@@ -46,15 +47,26 @@ export interface TestDraftInput {
   newId: () => string;
 }
 
-/** A text of the document and the material it cites. */
+/** A text of the document, the material it cites and, from the AI (Story 3.6), the side of the work it covers. */
 export interface DraftText {
   text: string;
   sourceRefs: readonly DocumentMaterialRef[];
+  aspect?: ClaimAspect;
 }
 
+/** One text per template key. */
+export type DraftTexts = Readonly<Record<TemplateTextKey, DraftText>>;
+
+/** The texts of each format (Story 3.6: the AI writes one text per format, fitted to its space). */
+export type FormatDraftTexts = Readonly<Record<FormatId, DraftTexts>>;
+
+/** The same texts in every format (the test text). */
+export const sameInEveryFormat = (texts: DraftTexts): FormatDraftTexts =>
+  Object.fromEntries(FORMAT_IDS.map((formatId) => [formatId, texts])) as Record<FormatId, DraftTexts>;
+
 export interface CaseDocumentInput {
-  /** One text per template key, each distinct (texts are matched to their refs by value). */
-  texts: Readonly<Record<TemplateTextKey, DraftText>>;
+  /** One text per template key and format, each distinct within its format (texts are matched to their refs by value). */
+  texts: FormatDraftTexts;
   images: readonly string[];
   resultRows: number;
   hasTestimonial: boolean;
@@ -147,11 +159,13 @@ function formatPages(formatId: FormatId, ctx: TemplateContext): Page[] {
   return [...pages.slice(0, afterIntro), caroselloContent(ctx.images, ctx.newId), ...pages.slice(afterIntro)];
 }
 
-/** Sets `sourceRefs` on every text whose words are one of the document's texts (fixed template copy is left as is). */
-function cite(elements: readonly DocumentElement[], refsByText: ReadonlyMap<string, readonly DocumentMaterialRef[]>): DocumentElement[] {
+/** Sets `sourceRefs` (and `aspect`) on every text whose words are one of the document's texts (fixed template copy is left as is). */
+function cite(elements: readonly DocumentElement[], byText: ReadonlyMap<string, DraftText>): DocumentElement[] {
   const citeText = (el: TextElement): TextElement => {
-    const refs = el.text === undefined ? undefined : refsByText.get(el.text);
-    return refs === undefined || refs.length === 0 ? el : { ...el, sourceRefs: [...refs] };
+    const found = el.text === undefined ? undefined : byText.get(el.text);
+    if (found === undefined) return el;
+    const withAspect = found.aspect === undefined ? el : { ...el, aspect: found.aspect };
+    return found.sourceRefs.length === 0 ? withAspect : { ...withAspect, sourceRefs: [...found.sourceRefs] };
   };
   return elements.map((el) => {
     if (el.type === "text") return citeText(el);
@@ -174,19 +188,19 @@ function cite(elements: readonly DocumentElement[], refsByText: ReadonlyMap<stri
  * the test draft (3.10) and, later, the generator (3.7).
  */
 export function buildCaseDocument(input: CaseDocumentInput): CaseStudyDocument {
-  const ctx: TemplateContext = {
-    newId: input.newId,
-    texts: Object.fromEntries(TEMPLATE_TEXT_KEYS.map((key) => [key, input.texts[key].text])),
-    images: input.images,
-    resultRows: input.resultRows,
-    hasTestimonial: input.hasTestimonial,
-  };
-  const refsByText = new Map(TEMPLATE_TEXT_KEYS.map((key) => [input.texts[key].text, input.texts[key].sourceRefs]));
   const formats = Object.fromEntries(
-    FORMAT_IDS.map((formatId) => [
-      formatId,
-      { pages: formatPages(formatId, ctx).map((p) => ({ ...p, blocks: p.blocks.map((b) => ({ ...b, elements: cite(b.elements, refsByText) })) })) },
-    ]),
+    FORMAT_IDS.map((formatId) => {
+      const texts = input.texts[formatId];
+      const ctx: TemplateContext = {
+        newId: input.newId,
+        texts: Object.fromEntries(TEMPLATE_TEXT_KEYS.map((key) => [key, texts[key].text])),
+        images: input.images,
+        resultRows: input.resultRows,
+        hasTestimonial: input.hasTestimonial,
+      };
+      const byText = new Map(TEMPLATE_TEXT_KEYS.map((key) => [texts[key].text, texts[key]]));
+      return [formatId, { pages: formatPages(formatId, ctx).map((p) => ({ ...p, blocks: p.blocks.map((b) => ({ ...b, elements: cite(b.elements, byText) })) })) }];
+    }),
   );
   return { schemaVersion: CURRENT_SCHEMA_VERSION, kind: "case_history", template: CASE_TEMPLATE, formats };
 }
@@ -198,7 +212,7 @@ export function buildCaseDocument(input: CaseDocumentInput): CaseStudyDocument {
  */
 export function buildTestDraft(input: TestDraftInput): CaseStudyDocument {
   return buildCaseDocument({
-    texts: testDraftTexts(input.form, input.assetIds),
+    texts: sameInEveryFormat(testDraftTexts(input.form, input.assetIds)),
     images: input.images,
     resultRows: input.form.results.length,
     hasTestimonial: input.form.testimonialQuote.trim() !== "",

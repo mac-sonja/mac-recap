@@ -62,6 +62,14 @@ describe("module boundaries (I/O matrix)", () => {
       expect(await ruleIds(file, `import "${spec}";\n`)).toContain("no-restricted-imports");
     });
 
+    it("the Anthropic SDK passes only in the generation module's anthropic adapter (Story 3.6)", async () => {
+      const code = `import Anthropic from "@anthropic-ai/sdk";\nexport { Anthropic };\n`;
+      expect(await ruleIds("src/modules/generation/adapters/anthropic/a.ts", code)).toEqual([]);
+      for (const file of ["src/modules/generation/adapters/documents/a.ts", "src/modules/material/adapters/supabase/a.ts", "src/modules/generation/application/a.ts", "src/modules/generation/worker.ts", "src/worker/a.ts", "src/app/a.ts"]) {
+        expect(await ruleIds(file, code), file).toContain("no-restricted-imports");
+      }
+    });
+
     it("sharp inside a module's adapters passes; in its worker entry it fails", async () => {
       expect(await ruleIds("src/modules/material/adapters/sharp/a.ts", `import sharp from "sharp";\nexport { sharp };\n`)).toEqual([]);
       expect(await ruleIds("src/modules/material/worker.ts", `import "sharp";\n`)).toContain("no-restricted-imports");

@@ -36,6 +36,7 @@ Supabase directly.
 | `SUPABASE_SECRET_KEY` | Secret key from `npx supabase status` (server only) |
 | `BASIC_AUTH_USER` | Optional basic-auth gate user, staging only (web only; see below) |
 | `BASIC_AUTH_PASSWORD` | Optional basic-auth gate password, staging only (web only; see below) |
+| `ANTHROPIC_API_KEY` | Optional, worker only: the AI writes a generated case's texts (Story 3.6). Unset: the marked test text |
 
 #### File storage
 

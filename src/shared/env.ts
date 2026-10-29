@@ -19,6 +19,8 @@ export const envSchema = z.object({
   // stay private, prod sets neither. An empty value counts as unset.
   BASIC_AUTH_USER: optionalNonEmpty,
   BASIC_AUTH_PASSWORD: optionalNonEmpty,
+  // The AI narrative (Story 3.6), worker only. Unset: generate writes the marked test text.
+  ANTHROPIC_API_KEY: optionalNonEmpty,
   NODE_ENV: z.string().optional(),
 });
 

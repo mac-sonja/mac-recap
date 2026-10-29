@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
-import { makeGenerateHandler, generateInputHash, JOB_OK, type GenerateDeps, type GenerateManifest } from "@/modules/generation/application/generate-case";
-import { TEST_DRAFT_MARKER, testDraftTexts } from "@/modules/generation/application/test-draft";
-import { testDraftTextSource } from "@/modules/generation/application/text-source";
+import { makeGenerateHandler, generateInputHash, JOB_OK, missingAspect, type GenerateDeps, type GenerateManifest } from "@/modules/generation/application/generate-case";
+import { sameInEveryFormat, TEST_DRAFT_MARKER, testDraftTexts, type DraftTexts } from "@/modules/generation/application/test-draft";
+import { testDraftTextSource, type SourceAsset, type TextSource } from "@/modules/generation/application/text-source";
 import { validateNewDocument } from "@/modules/generation";
 import { err, ok } from "@/shared/result";
 
@@ -20,6 +20,7 @@ const manifest: GenerateManifest = {
   ],
   formHash: "abc",
 };
+const asSource = (id: string, contentType: string, kind: SourceAsset["kind"]): SourceAsset => ({ id, contentType, kind, sizeBytes: 10, isFavourite: false });
 const job = { id: "dddddddd-0000-4000-8000-000000000001", subjectId: CASE_ID, payload: { baseHeadVersion: 3, manifest } as Record<string, unknown> };
 const live = new AbortController().signal;
 
@@ -28,8 +29,8 @@ function make(over: Partial<GenerateDeps> = {}) {
     getSystemActor: vi.fn(async () => ok(SYSTEM)),
     getCase: vi.fn(async () => ok({ status: "generating" as const, headVersion: 3 })),
     hasMaterial: vi.fn(async () => ok(true)),
-    buildManifest: vi.fn(async () =>
-      ok({ assets: [...manifest.assets, { id: LATE, contentType: "image/png" }] }),
+    listGenerationAssets: vi.fn(async () =>
+      ok([asSource(IMAGE, "image/png", "image"), asSource(PDF, "application/pdf", "document"), asSource(LATE, "image/png", "image")]),
     ),
     getDetailsForm: vi.fn(async () => ok({ context: SECRET, solution: "", results: [{ label: "a", value: "1" }], testimonialQuote: "" })),
     transition: vi.fn(async () => ok({})),
@@ -73,8 +74,49 @@ describe("generate handler: success", () => {
     const texts = vi.fn(testDraftTextSource.texts);
     const { handler } = make({ textSource: { texts } });
     await handler.run(job, live);
-    expect(texts).toHaveBeenCalledWith({ form: expect.objectContaining({ context: SECRET }), assetIds: [IMAGE, PDF] });
-    expect(testDraftTexts({ context: "", solution: "" }, [IMAGE])).toBeDefined();
+    expect(texts).toHaveBeenCalledWith({
+      caseId: CASE_ID,
+      form: expect.objectContaining({ context: SECRET }),
+      assets: [asSource(IMAGE, "image/png", "image"), asSource(PDF, "application/pdf", "document")],
+    });
+  });
+
+  it("writes the source's meta and, for an AI draft, the missing aspect on job_ok; each format gets its own texts", async () => {
+    const base = testDraftTexts({ context: "", solution: "" }, [IMAGE]);
+    const tagged = (prefix: string, aspect?: "technical" | "graphic"): DraftTexts =>
+      Object.fromEntries(Object.entries(base).map(([k, t]) => [k, { text: `${prefix} ${k}`, sourceRefs: t.sourceRefs, ...(aspect ? { aspect } : {}) }])) as unknown as DraftTexts;
+    const source: TextSource = {
+      texts: async () =>
+        ok({
+          texts: { presentazione_16_9: tagged("P", "technical"), carosello_1_1: tagged("C", "technical"), video_9_16: tagged("V") },
+          meta: { model: "claude-opus-5-5", fellBack: true, promptVersion: "case-narrative@1" },
+        }),
+    };
+    const { deps, handler } = make({ textSource: source });
+    expect((await handler.run(job, live)).ok).toBe(true);
+    const input = (vi.mocked(deps.createWorkingRevision).mock.calls[0] as unknown as [Actor, { doc: { formats: Record<string, unknown> }; meta: unknown }])[1];
+    expect(input.meta).toEqual({ model: "claude-opus-5-5", fellBack: true, promptVersion: "case-narrative@1" });
+    expect(JSON.stringify(input.doc.formats.video_9_16)).toContain("V title");
+    expect(JSON.stringify(input.doc.formats.video_9_16)).not.toContain("P title");
+    expect(JSON.stringify(input.doc.formats.presentazione_16_9)).toContain('"aspect":"technical"');
+    expect(deps.recordEvent).toHaveBeenCalledWith(SYSTEM, expect.objectContaining({ data: { jobId: job.id, kind: "generate", missingAspect: "graphic" } }));
+  });
+
+  it("a source failure keeps its code and retry flag; a throw is a retryable TEXT_SOURCE_FAILED", async () => {
+    const refused = make({ textSource: { texts: async () => err({ code: "LLM_REFUSAL", message: "m", retryable: false }) } });
+    expect(await refused.handler.run(job, live)).toMatchObject({ ok: false, error: { code: "LLM_REFUSAL", retryable: false } });
+    expect(refused.deps.createWorkingRevision).not.toHaveBeenCalled();
+    const down = make({ textSource: { texts: async () => err({ code: "LLM_UNAVAILABLE", message: "m", retryable: true }) } });
+    expect(await down.handler.run(job, live)).toMatchObject({ ok: false, error: { code: "LLM_UNAVAILABLE", retryable: true } });
+    const threw = make({ textSource: { texts: async () => { throw new Error(SECRET); } } });
+    expect(await threw.handler.run(job, live)).toMatchObject({ ok: false, error: { code: "TEXT_SOURCE_FAILED", retryable: true } });
+  });
+
+  it("missingAspect names the uncovered sides", () => {
+    const t = testDraftTexts({ context: "", solution: "" }, []);
+    expect(missingAspect(sameInEveryFormat(t))).toBe("both");
+    const one = { ...t, title: { ...t.title, aspect: "graphic" as const }, subtitle: { ...t.subtitle, aspect: "technical" as const } };
+    expect(missingAspect(sameInEveryFormat(one))).toBeNull();
   });
 
   it("a failing job_ok event does not fail the job", async () => {
@@ -117,7 +159,7 @@ describe("generate handler: gate and discarded results", () => {
   });
 
   it("all of the manifest's assets removed since: NO_MATERIAL even though newer files exist", async () => {
-    const { deps, handler } = make({ buildManifest: vi.fn(async () => ok({ assets: [{ id: LATE, contentType: "image/png" }] })) });
+    const { deps, handler } = make({ listGenerationAssets: vi.fn(async () => ok([asSource(LATE, "image/png", "image")])) });
     expect(await handler.run(job, live)).toMatchObject({ ok: false, error: { code: "NO_MATERIAL" } });
     expect(deps.createWorkingRevision).not.toHaveBeenCalled();
   });

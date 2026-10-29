@@ -24,8 +24,8 @@ describe("web code never imports worker-only packages (AD-10)", () => {
 });
 
 describe("worker-only module entries (Story 3.2)", () => {
-  /** A module's worker entry and the adapters only it uses (sharp, ffmpeg). */
-  const WORKER_ONLY = /^src\/modules\/[^/]+\/(worker\.ts$|adapters\/(sharp|ffmpeg)\/)/;
+  /** A module's worker entry and the adapters only it uses (sharp, ffmpeg; Story 3.6: Anthropic, document text). */
+  const WORKER_ONLY = /^src\/modules\/[^/]+\/(worker\.ts$|adapters\/(sharp|ffmpeg|anthropic|documents)\/)/;
 
   it("no web entry reaches src/modules/*/worker.ts or the sharp/ffmpeg adapters", async () => {
     const reached = await reachedSources(root, webEntries());
@@ -43,7 +43,11 @@ describe("worker-only module entries (Story 3.2)", () => {
     expect(reached).toContain("src/modules/material/adapters/sharp/image-processor.ts");
     expect(reached).toContain("src/modules/material/adapters/ffmpeg/video-processor.ts");
     const paths = (await forbiddenImports(root, entry)).map((f) => f.path);
-    expect(paths).toEqual(expect.arrayContaining(["sharp", "node:child_process"]));
+    expect(paths).toEqual(expect.arrayContaining(["sharp", "node:child_process", "@anthropic-ai/sdk"]));
+    // Story 3.6: the narrative generator and the document reader are reached from the worker only.
+    expect(reached).toContain("src/modules/generation/worker.ts");
+    expect(reached).toContain("src/modules/generation/adapters/anthropic/narrative-generator.ts");
+    expect(reached).toContain("src/modules/generation/adapters/documents/document-reader.ts");
   });
 });
 

@@ -1,14 +1,14 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Actor } from "@/modules/access";
-import { buildCaseDocument, type TestDraftForm } from "@/modules/generation/application/test-draft";
-import { testDraftTextSource, type TextSource } from "@/modules/generation/application/text-source";
-import type { CaseStudyDocument } from "@/modules/generation/domain/document";
+import { buildCaseDocument, type FormatDraftTexts, type TestDraftForm } from "@/modules/generation/application/test-draft";
+import { testDraftTextSource, type SourceAsset, type TextSource, type TextSourceMeta } from "@/modules/generation/application/text-source";
+import { CLAIM_ASPECTS, type CaseStudyDocument, type ClaimAspect } from "@/modules/generation/domain/document";
 import type { CaseStatus } from "@/shared/case-status";
 import { log } from "@/shared/log";
 import { err, ok, type Result } from "@/shared/result";
 
-/** The case event written when a generate job succeeds; `data` is `{ jobId, kind }`, `revisionId` the new head. */
+/** The case event written when a generate job succeeds; `data` is `{ jobId, kind, missingAspect? }`, `revisionId` the new head. */
 export const JOB_OK = "job_ok";
 
 /** The material manifest a generate job carries and its revision stores (see `material.buildManifest`). */
@@ -44,8 +44,8 @@ export interface GenerateDeps {
   getSystemActor(): Promise<Result<Actor>>;
   getCase(caseId: string): Promise<Result<{ status: CaseStatus; headVersion: number }>>;
   hasMaterial(caseId: string): Promise<Result<boolean>>;
-  /** The case's manifest now; only assets also in the job's manifest are read. */
-  buildManifest(caseId: string): Promise<Result<{ assets: readonly { id: string; contentType: string }[] }>>;
+  /** The case's live assets now (oldest first, with the favourite flag); only those also in the job's manifest are read. */
+  listGenerationAssets(caseId: string): Promise<Result<readonly SourceAsset[]>>;
   getDetailsForm(input: { caseId: string }): Promise<Result<TestDraftForm>>;
   transition(caseId: string, event: "generation_succeeded" | "generation_failed", actor: Actor): Promise<Result<unknown>>;
   createWorkingRevision(
@@ -54,7 +54,7 @@ export interface GenerateDeps {
       caseId: string;
       doc: CaseStudyDocument;
       manifest: GenerateManifest;
-      meta: { model: null; fellBack: false; promptVersion: null };
+      meta: TextSourceMeta;
       expectedHeadVersion: number;
     },
   ): Promise<Result<{ id: string }>>;
@@ -76,6 +76,17 @@ type Outcome = Result<void, { code: Uppercase<string>; message: string; retryabl
 
 const fail = (code: Uppercase<string>, message: string, retryable = false): Outcome => err({ code, message, retryable });
 
+/**
+ * The sides of the work no text covers (Story 3.6, AR6): `technical`, `graphic` or `both`,
+ * or null when every side has a text. Recorded on `job_ok`, never blocking (IR-A3).
+ */
+export function missingAspect(texts: FormatDraftTexts): "technical" | "graphic" | "both" | null {
+  const seen = new Set<ClaimAspect>();
+  for (const byKey of Object.values(texts)) for (const t of Object.values(byKey)) if (t.aspect !== undefined) seen.add(t.aspect);
+  const missing = CLAIM_ASPECTS.filter((a) => !seen.has(a));
+  return missing.length === 0 ? null : missing.length === 2 ? "both" : missing[0];
+}
+
 /** A use case call that may throw; a throw becomes a failed result carrying the error name only (never texts). */
 async function attempt<T>(code: Uppercase<string>, run: () => Promise<Result<T>>): Promise<Result<T>> {
   try {
@@ -88,12 +99,12 @@ async function attempt<T>(code: Uppercase<string>, run: () => Promise<Result<T>>
 
 /**
  * The `generate` job (Story 3.7), as the `system` actor. Re-checks the gate, builds the
- * document with `buildCaseDocument` from the text source (the marked test text until
- * Story 3.6), reads only the assets of the job's manifest, writes a new working revision
+ * document with `buildCaseDocument` from the text source (the AI's texts, Story 3.6, or
+ * the marked test text), reads only the assets of the job's manifest, writes a new working revision
  * (head compare-and-set on `baseHeadVersion`) and moves the case to `in_review` with a
  * `job_ok` event. A moved head (`STALE_HEAD`) discards the result and returns the case to
  * `draft`; `onPermanentFailure` does the same after a failure for good. Logs ids and
- * error codes only. Never calls an LLM.
+ * error codes only. Calls an LLM only through the injected text source.
  */
 export function makeGenerateHandler(deps: GenerateDeps) {
   const source = deps.textSource ?? testDraftTextSource;
@@ -131,22 +142,28 @@ export function makeGenerateHandler(deps: GenerateDeps) {
     const material = await attempt("MATERIAL_LOOKUP_FAILED", () => deps.hasMaterial(caseId));
     if (!material.ok) return fail("MATERIAL_LOOKUP_FAILED", material.error.message, true);
     if (!material.value) return fail("NO_MATERIAL", "The case has no material.");
-    const current = await attempt("MATERIAL_LOOKUP_FAILED", () => deps.buildManifest(caseId));
+    const current = await attempt("MATERIAL_LOOKUP_FAILED", () => deps.listGenerationAssets(caseId));
     if (!current.ok) return fail("MATERIAL_LOOKUP_FAILED", current.error.message, true);
     // Only the manifest's assets that are still live; material added after enqueue is ignored.
     const inManifest = new Set(manifest.assets.map((a) => a.id));
-    const assets = current.value.assets.filter((a) => inManifest.has(a.id));
+    const assets = current.value.filter((a) => inManifest.has(a.id));
     if (assets.length === 0) return fail("NO_MATERIAL", "None of the job's material is left.");
 
     const form = await attempt("DETAILS_LOOKUP_FAILED", () => deps.getDetailsForm({ caseId }));
     if (!form.ok) return fail("DETAILS_LOOKUP_FAILED", form.error.message, true);
 
-    const assetIds = assets.map((a) => a.id);
-    const images = assets.filter((a) => a.contentType.startsWith("image/")).map((a) => a.id);
-    const texts = await attempt("TEXT_SOURCE_FAILED", () => source.texts({ form: form.value, assetIds }));
-    if (!texts.ok) return fail("TEXT_SOURCE_FAILED", texts.error.message, true);
+    const images = assets.filter((a) => a.kind === "image").map((a) => a.id);
+    let written;
+    try {
+      written = await source.texts({ caseId, form: form.value, assets });
+    } catch (error) {
+      log.error(`generate text source threw: ${error instanceof Error ? error.name : typeof error}`, { caseId });
+      return fail("TEXT_SOURCE_FAILED", "The text source threw.", true);
+    }
+    if (!written.ok) return fail(written.error.code, written.error.message, written.error.retryable);
+    const { texts, meta } = written.value;
     const doc = buildCaseDocument({
-      texts: texts.value,
+      texts,
       images,
       resultRows: form.value.results.length,
       hasTestimonial: form.value.testimonialQuote.trim() !== "",
@@ -161,7 +178,7 @@ export function makeGenerateHandler(deps: GenerateDeps) {
         caseId,
         doc,
         manifest,
-        meta: { model: null, fellBack: false, promptVersion: null },
+        meta,
         expectedHeadVersion: baseHeadVersion,
       }),
     );
@@ -190,8 +207,11 @@ export function makeGenerateHandler(deps: GenerateDeps) {
       }
     }
     if (revisionId !== null) {
+      // The test text tags no aspect: only an AI draft records a missing one.
+      const missing = meta.promptVersion === null ? null : missingAspect(texts);
+      const data: Record<string, string> = { jobId: job.id, kind: "generate", ...(missing === null ? {} : { missingAspect: missing }) };
       const recorded = await attempt("EVENT_WRITE_FAILED", () =>
-        deps.recordEvent(actor.value, { caseId, type: JOB_OK, revisionId: revisionId as string, data: { jobId: job.id, kind: "generate" } }),
+        deps.recordEvent(actor.value, { caseId, type: JOB_OK, revisionId: revisionId as string, data }),
       );
       if (!recorded.ok) log.error(`job_ok event not recorded: ${recorded.error.code}`, { jobId: job.id, caseId });
     }
