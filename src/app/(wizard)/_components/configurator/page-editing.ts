@@ -21,7 +21,8 @@ export const COLUMN_LAYOUT_ID = "column";
 /** What an edit did: the new pages and what to select, or why nothing changed. */
 export type PageEdit =
   | { ok: true; pages: readonly Page[]; selection: NonNullable<Selection> }
-  | { ok: false; reason: "noBlock" | "pageFull" | "blockFull" | "nothing" }
+  /** `empty`: a default page with nothing to show (Story 4.4c). */
+  | { ok: false; reason: "noBlock" | "pageFull" | "blockFull" | "nothing" | "empty" }
   /** A layout with fewer cells than the page's filled blocks: `over` blocks too many. */
   | { ok: false; reason: "over"; over: number };
 

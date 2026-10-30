@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { CaseClientInfo, CaseStudy } from "@/modules/case-study";
+import { referencedAssetIds, type CaseClientInfo, type CaseStudy } from "@/modules/case-study";
 import type { Page } from "@/modules/generation";
 import type { DetailsForm, ListedAsset, RenditionLink } from "@/modules/material";
 import { CASE_TEMPLATE, FORMAT_IDS, starterPages, type BoundValues, type FormatId, type RenderAsset, type TemplateContext } from "@/modules/rendering";
@@ -55,6 +55,16 @@ export function starterPagesOf(assets: readonly ListedAsset[], form: DetailsForm
     hasTestimonial: form.testimonialQuote !== "",
   };
   return Object.fromEntries(FORMAT_IDS.map((id) => [id, starterPages(CASE_TEMPLATE, "case_history", id, ctx)])) as unknown as FormatPagesById;
+}
+
+/**
+ * The case's images (oldest first) that `docs` already reference: what Pagine di default
+ * may place (Story 4.4c). `saveRevisionDoc` refuses any other asset until Story 4.5's
+ * media guardrail.
+ */
+export function imagePoolOf(assets: readonly ListedAsset[], docs: readonly unknown[]): string[] {
+  const used = new Set(docs.flatMap((doc) => [...referencedAssetIds(doc)]));
+  return assets.filter((a) => a.kind === "image" && used.has(a.id.toLowerCase())).map((a) => a.id);
 }
 
 type GetRendition = (assetId: string, specName: string) => Promise<Result<RenditionLink>>;

@@ -2,9 +2,19 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FORMAT_IDS, layouts, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
-import { caseHistoryV2, validateNewDocument, type DocumentElement, type Page, type TextElement, type TextGroupElement } from "@/modules/generation";
+import {
+  buildTestDraft,
+  caseHistoryV2,
+  testDraftTexts,
+  validateNewDocument,
+  type DocumentElement,
+  type Page,
+  type TextElement,
+  type TextGroupElement,
+} from "@/modules/generation";
 import { fill, it as dict } from "@/shared/i18n/it";
 import { Configurator, type ConfiguratorProps } from "./configurator";
+import { generatedTextsOf, type GeneratedTexts } from "./default-pages";
 import { ownTextIds } from "./in-place-text";
 import { STATUS_MESSAGE_MS } from "./status-message";
 import { BACKGROUND_SWATCHES, NEW_BLOCK_COLOUR } from "./page-editing";
@@ -47,7 +57,13 @@ const savedOk: SaveFn = async (input) => ({ ok: true, value: { version: input.ex
 function setup(
   trial = false,
   pagesByFormat: Record<FormatId, Page[]> = formats,
-  { editable = true, onSave = vi.fn(savedOk) }: { editable?: boolean; onSave?: SaveFn } = {},
+  {
+    editable = true,
+    onSave = vi.fn(savedOk),
+    generatedTexts = {},
+    images = [],
+    values = VALUES,
+  }: { editable?: boolean; onSave?: SaveFn; generatedTexts?: GeneratedTexts; images?: readonly string[]; values?: BoundValues } = {},
 ) {
   return render(
     <Configurator
@@ -59,7 +75,9 @@ function setup(
       template="mac-case@1"
       formats={pagesByFormat}
       assets={{ [IMAGE]: { url: "https://cdn.test/a.webp", kind: "image" } }}
-      values={VALUES}
+      values={values}
+      generatedTexts={generatedTexts}
+      images={images}
       trial={trial}
       theme="system"
     />,
@@ -1707,5 +1725,121 @@ describe("Configurator resize (Story 4.4b)", () => {
     setup(false, pages);
     fireEvent.click(button(dict.configurator.preview.enter));
     expect(document.querySelectorAll("[data-resize]")).toHaveLength(0);
+  });
+});
+
+describe("Configurator Pagine di default (Story 4.4c)", () => {
+  const draft = () =>
+    buildTestDraft({
+      images: [IMAGE],
+      assetIds: [IMAGE],
+      form: { context: "Lumen non aveva una voce online.", solution: "", results: [], testimonialQuote: "" },
+      newId: (() => {
+        let n = 0;
+        return () => `dddddddd-0000-4000-8000-${String(++n).padStart(12, "0")}`;
+      })(),
+    });
+  const TEXTS = testDraftTexts({ context: "Lumen non aveva una voce online.", solution: "" }, [IMAGE]);
+  const pagesOf = (doc: ReturnType<typeof draft>) => Object.fromEntries(FORMAT_IDS.map((id) => [id, doc.formats[id]!.pages])) as Record<FormatId, Page[]>;
+  const tools = dict.configurator.tools;
+  const section = () => within(leftPanel()).getByRole("region", { name: tools.defaultPages, hidden: true });
+  const defaultButton = (name: string) => button(name, section());
+  const pageKeys = () => [...canvas().querySelectorAll<HTMLElement>("[data-canvas-page]")].map((p) => p.dataset.canvasPage);
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const carosello = () => fireEvent.click(button(/^Carosello/, screen.getByRole("group", { name: dict.configurator.formats.label, hidden: true })));
+
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  });
+
+  it("Carosello Intro brings back Sfida and Idea after the cover, in this format only, saved once; ⌘Z and ⇧⌘Z undo and redo it", async () => {
+    const doc = draft();
+    const pages = pagesOf(doc);
+    pages.carosello_1_1 = pages.carosello_1_1.filter((p) => p.pageKey !== "intro-sfida" && p.pageKey !== "intro-idea");
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave, generatedTexts: generatedTextsOf(doc), images: [IMAGE] });
+    carosello();
+    expect(section().textContent).not.toContain(dict.configurator.soon);
+    fireEvent.click(defaultButton("Intro"));
+    expect(pageKeys()).toEqual(["intro", "intro-sfida", "intro-idea", "content", "closing"]);
+    expect(pageNode("intro-sfida").textContent).toContain(TEXTS.challengeHead.text);
+    expect(leftPanel().textContent).toContain(dict.configurator.crumbs.page);
+    await settle();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const sent = lastDoc(onSave);
+    expect(sent.formats.carosello_1_1.pages.map((p: Page) => p.pageKey)).toEqual(["intro", "intro-sfida", "intro-idea", "content", "closing"]);
+    // The cover's photo comes from the image pool.
+    expect(sent.formats.carosello_1_1.pages[0].blocks[0].background).toEqual({ kind: "image", assetId: IMAGE });
+    expect(sent.formats.presentazione_16_9.pages).toEqual(pages.presentazione_16_9);
+    expect(validateNewDocument(sent)).toMatchObject({ ok: true });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(pageKeys()).toEqual(["intro", "content", "closing"]);
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true, shiftKey: true });
+    expect(pageKeys()).toEqual(["intro", "intro-sfida", "intro-idea", "content", "closing"]);
+  });
+
+  it("puts the generated texts back on the selected page", async () => {
+    const doc = draft();
+    const pages = pagesOf(doc);
+    const edited = structuredClone(pages.presentazione_16_9);
+    const titleId = ownTextIds(edited[0]!).find((id) => textElementAt(edited, "intro", id)?.text === TEXTS.title.text)!;
+    const title = textElementAt(edited, "intro", titleId)!;
+    title.text = "Un titolo riscritto";
+    pages.presentazione_16_9 = edited;
+    setup(false, pages, { generatedTexts: generatedTextsOf(doc), images: [IMAGE] });
+    expect(pageNode("intro").textContent).toContain("Un titolo riscritto");
+    fireEvent.click(defaultButton("Intro"));
+    expect(pageNode("intro").textContent).not.toContain("Un titolo riscritto");
+    expect(pageNode("intro").textContent).toContain(TEXTS.title.text);
+  });
+
+  it("Risultati e testimonial takes the case's result rows", async () => {
+    const doc = draft();
+    const onSave = vi.fn(savedOk);
+    const results = [
+      { label: "richieste", value: "+38%" },
+      { label: "visite", value: "2x" },
+    ];
+    setup(false, pagesOf(doc), { onSave, generatedTexts: generatedTextsOf(doc), images: [IMAGE], values: { ...VALUES, case: { ...VALUES.case, results } } });
+    fireEvent.click(defaultButton("Risultati e testimonial"));
+    await settle();
+    const restored = JSON.stringify(lastDoc(onSave).formats.presentazione_16_9.pages[0]);
+    expect(restored.match(/"field":"resultValue"/g)).toHaveLength(2);
+  });
+
+  it("Risultati e testimonial on a case with neither says so and changes nothing", async () => {
+    const doc = draft();
+    const onSave = vi.fn(savedOk);
+    setup(false, pagesOf(doc), { onSave, generatedTexts: generatedTextsOf(doc), images: [IMAGE] });
+    fireEvent.click(defaultButton("Risultati e testimonial"));
+    expect(status().textContent).toBe(dict.configurator.edit.defaultEmpty);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("when not editable, Pagine di default says it arrives soon and changes nothing", async () => {
+    const doc = draft();
+    const onSave = vi.fn(savedOk);
+    setup(false, pagesOf(doc), { editable: false, onSave, generatedTexts: generatedTextsOf(doc), images: [IMAGE] });
+    expect(section().textContent).toContain(dict.configurator.soon);
+    fireEvent.click(defaultButton("3 immagini"));
+    expect(status().textContent).toBe(`${tools.defaultPages} arriva presto.`);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("with no revision yet (Bozza di prova), Pagine di default says it arrives soon and changes nothing", () => {
+    const doc = draft();
+    setup(true, pagesOf(doc), { generatedTexts: generatedTextsOf(doc), images: [IMAGE] });
+    const before = pageNode("intro").innerHTML;
+    fireEvent.click(defaultButton("Intro"));
+    expect(status().textContent).toBe(`${tools.defaultPages} arriva presto.`);
+    expect(pageNode("intro").innerHTML).toBe(before);
   });
 });

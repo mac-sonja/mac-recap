@@ -6,8 +6,9 @@ import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import { CASE_TEMPLATE } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
-import { boundValuesOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../../_lib/configurator-data";
+import { boundValuesOf, imagePoolOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../../_lib/configurator-data";
 import { Configurator } from "../../../_components/configurator/configurator";
+import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import { saveRevisionDoc } from "./actions";
 
 export interface ConfiguratorPageProps {
@@ -26,6 +27,9 @@ export interface ConfiguratorPageProps {
  * Story 4.3a: the head revision's id and `version` go with them, and whether it can be
  * edited (a `working` head of an In revisione case; an approved case waits for 4.9). The
  * component is keyed by both, so a refresh after a stale save starts it afresh.
+ *
+ * Story 4.4c: Pagine di default gets the generated texts (from `generatedDoc`) and the
+ * case's images the revision already uses (none with no revision).
  */
 export default async function ConfiguratorPage({ params }: ConfiguratorPageProps) {
   const shell = await requireSurface("edit");
@@ -74,6 +78,8 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
       template={doc?.template ?? CASE_TEMPLATE}
       formats={doc === null ? starterPagesOf(listed.value, form.value) : pagesOfDocument(doc.formats)}
       assets={assets}
+      generatedTexts={generatedTextsOf(head?.generatedDoc ?? null)}
+      images={head === null ? [] : imagePoolOf(listed.value, [head.doc, head.generatedDoc])}
       values={boundValuesOf(current, info.value, client.value.logoUrl, form.value)}
       trial={doc === null}
       theme={theme}

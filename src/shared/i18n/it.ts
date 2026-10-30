@@ -918,6 +918,8 @@ export const it = {
       layoutOverOne: "La pagina ha 1 blocco in più di questo layout: toglilo prima.",
       /** Sfondo's colour field got something that isn't a colour. */
       badColour: "Scrivi un colore come #2977FF.",
+      /** Risultati e testimonial on a case with neither (Story 4.4c): nothing to lay out. */
+      defaultEmpty: "Questo caso non ha né risultati né testimonianza.",
     },
     /** The words of a text added from Elementi: placeholders to type over. */
     newTexts: {

@@ -2,10 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { CaseClientInfo, CaseStudy, CaseStudyRevision, ClientDetail } from "@/modules/case-study";
-import { caseHistoryV2 } from "@/modules/generation";
+import { randomUUID } from "node:crypto";
+import { buildTestDraft, caseHistoryV2 } from "@/modules/generation";
 import type { DetailsForm, ListedAsset, RenditionLink } from "@/modules/material";
 import { FORMAT_IDS } from "@/modules/rendering";
 import { err, ok, type Result } from "@/shared/result";
+import { generatedTextsOf, type GeneratedTexts } from "../../../_components/configurator/default-pages";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const get = vi.fn<(id: unknown) => Promise<Result<CaseStudy>>>();
@@ -25,12 +27,25 @@ vi.mock("next/navigation", () => ({
 vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => (name === "mac-theme" ? { value: "dark" } : undefined) }) }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
-vi.mock("@/modules/case-study", () => ({
+vi.mock("@/modules/case-study", async () => ({
+  // The pure walker the image pool reads (Story 4.4c).
+  referencedAssetIds: (await vi.importActual<typeof import("@/modules/case-study")>("@/modules/case-study")).referencedAssetIds,
   get: (id: unknown) => get(id),
   getEditableRevision: (subject: unknown) => getEditableRevision(subject),
   getClientInfoForCase: (id: unknown) => getClientInfoForCase(id),
   getClient: (id: unknown) => getClient(id),
 }));
+/** The props the page gives the configurator (Story 4.4c's Pagine di default inputs). */
+const configuratorProps = vi.fn<(props: Record<string, unknown>) => void>();
+vi.mock("../../../_components/configurator/configurator", async () => {
+  const actual = await vi.importActual<typeof import("../../../_components/configurator/configurator")>("../../../_components/configurator/configurator");
+  return {
+    Configurator: (props: Parameters<typeof actual.Configurator>[0]) => {
+      configuratorProps(props as unknown as Record<string, unknown>);
+      return actual.Configurator(props);
+    },
+  };
+});
 vi.mock("@/modules/material", () => ({
   getDetailsForm: (input: unknown) => getDetailsForm(input),
   listAssets: (input: unknown) => listAssets(input),
@@ -148,6 +163,23 @@ beforeEach(() => {
 });
 
 describe("ConfiguratorPage", () => {
+  it("gives Pagine di default the generated texts (not the edited ones) and the case's images the revision uses", async () => {
+    const generatedDoc = buildTestDraft({ images: [IMAGE], assetIds: [IMAGE], form: { context: "", solution: "", results: [], testimonialQuote: "" }, newId: randomUUID });
+    getEditableRevision.mockResolvedValue(ok({ ...revision, generatedDoc, doc: caseHistoryV2(FORMAT_IDS) }));
+    configuratorProps.mockClear();
+    await render();
+    const props = configuratorProps.mock.calls.at(-1)![0];
+    expect(props.generatedTexts).toEqual(generatedTextsOf(generatedDoc));
+    expect((props.generatedTexts as GeneratedTexts).presentazione_16_9?.title?.text).toContain("Titolo del progetto");
+    expect(props.images).toEqual([IMAGE]);
+
+    getEditableRevision.mockResolvedValue(ok(null));
+    configuratorProps.mockClear();
+    await render();
+    expect(configuratorProps.mock.calls.at(-1)![0]).toMatchObject({ generatedTexts: {}, images: [] });
+  });
+
+
   it("guards the surface with `edit` and reads the case's editable revision", async () => {
     const html = await render();
     expect(requireSurface).toHaveBeenCalledWith("edit");

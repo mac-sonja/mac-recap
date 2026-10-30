@@ -332,6 +332,7 @@ describe("configurator copy", () => {
       "La pagina ha {k} blocchi in più di questo layout: toglili prima.",
       "La pagina ha 1 blocco in più di questo layout: toglilo prima.",
       "Scrivi un colore come #2977FF.",
+      "Questo caso non ha né risultati né testimonianza.",
     ]);
     expect(Object.values(it.configurator.newTexts)).toEqual(["Nuovo titolo", "Scrivi qui il testo.", "+00%", "«La citazione del cliente.»", "Etichetta", "Titolo"]);
     expect(t("configurator.trial.title")).toBe("Bozza di prova");
