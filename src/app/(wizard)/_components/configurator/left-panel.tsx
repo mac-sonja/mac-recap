@@ -5,11 +5,13 @@ import type { Ref } from "react";
 import { SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { ThemeSwitch } from "@/app/_components/theme-switch";
 import type { ThemeChoice } from "@/app/_lib/theme";
-import type { Background, Block, DocumentElement, Page } from "@/modules/generation";
+import type { Background, Block, DocumentElement, Page, TextGroupAlign } from "@/modules/generation";
 import { defaultPages, layouts, textStyles, type FormatId, type Layout } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { ASPECT, EYEBROW, ICON_BUTTON, PANEL_SECTION, SEG, SEG_BUTTON, SOON_ID } from "./styles";
+import type { TextSettings } from "./text-editing";
+import { GroupPanel, TextPanel } from "./text-panel";
 
 const ELEMENT_ICONS: Readonly<Record<keyof typeof it.configurator.elements, LucideIcon>> = {
   block: LayoutGrid,
@@ -34,6 +36,10 @@ export interface LeftPanelProps {
   block: Block | undefined;
   element: DocumentElement | undefined;
   theme: ThemeChoice;
+  /** The text and group settings change the document (Story 4.3b); off, they only show. */
+  editable: boolean;
+  onTextSettings: (settings: TextSettings) => void;
+  onGroupAlign: (align: TextGroupAlign) => void;
   onSoon: (tool: string) => void;
   onHide: () => void;
   hideRef: Ref<HTMLButtonElement>;
@@ -73,12 +79,27 @@ const colourOf = (background: Background): string | undefined =>
 
 /**
  * The left panel (312 px, mockup `.pane-l`): the selected block's or element's name
- * first, then always the page tools, acting on the selected page or the page in view:
+ * first, with a text's settings or a Testi group's alignment (Story 4.3b), then always
+ * the page tools, acting on the selected page or the page in view:
  * **Layout**, **Pagine di default**, **Elementi**, **Sfondo** and **Elimina pagina**.
  * They arrive with Stories 4.3, 4.4 and 4.13: here they show in place, inactive, and
  * say so when pressed. The theme switch sits at its foot.
  */
-export function LeftPanel({ hidden = false, formatId, template, page, block, element, theme, onSoon, onHide, hideRef }: LeftPanelProps) {
+export function LeftPanel({
+  hidden = false,
+  formatId,
+  template,
+  page,
+  block,
+  element,
+  theme,
+  editable,
+  onTextSettings,
+  onGroupAlign,
+  onSoon,
+  onHide,
+  hideRef,
+}: LeftPanelProps) {
   const t = it.configurator.tools;
   const soon = (tool: string) => () => onSoon(tool);
   const inactive = { "aria-disabled": true, "aria-describedby": SOON_ID, title: it.configurator.soon } as const;
@@ -109,6 +130,10 @@ export function LeftPanel({ hidden = false, formatId, template, page, block, ele
             </div>
           </div>
         )}
+        {block !== undefined && element?.type === "text" && (
+          <TextPanel formatId={formatId} template={template} text={element} block={block} editable={editable} onChange={onTextSettings} onSoon={onSoon} />
+        )}
+        {element?.type === "text_group" && <GroupPanel group={element} editable={editable} onChange={onGroupAlign} onSoon={onSoon} />}
 
         {page !== undefined && (
           <>

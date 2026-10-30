@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
-import { CURRENT_SCHEMA_VERSION, type DocumentKind, type Page } from "@/modules/generation";
+import { CURRENT_SCHEMA_VERSION, type DocumentKind, type Page, type TextGroupAlign } from "@/modules/generation";
 import { FORMAT_IDS, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -16,7 +16,7 @@ import { RightPanel } from "./right-panel";
 import { findElement, resolveSelection, stepOut, type Selection } from "./selection";
 import { StatusMessage, useStatusMessage } from "./status-message";
 import { ICON_BUTTON, SOON_ID } from "./styles";
-import { isOwnText, textElementAt, withText } from "./text-editing";
+import { isOwnText, textElementAt, withGroupAlign, withText, withTextSettings, type TextSettings } from "./text-editing";
 import { TopBar, type ConfiguratorHeader } from "./top-bar";
 import { useDocument, type EditedRevision, type Formats, type SaveInput } from "./use-document";
 
@@ -58,7 +58,6 @@ const typing = (target: EventTarget | null) =>
  * a click frames a block or selects an element (its block framed); Esc steps out from
  * element to block to page to nothing. Messages show at the top of the canvas for a
  * few seconds (`role="status"`). Below 1024 px only the larger-screen message shows.
- * Nothing is edited or saved here (Stories 4.3 onwards).
  *
  * Anteprima (Story 4.2b, C37): the top bar's eye shows the same canvas without the
  * panels or the selection (kept for the return); Carosello and Video become one
@@ -69,7 +68,9 @@ const typing = (target: EventTarget | null) =>
  * on the page; in Anteprima a click does. Only the format in view changes. The document
  * saves itself (`useDocument`), ⌘Z and ⇧⌘Z (or the top bar) undo and redo every edit,
  * and a block whose text no longer fits shows a marker. Texts bound to the client or
- * the case, and an approved case, are not edited yet: they say so.
+ * the case, and an approved case, are not edited yet: they say so. The left panel sets
+ * a selected text's style, alignment, colour and columns, and a Testi group's alignment
+ * in its block (Story 4.3b), each change one undo step.
  */
 export function Configurator({ header, back, template, formats: initial, assets, values, trial, theme, caseId, revision, onSave }: ConfiguratorProps) {
   const router = useRouter();
@@ -217,6 +218,19 @@ export function Configurator({ header, back, template, formats: initial, assets,
     doc.flush();
   }, [doc]);
 
+  /** A text panel or Testi group control on the selected element: one undo step, in the format in view. */
+  const applyToSelection = useCallback(
+    (edit: (pages: readonly Page[], pageKey: string, elementId: string) => readonly Page[]) => {
+      if (!editable || selection?.elementId === undefined) return;
+      const current = formats[formatId];
+      const next = edit(current, selection.pageKey, selection.elementId);
+      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+    },
+    [doc, editable, formatId, formats, selection],
+  );
+  const textSettings = useCallback((settings: TextSettings) => applyToSelection((p, k, id) => withTextSettings(p, k, id, settings)), [applyToSelection]);
+  const groupAlign = useCallback((align: TextGroupAlign) => applyToSelection((p, k, id) => withGroupAlign(p, k, id, align)), [applyToSelection]);
+
   const undo = useCallback(() => {
     const changed = doc.undo();
     if (changed !== undefined && changed !== formatId) pickFormat(changed);
@@ -316,6 +330,9 @@ export function Configurator({ header, back, template, formats: initial, assets,
             block={block}
             element={element}
             theme={theme}
+            editable={editable}
+            onTextSettings={textSettings}
+            onGroupAlign={groupAlign}
             onSoon={soon}
             onHide={() => toggleLeft(false)}
             hideRef={hideLeft}

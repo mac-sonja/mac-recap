@@ -858,6 +858,33 @@ export const it = {
       image: "Immagine",
       deletePage: "Elimina pagina",
     },
+    /** The left panel with a text selected (Story 4.3b, C32). */
+    text: {
+      heading: "Testo · {format}",
+      style: "Stile",
+      align: "Allinea",
+      alignLeft: "Sinistra",
+      alignCentre: "Centro",
+      alignRight: "Destra",
+      colour: "Colore",
+      /** The colour field's accessible name. */
+      colourField: "Colore del testo",
+      /** The swatch, and the field's value, for no colour. */
+      transparent: "Trasparente",
+      columns: "Colonne",
+      /** The columns buttons' accessible names. */
+      oneColumn: "Una colonna",
+      twoColumns: "Due colonne",
+    },
+    /** The left panel with a Testi group selected (C30). */
+    group: {
+      heading: "Allineamento nel blocco",
+      top: "In alto",
+      centre: "Al centro",
+      bottom: "In basso",
+      splitOne: "Distanziati: il primo testo in alto, il resto in basso",
+      splitMany: "Distanziati: i primi {n} testi in alto, il resto in basso",
+    },
     /** The Elementi list, in the mockup's order. */
     elements: {
       block: "Blocco",

@@ -2,12 +2,12 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FORMAT_IDS, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
-import { caseHistoryV2, validateNewDocument, type Page } from "@/modules/generation";
-import { it as dict } from "@/shared/i18n/it";
+import { caseHistoryV2, validateNewDocument, type DocumentElement, type Page, type TextElement, type TextGroupElement } from "@/modules/generation";
+import { fill, it as dict } from "@/shared/i18n/it";
 import { Configurator, type ConfiguratorProps } from "./configurator";
 import { ownTextIds } from "./in-place-text";
 import { STATUS_MESSAGE_MS } from "./status-message";
-import { textElementAt } from "./text-editing";
+import { TEXT_COLOURS, textElementAt } from "./text-editing";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -785,5 +785,287 @@ describe("Configurator editing", () => {
     const sent = onSave.mock.calls[0]![0].doc.formats;
     expect(textElementAt(sent.carosello_1_1.pages, page.pageKey, id)?.text).toBe("Dal carosello");
     expect(sent.presentazione_16_9.pages).toEqual(pages.presentazione_16_9);
+  });
+});
+
+describe("Configurator text panel (Story 4.3b)", () => {
+  const fixture = () => {
+    const doc = caseHistoryV2(FORMAT_IDS);
+    return Object.fromEntries(FORMAT_IDS.map((id) => [id, doc.formats[id]!.pages])) as Record<FormatId, Page[]>;
+  };
+  /** The first text of `pages` matching `test`, inside groups and rows too, with its page. */
+  const findText = (pages: readonly Page[], test: (el: TextElement) => boolean) => {
+    for (const page of pages) {
+      for (const block of page.blocks) {
+        const walk = (elements: readonly DocumentElement[]): TextElement | undefined => {
+          for (const el of elements) {
+            if (el.type === "text" && test(el)) return el;
+            if (el.type === "text_group" || el.type === "row") {
+              const inner = walk(el.items);
+              if (inner !== undefined) return inner;
+            }
+          }
+          return undefined;
+        };
+        const el = walk(block.elements);
+        if (el !== undefined) return { page, el };
+      }
+    }
+    throw new Error("no such text in the fixture");
+  };
+  const findGroup = (pages: readonly Page[]) => {
+    for (const page of pages) {
+      for (const block of page.blocks) {
+        const el = block.elements.find((e): e is TextGroupElement => e.type === "text_group" && e.align !== "split" && e.items.length > 1);
+        if (el !== undefined) return { page, el };
+      }
+    }
+    throw new Error("no group in the fixture");
+  };
+  const node = (pageKey: string, id: string) => pageNode(pageKey).querySelector<HTMLElement>(`[data-element-id="${id}"]`)!;
+  const names: Record<TextGroupElement["align"], string> = {
+    top: dict.configurator.group.top,
+    centre: dict.configurator.group.centre,
+    bottom: dict.configurator.group.bottom,
+    split: dict.configurator.group.splitOne,
+  };
+  const groupSection = () => within(leftPanel()).getByRole("region", { name: dict.configurator.group.heading, hidden: true });
+  const textSection = () => within(leftPanel()).getByRole("region", { name: /^Testo · /, hidden: true });
+  /** The template's lime, from the palette (no raw colours in components). */
+  const LIME = TEXT_COLOURS[3];
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  });
+
+  it("shows Testo · {format} with the text's style, alignment, colour and columns", () => {
+    const pages = fixture();
+    setup(false, pages);
+    const { page, el } = findText(pages.presentazione_16_9, (t) => t.colour === undefined && t.align === undefined);
+    fireEvent.click(node(page.pageKey, el.elementId));
+    const panel = textSection();
+    expect(within(panel).getByText("Testo · Presentazione")).toBeTruthy();
+    const select = within(panel).getByLabelText(dict.configurator.text.style) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Etichetta", "Titolo XL", "Titolo", "Sottotitolo", "Testo", "Numero", "Citazione"]);
+    expect(select.value).toBe(el.style);
+    expect(button(dict.configurator.text.alignLeft, panel).getAttribute("aria-pressed")).toBe("true");
+    expect((within(panel).getByLabelText(dict.configurator.text.colourField) as HTMLInputElement).value).toMatch(/^#[0-9A-F]{6}/);
+    expect(button(dict.configurator.text.oneColumn, panel).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("a new style drops the template size, saves once in the format in view, and ⌘Z brings it back", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const { page, el } = findText(pages.presentazione_16_9, (t) => t.size !== undefined);
+    const style = el.style === "text" ? "title" : "text";
+    fireEvent.click(node(page.pageKey, el.elementId));
+    fireEvent.change(within(textSection()).getByLabelText(dict.configurator.text.style), { target: { value: style } });
+    expect(node(page.pageKey, el.elementId).classList.contains(`mr-t-${style}`)).toBe(true);
+    await settle();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const sent = lastDoc(onSave);
+    const saved = textElementAt(sent.formats.presentazione_16_9.pages, page.pageKey, el.elementId)!;
+    expect(saved).toMatchObject({ style, provenance: el.provenance });
+    expect(saved.size).toBeUndefined();
+    expect(sent.formats.carosello_1_1.pages).toEqual(pages.carosello_1_1);
+    expect(validateNewDocument(sent)).toMatchObject({ ok: true });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(node(page.pageKey, el.elementId).classList.contains(`mr-t-${el.style}`)).toBe(true);
+    await settle();
+    expect(textElementAt(lastDoc(onSave).formats.presentazione_16_9.pages, page.pageKey, el.elementId)).toMatchObject({ style: el.style, size: el.size });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true, shiftKey: true });
+    expect(node(page.pageKey, el.elementId).classList.contains(`mr-t-${style}`)).toBe(true);
+    await settle();
+    expect(textElementAt(lastDoc(onSave).formats.presentazione_16_9.pages, page.pageKey, el.elementId)?.style).toBe(style);
+  });
+
+  it("pressing the pressed alignment changes nothing and saves nothing", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const { page, el } = findText(pages.presentazione_16_9, (t) => t.align === undefined);
+    fireEvent.click(node(page.pageKey, el.elementId));
+    fireEvent.click(button(dict.configurator.text.alignLeft, textSection()));
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("sets alignment, a swatch colour and two columns, each one undo step", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const { page, el } = findText(pages.presentazione_16_9, (t) => t.align === undefined && t.columns === undefined && t.colour === undefined);
+    fireEvent.click(node(page.pageKey, el.elementId));
+    fireEvent.click(button(dict.configurator.text.alignCentre, textSection()));
+    fireEvent.click(button(LIME.toUpperCase(), textSection()));
+    fireEvent.click(button(dict.configurator.text.twoColumns, textSection()));
+    const shown = node(page.pageKey, el.elementId);
+    expect(shown.classList.contains("mr-al-centre")).toBe(true);
+    expect(shown.classList.contains("mr-cols-2")).toBe(true);
+    expect(shown.style.color.toLowerCase()).toBe(LIME);
+    expect(button(LIME.toUpperCase(), textSection()).getAttribute("aria-pressed")).toBe("true");
+    await settle();
+    expect(textElementAt(lastDoc(onSave).formats.presentazione_16_9.pages, page.pageKey, el.elementId)).toMatchObject({ align: "centre", colour: LIME, columns: 2 });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(node(page.pageKey, el.elementId).classList.contains("mr-cols-2")).toBe(false);
+    expect(node(page.pageKey, el.elementId).classList.contains("mr-al-centre")).toBe(true);
+    // A second ⌘Z takes the colour back, and saves it.
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(node(page.pageKey, el.elementId).style.color).toBe("");
+    expect(button(LIME.toUpperCase(), textSection()).getAttribute("aria-pressed")).toBe("false");
+    await settle();
+    expect(textElementAt(lastDoc(onSave).formats.presentazione_16_9.pages, page.pageKey, el.elementId)?.colour).toBeUndefined();
+    fireEvent.click(button(dict.configurator.text.oneColumn, textSection()));
+    fireEvent.click(button(dict.configurator.text.alignLeft, textSection()));
+    await settle();
+    const back = textElementAt(lastDoc(onSave).formats.presentazione_16_9.pages, page.pageKey, el.elementId)!;
+    expect("align" in back || "columns" in back).toBe(false);
+  });
+
+  it("takes a typed colour on Enter, and puts the current value back for anything else", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const { page, el } = findText(pages.presentazione_16_9, (t) => t.colour === undefined);
+    fireEvent.click(node(page.pageKey, el.elementId));
+    const field = () => within(textSection()).getByLabelText(dict.configurator.text.colourField) as HTMLInputElement;
+    const before = field().value;
+    fireEvent.change(field(), { target: { value: "blu" } });
+    fireEvent.blur(field());
+    expect(field().value).toBe(before);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    const blue = TEXT_COLOURS[4];
+    fireEvent.change(field(), { target: { value: blue.slice(1).toUpperCase() } });
+    fireEvent.keyDown(field(), { key: "Enter" });
+    expect(field().value).toBe(blue.toUpperCase());
+    // Enter in the field doesn't open the text for typing.
+    expect(node(page.pageKey, el.elementId).hasAttribute("contenteditable")).toBe(false);
+    await settle();
+    expect(textElementAt(lastDoc(onSave).formats.presentazione_16_9.pages, page.pageKey, el.elementId)?.colour).toBe(blue);
+    fireEvent.click(button(dict.configurator.text.transparent, textSection()));
+    expect(field().value).toBe(dict.configurator.text.transparent);
+  });
+
+  it("visiting the colour field, Escape in it, or the pressed swatch keeps an inherited colour inherited", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const { page, el } = findText(pages.presentazione_16_9, (t) => t.colour === undefined);
+    fireEvent.click(node(page.pageKey, el.elementId));
+    const field = () => within(textSection()).getByLabelText(dict.configurator.text.colourField) as HTMLInputElement;
+    fireEvent.focus(field());
+    fireEvent.blur(field());
+    fireEvent.change(field(), { target: { value: TEXT_COLOURS[4] } });
+    fireEvent.keyDown(field(), { key: "Escape" });
+    const pressed = within(textSection())
+      .getAllByRole("button", { hidden: true })
+      .find((b) => b.getAttribute("aria-pressed") === "true" && TEXT_COLOURS.some((c) => c.toUpperCase() === b.getAttribute("aria-label")))!;
+    fireEvent.click(pressed);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("restyles a text bound to the client, keeping its binding", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const { page, el } = findText(pages.presentazione_16_9, (t) => t.text === undefined && t.align === undefined);
+    fireEvent.click(node(page.pageKey, el.elementId));
+    fireEvent.click(button(dict.configurator.text.alignRight, textSection()));
+    await settle();
+    const saved = textElementAt(lastDoc(onSave).formats.presentazione_16_9.pages, page.pageKey, el.elementId)!;
+    expect(saved).toMatchObject({ align: "right", provenance: el.provenance });
+    expect(saved.binding ?? saved.bindings).toEqual(el.binding ?? el.bindings);
+  });
+
+  it("aligns a Testi group in its block: Distanziati puts the first text on top, In alto drops it", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const { page, el } = findGroup(pages.presentazione_16_9);
+    fireEvent.click(node(page.pageKey, el.elementId));
+    const section = groupSection();
+    expect(within(section).getAllByRole("button", { hidden: true }).map((b) => b.getAttribute("aria-label"))).toEqual([
+      "In alto",
+      "Al centro",
+      "In basso",
+      "Distanziati: il primo testo in alto, il resto in basso",
+    ]);
+    expect(button(names[el.align], section).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(button(dict.configurator.group.splitOne, section));
+    expect(node(page.pageKey, el.elementId).classList.contains("mr-grp-split")).toBe(true);
+    expect(button(dict.configurator.group.splitOne, section).getAttribute("aria-pressed")).toBe("true");
+    expect(button(names[el.align], section).getAttribute("aria-pressed")).toBe("false");
+    await settle();
+    const group = () => {
+      for (const block of lastDoc(onSave).formats.presentazione_16_9.pages.find((p) => p.pageKey === page.pageKey)!.blocks) {
+        const found = block.elements.find((e) => e.elementId === el.elementId);
+        if (found !== undefined) return found as TextGroupElement;
+      }
+      throw new Error("group gone");
+    };
+    expect(group()).toMatchObject({ align: "split", splitAt: 1 });
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    expect(lastDoc(onSave).formats.carosello_1_1.pages).toEqual(pages.carosello_1_1);
+    fireEvent.click(button(dict.configurator.group.top, section));
+    await settle();
+    expect(group().align).toBe("top");
+    expect("splitAt" in group()).toBe(false);
+  });
+
+  it("names Distanziati by how many texts stay on top", () => {
+    const pages = fixture();
+    const { page, el } = findGroup(pages.presentazione_16_9);
+    el.align = "split";
+    el.splitAt = 2;
+    setup(false, pages);
+    fireEvent.click(node(page.pageKey, el.elementId));
+    const split = button(fill(dict.configurator.group.splitMany, { n: 2 }), groupSection());
+    expect(split.getAttribute("aria-label")).toBe("Distanziati: i primi 2 testi in alto, il resto in basso");
+    expect(split.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("on a case that can't be edited, shows the values but changes nothing and says it comes soon", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { editable: false, onSave });
+    const { page, el } = findText(pages.presentazione_16_9, (t) => t.align === undefined);
+    fireEvent.click(node(page.pageKey, el.elementId));
+    const centre = button(dict.configurator.text.alignCentre, textSection());
+    expect(centre.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(centre);
+    expect(status().textContent).toBe(`${dict.configurator.text.align} arriva presto.`);
+    expect(node(page.pageKey, el.elementId).classList.contains("mr-al-centre")).toBe(false);
+    expect((within(textSection()).getByLabelText(dict.configurator.text.style) as HTMLSelectElement).disabled).toBe(true);
+    for (const name of [LIME.toUpperCase(), dict.configurator.text.twoColumns]) {
+      expect(button(name, textSection()).getAttribute("aria-disabled")).toBe("true");
+      fireEvent.click(button(name, textSection()));
+    }
+    const field = within(textSection()).getByLabelText(dict.configurator.text.colourField) as HTMLInputElement;
+    expect(field.readOnly).toBe(true);
+    fireEvent.change(field, { target: { value: LIME } });
+    fireEvent.blur(field);
+    // A Testi group's buttons too.
+    const { page: groupPage, el: group } = findGroup(pages.presentazione_16_9);
+    fireEvent.click(node(groupPage.pageKey, group.elementId));
+    const bottom = button(dict.configurator.group.bottom, groupSection());
+    expect(bottom.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(bottom);
+    expect(status().textContent).toBe(`${dict.configurator.group.heading} arriva presto.`);
+    expect(node(groupPage.pageKey, group.elementId).classList.contains("mr-grp-bottom")).toBe(group.align === "bottom");
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
   });
 });
