@@ -2,7 +2,8 @@
 title: 'Story 4.3c: add and remove elements and blocks, and copy, cut and paste blocks'
 type: 'feature'
 created: '2026-10-30'
-status: 'draft'
+status: 'done'
+baseline_commit: '82d8022fa4a0a51e2dd64452ef77426c28906f3a'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -22,6 +23,7 @@ context:
 - 2026-10-29: split from Story 4.3. Subagents only for the review step (and compiling the epic context).
 - 2026-10-30: drag-and-drop (Elementi dragged in, moving elements, Sposta swap, block onto another page) is Story 4.3e, in deferred-work.
 - 2026-10-30: a block count with no grid in the format stacks the blocks in one even column (the renderer's fallback); no template change.
+- 2026-10-30: the No grid row corrected from 2 → 3 (Presentazione has a 3-block layout) to 2 → 1.
 - 2026-10-30: Animazione stays "arriva presto" until its dialog (4.5).
 
 ## Boundaries & Constraints
@@ -47,7 +49,7 @@ context:
 | Click Titolo | element of block B selected | title appended to B, selected, one undo step | N/A |
 | No block | page only selected, click Testo | nothing | "Seleziona un blocco…" |
 | Blocco | Carosello page with 2 blocks, 1st selected | new block at index 1, grid `three_a` | N/A |
-| No grid | Presentazione 2 → 3 blocks | grid `column`, rows `[1,1,1]` | N/A |
+| No grid | Presentazione 2 → 1 block | grid `column`, rows `[1]` (3 blocks get `results`) | N/A |
 | Full | 6 blocks, Blocco or ⌘V | nothing | "…già 6 blocchi." |
 | Copy/paste | ⌘C on A, select B, ⌘V | copy after B, new ids, selected | message on copy |
 | Cut | ⌘X on block | removed, layout restarts, page selected | "Blocco tagliato." |
@@ -71,10 +73,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `it.ts` / `it.test.ts` -- strings.
-- [ ] `page-editing.ts` (+ tests) -- edits, grid restart, fresh ids.
-- [ ] `left-panel.tsx`, `configurator.tsx`, `canvas.tsx` (+ `configurator.test.tsx`) -- wiring, keys, clipboard, hint.
-- [ ] `sprint-status.yaml` -- on the 4.3 line: 4.3b done, 4.3c in review, 4.3e drag-and-drop in deferred-work.
+- [x] `it.ts` / `it.test.ts` -- strings.
+- [x] `page-editing.ts` (+ tests) -- edits, grid restart, fresh ids.
+- [x] `left-panel.tsx`, `configurator.tsx`, `canvas.tsx` (+ `configurator.test.tsx`) -- wiring, keys, clipboard, hint.
+- [x] `sprint-status.yaml` -- on the 4.3 line: 4.3b done, 4.3c in review, 4.3e drag-and-drop in deferred-work.
 
 **Acceptance Criteria:**
 - Given Story 4.3's criteria for Elementi (click), Blocco (click), ⌘C/⌘X/⌘V and removing in `epics.md`, when checked on the running page in each format, then each is met, the canvas redraws at once, and ⌘Z/⇧⌘Z undo and redo each one.
@@ -82,9 +84,43 @@ context:
 
 ## Implementation Notes
 
+- Owner (2026-10-29): subagents only for the epic context and the review step, so the implementation was done in the main session.
+- `MAX_BLOCKS_PER_PAGE` and `MAX_ELEMENTS_PER_BLOCK` aren't exported by `generation` (which this story may not change): `page-editing.ts` mirrors them, and `page-editing.test.ts` holds them to `pageSchema` / `blockSchema`.
+- The new block's grey (`#ededf0`) lives in `page-editing.ts`: `test/tokens.test.ts` forbids raw colours in `.tsx` under `src/app`.
+- New element words are document placeholders, kept in `it.ts` (`configurator.newTexts`) with the other Italian copy.
+- ⌘C/⌘X act only with a block itself selected, and ⌘V only with something selected and a block copied; otherwise the keys stay the browser's (no `preventDefault`).
+- While editing, only Animazione stays inactive in Elementi; the heading drops "Arriva presto".
+- The 4.2a test reading the left panel's text from the top now includes **Rimuovi blocco**.
+- Not done: the browser check against the local stack (as in 4.3b, the Supabase images can't be pulled here). Covered by `configurator.test.tsx` (happy-dom, the real renderer) and `page-editing.test.ts`.
+- Review (2026-10-30): held Backspace, ⌘/Ctrl with other keys, and highlighted text patched; tests for them and for keys in Anteprima.
+- Files: new `page-editing.ts` (+ test); `configurator.tsx`, `left-panel.tsx`, `canvas.tsx`, `configurator.test.tsx`; `it.ts` / `it.test.ts`; `sprint-status.yaml`, `deferred-work.md` (4.3e).
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Holding Backspace removes the element, then its block (now selected) on the repeat (edge) | medium | `removeSelected` selects the block; a repeated keydown removed it too | patch (repeats ignored; test) |
+| 2 | Any ⌘/Ctrl key returned early: Ctrl+Escape and ⌘Enter stopped working (edge) | low | The modifier branch returned for every key; direct fix | patch (only c/x/v; test) |
+| 3 | ⌘C/⌘X with text highlighted copied the block instead of the text (edge) | low | No check of the DOM selection; one-line guard | patch (left to the browser; test) |
+| 4 | Keys in Anteprima untested (verify-gap); "shortcuts act on a hidden selection in Anteprima" (blind) | medium | Code is right (the `preview` branch returns first) but untested | patch (test) |
+| 5 | No empty-block hint over an image background untested (verify-gap) | low | Empty photo blocks only come with Sfondo (4.4) | reject |
+| 6 | No message at 30 elements (blind, edge, verify-gap) | low | Frozen intent: "A block at 30 elements adds nothing"; rare | reject |
+| 7 | "Trascina…" copy asks for a drag that 4.3e builds (blind) | low | Strings fixed by the frozen intent (epics, mockup); raised with the owner | reject; flagged in the summary |
+| 8 | "6" hard-coded in `pageFull` (blind) | low | String pinned by the intent; the limit is fixed by C30 | reject |
+| 9 | In review without the browser check (blind, edge) | false | `in-review` is the status before that check; the gap is in Implementation Notes and the summary | reject |
+| 10 | A page's last block can be removed (blind) | false | `pageSchema` has no minimum blocks; the renderer stacks an empty grid | reject |
+| 11 | ⌘V / ⌘X claim success on a refused `nothing` (blind, edge, verify-gap) | false | Selection is cleared on a format switch and pages can't be removed here, so a selected block/page always resolves | reject |
+| 12 | Cross-format paste unspecified (blind) | false | The intent says the clipboard works across formats; styles exist in every format and the grid restarts | reject |
+| 13 | Bound texts can be removed (blind) | false | Removing an element never writes the record; free deletion per C30 | reject |
+| 14 | Empty hint stale when only a block resizes; `key={i}` (blind) | low | Track sizes change only with 4.4; overlays are inert | reject |
+| 15 | First layout by count gives Presentazione 3 blocks "Risultati e testimonial" (blind) | false | Owner chose it (2026-10-30) | reject |
+| 16 | Alt+Backspace removes the selection (blind) | low | No text to delete outside a field; consistent | reject |
+| 17 | Pasted block keeps the source's name (blind) | low | As in the mockup | reject |
+| 18 | Backspace with focus on a panel button removes the selection (edge) | false | Intended: focus is often on the panel after a click (mockup excludes only fields) | reject |
+| 19 | Keyboard Enter twice on Rimuovi removes element then block (edge) | low | Label changes to Rimuovi blocco; undoable | reject |
+| 20 | Blocco silent in a format with no pages (edge) | low | No such format today; pages come with 4.13 | reject |
 
 ## Verification
 

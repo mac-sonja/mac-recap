@@ -177,6 +177,28 @@ function CanvasPage({
       observer?.disconnect();
     };
   }, [page, renderKey, formatId, preview, measureStill]);
+  // An empty block (no elements, no photo) says what to do with it, in the editor only (Story 4.3c).
+  const [empty, setEmpty] = useState<Box[]>([]);
+  useLayoutEffect(() => {
+    const el = host.current;
+    const ids = preview ? [] : page.blocks.filter((b) => b.elements.length === 0 && b.background.kind !== "image").map((b) => b.blockId);
+    if (el === null || ids.length === 0) {
+      setEmpty((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+    const measure = () => {
+      const boxes = ids.flatMap((id) => {
+        const node = el.querySelector(`[data-block-id="${id}"]`);
+        return node === null ? [] : [boxIn(el, node)];
+      });
+      setEmpty((prev) => (sameBoxes(prev, boxes) ? prev : boxes));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [page, renderKey, formatId, preview]);
   // Anteprima shows no frames; the selection is kept and shows again in the editor.
   const mine = !preview && selection !== null && selection.pageKey === page.pageKey ? selection : null;
   const blockId = mine?.blockId;
@@ -261,6 +283,17 @@ function CanvasPage({
               </span>
             </div>
           ))}
+        {empty.map((box, i) => (
+          <div
+            key={i}
+            aria-hidden="true"
+            data-frame="empty"
+            className="pointer-events-none absolute flex items-center justify-center font-label text-xs font-medium text-foreground-muted"
+            style={{ top: box.top, left: box.left, width: box.width, height: box.height }}
+          >
+            {it.configurator.edit.emptyBlock}
+          </div>
+        ))}
         {frames.block !== null && (
           <div
             aria-hidden="true"

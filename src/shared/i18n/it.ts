@@ -885,6 +885,31 @@ export const it = {
       splitOne: "Distanziati: il primo testo in alto, il resto in basso",
       splitMany: "Distanziati: i primi {n} testi in alto, il resto in basso",
     },
+    /** Adding, copying and removing elements and blocks (Story 4.3c). */
+    edit: {
+      needBlock: "Seleziona un blocco, oppure trascina l’elemento dentro un blocco.",
+      pageFull: "Questa pagina ha già 6 blocchi.",
+      copied: "Blocco copiato.",
+      cut: "Blocco tagliato.",
+      elementRemoved: "Elemento eliminato. ⌘Z per annullare.",
+      blockRemoved: "Blocco eliminato. ⌘Z per annullare.",
+      removeElement: "Rimuovi elemento",
+      removeBlock: "Rimuovi blocco",
+      /** In an empty block, in the editor only. */
+      emptyBlock: "Trascina qui un elemento",
+      /** A new block's name. */
+      newBlock: "Blocco",
+    },
+    /** The words of a text added from Elementi: placeholders to type over. */
+    newTexts: {
+      title: "Nuovo titolo",
+      text: "Scrivi qui il testo.",
+      number: "+00%",
+      quote: "«La citazione del cliente.»",
+      label: "Etichetta",
+      /** The title inside a new Testi group. */
+      groupTitle: "Titolo",
+    },
     /** The Elementi list, in the mockup's order. */
     elements: {
       block: "Blocco",

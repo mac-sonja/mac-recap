@@ -127,8 +127,10 @@ describe("Configurator", () => {
     const blockNode = pageNode(page.pageKey).querySelector(`[data-block-id="${block.blockId}"]`)!;
     fireEvent.click(blockNode);
     expect(pageNode(page.pageKey).querySelector('[data-frame="block"]')?.textContent).toBe(dict.configurator.canvas.move);
-    // The left panel names the selection first: the crumb Blocco, then the block's name.
-    expect(leftPanel().textContent).toMatch(new RegExp(`^${dict.configurator.crumbs.block}${block.name}${dict.configurator.crumbs.page}`));
+    // The left panel names the selection first: the crumb Blocco, then the block's name and Rimuovi blocco (4.3c).
+    expect(leftPanel().textContent).toMatch(
+      new RegExp(`^${dict.configurator.crumbs.block}${block.name}${dict.configurator.edit.removeBlock}${dict.configurator.crumbs.page}`),
+    );
 
     const elementNode = blockNode.querySelector("[data-element-id]")!;
     fireEvent.click(elementNode);
@@ -1067,5 +1069,245 @@ describe("Configurator text panel (Story 4.3b)", () => {
     await settle();
     expect(onSave).not.toHaveBeenCalled();
     expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+});
+
+describe("Configurator elements and blocks (Story 4.3c)", () => {
+  const fixture = () => {
+    const doc = caseHistoryV2(FORMAT_IDS);
+    return Object.fromEntries(FORMAT_IDS.map((id) => [id, doc.formats[id]!.pages])) as Record<FormatId, Page[]>;
+  };
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const blockNode = (pageKey: string, blockId: string) => pageNode(pageKey).querySelector<HTMLElement>(`[data-block-id="${blockId}"]`)!;
+  const blockIds = (pageKey: string) => [...pageNode(pageKey).querySelectorAll<HTMLElement>("[data-block-id]")].map((b) => b.dataset.blockId);
+  const elementsSection = () => within(leftPanel()).getByRole("region", { name: dict.configurator.tools.elements, hidden: true });
+  const elementButton = (name: string) => button(name, elementsSection());
+  /** Clicks a block's own background (not one of its elements). */
+  const selectBlock = (pageKey: string, blockId: string) => fireEvent.click(blockNode(pageKey, blockId));
+
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  });
+
+  it("Titolo goes at the end of the selected element's block, selected, saved once in the format in view; ⌘Z and ⇧⌘Z undo and redo it", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const page = pages.presentazione_16_9[0]!;
+    const block = page.blocks[0]!;
+    fireEvent.click(blockNode(page.pageKey, block.blockId).querySelector("[data-element-id]")!);
+    expect(within(elementsSection()).queryByText(dict.configurator.soon)).toBeNull();
+    fireEvent.click(elementButton(dict.configurator.elements.title));
+    const added = blockNode(page.pageKey, block.blockId).querySelectorAll(":scope > [data-element-id]");
+    expect(added).toHaveLength(block.elements.length + 1);
+    expect(added[added.length - 1]!.textContent).toBe(dict.configurator.newTexts.title);
+    // The new title is selected: its name heads the left panel.
+    expect(pageNode(page.pageKey).querySelector('[data-frame="element"]')).not.toBeNull();
+    expect(button(dict.configurator.edit.removeElement, leftPanel())).toBeTruthy();
+    await settle();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const sent = lastDoc(onSave);
+    const saved = sent.formats.presentazione_16_9.pages[0].blocks[0].elements.at(-1);
+    expect(saved).toMatchObject({ type: "text", style: "title", text: dict.configurator.newTexts.title, provenance: "human_added" });
+    expect(sent.formats.carosello_1_1.pages).toEqual(pages.carosello_1_1);
+    expect(validateNewDocument(sent)).toMatchObject({ ok: true });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(blockNode(page.pageKey, block.blockId).querySelectorAll(":scope > [data-element-id]")).toHaveLength(block.elements.length);
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true, shiftKey: true });
+    expect(blockNode(page.pageKey, block.blockId).querySelectorAll(":scope > [data-element-id]")).toHaveLength(block.elements.length + 1);
+  });
+
+  it("an element with no block selected says to select one; Animazione arrives with 4.5", () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    fireEvent.click(elementButton(dict.configurator.elements.text));
+    expect(status().textContent).toBe(dict.configurator.edit.needBlock);
+    const animation = elementButton(dict.configurator.elements.animation);
+    expect(animation.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(animation);
+    expect(status().textContent).toBe(`${dict.configurator.elements.animation} arriva presto.`);
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("Blocco adds an empty block after the selected one, with its hint, until the page has 6", () => {
+    const pages = fixture();
+    setup(false, pages);
+    const page = pages.presentazione_16_9[0]!;
+    const first = page.blocks[0]!.blockId;
+    selectBlock(page.pageKey, first);
+    fireEvent.click(elementButton(dict.configurator.elements.block));
+    const after = blockIds(page.pageKey);
+    expect(after).toHaveLength(page.blocks.length + 1);
+    expect(after[0]).toBe(first);
+    expect(after.slice(2)).toEqual(page.blocks.slice(1).map((b) => b.blockId));
+    // The new block is selected (Sposta, Rimuovi blocco) and shows the hint.
+    expect(pageNode(page.pageKey).querySelector('[data-frame="block"]')?.textContent).toBe(dict.configurator.canvas.move);
+    expect(button(dict.configurator.edit.removeBlock, leftPanel())).toBeTruthy();
+    expect(pageNode(page.pageKey).querySelector('[data-frame="empty"]')?.textContent).toBe(dict.configurator.edit.emptyBlock);
+    for (let n = after.length; n < 6; n++) fireEvent.click(elementButton(dict.configurator.elements.block));
+    expect(blockIds(page.pageKey)).toHaveLength(6);
+    fireEvent.click(elementButton(dict.configurator.elements.block));
+    expect(status().textContent).toBe(dict.configurator.edit.pageFull);
+    expect(blockIds(page.pageKey)).toHaveLength(6);
+  });
+
+  it("⌘C copies a block and ⌘V pastes it after the selected block of another page, with new ids; ⌘X cuts", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const [from, to] = [pages.presentazione_16_9[0]!, pages.presentazione_16_9[1]!];
+    const copied = from.blocks[0]!;
+    selectBlock(from.pageKey, copied.blockId);
+    fireEvent.keyDown(document.body, { key: "c", metaKey: true });
+    expect(status().textContent).toBe(dict.configurator.edit.copied);
+    selectBlock(to.pageKey, to.blocks[0]!.blockId);
+    fireEvent.keyDown(document.body, { key: "v", metaKey: true });
+    const ids = blockIds(to.pageKey);
+    expect(ids).toHaveLength(to.blocks.length + 1);
+    expect(ids).not.toContain(copied.blockId);
+    expect(blockNode(to.pageKey, ids[1]!).textContent).toBe(blockNode(from.pageKey, copied.blockId).textContent);
+    await settle();
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+
+    const cut = to.blocks[0]!.blockId;
+    selectBlock(to.pageKey, cut);
+    fireEvent.keyDown(document.body, { key: "x", metaKey: true });
+    expect(status().textContent).toBe(dict.configurator.edit.cut);
+    expect(blockIds(to.pageKey)).not.toContain(cut);
+    // The page is selected now: ⌘V puts the cut block at its end.
+    fireEvent.keyDown(document.body, { key: "v", ctrlKey: true });
+    expect(blockIds(to.pageKey)).toHaveLength(ids.length);
+    await settle();
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+  });
+
+  it("⌘C with an element selected is left to the browser", () => {
+    const pages = fixture();
+    setup(false, pages);
+    const page = pages.presentazione_16_9[0]!;
+    fireEvent.click(blockNode(page.pageKey, page.blocks[0]!.blockId).querySelector("[data-element-id]")!);
+    const event = new KeyboardEvent("keydown", { key: "c", metaKey: true, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    fireEvent.keyDown(document.body, { key: "v", metaKey: true });
+    expect(blockIds(page.pageKey)).toHaveLength(page.blocks.length);
+  });
+
+  it("Backspace removes the selected element, then Rimuovi blocco its block, each with its message and undoable", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const page = pages.presentazione_16_9[0]!;
+    const block = page.blocks[0]!;
+    const element = blockNode(page.pageKey, block.blockId).querySelector<HTMLElement>("[data-element-id]")!;
+    const elementId = element.dataset.elementId!;
+    fireEvent.click(element);
+    fireEvent.keyDown(document.body, { key: "Backspace" });
+    expect(status().textContent).toBe(dict.configurator.edit.elementRemoved);
+    expect(pageNode(page.pageKey).querySelector(`[data-element-id="${elementId}"]`)).toBeNull();
+    // Its block is selected now.
+    fireEvent.click(button(dict.configurator.edit.removeBlock, leftPanel()));
+    expect(status().textContent).toBe(dict.configurator.edit.blockRemoved);
+    expect(blockIds(page.pageKey)).not.toContain(block.blockId);
+    await settle();
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(pageNode(page.pageKey).querySelector(`[data-element-id="${elementId}"]`)).not.toBeNull();
+  });
+
+  it("Delete in a field removes nothing; Rimuovi elemento removes the element", () => {
+    const pages = fixture();
+    setup(false, pages);
+    const page = pages.presentazione_16_9[0]!;
+    // Any own text of the page, inside Testi groups and rows too.
+    const all = (els: readonly DocumentElement[]): DocumentElement[] => els.flatMap((e) => (e.type === "text_group" || e.type === "row" ? all(e.items) : [e]));
+    const own = all(page.blocks.flatMap((b) => b.elements)).find((e) => e.type === "text" && e.text !== undefined)!;
+    const text = pageNode(page.pageKey).querySelector<HTMLElement>(`[data-element-id="${own.elementId}"]`)!;
+    fireEvent.click(text);
+    const field = within(leftPanel()).getByLabelText(dict.configurator.text.colourField);
+    fireEvent.keyDown(field, { key: "Delete" });
+    expect(pageNode(page.pageKey).querySelector(`[data-element-id="${own.elementId}"]`)).not.toBeNull();
+    fireEvent.click(button(dict.configurator.edit.removeElement, leftPanel()));
+    expect(pageNode(page.pageKey).querySelector(`[data-element-id="${text.dataset.elementId}"]`)).toBeNull();
+  });
+
+  it("when not editable, Elementi and Rimuovi say they arrive soon and the keys change nothing", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { editable: false, onSave });
+    const page = pages.presentazione_16_9[0]!;
+    const block = page.blocks[0]!;
+    selectBlock(page.pageKey, block.blockId);
+    expect(within(elementsSection()).getByText(dict.configurator.soon)).toBeTruthy();
+    fireEvent.click(elementButton(dict.configurator.elements.title));
+    expect(status().textContent).toBe(`${dict.configurator.tools.elements} arriva presto.`);
+    const remove = button(dict.configurator.edit.removeBlock, leftPanel());
+    expect(remove.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(remove);
+    expect(status().textContent).toBe(`${dict.configurator.edit.removeBlock} arriva presto.`);
+    for (const key of [{ key: "Backspace" }, { key: "x", metaKey: true }, { key: "v", metaKey: true }]) fireEvent.keyDown(document.body, key);
+    expect(blockIds(page.pageKey)).toEqual(page.blocks.map((b) => b.blockId));
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("in Anteprima Backspace, ⌘X and ⌘V change nothing, though the selection is kept", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const page = pages.presentazione_16_9[0]!;
+    selectBlock(page.pageKey, page.blocks[0]!.blockId);
+    fireEvent.keyDown(document.body, { key: "c", metaKey: true });
+    fireEvent.click(button(dict.configurator.preview.enter));
+    for (const key of [{ key: "Backspace" }, { key: "Delete" }, { key: "x", metaKey: true }, { key: "v", metaKey: true }]) fireEvent.keyDown(document.body, key);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(blockIds(page.pageKey)).toEqual(page.blocks.map((b) => b.blockId));
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("a held Backspace removes the element only, not its block next", () => {
+    const pages = fixture();
+    setup(false, pages);
+    const page = pages.presentazione_16_9[0]!;
+    const block = page.blocks[0]!;
+    fireEvent.click(blockNode(page.pageKey, block.blockId).querySelector("[data-element-id]")!);
+    fireEvent.keyDown(document.body, { key: "Backspace" });
+    fireEvent.keyDown(document.body, { key: "Backspace", repeat: true });
+    expect(blockIds(page.pageKey)).toContain(block.blockId);
+  });
+
+  it("⌘C with text highlighted is the browser’s; Ctrl+Escape still steps out", () => {
+    const pages = fixture();
+    setup(false, pages);
+    const page = pages.presentazione_16_9[0]!;
+    selectBlock(page.pageKey, page.blocks[0]!.blockId);
+    vi.spyOn(document, "getSelection").mockReturnValue({ isCollapsed: false } as Selection);
+    const event = new KeyboardEvent("keydown", { key: "c", metaKey: true, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    vi.mocked(document.getSelection).mockRestore();
+    // A modifier with any other key reaches the rest of the handler: Ctrl+Escape steps out.
+    fireEvent.keyDown(document.body, { key: "Escape", ctrlKey: true });
+    expect(pageNode(page.pageKey).querySelector('[data-frame="block"]')).toBeNull();
+  });
+
+  it("shows no empty-block hint in Anteprima", () => {
+    const pages = fixture();
+    setup(false, pages);
+    const page = pages.presentazione_16_9[0]!;
+    selectBlock(page.pageKey, page.blocks[0]!.blockId);
+    fireEvent.click(elementButton(dict.configurator.elements.block));
+    expect(canvas().querySelector('[data-frame="empty"]')).not.toBeNull();
+    fireEvent.click(button(dict.configurator.preview.enter));
+    expect(canvas().querySelector('[data-frame="empty"]')).toBeNull();
   });
 });

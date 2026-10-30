@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
-import { CURRENT_SCHEMA_VERSION, type DocumentKind, type Page, type TextGroupAlign } from "@/modules/generation";
+import { CURRENT_SCHEMA_VERSION, type Block, type DocumentKind, type Page, type TextGroupAlign } from "@/modules/generation";
 import { FORMAT_IDS, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { Canvas } from "./canvas";
 import type { InstagramView } from "./instagram-overlay";
-import { LeftPanel } from "./left-panel";
+import { LeftPanel, type ElementKey } from "./left-panel";
+import { addBlock, addElement, pasteBlock, removeSelection, type PageEdit } from "./page-editing";
 import { RightPanel } from "./right-panel";
 import { findElement, resolveSelection, stepOut, type Selection } from "./selection";
 import { StatusMessage, useStatusMessage } from "./status-message";
@@ -42,6 +43,9 @@ export interface ConfiguratorProps {
   onSave: (input: SaveInput) => Promise<ActionResult<{ version: number }>>;
 }
 
+/** A fresh id for a new block or element. */
+const newId = () => crypto.randomUUID();
+
 /** Whether the person asked for reduced motion (a jump instead of a smooth scroll). */
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
@@ -70,7 +74,9 @@ const typing = (target: EventTarget | null) =>
  * and a block whose text no longer fits shows a marker. Texts bound to the client or
  * the case, and an approved case, are not edited yet: they say so. The left panel sets
  * a selected text's style, alignment, colour and columns, and a Testi group's alignment
- * in its block (Story 4.3b), each change one undo step.
+ * in its block (Story 4.3b), each change one undo step. Elementi adds an element to the
+ * selected block, or a block; ⌘C, ⌘X and ⌘V copy, cut and paste a block; Backspace,
+ * Delete or **Rimuovi** removes the selection (Story 4.3c).
  */
 export function Configurator({ header, back, template, formats: initial, assets, values, trial, theme, caseId, revision, onSave }: ConfiguratorProps) {
   const router = useRouter();
@@ -228,6 +234,69 @@ export function Configurator({ header, back, template, formats: initial, assets,
     },
     [doc, editable, formatId, formats, selection],
   );
+  /** The block ⌘C or ⌘X took, for ⌘V (any page, any format). */
+  const clipboard = useRef<Block | null>(null);
+
+  /** A page edit in the format in view (one undo step), its result selected; a refusal says why. */
+  const applyPageEdit = useCallback(
+    (edit: PageEdit) => {
+      if (!edit.ok) {
+        if (edit.reason === "noBlock") say(it.configurator.edit.needBlock);
+        else if (edit.reason === "pageFull") say(it.configurator.edit.pageFull);
+        return false;
+      }
+      doc.change({ ...formats, [formatId]: edit.pages }, formatId);
+      setSelection(edit.selection);
+      return true;
+    },
+    [doc, formatId, formats, say],
+  );
+
+  /** An Elementi button: Blocco after the selected block (else at the end of the tools' page), anything else into the selected block. */
+  const addFromElementi = useCallback(
+    (key: ElementKey) => {
+      if (!editable || key === "animation") return;
+      const current = formats[formatId];
+      if (key !== "block") {
+        applyPageEdit(addElement(current, selection, key, newId));
+        return;
+      }
+      const pageKey = selection?.pageKey ?? toolPage?.pageKey;
+      if (pageKey !== undefined) applyPageEdit(addBlock(current, pageKey, selection?.blockId, formatId, template, newId));
+    },
+    [applyPageEdit, editable, formatId, formats, selection, template, toolPage],
+  );
+
+  /** Removes the selected element or block; false when there is nothing to remove. */
+  const removeSelected = useCallback(() => {
+    if (!editable) return false;
+    const element = selection?.elementId !== undefined;
+    if (!applyPageEdit(removeSelection(formats[formatId], selection, formatId, template))) return false;
+    say(element ? it.configurator.edit.elementRemoved : it.configurator.edit.blockRemoved);
+    return true;
+  }, [applyPageEdit, editable, formatId, formats, say, selection, template]);
+
+  /** ⌘C / ⌘X on a selected block; false when no block itself is selected. */
+  const copyBlock = useCallback(
+    (cut: boolean) => {
+      if (!editable || selection?.blockId === undefined || selection.elementId !== undefined) return false;
+      const { block: selected } = resolveSelection(formats[formatId], selection);
+      if (selected === undefined) return false;
+      clipboard.current = structuredClone(selected);
+      if (!cut) say(it.configurator.edit.copied);
+      else if (applyPageEdit(removeSelection(formats[formatId], selection, formatId, template))) say(it.configurator.edit.cut);
+      return true;
+    },
+    [applyPageEdit, editable, formatId, formats, say, selection, template],
+  );
+
+  /** ⌘V: the copied block after the selected one, else at the end of the selected page. */
+  const paste = useCallback(() => {
+    if (!editable || clipboard.current === null || selection === null) return false;
+    applyPageEdit(pasteBlock(formats[formatId], selection, clipboard.current, formatId, template, newId));
+    return true;
+  }, [applyPageEdit, editable, formatId, formats, selection, template]);
+
   const textSettings = useCallback((settings: TextSettings) => applyToSelection((p, k, id) => withTextSettings(p, k, id, settings)), [applyToSelection]);
   const groupAlign = useCallback((align: TextGroupAlign) => applyToSelection((p, k, id) => withGroupAlign(p, k, id, align)), [applyToSelection]);
 
@@ -242,9 +311,9 @@ export function Configurator({ header, back, template, formats: initial, assets,
   }, [doc, formatId]); // eslint-disable-line react-hooks/exhaustive-deps -- as undo
 
   /** The latest handlers, for the key listener. */
-  const keys = useRef({ undo, redo, requestEdit, element, selection });
+  const keys = useRef({ undo, redo, requestEdit, element, selection, removeSelected, copyBlock, paste });
   useEffect(() => {
-    keys.current = { undo, redo, requestEdit, element, selection };
+    keys.current = { undo, redo, requestEdit, element, selection, removeSelected, copyBlock, paste };
   });
 
   useEffect(() => {
@@ -266,6 +335,21 @@ export function Configurator({ header, back, template, formats: initial, assets,
           event.preventDefault();
           step(event.key === "ArrowRight" ? 1 : -1);
         }
+        return;
+      }
+      const mod = event.metaKey || event.ctrlKey;
+      // Backspace or Delete removes the selected element or block; a held key removes only once
+      // (the element's block is selected next, and must not go with it).
+      if (!mod && (event.key === "Backspace" || event.key === "Delete")) {
+        if (event.repeat) event.preventDefault();
+        else if (keys.current.removeSelected()) event.preventDefault();
+        return;
+      }
+      // ⌘C, ⌘X and ⌘V copy, cut and paste a block; with no block, or text highlighted, they stay the browser's.
+      const key = event.key.toLowerCase();
+      if (mod && !event.altKey && !event.shiftKey && (key === "c" || key === "x" || key === "v")) {
+        const highlighted = document.getSelection?.()?.isCollapsed === false;
+        if (key === "v" ? keys.current.paste() : !highlighted && keys.current.copyBlock(key === "x")) event.preventDefault();
         return;
       }
       if (event.key === "Escape") setSelection((current) => stepOut(current));
@@ -333,6 +417,8 @@ export function Configurator({ header, back, template, formats: initial, assets,
             editable={editable}
             onTextSettings={textSettings}
             onGroupAlign={groupAlign}
+            onAddElement={addFromElementi}
+            onRemove={removeSelected}
             onSoon={soon}
             onHide={() => toggleLeft(false)}
             hideRef={hideLeft}

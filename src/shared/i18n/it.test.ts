@@ -318,6 +318,19 @@ describe("configurator copy", () => {
     expect(t("configurator.group.splitOne")).toBe("Distanziati: il primo testo in alto, il resto in basso");
     expect(fill(t("configurator.group.splitMany"), { n: 2 })).toBe("Distanziati: i primi 2 testi in alto, il resto in basso");
     expect(fill(t("configurator.soonMessage"), { tool: "Layout" })).toBe("Layout arriva presto.");
+    expect(Object.values(it.configurator.edit)).toEqual([
+      "Seleziona un blocco, oppure trascina l’elemento dentro un blocco.",
+      "Questa pagina ha già 6 blocchi.",
+      "Blocco copiato.",
+      "Blocco tagliato.",
+      "Elemento eliminato. ⌘Z per annullare.",
+      "Blocco eliminato. ⌘Z per annullare.",
+      "Rimuovi elemento",
+      "Rimuovi blocco",
+      "Trascina qui un elemento",
+      "Blocco",
+    ]);
+    expect(Object.values(it.configurator.newTexts)).toEqual(["Nuovo titolo", "Scrivi qui il testo.", "+00%", "«La citazione del cliente.»", "Etichetta", "Titolo"]);
     expect(t("configurator.trial.title")).toBe("Bozza di prova");
     expect(fill(t("configurator.canvas.pageLabel"), { n: 2, name: "La sfida" })).toBe("2 · La sfida");
     expect(t("configurator.canvas.move")).toBe("⠿ Sposta");
