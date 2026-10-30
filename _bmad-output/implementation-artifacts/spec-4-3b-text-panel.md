@@ -21,6 +21,7 @@ context:
 
 **Decisions (owner, 2026-10-29):**
 - Subagents only for the review step (and compiling the epic context).
+- A text with no colour shows the block's `ink` first, then white on a photo, then `#012234`, as the renderer draws it (owner, 2026-10-30, on PR #128).
 
 ## Boundaries & Constraints
 
@@ -29,7 +30,7 @@ context:
   - Eyebrow "Testo · {format name}".
   - **Stile**: a native `<select>` of the seven styles, named from `textStyles(formatId, template)` (Etichetta, Titolo XL, Titolo, Sottotitolo, Testo, Numero, Citazione). Changing it sets `style` and drops `size`, so the text takes its new style's size; until then it keeps its template size.
   - **Allinea**: segmented Sinistra / Centro / Destra (`aria-pressed`). Sinistra removes `align`; the others set `centre` / `right`.
-  - **Colore**: a field with a chip and the value (`#RRGGBB` upper case, or "Trasparente"), then six swatches: `#FFFFFF`, `#EDEDF0`, `#012234`, `#DEFE56`, `#2977FF`, Trasparente (checkerboard). The value shown when `colour` is unset is the one the text renders in: white on a block with an image background, else the block's `ink`, else `#012234`. Typing a colour applies on Enter or on leaving the field when it is `#rrggbb` or `#rrggbbaa` (with or without `#`, any case, stored lower case) or "trasparente"; anything else puts the current value back. The pressed swatch has `aria-pressed="true"`.
+  - **Colore**: a field with a chip and the value (`#RRGGBB` upper case, or "Trasparente"), then six swatches: `#FFFFFF`, `#EDEDF0`, `#012234`, `#DEFE56`, `#2977FF`, Trasparente (checkerboard). The value shown when `colour` is unset is the one the text renders in: the block's `ink`, else white on a block with an image background, else `#012234`. Typing a colour applies on Enter or on leaving the field when it is `#rrggbb` or `#rrggbbaa` (with or without `#`, any case, stored lower case) or "trasparente"; anything else puts the current value back. The pressed swatch has `aria-pressed="true"`.
   - **Colonne**: segmented 1 / 2 (answer 14). 1 removes `columns`; 2 sets `columns: 2`.
 - A Testi group selected: eyebrow "Allineamento nel blocco", four icon buttons with names and titles: In alto, Al centro, In basso, and "Distanziati: il primo testo in alto, il resto in basso" (or "i primi {n} testi" when `splitAt` > 1). Distanziati sets `split` and `splitAt` (kept if already split, else 1); the others set `top` / `centre` / `bottom` and remove `splitAt`.
 - Every control is one undo step, applies only to the format in view, saves through `doc.change`, and is a no-op (no step, no save) when the value is already the one chosen.
@@ -107,7 +108,7 @@ context:
 | 7 | A unit test mutated its fixture midway (blind) | low | The case-insensitive check moved to its own test and fixture | patch |
 | 8 | Missing tests: group `splitMany` name and `aria-pressed`, group and swatch/Colonne/field when not editable, redo, group change kept to the format in view (verify-gap, blind) | medium | Pre-verified gaps; tests added | patch |
 | 9 | No way back to an inherited colour once one is picked (blind) | low | The frozen intent sets the controls (palette, Trasparente, typed colour); only undo restores inheritance | reject |
-| 10 | Spec's default-colour order (photo white before `ink`) differs from the code (blind, edge, verify-gap) | low | The code follows the renderer (inline `ink` beats `.mr-on-photo`); the fix would edit the frozen spec | reject (raised with the owner) |
+| 10 | Spec's default-colour order (photo white before `ink`) differs from the code (blind, edge, verify-gap) | low | The code follows the renderer (inline `ink` beats `.mr-on-photo`); the fix would edit the frozen spec | reject; owner chose the renderer's order (2026-10-30) and the frozen wording was corrected |
 | 11 | Browser check not done while tasks are ticked (blind) | false | Status is `in-review`, not done; the gap is in Implementation Notes and the summary | reject |
 | 12 | Swatches named by hex (blind) | low | Mockup names swatches by hex; Italian colour names need copy decisions | reject |
 | 13 | Distanziati offered on a one-text group (blind) | low | Same look as In alto, harmless; not covered by the intent | reject |
