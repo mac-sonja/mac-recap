@@ -2,7 +2,7 @@
 
 import { GalleryHorizontal, Hash, Heading, Image, LayoutGrid, PanelLeft, Quote, Tag, Type, Video, type LucideIcon } from "lucide-react";
 import type { Ref } from "react";
-import { SECONDARY_ACTION } from "@/app/_components/button-styles";
+import { PRESSABLE, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { ThemeSwitch } from "@/app/_components/theme-switch";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import type { Background, Block, DocumentElement, Page, TextGroupAlign } from "@/modules/generation";
@@ -13,7 +13,9 @@ import { ASPECT, EYEBROW, ICON_BUTTON, PANEL_SECTION, SEG, SEG_BUTTON, SOON_ID }
 import type { TextSettings } from "./text-editing";
 import { GroupPanel, TextPanel } from "./text-panel";
 
-const ELEMENT_ICONS: Readonly<Record<keyof typeof it.configurator.elements, LucideIcon>> = {
+export type ElementKey = keyof typeof it.configurator.elements;
+
+const ELEMENT_ICONS: Readonly<Record<ElementKey, LucideIcon>> = {
   block: LayoutGrid,
   group: Type,
   title: Heading,
@@ -40,6 +42,10 @@ export interface LeftPanelProps {
   editable: boolean;
   onTextSettings: (settings: TextSettings) => void;
   onGroupAlign: (align: TextGroupAlign) => void;
+  /** An Elementi button pressed (Story 4.3c): Blocco adds a block, the others an element to the selected block. */
+  onAddElement: (key: ElementKey) => void;
+  /** **Rimuovi elemento** / **Rimuovi blocco**: removes the selection. */
+  onRemove: () => void;
   onSoon: (tool: string) => void;
   onHide: () => void;
   hideRef: Ref<HTMLButtonElement>;
@@ -58,6 +64,20 @@ function SoonHeading({ children }: { children: string }) {
       {children}
       <span className="font-label text-[11px] font-medium tracking-normal text-foreground-muted normal-case">{it.configurator.soon}</span>
     </p>
+  );
+}
+
+/** **Rimuovi elemento** / **Rimuovi blocco** under the selection's name; off, it says it arrives soon. */
+function RemoveButton({ label, editable, onRemove, onSoon }: { label: string; editable: boolean; onRemove: () => void; onSoon: (tool: string) => void }) {
+  return (
+    <button
+      type="button"
+      {...(editable ? {} : { "aria-disabled": true, "aria-describedby": SOON_ID, title: it.configurator.soon })}
+      onClick={editable ? onRemove : () => onSoon(label)}
+      className={cn(SECONDARY_ACTION, "mt-3 h-7 w-full text-[12.5px]", !editable && "cursor-default aria-disabled:opacity-60")}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -82,7 +102,8 @@ const colourOf = (background: Background): string | undefined =>
  * first, with a text's settings or a Testi group's alignment (Story 4.3b), then always
  * the page tools, acting on the selected page or the page in view:
  * **Layout**, **Pagine di default**, **Elementi**, **Sfondo** and **Elimina pagina**.
- * They arrive with Stories 4.3, 4.4 and 4.13: here they show in place, inactive, and
+ * Elementi adds a block or an element, and the selection has its **Rimuovi** button
+ * (Story 4.3c). The rest arrive with Stories 4.4, 4.5 and 4.13: here they show in place, inactive, and
  * say so when pressed. The theme switch sits at its foot.
  */
 export function LeftPanel({
@@ -96,6 +117,8 @@ export function LeftPanel({
   editable,
   onTextSettings,
   onGroupAlign,
+  onAddElement,
+  onRemove,
   onSoon,
   onHide,
   hideRef,
@@ -128,6 +151,12 @@ export function LeftPanel({
             <div className="mt-0.5 font-display text-[15px] leading-snug font-semibold tracking-[-0.016em] text-foreground-strong">
               {element === undefined ? block.name : elementName(element, formatId, template)}
             </div>
+            <RemoveButton
+              label={element === undefined ? it.configurator.edit.removeBlock : it.configurator.edit.removeElement}
+              editable={editable}
+              onRemove={onRemove}
+              onSoon={onSoon}
+            />
           </div>
         )}
         {block !== undefined && element?.type === "text" && (
@@ -184,17 +213,22 @@ export function LeftPanel({
         )}
 
         <section className={PANEL_SECTION} aria-label={t.elements}>
-          <SoonHeading>{t.elements}</SoonHeading>
+          {editable ? <p className={EYEBROW}>{t.elements}</p> : <SoonHeading>{t.elements}</SoonHeading>}
           <div className="grid grid-cols-2 gap-1.5">
-            {(Object.keys(it.configurator.elements) as (keyof typeof it.configurator.elements)[]).map((key) => {
+            {(Object.keys(it.configurator.elements) as ElementKey[]).map((key) => {
               const Icon = ELEMENT_ICONS[key];
+              // Animazione arrives with its dialog (Story 4.5).
+              const active = editable && key !== "animation";
               return (
                 <button
                   key={key}
                   type="button"
-                  {...inactive}
-                  onClick={soon(t.elements)}
-                  className="flex h-9 cursor-default items-center gap-2 rounded-md bg-surface-raised px-2.5 font-label text-[13px] font-medium text-foreground shadow-card"
+                  {...(active ? {} : inactive)}
+                  onClick={active ? () => onAddElement(key) : soon(key === "animation" ? it.configurator.elements.animation : t.elements)}
+                  className={cn(
+                    "flex h-9 items-center gap-2 rounded-md bg-surface-raised px-2.5 font-label text-[13px] font-medium text-foreground shadow-card",
+                    active ? cn("hover:bg-surface-hover", PRESSABLE) : "cursor-default aria-disabled:opacity-60",
+                  )}
                 >
                   <Icon aria-hidden="true" className="size-[15px] shrink-0 text-foreground-muted" />
                   {it.configurator.elements[key]}
