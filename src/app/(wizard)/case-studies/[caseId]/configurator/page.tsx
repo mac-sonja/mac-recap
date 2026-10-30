@@ -9,7 +9,15 @@ import { it } from "@/shared/i18n/it";
 import { boundValuesOf, imagePoolOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../../_lib/configurator-data";
 import { Configurator } from "../../../_components/configurator/configurator";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
+import { isMedia, type MediaUploadRules } from "../../../_components/configurator/media-files";
 import { saveRevisionDoc } from "./actions";
+
+/** The Media tab's drop zone: Story 2.7's limits, images and videos only. */
+const MEDIA_RULES: MediaUploadRules = {
+  maxFiles: material.MAX_ASSETS_PER_CASE,
+  maxFileBytes: material.MAX_FILE_BYTES,
+  contentTypes: material.ALLOWED_CONTENT_TYPES.filter((type) => type.startsWith("image/") || type.startsWith("video/")),
+};
 
 export interface ConfiguratorPageProps {
   params: Promise<{ caseId: string }>;
@@ -30,6 +38,8 @@ export interface ConfiguratorPageProps {
  *
  * Story 4.4c: Pagine di default gets the generated texts (from `generatedDoc`) and the
  * case's images the revision already uses (none with no revision).
+ *
+ * Story 4.5a: the Media tab gets the case's images and videos and the upload rules.
  */
 export default async function ConfiguratorPage({ params }: ConfiguratorPageProps) {
   const shell = await requireSurface("edit");
@@ -83,6 +93,8 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
       values={boundValuesOf(current, info.value, client.value.logoUrl, form.value)}
       trial={doc === null}
       theme={theme}
+      media={listed.value.filter(isMedia)}
+      mediaRules={MEDIA_RULES}
     />
   );
 }

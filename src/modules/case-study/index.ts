@@ -40,6 +40,7 @@ import {
   makeGetEditableRevision,
   makeGetLiveRevision,
   makeSaveRevisionDoc,
+  type CaseAssetIds,
   type CaseStudyRevision,
 } from "@/modules/case-study/application/revisions";
 import { createSupabaseRevisionRepository } from "@/modules/case-study/adapters/supabase/revision-repository";
@@ -159,7 +160,7 @@ export type {
   RevisionSubject,
   SaveRevisionDocInput,
 } from "@/modules/case-study/domain/revision";
-export type { CaseStudyRevision } from "@/modules/case-study/application/revisions";
+export type { CaseAssetIds, CaseStudyRevision } from "@/modules/case-study/application/revisions";
 /** Every asset id a document references, as `saveRevisionDoc` checks it (pure; Story 4.4c's image pool). */
 export { referencedAssetIds } from "@/modules/case-study/application/revisions";
 export type { TransitionEvent } from "@/modules/case-study/domain/transition";
@@ -524,14 +525,16 @@ export function createWorkingRevision(actor: Actor, input: unknown): Promise<Res
  *
  * Errors, with nothing written: `INVALID_INPUT`, `DOCUMENT_INVALID`,
  * `DOCUMENT_SCHEMA_UNSUPPORTED`, `FORMAT_NOT_IN_REVISION`, `NOT_FOUND` (unknown
- * revision, another case's, or the case unknown or deleted), `ASSET_NOT_ALLOWED` (an
- * asset neither the stored `doc` nor `generatedDoc` references), `STALE_HEAD` (no longer the head),
+ * revision, another case's, or the case unknown or deleted), `ASSET_NOT_ALLOWED` (the
+ * media guardrail, Story 4.5a: a newly referenced asset that is neither a non-deleted file
+ * of this case, by `caseAssetIds` (pass `material.liveAssetIds`), nor a file of its client;
+ * references the stored `doc` or `generatedDoc` already has are kept), the asset lookup errors, `STALE_HEAD` (no longer the head),
  * `CASE_NOT_EDITABLE` (the case is not `in_review`), `REVISION_NOT_WRITABLE` (not
  * `working`), `STALE_REVISION` (saved by someone else since it was read).
  * `REVISION_WRITE_FAILED` may come after the write committed: re-read the head.
  */
-export function saveRevisionDoc(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
-  return makeSaveRevisionDoc(revisionDeps())(actor, input);
+export function saveRevisionDoc(actor: Actor, input: unknown, caseAssetIds: CaseAssetIds): Promise<Result<CaseStudyRevision>> {
+  return makeSaveRevisionDoc({ ...revisionDeps(), clients: createSupabaseClientRepository(), caseAssetIds })(actor, input);
 }
 
 /**

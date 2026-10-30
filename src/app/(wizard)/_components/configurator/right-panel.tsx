@@ -1,13 +1,16 @@
 "use client";
 
 import { LayoutGrid, List, PanelRight, Search } from "lucide-react";
-import { memo, useId, useState, type Ref } from "react";
+import { memo, useId, useMemo, useState, type Ref } from "react";
 import { SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
 import type { Page, PageSection } from "@/modules/generation";
+import type { ListedAsset } from "@/modules/material";
 import { renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import { ASPECT, EYEBROW, ICON_BUTTON, SEG, SEG_BUTTON, SOON_ID } from "./styles";
+import { pageAssetIds, type MediaUploadRules } from "./media-files";
+import { MediaTab } from "./media-tab";
+import { ASPECT, EYEBROW, ICON_BUTTON, SEG, SEG_BUTTON } from "./styles";
 
 const SECTIONS: readonly PageSection[] = ["intro", "output", "risultati"];
 
@@ -22,7 +25,13 @@ export interface RightPanelProps {
   /** The selected page, marked `aria-current`. */
   currentPageKey: string | undefined;
   onSelectPage: (pageKey: string) => void;
-  onSoon: (tool: string) => void;
+  /** The case whose Media the tab lists and uploads to (Story 4.5a). */
+  caseId: string;
+  /** The case's images and videos, oldest first. */
+  media: readonly ListedAsset[];
+  mediaRules: MediaUploadRules;
+  /** A message at the top of the canvas. */
+  say: (text: string) => void;
   onHide: () => void;
   hideRef: Ref<HTMLButtonElement>;
 }
@@ -54,37 +63,46 @@ const Thumbnail = memo(function Thumbnail({
 });
 
 /**
- * The right panel (224 px, mockup `.pane-r`): the tabs **Pagine** and **Media** (Media
- * arrives with Story 4.5 and says so), **Cerca** (filters the pages by name) and the
- * grid or list view. Pagine lists the format's pages as live thumbnails, grouped by
+ * The right panel (224 px, mockup `.pane-r`): the tabs **Pagine** and **Media** (Story
+ * 4.5a, `MediaTab`), **Cerca** (filters the pages by name, or the files by file name) and
+ * the grid or list view, shared by both tabs. Pagine lists the format's pages as live thumbnails, grouped by
  * section and labelled "{n} · {name}"; clicking one selects that page and brings it
  * to the middle of the canvas.
  */
-export function RightPanel({ hidden = false, formatId, template, pages, assets, values, currentPageKey, onSelectPage, onSoon, onHide, hideRef }: RightPanelProps) {
+export function RightPanel({
+  hidden = false,
+  formatId,
+  template,
+  pages,
+  assets,
+  values,
+  currentPageKey,
+  onSelectPage,
+  caseId,
+  media,
+  mediaRules,
+  say,
+  onHide,
+  hideRef,
+}: RightPanelProps) {
+  const [tab, setTab] = useState<"pages" | "media">("pages");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const searchId = useId();
   const q = query.trim().toLocaleLowerCase("it");
   const numbered = pages.map((page, i) => ({ page, number: i + 1 }));
   const shown = q === "" ? numbered : numbered.filter(({ page }) => page.name.toLocaleLowerCase("it").includes(q));
+  const onPage = useMemo(() => pageAssetIds(pages), [pages]);
 
   return (
     <aside aria-label={it.configurator.panels.right} hidden={hidden} className="col-start-3 row-start-1 flex min-h-0 flex-col border-l border-border bg-surface-sidebar">
       <div className="flex shrink-0 flex-col gap-2.5 border-b border-border p-3.5">
         <div className="flex items-center gap-1.5">
           <div role="group" aria-label={it.configurator.tabs.label} className={cn(SEG, "flex flex-1")}>
-            <button type="button" aria-pressed="true" className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
+            <button type="button" aria-pressed={tab === "pages"} onClick={() => setTab("pages")} className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
               {it.configurator.tabs.pages}
             </button>
-            <button
-              type="button"
-              aria-pressed="false"
-              aria-disabled="true"
-              aria-describedby={SOON_ID}
-              title={it.configurator.soon}
-              onClick={() => onSoon(it.configurator.tabs.media)}
-              className={cn(SEG_BUTTON, "flex-1 px-1.5")}
-            >
+            <button type="button" aria-pressed={tab === "media"} onClick={() => setTab("media")} className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
               {it.configurator.tabs.media}
             </button>
           </div>
@@ -102,7 +120,7 @@ export function RightPanel({ hidden = false, formatId, template, pages, assets, 
         <div className="flex gap-2">
           <div className="relative min-w-0 flex-1">
             <label htmlFor={searchId} className="sr-only">
-              {it.configurator.search.label}
+              {tab === "media" ? it.configurator.search.mediaLabel : it.configurator.search.label}
             </label>
             <Search aria-hidden="true" className={SEARCH_ICON} />
             <input
@@ -125,7 +143,7 @@ export function RightPanel({ hidden = false, formatId, template, pages, assets, 
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3.5">
+      <div hidden={tab !== "pages"} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3.5">
         {shown.length === 0 && q !== "" && <p className="font-label text-[12.5px] text-foreground-muted">{fill(it.configurator.noMatch, { query: query.trim() })}</p>}
         {SECTIONS.map((section) => {
           const inSection = shown.filter(({ page }) => page.section === section);
@@ -159,6 +177,17 @@ export function RightPanel({ hidden = false, formatId, template, pages, assets, 
           );
         })}
       </div>
+      <MediaTab
+        hidden={tab !== "media"}
+        caseId={caseId}
+        initialFiles={media}
+        rules={mediaRules}
+        assets={assets}
+        onPage={onPage}
+        query={query}
+        view={view}
+        say={say}
+      />
     </aside>
   );
 }

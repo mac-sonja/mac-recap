@@ -16,7 +16,7 @@ import { makeConfirmUpload } from "@/modules/material/application/confirm-upload
 import type { MaterialDeps } from "@/modules/material/application/deps";
 import { makeGetDetailsForm } from "@/modules/material/application/get-details-form";
 import { makeGetRendition } from "@/modules/material/application/get-rendition";
-import { makeHasMaterial } from "@/modules/material/application/has-material";
+import { makeHasMaterial, makeLiveAssetIds } from "@/modules/material/application/has-material";
 import { makeListAssets } from "@/modules/material/application/list-assets";
 import {
   makeListGenerationAssets,
@@ -167,6 +167,15 @@ export function setFavourite(actor: Actor, input: unknown): Promise<Result<void>
  */
 export function hasMaterial(caseId: unknown): Promise<Result<boolean>> {
   return makeHasMaterial(storagelessDeps())(caseId);
+}
+
+/**
+ * The ids of a case's non-deleted assets, oldest first: what a revision may newly reference
+ * (Story 4.5a, passed to `case-study.saveRevisionDoc`). Never touches storage. Errors:
+ * `INVALID_INPUT` (malformed id), `ASSET_LOOKUP_FAILED`.
+ */
+export function liveAssetIds(caseId: unknown): Promise<Result<string[]>> {
+  return makeLiveAssetIds(storagelessDeps())(caseId);
 }
 
 /**

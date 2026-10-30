@@ -11,6 +11,10 @@ import { caseHistoryV0, caseHistoryV1, caseHistoryV2 } from "@/modules/generatio
 import { UPGRADE_ID_PREFIX } from "@/modules/generation";
 import { FORMAT_IDS, starterPages } from "@/modules/rendering";
 import { createTestClient } from "../helpers/db-clients";
+import { ok } from "@/shared/result";
+
+/** The media guardrail's case files: none (these saves add no asset). */
+const noNewAssets = async () => ok([]);
 
 const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -748,7 +752,7 @@ describe("save_revision_doc", () => {
     const { caseId, revisionId } = await editableCase();
     await arrange(caseId, revisionId);
     const { saveRevisionDoc } = await loadCaseStudy();
-    expect(await saveRevisionDoc(await signedInActor(), { caseId, revisionId, doc: edited(), expectedVersion: 0 })).toMatchObject({
+    expect(await saveRevisionDoc(await signedInActor(), { caseId, revisionId, doc: edited(), expectedVersion: 0 }, noNewAssets)).toMatchObject({
       ok: false,
       error: { code },
     });
@@ -758,7 +762,7 @@ describe("save_revision_doc", () => {
     const created = await createCase();
     const revision = await createRevision(created.id, 0);
     const { saveRevisionDoc } = await loadCaseStudy();
-    expect(await saveRevisionDoc(await signedInActor(), { caseId: created.id, revisionId: revision.id, doc: edited(), expectedVersion: 0 })).toMatchObject({
+    expect(await saveRevisionDoc(await signedInActor(), { caseId: created.id, revisionId: revision.id, doc: edited(), expectedVersion: 0 }, noNewAssets)).toMatchObject({
       ok: false,
       error: { code: "CASE_NOT_EDITABLE" },
     });
@@ -768,9 +772,9 @@ describe("save_revision_doc", () => {
     const { caseId, revisionId } = await editableCase();
     const { saveRevisionDoc } = await loadCaseStudy();
     const actor = await signedInActor();
-    const saved = await saveRevisionDoc(actor, { caseId, revisionId, doc: edited(), expectedVersion: 0 });
+    const saved = await saveRevisionDoc(actor, { caseId, revisionId, doc: edited(), expectedVersion: 0 }, noNewAssets);
     expect(saved).toMatchObject({ ok: true, value: { version: 1, doc: edited(), generatedDoc: v2() } });
-    expect(await saveRevisionDoc(actor, { caseId, revisionId, doc: v2(), expectedVersion: 0 })).toMatchObject({
+    expect(await saveRevisionDoc(actor, { caseId, revisionId, doc: v2(), expectedVersion: 0 }, noNewAssets)).toMatchObject({
       ok: false,
       error: { code: "STALE_REVISION" },
     });

@@ -963,7 +963,40 @@ export const it = {
     },
     search: {
       label: "Cerca tra le pagine",
+      /** On the Media tab. */
+      mediaLabel: "Cerca tra i media",
       placeholder: "Cerca",
+    },
+    /**
+     * The Media tab (Story 4.5a, mockup `renderRight`): the case's images and videos, a star
+     * per file and the drop zone at its foot.
+     */
+    media: {
+      label: "Media della case",
+      empty: "Ancora nessuna immagine o video. Trascinali qui sotto.",
+      /** `{query}` is the search text. */
+      noMatch: "Nessun file per “{query}”.",
+      /** Read after a file's name when it is on a page of the format in view. */
+      onPage: "sulla pagina",
+      /** `{length}` is m:ss. */
+      videoLength: "video di {length}",
+      favourite: {
+        add: "Aggiungi ai preferiti",
+        remove: "Togli dai preferiti",
+      },
+      drop: {
+        lead: "Trascina qui immagini e video",
+        hint: "Finiscono nei Media di questa case.",
+        /** After `lead` in the drop zone's accessible name: as a button it opens the file picker. */
+        choose: "oppure sceglili dai file",
+        /** `{n}` files still uploading. */
+        uploading: "Caricamento di {n} file…",
+      },
+      /** `{n}` files uploaded in one go. */
+      uploaded: "{n} file caricati.",
+      errors: {
+        type: "Qui vanno solo immagini e video.",
+      },
     },
     view: {
       label: "Vista",

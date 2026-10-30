@@ -59,8 +59,7 @@ export function starterPagesOf(assets: readonly ListedAsset[], form: DetailsForm
 
 /**
  * The case's images (oldest first) that `docs` already reference: what Pagine di default
- * may place (Story 4.4c). `saveRevisionDoc` refuses any other asset until Story 4.5's
- * media guardrail.
+ * may place (Story 4.4c).
  */
 export function imagePoolOf(assets: readonly ListedAsset[], docs: readonly unknown[]): string[] {
   const used = new Set(docs.flatMap((doc) => [...referencedAssetIds(doc)]));

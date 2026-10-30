@@ -13,7 +13,9 @@ import {
   type TextGroupElement,
 } from "@/modules/generation";
 import { fill, it as dict } from "@/shared/i18n/it";
+import type { ListedAsset } from "@/modules/material";
 import { Configurator, type ConfiguratorProps } from "./configurator";
+import type { MediaUploadRules } from "./media-files";
 import { generatedTextsOf, type GeneratedTexts } from "./default-pages";
 import { ownTextIds } from "./in-place-text";
 import { STATUS_MESSAGE_MS } from "./status-message";
@@ -31,7 +33,19 @@ vi.mock("next/link", () => ({
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
+// The Media tab's server actions (Story 4.5a).
+const actions = vi.hoisted(() => ({
+  listAssets: vi.fn(),
+  presignAssetUpload: vi.fn(),
+  confirmAssetUpload: vi.fn(),
+  setAssetFavourite: vi.fn(),
+}));
+vi.mock("@/app/(tool)/case-studies/actions", () => actions);
+const uploads = vi.hoisted(() => ({ uploadFile: vi.fn() }));
+vi.mock("../../_lib/upload", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../_lib/upload")>()), uploadFile: uploads.uploadFile }));
+
 const IMAGE = "bbbbbbbb-0000-4000-8000-000000000001";
+const VIDEO = "bbbbbbbb-0000-4000-8000-000000000002";
 const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const REVISION_ID = "dddddddd-0000-4000-8000-000000000001";
 
@@ -51,6 +65,21 @@ const VALUES: BoundValues = {
 
 const formats = starterFormats();
 
+const listed = (id: string, kind: "image" | "video", name: string, over: Partial<ListedAsset> = {}): ListedAsset => ({
+  id,
+  kind,
+  originalFileName: name,
+  contentType: kind === "image" ? "image/jpeg" : "video/mp4",
+  sizeBytes: 1000,
+  createdAt: "2026-10-30T10:00:00Z",
+  isFavourite: false,
+  thumbnailUrl: `https://cdn.test/${name}.webp`,
+  thumbnailPending: false,
+  ...over,
+});
+const MEDIA: readonly ListedAsset[] = [listed(IMAGE, "image", "LUM_cover.jpg", { isFavourite: true }), listed(VIDEO, "video", "LUM_reel.mp4")];
+const MEDIA_RULES: MediaUploadRules = { maxFiles: 20, maxFileBytes: 50 * 1024 * 1024, contentTypes: ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime"] };
+
 type SaveFn = ConfiguratorProps["onSave"];
 const savedOk: SaveFn = async (input) => ({ ok: true, value: { version: input.expectedVersion + 1 } });
 
@@ -63,7 +92,8 @@ function setup(
     generatedTexts = {},
     images = [],
     values = VALUES,
-  }: { editable?: boolean; onSave?: SaveFn; generatedTexts?: GeneratedTexts; images?: readonly string[]; values?: BoundValues } = {},
+    media = MEDIA,
+  }: { editable?: boolean; onSave?: SaveFn; generatedTexts?: GeneratedTexts; images?: readonly string[]; values?: BoundValues; media?: readonly ListedAsset[] } = {},
 ) {
   return render(
     <Configurator
@@ -80,6 +110,8 @@ function setup(
       images={images}
       trial={trial}
       theme="system"
+      media={media}
+      mediaRules={MEDIA_RULES}
     />,
   );
 }
@@ -288,8 +320,6 @@ describe("Configurator", () => {
     expect(canvas().innerHTML).toBe(before);
     act(() => vi.advanceTimersByTime(STATUS_MESSAGE_MS));
     expect(status().textContent).toBe("");
-    fireEvent.click(button(dict.configurator.tabs.media));
-    expect(status().textContent).toBe("Media arriva presto.");
     fireEvent.click(button(dict.configurator.approve));
     expect(status().textContent).toBe("Approva arriva presto.");
   });
@@ -1841,5 +1871,192 @@ describe("Configurator Pagine di default (Story 4.4c)", () => {
     fireEvent.click(defaultButton("Intro"));
     expect(status().textContent).toBe(`${tools.defaultPages} arriva presto.`);
     expect(pageNode("intro").innerHTML).toBe(before);
+  });
+});
+
+describe("Configurator Media tab (Story 4.5a)", () => {
+  const openMedia = () => fireEvent.click(button(dict.configurator.tabs.media, rightPanel()));
+  const tiles = () => [...rightPanel().querySelectorAll<HTMLElement>("[data-media]")];
+  const star = (name: string, on: boolean) =>
+    button(`${on ? dict.configurator.media.favourite.remove : dict.configurator.media.favourite.add}: ${name}`, rightPanel());
+  const dropZone = () => button(`${dict.configurator.media.drop.lead}, ${dict.configurator.media.drop.choose}`, rightPanel());
+  const drop = (files: File[]) => fireEvent.drop(dropZone(), { dataTransfer: { files, dropEffect: "copy" } });
+  const flush = async () => {
+    for (let i = 0; i < 10; i++) await act(async () => {});
+  };
+
+  beforeEach(() => {
+    for (const fn of Object.values(actions)) fn.mockReset();
+    uploads.uploadFile.mockReset().mockResolvedValue(undefined);
+    actions.listAssets.mockResolvedValue({ ok: true, value: MEDIA });
+    actions.setAssetFavourite.mockResolvedValue({ ok: true, value: undefined });
+  });
+
+  it("lists the case's images and videos, marks those on a page of the format in view, and searches by file name", () => {
+    setup();
+    expect(button(dict.configurator.tabs.pages, rightPanel()).getAttribute("aria-pressed")).toBe("true");
+    openMedia();
+    expect(button(dict.configurator.tabs.media, rightPanel()).getAttribute("aria-pressed")).toBe("true");
+    expect(tiles().map((t) => t.dataset.media)).toEqual([IMAGE, VIDEO]);
+    expect(tiles().map((t) => t.dataset.onPage !== undefined)).toEqual([true, false]);
+    expect(tiles()[0].textContent).toContain(dict.configurator.media.onPage);
+    expect(rightPanel().querySelector("[data-thumb]")?.closest("[hidden]")).not.toBeNull();
+
+    const search = within(rightPanel()).getByLabelText(dict.configurator.search.mediaLabel);
+    fireEvent.change(search, { target: { value: "reel" } });
+    expect(tiles().map((t) => t.dataset.media)).toEqual([VIDEO]);
+    fireEvent.change(search, { target: { value: "zzz" } });
+    expect(rightPanel().textContent).toContain(fill(dict.configurator.media.noMatch, { query: "zzz" }));
+  });
+
+  it("drops the on-page mark when the format in view no longer shows the file", () => {
+    const without = { ...formats, carosello_1_1: formats.carosello_1_1.map((page) => ({ ...page, blocks: [] })) };
+    setup(false, without);
+    openMedia();
+    expect(tiles()[0].dataset.onPage).toBe("");
+    fireEvent.click(button(/Carosello/));
+    expect(tiles()[0].dataset.onPage).toBeUndefined();
+  });
+
+  it("switches back to Pagine with its thumbnails", () => {
+    setup();
+    openMedia();
+    fireEvent.click(button(dict.configurator.tabs.pages, rightPanel()));
+    expect(rightPanel().querySelector("[data-thumb]")?.closest("[hidden]")).toBeNull();
+    expect(within(rightPanel()).getByLabelText(dict.configurator.search.label)).toBeTruthy();
+  });
+
+  it("says when the case has no images or videos yet", () => {
+    setup(false, formats, { media: [] });
+    openMedia();
+    expect(rightPanel().textContent).toContain(dict.configurator.media.empty);
+  });
+
+  it("stars a file at once and saves it as a favourite", async () => {
+    setup();
+    openMedia();
+    fireEvent.click(star("LUM_reel.mp4", false));
+    expect(star("LUM_reel.mp4", true).getAttribute("aria-pressed")).toBe("true");
+    await flush();
+    expect(actions.setAssetFavourite).toHaveBeenCalledWith({ caseId: CASE_ID, assetId: VIDEO, isFavourite: true });
+    expect(star("LUM_reel.mp4", true)).toBeTruthy();
+  });
+
+  it("puts the star back and says so when the save fails", async () => {
+    actions.setAssetFavourite.mockResolvedValue({ ok: false, status: 500, error: { code: "ASSET_WRITE_FAILED", message: "m" } });
+    setup();
+    openMedia();
+    fireEvent.click(star("LUM_cover.jpg", true));
+    await flush();
+    expect(actions.setAssetFavourite).toHaveBeenCalledWith({ caseId: CASE_ID, assetId: IMAGE, isFavourite: false });
+    expect(star("LUM_cover.jpg", true).getAttribute("aria-pressed")).toBe("true");
+    expect(status().textContent).toBe(dict.wizard.material.errors.favourite);
+  });
+
+  it("uploads dropped images and videos to the case's Media and lists them; another type is refused by name without a call", async () => {
+    const added = listed("bbbbbbbb-0000-4000-8000-000000000003", "image", "nuova.png");
+    actions.presignAssetUpload.mockResolvedValue({ ok: true, value: { assetId: added.id, url: "https://storage.test/u", method: "PUT", headers: {} } });
+    actions.confirmAssetUpload.mockResolvedValue({ ok: true, value: { id: added.id } });
+    actions.listAssets.mockResolvedValue({ ok: true, value: [...MEDIA, added, listed("bbbbbbbb-0000-4000-8000-000000000004", "image", "x.pdf", { kind: "document" as never })] });
+    setup();
+    openMedia();
+    drop([new File(["x"], "nuova.png", { type: "image/png" }), new File(["x"], "brief.pdf", { type: "application/pdf" })]);
+    await flush();
+    expect(actions.presignAssetUpload).toHaveBeenCalledTimes(1);
+    expect(actions.presignAssetUpload).toHaveBeenCalledWith({ caseId: CASE_ID, contentType: "image/png", sizeBytes: 1 });
+    expect(actions.confirmAssetUpload).toHaveBeenCalledWith({ caseId: CASE_ID, assetId: added.id, contentType: "image/png", fileName: "nuova.png" });
+    expect(tiles().map((t) => t.dataset.media)).toEqual([IMAGE, VIDEO, added.id]);
+    expect(status().textContent).toContain(fill(dict.wizard.material.announce.done, { name: "nuova.png" }));
+    expect(status().textContent).toContain(fill(dict.wizard.material.announce.error, { name: "brief.pdf", message: dict.configurator.media.errors.type }));
+  });
+
+  it("names a file the server refuses, without retrying it", async () => {
+    actions.presignAssetUpload.mockResolvedValue({ ok: false, status: 409, error: { code: "FILE_LIMIT_REACHED", message: "m" } });
+    setup();
+    openMedia();
+    drop([new File(["x"], "troppi.jpg", { type: "image/jpeg" })]);
+    await flush();
+    expect(actions.presignAssetUpload).toHaveBeenCalledTimes(1);
+    expect(status().textContent).toBe(fill(dict.wizard.material.announce.error, { name: "troppi.jpg", message: fill(dict.wizard.material.errors.limit, { max: 20 }) }));
+    expect(tiles()).toHaveLength(2);
+  });
+
+  it("retries a failed upload once, then says it did not go", async () => {
+    actions.presignAssetUpload.mockResolvedValue({ ok: true, value: { assetId: "bbbbbbbb-0000-4000-8000-000000000009", url: "https://storage.test/u", method: "PUT", headers: {} } });
+    uploads.uploadFile.mockRejectedValue(new Error("network"));
+    setup();
+    openMedia();
+    drop([new File(["x"], "lenta.jpg", { type: "image/jpeg" })]);
+    await flush();
+    expect(actions.presignAssetUpload).toHaveBeenCalledTimes(2);
+    expect(status().textContent).toBe(fill(dict.wizard.material.announce.error, { name: "lenta.jpg", message: dict.wizard.material.errors.failed }));
+  });
+
+  it("refuses a file over the size limit by name, without a call", async () => {
+    setup(false, formats, {});
+    openMedia();
+    const big = new File(["x"], "enorme.mp4", { type: "video/mp4" });
+    Object.defineProperty(big, "size", { value: MEDIA_RULES.maxFileBytes + 1 });
+    drop([big]);
+    await flush();
+    expect(actions.presignAssetUpload).not.toHaveBeenCalled();
+    expect(status().textContent).toBe(fill(dict.wizard.material.announce.error, { name: "enorme.mp4", message: fill(dict.wizard.material.errors.tooLarge, { size: 50 }) }));
+  });
+
+  it("turns the drop zone off when storage isn't configured, and says so on a later drop", async () => {
+    actions.presignAssetUpload.mockResolvedValue({ ok: false, status: 503, error: { code: "STORAGE_NOT_CONFIGURED", message: "m" } });
+    setup();
+    openMedia();
+    drop([new File(["x"], "a.jpg", { type: "image/jpeg" })]);
+    await flush();
+    expect(status().textContent).toBe(dict.wizard.material.errors.storage);
+    expect(dropZone().getAttribute("aria-disabled")).toBe("true");
+    drop([new File(["x"], "b.jpg", { type: "image/jpeg" })]);
+    await flush();
+    expect(actions.presignAssetUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts a file as uploaded when its confirm failed late but it was stored after all", async () => {
+    const added = listed("bbbbbbbb-0000-4000-8000-000000000005", "image", "tardi.jpg");
+    actions.presignAssetUpload.mockResolvedValue({ ok: true, value: { assetId: added.id, url: "https://storage.test/u", method: "PUT", headers: {} } });
+    actions.confirmAssetUpload.mockResolvedValue({ ok: false, status: 500, error: { code: "ASSET_WRITE_FAILED", message: "m" } });
+    actions.listAssets.mockResolvedValue({ ok: true, value: [...MEDIA, added] });
+    setup();
+    openMedia();
+    drop([new File(["x"], "tardi.jpg", { type: "image/jpeg" })]);
+    await flush();
+    expect(actions.presignAssetUpload).toHaveBeenCalledTimes(1);
+    expect(status().textContent).toBe(fill(dict.wizard.material.announce.done, { name: "tardi.jpg" }));
+    expect(tiles().map((t) => t.dataset.media)).toContain(added.id);
+  });
+
+  it("reads the list again while a thumbnail is being made, then shows it", async () => {
+    vi.useFakeTimers();
+    const pending = listed(VIDEO, "video", "LUM_reel.mp4", { thumbnailUrl: null, thumbnailPending: true });
+    actions.listAssets.mockResolvedValue({ ok: true, value: [MEDIA[0], { ...pending, thumbnailUrl: "https://cdn.test/poster.webp", thumbnailPending: false }] });
+    setup(false, formats, { media: [MEDIA[0], pending] });
+    openMedia();
+    expect(tiles()[1].querySelector("img")).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(actions.listAssets).toHaveBeenCalledWith({ caseId: CASE_ID });
+    expect(tiles()[1].querySelector("img")?.getAttribute("src")).toBe("https://cdn.test/poster.webp");
+  });
+
+  it("opens the file picker from the keyboard", () => {
+    setup();
+    openMedia();
+    const picker = rightPanel().querySelector<HTMLInputElement>('input[type="file"]')!;
+    const click = vi.spyOn(picker, "click").mockImplementation(() => {});
+    fireEvent.keyDown(dropZone(), { key: "Enter" });
+    fireEvent.keyDown(dropZone(), { key: " " });
+    expect(click).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers no recolour, filter or effect control", () => {
+    setup();
+    openMedia();
+    expect(rightPanel().textContent).not.toMatch(/colora|filtr|effett/i);
   });
 });
