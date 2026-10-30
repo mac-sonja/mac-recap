@@ -247,3 +247,6 @@
 - source_spec: none
   summary: Story 4.3d: client and case fields edited on the page (client name, sector as free text, logo by upload; case year and services) through the client's and case's own update use cases, shown at once everywhere; the document keeps only the binding.
   evidence: Split from Story 4.3 at the owner's choice (2026-10-29); touches the client and case modules, not the document save path.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3c-elements-and-blocks.md`
+  summary: Story 4.3e: drag-and-drop on the canvas: drag Elementi into a block (before the element under the pointer), move elements within or across blocks and pages, swap blocks with "⠿ Sposta" (or a block's only element), drop a block on another page's end, with "Trascina l’elemento dentro un blocco."; built on 4.3c's page edits.
+  evidence: Split from 4.3c at the owner's choice (2026-10-30) to keep the spec under the size limit; 4.3c ships the click and keyboard edits first.
