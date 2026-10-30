@@ -11,6 +11,7 @@ import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { Canvas } from "./canvas";
 import type { InstagramView } from "./instagram-overlay";
+import { setTracks, type Axis } from "./grid-resize";
 import { LeftPanel, type ElementKey } from "./left-panel";
 import { addBlock, addElement, applyLayout, pasteBlock, removeSelection, setBackground, shuffleLayout, type PageEdit } from "./page-editing";
 import { RightPanel } from "./right-panel";
@@ -295,6 +296,17 @@ export function Configurator({ header, back, template, formats: initial, assets,
     [block, doc, editable, formatId, formats, toolPage],
   );
 
+  /** A dragged border released (Story 4.4b): the page's new track sizes, one undo step; the selection stays. */
+  const resize = useCallback(
+    (pageKey: string, axis: Axis, sizes: number[]) => {
+      if (!editable) return;
+      const current = formats[formatId];
+      const next = setTracks(current, pageKey, axis, sizes);
+      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+    },
+    [doc, editable, formatId, formats],
+  );
+
   /** Removes the selected element or block; false when there is nothing to remove. */
   const removeSelected = useCallback(() => {
     if (!editable) return false;
@@ -482,6 +494,7 @@ export function Configurator({ header, back, template, formats: initial, assets,
               onEditRequest={requestEdit}
               onTextInput={textInput}
               onTextDone={textDone}
+              onResize={resize}
             />
             <StatusMessage message={message} />
             {!leftOpen && !preview && (

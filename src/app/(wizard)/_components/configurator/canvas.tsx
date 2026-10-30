@@ -6,7 +6,9 @@ import { measureOverflow, renderFormat, type BoundValues, type FormatId, type Re
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { useInPlaceText } from "./in-place-text";
+import type { Axis } from "./grid-resize";
 import { INSTAGRAM_VIEWS, InstagramOverlay, type InstagramView } from "./instagram-overlay";
+import { ResizeHandles } from "./resize-handles";
 import { selectionAt, type Selection } from "./selection";
 import { Slideshow } from "./slideshow";
 import { PAGE_WIDTH, PREVIEW_WIDTH, SEG, SEG_BUTTON } from "./styles";
@@ -50,6 +52,8 @@ export interface CanvasProps {
   onTextInput: (pageKey: string, elementId: string, text: string) => void;
   /** A text editing session ended. */
   onTextDone: (pageKey: string, elementId: string) => void;
+  /** A border dragged and released (Story 4.4b): the page's new track sizes on `axis`. */
+  onResize: (pageKey: string, axis: Axis, sizes: number[]) => void;
 }
 
 /** What a page needs to let its texts be typed in. */
@@ -123,7 +127,8 @@ function CanvasPage({
   onEditRequest,
   onTextInput,
   onTextDone,
-}: Pick<CanvasProps, "formatId" | "template" | "assets" | "values" | "onSelect" | "preview" | "animateTexts" | "onEditRequest"> &
+  onResize,
+}: Pick<CanvasProps, "formatId" | "template" | "assets" | "values" | "onSelect" | "preview" | "animateTexts" | "onEditRequest" | "onResize"> &
   TextEditing & {
     page: Page;
     number: number;
@@ -308,6 +313,9 @@ function CanvasPage({
             )}
           </div>
         )}
+        {!preview && editable && (
+          <ResizeHandles host={host} page={page} formatId={formatId} template={template} onResize={(axis, sizes) => onResize(page.pageKey, axis, sizes)} />
+        )}
         {frames.element !== null && (
           <div
             aria-hidden="true"
@@ -356,6 +364,7 @@ export function Canvas({
   onEditRequest,
   onTextInput,
   onTextDone,
+  onResize,
 }: CanvasProps) {
   const frame = useRef<number | null>(null);
   const video = formatId === "video_9_16";
@@ -457,6 +466,7 @@ export function Canvas({
             onEditRequest={onEditRequest}
             onTextInput={onTextInput}
             onTextDone={onTextDone}
+            onResize={onResize}
           />,
         ];
       })}

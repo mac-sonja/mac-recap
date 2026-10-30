@@ -2,7 +2,8 @@
 title: 'Story 4.4b: resize blocks by dragging the border between them'
 type: 'feature'
 created: '2026-10-30'
-status: 'draft'
+status: 'done'
+baseline_commit: '36e60b5975f45b2265712ab6b0a80bccceb47bae'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -72,13 +73,23 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `grid-resize.ts` (+ tests) -- borders, track maths, `setTracks`.
-- [ ] `resize-handles.tsx`, `canvas.tsx`, `configurator.tsx` (+ `configurator.test.tsx`) -- handles, drag, commit.
-- [ ] `sprint-status.yaml` -- on the 4.4 line: 4.4b in review.
+- [x] `grid-resize.ts` (+ tests) -- borders, track maths, `setTracks`.
+- [x] `resize-handles.tsx`, `canvas.tsx`, `configurator.tsx` (+ `configurator.test.tsx`) -- handles, drag, commit.
+- [x] `sprint-status.yaml` -- on the 4.4 line: 4.4b in review.
 
 **Acceptance Criteria:**
 - Given Story 4.4's resize criteria in `epics.md`, when checked on the running page in each format, then each is met: neighbours give or take space, the page keeps its sizes while its grid stays, a move that overflows a text or goes under 12% is refused with an orange border, and the drag is one undo step.
 - Given `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, when they run, then they pass.
+
+## Implementation Notes
+
+- Owner (2026-10-29, 4.3): subagents only for the review step, so the implementation was done in the main session.
+- The drag writes `gridTemplate` on the rendered `.mr-bento` directly (no React render per move) and puts the renderer's value back on release; the saved sizes then redraw it. On a page change mid-drag (⌘Z, Mescola, Anteprima, another format) the drag is dropped, and the style is put back only if the renderer hasn't already drawn over it.
+- A cancel or lost pointer capture drops the drag; only the pointer that started it moves or ends it.
+- Handles only when the layout's areas and track counts match the page's blocks and `grid.rows/cols`.
+- The 12% minimum is of the grid's whole size on that axis, gaps included (as the mockup).
+- Not done: the browser check against the local stack (the configurator needs Supabase). The tests mock the grid's geometry (1000 × 1000 px) and overflow in happy-dom; the real gap and fonts are only exercised in `grid-resize.test.ts`'s maths.
+- Files: new `grid-resize.ts` (+ test) and `resize-handles.tsx`; `canvas.tsx`, `configurator.tsx`, `configurator.test.tsx`; `sprint-status.yaml`.
 
 ## Spec Change Log
 
@@ -89,3 +100,27 @@ context:
 
 **Manual checks:**
 - In Chromium, in each format: drag every border of a few layouts; push past 12% and into a text overflow (orange, held); release; ⌘Z/⇧⌘Z; reload keeps the sizes; Layout and Mescola reset them; light and dark.
+
+## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | A cancelled pointer saves the drag (blind, verify-gap other) | medium | `onPointerCancel` went through the save path | patch (cancel and lost capture drop it; test) |
+| 2 | Handles unmounting or the page changing mid-drag leave the drag's style or commit from a stale base (blind, edge) | medium | No cleanup; ⌘Z mid-drag then release saved over the undo | patch (cleanup on page change; restores only its own style; test found and fixed the ordering) |
+| 3 | A second pointer overwrites or ends the drag (edge) | low | No pointer id check; direct guard | patch (test) |
+| 4 | `setTracks` accepts NaN, zero or negative sizes (blind, edge) | low | Only length and equality checked; one-line guard | patch (test) |
+| 5 | Track counts not checked against the layout (edge) | low | Areas from the layout, counts from the page | patch (handles only when they match) |
+| 6 | Bento resize without the host resizing not observed (blind, edge) | low | Observer on the host only | patch (also observes the bento) |
+| 7 | Row drag, gaps, already-overflowing text untested (verify-gap, blind) | medium | All drags were `col-0-0`, gap 0, no overflow at start | patch (tests) |
+| 8 | Intro border test circular (blind) | low | Recomputed the same expression | patch (explicit expected borders, checked by hand) |
+| 9 | No keyboard, 10 px target, invisible until hover (blind) | low | Owner-approved spec: no keyboard alternative for now; desktop tool (≥1024 px) | reject |
+| 10 | Frames don't follow the drag (blind) | false | `canvas.tsx` frames observe the block and element with `ResizeObserver`, which fires as the grid moves | reject |
+| 11 | Already-overflowing blocks can get worse unwarned; reuse `measureOverflow` (blind) | false | Frozen intent: refuse only overflow of "a block that didn't overflow when the drag started"; same rule as `measureOverflow` | reject |
+| 12 | No Escape to abort (blind) | low | Not in the intent; cancel by moving back | reject |
+| 13 | Layout per move (blind) | low | One grid write and a few reads per event; fine at six blocks | reject |
+| 14 | Sizes kept or reset by Mescola/Layout untested (blind) | false | Reset covered by 4.4a's `applyLayout` / `shuffleLayout` tests | reject |
+| 15 | Overflow mock keyed on printed numbers (blind) | low | Test-only; `tracksCss` pinned by its own test | reject |
+| 16 | 12% base includes gaps (blind) | false | Spec: "12% of the grid's size"; noted above | reject |
+| 17 | `layoutId` changed but same track count on release (edge) | false | Covered by #2: a page change drops the drag before release | reject |
+| 18 | Sprint status wording (blind) | low | 4.4c named as left on the 4.4 line | reject |
+| 19 | Fewer blocks than cells renders a layout with no handles (verify-gap other) | low | Not reachable: 4.3c/4.4a keep blocks equal to cells or use `column` | reject |

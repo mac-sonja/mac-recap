@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FORMAT_IDS, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
+import { FORMAT_IDS, layouts, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
 import { caseHistoryV2, validateNewDocument, type DocumentElement, type Page, type TextElement, type TextGroupElement } from "@/modules/generation";
 import { fill, it as dict } from "@/shared/i18n/it";
 import { Configurator, type ConfiguratorProps } from "./configurator";
@@ -1515,5 +1515,197 @@ describe("Configurator layout and background (Story 4.4a)", () => {
     expect(blockIds(pages.carosello_1_1[0]!.pageKey)).toHaveLength(3);
     await settle();
     expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
+describe("Configurator resize (Story 4.4b)", () => {
+  /** Carosello's first page on `layoutId`, cut to as many blocks as it has cells. */
+  const withLayout = (layoutId: string) => {
+    const doc = caseHistoryV2(FORMAT_IDS);
+    const pages = Object.fromEntries(FORMAT_IDS.map((id) => [id, doc.formats[id]!.pages])) as Record<FormatId, Page[]>;
+    const layout = layouts("carosello_1_1", "mac-case@1").find((l) => l.layoutId === layoutId)!;
+    const page = pages.carosello_1_1[1]!; // four blocks
+    page.blocks = page.blocks.slice(0, layout.areas.length);
+    page.grid = { layoutId, rows: [...layout.rows], cols: [...layout.cols] };
+    return { pages, page };
+  };
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const handles = (pageKey: string) => [...pageNode(pageKey).querySelectorAll<HTMLElement>("[data-resize]")].map((h) => h.dataset.resize);
+  const handle = (pageKey: string, key: string) => pageNode(pageKey).querySelector<HTMLElement>(`[data-resize="${key}"]`)!;
+  const bento = (pageKey: string) => pageNode(pageKey).querySelector<HTMLElement>(".mr-bento")!;
+  const carosello = () => fireEvent.click(button(/^Carosello/, screen.getByRole("group", { name: dict.configurator.formats.label, hidden: true })));
+
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    // happy-dom has no layout: the grid is 1000 × 1000 px at the page's corner, with no gap.
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const size = this.classList.contains("mr-bento") ? 1000 : 0;
+      return { top: 0, left: 0, right: size, bottom: size, width: size, height: size, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+  });
+
+  it("draws a handle on each border of the page's layout, and none on a grid that isn't a layout", () => {
+    const { pages, page } = withLayout("three_a");
+    const fallback = pages.carosello_1_1[2]!;
+    fallback.grid = { layoutId: "column", rows: fallback.blocks.map(() => 1), cols: [1] };
+    setup(false, pages);
+    carosello();
+    expect(handles(page.pageKey)).toEqual(["col-0-0", "row-0-0"]);
+    // The fixture's first page is on a layout id the format doesn't have.
+    expect(handles(pages.carosello_1_1[0]!.pageKey)).toEqual([]);
+    expect(handles(fallback.pageKey)).toEqual([]);
+  });
+
+  it("a drag moves the line live and saves the new sizes once on release; ⌘Z and ⇧⌘Z undo and redo it", async () => {
+    const { pages, page } = withLayout("two");
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    carosello();
+    const line = handle(page.pageKey, "col-0-0");
+    fireEvent.pointerDown(line, { button: 0, clientX: 500, clientY: 500, pointerId: 1 });
+    fireEvent.pointerMove(line, { clientX: 600, clientY: 500, pointerId: 1 });
+    expect(bento(page.pageKey).style.gridTemplate).toContain("minmax(0,1.2fr) minmax(0,0.8fr)");
+    expect(line.hasAttribute("data-warn")).toBe(false);
+    fireEvent.pointerUp(line, { clientX: 600, clientY: 500, pointerId: 1 });
+    await settle();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const saved = lastDoc(onSave);
+    expect(saved.formats.carosello_1_1.pages[1].grid).toEqual({ layoutId: "two", rows: [1], cols: [1.2, 0.8] });
+    expect(saved.formats.presentazione_16_9.pages).toEqual(pages.presentazione_16_9);
+    expect(validateNewDocument(saved)).toMatchObject({ ok: true });
+    expect(bento(page.pageKey).style.gridTemplate).toContain("1.2fr");
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(bento(page.pageKey).style.gridTemplate).toContain("minmax(0,1fr) minmax(0,1fr)");
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true, shiftKey: true });
+    expect(bento(page.pageKey).style.gridTemplate).toContain("1.2fr");
+  });
+
+  it("a press without a move saves nothing and keeps the selection", async () => {
+    const { pages, page } = withLayout("two");
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    carosello();
+    fireEvent.click(pageNode(page.pageKey).querySelector(`[data-block-id="${page.blocks[0]!.blockId}"]`)!);
+    const line = handle(page.pageKey, "col-0-0");
+    fireEvent.pointerDown(line, { button: 0, clientX: 500, clientY: 500, pointerId: 1 });
+    fireEvent.pointerUp(line, { clientX: 500, clientY: 500, pointerId: 1 });
+    fireEvent.click(line);
+    expect(pageNode(page.pageKey).querySelector('[data-frame="block"]')).not.toBeNull();
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("holds a track at 12% and refuses a move that overflows a text, turning the handle orange; the last good sizes are saved", async () => {
+    const { pages, page } = withLayout("two");
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    carosello();
+    const line = handle(page.pageKey, "col-0-0");
+    fireEvent.pointerDown(line, { button: 0, clientX: 500, clientY: 500, pointerId: 1 });
+    fireEvent.pointerMove(line, { clientX: -500, clientY: 500, pointerId: 1 });
+    expect(line.hasAttribute("data-warn")).toBe(true);
+    expect(bento(page.pageKey).style.gridTemplate).toContain("minmax(0,0.24fr)");
+    // The right block's text no longer fits once it is narrower than 0.7fr.
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) {
+      const narrow = /minmax\(0,0\.[0-6]\d*fr\)$/.test(this.parentElement?.style.gridTemplate ?? "");
+      return this.dataset.blockId === page.blocks[1]!.blockId && narrow ? 50 : 0;
+    });
+    fireEvent.pointerMove(line, { clientX: 650, clientY: 500, pointerId: 1 });
+    expect(line.hasAttribute("data-warn")).toBe(false);
+    fireEvent.pointerMove(line, { clientX: 700, clientY: 500, pointerId: 1 });
+    expect(line.hasAttribute("data-warn")).toBe(true);
+    expect(bento(page.pageKey).style.gridTemplate).toContain("minmax(0,1.3fr) minmax(0,0.7fr)");
+    fireEvent.pointerUp(line, { clientX: 700, clientY: 500, pointerId: 1 });
+    await settle();
+    expect(lastDoc(onSave).formats.carosello_1_1.pages[1].grid.cols).toEqual([1.3, 0.7]);
+  });
+
+  it("drags a row border along y and saves the rows only", async () => {
+    const { pages, page } = withLayout("four");
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    carosello();
+    const line = handle(page.pageKey, "row-0-0");
+    fireEvent.pointerDown(line, { button: 0, clientX: 500, clientY: 500, pointerId: 1 });
+    fireEvent.pointerMove(line, { clientX: 900, clientY: 400, pointerId: 1 });
+    expect(bento(page.pageKey).style.gridTemplate).toMatch(/^minmax\(0,0\.8fr\) minmax\(0,1\.2fr\) \//);
+    fireEvent.pointerUp(line, { clientX: 900, clientY: 400, pointerId: 1 });
+    await settle();
+    expect(lastDoc(onSave).formats.carosello_1_1.pages[1].grid).toEqual({ layoutId: "four", rows: [0.8, 1.2], cols: [1, 1] });
+  });
+
+  it("allows a move while a text overflows already, warning only for a new overflow", async () => {
+    const { pages, page } = withLayout("two");
+    const onSave = vi.fn(savedOk);
+    // The left block overflows from the start, whatever the sizes.
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.dataset.blockId === page.blocks[0]!.blockId ? 50 : 0;
+    });
+    setup(false, pages, { onSave });
+    carosello();
+    const line = handle(page.pageKey, "col-0-0");
+    fireEvent.pointerDown(line, { button: 0, clientX: 500, clientY: 500, pointerId: 1 });
+    fireEvent.pointerMove(line, { clientX: 400, clientY: 500, pointerId: 1 });
+    expect(line.hasAttribute("data-warn")).toBe(false);
+    fireEvent.pointerUp(line, { clientX: 400, clientY: 500, pointerId: 1 });
+    await settle();
+    expect(lastDoc(onSave).formats.carosello_1_1.pages[1].grid.cols).toEqual([0.8, 1.2]);
+  });
+
+  it("a cancelled pointer, or another pointer, saves nothing and puts the grid back", async () => {
+    const { pages, page } = withLayout("two");
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    carosello();
+    const line = handle(page.pageKey, "col-0-0");
+    const before = bento(page.pageKey).style.gridTemplate;
+    fireEvent.pointerDown(line, { button: 0, clientX: 500, clientY: 500, pointerId: 1 });
+    fireEvent.pointerMove(line, { clientX: 600, clientY: 500, pointerId: 1 });
+    fireEvent.pointerMove(line, { clientX: 900, clientY: 500, pointerId: 2 });
+    fireEvent.pointerUp(line, { clientX: 900, clientY: 500, pointerId: 2 });
+    expect(bento(page.pageKey).style.gridTemplate).toContain("1.2fr");
+    fireEvent.pointerCancel(line, { pointerId: 1 });
+    expect(bento(page.pageKey).style.gridTemplate).toBe(before);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("drops a drag when the page changes under it (⌘Z mid-drag): the release saves nothing", async () => {
+    const { pages, page } = withLayout("two");
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    carosello();
+    const line = () => handle(page.pageKey, "col-0-0");
+    fireEvent.pointerDown(line(), { button: 0, clientX: 500, clientY: 500, pointerId: 1 });
+    fireEvent.pointerMove(line(), { clientX: 600, clientY: 500, pointerId: 1 });
+    fireEvent.pointerUp(line(), { clientX: 600, clientY: 500, pointerId: 1 });
+    await settle();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(line(), { button: 0, clientX: 600, clientY: 500, pointerId: 1 });
+    fireEvent.pointerMove(line(), { clientX: 300, clientY: 500, pointerId: 1 });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(bento(page.pageKey).style.gridTemplate).toContain("minmax(0,1fr) minmax(0,1fr)");
+    fireEvent.pointerUp(line(), { clientX: 300, clientY: 500, pointerId: 1 });
+    await settle();
+    expect(lastDoc(onSave).formats.carosello_1_1.pages[1].grid.cols).toEqual([1, 1]);
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(bento(page.pageKey).style.gridTemplate).toContain("minmax(0,1fr) minmax(0,1fr)");
+  });
+
+  it("shows no handles when the case can't be edited, or in Anteprima", () => {
+    const { pages, page } = withLayout("two");
+    setup(false, pages, { editable: false });
+    carosello();
+    expect(handles(page.pageKey)).toEqual([]);
+    cleanup();
+    setup(false, pages);
+    fireEvent.click(button(dict.configurator.preview.enter));
+    expect(document.querySelectorAll("[data-resize]")).toHaveLength(0);
   });
 });
