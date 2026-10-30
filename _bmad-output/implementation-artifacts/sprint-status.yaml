@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-09-2026 10:25
-last_updated: 10-30-2026 10:00
+last_updated: 10-30-2026 12:00
 project: MAC Recap
 project_key: NOKEY
 tracking_system: file-system
@@ -76,8 +76,8 @@ development_status:
   epic-4: in-progress
   4-1-review-dashboard-and-to-review-queue: done  # ?stato= filter with counts on the Case table, kept in the URL; ?stato=in_review = To review queue, longest waiting first (latest generation_succeeded, no migration), opened from Home and from the sidebar's Da approvare note (#115); owner 2026-10-28: row Delete dropped (a draft is deleted inside the draft, 2.20; approved Elimina goes on the 5.2 detail page)
   4-2-open-a-draft-in-the-configurator: done  # 4.2a merged (#114), 4.2b merged (#118, spec-4-2b-anteprima-instagram-overlay-and-text-animation); split by the owner 2026-10-28: 4.2a frame, canvas, panels (spec-4-2-open-a-draft-in-the-configurator); 4.2b Anteprima, Instagram overlay, Animazione testi (deferred-work); amendment per SCP 2026-10-16 client intro and collections (read by subject); Bento designed with the owner first (SCP 2026-10-20); per SCP 2026-10-28: rewritten from the mockup (frame C40, Anteprima C37, three formats)
-  4-3-edit-generated-text-in-place-with-autosave: review  # split by the owner 2026-10-29: 4.3a texts in place, autosave, undo/redo, overflow marker merged (spec-4-3a-edit-texts-in-place-with-autosave; save_revision_doc migration not applied to mac-recap-dev); 4.3b text panel merged (#128, spec-4-3b-text-panel); 4.3c add/remove elements and blocks, copy/cut/paste blocks in review (spec-4-3c-elements-and-blocks); 4.3d client and case fields and 4.3e drag-and-drop (owner 2026-10-30) in deferred-work; per SCP 2026-10-28: rewritten (texts, elements and blocks per format; seven text styles; client fields editable on the page); 4.6 folded in; Anteprima texts editable too (4.2b, owner 2026-10-28)
-  4-4-adjust-the-layout-per-format: backlog  # per SCP 2026-10-28: rewritten (Layout grids, Mescola, resize, Pagine di default, Sfondo); variants, Shuffle, spacing and Reset gone
+  4-3-edit-generated-text-in-place-with-autosave: in-progress  # 4.3a, 4.3b, 4.3c merged; 4.3d and 4.3e left in deferred-work; split by the owner 2026-10-29: 4.3a texts in place, autosave, undo/redo, overflow marker merged (spec-4-3a-edit-texts-in-place-with-autosave; save_revision_doc migration not applied to mac-recap-dev); 4.3b text panel merged (#128, spec-4-3b-text-panel); 4.3c add/remove elements and blocks, copy/cut/paste blocks merged (#129, spec-4-3c-elements-and-blocks); 4.3d client and case fields and 4.3e drag-and-drop (owner 2026-10-30) in deferred-work; per SCP 2026-10-28: rewritten (texts, elements and blocks per format; seven text styles; client fields editable on the page); 4.6 folded in; Anteprima texts editable too (4.2b, owner 2026-10-28)
+  4-4-adjust-the-layout-per-format: in-progress  # split by the owner 2026-10-30: 4.4a Layout pick, Mescola, Sfondo colour drafted (spec-4-4a-layout-mescola-and-sfondo); 4.4b border resize and 4.4c Pagine di default (generated texts, owner 2026-10-30) in deferred-work; Sfondo Immagine with 4.5 (drafting, to confirm); per SCP 2026-10-28: rewritten (Layout grids, Mescola, resize, Pagine di default, Sfondo); variants, Shuffle, spacing and Reset gone
   4-5-replace-reorder-and-remove-media: backlog  # per SCP 2026-10-28: rewritten (Media tab with drop zone, Riempi/Adatta/Ritaglia, animations)
   4-6-choose-typography-per-format: backlog  # per SCP 2026-10-28: folded into 4.3 (C32); nothing left to build
   4-7-check-every-block-against-the-material: backlog  # demo (owner 2026-10-27): not needed, no per-block check before approval
