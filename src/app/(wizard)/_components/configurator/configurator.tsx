@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
-import { CURRENT_SCHEMA_VERSION, type Block, type DocumentKind, type Page, type TextGroupAlign } from "@/modules/generation";
-import { FORMAT_IDS, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
+import { CURRENT_SCHEMA_VERSION, type Background, type Block, type DocumentKind, type Page, type TextGroupAlign } from "@/modules/generation";
+import { FORMAT_IDS, type BoundValues, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { Canvas } from "./canvas";
 import type { InstagramView } from "./instagram-overlay";
 import { LeftPanel, type ElementKey } from "./left-panel";
-import { addBlock, addElement, pasteBlock, removeSelection, type PageEdit } from "./page-editing";
+import { addBlock, addElement, applyLayout, pasteBlock, removeSelection, setBackground, shuffleLayout, type PageEdit } from "./page-editing";
 import { RightPanel } from "./right-panel";
 import { findElement, resolveSelection, stepOut, type Selection } from "./selection";
 import { StatusMessage, useStatusMessage } from "./status-message";
@@ -243,6 +243,7 @@ export function Configurator({ header, back, template, formats: initial, assets,
       if (!edit.ok) {
         if (edit.reason === "noBlock") say(it.configurator.edit.needBlock);
         else if (edit.reason === "pageFull") say(it.configurator.edit.pageFull);
+        else if (edit.reason === "over") say(edit.over === 1 ? it.configurator.edit.layoutOverOne : fill(it.configurator.edit.layoutOver, { k: edit.over }));
         return false;
       }
       doc.change({ ...formats, [formatId]: edit.pages }, formatId);
@@ -265,6 +266,33 @@ export function Configurator({ header, back, template, formats: initial, assets,
       if (pageKey !== undefined) applyPageEdit(addBlock(current, pageKey, selection?.blockId, formatId, template, newId));
     },
     [applyPageEdit, editable, formatId, formats, selection, template, toolPage],
+  );
+
+  /** A Layout thumbnail (Story 4.4a): the tools' page takes it, then is selected. */
+  const pickLayout = useCallback(
+    (layout: Layout) => {
+      if (editable && toolPage !== undefined) applyPageEdit(applyLayout(formats[formatId], toolPage.pageKey, layout, newId));
+    },
+    [applyPageEdit, editable, formatId, formats, toolPage],
+  );
+
+  /** **Mescola**: the tools' page on its next layout; the selection stays. */
+  const shuffle = useCallback(() => {
+    if (!editable || toolPage === undefined) return;
+    const current = formats[formatId];
+    const next = shuffleLayout(current, toolPage.pageKey, formatId, template);
+    if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+  }, [doc, editable, formatId, formats, template, toolPage]);
+
+  /** Sfondo: the selected block's background, else the tools' page's. */
+  const background = useCallback(
+    (value: Background) => {
+      if (!editable || toolPage === undefined) return;
+      const current = formats[formatId];
+      const next = setBackground(current, toolPage.pageKey, block?.blockId, value);
+      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+    },
+    [block, doc, editable, formatId, formats, toolPage],
   );
 
   /** Removes the selected element or block; false when there is nothing to remove. */
@@ -419,6 +447,10 @@ export function Configurator({ header, back, template, formats: initial, assets,
             onGroupAlign={groupAlign}
             onAddElement={addFromElementi}
             onRemove={removeSelected}
+            onLayout={pickLayout}
+            onShuffle={shuffle}
+            onBackground={background}
+            onBadColour={() => say(it.configurator.edit.badColour)}
             onSoon={soon}
             onHide={() => toggleLeft(false)}
             hideRef={hideLeft}

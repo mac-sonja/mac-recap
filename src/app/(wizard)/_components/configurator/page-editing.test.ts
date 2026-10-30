@@ -15,14 +15,22 @@ import { it as dict } from "@/shared/i18n/it";
 import {
   addBlock,
   addElement,
+  applyLayout,
+  BACKGROUND_SWATCHES,
   COLUMN_LAYOUT_ID,
   MAX_BLOCKS_PER_PAGE,
   MAX_ELEMENTS_PER_BLOCK,
   NEW_BLOCK_COLOUR,
   NEW_ELEMENTS,
+  newElement,
+  parseBackground,
   pasteBlock,
   removeSelection,
   restartGrid,
+  setBackground,
+  shuffleChoices,
+  shuffleLayout,
+  swatchBackground,
   withFreshIds,
   type PageEdit,
 } from "./page-editing";
@@ -283,5 +291,144 @@ describe("removeSelection", () => {
       ok: false,
       reason: "nothing",
     });
+  });
+});
+
+/** Uuids for the blocks an edit adds, distinct from `ids()`'s. */
+function otherIds() {
+  let n = 0;
+  return () => `ffffffff-0000-4000-8000-${String(++n).padStart(12, "0")}`;
+}
+
+const layoutOf = (formatId: FormatId, layoutId: string) => layouts(formatId, TEMPLATE).find((l) => l.layoutId === layoutId)!;
+
+/** A page with `filled` blocks holding a title, then `empty` empty blocks, in `formatId`. */
+function mixedPage(filled: number, empty: number, formatId: FormatId): Page {
+  const newId = ids();
+  const page = emptyPage(filled + empty, formatId, newId);
+  page.blocks.slice(0, filled).forEach((b) => b.elements.push(newElement("title", newId)));
+  return page;
+}
+
+describe("applyLayout", () => {
+  it("appends empty grey blocks for more cells and selects the page", () => {
+    const page = mixedPage(2, 0, "carosello_1_1");
+    const four = layoutOf("carosello_1_1", "four");
+    const edit = ok(applyLayout([page], page.pageKey, four, otherIds()));
+    const next = edit.pages[0]!;
+    expect(next.blocks).toHaveLength(4);
+    expect(next.blocks.slice(0, 2)).toEqual(page.blocks);
+    expect(next.blocks.slice(2).every((b) => b.elements.length === 0 && b.background.kind === "colour" && b.background.value === NEW_BLOCK_COLOUR)).toBe(true);
+    expect(next.grid).toEqual({ layoutId: "four", rows: [...four.rows], cols: [...four.cols] });
+    expect(edit.selection).toEqual({ pageKey: page.pageKey });
+    expectValid(edit.pages, "carosello_1_1");
+  });
+
+  it("removes empty blocks, last first, for fewer cells", () => {
+    const page = mixedPage(2, 2, "carosello_1_1");
+    page.blocks.unshift(page.blocks.pop()!); // an empty block first: it stays, the last empty one goes
+    const edit = ok(applyLayout([page], page.pageKey, layoutOf("carosello_1_1", "three_a"), ids()));
+    expect(edit.pages[0]!.blocks.map((b) => b.blockId)).toEqual(page.blocks.slice(0, 3).map((b) => b.blockId));
+    const two = ok(applyLayout([mixedPage(2, 2, "carosello_1_1")], page.pageKey, layoutOf("carosello_1_1", "two"), ids()));
+    expect(two.pages[0]!.blocks.every((b) => b.elements.length === 1)).toBe(true);
+    expect(two.pages[0]!.grid.layoutId).toBe("two");
+  });
+
+  it("refuses when filled blocks would have to go, saying how many are over", () => {
+    const four = mixedPage(4, 0, "carosello_1_1");
+    expect(applyLayout([four], four.pageKey, layoutOf("carosello_1_1", "two"), ids())).toEqual({ ok: false, reason: "over", over: 2 });
+    const three = mixedPage(3, 0, "carosello_1_1");
+    expect(applyLayout([three], three.pageKey, layoutOf("carosello_1_1", "two"), ids())).toEqual({ ok: false, reason: "over", over: 1 });
+  });
+
+  it("counts a block with an image background as filled", () => {
+    const page = mixedPage(2, 1, "carosello_1_1");
+    page.blocks[2]!.background = { kind: "image", assetId: "aaaaaaaa-0000-4000-8000-000000000001" };
+    expect(applyLayout([page], page.pageKey, layoutOf("carosello_1_1", "two"), ids())).toEqual({ ok: false, reason: "over", over: 1 });
+  });
+
+  it("does nothing for the pressed layout with its own track sizes, and resets changed sizes", () => {
+    const page = mixedPage(3, 0, "carosello_1_1");
+    expect(page.grid.layoutId).toBe("three_a");
+    expect(applyLayout([page], page.pageKey, layoutOf("carosello_1_1", "three_a"), ids())).toEqual({ ok: false, reason: "nothing" });
+    page.grid.rows = [2, 1];
+    const edit = ok(applyLayout([page], page.pageKey, layoutOf("carosello_1_1", "three_a"), ids()));
+    expect(edit.pages[0]!.grid.rows).toEqual([...layoutOf("carosello_1_1", "three_a").rows]);
+  });
+
+  it("changes only the page it is given", () => {
+    const pages = [mixedPage(2, 0, "carosello_1_1"), { ...mixedPage(1, 0, "carosello_1_1"), pageKey: "other" }];
+    const edit = ok(applyLayout(pages, pages[0]!.pageKey, layoutOf("carosello_1_1", "four"), ids()));
+    expect(edit.pages[1]).toBe(pages[1]);
+  });
+});
+
+describe("Mescola", () => {
+  it("cycles through the layouts with the page's number of blocks, in order", () => {
+    const pages = [mixedPage(3, 0, "carosello_1_1")];
+    const once = shuffleLayout(pages, pages[0]!.pageKey, "carosello_1_1", TEMPLATE);
+    const threeB = layoutOf("carosello_1_1", "three_b");
+    expect(once[0]!.grid).toEqual({ layoutId: "three_b", rows: [...threeB.rows], cols: [...threeB.cols] });
+    expect(once[0]!.blocks).toEqual(pages[0]!.blocks);
+    expect(shuffleLayout(once, pages[0]!.pageKey, "carosello_1_1", TEMPLATE)[0]!.grid.layoutId).toBe("three_a");
+  });
+
+  it("goes from intro to only_layout and back in Presentazione, and from two to stack in Carosello", () => {
+    const five = [mixedPage(5, 0, "presentazione_16_9")];
+    expect(five[0]!.grid.layoutId).toBe("intro");
+    const once = shuffleLayout(five, five[0]!.pageKey, "presentazione_16_9", TEMPLATE);
+    expect(once[0]!.grid.layoutId).toBe("only_layout");
+    expect(shuffleLayout(once, five[0]!.pageKey, "presentazione_16_9", TEMPLATE)[0]!.grid.layoutId).toBe("intro");
+    const two = [mixedPage(2, 0, "carosello_1_1")];
+    expect(shuffleLayout(two, two[0]!.pageKey, "carosello_1_1", TEMPLATE)[0]!.grid.layoutId).toBe("stack");
+  });
+
+  it("starts from the first layout off a grid that isn't among them", () => {
+    const page = mixedPage(3, 0, "carosello_1_1");
+    page.grid = { layoutId: COLUMN_LAYOUT_ID, rows: [1, 1, 1], cols: [1] };
+    expect(shuffleLayout([page], page.pageKey, "carosello_1_1", TEMPLATE)[0]!.grid.layoutId).toBe("three_a");
+  });
+
+  it("has nothing to cycle through with one layout or none for the count", () => {
+    expect(shuffleChoices("video_9_16", TEMPLATE, 3)).toHaveLength(1);
+    expect(shuffleChoices("presentazione_16_9", TEMPLATE, 2)).toHaveLength(1);
+    expect(shuffleChoices("carosello_1_1", TEMPLATE, 5)).toHaveLength(0);
+    const pages = [mixedPage(3, 0, "video_9_16")];
+    expect(shuffleLayout(pages, pages[0]!.pageKey, "video_9_16", TEMPLATE)).toBe(pages);
+  });
+});
+
+describe("Sfondo", () => {
+  it("sets the selected block's background, else the page's, and a swatch replaces an image", () => {
+    const page = mixedPage(2, 0, "carosello_1_1");
+    const blockId = page.blocks[1]!.blockId;
+    const blue = setBackground([page], page.pageKey, blockId, swatchBackground("#2977ff"));
+    expect(blue[0]!.blocks[1]!.background).toEqual({ kind: "colour", value: "#2977ff" });
+    expect(blue[0]!.background).toEqual(page.background);
+    const clear = setBackground([page], page.pageKey, undefined, swatchBackground("transparent"));
+    expect(clear[0]!.background).toEqual({ kind: "transparent" });
+    page.blocks[0]!.background = { kind: "image", assetId: "aaaaaaaa-0000-4000-8000-000000000001" };
+    expect(setBackground([page], page.pageKey, page.blocks[0]!.blockId, swatchBackground("#ededf0"))[0]!.blocks[0]!.background).toEqual({ kind: "colour", value: "#ededf0" });
+    expectValid(blue, "carosello_1_1");
+  });
+
+  it("keeps the pages when the background already has that colour, or the target is unknown", () => {
+    const page = mixedPage(1, 0, "carosello_1_1");
+    page.background = { kind: "colour", value: "#FFFFFF" };
+    const pages = [page];
+    expect(setBackground(pages, page.pageKey, undefined, { kind: "colour", value: "#ffffff" })).toBe(pages);
+    expect(setBackground(pages, page.pageKey, "ffffffff-0000-4000-8000-000000000000", { kind: "transparent" })).toBe(pages);
+    expect(setBackground(pages, "nope", undefined, { kind: "transparent" })).toBe(pages);
+  });
+
+  it("offers the template's palette and transparent", () => {
+    expect(BACKGROUND_SWATCHES).toEqual(["#ffffff", "#ededf0", "#012234", "#defe56", "#2977ff", "transparent"]);
+  });
+
+  it("reads a typed #rrggbb (with or without #, any case) or Trasparente, and nothing else", () => {
+    expect(parseBackground("defe56")).toEqual({ kind: "colour", value: "#defe56" });
+    expect(parseBackground(" #2977FF ")).toEqual({ kind: "colour", value: "#2977ff" });
+    expect(parseBackground("Trasparente")).toEqual({ kind: "transparent" });
+    for (const bad of ["blu", "#fff", "#2977ff80", "", "#gggggg"]) expect(parseBackground(bad)).toBeUndefined();
   });
 });

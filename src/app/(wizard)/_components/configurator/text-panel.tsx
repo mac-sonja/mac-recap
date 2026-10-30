@@ -6,15 +6,12 @@ import { TEXT_STYLES, type Block, type TextAlign, type TextElement, type TextGro
 import { textStyles, type FormatId } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import { EYEBROW, PANEL_SECTION, SEG, SEG_BUTTON, SOON_ID } from "./styles";
+import { CHECKERBOARD, EYEBROW, PANEL_SECTION, SEG, SEG_BUTTON, SOON_ID } from "./styles";
 import { parseColour, shownColour, TEXT_COLOURS, type TextColour, type TextSettings } from "./text-editing";
 
 /** A control's label column (mockup `.row label`). */
 const ROW = "mt-2 flex items-center gap-2 first-of-type:mt-0";
 const ROW_LABEL = "w-[76px] shrink-0 font-label text-[12.5px] text-foreground-muted";
-
-/** Transparent, drawn as a checkerboard (mockup `[data-none]`). */
-const CHECKERBOARD = "bg-[conic-gradient(var(--color-border-strong)_25%,var(--color-surface-raised)_0_50%,var(--color-border-strong)_0_75%,var(--color-surface-raised)_0)] bg-[length:8px_8px]";
 
 
 /** A colour as the field shows it: upper-case hex, or "Trasparente". */

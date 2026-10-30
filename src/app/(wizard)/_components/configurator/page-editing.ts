@@ -1,7 +1,8 @@
-import type { Block, DocumentElement, Page, TextElement, TextStyle } from "@/modules/generation";
-import { layouts, type FormatId } from "@/modules/rendering";
+import type { Background, Block, DocumentElement, Page, TextElement, TextStyle } from "@/modules/generation";
+import { layouts, type FormatId, type Layout } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
 import type { Selection } from "./selection";
+import { parseColour, TEXT_COLOURS } from "./text-editing";
 
 /** The Elementi a click adds to a block (Story 4.3c): Blocco and Animazione are not elements here. */
 export const NEW_ELEMENTS = ["group", "title", "text", "number", "quote", "label", "image", "video"] as const;
@@ -20,9 +21,11 @@ export const COLUMN_LAYOUT_ID = "column";
 /** What an edit did: the new pages and what to select, or why nothing changed. */
 export type PageEdit =
   | { ok: true; pages: readonly Page[]; selection: NonNullable<Selection> }
-  | { ok: false; reason: "noBlock" | "pageFull" | "blockFull" | "nothing" };
+  | { ok: false; reason: "noBlock" | "pageFull" | "blockFull" | "nothing" }
+  /** A layout with fewer cells than the page's filled blocks: `over` blocks too many. */
+  | { ok: false; reason: "over"; over: number };
 
-const refused = (reason: Extract<PageEdit, { ok: false }>["reason"]): PageEdit => ({ ok: false, reason });
+const refused = (reason: Exclude<Extract<PageEdit, { ok: false }>["reason"], "over">): PageEdit => ({ ok: false, reason });
 
 const newText = (newId: () => string, style: TextStyle, text: string): TextElement => ({
   elementId: newId(),
@@ -115,10 +118,100 @@ function insertBlock(pages: readonly Page[], pageKey: string, after: string | un
   return { ok: true, pages: next, selection: { pageKey, blockId: block.blockId } };
 }
 
+/** An empty block: "Blocco", the template's grey. */
+const emptyBlock = (newId: () => string): Block => ({
+  blockId: newId(),
+  name: it.configurator.edit.newBlock,
+  background: { kind: "colour", value: NEW_BLOCK_COLOUR },
+  elements: [],
+});
+
 /** An empty block ("Blocco", the template's grey) after block `after` of page `pageKey`, else at the end. */
 export function addBlock(pages: readonly Page[], pageKey: string, after: string | undefined, formatId: FormatId, template: string, newId: () => string): PageEdit {
-  const block: Block = { blockId: newId(), name: it.configurator.edit.newBlock, background: { kind: "colour", value: NEW_BLOCK_COLOUR }, elements: [] };
-  return insertBlock(pages, pageKey, after, block, formatId, template);
+  return insertBlock(pages, pageKey, after, emptyBlock(newId), formatId, template);
+}
+
+/** A block with no elements and no image background: a layout may add or remove it. */
+const isEmpty = (block: Block) => block.elements.length === 0 && block.background.kind !== "image";
+
+const sameTracks = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+/**
+ * Page `pageKey` laid out as `layout` (Story 4.4a), its track sizes reset and the page
+ * selected. More cells add empty blocks at the end; fewer remove empty blocks, last
+ * first, and refuse (`over`) when filled blocks would have to go.
+ */
+export function applyLayout(pages: readonly Page[], pageKey: string, layout: Layout, newId: () => string): PageEdit {
+  const index = pages.findIndex((p) => p.pageKey === pageKey);
+  if (index < 0) return refused("nothing");
+  const page = pages[index]!;
+  const cells = layout.areas.length;
+  const n = page.blocks.length;
+  if (cells === n && page.grid.layoutId === layout.layoutId && sameTracks(page.grid.rows, layout.rows) && sameTracks(page.grid.cols, layout.cols)) {
+    return refused("nothing");
+  }
+  const over = n - cells - page.blocks.filter(isEmpty).length;
+  if (over > 0) return { ok: false, reason: "over", over };
+  const next = withPage(pages, index, (copy) => {
+    while (copy.blocks.length < cells) copy.blocks.push(emptyBlock(newId));
+    for (let i = copy.blocks.length - 1; i >= 0 && copy.blocks.length > cells; i--) if (isEmpty(copy.blocks[i]!)) copy.blocks.splice(i, 1);
+    copy.grid = { layoutId: layout.layoutId, rows: [...layout.rows], cols: [...layout.cols] };
+  });
+  return { ok: true, pages: next, selection: { pageKey } };
+}
+
+/** The layouts **Mescola** cycles through for a page of `blocks` blocks: shown only when there are two or more. */
+export const shuffleChoices = (formatId: FormatId, template: string, blocks: number): readonly Layout[] =>
+  layouts(formatId, template).filter((l) => l.areas.length === blocks);
+
+/**
+ * **Mescola**: page `pageKey` on the next layout with its number of blocks, back to the
+ * first after the last (the first from a grid not among them); track sizes reset, the
+ * blocks stay. `pages` itself when there is nothing to cycle through.
+ */
+export function shuffleLayout(pages: readonly Page[], pageKey: string, formatId: FormatId, template: string): readonly Page[] {
+  const index = pages.findIndex((p) => p.pageKey === pageKey);
+  if (index < 0) return pages;
+  const page = pages[index]!;
+  const choices = shuffleChoices(formatId, template, page.blocks.length);
+  if (choices.length < 2) return pages;
+  const at = choices.findIndex((l) => l.layoutId === page.grid.layoutId);
+  const layout = choices[(at + 1) % choices.length]!;
+  return withPage(pages, index, (copy) => {
+    copy.grid = { layoutId: layout.layoutId, rows: [...layout.rows], cols: [...layout.cols] };
+  });
+}
+
+/** Sfondo's swatches (C30): the template's palette and transparent, the same as the text's. */
+export const BACKGROUND_SWATCHES = TEXT_COLOURS;
+export type BackgroundSwatch = (typeof BACKGROUND_SWATCHES)[number];
+
+/** A swatch as a background. */
+export const swatchBackground = (swatch: BackgroundSwatch): Background =>
+  swatch === "transparent" ? { kind: "transparent" } : { kind: "colour", value: swatch };
+
+/** A typed background colour: `#rrggbb` (the `#` optional, any case) or "Trasparente"; undefined for anything else. */
+export function parseBackground(typed: string): Background | undefined {
+  const parsed = parseColour(typed);
+  if (parsed === "transparent") return { kind: "transparent" };
+  // A background has no alpha: `#rrggbbaa` is not one.
+  return parsed !== undefined && parsed.length === 7 ? { kind: "colour", value: parsed } : undefined;
+}
+
+const sameBackground = (a: Background, b: Background) =>
+  a.kind === b.kind && (a.kind !== "colour" || a.value.toLowerCase() === (b as Extract<Background, { kind: "colour" }>).value.toLowerCase()) && (a.kind !== "image" || a.assetId === (b as Extract<Background, { kind: "image" }>).assetId);
+
+/** Sets the background of block `blockId`, or of page `pageKey` without one; `pages` itself when it already has it. */
+export function setBackground(pages: readonly Page[], pageKey: string, blockId: string | undefined, background: Background): readonly Page[] {
+  const index = pages.findIndex((p) => p.pageKey === pageKey);
+  if (index < 0) return pages;
+  const page = pages[index]!;
+  const target = blockId === undefined ? page : page.blocks.find((b) => b.blockId === blockId);
+  if (target === undefined || sameBackground(target.background, background)) return pages;
+  return withPage(pages, index, (copy) => {
+    const into = blockId === undefined ? copy : copy.blocks.find((b) => b.blockId === blockId)!;
+    into.background = background;
+  });
 }
 
 /** A copy of `block`, with fresh ids, after the selected block, else at the end of the selected page. */

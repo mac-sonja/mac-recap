@@ -7,6 +7,7 @@ import { fill, it as dict } from "@/shared/i18n/it";
 import { Configurator, type ConfiguratorProps } from "./configurator";
 import { ownTextIds } from "./in-place-text";
 import { STATUS_MESSAGE_MS } from "./status-message";
+import { BACKGROUND_SWATCHES, NEW_BLOCK_COLOUR } from "./page-editing";
 import { TEXT_COLOURS, textElementAt } from "./text-editing";
 
 vi.mock("next/link", () => ({
@@ -1309,5 +1310,210 @@ describe("Configurator elements and blocks (Story 4.3c)", () => {
     expect(canvas().querySelector('[data-frame="empty"]')).not.toBeNull();
     fireEvent.click(button(dict.configurator.preview.enter));
     expect(canvas().querySelector('[data-frame="empty"]')).toBeNull();
+  });
+});
+
+describe("Configurator layout and background (Story 4.4a)", () => {
+  const fixture = () => {
+    const doc = caseHistoryV2(FORMAT_IDS);
+    return Object.fromEntries(FORMAT_IDS.map((id) => [id, doc.formats[id]!.pages])) as Record<FormatId, Page[]>;
+  };
+  const tools = dict.configurator.tools;
+  // The palette by name, so no raw colour is written here (test/tokens.test.ts).
+  const [WHITE, , , LIME, BLUE] = BACKGROUND_SWATCHES;
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const section = (name: string) => within(leftPanel()).getByRole("region", { name, hidden: true });
+  const layoutButton = (name: string) => button(fill(tools.layoutOption, { name }), section(tools.layout));
+  const pressedLayout = () =>
+    within(section(tools.layout))
+      .getAllByRole("button", { hidden: true })
+      .filter((b) => b.getAttribute("aria-pressed") === "true")
+      .map((b) => b.getAttribute("aria-label"));
+  const shuffleButton = () => within(section(tools.layout)).queryByRole("button", { name: tools.shuffle, hidden: true });
+  const swatch = (name: string) => button(name, section(tools.background));
+  const colourField = () => within(section(tools.background)).getByRole("textbox", { name: tools.colourField, hidden: true }) as HTMLInputElement;
+  const blockIds = (pageKey: string) => [...pageNode(pageKey).querySelectorAll<HTMLElement>("[data-block-id]")].map((b) => b.dataset.blockId);
+  const selectBlock = (pageKey: string, blockId: string) => fireEvent.click(pageNode(pageKey).querySelector<HTMLElement>(`[data-block-id="${blockId}"]`)!);
+  const carosello = () => fireEvent.click(button(/^Carosello/, screen.getByRole("group", { name: dict.configurator.formats.label, hidden: true })));
+
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  });
+
+  it("a layout with more cells adds empty blocks, in this format only, saved once; ⌘Z and ⇧⌘Z undo and redo it", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    carosello();
+    const page = pages.carosello_1_1[0]!;
+    expect(section(tools.layout).textContent).not.toContain(dict.configurator.soon);
+    fireEvent.click(layoutButton("4 immagini"));
+    expect(blockIds(page.pageKey)).toHaveLength(4);
+    expect(blockIds(page.pageKey).slice(0, 3)).toEqual(page.blocks.map((b) => b.blockId));
+    expect(pressedLayout()).toEqual(["Layout 4 immagini"]);
+    await settle();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const sent = lastDoc(onSave);
+    expect(sent.formats.carosello_1_1.pages[0].grid.layoutId).toBe("four");
+    expect(sent.formats.carosello_1_1.pages[0].blocks[3]).toMatchObject({ elements: [], background: { kind: "colour", value: NEW_BLOCK_COLOUR } });
+    expect(sent.formats.presentazione_16_9.pages).toEqual(pages.presentazione_16_9);
+    expect(validateNewDocument(sent)).toMatchObject({ ok: true });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(blockIds(page.pageKey)).toHaveLength(3);
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true, shiftKey: true });
+    expect(blockIds(page.pageKey)).toHaveLength(4);
+  });
+
+  it("refuses a layout that would drop filled blocks, saying how many are over", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    carosello();
+    const [intro, content] = pages.carosello_1_1;
+    fireEvent.click(layoutButton("2 immagini"));
+    expect(status().textContent).toBe(dict.configurator.edit.layoutOverOne);
+    expect(blockIds(intro!.pageKey)).toHaveLength(3);
+    selectBlock(content!.pageKey, content!.blocks[0]!.blockId);
+    fireEvent.click(layoutButton("2 immagini"));
+    expect(status().textContent).toBe(fill(dict.configurator.edit.layoutOver, { k: 2 }));
+    expect(blockIds(content!.pageKey)).toHaveLength(4);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("Mescola cycles the page through the layouts with its number of blocks, and hides with only one", () => {
+    const pages = fixture();
+    setup(false, pages);
+    carosello();
+    fireEvent.click(shuffleButton()!);
+    expect(pressedLayout()).toEqual(["Layout 3 immagini · A"]);
+    fireEvent.click(shuffleButton()!);
+    expect(pressedLayout()).toEqual(["Layout 3 immagini · B"]);
+    fireEvent.click(shuffleButton()!);
+    expect(pressedLayout()).toEqual(["Layout 3 immagini · A"]);
+    fireEvent.click(button(/^Video/, screen.getByRole("group", { name: dict.configurator.formats.label, hidden: true })));
+    expect(shuffleButton()).toBeNull();
+  });
+
+  it("Mescola is saved, keeps the selection, and ⌘Z and ⇧⌘Z undo and redo it", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    carosello();
+    const page = pages.carosello_1_1[0]!;
+    selectBlock(page.pageKey, page.blocks[1]!.blockId);
+    fireEvent.click(shuffleButton()!);
+    fireEvent.click(shuffleButton()!);
+    expect(pressedLayout()).toEqual(["Layout 3 immagini · B"]);
+    expect(button(dict.configurator.edit.removeBlock, leftPanel())).toBeTruthy();
+    await settle();
+    expect(lastDoc(onSave).formats.carosello_1_1.pages[0].grid.layoutId).toBe("three_b");
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(pressedLayout()).toEqual(["Layout 3 immagini · A"]);
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true, shiftKey: true });
+    expect(pressedLayout()).toEqual(["Layout 3 immagini · B"]);
+  });
+
+  it("Sfondo sets the selected block's colour, else the page's, from a swatch or a typed colour", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const page = pages.presentazione_16_9[0]!;
+    expect(section(tools.background).textContent).toContain(fill(tools.backgroundOf, { what: tools.backgroundPage }));
+    expect(swatch(tools.swatches[WHITE]).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(swatch(tools.swatches.transparent));
+    expect(colourField().value).toBe(tools.swatches.transparent);
+
+    // An element selected: Sfondo acts on its block.
+    fireEvent.click(pageNode(page.pageKey).querySelector(`[data-block-id="${page.blocks[0]!.blockId}"] [data-element-id]`)!);
+    expect(section(tools.background).textContent).toContain(fill(tools.backgroundOf, { what: tools.backgroundBlock }));
+    fireEvent.click(swatch(tools.swatches[BLUE]));
+    expect(swatch(tools.swatches[BLUE]).getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.change(colourField(), { target: { value: "defe56" } });
+    fireEvent.keyDown(colourField(), { key: "Enter" });
+    expect(colourField().value).toBe(LIME.toUpperCase());
+    await settle();
+    const sent = lastDoc(onSave).formats.presentazione_16_9.pages[0];
+    expect(sent.background).toEqual({ kind: "transparent" });
+    expect(sent.blocks[0].background).toEqual({ kind: "colour", value: LIME });
+    expect(sent.blocks[1].background).toEqual(page.blocks[1]!.background);
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    expect(swatch(tools.swatches[BLUE]).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true, shiftKey: true });
+    expect(colourField().value).toBe(LIME.toUpperCase());
+  });
+
+  it("Enter keeps the focus in the colour field; Escape puts the colour back and changes nothing", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const field = colourField();
+    field.focus();
+    fireEvent.change(field, { target: { value: "2977ff" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(colourField()).toBe(field);
+    expect(document.activeElement).toBe(field);
+    fireEvent.change(field, { target: { value: "defe56" } });
+    fireEvent.keyDown(field, { key: "Escape" });
+    fireEvent.blur(field);
+    expect(field.value).toBe(BLUE.toUpperCase());
+    await settle();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(lastDoc(onSave).formats.presentazione_16_9.pages[0].background).toEqual({ kind: "colour", value: BLUE });
+  });
+
+  it("Tinta unita on an image background goes back to the default colour", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    const page = pages.presentazione_16_9[2]!;
+    expect(page.background.kind).toBe("image");
+    fireEvent.click(rightPanel().querySelector<HTMLElement>(`[data-thumb="${page.pageKey}"]`)!);
+    expect(button(tools.image, section(tools.background)).getAttribute("aria-pressed")).toBe("true");
+    expect(colourField().value).toBe("");
+    fireEvent.click(button(tools.solid, section(tools.background)));
+    expect(swatch(tools.swatches[WHITE]).getAttribute("aria-pressed")).toBe("true");
+    await settle();
+    expect(lastDoc(onSave).formats.presentazione_16_9.pages[2].background).toEqual({ kind: "colour", value: WHITE });
+  });
+
+  it("a typed value that isn't a colour says how to write one and changes nothing; Immagine arrives with 4.5", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    fireEvent.change(colourField(), { target: { value: "blu" } });
+    fireEvent.blur(colourField());
+    expect(status().textContent).toBe(dict.configurator.edit.badColour);
+    expect(colourField().value).toBe(WHITE.toUpperCase());
+    fireEvent.click(button(tools.image, section(tools.background)));
+    expect(status().textContent).toBe(`${tools.image} arriva presto.`);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("when not editable, Layout, Mescola and Sfondo say they arrive soon and change nothing", async () => {
+    const pages = fixture();
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { editable: false, onSave });
+    carosello();
+    expect(section(tools.layout).textContent).toContain(dict.configurator.soon);
+    fireEvent.click(layoutButton("4 immagini"));
+    expect(status().textContent).toBe(`${tools.layout} arriva presto.`);
+    fireEvent.click(shuffleButton()!);
+    expect(status().textContent).toBe(`${tools.shuffle} arriva presto.`);
+    fireEvent.click(swatch(tools.swatches[BLUE]));
+    expect(status().textContent).toBe(`${tools.background} arriva presto.`);
+    fireEvent.change(colourField(), { target: { value: BLUE } });
+    fireEvent.blur(colourField());
+    expect(blockIds(pages.carosello_1_1[0]!.pageKey)).toHaveLength(3);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

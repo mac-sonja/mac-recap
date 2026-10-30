@@ -250,3 +250,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3c-elements-and-blocks.md`
   summary: Story 4.3e: drag-and-drop on the canvas: drag Elementi into a block (before the element under the pointer), move elements within or across blocks and pages, swap blocks with "⠿ Sposta" (or a block's only element), drop a block on another page's end, with "Trascina l’elemento dentro un blocco."; built on 4.3c's page edits.
   evidence: Split from 4.3c at the owner's choice (2026-10-30) to keep the spec under the size limit; 4.3c ships the click and keyboard edits first.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4a-layout-mescola-and-sfondo.md`
+  summary: Story 4.4b: resize by dragging the border between two blocks; the tracks on both sides give or take the space, the page keeps these sizes while its grid stays the same; a move that would overflow a text or make a row or column smaller than 12% of the page is refused and the border turns orange; the whole drag is one undo step; no transition with reduced motion (mockup `placeHandles`).
+  evidence: Split from Story 4.4 at the owner's choice (2026-10-30); needs the canvas's measured overflow during the drag, independent of 4.4a's clicks.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4a-layout-mescola-and-sfondo.md`
+  summary: Story 4.4c: Pagine di default lays the selected page out as one of the format's default pages (`defaultPages`), keeping the page's images first; Carosello Intro also lays out its Sfida and Idea pages, replacing the ones it added before; never adds a page. Texts come from the case's `generated_doc` (owner 2026-10-30). Open: how to find each template text key's words in `generated_doc` (e.g. a template key recorded on generated texts, or the default page's position), since the document doesn't store texts by key.
+  evidence: Split from Story 4.4 at the owner's choice (2026-10-30); the text source needs a design decision, possibly in generation (3.7's document build).
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4a-layout-mescola-and-sfondo.md`
+  summary: Sfondo · Immagine (pick an image of the case's or the client's media as a page or block background, Togli immagine) joins Story 4.5.
+  evidence: `saveRevisionDoc` refuses assets the revision doesn't already use (`ASSET_NOT_ALLOWED`) until 4.5's media guardrail, and the configurator doesn't load the client's media yet. Drafting decision 2026-10-30, to confirm with the owner.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4a-layout-mescola-and-sfondo.md`
+  summary: The text panel's colour field (Story 4.3b) is re-keyed on each new colour (`key={colour}` in `text-panel.tsx`), so Enter drops the keyboard focus; fix as 4.4a's Sfondo field (no key, update the value when not focused).
+  evidence: Found in the 4.4a review (finding 16); 4.4a fixed the same pattern in `left-panel.tsx`.

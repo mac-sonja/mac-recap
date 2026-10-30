@@ -857,6 +857,20 @@ export const it = {
       solid: "Tinta unita",
       image: "Immagine",
       deletePage: "Elimina pagina",
+      /** Moves the page to the next layout with the same number of blocks (Story 4.4a). */
+      shuffle: "Mescola",
+      /** Sfondo's colour field: its label and accessible name. */
+      colour: "Colore",
+      colourField: "Colore dello sfondo",
+      /** Sfondo's swatches, keyed by colour (C30). */
+      swatches: {
+        "#ffffff": "Bianco",
+        "#ededf0": "Grigio",
+        "#012234": "Blu notte",
+        "#defe56": "Lime",
+        "#2977ff": "Blu",
+        transparent: "Trasparente",
+      },
     },
     /** The left panel with a text selected (Story 4.3b, C32). */
     text: {
@@ -899,6 +913,11 @@ export const it = {
       emptyBlock: "Trascina qui un elemento",
       /** A new block's name. */
       newBlock: "Blocco",
+      /** A layout with fewer cells than the page's filled blocks (Story 4.4a); `{k}` blocks over. */
+      layoutOver: "La pagina ha {k} blocchi in più di questo layout: toglili prima.",
+      layoutOverOne: "La pagina ha 1 blocco in più di questo layout: toglilo prima.",
+      /** Sfondo's colour field got something that isn't a colour. */
+      badColour: "Scrivi un colore come #2977FF.",
     },
     /** The words of a text added from Elementi: placeholders to type over. */
     newTexts: {
