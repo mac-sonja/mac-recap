@@ -6,10 +6,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import { CURRENT_SCHEMA_VERSION, type Background, type Block, type DocumentKind, type Page, type TextGroupAlign } from "@/modules/generation";
-import { FORMAT_IDS, type BoundValues, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
+import { FORMAT_IDS, type BoundValues, type DefaultPage, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { Canvas } from "./canvas";
+import { applyDefaultPage, type GeneratedTexts } from "./default-pages";
 import type { InstagramView } from "./instagram-overlay";
 import { setTracks, type Axis } from "./grid-resize";
 import { LeftPanel, type ElementKey } from "./left-panel";
@@ -33,6 +34,10 @@ export interface ConfiguratorProps {
   /** By asset id; an asset left out (rendition not ready) draws an empty cell. */
   assets: Readonly<Record<string, RenderAsset>>;
   values: BoundValues;
+  /** The case's generated texts per format, by template key: what Pagine di default fills a page with (Story 4.4c). */
+  generatedTexts: GeneratedTexts;
+  /** The case's images a default page may place, oldest first (those the revision already uses). */
+  images: readonly string[];
   /** No revision yet: the starter pages, with the *Bozza di prova* note. */
   trial: boolean;
   theme: ThemeChoice;
@@ -77,9 +82,24 @@ const typing = (target: EventTarget | null) =>
  * a selected text's style, alignment, colour and columns, and a Testi group's alignment
  * in its block (Story 4.3b), each change one undo step. Elementi adds an element to the
  * selected block, or a block; ⌘C, ⌘X and ⌘V copy, cut and paste a block; Backspace,
- * Delete or **Rimuovi** removes the selection (Story 4.3c).
+ * Delete or **Rimuovi** removes the selection (Story 4.3c). **Pagine di default** lays the
+ * tools' page out as a template page, filled with the generated texts (Story 4.4c).
  */
-export function Configurator({ header, back, template, formats: initial, assets, values, trial, theme, caseId, revision, onSave }: ConfiguratorProps) {
+export function Configurator({
+  header,
+  back,
+  template,
+  formats: initial,
+  assets,
+  values,
+  generatedTexts,
+  images,
+  trial,
+  theme,
+  caseId,
+  revision,
+  onSave,
+}: ConfiguratorProps) {
   const router = useRouter();
   const doc = useDocument({
     caseId,
@@ -245,6 +265,7 @@ export function Configurator({ header, back, template, formats: initial, assets,
         if (edit.reason === "noBlock") say(it.configurator.edit.needBlock);
         else if (edit.reason === "pageFull") say(it.configurator.edit.pageFull);
         else if (edit.reason === "over") say(edit.over === 1 ? it.configurator.edit.layoutOverOne : fill(it.configurator.edit.layoutOver, { k: edit.over }));
+        else if (edit.reason === "empty") say(it.configurator.edit.defaultEmpty);
         return false;
       }
       doc.change({ ...formats, [formatId]: edit.pages }, formatId);
@@ -275,6 +296,23 @@ export function Configurator({ header, back, template, formats: initial, assets,
       if (editable && toolPage !== undefined) applyPageEdit(applyLayout(formats[formatId], toolPage.pageKey, layout, newId));
     },
     [applyPageEdit, editable, formatId, formats, toolPage],
+  );
+
+  /** A Pagine di default button (Story 4.4c): the tools' page laid out as that template page, then selected. */
+  const pickDefaultPage = useCallback(
+    (defaultPage: DefaultPage) => {
+      if (!editable || toolPage === undefined) return;
+      applyPageEdit(
+        applyDefaultPage(formats[formatId], toolPage.pageKey, defaultPage, {
+          texts: generatedTexts[formatId] ?? {},
+          pool: images,
+          resultRows: values.case.results.length,
+          hasTestimonial: values.case.testimonial !== null,
+          newId,
+        }),
+      );
+    },
+    [applyPageEdit, editable, formatId, formats, generatedTexts, images, toolPage, values],
   );
 
   /** **Mescola**: the tools' page on its next layout; the selection stays. */
@@ -461,6 +499,7 @@ export function Configurator({ header, back, template, formats: initial, assets,
             onRemove={removeSelected}
             onLayout={pickLayout}
             onShuffle={shuffle}
+            onDefaultPage={pickDefaultPage}
             onBackground={background}
             onBadColour={() => say(it.configurator.edit.badColour)}
             onSoon={soon}

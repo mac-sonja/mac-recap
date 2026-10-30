@@ -6,7 +6,7 @@ import { PRESSABLE, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { ThemeSwitch } from "@/app/_components/theme-switch";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import type { Background, Block, DocumentElement, Page, TextGroupAlign } from "@/modules/generation";
-import { defaultPages, layouts, textStyles, type FormatId, type Layout } from "@/modules/rendering";
+import { defaultPages, layouts, textStyles, type DefaultPage, type FormatId, type Layout } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { BACKGROUND_SWATCHES, NEW_BLOCK_COLOUR, parseBackground, shuffleChoices, swatchBackground } from "./page-editing";
@@ -51,6 +51,8 @@ export interface LeftPanelProps {
   onLayout: (layout: Layout) => void;
   /** **Mescola**: the page moves to the next layout with its number of blocks. */
   onShuffle: () => void;
+  /** A Pagine di default button (Story 4.4c). */
+  onDefaultPage: (defaultPage: DefaultPage) => void;
   /** A Sfondo swatch or typed colour: the selected block's background, else the page's. */
   onBackground: (background: Background) => void;
   /** Sfondo's field got something that isn't a colour. */
@@ -240,6 +242,7 @@ export function LeftPanel({
   onRemove,
   onLayout,
   onShuffle,
+  onDefaultPage,
   onBackground,
   onBadColour,
   onSoon,
@@ -330,15 +333,18 @@ export function LeftPanel({
             </section>
 
             <section className={PANEL_SECTION} aria-label={t.defaultPages}>
-              <SoonHeading>{t.defaultPages}</SoonHeading>
+              {heading(t.defaultPages)}
               <div className="grid grid-cols-2 gap-1.5">
                 {defaultPages(formatId, template).map((dp) => (
                   <button
                     key={dp.key}
                     type="button"
-                    {...inactive}
-                    onClick={soon(t.defaultPages)}
-                    className="min-h-9 cursor-default rounded-md bg-surface-raised px-2.5 py-1.5 text-left font-label text-[12.5px] leading-tight text-foreground shadow-card"
+                    {...(editable ? {} : inactive)}
+                    onClick={editable ? () => onDefaultPage(dp) : soon(t.defaultPages)}
+                    className={cn(
+                      "min-h-9 rounded-md bg-surface-raised px-2.5 py-1.5 text-left font-label text-[12.5px] leading-tight text-foreground shadow-card",
+                      editable ? cn("hover:bg-surface-hover", PRESSABLE) : "cursor-default",
+                    )}
                   >
                     {dp.name}
                   </button>

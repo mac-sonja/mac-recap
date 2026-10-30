@@ -160,6 +160,8 @@ export type {
   SaveRevisionDocInput,
 } from "@/modules/case-study/domain/revision";
 export type { CaseStudyRevision } from "@/modules/case-study/application/revisions";
+/** Every asset id a document references, as `saveRevisionDoc` checks it (pure; Story 4.4c's image pool). */
+export { referencedAssetIds } from "@/modules/case-study/application/revisions";
 export type { TransitionEvent } from "@/modules/case-study/domain/transition";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
 
