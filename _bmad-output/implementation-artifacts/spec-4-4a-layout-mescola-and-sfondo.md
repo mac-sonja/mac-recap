@@ -2,7 +2,8 @@
 title: 'Story 4.4a: pick a layout, Mescola, and set a page or block background colour'
 type: 'feature'
 created: '2026-10-30'
-status: 'draft'
+status: 'done'
+baseline_commit: '8efc5acd4095e9ff6a95581774f8e326767b581b'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -84,14 +85,25 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `it.ts` / `it.test.ts` -- strings.
-- [ ] `page-editing.ts` (+ tests) -- layout, Mescola, background edits.
-- [ ] `left-panel.tsx`, `configurator.tsx` (+ `configurator.test.tsx`) -- wiring.
-- [ ] `sprint-status.yaml` -- on the 4.4 line: 4.4a in review, 4.4b and 4.4c in deferred-work.
+- [x] `it.ts` / `it.test.ts` -- strings.
+- [x] `page-editing.ts` (+ tests) -- layout, Mescola, background edits.
+- [x] `left-panel.tsx`, `configurator.tsx` (+ `configurator.test.tsx`) -- wiring.
+- [x] `sprint-status.yaml` -- on the 4.4 line: 4.4a in review, 4.4b and 4.4c in deferred-work.
 
 **Acceptance Criteria:**
 - Given Story 4.4's criteria for Layout (click), Mescola and Sfondo · Tinta unita in `epics.md`, when checked on the running page in each format, then each is met, the canvas redraws at once, and ⌘Z/⇧⌘Z undo and redo each one.
 - Given `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, when they run, then they pass.
+
+## Implementation Notes
+
+- Owner (2026-10-29, 4.3): subagents only for the review step, so the implementation was done in the main session.
+- Layout and Mescola act on the tools' page (selected, else in view); Sfondo on the selected block, else that page. Layout goes through `applyPageEdit` (page selected); Mescola and Sfondo call `doc.change` directly and keep the selection.
+- `BACKGROUND_SWATCHES` is `TEXT_COLOURS` (one palette), and `parseBackground` reuses `parseColour`, refusing `#rrggbbaa`.
+- Sfondo's swatches are named in `it.ts` (`tools.swatches`); the test file names colours through `BACKGROUND_SWATCHES` (`test/tokens.test.ts` forbids raw colours in `.tsx`).
+- `CHECKERBOARD` moved from `text-panel.tsx` to `styles.ts`, shared by both colour pickers.
+- Review: Tinta unita on an image background goes back to the default colour (page white, block `#ededf0`), as the mockup's colour tab does. The colour field is no longer re-keyed on a new value, so Enter keeps the focus.
+- Not done: the browser check against the local stack (as in 4.3b/c, the configurator needs Supabase). Covered by `configurator.test.tsx` (happy-dom, the real renderer) and `page-editing.test.ts`.
+- Files: `page-editing.ts` (+ test), `left-panel.tsx`, `configurator.tsx`, `configurator.test.tsx`, `styles.ts`, `text-panel.tsx`, `it.ts` / `it.test.ts`, `sprint-status.yaml`.
 
 ## Spec Change Log
 
@@ -102,3 +114,25 @@ context:
 
 **Manual checks:**
 - In Chromium, in each format: pick every layout from a page with fewer and with more blocks; Mescola through a full cycle; each swatch and a typed colour on a page and on a block; ⌘Z/⇧⌘Z; reload keeps the result; light and dark.
+
+
+## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Undo/redo and save untested for Mescola and Sfondo (blind, verify-gap) | medium | Only the Layout test pressed ⌘Z; Mescola and Sfondo call `doc.change` on their own path | patch (tests: Mescola save, kept selection, ⌘Z/⇧⌘Z; Sfondo ⌘Z/⇧⌘Z) |
+| 2 | Enter in the colour field drops the focus (blind, edge) | medium | `key={colour}` remounted the input on a new colour | patch (no key; an effect updates the value when the field isn't focused; test) |
+| 3 | Tinta unita does nothing on an image background (blind, edge, verify-gap) | low | `onClick` was undefined when editable; image backgrounds exist in templates and fixtures | patch (back to the default colour, as the mockup; test) |
+| 4 | `parseBackground` copies `parseColour` (blind) | low | Same trim/hex logic in two files | patch (reuse, refuse 8 digits) |
+| 5 | Swatch palette duplicated (blind) | low | `BACKGROUND_SWATCHES` equalled `TEXT_COLOURS` | patch (alias); the names map stays: the text panel labels swatches by hex |
+| 6 | `shownColour` name clash (blind) | low | `text-editing.ts` exports a different `shownColour` | patch (renamed `fieldValue`) |
+| 7 | `refused` restates the reason union (blind) | low | Literal list beside `PageEdit` | patch (derived with `Exclude`) |
+| 8 | Escape in the Sfondo field untested (verify-gap) | low | Mirrors the tested text-panel handler | patch (test) |
+| 9 | `applyPageEdit` has no default for silent reasons (blind) | false | `nothing` is meant to be silent (pressed layout, frozen intent); `blockFull` silent per 4.3c's frozen intent | reject |
+| 10 | The read-only colour field gives no message (blind) | low | Same as the text panel's field (4.3b); swatches and thumbnails do say it | reject |
+| 11 | A layout drops the block selection (blind) | false | Frozen intent: "The page is then selected" | reject |
+| 12 | Removing middle empty blocks reflows filled ones (blind) | false | Frozen intent: "removes empty blocks, last first"; block order is kept | reject |
+| 13 | Mescola isn't announced (blind) | low | The pressed thumbnail updates; adding a message is new behaviour | reject |
+| 14 | Scrolling while typing retargets the colour (edge) | low | Needs a scroll-wheel move with focus in the field and no selection; fix adds target state | reject |
+| 15 | Typing then clicking a swatch commits twice or says bad colour (edge) | low | Blur commits first; rare, the fix adds a `relatedTarget` guard | reject |
+| 16 | Same Enter re-key focus loss in the text panel's colour field | low | Pre-existing in 4.3b (`text-panel.tsx` `key={colour}`), not caused here | defer |

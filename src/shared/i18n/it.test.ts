@@ -329,6 +329,9 @@ describe("configurator copy", () => {
       "Rimuovi blocco",
       "Trascina qui un elemento",
       "Blocco",
+      "La pagina ha {k} blocchi in più di questo layout: toglili prima.",
+      "La pagina ha 1 blocco in più di questo layout: toglilo prima.",
+      "Scrivi un colore come #2977FF.",
     ]);
     expect(Object.values(it.configurator.newTexts)).toEqual(["Nuovo titolo", "Scrivi qui il testo.", "+00%", "«La citazione del cliente.»", "Etichetta", "Titolo"]);
     expect(t("configurator.trial.title")).toBe("Bozza di prova");
@@ -342,6 +345,15 @@ describe("configurator copy", () => {
       t("configurator.tools.background"),
       t("configurator.tools.deletePage"),
     ]).toEqual(["Layout", "Pagine di default", "Elementi", "Sfondo", "Elimina pagina"]);
+    expect([t("configurator.tools.shuffle"), t("configurator.tools.colour"), t("configurator.tools.colourField")]).toEqual(["Mescola", "Colore", "Colore dello sfondo"]);
+    expect(it.configurator.tools.swatches).toEqual({
+      "#ffffff": "Bianco",
+      "#ededf0": "Grigio",
+      "#012234": "Blu notte",
+      "#defe56": "Lime",
+      "#2977ff": "Blu",
+      transparent: "Trasparente",
+    });
     expect(Object.values(it.configurator.elements)).toEqual([
       "Blocco",
       "Testi",

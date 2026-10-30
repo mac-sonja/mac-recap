@@ -20,6 +20,10 @@ export const ICON_BUTTON = `inline-flex size-7 shrink-0 items-center justify-cen
 export const EYEBROW =
   "mb-2.5 flex items-center justify-between gap-2 font-label text-[11.5px] font-semibold tracking-[0.06em] text-foreground-muted uppercase";
 
+/** Transparent, drawn as a checkerboard (mockup `[data-none]`). */
+export const CHECKERBOARD =
+  "bg-[conic-gradient(var(--color-border-strong)_25%,var(--color-surface-raised)_0_50%,var(--color-border-strong)_0_75%,var(--color-surface-raised)_0)] bg-[length:8px_8px]";
+
 /** A panel section. */
 export const PANEL_SECTION = "border-b border-border p-3.5 last:border-b-0";
 

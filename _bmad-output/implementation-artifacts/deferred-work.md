@@ -259,3 +259,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-4a-layout-mescola-and-sfondo.md`
   summary: Sfondo · Immagine (pick an image of the case's or the client's media as a page or block background, Togli immagine) joins Story 4.5.
   evidence: `saveRevisionDoc` refuses assets the revision doesn't already use (`ASSET_NOT_ALLOWED`) until 4.5's media guardrail, and the configurator doesn't load the client's media yet. Drafting decision 2026-10-30, to confirm with the owner.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4a-layout-mescola-and-sfondo.md`
+  summary: The text panel's colour field (Story 4.3b) is re-keyed on each new colour (`key={colour}` in `text-panel.tsx`), so Enter drops the keyboard focus; fix as 4.4a's Sfondo field (no key, update the value when not focused).
+  evidence: Found in the 4.4a review (finding 16); 4.4a fixed the same pattern in `left-panel.tsx`.
