@@ -152,7 +152,7 @@ export function Sidebar({
   return (
     <aside className="sticky top-0 flex h-dvh w-16 shrink-0 flex-col border-r bg-surface-sidebar xl:w-64">
       <nav aria-label={it.shell.nav.label} className="flex flex-1 flex-col gap-0.5 p-2 xl:p-4">
-        <p className="mb-8 hidden items-end gap-2 px-2 pt-2 text-foreground-strong xl:flex">
+        <p className="mb-8 hidden items-end gap-2 px-2 pt-6 text-foreground-strong xl:flex">
           <MacWordmark label={it.app.name} className="h-[22px] w-auto" />
           {/* The wordmark's label already reads "MAC Recap". */}
           <span aria-hidden="true" className="font-label text-[11px] leading-none font-semibold tracking-[0.18em]">
