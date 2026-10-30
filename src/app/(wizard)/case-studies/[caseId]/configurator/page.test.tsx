@@ -46,7 +46,8 @@ vi.mock("../../../_components/configurator/configurator", async () => {
     },
   };
 });
-vi.mock("@/modules/material", () => ({
+vi.mock("@/modules/material", async () => ({
+  ...(await vi.importActual<typeof import("@/modules/material/domain/files")>("@/modules/material/domain/files")),
   getDetailsForm: (input: unknown) => getDetailsForm(input),
   listAssets: (input: unknown) => listAssets(input),
   getRendition: (assetId: unknown, spec: unknown) => getRendition(assetId, spec),
@@ -179,6 +180,19 @@ describe("ConfiguratorPage", () => {
     expect(configuratorProps.mock.calls.at(-1)![0]).toMatchObject({ generatedTexts: {}, images: [] });
   });
 
+
+  it("gives the Media tab the case's images and videos and the upload rules for images and videos (Story 4.5a)", async () => {
+    listAssets.mockResolvedValue(ok([listed(IMAGE, "image"), { ...listed(PENDING, "image"), kind: "document", contentType: "application/pdf" }, listed(VIDEO, "video")]));
+    configuratorProps.mockClear();
+    await render();
+    const props = configuratorProps.mock.calls.at(-1)![0];
+    expect((props.media as ListedAsset[]).map((file) => file.id)).toEqual([IMAGE, VIDEO]);
+    expect(props.mediaRules).toEqual({
+      maxFiles: 20,
+      maxFileBytes: 50 * 1024 * 1024,
+      contentTypes: ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime"],
+    });
+  });
 
   it("guards the surface with `edit` and reads the case's editable revision", async () => {
     const html = await render();

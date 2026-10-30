@@ -10,7 +10,7 @@ import type { Rendition } from "@/modules/material/domain/rendition";
 import { err, ok } from "@/shared/result";
 import { makeConfirmUpload } from "./confirm-upload";
 import { makeGetRendition } from "./get-rendition";
-import { makeHasMaterial } from "./has-material";
+import { makeHasMaterial, makeLiveAssetIds } from "./has-material";
 import { makeListAssets } from "./list-assets";
 import type { CaseStudies, Jobs, MaterialDeps } from "./deps";
 import { renditionInputHash, specHashOf } from "./spec-hash";
@@ -640,6 +640,29 @@ describe("hasMaterial", () => {
     const failure = err({ code: "MATERIAL_LOOKUP_FAILED", message: "down" });
     w.repo.hasMaterial.mockResolvedValueOnce(failure);
     expect(await makeHasMaterial(w.deps)(CASE_ID)).toEqual(failure);
+  });
+});
+
+describe("liveAssetIds", () => {
+  it("lists the live assets' ids, oldest first, never the removed ones", async () => {
+    const w = world({ live: 2, removed: 1 });
+    const listed = await w.repo.listLive(CASE_ID);
+    if (!listed.ok) throw new Error("seed");
+    expect(listed.value).toHaveLength(2);
+    expect(await makeLiveAssetIds(w.deps)(CASE_ID)).toEqual(ok(listed.value.map((a) => a.id)));
+  });
+
+  it("a malformed case id → INVALID_INPUT without a query", async () => {
+    const w = world();
+    expect(codeOf(await makeLiveAssetIds(w.deps)("nope"))).toBe("INVALID_INPUT");
+    expect(w.repo.listLive).not.toHaveBeenCalled();
+  });
+
+  it("passes a lookup failure through", async () => {
+    const w = world();
+    const failure = err({ code: "ASSET_LOOKUP_FAILED", message: "down" });
+    w.repo.listLive.mockResolvedValueOnce(failure);
+    expect(await makeLiveAssetIds(w.deps)(CASE_ID)).toEqual(failure);
   });
 });
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { err, ok } from "@/shared/result";
 
-const { getActor, saveRevisionDocUseCase } = vi.hoisted(() => ({ getActor: vi.fn(), saveRevisionDocUseCase: vi.fn() }));
+const { getActor, saveRevisionDocUseCase, liveAssetIds } = vi.hoisted(() => ({ getActor: vi.fn(), saveRevisionDocUseCase: vi.fn(), liveAssetIds: vi.fn() }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
 vi.mock("@/modules/access", async (importOriginal) => ({
@@ -10,6 +10,7 @@ vi.mock("@/modules/access", async (importOriginal) => ({
   getActor,
 }));
 vi.mock("@/modules/case-study", () => ({ saveRevisionDoc: saveRevisionDocUseCase }));
+vi.mock("@/modules/material", () => ({ liveAssetIds }));
 
 const { saveRevisionDoc } = await import("./actions");
 
@@ -22,10 +23,10 @@ beforeEach(() => {
 });
 
 describe("saveRevisionDoc", () => {
-  it("saves with the actor and returns only the new version", async () => {
+  it("saves with the actor and the case's live files (the media guardrail), and returns only the new version", async () => {
     saveRevisionDocUseCase.mockResolvedValue(ok({ id: input.revisionId, version: 3, doc: { big: true } }));
     expect(await saveRevisionDoc(input)).toEqual({ ok: true, value: { version: 3 } });
-    expect(saveRevisionDocUseCase).toHaveBeenCalledWith(actor("owner_designer"), input);
+    expect(saveRevisionDocUseCase).toHaveBeenCalledWith(actor("owner_designer"), input, liveAssetIds);
   });
 
   it("refuses account/sales/social with 403 before any save", async () => {

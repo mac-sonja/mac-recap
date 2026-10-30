@@ -8,6 +8,7 @@ import {
 } from "@/modules/case-study/domain/revision";
 import { parseInput } from "@/modules/case-study/domain/validation";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
+import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
 import type { RevisionRepository } from "@/modules/case-study/ports/revision-repository";
 import { upgrade, validateNewDocument, type CaseStudyDocument } from "@/modules/generation";
 import { log } from "@/shared/log";
@@ -130,14 +131,43 @@ export function referencedAssetIds(doc: unknown): Set<string> {
 }
 
 /**
- * Saves an edited `doc` of a case's head revision (Story 4.3a) by compare-and-set on
- * `version`. The revision must be `revisionId` of `caseId` (else `NOT_FOUND`), `doc`
- * must pass `generation.validateNewDocument`, and it may reference only assets the
- * stored `doc` or `generatedDoc` references (`ASSET_NOT_ALLOWED`; Story 4.5 brings the
- * media guardrail). The caller has authorized the actor to `edit`; the database checks
- * the case is `in_review`.
+ * The ids of a case's non-deleted assets (the material module's `liveAssetIds`, passed in:
+ * material imports this module, never the reverse).
  */
-export function makeSaveRevisionDoc(deps: { revisions: RevisionRepository }) {
+export type CaseAssetIds = (caseId: string) => Promise<Result<readonly string[]>>;
+
+export interface SaveRevisionDocDeps {
+  revisions: RevisionRepository;
+  cases: Pick<CaseStudyRepository, "findById">;
+  clients: Pick<ClientRepository, "listAssets">;
+  caseAssetIds: CaseAssetIds;
+}
+
+/** The assets a revision of `caseId` may newly reference: the case's live files and its client's files, lowercased. */
+async function allowedAssetIds(deps: SaveRevisionDocDeps, caseId: string): Promise<Result<Set<string>>> {
+  const owner = await deps.cases.findById(caseId);
+  if (!owner.ok) return owner;
+  if (owner.value === null) return err({ code: "NOT_FOUND", message: "No case study with this id.", details: { caseId } });
+  const [ofCase, ofClient] = await Promise.all([deps.caseAssetIds(caseId), deps.clients.listAssets(owner.value.client.id)]);
+  if (!ofCase.ok) return ofCase;
+  if (!ofClient.ok) return ofClient;
+  return ok(new Set([...ofCase.value, ...ofClient.value.map((asset) => asset.id)].map((id) => id.toLowerCase())));
+}
+
+/**
+ * Saves an edited `doc` of a case's head revision (Story 4.3a) by compare-and-set on
+ * `version`. The revision must be `revisionId` of `caseId` (else `NOT_FOUND`), and `doc`
+ * must pass `generation.validateNewDocument`.
+ *
+ * The media guardrail (Story 4.5a): an asset neither the stored `doc` nor `generatedDoc`
+ * references must be a non-deleted file of this case or a file of its client
+ * (`ASSET_NOT_ALLOWED`, naming up to 10). References the revision already has are kept even
+ * once their file is deleted, so the document stays editable (an undo or Pagine di default
+ * may bring a generated one back); approval reports them (`MATERIAL_MISSING`). The
+ * asset lists are read only when something is added. The caller has authorized the actor
+ * to `edit`; the database checks the case is `in_review`.
+ */
+export function makeSaveRevisionDoc(deps: SaveRevisionDocDeps) {
   return async function saveRevisionDoc(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
     const parsed = parseInput(saveRevisionDocInputSchema, input);
     if (!parsed.ok) return parsed;
@@ -152,15 +182,21 @@ export function makeSaveRevisionDoc(deps: { revisions: RevisionRepository }) {
     }
     const current = upgraded(found.value);
     if (!current.ok) return current;
-    // What the revision uses now or was generated with (an undo may bring a removed one back).
-    const allowed = new Set([...referencedAssetIds(current.value.doc), ...referencedAssetIds(current.value.generatedDoc)]);
-    const foreign = [...referencedAssetIds(valid.value)].filter((id) => !allowed.has(id));
-    if (foreign.length > 0) {
-      return err({
-        code: "ASSET_NOT_ALLOWED",
-        message: "The document references an asset this revision does not use.",
-        details: { revisionId, assetIds: foreign.slice(0, 10) },
-      });
+
+    // What the revision uses now or was generated with: Pagine di default and undo bring generated refs back.
+    const kept = new Set([...referencedAssetIds(current.value.doc), ...referencedAssetIds(current.value.generatedDoc)]);
+    const added = [...referencedAssetIds(valid.value)].filter((id) => !kept.has(id));
+    if (added.length > 0) {
+      const allowed = await allowedAssetIds(deps, caseId);
+      if (!allowed.ok) return allowed;
+      const foreign = added.filter((id) => !allowed.value.has(id));
+      if (foreign.length > 0) {
+        return err({
+          code: "ASSET_NOT_ALLOWED",
+          message: "The document references a file that is not this case's or its client's.",
+          details: { revisionId, assetIds: foreign.slice(0, 10) },
+        });
+      }
     }
 
     const saved = await deps.revisions.saveDoc({ revisionId, doc: valid.value, expectedVersion, actorId: actor.id });

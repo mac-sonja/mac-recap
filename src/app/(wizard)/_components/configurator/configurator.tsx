@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import { CURRENT_SCHEMA_VERSION, type Background, type Block, type DocumentKind, type Page, type TextGroupAlign } from "@/modules/generation";
+import type { ListedAsset } from "@/modules/material";
 import { FORMAT_IDS, type BoundValues, type DefaultPage, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -15,6 +16,7 @@ import type { InstagramView } from "./instagram-overlay";
 import { setTracks, type Axis } from "./grid-resize";
 import { LeftPanel, type ElementKey } from "./left-panel";
 import { addBlock, addElement, applyLayout, pasteBlock, removeSelection, setBackground, shuffleLayout, type PageEdit } from "./page-editing";
+import type { MediaUploadRules } from "./media-files";
 import { RightPanel } from "./right-panel";
 import { findElement, resolveSelection, stepOut, type Selection } from "./selection";
 import { StatusMessage, useStatusMessage } from "./status-message";
@@ -47,6 +49,10 @@ export interface ConfiguratorProps {
   revision: (EditedRevision & { kind: DocumentKind }) | null;
   /** The autosave's server action. */
   onSave: (input: SaveInput) => Promise<ActionResult<{ version: number }>>;
+  /** The case's images and videos, oldest first: the Media tab's files (Story 4.5a). */
+  media: readonly ListedAsset[];
+  /** What the Media tab's drop zone uploads (Story 2.7's rules, images and videos only). */
+  mediaRules: MediaUploadRules;
 }
 
 /** A fresh id for a new block or element. */
@@ -84,6 +90,8 @@ const typing = (target: EventTarget | null) =>
  * selected block, or a block; ⌘C, ⌘X and ⌘V copy, cut and paste a block; Backspace,
  * Delete or **Rimuovi** removes the selection (Story 4.3c). **Pagine di default** lays the
  * tools' page out as a template page, filled with the generated texts (Story 4.4c).
+ * The right panel's **Media** tab lists, stars and uploads the case's images and videos
+ * (Story 4.5a).
  */
 export function Configurator({
   header,
@@ -99,6 +107,8 @@ export function Configurator({
   caseId,
   revision,
   onSave,
+  media,
+  mediaRules,
 }: ConfiguratorProps) {
   const router = useRouter();
   const doc = useDocument({
@@ -571,7 +581,10 @@ export function Configurator({
             values={values}
             currentPageKey={selectedPage?.pageKey}
             onSelectPage={selectPage}
-            onSoon={soon}
+            caseId={caseId}
+            media={media}
+            mediaRules={mediaRules}
+            say={say}
             onHide={() => toggleRight(false)}
             hideRef={hideRight}
           />

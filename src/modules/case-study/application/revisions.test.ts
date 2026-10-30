@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
+import type { ClientAsset } from "@/modules/case-study/domain/client-material";
 import type { CaseStudy } from "@/modules/case-study/domain/case-study";
 import type { Revision } from "@/modules/case-study/domain/revision";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
+import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
 import type { RevisionRepository } from "@/modules/case-study/ports/revision-repository";
 import { caseHistoryV0, caseHistoryV1, caseHistoryV2, UPGRADE_ID_PREFIX } from "@/modules/generation";
 import { FORMAT_IDS, starterPages } from "@/modules/rendering";
 import { err, ok } from "@/shared/result";
-import { makeCreateWorkingRevision, makeGetEditableRevision, makeGetLiveRevision, makeSaveRevisionDoc, referencedAssetIds } from "./revisions";
+import { makeCreateWorkingRevision, makeGetEditableRevision, makeGetLiveRevision, makeSaveRevisionDoc, referencedAssetIds, type CaseAssetIds } from "./revisions";
 
 const actor: Actor = {
   id: "00000000-0000-4000-8000-000000000002",
@@ -301,7 +303,7 @@ describe("saveRevisionDoc", () => {
   const head = () => stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { version: 3 });
 
   it("validates the document, then saves it once with the actor and the expected version", async () => {
-    const deps = fakes(caseStudy(), [head()]);
+    const deps = guarded([head()]);
     const result = await makeSaveRevisionDoc(deps)(actor, input());
     expect(deps.revisions.saveDoc).toHaveBeenCalledTimes(1);
     expect(deps.revisions.saveDoc).toHaveBeenCalledWith({ revisionId: HEAD_ID, doc: edited(), expectedVersion: 3, actorId: actor.id });
@@ -309,7 +311,7 @@ describe("saveRevisionDoc", () => {
   });
 
   it("lowercases the ids it is given", async () => {
-    const deps = fakes(caseStudy(), [head()]);
+    const deps = guarded([head()]);
     const result = await makeSaveRevisionDoc(deps)(actor, input({ caseId: CASE_ID.toUpperCase(), revisionId: HEAD_ID.toUpperCase() }));
     expect(result.ok).toBe(true);
   });
@@ -318,7 +320,7 @@ describe("saveRevisionDoc", () => {
     ["an unknown revision", [] as Revision[]],
     ["another case's revision", [stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { caseId: "11111111-0000-4000-8000-000000000009" })]],
   ])("refuses %s with NOT_FOUND before any write", async (_name, rows) => {
-    const deps = fakes(caseStudy(), rows);
+    const deps = guarded(rows);
     expect(await makeSaveRevisionDoc(deps)(actor, input())).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
     expect(deps.revisions.saveDoc).not.toHaveBeenCalled();
   });
@@ -332,7 +334,7 @@ describe("saveRevisionDoc", () => {
       return doc;
     }, "FORMAT_NOT_IN_REVISION"],
   ])("refuses %s before any write", async (_name, doc, code) => {
-    const deps = fakes(caseStudy(), [head()]);
+    const deps = guarded([head()]);
     expect(await makeSaveRevisionDoc(deps)(actor, input({ doc: doc() }))).toMatchObject({ ok: false, error: { code } });
     expect(deps.revisions.saveDoc).not.toHaveBeenCalled();
   });
@@ -343,41 +345,100 @@ describe("saveRevisionDoc", () => {
     ["a malformed revision id", { revisionId: "x" }],
     ["an unknown key", { status: "approved" }],
   ])("refuses %s with INVALID_INPUT", async (_name, over) => {
-    const deps = fakes(caseStudy(), [head()]);
+    const deps = guarded([head()]);
     expect(await makeSaveRevisionDoc(deps)(actor, input(over))).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
     expect(deps.revisions.saveDoc).not.toHaveBeenCalled();
   });
 
-  it("refuses an asset the stored document does not reference with ASSET_NOT_ALLOWED", async () => {
-    const deps = fakes(caseStudy(), [head()]);
+  const CASE_ASSET = "aaaaaaaa-0000-4000-8000-0000000000a1";
+  const CLIENT_ASSET = "aaaaaaaa-0000-4000-8000-0000000000c1";
+  const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
+  /** `fakes` plus the guardrail's lookups: the case's live files and its client's files. */
+  const guarded = (rows: Revision[], live: string[] = [CASE_ASSET], clientFiles: string[] = [CLIENT_ASSET]) => {
+    const base = fakes(caseStudy(), rows);
+    const caseAssetIds = vi.fn<CaseAssetIds>(async () => ok(live));
+    const clients = {
+      listAssets: vi.fn<ClientRepository["listAssets"]>(async () => ok(clientFiles.map((id) => ({ id }) as ClientAsset))),
+    };
+    return { ...base, caseAssetIds, clients };
+  };
+  const withBackground = (assetId: string) => {
     const doc = edited();
+    doc.formats.presentazione_16_9!.pages[0]!.background = { kind: "image", assetId };
+    return doc;
+  };
+
+  it("saves a text edit without looking any asset up", async () => {
+    const deps = guarded([head()]);
+    expect((await makeSaveRevisionDoc(deps)(actor, input())).ok).toBe(true);
+    expect(deps.caseAssetIds).not.toHaveBeenCalled();
+    expect(deps.clients.listAssets).not.toHaveBeenCalled();
+    expect(deps.cases.findById).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a live file of this case", CASE_ASSET.toUpperCase()],
+    ["a file of its client", CLIENT_ASSET],
+  ])("allows a new reference to %s", async (_name, assetId) => {
+    const deps = guarded([head()]);
+    expect((await makeSaveRevisionDoc(deps)(actor, input({ doc: withBackground(assetId) }))).ok).toBe(true);
+    expect(deps.caseAssetIds).toHaveBeenCalledWith(CASE_ID);
+    expect(deps.clients.listAssets).toHaveBeenCalledWith(CLIENT_ID);
+    expect(deps.revisions.saveDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a new reference to another case's, a deleted or an unknown file with ASSET_NOT_ALLOWED before any write", async () => {
     const foreign = "99999999-0000-4000-8000-000000000001";
-    doc.formats.presentazione_16_9!.pages[0]!.background = { kind: "image", assetId: foreign };
-    const result = await makeSaveRevisionDoc(deps)(actor, input({ doc }));
+    const deps = guarded([head()]);
+    const result = await makeSaveRevisionDoc(deps)(actor, input({ doc: withBackground(foreign) }));
     expect(result).toMatchObject({ ok: false, error: { code: "ASSET_NOT_ALLOWED", details: { assetIds: [foreign] } } });
     expect(deps.revisions.saveDoc).not.toHaveBeenCalled();
   });
 
-  it("allows an asset only the generated document references (an undo bringing it back)", async () => {
-    const generated = caseHistoryV2(FORMAT_IDS);
-    const kept = stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { version: 3, generatedDoc: generated });
-    const removedId = "99999999-0000-4000-8000-000000000002";
-    generated.formats.presentazione_16_9!.pages[0]!.background = { kind: "image", assetId: removedId };
-    const deps = fakes(caseStudy(), [kept]);
-    const doc = edited();
-    doc.formats.presentazione_16_9!.pages[0]!.background = { kind: "image", assetId: removedId };
-    expect((await makeSaveRevisionDoc(deps)(actor, input({ doc }))).ok).toBe(true);
+  it("keeps a reference the stored document already has, even once its file is deleted", async () => {
+    const deleted = "99999999-0000-4000-8000-000000000003";
+    const kept = stored(HEAD_ID, withBackground(deleted), { version: 3 });
+    const deps = guarded([kept], []);
+    expect((await makeSaveRevisionDoc(deps)(actor, input({ doc: withBackground(deleted) }))).ok).toBe(true);
+    expect(deps.caseAssetIds).not.toHaveBeenCalled();
+  });
+
+  it("keeps a reference only the generated document has (an undo or Pagine di default bringing it back), even once its file is deleted", async () => {
+    const removed = "99999999-0000-4000-8000-000000000002";
+    const kept = stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { version: 3, generatedDoc: withBackground(removed) });
+    const deps = guarded([kept], []);
+    expect((await makeSaveRevisionDoc(deps)(actor, input({ doc: withBackground(removed) }))).ok).toBe(true);
+    expect(deps.caseAssetIds).not.toHaveBeenCalled();
+  });
+
+  it("names only the foreign assets when a save adds an allowed and a foreign one", async () => {
+    const foreign = "99999999-0000-4000-8000-000000000004";
+    const deps = guarded([head()]);
+    const doc = withBackground(CASE_ASSET);
+    doc.formats.carosello_1_1!.pages[0]!.background = { kind: "image", assetId: foreign };
+    expect(await makeSaveRevisionDoc(deps)(actor, input({ doc }))).toMatchObject({ ok: false, error: { code: "ASSET_NOT_ALLOWED", details: { assetIds: [foreign] } } });
+  });
+
+  it.each([
+    ["the case's files", (deps: ReturnType<typeof guarded>) => deps.caseAssetIds.mockResolvedValueOnce(err({ code: "ASSET_LOOKUP_FAILED", message: "down" })), "ASSET_LOOKUP_FAILED"],
+    ["the client's files", (deps: ReturnType<typeof guarded>) => deps.clients.listAssets.mockResolvedValueOnce(err({ code: "CLIENT_LOOKUP_FAILED", message: "down" })), "CLIENT_LOOKUP_FAILED"],
+    ["the case", (deps: ReturnType<typeof guarded>) => deps.cases.findById.mockResolvedValueOnce(ok(null)), "NOT_FOUND"],
+  ])("passes a failed lookup of %s through, writing nothing", async (_name, fail, code) => {
+    const deps = guarded([head()]);
+    fail(deps);
+    expect(await makeSaveRevisionDoc(deps)(actor, input({ doc: withBackground(CASE_ASSET) }))).toMatchObject({ ok: false, error: { code } });
+    expect(deps.revisions.saveDoc).not.toHaveBeenCalled();
   });
 
   it("allows removing assets", async () => {
-    const deps = fakes(caseStudy(), [head()]);
+    const deps = guarded([head()]);
     const doc = edited();
     for (const format of Object.values(doc.formats)) for (const page of format.pages) page.blocks = [];
     expect((await makeSaveRevisionDoc(deps)(actor, input({ doc }))).ok).toBe(true);
   });
 
   it("passes a refusal from the repository through", async () => {
-    const deps = fakes(caseStudy(), [head()]);
+    const deps = guarded([head()]);
     deps.revisions.saveDoc.mockResolvedValueOnce(err({ code: "STALE_REVISION", message: "m" }));
     expect(await makeSaveRevisionDoc(deps)(actor, input())).toMatchObject({ ok: false, error: { code: "STALE_REVISION" } });
   });

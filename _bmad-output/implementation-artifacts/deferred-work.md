@@ -262,3 +262,18 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-4a-layout-mescola-and-sfondo.md`
   summary: The text panel's colour field (Story 4.3b) is re-keyed on each new colour (`key={colour}` in `text-panel.tsx`), so Enter drops the keyboard focus; fix as 4.4a's Sfondo field (no key, update the value when not focused).
   evidence: Found in the 4.4a review (finding 16); 4.4a fixed the same pattern in `left-panel.tsx`.
+- source_spec: none
+  summary: Story 4.5b: place and replace media on a page (drag a Media file onto an image to replace it, elsewhere in a block to add it; click to fill the selected image or add to the selected block), the left panel's Sostituisci dai Media / Scegli dai Media and Adattamento (Riempi, Adatta, Ritaglia with drag inside the block and a zoom slider), and Sfondo · Immagine (page or block background from the case's or client's media, Togli immagine); undoable and saved through 4.3a's autosave.
+  evidence: Split from Story 4.5 at the owner's choice (2026-10-30); built on 4.5a's Media tab and media guardrail.
+- source_spec: none
+  summary: Story 4.5c: Animazione (C35): the dialog previewing Carousel 01, 03, 04 and Wheel 02 with media picked in order from the case's and client's media or dropped in (joining the case's Media), Inserisci disabled until a file is chosen; the selected animation's left panel (Tipo, media count, Cambia animazione o media, Adatta/Riempi, Dimensione 50–150%).
+  evidence: Split from Story 4.5 at the owner's choice (2026-10-30); independent of 4.5b's image placement, needs 4.5a's Media tab.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5a-media-tab-and-guardrail.md`
+  summary: Files uploaded from the Media tab get no render asset until the page reloads (the `assets` map is built on the server), so a new video shows no length and a new file can't be drawn on a page; 4.5b needs the upload to bring back its renditions (or a `router.refresh()`), plus a test of the video length.
+  evidence: Review of 4.5a (findings 8 and 11); `MediaTab.relist` refreshes only its own list.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5a-media-tab-and-guardrail.md`
+  summary: Client files (`client_asset`) are hard-deleted; once 4.5b lets a page use them, a file a revision references must only be soft-deleted (AR18) so approval can report `MATERIAL_MISSING`.
+  evidence: 4.5a's guardrail already allows client files; `remove_client_material` deletes the row and the object.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5a-media-tab-and-guardrail.md`
+  summary: A media ref the person placed, removed and then brings back with ⌘Z after its file was deleted is refused (`ASSET_NOT_ALLOWED`, permanent), so autosave stays blocked with only the generic banner; 4.5b should name the missing file and let the person drop it (or treat refs from the session's history as kept).
+  evidence: Review of 4.5a (finding 10); the same behaviour existed before 4.5a, reachable once 4.5b places media.
