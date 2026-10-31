@@ -856,6 +856,14 @@ export const it = {
       backgroundBlock: "blocco",
       solid: "Tinta unita",
       image: "Immagine",
+      /** A selected image's or video's file in the left panel (Story 4.5b, mockup `mediaPicker`). */
+      file: {
+        replace: "Sostituisci dai Media",
+        choose: "Scegli dai Media",
+        none: "Nessun file",
+        /** The section heading for a video. */
+        video: "Video",
+      },
       deletePage: "Elimina pagina",
       /** Moves the page to the next layout with the same number of blocks (Story 4.4a). */
       shuffle: "Mescola",
@@ -902,6 +910,8 @@ export const it = {
     /** Adding, copying and removing elements and blocks (Story 4.3c). */
     edit: {
       needBlock: "Seleziona un blocco, oppure trascina l’elemento dentro un blocco.",
+      /** A block already holding the most elements (Story 4.5b). */
+      blockFull: "Questo blocco è pieno. Usa un altro blocco.",
       pageFull: "Questa pagina ha già 6 blocchi.",
       copied: "Blocco copiato.",
       cut: "Blocco tagliato.",
@@ -996,6 +1006,18 @@ export const it = {
       uploaded: "{n} file caricati.",
       errors: {
         type: "Qui vanno solo immagini e video.",
+      },
+      /** A tile's title: a click fills the selected image or adds the file to the selected block, a drag puts it on a page (Story 4.5b). */
+      place: "Clic o trascina per metterlo sulla pagina",
+      /** A tile dropped on a page outside every block. */
+      dropOffBlock: "Trascina il file dentro un blocco.",
+      /** A save refused for files no longer in the Media (deleted elsewhere); `{name}` is the file's name, or `unknown`. */
+      missing: {
+        one: "{name} non è più nei Media, quindi non possiamo salvare.",
+        many: "{n} file non sono più nei Media, quindi non possiamo salvare.",
+        unknown: "Un file",
+        remove: "Togli dalla pagina",
+        removed: "Tolto dalla pagina.",
       },
     },
     view: {

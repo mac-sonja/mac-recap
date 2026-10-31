@@ -17,6 +17,7 @@ import {
   addElement,
   applyLayout,
   BACKGROUND_SWATCHES,
+  clearAssets,
   COLUMN_LAYOUT_ID,
   MAX_BLOCKS_PER_PAGE,
   MAX_ELEMENTS_PER_BLOCK,
@@ -25,6 +26,7 @@ import {
   newElement,
   parseBackground,
   pasteBlock,
+  placeMedia,
   removeSelection,
   restartGrid,
   setBackground,
@@ -430,5 +432,89 @@ describe("Sfondo", () => {
     expect(parseBackground(" #2977FF ")).toEqual({ kind: "colour", value: "#2977ff" });
     expect(parseBackground("Trasparente")).toEqual({ kind: "transparent" });
     for (const bad of ["blu", "#fff", "#2977ff80", "", "#gggggg"]) expect(parseBackground(bad)).toBeUndefined();
+  });
+});
+
+describe("placeMedia (Story 4.5b)", () => {
+  const FILE = "aaaaaaaa-0000-4000-8000-000000000001";
+  const CLIP = "aaaaaaaa-0000-4000-8000-000000000002";
+  const OLD = "aaaaaaaa-0000-4000-8000-000000000003";
+  const P = "dddddddd-0000-4000-8000-000000000001";
+  const B = "dddddddd-0000-4000-8000-000000000002";
+  const IMG = "dddddddd-0000-4000-8000-000000000003";
+  const TXT = "dddddddd-0000-4000-8000-000000000004";
+  const GROUP = "dddddddd-0000-4000-8000-000000000005";
+  const INNER = "dddddddd-0000-4000-8000-000000000006";
+
+  function pages(): Page[] {
+    const page = structuredClone(starter("presentazione_16_9")[0]!);
+    page.pageKey = P;
+    page.blocks = [
+      {
+        blockId: B,
+        name: "Blocco",
+        background: { kind: "colour", value: NEW_BLOCK_COLOUR },
+        elements: [
+          { elementId: TXT, type: "text", style: "text", text: "Ciao", provenance: "human_added" },
+          { elementId: IMG, type: "image", assetId: OLD, fit: "crop", crop: { x: 0.2, y: 0.3, zoom: 2 } },
+          {
+            elementId: GROUP,
+            type: "text_group",
+            align: "top",
+            items: [{ elementId: INNER, type: "text", style: "title", text: "Titolo", provenance: "human_added" }],
+          },
+        ],
+      },
+    ];
+    restartGrid(page, "presentazione_16_9", TEMPLATE);
+    return [page];
+  }
+  const elementsOf = (edit: PageEdit) => (edit.ok ? edit.pages[0]!.blocks[0]!.elements : []);
+
+  it("replaces the image under the pointer, takes the file's kind, keeps the fit and drops the crop", () => {
+    const edit = placeMedia(pages(), { pageKey: P, blockId: B, elementId: IMG }, { id: CLIP, kind: "video" }, "before", ids());
+    expect(edit).toMatchObject({ ok: true, selection: { pageKey: P, blockId: B, elementId: IMG } });
+    expect(elementsOf(edit)[1]).toEqual({ elementId: IMG, type: "video", assetId: CLIP, fit: "crop" });
+    expect(elementsOf(edit)).toHaveLength(3);
+    expect(() => pageSchema.parse((edit as Extract<PageEdit, { ok: true }>).pages[0])).not.toThrow();
+  });
+
+  it("drops a new element before the element under the pointer", () => {
+    const edit = placeMedia(pages(), { pageKey: P, blockId: B, elementId: TXT }, { id: FILE, kind: "image" }, "before", ids());
+    const placed = elementsOf(edit)[0]!;
+    expect(placed).toMatchObject({ type: "image", assetId: FILE, fit: "fill" });
+    expect(edit).toMatchObject({ ok: true, selection: { elementId: placed.elementId } });
+    expect(elementsOf(edit)).toHaveLength(4);
+  });
+
+  it("goes before the Testi group a target inside it belongs to", () => {
+    const edit = placeMedia(pages(), { pageKey: P, blockId: B, elementId: INNER }, { id: FILE, kind: "image" }, "before", ids());
+    expect(elementsOf(edit).map((el) => el.type)).toEqual(["text", "image", "image", "text_group"]);
+  });
+
+  it("goes at the end of the block when dropped on no element, or when a click adds it", () => {
+    const dropped = placeMedia(pages(), { pageKey: P, blockId: B }, { id: FILE, kind: "video" }, "before", ids());
+    expect(elementsOf(dropped).at(-1)).toMatchObject({ type: "video", assetId: FILE });
+    const clicked = placeMedia(pages(), { pageKey: P, blockId: B, elementId: TXT }, { id: FILE, kind: "image" }, "end", ids());
+    expect(elementsOf(clicked).at(-1)).toMatchObject({ type: "image", assetId: FILE });
+  });
+
+  it("refuses a drop outside every block, a full block, and the same file again", () => {
+    expect(placeMedia(pages(), { pageKey: P }, { id: FILE, kind: "image" }, "before", ids())).toEqual({ ok: false, reason: "offBlock" });
+    const full = pages();
+    full[0]!.blocks[0]!.elements = Array.from({ length: MAX_ELEMENTS_PER_BLOCK }, (_, i) => ({
+      elementId: `cccccccc-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
+      type: "divider" as const,
+    }));
+    expect(placeMedia(full, { pageKey: P, blockId: B }, { id: FILE, kind: "image" }, "end", ids())).toEqual({ ok: false, reason: "blockFull" });
+    expect(placeMedia(pages(), { pageKey: P, blockId: B, elementId: IMG }, { id: OLD, kind: "image" }, "before", ids())).toEqual({ ok: false, reason: "nothing" });
+  });
+
+  it("clearAssets empties every image or video showing a refused file, and leaves the rest", () => {
+    const before = pages();
+    const next = clearAssets(before, [OLD.toUpperCase()]);
+    expect(next[0]!.blocks[0]!.elements[1]).toMatchObject({ elementId: IMG, assetId: null });
+    expect(next[0]!.blocks[0]!.elements[0]).toBe(before[0]!.blocks[0]!.elements[0]);
+    expect(clearAssets(before, [FILE])).toBe(before);
   });
 });

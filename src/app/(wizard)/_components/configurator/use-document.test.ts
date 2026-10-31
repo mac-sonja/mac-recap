@@ -182,6 +182,19 @@ describe("useDocument", () => {
     expect(hook.result.current).toMatchObject({ save: "saved", banner: false });
   });
 
+  it("keeps the files an ASSET_NOT_ALLOWED save was refused for until a save goes through", async () => {
+    const refusedFor = { ok: false as const, status: 400, error: { code: "ASSET_NOT_ALLOWED", message: "m", assetIds: ["a1"] } };
+    const save = vi.fn<Save>().mockResolvedValueOnce(refusedFor).mockImplementation(okSave);
+    const { hook } = setup({ save });
+    expect(hook.result.current.refused).toBeNull();
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(hook.result.current.refused).toEqual(["a1"]);
+    act(() => hook.result.current.change(formatsNamed("b"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(hook.result.current.refused).toBeNull();
+  });
+
   it("asks before the tab closes while an edit is unsaved, and not once it is saved", async () => {
     const { hook } = setup();
     const unload = () => {

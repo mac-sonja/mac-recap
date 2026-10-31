@@ -15,11 +15,11 @@ import {
 import { fill, it as dict } from "@/shared/i18n/it";
 import type { ListedAsset } from "@/modules/material";
 import { Configurator, type ConfiguratorProps } from "./configurator";
-import type { MediaUploadRules } from "./media-files";
+import { MEDIA_DRAG_TYPE, type MediaUploadRules } from "./media-files";
 import { generatedTextsOf, type GeneratedTexts } from "./default-pages";
 import { ownTextIds } from "./in-place-text";
 import { STATUS_MESSAGE_MS } from "./status-message";
-import { BACKGROUND_SWATCHES, NEW_BLOCK_COLOUR } from "./page-editing";
+import { BACKGROUND_SWATCHES, NEW_BLOCK_COLOUR, restartGrid } from "./page-editing";
 import { TEXT_COLOURS, textElementAt } from "./text-editing";
 
 vi.mock("next/link", () => ({
@@ -93,7 +93,16 @@ function setup(
     images = [],
     values = VALUES,
     media = MEDIA,
-  }: { editable?: boolean; onSave?: SaveFn; generatedTexts?: GeneratedTexts; images?: readonly string[]; values?: BoundValues; media?: readonly ListedAsset[] } = {},
+    onRenderAssets,
+  }: {
+    editable?: boolean;
+    onSave?: SaveFn;
+    generatedTexts?: GeneratedTexts;
+    images?: readonly string[];
+    values?: BoundValues;
+    media?: readonly ListedAsset[];
+    onRenderAssets?: ConfiguratorProps["onRenderAssets"];
+  } = {},
 ) {
   return render(
     <Configurator
@@ -112,6 +121,7 @@ function setup(
       theme="system"
       media={media}
       mediaRules={MEDIA_RULES}
+      onRenderAssets={onRenderAssets}
     />,
   );
 }
@@ -2058,5 +2068,196 @@ describe("Configurator Media tab (Story 4.5a)", () => {
     setup();
     openMedia();
     expect(rightPanel().textContent).not.toMatch(/colora|filtr|effett/i);
+  });
+});
+
+describe("Configurator placing media (Story 4.5b)", () => {
+  const P = "eeeeeeee-0000-4000-8000-000000000001";
+  const PHOTO_BLOCK = "eeeeeeee-0000-4000-8000-000000000002";
+  const TEXT_BLOCK = "eeeeeeee-0000-4000-8000-000000000003";
+  const PHOTO = "eeeeeeee-0000-4000-8000-000000000004";
+  const WORDS = "eeeeeeee-0000-4000-8000-000000000005";
+  const NEW = "bbbbbbbb-0000-4000-8000-000000000007";
+
+  /** The starter pages, the first Presentazione page made of a photo block and a text block. */
+  function fixture(photo: string | null = IMAGE): Record<FormatId, Page[]> {
+    const pages = structuredClone(starterFormats());
+    const page = pages.presentazione_16_9[0]!;
+    page.pageKey = P;
+    page.blocks = [
+      { blockId: PHOTO_BLOCK, name: "Foto", background: { kind: "colour", value: NEW_BLOCK_COLOUR }, elements: [{ elementId: PHOTO, type: "image", assetId: photo, fit: "crop" }] },
+      {
+        blockId: TEXT_BLOCK,
+        name: "Testo",
+        background: { kind: "colour", value: NEW_BLOCK_COLOUR },
+        elements: [{ elementId: WORDS, type: "text", style: "text", text: "Ciao", provenance: "human_added" }],
+      },
+    ];
+    restartGrid(page, "presentazione_16_9", "mac-case@1");
+    return pages;
+  }
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const savedBlocks = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => lastDoc(onSave).formats.presentazione_16_9.pages[0].blocks as Page["blocks"];
+  const blockNode = (blockId: string) => pageNode(P).querySelector<HTMLElement>(`[data-block-id="${blockId}"]`)!;
+  const elementNode = (elementId: string) => pageNode(P).querySelector<HTMLElement>(`[data-element-id="${elementId}"]`)!;
+  const tile = (id: string) => rightPanel().querySelector<HTMLElement>(`[data-media="${id}"]`)!;
+  // The tile's own button is named by its file name; the star's name starts with its action.
+  const pickTile = (name: string) => fireEvent.click(button(new RegExp(`^${name.replace(".", "\\.")}`), rightPanel()));
+  const openMedia = () => fireEvent.click(button(dict.configurator.tabs.media, rightPanel()));
+  const drag = (id: string) => ({ dataTransfer: { types: [MEDIA_DRAG_TYPE], getData: (type: string) => (type === MEDIA_DRAG_TYPE ? id : ""), dropEffect: "none" } });
+  const dropOn = (target: HTMLElement, id: string) => {
+    fireEvent.dragOver(target, drag(id));
+    fireEvent.drop(target, drag(id));
+  };
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    for (const fn of Object.values(actions)) fn.mockReset();
+    actions.listAssets.mockResolvedValue({ ok: true, value: MEDIA });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  });
+
+  it("a tile dropped on an image replaces its file, takes the file's kind and is one undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    dropOn(elementNode(PHOTO), VIDEO);
+    await settle();
+    expect(savedBlocks(onSave)[0]!.elements).toEqual([{ elementId: PHOTO, type: "video", assetId: VIDEO, fit: "crop" }]);
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    // Selected: the left panel shows the file.
+    expect(leftPanel().querySelector("[data-media-name]")?.textContent).toBe("LUM_reel.mp4");
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    await settle();
+    expect(savedBlocks(onSave)[0]!.elements[0]).toMatchObject({ type: "image", assetId: IMAGE });
+  });
+
+  it("a tile dropped elsewhere in a block comes in as a new element before the one under it; the block is framed while over", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    fireEvent.dragOver(elementNode(WORDS), drag(IMAGE));
+    expect(pageNode(P).querySelector('[data-frame="drop"]')).not.toBeNull();
+    fireEvent.drop(elementNode(WORDS), drag(IMAGE));
+    expect(pageNode(P).querySelector('[data-frame="drop"]')).toBeNull();
+    await settle();
+    expect(savedBlocks(onSave)[1]!.elements.map((el) => el.type)).toEqual(["image", "text"]);
+    expect(savedBlocks(onSave)[1]!.elements[0]).toMatchObject({ assetId: IMAGE, fit: "fill" });
+  });
+
+  it("a tile dropped outside every block says to drop it inside one, and changes nothing", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    dropOn(pageNode(P), IMAGE);
+    expect(status().textContent).toBe(dict.configurator.media.dropOffBlock);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("a clicked tile fills the selected image, joins the selected block, or asks for a block", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(null), { onSave });
+    openMedia();
+    pickTile("LUM_cover.jpg");
+    expect(status().textContent).toBe(dict.configurator.edit.needBlock);
+    fireEvent.click(elementNode(PHOTO));
+    pickTile("LUM_cover.jpg");
+    fireEvent.click(blockNode(TEXT_BLOCK));
+    pickTile("LUM_reel.mp4");
+    await settle();
+    expect(savedBlocks(onSave)[0]!.elements).toEqual([{ elementId: PHOTO, type: "image", assetId: IMAGE, fit: "crop" }]);
+    expect(savedBlocks(onSave)[1]!.elements.map((el) => el.type)).toEqual(["text", "video"]);
+    expect(tile(IMAGE).dataset.onPage).toBe("");
+  });
+
+  it("the left panel shows a selected image's file; Scegli dai Media, then Sostituisci dai Media, opens the Media tab", () => {
+    setup(false, fixture(null));
+    fireEvent.click(elementNode(PHOTO));
+    expect(leftPanel().querySelector("[data-media-name]")?.textContent).toBe(dict.configurator.tools.file.none);
+    fireEvent.click(button(dict.configurator.tools.file.choose, leftPanel()));
+    const mediaTab = button(dict.configurator.tabs.media, rightPanel());
+    expect(mediaTab.getAttribute("aria-pressed")).toBe("true");
+    expect(document.activeElement).toBe(mediaTab);
+    pickTile("LUM_cover.jpg");
+    expect(leftPanel().querySelector("[data-media-name]")?.textContent).toBe("LUM_cover.jpg");
+    expect(button(dict.configurator.tools.file.replace, leftPanel())).toBeTruthy();
+  });
+
+  it("the right panel hidden comes back on Sostituisci dai Media", () => {
+    setup(false, fixture());
+    fireEvent.click(button(dict.configurator.panels.hideRight));
+    fireEvent.click(elementNode(PHOTO));
+    fireEvent.click(button(dict.configurator.tools.file.replace, leftPanel()));
+    expect(rightPanel().hidden).toBe(false);
+    expect(button(dict.configurator.tabs.media, rightPanel()).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("places nothing when the case can't be edited: tiles don't drag or click, the canvas takes no drop", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave, editable: false });
+    openMedia();
+    expect(tile(IMAGE).getAttribute("draggable")).toBe("false");
+    expect(within(tile(IMAGE)).queryAllByRole("button", { hidden: true })).toHaveLength(1);
+    dropOn(elementNode(PHOTO), VIDEO);
+    fireEvent.click(elementNode(PHOTO));
+    fireEvent.click(button(dict.configurator.tools.file.replace, leftPanel()));
+    expect(status().textContent).toBe(fill(dict.configurator.soonMessage, { tool: dict.configurator.tools.file.replace }));
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("reads the render asset of a file listed after the page loaded, so it shows once placed", async () => {
+    const added = listed(NEW, "image", "nuova.png");
+    const onRenderAssets = vi.fn<NonNullable<ConfiguratorProps["onRenderAssets"]>>(async () => ({
+      ok: true,
+      value: { [NEW]: { url: "https://cdn.test/nuova.webp", kind: "image" } },
+    }));
+    actions.listAssets.mockResolvedValue({ ok: true, value: [...MEDIA, added] });
+    actions.presignAssetUpload.mockResolvedValue({ ok: true, value: { assetId: NEW, url: "https://storage.test/u", method: "PUT", headers: {} } });
+    actions.confirmAssetUpload.mockResolvedValue({ ok: true, value: { id: NEW } });
+    uploads.uploadFile.mockReset().mockResolvedValue(undefined);
+    vi.useRealTimers();
+    setup(false, fixture(), { onRenderAssets });
+    openMedia();
+    const zone = button(`${dict.configurator.media.drop.lead}, ${dict.configurator.media.drop.choose}`, rightPanel());
+    fireEvent.drop(zone, { dataTransfer: { files: [new File(["x"], "nuova.png", { type: "image/png" })], types: ["Files"] } });
+    for (let i = 0; i < 10; i++) await act(async () => {});
+    // The video had no rendition when the page loaded either: it is asked for too.
+    expect(onRenderAssets).toHaveBeenCalledWith({ caseId: CASE_ID, assetIds: [VIDEO, NEW] });
+    dropOn(elementNode(PHOTO), NEW);
+    expect(elementNode(PHOTO).querySelector("img")?.getAttribute("src")).toBe("https://cdn.test/nuova.webp");
+  });
+
+  it("asks again at the next listing for a render asset it could not read", async () => {
+    const onRenderAssets = vi.fn<NonNullable<ConfiguratorProps["onRenderAssets"]>>().mockResolvedValue({ ok: false, status: 500, error: { code: "RENDITION_LOOKUP_FAILED", message: "m" } });
+    actions.presignAssetUpload.mockResolvedValue({ ok: true, value: { assetId: NEW, url: "https://storage.test/u", method: "PUT", headers: {} } });
+    actions.confirmAssetUpload.mockResolvedValue({ ok: true, value: { id: NEW } });
+    actions.listAssets.mockResolvedValue({ ok: true, value: [...MEDIA, listed(NEW, "image", "nuova.png")] });
+    uploads.uploadFile.mockReset().mockResolvedValue(undefined);
+    vi.useRealTimers();
+    setup(false, fixture(), { onRenderAssets });
+    openMedia();
+    const zone = button(`${dict.configurator.media.drop.lead}, ${dict.configurator.media.drop.choose}`, rightPanel());
+    for (const name of ["a.png", "b.png"]) {
+      fireEvent.drop(zone, { dataTransfer: { files: [new File(["x"], name, { type: "image/png" })], types: ["Files"] } });
+      for (let i = 0; i < 10; i++) await act(async () => {});
+    }
+    expect(onRenderAssets).toHaveBeenCalledTimes(2);
+    expect(onRenderAssets.mock.calls[1]![0].assetIds).toContain(NEW);
+  });
+
+  it("a save refused for a file no longer in the Media names it; Togli dalla pagina empties it and saves", async () => {
+    const onSave = vi.fn<SaveFn>(savedOk).mockResolvedValueOnce({ ok: false, status: 400, error: { code: "ASSET_NOT_ALLOWED", message: "m", assetIds: [VIDEO] } });
+    setup(false, fixture(), { onSave });
+    dropOn(elementNode(PHOTO), VIDEO);
+    await settle();
+    const alert = screen.getByRole("alert", { hidden: true });
+    expect(alert.textContent).toContain(fill(dict.configurator.media.missing.one, { name: "LUM_reel.mp4" }));
+    fireEvent.click(button(dict.configurator.media.missing.remove, alert));
+    await settle();
+    expect(savedBlocks(onSave)[0]!.elements[0]).toMatchObject({ elementId: PHOTO, assetId: null });
+    expect(screen.queryByRole("alert", { hidden: true })).toBeNull();
   });
 });

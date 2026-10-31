@@ -14,6 +14,9 @@ import { ASPECT, EYEBROW, ICON_BUTTON, SEG, SEG_BUTTON } from "./styles";
 
 const SECTIONS: readonly PageSection[] = ["intro", "output", "risultati"];
 
+/** The right panel's tabs. */
+export type RightTab = "pages" | "media";
+
 export interface RightPanelProps {
   /** Hidden from its own bar; kept mounted so its state survives. */
   hidden?: boolean;
@@ -32,6 +35,15 @@ export interface RightPanelProps {
   mediaRules: MediaUploadRules;
   /** A message at the top of the canvas. */
   say: (text: string) => void;
+  /** The tab shown; the configurator owns it, so **Sostituisci dai Media** can open Media (Story 4.5b). */
+  tab: RightTab;
+  onTab: (tab: RightTab) => void;
+  /** The Media tab's button, focused when the left panel opens it. */
+  mediaTabRef?: Ref<HTMLButtonElement>;
+  /** A Media tile clicked (Story 4.5b); undefined while nothing can be placed. */
+  onPickMedia?: (file: ListedAsset) => void;
+  /** The case's images and videos as the Media tab read them again. */
+  onMediaListed?: (files: readonly ListedAsset[]) => void;
   onHide: () => void;
   hideRef: Ref<HTMLButtonElement>;
 }
@@ -82,10 +94,14 @@ export function RightPanel({
   media,
   mediaRules,
   say,
+  tab,
+  onTab: setTab,
+  mediaTabRef,
+  onPickMedia,
+  onMediaListed,
   onHide,
   hideRef,
 }: RightPanelProps) {
-  const [tab, setTab] = useState<"pages" | "media">("pages");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const searchId = useId();
@@ -102,7 +118,7 @@ export function RightPanel({
             <button type="button" aria-pressed={tab === "pages"} onClick={() => setTab("pages")} className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
               {it.configurator.tabs.pages}
             </button>
-            <button type="button" aria-pressed={tab === "media"} onClick={() => setTab("media")} className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
+            <button ref={mediaTabRef} type="button" aria-pressed={tab === "media"} onClick={() => setTab("media")} className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
               {it.configurator.tabs.media}
             </button>
           </div>
@@ -187,6 +203,8 @@ export function RightPanel({
         query={query}
         view={view}
         say={say}
+        onPick={onPickMedia}
+        onListed={onMediaListed}
       />
     </aside>
   );

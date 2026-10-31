@@ -3,6 +3,7 @@
 import { PanelLeft, PanelRight, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { SECONDARY_ACTION } from "@/app/_components/button-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import { CURRENT_SCHEMA_VERSION, type Background, type Block, type DocumentKind, type Page, type TextGroupAlign } from "@/modules/generation";
@@ -15,9 +16,21 @@ import { applyDefaultPage, type GeneratedTexts } from "./default-pages";
 import type { InstagramView } from "./instagram-overlay";
 import { setTracks, type Axis } from "./grid-resize";
 import { LeftPanel, type ElementKey } from "./left-panel";
-import { addBlock, addElement, applyLayout, pasteBlock, removeSelection, setBackground, shuffleLayout, type PageEdit } from "./page-editing";
-import type { MediaUploadRules } from "./media-files";
-import { RightPanel } from "./right-panel";
+import {
+  addBlock,
+  addElement,
+  applyLayout,
+  clearAssets,
+  pasteBlock,
+  placeMedia,
+  removeSelection,
+  setBackground,
+  shuffleLayout,
+  type MediaTarget,
+  type PageEdit,
+} from "./page-editing";
+import { isMedia, type MediaUploadRules } from "./media-files";
+import { RightPanel, type RightTab } from "./right-panel";
 import { findElement, resolveSelection, stepOut, type Selection } from "./selection";
 import { StatusMessage, useStatusMessage } from "./status-message";
 import { ICON_BUTTON, SOON_ID } from "./styles";
@@ -53,6 +66,8 @@ export interface ConfiguratorProps {
   media: readonly ListedAsset[];
   /** What the Media tab's drop zone uploads (Story 2.7's rules, images and videos only). */
   mediaRules: MediaUploadRules;
+  /** The render assets of files listed after the page loaded (Story 4.5b): a new upload can be drawn once its rendition is ready. */
+  onRenderAssets?: (input: { caseId: string; assetIds: string[] }) => Promise<ActionResult<Record<string, RenderAsset>>>;
 }
 
 /** A fresh id for a new block or element. */
@@ -91,14 +106,18 @@ const typing = (target: EventTarget | null) =>
  * Delete or **Rimuovi** removes the selection (Story 4.3c). **Pagine di default** lays the
  * tools' page out as a template page, filled with the generated texts (Story 4.4c).
  * The right panel's **Media** tab lists, stars and uploads the case's images and videos
- * (Story 4.5a).
+ * (Story 4.5a). A tile dragged onto an image or video replaces its file, dropped elsewhere
+ * in a block adds it there; a tile clicked fills the selected image or video, else joins
+ * the selected block; the left panel's **Sostituisci dai Media** opens the tab (Story 4.5b).
+ * A file uploaded meanwhile gets its render asset once its rendition is ready. A save
+ * refused for a file no longer in the Media names it and offers to take it off the page.
  */
 export function Configurator({
   header,
   back,
   template,
   formats: initial,
-  assets,
+  assets: initialAssets,
   values,
   generatedTexts,
   images,
@@ -109,6 +128,7 @@ export function Configurator({
   onSave,
   media,
   mediaRules,
+  onRenderAssets,
 }: ConfiguratorProps) {
   const router = useRouter();
   const doc = useDocument({
@@ -136,6 +156,21 @@ export function Configurator({
   const [textAnim, setTextAnim] = useState(true);
   /** Reduced motion, read when Anteprima opens: the slideshow then switches without a transition. */
   const [still, setStill] = useState(false);
+  const [rightTab, setRightTab] = useState<RightTab>("pages");
+  /** The render assets: the page's, then those of files uploaded since (Story 4.5b). */
+  const [assets, setAssets] = useState(initialAssets);
+  /** The case's images and videos as last listed. */
+  const [files, setFiles] = useState(media);
+  /** Ids whose render asset is being read. */
+  const reading = useRef(new Set<string>());
+  /** The latest assets: the Media tab's polling may call an older `listed`. */
+  const assetsNow = useRef(assets);
+  useEffect(() => {
+    assetsNow.current = assets;
+  });
+  const mediaTab = useRef<HTMLButtonElement>(null);
+  /** **Sostituisci dai Media** pressed: focus the Media tab once it shows. */
+  const focusMedia = useRef(false);
 
   const canvasRef = useRef<HTMLElement>(null);
   const hideLeft = useRef<HTMLButtonElement>(null);
@@ -276,6 +311,8 @@ export function Configurator({
         else if (edit.reason === "pageFull") say(it.configurator.edit.pageFull);
         else if (edit.reason === "over") say(edit.over === 1 ? it.configurator.edit.layoutOverOne : fill(it.configurator.edit.layoutOver, { k: edit.over }));
         else if (edit.reason === "empty") say(it.configurator.edit.defaultEmpty);
+        else if (edit.reason === "blockFull") say(it.configurator.edit.blockFull);
+        else if (edit.reason === "offBlock") say(it.configurator.media.dropOffBlock);
         return false;
       }
       doc.change({ ...formats, [formatId]: edit.pages }, formatId);
@@ -354,6 +391,74 @@ export function Configurator({
     },
     [doc, editable, formatId, formats],
   );
+
+  /** A Media file put at `target` (Story 4.5b): a drop goes before the element under it, a click at the end of the block. */
+  const placeFile = useCallback(
+    (target: MediaTarget, assetId: string, at: "before" | "end") => {
+      if (!editable) return;
+      const id = assetId.toLowerCase();
+      const file = files.find((f) => f.id.toLowerCase() === id);
+      if (file === undefined || !isMedia(file)) return;
+      applyPageEdit(placeMedia(formats[formatId], target, { id: file.id, kind: file.kind as "image" | "video" }, at, newId));
+    },
+    [applyPageEdit, editable, files, formatId, formats],
+  );
+
+  /** A tile clicked: it fills the selected image or video, else joins the selected block. */
+  const pickFile = useCallback(
+    (file: ListedAsset) => {
+      if (selection?.blockId === undefined) {
+        say(it.configurator.edit.needBlock);
+        return;
+      }
+      placeFile(selection, file.id, "end");
+    },
+    [placeFile, say, selection],
+  );
+
+  /** The Media tab read the files again: keep them, and read the render assets of new ones. */
+  const listed = useCallback(
+    (fresh: readonly ListedAsset[]) => {
+      setFiles(fresh);
+      if (onRenderAssets === undefined) return;
+      const missing = fresh.filter((f) => !(f.id in assetsNow.current) && !reading.current.has(f.id)).map((f) => f.id);
+      if (missing.length === 0) return;
+      for (const id of missing) reading.current.add(id);
+      void onRenderAssets({ caseId, assetIds: missing })
+        .then((result) => {
+          if (result.ok && Object.keys(result.value).length > 0) setAssets((current) => ({ ...current, ...result.value }));
+        })
+        .catch(() => undefined)
+        // A file still without a rendition is asked for again at the next listing.
+        .finally(() => {
+          for (const id of missing) reading.current.delete(id);
+        });
+    },
+    [caseId, onRenderAssets],
+  );
+
+  /** **Sostituisci dai Media** / **Scegli dai Media**: the right panel shows, on its Media tab. */
+  const openMedia = useCallback(() => {
+    focusMedia.current = true;
+    setRightOpen(true);
+    setRightTab("media");
+  }, []);
+
+  useEffect(() => {
+    if (!focusMedia.current) return;
+    focusMedia.current = false;
+    mediaTab.current?.focus();
+  }, [rightOpen, rightTab]);
+
+  /** **Togli dalla pagina** on the refused-file banner: those files' images and videos emptied, in every format (one undo step). */
+  const removeRefused = useCallback(() => {
+    if (doc.refused === null) return;
+    const next = Object.fromEntries(Object.entries(formats).map(([id, pages]) => [id, clearAssets(pages, doc.refused!)])) as Formats;
+    const changed = (Object.keys(next) as FormatId[]).filter((id) => next[id] !== formats[id]);
+    if (changed.length === 0) return;
+    doc.change(next, changed.includes(formatId) ? formatId : changed[0]!);
+    say(it.configurator.media.missing.removed);
+  }, [doc, formatId, formats, say]);
 
   /** Removes the selected element or block; false when there is nothing to remove. */
   const removeSelected = useCallback(() => {
@@ -477,13 +582,18 @@ export function Configurator({
           onRedo={redo}
         />
         {doc.banner && (
-          <p
+          <div
             role="alert"
             className="flex shrink-0 items-center justify-center gap-2 border-b border-border bg-surface-raised px-4 py-2 font-label text-[13px] font-medium text-danger"
           >
             <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
-            {it.configurator.saveBanner}
-          </p>
+            {doc.refused === null ? it.configurator.saveBanner : missingMessage(doc.refused, files)}
+            {doc.refused !== null && canClear(formats, doc.refused) && (
+              <button type="button" onClick={removeRefused} className={cn(SECONDARY_ACTION, "ml-2 h-7 px-3 text-[12.5px]")}>
+                {it.configurator.media.missing.remove}
+              </button>
+            )}
+          </div>
         )}
 
         <main
@@ -513,6 +623,8 @@ export function Configurator({
             onBackground={background}
             onBadColour={() => say(it.configurator.edit.badColour)}
             onSoon={soon}
+            files={files}
+            onOpenMedia={openMedia}
             onHide={() => toggleLeft(false)}
             hideRef={hideLeft}
           />
@@ -544,6 +656,7 @@ export function Configurator({
               onTextInput={textInput}
               onTextDone={textDone}
               onResize={resize}
+              onPlaceMedia={editable ? (target, assetId) => placeFile(target, assetId, "before") : undefined}
             />
             <StatusMessage message={message} />
             {!leftOpen && !preview && (
@@ -585,6 +698,11 @@ export function Configurator({
             media={media}
             mediaRules={mediaRules}
             say={say}
+            tab={rightTab}
+            onTab={setRightTab}
+            mediaTabRef={mediaTab}
+            onPickMedia={editable ? pickFile : undefined}
+            onMediaListed={listed}
             onHide={() => toggleRight(false)}
             hideRef={hideRight}
           />
@@ -600,3 +718,15 @@ function selectionOf(pages: readonly Page[], pageKey: string, elementId: string)
   const block = page?.blocks.find((b) => findElement(b.elements, elementId) !== undefined);
   return block === undefined ? { pageKey } : { pageKey, blockId: block.blockId, elementId };
 }
+
+/** The refused-file banner's words: the file's name when the Media still lists it, else "Un file"; several by count. */
+function missingMessage(refused: readonly string[], files: readonly ListedAsset[]): string {
+  const t = it.configurator.media.missing;
+  if (refused.length > 1) return fill(t.many, { n: refused.length });
+  const id = refused[0]?.toLowerCase();
+  const name = files.find((f) => f.id.toLowerCase() === id)?.originalFileName ?? t.unknown;
+  return fill(t.one, { name });
+}
+
+/** Whether **Togli dalla pagina** would change anything: some image or video shows a refused file. */
+const canClear = (formats: Formats, refused: readonly string[]) => Object.values(formats).some((pages) => clearAssets(pages, refused) !== pages);

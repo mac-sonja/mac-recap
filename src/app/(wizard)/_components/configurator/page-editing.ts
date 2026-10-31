@@ -1,7 +1,7 @@
 import type { Background, Block, DocumentElement, Page, TextElement, TextStyle } from "@/modules/generation";
 import { layouts, type FormatId, type Layout } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
-import type { Selection } from "./selection";
+import { findElement, type Selection } from "./selection";
 import { parseColour, TEXT_COLOURS } from "./text-editing";
 
 /** The Elementi a click adds to a block (Story 4.3c): Blocco and Animazione are not elements here. */
@@ -21,8 +21,8 @@ export const COLUMN_LAYOUT_ID = "column";
 /** What an edit did: the new pages and what to select, or why nothing changed. */
 export type PageEdit =
   | { ok: true; pages: readonly Page[]; selection: NonNullable<Selection> }
-  /** `empty`: a default page with nothing to show (Story 4.4c). */
-  | { ok: false; reason: "noBlock" | "pageFull" | "blockFull" | "nothing" | "empty" }
+  /** `empty`: a default page with nothing to show (Story 4.4c); `offBlock`: a file dropped outside every block (Story 4.5b). */
+  | { ok: false; reason: "noBlock" | "pageFull" | "blockFull" | "nothing" | "empty" | "offBlock" }
   /** A layout with fewer cells than the page's filled blocks: `over` blocks too many. */
   | { ok: false; reason: "over"; over: number };
 
@@ -104,6 +104,70 @@ export function addElement(pages: readonly Page[], selection: Selection, kind: N
   const element = newElement(kind, newId);
   const next = withPage(pages, index, (page) => page.blocks.find((b) => b.blockId === blockId)!.elements.push(element));
   return { ok: true, pages: next, selection: { pageKey: pages[index]!.pageKey, blockId, elementId: element.elementId } };
+}
+
+/** A Media file to put on a page (Story 4.5b): its asset id and whether it is an image or a video. */
+export interface MediaFile {
+  id: string;
+  kind: "image" | "video";
+}
+
+/** Where a Media file goes: a dropped tile's target, or the selection a clicked tile fills. */
+export type MediaTarget = { pageKey: string; blockId?: string; elementId?: string };
+
+/**
+ * `file` put on page `target.pageKey` (Story 4.5b, mockup `wireBlock`): onto the image or
+ * video `target.elementId`, it takes the file (its type the file's kind, its fit kept,
+ * its crop dropped); anywhere else in block `target.blockId`, a new element of the file's
+ * kind (`fill`) goes before the element under the pointer (`at: "before"`, a drop) or at
+ * the end (`at: "end"`, a click). The placed element is selected. Media sit only at a
+ * block's top level, so a target inside a Testi group goes before that group.
+ */
+export function placeMedia(pages: readonly Page[], target: MediaTarget, file: MediaFile, at: "before" | "end", newId: () => string): PageEdit {
+  const index = pages.findIndex((p) => p.pageKey === target.pageKey);
+  if (index < 0) return refused("nothing");
+  const { blockId, elementId } = target;
+  if (blockId === undefined) return refused("offBlock");
+  const block = pages[index]!.blocks.find((b) => b.blockId === blockId);
+  if (block === undefined) return refused("offBlock");
+  const pageKey = pages[index]!.pageKey;
+  const under = elementId === undefined ? -1 : block.elements.findIndex((el) => findElement([el], elementId) !== undefined);
+  const hit = under < 0 ? undefined : block.elements[under];
+  if (hit !== undefined && (hit.type === "image" || hit.type === "video")) {
+    if (hit.assetId === file.id && hit.type === file.kind) return refused("nothing");
+    const next = withPage(pages, index, (page) => {
+      const elements = page.blocks.find((b) => b.blockId === blockId)!.elements;
+      elements[under] = { elementId: hit.elementId, type: file.kind, assetId: file.id, fit: hit.fit };
+    });
+    return { ok: true, pages: next, selection: { pageKey, blockId, elementId: hit.elementId } };
+  }
+  if (block.elements.length >= MAX_ELEMENTS_PER_BLOCK) return refused("blockFull");
+  const element: DocumentElement = { elementId: newId(), type: file.kind, assetId: file.id, fit: "fill" };
+  const next = withPage(pages, index, (page) => {
+    const elements = page.blocks.find((b) => b.blockId === blockId)!.elements;
+    elements.splice(at === "before" && under >= 0 ? under : elements.length, 0, element);
+  });
+  return { ok: true, pages: next, selection: { pageKey, blockId, elementId: element.elementId } };
+}
+
+/**
+ * Every image and video showing one of `assetIds` emptied (`assetId: null`), in every
+ * page of `pages`: a file the server no longer accepts taken off the page (Story 4.5b).
+ * `pages` itself when none shows one.
+ */
+export function clearAssets(pages: readonly Page[], assetIds: readonly string[]): readonly Page[] {
+  const gone = new Set(assetIds.map((id) => id.toLowerCase()));
+  const hit = (el: DocumentElement) => (el.type === "image" || el.type === "video") && el.assetId !== null && gone.has(el.assetId.toLowerCase());
+  let changed = false;
+  const next = pages.map((page) => {
+    if (!page.blocks.some((b) => b.elements.some(hit))) return page;
+    changed = true;
+    return {
+      ...page,
+      blocks: page.blocks.map((b) => (b.elements.some(hit) ? { ...b, elements: b.elements.map((el) => (hit(el) ? { ...el, assetId: null } : el)) } : b)),
+    };
+  });
+  return changed ? next : pages;
 }
 
 /** `block` put on page `pageKey` after block `after` (else at the end), the grid restarted, and selected. */

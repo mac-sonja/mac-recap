@@ -277,3 +277,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-5a-media-tab-and-guardrail.md`
   summary: A media ref the person placed, removed and then brings back with ⌘Z after its file was deleted is refused (`ASSET_NOT_ALLOWED`, permanent), so autosave stays blocked with only the generic banner; 4.5b should name the missing file and let the person drop it (or treat refs from the session's history as kept).
   evidence: Review of 4.5a (finding 10); the same behaviour existed before 4.5a, reachable once 4.5b places media.
+- source_spec: none
+  summary: Story 4.5b-2: Sfondo · Immagine (page or block background image from the case's or client's media, Togli immagine), undoable and saved through 4.3a's autosave.
+  evidence: Split from Story 4.5b at the owner's choice (2026-10-30); builds on 4.5b's media picking, ships on its own.
+- source_spec: none
+  summary: Soft-delete client files (`client_asset`) that a revision references, instead of the hard delete in `remove_client_material`, so approval can report `MATERIAL_MISSING` (needs a migration; the 1–3 position slots must ignore deleted rows).
+  evidence: Split from Story 4.5b at the owner's choice (2026-10-30); a migration that ships on its own and matters only once client files can be placed.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5b-place-media.md`
+  summary: Story 4.5b-3: Adattamento for a selected image or video (Riempi, Adatta, Ritaglia in the left panel; leaving Ritaglia drops the crop) and, with Ritaglia, dragging the image inside its block (focal point moves opposite the pointer, drag ÷ element size, clamped 0–1) and a Zoom slider 100–400 %, each gesture one undo step.
+  evidence: Split from the 4.5b spec at the owner's choice (2026-10-30, spec over the size target); builds on 4.5b's image/video section in the left panel.

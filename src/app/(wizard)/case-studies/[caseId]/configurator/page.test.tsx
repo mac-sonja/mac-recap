@@ -24,7 +24,7 @@ vi.mock("next/navigation", () => ({
   }),
   useRouter: () => ({ refresh: vi.fn() }),
 }));
-vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn() }));
+vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn(), getRenderAssets: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => (name === "mac-theme" ? { value: "dark" } : undefined) }) }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
 vi.mock("@/modules/case-study", async () => ({

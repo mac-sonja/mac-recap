@@ -10,7 +10,7 @@ import { boundValuesOf, imagePoolOf, pagesOfDocument, renderAssetsOf, starterPag
 import { Configurator } from "../../../_components/configurator/configurator";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import { isMedia, type MediaUploadRules } from "../../../_components/configurator/media-files";
-import { saveRevisionDoc } from "./actions";
+import { getRenderAssets, saveRevisionDoc } from "./actions";
 
 /** The Media tab's drop zone: Story 2.7's limits, images and videos only. */
 const MEDIA_RULES: MediaUploadRules = {
@@ -95,6 +95,7 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
       theme={theme}
       media={listed.value.filter(isMedia)}
       mediaRules={MEDIA_RULES}
+      onRenderAssets={getRenderAssets}
     />
   );
 }

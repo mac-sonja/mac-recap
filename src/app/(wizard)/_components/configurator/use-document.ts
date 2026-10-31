@@ -46,6 +46,8 @@ export interface DocumentState {
   save: SaveState;
   /** Three saves in a row failed: *Le modifiche non si salvano.* */
   banner: boolean;
+  /** The files the last save was refused for (`ASSET_NOT_ALLOWED`, Story 4.5b); null once a save goes through. */
+  refused: readonly string[] | null;
   canUndo: boolean;
   canRedo: boolean;
   /**
@@ -94,6 +96,7 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
   const [formats, setFormats] = useState<Formats>(initial);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [banner, setBanner] = useState(false);
+  const [refused, setRefused] = useState<readonly string[] | null>(null);
   const [history, setHistory] = useState({ undo: 0, redo: 0 });
 
   const current = useRef<Formats>(initial);
@@ -152,6 +155,7 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
       saved.current = sent;
       failures.current = 0;
       setBanner(false);
+      setRefused(null);
       // Edits made while it was in flight: save them now.
       if (current.current !== sent) return run();
       setSaveState("saved");
@@ -169,6 +173,7 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
       // The same document would be refused again: wait for the next edit.
       blocked.current = true;
       setBanner(true);
+      if (result.error.code === "ASSET_NOT_ALLOWED") setRefused(result.error.assetIds ?? []);
       return;
     }
     if (failures.current >= BANNER_AFTER) setBanner(true);
@@ -253,5 +258,5 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
     };
   }, []);
 
-  return { formats, save: saveState, banner, canUndo: history.undo > 0, canRedo: history.redo > 0, change, flush, undo, redo };
+  return { formats, save: saveState, banner, refused, canUndo: history.undo > 0, canRedo: history.redo > 0, change, flush, undo, redo };
 }

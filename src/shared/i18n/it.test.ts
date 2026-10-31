@@ -320,6 +320,7 @@ describe("configurator copy", () => {
     expect(fill(t("configurator.soonMessage"), { tool: "Layout" })).toBe("Layout arriva presto.");
     expect(Object.values(it.configurator.edit)).toEqual([
       "Seleziona un blocco, oppure trascina l’elemento dentro un blocco.",
+      "Questo blocco è pieno. Usa un altro blocco.",
       "Questa pagina ha già 6 blocchi.",
       "Blocco copiato.",
       "Blocco tagliato.",

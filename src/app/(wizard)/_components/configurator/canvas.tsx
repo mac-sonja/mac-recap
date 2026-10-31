@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useLayoutEffect, useRef, useState, type MouseEvent, type RefObject } from "react";
+import { memo, useLayoutEffect, useRef, useState, type DragEvent, type MouseEvent, type RefObject } from "react";
 import type { Page } from "@/modules/generation";
 import { measureOverflow, renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
@@ -8,6 +8,8 @@ import { cn } from "@/shared/utils";
 import { useInPlaceText } from "./in-place-text";
 import type { Axis } from "./grid-resize";
 import { INSTAGRAM_VIEWS, InstagramOverlay, type InstagramView } from "./instagram-overlay";
+import { MEDIA_DRAG_TYPE } from "./media-files";
+import type { MediaTarget } from "./page-editing";
 import { ResizeHandles } from "./resize-handles";
 import { selectionAt, type Selection } from "./selection";
 import { Slideshow } from "./slideshow";
@@ -54,6 +56,8 @@ export interface CanvasProps {
   onTextDone: (pageKey: string, elementId: string) => void;
   /** A border dragged and released (Story 4.4b): the page's new track sizes on `axis`. */
   onResize: (pageKey: string, axis: Axis, sizes: number[]) => void;
+  /** A Media tile dropped on a page (Story 4.5b): where, and its asset id. Undefined: the canvas takes no drop. */
+  onPlaceMedia?: (target: MediaTarget, assetId: string) => void;
 }
 
 /** What a page needs to let its texts be typed in. */
@@ -128,7 +132,8 @@ function CanvasPage({
   onTextInput,
   onTextDone,
   onResize,
-}: Pick<CanvasProps, "formatId" | "template" | "assets" | "values" | "onSelect" | "preview" | "animateTexts" | "onEditRequest" | "onResize"> &
+  onPlaceMedia,
+}: Pick<CanvasProps, "formatId" | "template" | "assets" | "values" | "onSelect" | "preview" | "animateTexts" | "onEditRequest" | "onResize" | "onPlaceMedia"> &
   TextEditing & {
     page: Page;
     number: number;
@@ -237,6 +242,35 @@ function CanvasPage({
     if (target.elementId !== undefined) onEditRequest(page.pageKey, target.elementId);
   }
 
+  // A Media tile dragged over the page (Story 4.5b): the block it would go in framed, or the page when it is off every block.
+  const dropsMedia = !preview && onPlaceMedia !== undefined;
+  const [dropFrame, setDropFrame] = useState<Box | null>(null);
+  const takes = (event: DragEvent<HTMLDivElement>) => dropsMedia && event.dataTransfer.types.includes(MEDIA_DRAG_TYPE);
+
+  function onDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!takes(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    const el = host.current;
+    const block = (event.target as Element).closest?.("[data-block-id]");
+    const box = el === null || block === null || block === undefined ? null : boxIn(el, block);
+    setDropFrame((prev) => (prev === null || box === null ? box : sameBoxes([prev], [box]) ? prev : box));
+  }
+
+  function onDragLeave(event: DragEvent<HTMLDivElement>) {
+    // Leaving for a child is not leaving the page.
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+    setDropFrame(null);
+  }
+
+  function onDrop(event: DragEvent<HTMLDivElement>) {
+    if (!takes(event)) return;
+    event.preventDefault();
+    setDropFrame(null);
+    const assetId = event.dataTransfer.getData(MEDIA_DRAG_TYPE);
+    if (assetId !== "") onPlaceMedia?.(selectionAt(event.target as Element, page.pageKey), assetId);
+  }
+
   const pageSelected = mine !== null && blockId === undefined;
   const width = preview ? PREVIEW_WIDTH : PAGE_WIDTH[formatId];
   return (
@@ -251,6 +285,9 @@ function CanvasPage({
         data-selected={pageSelected ? "" : undefined}
         onClick={preview ? undefined : onClick}
         onDoubleClick={preview ? undefined : onDoubleClick}
+        onDragOver={dropsMedia ? onDragOver : undefined}
+        onDragLeave={dropsMedia ? onDragLeave : undefined}
+        onDrop={dropsMedia ? onDrop : undefined}
         className={cn(
           "relative w-full shrink-0 shadow-page transition-shadow duration-150 data-selected:ring-2 data-selected:ring-accent",
           // The text being typed in is framed by the selection; no second outline (mockup).
@@ -316,6 +353,14 @@ function CanvasPage({
         {!preview && editable && (
           <ResizeHandles host={host} page={page} formatId={formatId} template={template} onResize={(axis, sizes) => onResize(page.pageKey, axis, sizes)} />
         )}
+        {dropFrame !== null && (
+          <div
+            aria-hidden="true"
+            data-frame="drop"
+            className="pointer-events-none absolute z-10 rounded-lg border-2 border-dashed border-accent bg-accent/5"
+            style={{ top: dropFrame.top - 2, left: dropFrame.left - 2, width: dropFrame.width + 4, height: dropFrame.height + 4 }}
+          />
+        )}
         {frames.element !== null && (
           <div
             aria-hidden="true"
@@ -333,7 +378,9 @@ function CanvasPage({
  * The canvas (mockup `.canvas`): the format's pages one under the other, grouped under
  * Intro, Output and Risultati and labelled "{n} · {name}", each drawn by the shared
  * renderer at the format's editor width. A click selects the element, block or page
- * under the pointer. It reports the page nearest its middle as the page in view.
+ * under the pointer. It reports the page nearest its middle as the page in view. A Media
+ * tile dragged over a page frames the block it would go in, and dropped puts its file
+ * there (Story 4.5b).
  *
  * Above the Video pages sits the meta row: **Animazione testi** in the editor, the
  * Instagram switch in Anteprima. Anteprima of Presentazione stacks the pages at up to
@@ -365,6 +412,7 @@ export function Canvas({
   onTextInput,
   onTextDone,
   onResize,
+  onPlaceMedia,
 }: CanvasProps) {
   const frame = useRef<number | null>(null);
   const video = formatId === "video_9_16";
@@ -467,6 +515,7 @@ export function Canvas({
             onTextInput={onTextInput}
             onTextDone={onTextDone}
             onResize={onResize}
+            onPlaceMedia={onPlaceMedia}
           />,
         ];
       })}
