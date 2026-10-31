@@ -34,8 +34,8 @@ export async function saveRevisionDoc(input: unknown): Promise<ActionResult<{ ve
  * The render assets of files the Media tab listed after the page loaded (Story 4.5b): input
  * `{ caseId, assetIds }`; returns, by asset id, those that are this case's live images and
  * videos with a rendition ready (an id that isn't, or whose rendition is still being made,
- * is left out, so the caller asks again later). 403 `FORBIDDEN` unless the role may `edit`;
- * 400 `INVALID_INPUT`; 500 `RENDITION_LOOKUP_FAILED`.
+ * is left out, so the caller asks again later; so is one whose rendition can't be read,
+ * without failing the others). 403 `FORBIDDEN` unless the role may `edit`; 400 `INVALID_INPUT`.
  */
 export async function getRenderAssets(input: unknown): Promise<ActionResult<Record<string, RenderAsset>>> {
   const actor = await getActor();
@@ -50,9 +50,7 @@ export async function getRenderAssets(input: unknown): Promise<ActionResult<Reco
   if (!listed.ok) return failure(listed.error);
   const wanted = new Set(assetIds.map((id) => id.toLowerCase()));
   const files = listed.value.filter((asset) => isMedia(asset) && wanted.has(asset.id.toLowerCase()));
-  try {
-    return { ok: true, value: await renderAssetsOf(files, (assetId, spec) => material.getRendition(assetId, spec)) };
-  } catch {
-    return failure({ code: "RENDITION_LOOKUP_FAILED", message: "A rendition could not be read." });
-  }
+  const read = (assetId: string, spec: string) => material.getRendition(assetId, spec);
+  const each = await Promise.all(files.map((file) => renderAssetsOf([file], read).catch(() => ({}))));
+  return { ok: true, value: Object.assign({}, ...each) };
 }

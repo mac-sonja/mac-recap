@@ -1,6 +1,7 @@
 "use client";
 
 import { Film, ImageIcon } from "lucide-react";
+import { useState } from "react";
 import type { ImageElement, VideoElement } from "@/modules/generation";
 import type { ListedAsset } from "@/modules/material";
 import { it } from "@/shared/i18n/it";
@@ -20,7 +21,7 @@ export interface MediaPanelProps {
 
 /**
  * A selected image's or video's file (Story 4.5b, mockup `mediaPicker`): its thumbnail and
- * name ("Nessun file" when empty, or when the file is no longer listed), and **Sostituisci
+ * name ("Nessun file" when empty, "Non più nei Media" when its file is no longer listed), and **Sostituisci
  * dai Media** (**Scegli dai Media** when empty), which opens the Media tab: a click on a
  * tile there fills the selected element.
  */
@@ -31,22 +32,26 @@ export function MediaPanel({ element, files, editable, onOpenMedia, onSoon }: Me
   const heading = element.type === "video" ? t.video : it.configurator.tools.image;
   const label = element.assetId === null ? t.choose : t.replace;
   const Placeholder = element.type === "video" ? Film : ImageIcon;
+  // An expired or broken thumbnail URL falls back to the type icon (as the Media tab).
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const thumbnail = file?.thumbnailUrl != null && file.thumbnailUrl !== brokenUrl ? file.thumbnailUrl : null;
+  const name = file?.originalFileName ?? (element.assetId === null ? t.none : t.gone);
   return (
     <section className={PANEL_SECTION} aria-label={heading}>
       <p className={EYEBROW}>{heading}</p>
       <div className="flex items-center gap-2.5">
         <span className="relative grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-surface-control text-foreground-muted">
-          {file?.thumbnailUrl ? (
+          {thumbnail !== null ? (
             // A presigned GET of the thumbnail, as in the Media tab; no next/image.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={file.thumbnailUrl} alt="" className="absolute inset-0 size-full object-cover" />
+            <img src={thumbnail} alt="" onError={() => setBrokenUrl(thumbnail)} className="absolute inset-0 size-full object-cover" />
           ) : (
             <Placeholder aria-hidden="true" className="size-4" />
           )}
         </span>
         <div className="min-w-0">
           <div data-media-name className="truncate font-label text-[13px] font-medium text-foreground-strong">
-            {file?.originalFileName ?? t.none}
+            {name}
           </div>
           <button
             type="button"

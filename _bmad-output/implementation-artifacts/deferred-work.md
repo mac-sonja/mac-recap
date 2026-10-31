@@ -286,3 +286,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-5b-place-media.md`
   summary: Story 4.5b-3: Adattamento for a selected image or video (Riempi, Adatta, Ritaglia in the left panel; leaving Ritaglia drops the crop) and, with Ritaglia, dragging the image inside its block (focal point moves opposite the pointer, drag ÷ element size, clamped 0–1) and a Zoom slider 100–400 %, each gesture one undo step.
   evidence: Split from the 4.5b spec at the owner's choice (2026-10-30, spec over the size target); builds on 4.5b's image/video section in the left panel.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5b-place-media.md`
+  summary: A newly uploaded video's render asset is fetched only at the Media tab's re-lists, which stop once thumbnails are ready; if its display rendition can arrive later, a placed video stays blank until reload (unverified, medium).
+  evidence: Review of 4.5b (finding 19); settle by checking whether one `rendition` job writes the thumbnail and `video.display` together.

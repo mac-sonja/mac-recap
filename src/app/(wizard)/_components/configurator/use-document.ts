@@ -169,11 +169,13 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
     }
     failures.current += 1;
     setSaveState("retrying");
+    // Only a refusal that names its files keeps them; any other failure shows the plain banner.
+    const named = result?.ok === false && result.error.code === "ASSET_NOT_ALLOWED" ? (result.error.assetIds ?? []) : [];
+    setRefused(named.length > 0 ? named : null);
     if (result !== null && PERMANENT_CODES.has(result.error.code)) {
       // The same document would be refused again: wait for the next edit.
       blocked.current = true;
       setBanner(true);
-      if (result.error.code === "ASSET_NOT_ALLOWED") setRefused(result.error.assetIds ?? []);
       return;
     }
     if (failures.current >= BANNER_AFTER) setBanner(true);

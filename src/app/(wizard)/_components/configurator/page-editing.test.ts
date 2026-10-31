@@ -517,4 +517,14 @@ describe("placeMedia (Story 4.5b)", () => {
     expect(next[0]!.blocks[0]!.elements[0]).toBe(before[0]!.blocks[0]!.elements[0]);
     expect(clearAssets(before, [FILE])).toBe(before);
   });
+
+  it("clearAssets sets a page or block background showing a refused file back to its default colour", () => {
+    const before = pages();
+    before[0]!.background = { kind: "image", assetId: OLD };
+    before[0]!.blocks[0]!.background = { kind: "image", assetId: OLD };
+    const next = clearAssets(before, [OLD]);
+    expect(next[0]!.background).toEqual({ kind: "colour", value: "#ffffff" });
+    expect(next[0]!.blocks[0]!.background).toEqual({ kind: "colour", value: NEW_BLOCK_COLOUR });
+    expect(() => pageSchema.parse(next[0])).not.toThrow();
+  });
 });

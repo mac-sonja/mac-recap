@@ -161,6 +161,8 @@ export function Configurator({
   const [assets, setAssets] = useState(initialAssets);
   /** The case's images and videos as last listed. */
   const [files, setFiles] = useState(media);
+  /** Every file name listed this session, by lowercased id: a file deleted since is still named in the refused-save banner. */
+  const [names, setNames] = useState<ReadonlyMap<string, string>>(() => new Map(media.map((f) => [f.id.toLowerCase(), f.originalFileName])));
   /** Ids whose render asset is being read. */
   const reading = useRef(new Set<string>());
   /** The latest assets: the Media tab's polling may call an older `listed`. */
@@ -407,19 +409,20 @@ export function Configurator({
   /** A tile clicked: it fills the selected image or video, else joins the selected block. */
   const pickFile = useCallback(
     (file: ListedAsset) => {
-      if (selection?.blockId === undefined) {
+      if (selection === null || block === undefined) {
         say(it.configurator.edit.needBlock);
         return;
       }
       placeFile(selection, file.id, "end");
     },
-    [placeFile, say, selection],
+    [block, placeFile, say, selection],
   );
 
   /** The Media tab read the files again: keep them, and read the render assets of new ones. */
   const listed = useCallback(
     (fresh: readonly ListedAsset[]) => {
       setFiles(fresh);
+      setNames((current) => new Map([...current, ...fresh.map((f) => [f.id.toLowerCase(), f.originalFileName] as const)]));
       if (onRenderAssets === undefined) return;
       const missing = fresh.filter((f) => !(f.id in assetsNow.current) && !reading.current.has(f.id)).map((f) => f.id);
       if (missing.length === 0) return;
@@ -439,10 +442,15 @@ export function Configurator({
 
   /** **Sostituisci dai Media** / **Scegli dai Media**: the right panel shows, on its Media tab. */
   const openMedia = useCallback(() => {
+    // Already showing: nothing re-renders, so focus it now.
+    if (rightOpen && rightTab === "media") {
+      mediaTab.current?.focus();
+      return;
+    }
     focusMedia.current = true;
     setRightOpen(true);
     setRightTab("media");
-  }, []);
+  }, [rightOpen, rightTab]);
 
   useEffect(() => {
     if (!focusMedia.current) return;
@@ -587,7 +595,7 @@ export function Configurator({
             className="flex shrink-0 items-center justify-center gap-2 border-b border-border bg-surface-raised px-4 py-2 font-label text-[13px] font-medium text-danger"
           >
             <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
-            {doc.refused === null ? it.configurator.saveBanner : missingMessage(doc.refused, files)}
+            {doc.refused === null ? it.configurator.saveBanner : missingMessage(doc.refused, names)}
             {doc.refused !== null && canClear(formats, doc.refused) && (
               <button type="button" onClick={removeRefused} className={cn(SECONDARY_ACTION, "ml-2 h-7 px-3 text-[12.5px]")}>
                 {it.configurator.media.missing.remove}
@@ -719,13 +727,11 @@ function selectionOf(pages: readonly Page[], pageKey: string, elementId: string)
   return block === undefined ? { pageKey } : { pageKey, blockId: block.blockId, elementId };
 }
 
-/** The refused-file banner's words: the file's name when the Media still lists it, else "Un file"; several by count. */
-function missingMessage(refused: readonly string[], files: readonly ListedAsset[]): string {
+/** The refused-file banner's words: the file's name when it was listed this session, else "Un file"; several by count. */
+function missingMessage(refused: readonly string[], names: ReadonlyMap<string, string>): string {
   const t = it.configurator.media.missing;
   if (refused.length > 1) return fill(t.many, { n: refused.length });
-  const id = refused[0]?.toLowerCase();
-  const name = files.find((f) => f.id.toLowerCase() === id)?.originalFileName ?? t.unknown;
-  return fill(t.one, { name });
+  return fill(t.one, { name: names.get(refused[0]!.toLowerCase()) ?? t.unknown });
 }
 
 /** Whether **Togli dalla pagina** would change anything: some image or video shows a refused file. */

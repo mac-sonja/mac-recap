@@ -90,8 +90,11 @@ describe("getRenderAssets", () => {
     expect(listAssets).not.toHaveBeenCalled();
   });
 
-  it("fails without throwing when a rendition can't be read", async () => {
-    getRendition.mockResolvedValue(err({ code: "STORAGE_FAILED", message: "m" }));
-    expect(await getRenderAssets({ caseId: input.caseId, assetIds: [IMAGE] })).toMatchObject({ ok: false, error: { code: "RENDITION_LOOKUP_FAILED" } });
+  it("leaves out a file whose rendition can't be read, and returns the others", async () => {
+    getRendition.mockImplementation(async (id: string, spec: string) => (id === IMAGE ? err({ code: "STORAGE_FAILED", message: "m" }) : ok({ url: `https://x/${id}/${spec}` })));
+    expect(await getRenderAssets({ caseId: input.caseId, assetIds: [IMAGE, VIDEO] })).toEqual({
+      ok: true,
+      value: { [VIDEO]: { kind: "video", url: `https://x/${VIDEO}/video.display`, posterUrl: `https://x/${VIDEO}/video.poster` } },
+    });
   });
 });

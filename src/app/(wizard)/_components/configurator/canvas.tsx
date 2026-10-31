@@ -242,7 +242,7 @@ function CanvasPage({
     if (target.elementId !== undefined) onEditRequest(page.pageKey, target.elementId);
   }
 
-  // A Media tile dragged over the page (Story 4.5b): the block it would go in framed, or the page when it is off every block.
+  // A Media tile dragged over the page (Story 4.5b): the block it would go in framed; off every block, no frame.
   const dropsMedia = !preview && onPlaceMedia !== undefined;
   const [dropFrame, setDropFrame] = useState<Box | null>(null);
   const takes = (event: DragEvent<HTMLDivElement>) => dropsMedia && event.dataTransfer.types.includes(MEDIA_DRAG_TYPE);

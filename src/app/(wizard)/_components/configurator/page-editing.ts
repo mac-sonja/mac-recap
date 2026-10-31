@@ -151,20 +151,32 @@ export function placeMedia(pages: readonly Page[], target: MediaTarget, file: Me
 }
 
 /**
- * Every image and video showing one of `assetIds` emptied (`assetId: null`), in every
- * page of `pages`: a file the server no longer accepts taken off the page (Story 4.5b).
- * `pages` itself when none shows one.
+ * Every image and video showing one of `assetIds` emptied (`assetId: null`), and every
+ * page or block background showing one back to its default colour (page white, block
+ * grey), in every page of `pages`: a file the server no longer accepts taken off the page
+ * (Story 4.5b). `pages` itself when none shows one.
  */
 export function clearAssets(pages: readonly Page[], assetIds: readonly string[]): readonly Page[] {
   const gone = new Set(assetIds.map((id) => id.toLowerCase()));
   const hit = (el: DocumentElement) => (el.type === "image" || el.type === "video") && el.assetId !== null && gone.has(el.assetId.toLowerCase());
+  const goneBg = (bg: Background) => bg.kind === "image" && gone.has(bg.assetId.toLowerCase());
+  const blockHit = (b: Block) => goneBg(b.background) || b.elements.some(hit);
   let changed = false;
   const next = pages.map((page) => {
-    if (!page.blocks.some((b) => b.elements.some(hit))) return page;
+    if (!goneBg(page.background) && !page.blocks.some(blockHit)) return page;
     changed = true;
     return {
       ...page,
-      blocks: page.blocks.map((b) => (b.elements.some(hit) ? { ...b, elements: b.elements.map((el) => (hit(el) ? { ...el, assetId: null } : el)) } : b)),
+      background: goneBg(page.background) ? swatchBackground(BACKGROUND_SWATCHES[0]) : page.background,
+      blocks: page.blocks.map((b) =>
+        blockHit(b)
+          ? {
+              ...b,
+              background: goneBg(b.background) ? ({ kind: "colour", value: NEW_BLOCK_COLOUR } as const) : b.background,
+              elements: b.elements.map((el) => (hit(el) ? { ...el, assetId: null } : el)),
+            }
+          : b,
+      ),
     };
   });
   return changed ? next : pages;

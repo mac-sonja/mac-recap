@@ -2248,6 +2248,32 @@ describe("Configurator placing media (Story 4.5b)", () => {
     expect(onRenderAssets.mock.calls[1]![0].assetIds).toContain(NEW);
   });
 
+  it("a tile dropped into a full block says so, and changes nothing", async () => {
+    const onSave = vi.fn(savedOk);
+    const pages = fixture();
+    pages.presentazione_16_9[0]!.blocks[1]!.elements.push(
+      ...Array.from({ length: 29 }, (_, i) => ({ elementId: `cccccccc-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, type: "divider" as const })),
+    );
+    setup(false, pages, { onSave });
+    dropOn(elementNode(WORDS), IMAGE);
+    expect(status().textContent).toBe(dict.configurator.edit.blockFull);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("the refused-save banner counts several files, and says Un file for one never listed", async () => {
+    const GONE = "bbbbbbbb-0000-4000-8000-000000000099";
+    const refusedFor = (assetIds: string[]) => ({ ok: false as const, status: 400, error: { code: "ASSET_NOT_ALLOWED", message: "m", assetIds } });
+    const onSave = vi.fn<SaveFn>(savedOk).mockResolvedValueOnce(refusedFor([IMAGE, VIDEO])).mockResolvedValueOnce(refusedFor([GONE]));
+    setup(false, fixture(), { onSave });
+    dropOn(elementNode(WORDS), VIDEO);
+    await settle();
+    expect(screen.getByRole("alert", { hidden: true }).textContent).toContain(fill(dict.configurator.media.missing.many, { n: 2 }));
+    dropOn(elementNode(WORDS), IMAGE);
+    await settle();
+    expect(screen.getByRole("alert", { hidden: true }).textContent).toContain(fill(dict.configurator.media.missing.one, { name: dict.configurator.media.missing.unknown }));
+  });
+
   it("a save refused for a file no longer in the Media names it; Togli dalla pagina empties it and saves", async () => {
     const onSave = vi.fn<SaveFn>(savedOk).mockResolvedValueOnce({ ok: false, status: 400, error: { code: "ASSET_NOT_ALLOWED", message: "m", assetIds: [VIDEO] } });
     setup(false, fixture(), { onSave });

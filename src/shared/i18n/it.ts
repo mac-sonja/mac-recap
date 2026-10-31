@@ -861,6 +861,8 @@ export const it = {
         replace: "Sostituisci dai Media",
         choose: "Scegli dai Media",
         none: "Nessun file",
+        /** The element shows a file the Media no longer lists. */
+        gone: "Non più nei Media",
         /** The section heading for a video. */
         video: "Video",
       },

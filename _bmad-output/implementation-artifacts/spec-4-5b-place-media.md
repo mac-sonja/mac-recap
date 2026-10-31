@@ -2,7 +2,7 @@
 title: 'Story 4.5b: place and replace media on a page'
 type: 'feature'
 created: '2026-10-30'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'f1c1236549c8ae97d955f90cfea2a9e2a20a98e6'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -78,10 +78,39 @@ context:
 - A `blockFull` message was added (`configurator.edit.blockFull`); `addElement` could already refuse with it silently.
 - `ActionResult.error.assetIds` is passed only for `ASSET_NOT_ALLOWED`.
 - No visual check in a browser: the configurator page needs Supabase.
+- Resolves the 4.5a deferrals on new uploads' render assets and on naming a refused file.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Finding | Verdict | Route / evidence |
+|---|---------|---------|------------------|
+| 1 | `refused` kept after a later failure for another reason (banner names a file the real failure isn't about) | medium | patch: `refused` reset on every failure that isn't a named `ASSET_NOT_ALLOWED`; test added |
+| 2 | `ASSET_NOT_ALLOWED` without `assetIds` shows "Un file…" with no button | low | patch: no ids → plain save banner (same fix as 1) |
+| 3 | Banner rarely names the file: a deleted file drops out of the next listing | medium | patch: names of every file listed this session are kept |
+| 4 | `getRenderAssets`: one broken rendition fails the whole batch, so no new upload ever gets its asset | medium | patch: each file read on its own, a failing one left out; test changed |
+| 5 | Files whose rendition never arrives are asked for at every re-list | low | rejected: re-lists happen only after uploads and during the bounded thumbnail poll |
+| 6 | `getRenderAssets` doesn't validate `caseId` | false | `material.listAssets` parses its input and returns `INVALID_INPUT` |
+| 7 | Left panel shows "Nessun file" for a file no longer listed, next to **Sostituisci** | low | patch: says "Non più nei Media" |
+| 8 | Left panel thumbnail has no broken-URL fallback (presigned URLs expire) | low | patch: falls back to the type icon, as the Media tab |
+| 9 | Drop-frame comment says the page is framed off every block | low | patch: comment corrected |
+| 10 | Drop frame may stay after a cancelled drag (no `dragend`) | maybe-false | rejected: low at worst; browsers fire `dragleave` on cancel; next drag clears it |
+| 11 | **Togli dalla pagina** acts on every format; undo unclear | false | one `doc.change` holds all formats, so one ⌘Z restores all |
+| 12 | Silent no-op for an unknown dropped id or the same file again | low | rejected: unlikely (ids come from this tab), fix adds branches |
+| 13 | 4.5a deferred entry not closed | false | deferred-work entries are append-only by the workflow; resolved here (Implementation Notes) |
+| 14 | Code Map signature differs (`at` parameter, drop guard) | low | rejected: fix edits this spec |
+| 15 | Page doesn't verify it passes `getRenderAssets` | medium | patch: `page.test.tsx` asserts the prop |
+| 16 | No test of the `blockFull` message on a drop | low | patch: test added |
+| 17 | No test of the several-files and unknown-file banners | low | patch: test added |
+| 18 | **Sostituisci dai Media** with Media already shown: focus not moved, a later tab change steals it | low | patch: focuses at once when already shown |
+| 19 | Video display rendition may arrive after the thumbnail polling stops | maybe-false | defer (unverified medium): settle by checking whether one `rendition` job makes thumbnail and display together |
+| 20 | >10 refused files: count wrong, clear partial | low | rejected: very rare; after clearing, the next save names the rest |
+| 21 | Refused id used as a page or block background: no way out | medium | patch: `clearAssets` resets those backgrounds to their default colours; test added |
+| 22 | Clicked tile with a selected block that no longer exists says the drag message | low | patch: `pickFile` checks the resolved block, says `needBlock` |
+| 23 | Same file re-placed with a differently cased id records a step | low | rejected: ids are lowercase UUIDs from the database |
+| 24 | Several refused files shown only as a count | low | rejected: the count is the matrix's "file(s)" wording; names need more branches |
+| 25 | No tests: drops in Anteprima, tile dropped back on the tab | low | rejected: both are guarded by one condition each (`preview`, `MEDIA_DRAG_TYPE`) already exercised by other tests |
 
 ## Verification
 
