@@ -5,6 +5,9 @@ import type { ListedAsset } from "@/modules/material";
 /** What the Media tab lists: a case's images and videos. */
 export const isMedia = (file: Pick<ListedAsset, "kind">) => file.kind === "image" || file.kind === "video";
 
+/** A Media tile's drag data type (Story 4.5b): the asset id, in a type no file drag carries. */
+export const MEDIA_DRAG_TYPE = "application/x-mac-media";
+
 /** The upload rules the drop zone follows (Story 2.7): the case's cap, the per-file size and the image and video types. */
 export interface MediaUploadRules {
   maxFiles: number;

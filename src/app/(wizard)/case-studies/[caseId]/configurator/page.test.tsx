@@ -24,7 +24,7 @@ vi.mock("next/navigation", () => ({
   }),
   useRouter: () => ({ refresh: vi.fn() }),
 }));
-vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn() }));
+vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn(), getRenderAssets: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => (name === "mac-theme" ? { value: "dark" } : undefined) }) }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
 vi.mock("@/modules/case-study", async () => ({
@@ -54,6 +54,7 @@ vi.mock("@/modules/material", async () => ({
 }));
 
 const { default: ConfiguratorPage } = await import("./page");
+const { getRenderAssets } = await import("./actions");
 
 const ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
@@ -192,6 +193,8 @@ describe("ConfiguratorPage", () => {
       maxFileBytes: 50 * 1024 * 1024,
       contentTypes: ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime"],
     });
+    // Story 4.5b: files uploaded later get their render assets through this action.
+    expect(props.onRenderAssets).toBe(getRenderAssets);
   });
 
   it("guards the surface with `edit` and reads the case's editable revision", async () => {

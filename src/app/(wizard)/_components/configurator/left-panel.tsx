@@ -6,6 +6,7 @@ import { PRESSABLE, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { ThemeSwitch } from "@/app/_components/theme-switch";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import type { Background, Block, DocumentElement, Page, TextGroupAlign } from "@/modules/generation";
+import type { ListedAsset } from "@/modules/material";
 import { defaultPages, layouts, textStyles, type DefaultPage, type FormatId, type Layout } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -13,6 +14,7 @@ import { BACKGROUND_SWATCHES, NEW_BLOCK_COLOUR, parseBackground, shuffleChoices,
 import { ASPECT, CHECKERBOARD, EYEBROW, ICON_BUTTON, PANEL_SECTION, SEG, SEG_BUTTON, SOON_ID } from "./styles";
 import type { TextSettings } from "./text-editing";
 import { GroupPanel, TextPanel } from "./text-panel";
+import { MediaPanel } from "./media-panel";
 
 export type ElementKey = keyof typeof it.configurator.elements;
 
@@ -58,6 +60,10 @@ export interface LeftPanelProps {
   /** Sfondo's field got something that isn't a colour. */
   onBadColour: () => void;
   onSoon: (tool: string) => void;
+  /** The case's images and videos: a selected image's or video's file (Story 4.5b). */
+  files: readonly ListedAsset[];
+  /** **Sostituisci dai Media** / **Scegli dai Media**: shows the Media tab. */
+  onOpenMedia: () => void;
   onHide: () => void;
   hideRef: Ref<HTMLButtonElement>;
 }
@@ -219,7 +225,8 @@ function BackgroundColour({
 
 /**
  * The left panel (312 px, mockup `.pane-l`): the selected block's or element's name
- * first, with a text's settings or a Testi group's alignment (Story 4.3b), then always
+ * first, with a text's settings or a Testi group's alignment (Story 4.3b), or an image's
+ * or video's file with **Sostituisci dai Media** (Story 4.5b), then always
  * the page tools, acting on the selected page or the page in view:
  * **Layout**, **Pagine di default**, **Elementi**, **Sfondo** and **Elimina pagina**.
  * Elementi adds a block or an element, and the selection has its **Rimuovi** button
@@ -246,6 +253,8 @@ export function LeftPanel({
   onBackground,
   onBadColour,
   onSoon,
+  files,
+  onOpenMedia,
   onHide,
   hideRef,
 }: LeftPanelProps) {
@@ -291,6 +300,9 @@ export function LeftPanel({
           <TextPanel formatId={formatId} template={template} text={element} block={block} editable={editable} onChange={onTextSettings} onSoon={onSoon} />
         )}
         {element?.type === "text_group" && <GroupPanel group={element} editable={editable} onChange={onGroupAlign} onSoon={onSoon} />}
+        {(element?.type === "image" || element?.type === "video") && (
+          <MediaPanel element={element} files={files} editable={editable} onOpenMedia={onOpenMedia} onSoon={onSoon} />
+        )}
 
         {page !== undefined && (
           <>

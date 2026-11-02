@@ -17,4 +17,10 @@ describe("failure", () => {
     const result = failure({ code: "CLIENT_FIELD_INVALID", message: "m", details: { fields: ["description"] } });
     expect(result.ok || result.error).toEqual({ code: "CLIENT_FIELD_INVALID", message: "m", fields: ["description"] });
   });
+
+  it("passes the refused asset ids of ASSET_NOT_ALLOWED only, without the other details", () => {
+    const refused = failure({ code: "ASSET_NOT_ALLOWED", message: "m", details: { revisionId: "r", assetIds: ["a", 2, "b"] } });
+    expect(refused).toEqual({ ok: false, status: expect.any(Number), error: { code: "ASSET_NOT_ALLOWED", message: "m", assetIds: ["a", "b"] } });
+    expect(failure({ code: "DOCUMENT_INVALID", message: "m", details: { assetIds: ["a"] } })).not.toHaveProperty("error.assetIds");
+  });
 });

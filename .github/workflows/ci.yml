@@ -24,15 +24,20 @@ jobs:
       # so the .deb files are cached and installed offline. On a miss, or when the cached files no longer
       # install on the runner image, they are downloaded (time-limited, 3 attempts, then from Ubuntu's
       # main archive) and saved again.
-      # To force a fresh download, bump the v1 in both cache keys.
+      # To force a fresh download, bump the v1 in both cache keys. The keys carry the Ubuntu codename:
+      # packages cached on another release (2026-11-02: noble's, restored on resolute) half-install and
+      # leave apt unable to install anything.
+      - name: Ubuntu release
+        id: release
+        run: echo "codename=$(. /etc/os-release && echo "$VERSION_CODENAME")" >> "$GITHUB_OUTPUT"
       - name: Restore ffmpeg packages
         id: ffmpeg-cache
         uses: actions/cache/restore@v4
         with:
           path: ~/ffmpeg-debs
           # Never an exact hit: the newest saved cache with this prefix is restored.
-          key: ffmpeg-debs-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
-          restore-keys: ffmpeg-debs-v1-${{ runner.os }}-${{ runner.arch }}-
+          key: ffmpeg-debs-v1-${{ runner.os }}-${{ steps.release.outputs.codename }}-${{ runner.arch }}-${{ github.run_id }}
+          restore-keys: ffmpeg-debs-v1-${{ runner.os }}-${{ steps.release.outputs.codename }}-${{ runner.arch }}-
       - name: Install ffmpeg
         id: ffmpeg
         timeout-minutes: 12
@@ -66,7 +71,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/ffmpeg-debs
-          key: ffmpeg-debs-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
+          key: ffmpeg-debs-v1-${{ runner.os }}-${{ steps.release.outputs.codename }}-${{ runner.arch }}-${{ github.run_id }}
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test

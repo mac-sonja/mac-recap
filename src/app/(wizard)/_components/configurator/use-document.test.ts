@@ -182,6 +182,32 @@ describe("useDocument", () => {
     expect(hook.result.current).toMatchObject({ save: "saved", banner: false });
   });
 
+  it("keeps the files an ASSET_NOT_ALLOWED save was refused for until a save goes through", async () => {
+    const refusedFor = { ok: false as const, status: 400, error: { code: "ASSET_NOT_ALLOWED", message: "m", assetIds: ["a1"] } };
+    const save = vi.fn<Save>().mockResolvedValueOnce(refusedFor).mockImplementation(okSave);
+    const { hook } = setup({ save });
+    expect(hook.result.current.refused).toBeNull();
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(hook.result.current.refused).toEqual(["a1"]);
+    act(() => hook.result.current.change(formatsNamed("b"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(hook.result.current.refused).toBeNull();
+  });
+
+  it("drops the refused files at a failure for another reason, and when the refusal names none", async () => {
+    const named = { ok: false as const, status: 400, error: { code: "ASSET_NOT_ALLOWED", message: "m", assetIds: ["a1"] } };
+    const unnamed = { ok: false as const, status: 400, error: { code: "ASSET_NOT_ALLOWED", message: "m" } };
+    const save = vi.fn<Save>().mockResolvedValueOnce(named).mockResolvedValueOnce(refused("DOCUMENT_INVALID", 400)).mockResolvedValueOnce(unnamed).mockImplementation(okSave);
+    const { hook } = setup({ save });
+    for (const [name, expected] of [["a", ["a1"]], ["b", null], ["c", null]] as const) {
+      act(() => hook.result.current.change(formatsNamed(name), "presentazione_16_9"));
+      await advance(DEBOUNCE_MS);
+      expect(hook.result.current.refused).toEqual(expected);
+    }
+    expect(hook.result.current.banner).toBe(true);
+  });
+
   it("asks before the tab closes while an edit is unsaved, and not once it is saved", async () => {
     const { hook } = setup();
     const unload = () => {

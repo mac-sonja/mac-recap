@@ -9,7 +9,7 @@ import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { acceptFor, normalizeContentType, uploadFile } from "../../_lib/upload";
 import { THUMBNAIL_POLL_MAX_MS, THUMBNAIL_POLL_MS } from "../material-step";
-import { formatLength, isMedia, type MediaUploadRules } from "./media-files";
+import { formatLength, isMedia, MEDIA_DRAG_TYPE, type MediaUploadRules } from "./media-files";
 
 const copy = it.configurator.media;
 const materialCopy = it.wizard.material;
@@ -41,12 +41,15 @@ function MediaTile({
   onPage,
   videoUrl,
   onStar,
+  onPick,
 }: {
   file: ListedAsset;
   view: "grid" | "list";
   onPage: boolean;
   videoUrl: string | undefined;
   onStar: (file: ListedAsset) => void;
+  /** A click: the file goes on the page (Story 4.5b); undefined while nothing can be placed. */
+  onPick: ((file: ListedAsset) => void) | undefined;
 }) {
   const seconds = useVideoLength(file.kind === "video" ? videoUrl : undefined);
   const length = seconds === null ? null : formatLength(seconds);
@@ -55,42 +58,59 @@ function MediaTile({
   const thumbnail = file.thumbnailUrl !== null && file.thumbnailUrl !== brokenUrl ? file.thumbnailUrl : null;
   const star = file.isFavourite ? copy.favourite.remove : copy.favourite.add;
   const grid = view === "grid";
+  // With somewhere to put it, the thumbnail and name are one button; the star stays its own.
+  const Pick = onPick === undefined ? "span" : "button";
   const notes = [onPage ? copy.onPage : null, length !== null ? fill(copy.videoLength, { length }) : null].filter((note) => note !== null);
 
   return (
     <li
       data-media={file.id}
       data-on-page={onPage ? "" : undefined}
+      draggable={onPick !== undefined}
+      onDragStart={(event) => {
+        // The id in a private type: the canvas takes it, the drop zone and the browser ignore it.
+        event.dataTransfer.setData(MEDIA_DRAG_TYPE, file.id);
+        event.dataTransfer.effectAllowed = "copy";
+      }}
       className={cn(
         "group relative flex min-w-0 rounded-xl transition-colors duration-150",
         grid ? "flex-col gap-1.5 bg-surface-control p-1.5 hover:bg-surface-selected" : "flex-row items-center gap-2.5 px-1.5 py-1 hover:bg-surface-hover",
       )}
     >
-      <span className={cn("relative grid shrink-0 place-items-center overflow-hidden bg-surface-selected text-foreground-muted", grid ? "aspect-square w-full rounded-lg" : "size-9 rounded-md")}>
-        {thumbnail !== null ? (
-          // A presigned GET of the thumbnail rendition, or of an image's original; no next/image (as the Material step).
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumbnail} alt="" onError={() => setBrokenUrl(thumbnail)} className="absolute inset-0 size-full object-cover" />
-        ) : file.kind === "video" ? (
-          <Film aria-hidden="true" className="size-4" />
-        ) : (
-          <ImageIcon aria-hidden="true" className="size-4" />
+      <Pick
+        {...(onPick === undefined ? {} : { type: "button" as const, title: copy.place, onClick: () => onPick(file) })}
+        className={cn(
+          "flex min-w-0 rounded-lg text-left outline-none focus-visible:outline-2 focus-visible:outline-focus-ring",
+          grid ? "flex-col gap-1.5" : "flex-1 flex-row items-center gap-2.5",
+          onPick !== undefined && "cursor-pointer",
         )}
-        {grid && file.kind === "video" && (
-          <span aria-hidden="true" className="absolute bottom-1.5 left-1.5 rounded-[5px] bg-scrim/60 px-1.5 py-0.5 font-mono text-[10.5px] font-medium text-surface-inverse-foreground">
-            {length === null ? "▶" : `▶ ${length}`}
-          </span>
-        )}
-      </span>
-      <small className="min-w-0 flex-1 truncate font-label text-[12.5px] text-foreground-muted">
-        {onPage && (
-          <span aria-hidden="true" className="text-accent">
-            {"● "}
-          </span>
-        )}
-        {file.originalFileName}
-        {notes.length > 0 && <span className="sr-only">{`, ${notes.join(", ")}`}</span>}
-      </small>
+      >
+        <span className={cn("relative grid shrink-0 place-items-center overflow-hidden bg-surface-selected text-foreground-muted", grid ? "aspect-square w-full rounded-lg" : "size-9 rounded-md")}>
+          {thumbnail !== null ? (
+            // A presigned GET of the thumbnail rendition, or of an image's original; no next/image (as the Material step).
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={thumbnail} alt="" onError={() => setBrokenUrl(thumbnail)} className="absolute inset-0 size-full object-cover" />
+          ) : file.kind === "video" ? (
+            <Film aria-hidden="true" className="size-4" />
+          ) : (
+            <ImageIcon aria-hidden="true" className="size-4" />
+          )}
+          {grid && file.kind === "video" && (
+            <span aria-hidden="true" className="absolute bottom-1.5 left-1.5 rounded-[5px] bg-scrim/60 px-1.5 py-0.5 font-mono text-[10.5px] font-medium text-surface-inverse-foreground">
+              {length === null ? "▶" : `▶ ${length}`}
+            </span>
+          )}
+        </span>
+        <small className="min-w-0 flex-1 truncate font-label text-[12.5px] text-foreground-muted">
+          {onPage && (
+            <span aria-hidden="true" className="text-accent">
+              {"● "}
+            </span>
+          )}
+          {file.originalFileName}
+          {notes.length > 0 && <span className="sr-only">{`, ${notes.join(", ")}`}</span>}
+        </small>
+      </Pick>
       <button
         type="button"
         aria-pressed={file.isFavourite}
@@ -132,6 +152,10 @@ export interface MediaTabProps {
   view: "grid" | "list";
   /** A message at the top of the canvas. */
   say: (text: string) => void;
+  /** A tile clicked: the file goes on the page (Story 4.5b); undefined while nothing can be placed (tiles neither click nor drag). */
+  onPick?: (file: ListedAsset) => void;
+  /** The case's images and videos as read again (after an upload, or while thumbnails are made). */
+  onListed?: (files: readonly ListedAsset[]) => void;
 }
 
 /**
@@ -142,10 +166,11 @@ export interface MediaTabProps {
  * message on failure. The drop zone at the foot uploads images and videos to the case's
  * material with Story 2.7's rules: each file presigned, sent and confirmed, retried once;
  * a refused file is named in one message at the end. Then the list is read again, and
- * again every few seconds while a thumbnail is being made. Placing a file on a page comes
- * with Story 4.5b. Kept mounted while hidden, so uploads and stars survive a tab switch.
+ * again every few seconds while a thumbnail is being made. A tile clicked or dragged onto a
+ * block puts its file on the page (Story 4.5b). Kept mounted while hidden, so uploads and
+ * stars survive a tab switch.
  */
-export function MediaTab({ hidden, caseId, initialFiles, rules, assets, onPage, query, view, say }: MediaTabProps) {
+export function MediaTab({ hidden, caseId, initialFiles, rules, assets, onPage, query, view, say, onPick, onListed }: MediaTabProps) {
   const [files, setFiles] = useState<readonly ListedAsset[]>(initialFiles);
   const [uploading, setUploading] = useState(0);
   const [storageOff, setStorageOff] = useState(false);
@@ -178,6 +203,7 @@ export function MediaTab({ hidden, caseId, initialFiles, rules, assets, onPage, 
         const shownStar = new Map(current.map((f) => [f.id, f.isFavourite]));
         return media.map((f) => (favouriteBusy.current.has(f.id) && shownStar.has(f.id) ? { ...f, isFavourite: shownStar.get(f.id) as boolean } : f));
       });
+      onListed?.(media);
       return media;
     } catch {
       return null;
@@ -321,6 +347,8 @@ export function MediaTab({ hidden, caseId, initialFiles, rules, assets, onPage, 
   }
 
   function onDragOver(event: DragEvent<HTMLDivElement>) {
+    // A tile dragged back over the tab is not an upload.
+    if (event.dataTransfer.types.includes(MEDIA_DRAG_TYPE)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = storageOff ? "none" : "copy";
   }
@@ -352,6 +380,7 @@ export function MediaTab({ hidden, caseId, initialFiles, rules, assets, onPage, 
                 onPage={onPage.has(file.id.toLowerCase())}
                 videoUrl={assets[file.id]?.kind === "video" ? assets[file.id]?.url : undefined}
                 onStar={(f) => void star(f)}
+                onPick={onPick}
               />
             ))}
           </ul>
@@ -367,11 +396,13 @@ export function MediaTab({ hidden, caseId, initialFiles, rules, assets, onPage, 
           data-drag-over={over ? "" : undefined}
           onClick={browse}
           onKeyDown={onKeyDown}
-          onDragEnter={() => {
+          onDragEnter={(event) => {
+            if (event.dataTransfer.types.includes(MEDIA_DRAG_TYPE)) return;
             depth.current += 1;
             if (!storageOff) setOver(true);
           }}
-          onDragLeave={() => {
+          onDragLeave={(event) => {
+            if (event.dataTransfer.types.includes(MEDIA_DRAG_TYPE)) return;
             // Enter/leave also fire on children; only the last leave ends the drag.
             depth.current = Math.max(0, depth.current - 1);
             if (depth.current === 0) setOver(false);
