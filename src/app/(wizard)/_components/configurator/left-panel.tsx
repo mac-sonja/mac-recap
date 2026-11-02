@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, type KeyboardEvent, type Ref } from "react";
 import { PRESSABLE, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { ThemeSwitch } from "@/app/_components/theme-switch";
 import type { ThemeChoice } from "@/app/_lib/theme";
-import type { Background, Block, DocumentElement, Page, TextGroupAlign } from "@/modules/generation";
+import type { Background, Block, DocumentElement, MediaFit, Page, TextGroupAlign } from "@/modules/generation";
 import type { ListedAsset } from "@/modules/material";
 import { defaultPages, layouts, textStyles, type DefaultPage, type FormatId, type Layout } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
@@ -64,6 +64,10 @@ export interface LeftPanelProps {
   files: readonly ListedAsset[];
   /** **Sostituisci dai Media** / **Scegli dai Media**: shows the Media tab. */
   onOpenMedia: () => void;
+  /** **Adattamento** and **Zoom** on the selected image or video (Story 4.5b-3). */
+  onFit: (fit: MediaFit) => void;
+  onZoom: (zoom: number) => void;
+  onZoomDone: () => void;
   onHide: () => void;
   hideRef: Ref<HTMLButtonElement>;
 }
@@ -255,6 +259,9 @@ export function LeftPanel({
   onSoon,
   files,
   onOpenMedia,
+  onFit,
+  onZoom,
+  onZoomDone,
   onHide,
   hideRef,
 }: LeftPanelProps) {
@@ -301,7 +308,16 @@ export function LeftPanel({
         )}
         {element?.type === "text_group" && <GroupPanel group={element} editable={editable} onChange={onGroupAlign} onSoon={onSoon} />}
         {(element?.type === "image" || element?.type === "video") && (
-          <MediaPanel element={element} files={files} editable={editable} onOpenMedia={onOpenMedia} onSoon={onSoon} />
+          <MediaPanel
+            element={element}
+            files={files}
+            editable={editable}
+            onOpenMedia={onOpenMedia}
+            onSoon={onSoon}
+            onFit={onFit}
+            onZoom={onZoom}
+            onZoomDone={onZoomDone}
+          />
         )}
 
         {page !== undefined && (

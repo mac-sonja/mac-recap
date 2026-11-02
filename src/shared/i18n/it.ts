@@ -866,6 +866,21 @@ export const it = {
         /** The section heading for a video. */
         video: "Video",
       },
+      /** A selected image's or video's fit (Story 4.5b-3, mockup `#fit`). */
+      fit: {
+        heading: "Adattamento",
+        fill: "Riempi",
+        fit: "Adatta",
+        crop: "Ritaglia",
+        zoom: "Zoom",
+        /** `{n}` is the zoom in percent. */
+        zoomValue: "{n} %",
+        cropHint: "Trascina l’immagine nel blocco (o usa le frecce) per scegliere cosa si vede.",
+        /** The Ritaglia frame on the canvas, focusable: arrow keys move what shows. */
+        cropFrame: "Parte visibile: trascina o usa le frecce",
+        /** `{x}`, `{y}`: the focal point in percent from the left and the top. */
+        cropPosition: "{x} % da sinistra, {y} % dall’alto",
+      },
       deletePage: "Elimina pagina",
       /** Moves the page to the next layout with the same number of blocks (Story 4.4a). */
       shuffle: "Mescola",

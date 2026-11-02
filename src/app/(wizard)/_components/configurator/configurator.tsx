@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import { SECONDARY_ACTION } from "@/app/_components/button-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
-import { CURRENT_SCHEMA_VERSION, type Background, type Block, type DocumentKind, type Page, type TextGroupAlign } from "@/modules/generation";
+import { CURRENT_SCHEMA_VERSION, type Background, type Block, type Crop, type DocumentKind, type MediaFit, type Page, type TextGroupAlign } from "@/modules/generation";
 import type { ListedAsset } from "@/modules/material";
 import { FORMAT_IDS, type BoundValues, type DefaultPage, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
@@ -26,6 +26,8 @@ import {
   removeSelection,
   setBackground,
   shuffleLayout,
+  withCrop,
+  withFit,
   type MediaTarget,
   type PageEdit,
 } from "./page-editing";
@@ -109,6 +111,8 @@ const typing = (target: EventTarget | null) =>
  * (Story 4.5a). A tile dragged onto an image or video replaces its file, dropped elsewhere
  * in a block adds it there; a tile clicked fills the selected image or video, else joins
  * the selected block; the left panel's **Sostituisci dai Media** opens the tab (Story 4.5b).
+ * Its **Adattamento** sets Riempi, Adatta or Ritaglia; with Ritaglia the image is dragged
+ * in its block and zoomed with **Zoom**, each gesture one undo step (Story 4.5b-3).
  * A file uploaded meanwhile gets its render asset once its rendition is ready. A save
  * refused for a file no longer in the Media names it and offers to take it off the page.
  */
@@ -468,6 +472,47 @@ export function Configurator({
     say(it.configurator.media.missing.removed);
   }, [doc, formatId, formats, say]);
 
+  /** One crop drag or Zoom slide (Story 4.5b-3): its changes are one undo step. */
+  const mediaGesture = useRef(0);
+
+  /** **Adattamento**: the selected image or video takes `fit` (one undo step). */
+  const fitMedia = useCallback(
+    (fit: MediaFit) => {
+      if (!editable || selection?.elementId === undefined) return;
+      const current = formats[formatId];
+      const next = withFit(current, selection.pageKey, selection.elementId, fit);
+      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+    },
+    [doc, editable, formatId, formats, selection],
+  );
+
+  /** Ritaglia's drag or Zoom: element `elementId` of page `pageKey` shows `crop`; one gesture, one undo step. */
+  const cropMedia = useCallback(
+    (pageKey: string, elementId: string, crop: Crop) => {
+      if (!editable) return;
+      const current = formats[formatId];
+      const next = withCrop(current, pageKey, elementId, crop);
+      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId, `media-${mediaGesture.current}-${elementId}`);
+    },
+    [doc, editable, formatId, formats],
+  );
+
+  /** **Zoom** moved: the selected cropped element's zoom, its position kept (centred when none). */
+  const zoomMedia = useCallback(
+    (zoom: number) => {
+      if (selection?.elementId === undefined || element === undefined || (element.type !== "image" && element.type !== "video")) return;
+      const at = element.crop ?? { x: 0.5, y: 0.5, zoom: 1 };
+      cropMedia(selection.pageKey, selection.elementId, { x: at.x, y: at.y, zoom });
+    },
+    [cropMedia, element, selection],
+  );
+
+  /** A crop drag or Zoom slide let go: the next one is a new undo step, and this one saves now. */
+  const mediaDone = useCallback(() => {
+    mediaGesture.current += 1;
+    doc.flush();
+  }, [doc]);
+
   /** Removes the selected element or block; false when there is nothing to remove. */
   const removeSelected = useCallback(() => {
     if (!editable) return false;
@@ -633,6 +678,9 @@ export function Configurator({
             onSoon={soon}
             files={files}
             onOpenMedia={openMedia}
+            onFit={fitMedia}
+            onZoom={zoomMedia}
+            onZoomDone={mediaDone}
             onHide={() => toggleLeft(false)}
             hideRef={hideLeft}
           />
@@ -665,6 +713,8 @@ export function Configurator({
               onTextDone={textDone}
               onResize={resize}
               onPlaceMedia={editable ? (target, assetId) => placeFile(target, assetId, "before") : undefined}
+              onCrop={cropMedia}
+              onCropDone={mediaDone}
             />
             <StatusMessage message={message} />
             {!leftOpen && !preview && (
