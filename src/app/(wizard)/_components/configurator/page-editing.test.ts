@@ -33,6 +33,8 @@ import {
   shuffleChoices,
   shuffleLayout,
   swatchBackground,
+  withCrop,
+  withFit,
   withFreshIds,
   type PageEdit,
 } from "./page-editing";
@@ -526,5 +528,62 @@ describe("placeMedia (Story 4.5b)", () => {
     expect(next[0]!.background).toEqual({ kind: "colour", value: "#ffffff" });
     expect(next[0]!.blocks[0]!.background).toEqual({ kind: "colour", value: NEW_BLOCK_COLOUR });
     expect(() => pageSchema.parse(next[0])).not.toThrow();
+  });
+});
+
+describe("withFit and withCrop (Story 4.5b-3)", () => {
+  const P = "dddddddd-0000-4000-8000-000000000011";
+  const IMG = "dddddddd-0000-4000-8000-000000000012";
+  const TXT = "dddddddd-0000-4000-8000-000000000013";
+  const FILE = "aaaaaaaa-0000-4000-8000-000000000011";
+  function pages(el: Partial<Extract<DocumentElement, { type: "image" }>> = {}): Page[] {
+    const page = structuredClone(starter("presentazione_16_9")[0]!);
+    page.pageKey = P;
+    page.blocks = [
+      {
+        blockId: "dddddddd-0000-4000-8000-000000000014",
+        name: "Blocco",
+        background: { kind: "colour", value: NEW_BLOCK_COLOUR },
+        elements: [
+          { elementId: TXT, type: "text", style: "text", text: "Ciao", provenance: "human_added" },
+          { elementId: IMG, type: "image", assetId: FILE, fit: "fill", ...el },
+        ],
+      },
+    ];
+    restartGrid(page, "presentazione_16_9", TEMPLATE);
+    return [page];
+  }
+  const media = (next: readonly Page[]) => next[0]!.blocks[0]!.elements[1]!;
+
+  it("sets the fit, and drops the crop when leaving Ritaglia", () => {
+    expect(media(withFit(pages(), P, IMG, "fit"))).toEqual({ elementId: IMG, type: "image", assetId: FILE, fit: "fit" });
+    const cropped = pages({ fit: "crop", crop: { x: 0.2, y: 0.3, zoom: 2 } });
+    const filled = withFit(cropped, P, IMG, "fill");
+    expect(media(filled)).toEqual({ elementId: IMG, type: "image", assetId: FILE, fit: "fill" });
+    expect(() => pageSchema.parse(filled[0])).not.toThrow();
+  });
+
+  it("changes nothing for the same fit, a text, or an unknown element", () => {
+    const before = pages();
+    expect(withFit(before, P, IMG, "fill")).toBe(before);
+    expect(withFit(before, P, TXT, "fit")).toBe(before);
+    expect(withFit(before, P, "dddddddd-0000-4000-8000-000000000099", "fit")).toBe(before);
+  });
+
+  it("sets a cropped image's crop, clamped to the schema's range, and only with Ritaglia", () => {
+    const cropped = pages({ fit: "crop" });
+    const next = withCrop(cropped, P, IMG, { x: -0.5, y: 1.4, zoom: 9 });
+    expect(media(next)).toMatchObject({ fit: "crop", crop: { x: 0, y: 1, zoom: 4 } });
+    expect(() => pageSchema.parse(next[0])).not.toThrow();
+    expect(withCrop(next, P, IMG, { x: 0, y: 1, zoom: 4 })).toBe(next);
+    const filled = pages();
+    expect(withCrop(filled, P, IMG, { x: 0.5, y: 0.5, zoom: 2 })).toBe(filled);
+  });
+
+  it("works on a video too", () => {
+    const video = pages();
+    video[0]!.blocks[0]!.elements[1] = { elementId: IMG, type: "video", assetId: FILE, fit: "fill" };
+    const next = withCrop(withFit(video, P, IMG, "crop"), P, IMG, { x: 0.1, y: 0.9, zoom: 1.5 });
+    expect(media(next)).toEqual({ elementId: IMG, type: "video", assetId: FILE, fit: "crop", crop: { x: 0.1, y: 0.9, zoom: 1.5 } });
   });
 });

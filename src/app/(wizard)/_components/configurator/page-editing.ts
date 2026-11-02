@@ -1,4 +1,4 @@
-import type { Background, Block, DocumentElement, Page, TextElement, TextStyle } from "@/modules/generation";
+import type { Background, Block, Crop, DocumentElement, MediaFit, Page, TextElement, TextStyle } from "@/modules/generation";
 import { layouts, type FormatId, type Layout } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
 import { findElement, type Selection } from "./selection";
@@ -148,6 +148,51 @@ export function placeMedia(pages: readonly Page[], target: MediaTarget, file: Me
     elements.splice(at === "before" && under >= 0 ? under : elements.length, 0, element);
   });
   return { ok: true, pages: next, selection: { pageKey, blockId, elementId: element.elementId } };
+}
+
+/** Edits the top-level image or video `elementId` of page `pageKey` (media sit only at a block's top level); `pages` itself when `edit` returns it unchanged. */
+function withMedia(
+  pages: readonly Page[],
+  pageKey: string,
+  elementId: string,
+  edit: (el: Extract<DocumentElement, { type: "image" | "video" }>) => Extract<DocumentElement, { type: "image" | "video" }>,
+): readonly Page[] {
+  const index = pages.findIndex((p) => p.pageKey === pageKey);
+  if (index < 0) return pages;
+  for (const [b, block] of pages[index]!.blocks.entries()) {
+    const at = block.elements.findIndex((el) => el.elementId === elementId);
+    const el = at < 0 ? undefined : block.elements[at];
+    if (el === undefined) continue;
+    if (el.type !== "image" && el.type !== "video") return pages;
+    const next = edit(el);
+    if (next === el) return pages;
+    return withPage(pages, index, (page) => {
+      page.blocks[b]!.elements[at] = next;
+    });
+  }
+  return pages;
+}
+
+/** **Adattamento** (Story 4.5b-3): the image or video takes `fit`; any other fit than Ritaglia drops its crop. */
+export function withFit(pages: readonly Page[], pageKey: string, elementId: string, fit: MediaFit): readonly Page[] {
+  return withMedia(pages, pageKey, elementId, (el) => {
+    if (el.fit === fit) return el;
+    const { crop, ...rest } = el;
+    return fit === "crop" && crop !== undefined ? { ...rest, fit, crop } : { ...rest, fit };
+  });
+}
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+/** Ritaglia's drag or Zoom (Story 4.5b-3): the cropped image or video shows `crop`, kept in the schema's range (x, y 0–1, zoom 1–4). */
+export function withCrop(pages: readonly Page[], pageKey: string, elementId: string, crop: Crop): readonly Page[] {
+  const next = { x: clamp(crop.x, 0, 1), y: clamp(crop.y, 0, 1), zoom: clamp(crop.zoom, 1, 4) };
+  return withMedia(pages, pageKey, elementId, (el) => {
+    if (el.fit !== "crop") return el;
+    const now = el.crop;
+    if (now !== undefined && now.x === next.x && now.y === next.y && now.zoom === next.zoom) return el;
+    return { ...el, crop: next };
+  });
 }
 
 /**

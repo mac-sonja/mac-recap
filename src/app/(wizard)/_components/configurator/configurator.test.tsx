@@ -2287,3 +2287,195 @@ describe("Configurator placing media (Story 4.5b)", () => {
     expect(screen.queryByRole("alert", { hidden: true })).toBeNull();
   });
 });
+
+describe("Configurator Adattamento and Ritaglia (Story 4.5b-3)", () => {
+  const P = "eeeeeeee-0000-4000-8000-000000000011";
+  const BLOCK = "eeeeeeee-0000-4000-8000-000000000012";
+  const PHOTO = "eeeeeeee-0000-4000-8000-000000000013";
+  const f = dict.configurator.tools.fit;
+
+  function fixture(photo: Partial<Extract<DocumentElement, { type: "image" }>> = {}): Record<FormatId, Page[]> {
+    const pages = structuredClone(starterFormats());
+    const page = pages.presentazione_16_9[0]!;
+    page.pageKey = P;
+    page.blocks = [
+      { blockId: BLOCK, name: "Foto", background: { kind: "colour", value: NEW_BLOCK_COLOUR }, elements: [{ elementId: PHOTO, type: "image", assetId: IMAGE, fit: "fill", ...photo }] },
+    ];
+    restartGrid(page, "presentazione_16_9", "mac-case@1");
+    return pages;
+  }
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const savedPhoto = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => lastDoc(onSave).formats.presentazione_16_9.pages[0].blocks[0].elements[0];
+  const photoNode = () => pageNode(P).querySelector<HTMLElement>(`[data-element-id="${PHOTO}"]`)!;
+  const fitGroup = () => within(leftPanel()).getByRole("group", { name: f.heading, hidden: true });
+  const fitButton = (name: string) => button(name, fitGroup());
+  const zoom = () => within(leftPanel()).getByLabelText(f.zoom) as HTMLInputElement;
+  const cropFrame = () => pageNode(P).querySelector<HTMLElement>('[data-frame="crop"]');
+  const undo = () => fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    // happy-dom lays nothing out: every box is 200 × 100 at the origin.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 0, left: 0, width: 200, height: 100, right: 200, bottom: 100, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+  });
+
+  it("Adattamento shows the fit pressed; a press sets it in one undo step, and leaving Ritaglia drops the crop", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture({ fit: "crop", crop: { x: 0.2, y: 0.3, zoom: 2 } }), { onSave });
+    fireEvent.click(photoNode());
+    expect(fitButton(f.crop).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(fitButton(f.fit));
+    expect(fitButton(f.fit).getAttribute("aria-pressed")).toBe("true");
+    expect(zoom).toThrow();
+    await settle();
+    expect(savedPhoto(onSave)).toEqual({ elementId: PHOTO, type: "image", assetId: IMAGE, fit: "fit" });
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    undo();
+    await settle();
+    expect(savedPhoto(onSave)).toMatchObject({ fit: "crop", crop: { x: 0.2, y: 0.3, zoom: 2 } });
+    fireEvent.click(fitButton(f.crop));
+    await settle();
+    expect(onSave).toHaveBeenCalledTimes(2);
+  });
+
+  it("Zoom sets the crop's zoom, centred when there was none; one slide is one undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture({ fit: "crop" }), { onSave });
+    fireEvent.click(photoNode());
+    expect(zoom().value).toBe("100");
+    fireEvent.change(zoom(), { target: { value: "150" } });
+    fireEvent.change(zoom(), { target: { value: "250" } });
+    fireEvent.pointerUp(zoom());
+    await settle();
+    expect(savedPhoto(onSave)).toMatchObject({ fit: "crop", crop: { x: 0.5, y: 0.5, zoom: 2.5 } });
+    expect(zoom().getAttribute("aria-valuetext")).toBe(fill(f.zoomValue, { n: 250 }));
+    undo();
+    await settle();
+    expect(savedPhoto(onSave)).not.toHaveProperty("crop");
+  });
+
+  it("dragging the cropped image moves what shows, opposite the pointer and clamped; one drag is one undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture({ fit: "crop", crop: { x: 0.5, y: 0.5, zoom: 2 } }), { onSave });
+    fireEvent.click(photoNode());
+    const frame = cropFrame()!;
+    fireEvent.pointerDown(frame, { button: 0, clientX: 100, clientY: 50, pointerId: 1 });
+    fireEvent.pointerMove(frame, { clientX: 140, clientY: 50, pointerId: 1 });
+    fireEvent.pointerMove(frame, { clientX: 60, clientY: 0, pointerId: 1 });
+    fireEvent.pointerUp(frame, { clientX: 60, clientY: 0, pointerId: 1 });
+    await settle();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(savedPhoto(onSave)).toMatchObject({ crop: { x: 0.7, y: 1, zoom: 2 } });
+    // The element stays selected: a click on the frame does not select the page.
+    fireEvent.click(frame);
+    expect(cropFrame()).not.toBeNull();
+    undo();
+    await settle();
+    expect(savedPhoto(onSave)).toMatchObject({ crop: { x: 0.5, y: 0.5, zoom: 2 } });
+  });
+
+  const dragBy = (dx: number, dy: number) => {
+    const frame = cropFrame()!;
+    fireEvent.pointerDown(frame, { button: 0, clientX: 100, clientY: 50, pointerId: 1 });
+    fireEvent.pointerMove(frame, { clientX: 100 + dx, clientY: 50 + dy, pointerId: 1 });
+    fireEvent.pointerUp(frame, { clientX: 100 + dx, clientY: 50 + dy, pointerId: 1 });
+  };
+
+  it("two drags are two undo steps", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture({ fit: "crop", crop: { x: 0.5, y: 0.5, zoom: 1 } }), { onSave });
+    fireEvent.click(photoNode());
+    dragBy(-20, 0);
+    dragBy(-20, 0);
+    await settle();
+    expect(savedPhoto(onSave)).toMatchObject({ crop: { x: 0.7 } });
+    undo();
+    await settle();
+    expect(savedPhoto(onSave)).toMatchObject({ crop: { x: 0.6 } });
+  });
+
+  it("two Zoom slides are two undo steps, ended by pointer or by key", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture({ fit: "crop" }), { onSave });
+    fireEvent.click(photoNode());
+    fireEvent.change(zoom(), { target: { value: "150" } });
+    fireEvent.pointerUp(zoom());
+    fireEvent.change(zoom(), { target: { value: "200" } });
+    fireEvent.keyUp(zoom(), { key: "ArrowRight" });
+    await settle();
+    expect(savedPhoto(onSave)).toMatchObject({ crop: { zoom: 2 } });
+    undo();
+    await settle();
+    expect(savedPhoto(onSave)).toMatchObject({ crop: { zoom: 1.5 } });
+  });
+
+  it("a wobble of a pixel or two is not a drag; arrow keys on the focused frame move what shows, one step each", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture({ fit: "crop" }), { onSave });
+    fireEvent.click(photoNode());
+    dragBy(1, 1);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    const frame = within(pageNode(P)).getByRole("slider", { name: f.cropFrame, hidden: true });
+    fireEvent.keyDown(frame, { key: "ArrowRight" });
+    fireEvent.keyDown(frame, { key: "ArrowUp" });
+    await settle();
+    expect(savedPhoto(onSave)).toMatchObject({ crop: { x: 0.55, y: 0.45, zoom: 1 } });
+    undo();
+    await settle();
+    expect(savedPhoto(onSave)).toMatchObject({ crop: { x: 0.55, y: 0.5 } });
+  });
+
+  it("a Media tile dropped on a selected Ritaglia image replaces its file", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture({ fit: "crop" }), { onSave });
+    fireEvent.click(photoNode());
+    const drag = { dataTransfer: { types: [MEDIA_DRAG_TYPE], getData: () => VIDEO, dropEffect: "none" } };
+    fireEvent.dragOver(cropFrame()!, drag);
+    fireEvent.drop(cropFrame()!, drag);
+    await settle();
+    expect(savedPhoto(onSave)).toMatchObject({ elementId: PHOTO, type: "video", assetId: VIDEO, fit: "crop" });
+  });
+
+  it("works the same on a video: Ritaglia saves and shows the drag frame", async () => {
+    const onSave = vi.fn(savedOk);
+    const pages = fixture();
+    pages.presentazione_16_9[0]!.blocks[0]!.elements[0] = { elementId: PHOTO, type: "video", assetId: VIDEO, fit: "fill" };
+    setup(false, pages, { onSave });
+    fireEvent.click(photoNode());
+    fireEvent.click(fitButton(f.crop));
+    expect(cropFrame()).not.toBeNull();
+    await settle();
+    expect(savedPhoto(onSave)).toEqual({ elementId: PHOTO, type: "video", assetId: VIDEO, fit: "crop" });
+  });
+
+  it("a press without moving changes nothing; no drag frame unless the fit is Ritaglia", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture({ fit: "crop" }), { onSave });
+    fireEvent.click(photoNode());
+    fireEvent.pointerDown(cropFrame()!, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+    fireEvent.pointerUp(cropFrame()!, { clientX: 10, clientY: 10, pointerId: 1 });
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.click(fitButton(f.fill));
+    expect(cropFrame()).toBeNull();
+  });
+
+  it("can't be changed when the case isn't editable: the buttons say it arrives soon, and there is no drag", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture({ fit: "crop" }), { onSave, editable: false });
+    fireEvent.click(photoNode());
+    expect(fitButton(f.fill).getAttribute("aria-disabled")).toBe("true");
+    expect(zoom().disabled).toBe(true);
+    fireEvent.click(fitButton(f.fill));
+    expect(status().textContent).toBe(fill(dict.configurator.soonMessage, { tool: f.heading }));
+    expect(cropFrame()).toBeNull();
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+});

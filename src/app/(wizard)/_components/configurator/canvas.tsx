@@ -1,7 +1,7 @@
 "use client";
 
-import { memo, useLayoutEffect, useRef, useState, type DragEvent, type MouseEvent, type RefObject } from "react";
-import type { Page } from "@/modules/generation";
+import { memo, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject } from "react";
+import type { Crop, Page } from "@/modules/generation";
 import { measureOverflow, renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
@@ -11,7 +11,7 @@ import { INSTAGRAM_VIEWS, InstagramOverlay, type InstagramView } from "./instagr
 import { MEDIA_DRAG_TYPE } from "./media-files";
 import type { MediaTarget } from "./page-editing";
 import { ResizeHandles } from "./resize-handles";
-import { selectionAt, type Selection } from "./selection";
+import { findElement, selectionAt, type Selection } from "./selection";
 import { Slideshow } from "./slideshow";
 import { PAGE_WIDTH, PREVIEW_WIDTH, SEG, SEG_BUTTON } from "./styles";
 
@@ -58,10 +58,19 @@ export interface CanvasProps {
   onResize: (pageKey: string, axis: Axis, sizes: number[]) => void;
   /** A Media tile dropped on a page (Story 4.5b): where, and its asset id. Undefined: the canvas takes no drop. */
   onPlaceMedia?: (target: MediaTarget, assetId: string) => void;
+  /** Ritaglia's drag (Story 4.5b-3): the selected cropped image's or video's crop while it moves. */
+  onCrop?: (pageKey: string, elementId: string, crop: Crop) => void;
+  /** The drag let go after moving: the gesture is one undo step. */
+  onCropDone?: () => void;
 }
 
 /** What a page needs to let its texts be typed in. */
 type TextEditing = Pick<CanvasProps, "editable" | "onTextInput" | "onTextDone">;
+
+/** How far (px) a press moves before it is a Ritaglia drag. */
+const CROP_DEAD_ZONE_PX = 3;
+/** How far one arrow key moves Ritaglia's focal point (of the 0–1 range). */
+const CROP_KEY_STEP = 0.05;
 
 /** A frame's box in its page, in px. */
 interface Box {
@@ -133,7 +142,12 @@ function CanvasPage({
   onTextDone,
   onResize,
   onPlaceMedia,
-}: Pick<CanvasProps, "formatId" | "template" | "assets" | "values" | "onSelect" | "preview" | "animateTexts" | "onEditRequest" | "onResize" | "onPlaceMedia"> &
+  onCrop,
+  onCropDone,
+}: Pick<
+  CanvasProps,
+  "formatId" | "template" | "assets" | "values" | "onSelect" | "preview" | "animateTexts" | "onEditRequest" | "onResize" | "onPlaceMedia" | "onCrop" | "onCropDone"
+> &
   TextEditing & {
     page: Page;
     number: number;
@@ -252,7 +266,8 @@ function CanvasPage({
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     const el = host.current;
-    const block = (event.target as Element).closest?.("[data-block-id]");
+    const target = dropTarget(event.target as Element);
+    const block = target.blockId === undefined ? null : el?.querySelector(`[data-block-id="${target.blockId}"]`);
     const box = el === null || block === null || block === undefined ? null : boxIn(el, block);
     setDropFrame((prev) => (prev === null || box === null ? box : sameBoxes([prev], [box]) ? prev : box));
   }
@@ -268,7 +283,71 @@ function CanvasPage({
     event.preventDefault();
     setDropFrame(null);
     const assetId = event.dataTransfer.getData(MEDIA_DRAG_TYPE);
-    if (assetId !== "") onPlaceMedia?.(selectionAt(event.target as Element, page.pageKey), assetId);
+    if (assetId !== "") onPlaceMedia?.(dropTarget(event.target as Element), assetId);
+  }
+
+  /** What a drop at `target` aims at: the Ritaglia frame stands for the selected element under it. */
+  function dropTarget(target: Element): MediaTarget {
+    if (target.closest?.('[data-frame="crop"]') && blockId !== undefined && elementId !== undefined) return { pageKey: page.pageKey, blockId, elementId };
+    return selectionAt(target, page.pageKey);
+  }
+
+  // Ritaglia (Story 4.5b-3): the selected cropped image or video is dragged to choose what shows.
+  const block = blockId === undefined ? undefined : page.blocks.find((b) => b.blockId === blockId);
+  const selected = block === undefined || elementId === undefined ? undefined : findElement(block.elements, elementId);
+  const cropped = selected !== undefined && (selected.type === "image" || selected.type === "video") && selected.fit === "crop" ? selected : undefined;
+  const crops = !preview && editable && onCrop !== undefined && cropped !== undefined;
+  const drag = useRef<{ pointerId: number; x: number; y: number; from: Crop; moved: boolean } | null>(null);
+  const cropFrom = (): Crop => cropped?.crop ?? { x: 0.5, y: 0.5, zoom: 1 };
+
+  /** Ends the drag in progress; a drag that moved closes its undo step. */
+  const endDrag = useRef(() => {});
+  useLayoutEffect(() => {
+    endDrag.current = () => {
+      const start = drag.current;
+      drag.current = null;
+      if (start?.moved === true) onCropDone?.();
+    };
+  });
+  // The frame going away mid-drag (another selection, an undo, a fit change) still ends the gesture.
+  const croppedId = crops ? cropped.elementId : null;
+  useLayoutEffect(() => () => endDrag.current(), [croppedId]);
+
+  function onCropDown(event: PointerEvent<HTMLDivElement>) {
+    if (cropped === undefined || event.button !== 0 || drag.current !== null) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, from: cropFrom(), moved: false };
+  }
+
+  function onCropMove(event: PointerEvent<HTMLDivElement>) {
+    const start = drag.current;
+    const box = frames.element;
+    if (start === null || event.pointerId !== start.pointerId || box === null || box.width <= 0 || box.height <= 0 || cropped === undefined) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    // A press that wobbles a pixel or two is not a drag.
+    if (!start.moved && Math.hypot(dx, dy) < CROP_DEAD_ZONE_PX) return;
+    start.moved = true;
+    // Crossing the whole element moves the focal point from one edge to the other, opposite the pointer.
+    onCrop?.(page.pageKey, cropped.elementId, { x: start.from.x - dx / box.width, y: start.from.y - dy / box.height, zoom: start.from.zoom });
+  }
+
+  function onCropUp(event: PointerEvent<HTMLDivElement>) {
+    if (drag.current?.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    endDrag.current();
+  }
+
+  /** Arrow keys on the focused Ritaglia frame move the focal point by one step each (one undo step per press). */
+  function onCropKey(event: KeyboardEvent<HTMLDivElement>) {
+    const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+    if (step === undefined || cropped === undefined) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const from = cropFrom();
+    onCrop?.(page.pageKey, cropped.elementId, { x: from.x + step[0]! * CROP_KEY_STEP, y: from.y + step[1]! * CROP_KEY_STEP, zoom: from.zoom });
+    onCropDone?.();
   }
 
   const pageSelected = mine !== null && blockId === undefined;
@@ -361,6 +440,26 @@ function CanvasPage({
             style={{ top: dropFrame.top - 2, left: dropFrame.left - 2, width: dropFrame.width + 4, height: dropFrame.height + 4 }}
           />
         )}
+        {crops && frames.element !== null && (
+          <div
+            role="slider"
+            tabIndex={0}
+            aria-label={it.configurator.tools.fit.cropFrame}
+            aria-valuetext={fill(it.configurator.tools.fit.cropPosition, { x: Math.round(cropFrom().x * 100), y: Math.round(cropFrom().y * 100) })}
+            data-frame="crop"
+            onPointerDown={onCropDown}
+            onPointerMove={onCropMove}
+            onPointerUp={onCropUp}
+            onPointerCancel={onCropUp}
+            onLostPointerCapture={onCropUp}
+            onKeyDown={onCropKey}
+            // The page would take the click and select itself; the element stays selected.
+            onClick={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            className="absolute z-10 cursor-grab touch-none outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring active:cursor-grabbing"
+            style={{ top: frames.element.top, left: frames.element.left, width: frames.element.width, height: frames.element.height }}
+          />
+        )}
         {frames.element !== null && (
           <div
             aria-hidden="true"
@@ -413,6 +512,8 @@ export function Canvas({
   onTextDone,
   onResize,
   onPlaceMedia,
+  onCrop,
+  onCropDone,
 }: CanvasProps) {
   const frame = useRef<number | null>(null);
   const video = formatId === "video_9_16";
@@ -516,6 +617,8 @@ export function Canvas({
             onTextDone={onTextDone}
             onResize={onResize}
             onPlaceMedia={onPlaceMedia}
+            onCrop={onCrop}
+            onCropDone={onCropDone}
           />,
         ];
       })}
