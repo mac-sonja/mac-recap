@@ -1535,14 +1535,15 @@ describe("Configurator layout and background (Story 4.4a)", () => {
     expect(page.background.kind).toBe("image");
     fireEvent.click(rightPanel().querySelector<HTMLElement>(`[data-thumb="${page.pageKey}"]`)!);
     expect(button(tools.image, section(tools.background)).getAttribute("aria-pressed")).toBe("true");
-    expect(colourField().value).toBe("");
+    // The image grid shows in the colour field's place (Story 4.5b-2).
+    expect(within(section(tools.background)).queryByRole("textbox", { hidden: true })).toBeNull();
     fireEvent.click(button(tools.solid, section(tools.background)));
     expect(swatch(tools.swatches[WHITE]).getAttribute("aria-pressed")).toBe("true");
     await settle();
     expect(lastDoc(onSave).formats.presentazione_16_9.pages[2].background).toEqual({ kind: "colour", value: WHITE });
   });
 
-  it("a typed value that isn't a colour says how to write one and changes nothing; Immagine arrives with 4.5", async () => {
+  it("a typed value that isn't a colour says how to write one and changes nothing", async () => {
     const pages = fixture();
     const onSave = vi.fn(savedOk);
     setup(false, pages, { onSave });
@@ -1550,8 +1551,6 @@ describe("Configurator layout and background (Story 4.4a)", () => {
     fireEvent.blur(colourField());
     expect(status().textContent).toBe(dict.configurator.edit.badColour);
     expect(colourField().value).toBe(WHITE.toUpperCase());
-    fireEvent.click(button(tools.image, section(tools.background)));
-    expect(status().textContent).toBe(`${tools.image} arriva presto.`);
     await settle();
     expect(onSave).not.toHaveBeenCalled();
   });
@@ -2475,6 +2474,120 @@ describe("Configurator Adattamento and Ritaglia (Story 4.5b-3)", () => {
     fireEvent.click(fitButton(f.fill));
     expect(status().textContent).toBe(fill(dict.configurator.soonMessage, { tool: f.heading }));
     expect(cropFrame()).toBeNull();
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
+describe("Configurator Sfondo · Immagine (Story 4.5b-2)", () => {
+  const P = "eeeeeeee-0000-4000-8000-000000000021";
+  const BLOCK = "eeeeeeee-0000-4000-8000-000000000022";
+  const tools = dict.configurator.tools;
+  /** The template's page white (a template value). */
+  const PAGE_WHITE = BACKGROUND_SWATCHES[0];
+
+  function fixture(): Record<FormatId, Page[]> {
+    const pages = structuredClone(starterFormats());
+    const page = pages.presentazione_16_9[0]!;
+    page.pageKey = P;
+    page.background = { kind: "colour", value: PAGE_WHITE };
+    page.blocks = [{ blockId: BLOCK, name: "Blocco", background: { kind: "colour", value: NEW_BLOCK_COLOUR }, elements: [] }];
+    restartGrid(page, "presentazione_16_9", "mac-case@1");
+    return pages;
+  }
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const savedPage = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => lastDoc(onSave).formats.presentazione_16_9.pages[0] as Page;
+  const sfondo = () => within(leftPanel()).getByRole("region", { name: tools.background, hidden: true });
+  const images = () => within(sfondo()).queryByRole("group", { name: tools.backgroundImages, hidden: true });
+  const blockNode = () => pageNode(P).querySelector<HTMLElement>(`[data-block-id="${BLOCK}"]`)!;
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  });
+
+  it("Immagine shows the case's images (no videos); a pick makes it the page's background, in one undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    fireEvent.click(pageNode(P));
+    fireEvent.click(button(tools.image, sfondo()));
+    expect(within(images()!).getAllByRole("button", { hidden: true }).map((b) => b.getAttribute("aria-label"))).toEqual(["LUM_cover.jpg"]);
+    fireEvent.click(button("LUM_cover.jpg", images()!));
+    expect(button("LUM_cover.jpg", images()!).getAttribute("aria-pressed")).toBe("true");
+    await settle();
+    expect(savedPage(onSave).background).toEqual({ kind: "image", assetId: IMAGE });
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    await settle();
+    expect(savedPage(onSave).background).toEqual({ kind: "colour", value: PAGE_WHITE });
+  });
+
+  it("a selected block takes the image; Togli immagine puts the block's grey back and shows the colours again", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    fireEvent.click(blockNode());
+    fireEvent.click(button(tools.image, sfondo()));
+    fireEvent.click(button("LUM_cover.jpg", images()!));
+    await settle();
+    expect(savedPage(onSave).blocks[0]!.background).toEqual({ kind: "image", assetId: IMAGE });
+    expect(savedPage(onSave).background).toEqual({ kind: "colour", value: PAGE_WHITE });
+    fireEvent.click(button(tools.removeImage, sfondo()));
+    await settle();
+    expect(savedPage(onSave).blocks[0]!.background).toEqual({ kind: "colour", value: NEW_BLOCK_COLOUR });
+    expect(images()).toBeNull();
+    expect(button(tools.solid, sfondo()).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("the image grid closes when the selection moves to another block or page", () => {
+    setup(false, fixture());
+    fireEvent.click(pageNode(P));
+    fireEvent.click(button(tools.image, sfondo()));
+    expect(images()).not.toBeNull();
+    fireEvent.click(blockNode());
+    expect(images()).toBeNull();
+    expect(button(tools.solid, sfondo()).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("Togli immagine stays when the background's file is no longer among the case's images", async () => {
+    const onSave = vi.fn(savedOk);
+    const pages = fixture();
+    pages.presentazione_16_9[0]!.background = { kind: "image", assetId: "bbbbbbbb-0000-4000-8000-000000000099" };
+    setup(false, pages, { onSave, media: [] });
+    fireEvent.click(pageNode(P));
+    expect(sfondo().textContent).toContain(tools.noBackgroundImages);
+    fireEvent.click(button(tools.removeImage, sfondo()));
+    await settle();
+    expect(savedPage(onSave).background).toEqual({ kind: "colour", value: PAGE_WHITE });
+  });
+
+  it("when not editable, an image background shows its grid, locked", () => {
+    const pages = fixture();
+    pages.presentazione_16_9[0]!.background = { kind: "image", assetId: IMAGE };
+    setup(false, pages, { editable: false });
+    fireEvent.click(pageNode(P));
+    const tile = button("LUM_cover.jpg", images()!);
+    expect(tile.getAttribute("aria-pressed")).toBe("true");
+    expect(tile.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(tile);
+    expect(status().textContent).toBe(`${tools.image} arriva presto.`);
+  });
+
+  it("says so when the case has no images", () => {
+    setup(false, fixture(), { media: [listed(VIDEO, "video", "LUM_reel.mp4")] });
+    fireEvent.click(button(tools.image, sfondo()));
+    expect(sfondo().textContent).toContain(tools.noBackgroundImages);
+  });
+
+  it("when not editable, Immagine says it arrives soon and changes nothing", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave, editable: false });
+    fireEvent.click(button(tools.image, sfondo()));
+    expect(status().textContent).toBe(`${tools.image} arriva presto.`);
+    expect(images()).toBeNull();
     await settle();
     expect(onSave).not.toHaveBeenCalled();
   });
