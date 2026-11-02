@@ -856,6 +856,10 @@ export const it = {
       backgroundBlock: "blocco",
       solid: "Tinta unita",
       image: "Immagine",
+      /** Sfondo · Immagine (Story 4.5b-2, mockup `bgTools`): the case's images to pick from. */
+      backgroundImages: "Immagini della case",
+      noBackgroundImages: "Ancora nessuna immagine nei Media della case.",
+      removeImage: "Togli immagine",
       /** A selected image's or video's file in the left panel (Story 4.5b, mockup `mediaPicker`). */
       file: {
         replace: "Sostituisci dai Media",

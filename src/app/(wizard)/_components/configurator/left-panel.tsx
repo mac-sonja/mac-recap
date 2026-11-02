@@ -1,7 +1,7 @@
 "use client";
 
 import { GalleryHorizontal, Hash, Heading, Image, LayoutGrid, PanelLeft, Quote, Tag, Type, Video, type LucideIcon } from "lucide-react";
-import { useEffect, useId, useRef, type KeyboardEvent, type Ref } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type Ref } from "react";
 import { PRESSABLE, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { ThemeSwitch } from "@/app/_components/theme-switch";
 import type { ThemeChoice } from "@/app/_lib/theme";
@@ -125,9 +125,93 @@ const colourOf = (background: Background): string | undefined =>
 const fieldValue = (colour: string | undefined) =>
   colour === undefined ? "" : colour === "transparent" ? it.configurator.tools.swatches.transparent : colour.toUpperCase();
 
+/** One image of Sfondo's grid; an expired or broken thumbnail URL falls back to the image icon. */
+function ImageTile({ file, pressed, editable, onPick }: { file: ListedAsset; pressed: boolean; editable: boolean; onPick: () => void }) {
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const thumbnail = file.thumbnailUrl !== null && file.thumbnailUrl !== brokenUrl ? file.thumbnailUrl : null;
+  return (
+    <button
+      type="button"
+      aria-label={file.originalFileName}
+      title={file.originalFileName}
+      aria-pressed={pressed}
+      onClick={onPick}
+      {...(editable ? {} : { "aria-disabled": true, "aria-describedby": SOON_ID })}
+      className={cn(
+        "relative grid aspect-square place-items-center overflow-hidden rounded-md bg-surface-control text-foreground-muted shadow-control aria-pressed:outline-2 aria-pressed:outline-offset-2 aria-pressed:outline-accent aria-disabled:cursor-default",
+        editable && PRESSABLE,
+      )}
+    >
+      {thumbnail !== null ? (
+        // A presigned GET of the thumbnail, as in the Media tab; no next/image.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={thumbnail} alt="" onError={() => setBrokenUrl(thumbnail)} className="absolute inset-0 size-full object-cover" />
+      ) : (
+        <Image aria-hidden="true" className="size-4" />
+      )}
+    </button>
+  );
+}
+
+/**
+ * Sfondo · Immagine (Story 4.5b-2, mockup `bgTools`): the case's images as small tiles,
+ * the background's own pressed; a press makes it the background, **Togli immagine**
+ * puts the default colour back. Videos are not backgrounds.
+ */
+function BackgroundImage({
+  background,
+  files,
+  editable,
+  onPick,
+  onRemove,
+  onSoon,
+}: {
+  background: Background;
+  files: readonly ListedAsset[];
+  editable: boolean;
+  onPick: (assetId: string) => void;
+  onRemove: () => void;
+  onSoon: (tool: string) => void;
+}) {
+  const t = it.configurator.tools;
+  const images = files.filter((file) => file.kind === "image");
+  const current = background.kind === "image" ? background.assetId.toLowerCase() : null;
+  const lock = editable ? {} : ({ "aria-disabled": true, "aria-describedby": SOON_ID } as const);
+  return (
+    <>
+      {images.length === 0 ? (
+        <p className="mt-2.5 font-label text-[12.5px] text-foreground-muted">{t.noBackgroundImages}</p>
+      ) : (
+        <div role="group" aria-label={t.backgroundImages} className="mt-2.5 grid max-h-56 grid-cols-4 gap-1.5 overflow-y-auto p-0.5">
+          {images.map((file) => (
+            <ImageTile
+              key={file.id}
+              file={file}
+              pressed={current === file.id.toLowerCase()}
+              editable={editable}
+              onPick={editable ? () => onPick(file.id) : () => onSoon(t.image)}
+            />
+          ))}
+        </div>
+      )}
+      {/* Also when the image is no longer listed: the person can always take it off. */}
+      {current !== null && (
+        <button
+          type="button"
+          onClick={editable ? onRemove : () => onSoon(t.image)}
+          {...lock}
+          className={cn(SECONDARY_ACTION, "mt-2.5 h-7 w-full text-[12.5px]", !editable && "cursor-default aria-disabled:opacity-60")}
+        >
+          {t.removeImage}
+        </button>
+      )}
+    </>
+  );
+}
+
 /**
  * Sfondo · Tinta unita (Story 4.4a, C30): the six swatches and a typed `#rrggbb`, on the
- * selected block's background or the page's. Immagine arrives with Story 4.5.
+ * selected block's background or the page's. Immagine is `BackgroundImage` (Story 4.5b-2).
  */
 function BackgroundColour({
   background,
@@ -269,6 +353,12 @@ export function LeftPanel({
   const soon = (tool: string) => () => onSoon(tool);
   const inactive = { "aria-disabled": true, "aria-describedby": SOON_ID, title: it.configurator.soon } as const;
   const background = block !== undefined ? block.background : page?.background;
+  /** Where Sfondo's Immagine was pressed on a colour background: the grid shows there until a colour is set or the selection moves. */
+  const target = `${formatId}:${page?.pageKey ?? ""}:${block?.blockId ?? ""}`;
+  const [imageTabFor, setImageTabFor] = useState<string | null>(null);
+  const setImageTab = (open: boolean) => setImageTabFor(open ? target : null);
+  const showImages = background?.kind === "image" || imageTabFor === target;
+  const defaultColour: Background = { kind: "colour", value: block !== undefined ? NEW_BLOCK_COLOUR : PAGE_COLOUR };
   const shuffles = page === undefined ? 0 : shuffleChoices(formatId, template, page.blocks.length).length;
   /** A tool's heading: "Arriva presto" beside it while the document can't change. */
   const heading = (text: string) => (editable ? <p className={EYEBROW}>{text}</p> : <SoonHeading>{text}</SoonHeading>);
@@ -416,26 +506,45 @@ export function LeftPanel({
                 <button
                   type="button"
                   {...(editable ? {} : inactive)}
-                  aria-pressed={background?.kind !== "image"}
+                  aria-pressed={!showImages}
                   // On an image, Tinta unita goes back to the default colour (mockup `wireBgTools`).
                   onClick={
                     !editable
                       ? soon(t.background)
-                      : background?.kind === "image"
-                        ? () => onBackground({ kind: "colour", value: block !== undefined ? NEW_BLOCK_COLOUR : PAGE_COLOUR })
-                        : undefined
+                      : () => {
+                          setImageTab(false);
+                          if (background?.kind === "image") onBackground(defaultColour);
+                        }
                   }
                   className={cn(SEG_BUTTON, "flex-1 px-1.5")}
                 >
                   {t.solid}
                 </button>
-                {/* Picking an image arrives with Story 4.5 (the media guardrail and the client's media). */}
-                <button type="button" {...inactive} aria-pressed={background?.kind === "image"} onClick={soon(t.image)} className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
+                <button
+                  type="button"
+                  {...(editable ? {} : inactive)}
+                  aria-pressed={showImages}
+                  onClick={editable ? () => setImageTab(true) : soon(t.image)}
+                  className={cn(SEG_BUTTON, "flex-1 px-1.5")}
+                >
                   {t.image}
                 </button>
               </div>
-              {background !== undefined && (
+              {background !== undefined && !showImages && (
                 <BackgroundColour background={background} editable={editable} onBackground={onBackground} onBadColour={onBadColour} onSoon={onSoon} />
+              )}
+              {background !== undefined && showImages && (
+                <BackgroundImage
+                  background={background}
+                  files={files}
+                  editable={editable}
+                  onPick={(assetId) => onBackground({ kind: "image", assetId })}
+                  onRemove={() => {
+                    setImageTab(false);
+                    onBackground(defaultColour);
+                  }}
+                  onSoon={onSoon}
+                />
               )}
             </section>
 
