@@ -24,12 +24,30 @@ vi.mock("next/navigation", () => ({
   }),
   useRouter: () => ({ refresh: vi.fn() }),
 }));
-vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn(), getRenderAssets: vi.fn(), approveCase: vi.fn() }));
+vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn(), getRenderAssets: vi.fn(), approveCase: vi.fn(), updateCaseFields: vi.fn() }));
+// The field saves (Story 4.3d) are the client's and the case's own actions.
+vi.mock("@/app/(tool)/clients/actions", () => ({
+  updateClient: vi.fn(),
+  addClientSector: vi.fn(),
+  requestClientLogoUpload: vi.fn(),
+  confirmClientLogoUpload: vi.fn(),
+}));
+vi.mock("@/app/(tool)/case-studies/actions", () => ({
+  saveCaseResults: vi.fn(),
+  saveCaseTestimonial: vi.fn(),
+  listAssets: vi.fn(),
+  presignAssetUpload: vi.fn(),
+  confirmAssetUpload: vi.fn(),
+  setAssetFavourite: vi.fn(),
+}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => (name === "mac-theme" ? { value: "dark" } : undefined) }) }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
 vi.mock("@/modules/case-study", async () => ({
+  // The constants the client's limits and the year and services read (Story 4.3d).
+  ...(await vi.importActual<typeof import("@/modules/case-study/domain/case-study")>("@/modules/case-study/domain/case-study")),
   // The pure walker the image pool reads (Story 4.4c).
   referencedAssetIds: (await vi.importActual<typeof import("@/modules/case-study")>("@/modules/case-study")).referencedAssetIds,
+  listClientSectors: () => listClientSectors(),
   get: (id: unknown) => get(id),
   getEditableRevision: (subject: unknown) => getEditableRevision(subject),
   getClientInfoForCase: (id: unknown) => getClientInfoForCase(id),
@@ -37,6 +55,11 @@ vi.mock("@/modules/case-study", async () => ({
   listClientMaterial: () => listClientMaterial(),
 }));
 const listClientMaterial = vi.fn(async (): Promise<unknown> => ({ ok: true, value: [{ id: "cccccccc-0000-4000-8000-000000000001", fileName: "logo.png" }] }));
+const SECTORS = [
+  { key: "illuminazione", label: "Illuminazione" },
+  { key: "moda", label: "Moda" },
+];
+const listClientSectors = vi.fn(async (): Promise<unknown> => ({ ok: true, value: SECTORS }));
 /** The props the page gives the configurator (Story 4.4c's Pagine di default inputs). */
 const configuratorProps = vi.fn<(props: Record<string, unknown>) => void>();
 vi.mock("../../../_components/configurator/configurator", async () => {
@@ -56,7 +79,9 @@ vi.mock("@/modules/material", async () => ({
 }));
 
 const { default: ConfiguratorPage } = await import("./page");
-const { approveCase, getRenderAssets } = await import("./actions");
+const { approveCase, getRenderAssets, updateCaseFields } = await import("./actions");
+const clientActions = await import("@/app/(tool)/clients/actions");
+const caseActions = await import("@/app/(tool)/case-studies/actions");
 
 const ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
@@ -201,6 +226,41 @@ describe("ConfiguratorPage", () => {
     expect(props.onApprove).toBe(approveCase);
     expect(props.headVersion).toBe(7);
     expect(props.clientFiles).toEqual([{ id: "cccccccc-0000-4000-8000-000000000001", name: "logo.png" }]);
+  });
+
+  it("gives the field edits the stored fields, the sector list, the limits and the client's and case's own saves (Story 4.3d)", async () => {
+    configuratorProps.mockClear();
+    await render();
+    const props = configuratorProps.mock.calls.at(-1)![0];
+    expect(props.fields).toEqual({
+      client: { id: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Lampade di design.", logoId: null },
+      case: {
+        year: 2026,
+        businessLines: ["branding", "web_design"],
+        results: [{ label: "richieste dal sito", value: "+38%" }],
+        testimonial: { quote: "Finalmente.", author: "Giulia R." },
+      },
+    });
+    expect(props.fieldOptions).toMatchObject({
+      sectors: SECTORS,
+      years: { min: 1900, max: 2100 },
+      businessLines: ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"],
+      limits: expect.objectContaining({ nameMax: 120, resultValueMax: 20, resultLabelMax: 80 }),
+    });
+    expect(props.fieldActions).toEqual({
+      updateClient: clientActions.updateClient,
+      addClientSector: clientActions.addClientSector,
+      updateCaseFields,
+      saveCaseResults: caseActions.saveCaseResults,
+      saveCaseTestimonial: caseActions.saveCaseTestimonial,
+    });
+  });
+
+  it("still opens when the sector list can't be read: the client's own sector stays", async () => {
+    listClientSectors.mockResolvedValueOnce({ ok: false, error: { code: "CLIENT_SECTOR_LOOKUP_FAILED", message: "down" } });
+    configuratorProps.mockClear();
+    await render();
+    expect((configuratorProps.mock.calls.at(-1)![0].fieldOptions as { sectors: unknown }).sectors).toEqual([{ key: "illuminazione", label: "Illuminazione" }]);
   });
 
   it("still opens when the client's files can't be read: none count as present (Story 4.8)", async () => {

@@ -42,6 +42,9 @@ const actions = vi.hoisted(() => ({
   setAssetFavourite: vi.fn(),
 }));
 vi.mock("@/app/(tool)/case-studies/actions", () => actions);
+// The client logo's upload (Story 4.3d's Sostituisci logo).
+const clientActions = vi.hoisted(() => ({ requestClientLogoUpload: vi.fn(), confirmClientLogoUpload: vi.fn() }));
+vi.mock("@/app/(tool)/clients/actions", () => clientActions);
 const uploads = vi.hoisted(() => ({ uploadFile: vi.fn() }));
 vi.mock("../../_lib/upload", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../_lib/upload")>()), uploadFile: uploads.uploadFile }));
 
@@ -97,6 +100,9 @@ function setup(
     onRenderAssets,
     onApprove,
     clientFiles,
+    fields,
+    fieldOptions,
+    fieldActions,
   }: {
     editable?: boolean;
     onSave?: SaveFn;
@@ -107,6 +113,9 @@ function setup(
     onRenderAssets?: ConfiguratorProps["onRenderAssets"];
     onApprove?: ConfiguratorProps["onApprove"];
     clientFiles?: ConfiguratorProps["clientFiles"];
+    fields?: ConfiguratorProps["fields"];
+    fieldOptions?: ConfiguratorProps["fieldOptions"];
+    fieldActions?: ConfiguratorProps["fieldActions"];
   } = {},
 ) {
   return render(
@@ -130,6 +139,9 @@ function setup(
       onApprove={onApprove}
       headVersion={7}
       clientFiles={clientFiles}
+      fields={fields}
+      fieldOptions={fieldOptions}
+      fieldActions={fieldActions}
     />,
   );
 }
@@ -3071,5 +3083,294 @@ describe("Configurator Approva (Story 4.8)", () => {
     setup(true, formats, { onApprove });
     fireEvent.click(approveButton());
     expect(status().textContent).toBe(`${dict.configurator.approve} arriva presto.`);
+  });
+});
+
+/** Story 4.3d: the client's and the case's fields, typed on the page or set in the left panel. */
+describe("Configurator client and case fields", () => {
+  const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
+  const LOGO = "eeeeeeee-0000-4000-8000-000000000001";
+  const NEW_LOGO = "eeeeeeee-0000-4000-8000-000000000002";
+  const t = dict.configurator.fields;
+  const FIELDS: NonNullable<ConfiguratorProps["fields"]> = {
+    client: { id: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Lampade.", logoId: LOGO },
+    case: {
+      year: 2026,
+      businessLines: ["branding"],
+      results: [
+        { label: "Vendite", value: "+30%" },
+        { label: "Visite", value: "2x" },
+      ],
+      testimonial: { quote: "Bravi.", author: "Ada" },
+    },
+  };
+  const FIELD_VALUES: BoundValues = {
+    client: { name: "Lumen Srl", sector: "Illuminazione", description: "Lampade.", logoUrl: "https://cdn.test/logo.png", results: [], testimonial: null },
+    case: { year: 2026, services: ["Branding"], results: FIELDS.case.results, testimonial: { quote: "Bravi.", author: "Ada" } },
+  };
+  const OPTIONS: NonNullable<ConfiguratorProps["fieldOptions"]> = {
+    sectors: [
+      { key: "illuminazione", label: "Illuminazione" },
+      { key: "moda", label: "Moda" },
+    ],
+    limits: {
+      nameMax: 120,
+      descriptionMax: 400,
+      briefMax: 5000,
+      resultLabelMax: 80,
+      resultValueMax: 20,
+      testimonialQuoteMax: 600,
+      testimonialAuthorMax: 120,
+      sectorLabelMin: 2,
+      sectorLabelMax: 40,
+      logoTypes: ["image/png", "image/jpeg", "image/webp", "image/svg+xml"],
+      logoMaxBytes: 5 * 1024 * 1024,
+      logoMinShortSide: 400,
+    },
+    years: { min: 1900, max: 2100 },
+    businessLines: ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"],
+  };
+  const saved = { ok: true as const, value: null };
+
+  function fieldActions() {
+    return {
+      updateClient: vi.fn(async () => saved),
+      addClientSector: vi.fn(async ({ label }: { label: string }) => ({ ok: true as const, value: { key: label.toLowerCase(), label } })),
+      updateCaseFields: vi.fn(async () => saved),
+      saveCaseResults: vi.fn(async () => saved),
+      saveCaseTestimonial: vi.fn(async () => saved),
+    } satisfies NonNullable<ConfiguratorProps["fieldActions"]>;
+  }
+
+  function open(over: { editable?: boolean; fields?: typeof FIELDS; actions?: ReturnType<typeof fieldActions>; onSave?: SaveFn } = {}) {
+    const actions = over.actions ?? fieldActions();
+    const onSave = vi.fn(over.onSave ?? savedOk);
+    setup(false, formats, {
+      editable: over.editable ?? true,
+      onSave,
+      values: FIELD_VALUES,
+      fields: over.fields ?? FIELDS,
+      fieldOptions: OPTIONS,
+      fieldActions: actions,
+    });
+    return { actions, onSave };
+  }
+
+  /** The first element of Presentazione (else any format shown) matching `match`: its page and id. */
+  function find(match: (el: DocumentElement) => boolean, formatId: FormatId = "presentazione_16_9") {
+    for (const page of formats[formatId]) {
+      const walk = (elements: readonly DocumentElement[]): string | undefined => {
+        for (const el of elements) {
+          if (match(el)) return el.elementId;
+          if (el.type === "text_group" || el.type === "row") {
+            const inner = walk(el.items as readonly DocumentElement[]);
+            if (inner !== undefined) return inner;
+          }
+        }
+        return undefined;
+      };
+      for (const block of page.blocks) {
+        const id = walk(block.elements);
+        if (id !== undefined) return { pageKey: page.pageKey, id };
+      }
+    }
+    throw new Error("not in the fixture");
+  }
+  const bound = (record: string, field: string, index?: number) => (el: DocumentElement) =>
+    el.type === "text" && el.binding?.record === record && el.binding.field === field && (index === undefined || el.binding.index === index);
+  const node = (at: { pageKey: string; id: string }) => pageNode(at.pageKey).querySelector<HTMLElement>(`[data-element-id="${at.id}"]`)!;
+  const nameNodes = () =>
+    [...canvas().querySelectorAll<HTMLElement>(".mr-txt[data-element-id]")].filter((n) => {
+      const at = { pageKey: n.closest<HTMLElement>("[data-canvas-page]")!.dataset.canvasPage!, id: n.dataset.elementId! };
+      const page = formats.presentazione_16_9.find((p) => p.pageKey === at.pageKey);
+      return page !== undefined && textElementAt([page], at.pageKey, at.id)?.binding?.field === "name";
+    });
+  async function flush() {
+    for (let i = 0; i < 5; i += 1) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+  }
+  function typeAndPress(target: HTMLElement, text: string, key: "Enter" | "Escape") {
+    target.textContent = text;
+    fireEvent.input(target);
+    fireEvent.keyDown(target, { key });
+  }
+
+  beforeEach(() => {
+    refresh.mockClear();
+  });
+
+  it("typing a new client name saves it through updateClient with the client's other fields, shows it on every page, and leaves the document alone", async () => {
+    const { actions, onSave } = open();
+    const name = find(bound("client", "name"));
+    fireEvent.doubleClick(node(name));
+    expect(node(name).getAttribute("contenteditable")).toBe("plaintext-only");
+    // It opens on the stored name.
+    expect(node(name).textContent).toBe("Lumen Srl");
+    typeAndPress(node(name), "Lumen Group", "Enter");
+    await flush();
+    expect(actions.updateClient).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, name: "Lumen Group", industry: "illuminazione", description: "Lampade.", logoId: LOGO });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(node(name).hasAttribute("contenteditable")).toBe(false);
+    expect(nameNodes().length).toBeGreaterThan(0);
+    for (const each of nameNodes()) expect(each.textContent).toBe("Lumen Group");
+    // Not a document edit: nothing saved, nothing to undo.
+    expect(onSave).not.toHaveBeenCalled();
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("a refused save puts the old name back and says why", async () => {
+    const actions = fieldActions();
+    actions.updateClient.mockResolvedValueOnce({ ok: false, status: 409, error: { code: "CLIENT_NAME_TAKEN", message: "m" } } as never);
+    open({ actions });
+    const name = find(bound("client", "name"));
+    fireEvent.doubleClick(node(name));
+    typeAndPress(node(name), "Acme", "Enter");
+    await flush();
+    expect(actions.updateClient).toHaveBeenCalledTimes(1);
+    expect(node(name).textContent).toBe("Lumen Srl");
+    expect(status().textContent).toBe(t.errors.CLIENT_NAME_TAKEN);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("Esc cancels the typing and saves nothing", async () => {
+    const { actions } = open();
+    const name = find(bound("client", "name"));
+    fireEvent.doubleClick(node(name));
+    typeAndPress(node(name), "Altro", "Escape");
+    await flush();
+    expect(actions.updateClient).not.toHaveBeenCalled();
+    expect(node(name).textContent).toBe("Lumen Srl");
+  });
+
+  it("a client without a logo can't be renamed here: Aggiungi prima il logo del cliente.", () => {
+    const { actions } = open({ fields: { ...FIELDS, client: { ...FIELDS.client, logoId: null } } });
+    const name = find(bound("client", "name"));
+    fireEvent.doubleClick(node(name));
+    expect(node(name).hasAttribute("contenteditable")).toBe(false);
+    expect(status().textContent).toBe(t.needLogo);
+    expect(actions.updateClient).not.toHaveBeenCalled();
+  });
+
+  it("an approved case: a double-click on a bound text edits nothing and says so, and no field section shows", () => {
+    open({ editable: false });
+    const name = find(bound("client", "name"));
+    fireEvent.doubleClick(node(name));
+    expect(node(name).hasAttribute("contenteditable")).toBe(false);
+    expect(status().textContent).toBe(dict.configurator.editSoon);
+    const services = find((el) => el.type === "services", "carosello_1_1");
+    fireEvent.click(button(/Carosello/));
+    fireEvent.click(node(services));
+    expect(pageNode(services.pageKey).querySelector('[data-frame="element"]')).not.toBeNull();
+    expect(within(leftPanel()).queryByText(t.caseHeading)).toBeNull();
+  });
+
+  it("a result number typed in row 2 saves the stored rows with only row 2 changed", async () => {
+    const { actions } = open();
+    const value = find(bound("case", "resultValue", 1));
+    fireEvent.doubleClick(node(value));
+    expect(node(value).textContent).toBe("2x");
+    typeAndPress(node(value), "3x", "Enter");
+    await flush();
+    expect(actions.saveCaseResults).toHaveBeenCalledExactlyOnceWith({
+      caseId: CASE_ID,
+      results: [
+        { label: "Vendite", value: "+30%" },
+        { label: "Visite", value: "3x" },
+      ],
+    });
+  });
+
+  it("a number over 20 characters is refused before any save, and the old one stays", async () => {
+    const { actions } = open();
+    const value = find(bound("case", "resultValue", 0));
+    fireEvent.doubleClick(node(value));
+    typeAndPress(node(value), "1".repeat(21), "Enter");
+    await flush();
+    expect(actions.saveCaseResults).not.toHaveBeenCalled();
+    expect(status().textContent).toBe(fill(t.tooLong, { max: 20 }));
+    expect(node(value).textContent).toBe("+30%");
+  });
+
+  it("a new author saves with the stored quote; the quote opens without the template's « »", async () => {
+    const { actions } = open();
+    const quote = find(bound("case", "testimonialQuote"));
+    fireEvent.doubleClick(node(quote));
+    expect(node(quote).textContent).toBe("Bravi.");
+    fireEvent.keyDown(node(quote), { key: "Escape" });
+    const author = find(bound("case", "testimonialAuthor"));
+    fireEvent.doubleClick(node(author));
+    typeAndPress(node(author), "Ada L.", "Enter");
+    await flush();
+    expect(actions.saveCaseTestimonial).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, quote: "Bravi.", author: "Ada L." });
+  });
+
+  it("a double-click on the meta line selects it and focuses the year; a new year saves through updateCaseFields and the code stays", async () => {
+    const { actions } = open();
+    const meta = find((el) => el.type === "text" && el.bindings !== undefined);
+    fireEvent.doubleClick(node(meta));
+    const year = within(leftPanel()).getByLabelText(t.year) as HTMLInputElement;
+    expect(document.activeElement).toBe(year);
+    expect(year.value).toBe("2026");
+    fireEvent.change(year, { target: { value: "2025" } });
+    fireEvent.keyDown(year, { key: "Enter" });
+    fireEvent.blur(year);
+    await flush();
+    expect(actions.updateCaseFields).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, year: 2025, businessLines: ["branding"] });
+    expect(node(meta).textContent).toBe("Illuminazione · 2025");
+    expect(screen.getByText("LUM-2026-01")).toBeDefined();
+  });
+
+  it("a sector picked in the panel saves through updateClient with the client's other fields", async () => {
+    const { actions } = open();
+    const meta = find((el) => el.type === "text" && el.bindings !== undefined);
+    fireEvent.click(node(meta));
+    fireEvent.click(within(leftPanel()).getByRole("radio", { name: "Moda", hidden: true }));
+    await flush();
+    expect(actions.updateClient).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, name: "Lumen Srl", industry: "moda", description: "Lampade.", logoId: LOGO });
+    expect(node(meta).textContent).toBe("Moda · 2026");
+  });
+
+  it("the services' pills save the new list; turning off the last one is refused: Serve almeno un servizio.", async () => {
+    const { actions } = open();
+    const services = find((el) => el.type === "services", "carosello_1_1");
+    fireEvent.click(button(/Carosello/));
+    fireEvent.click(node(services));
+    const group = within(leftPanel()).getByRole("group", { name: t.services, hidden: true });
+    fireEvent.click(within(group).getByRole("button", { name: /Branding/, hidden: true }));
+    await flush();
+    expect(actions.updateCaseFields).not.toHaveBeenCalled();
+    expect(status().textContent).toBe(t.needService);
+    fireEvent.click(within(group).getByRole("button", { name: dict.businessLines.video, hidden: true }));
+    await flush();
+    expect(actions.updateCaseFields).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, year: 2026, businessLines: ["branding", "video"] });
+  });
+
+  it("Sostituisci logo uploads the file, confirms it, then links it through updateClient", async () => {
+    const { actions } = open();
+    clientActions.requestClientLogoUpload.mockResolvedValue({ ok: true, value: { logoId: NEW_LOGO, url: "https://upload.test", method: "PUT", headers: {} } });
+    clientActions.confirmClientLogoUpload.mockResolvedValue({ ok: true, value: { logoId: NEW_LOGO } });
+    uploads.uploadFile.mockResolvedValue(undefined);
+    const logos = find((el) => el.type === "logos", "carosello_1_1");
+    fireEvent.click(button(/Carosello/));
+    fireEvent.click(node(logos));
+    expect(button(t.replaceLogo, leftPanel())).toBeDefined();
+    const input = leftPanel().querySelector<HTMLInputElement>('input[type="file"]')!;
+    const file = new File([new Uint8Array(10)], "logo.png", { type: "image/png" });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
+    await flush();
+    expect(clientActions.requestClientLogoUpload).toHaveBeenCalledWith({ clientId: CLIENT_ID, contentType: "image/png", sizeBytes: 10 });
+    expect(actions.updateClient).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Lampade.", logoId: NEW_LOGO });
+  });
+
+  it("without field saves (a client's file, later) a bound text still says it can't be edited yet", () => {
+    setup(false, formats, { values: FIELD_VALUES });
+    const name = find(bound("client", "name"));
+    fireEvent.doubleClick(node(name));
+    expect(status().textContent).toBe(dict.configurator.editSoon);
   });
 });
