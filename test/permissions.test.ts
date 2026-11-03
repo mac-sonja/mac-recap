@@ -63,6 +63,7 @@ vi.mock("@/modules/material", () => stubbedUseCases(() => vi.importActual("@/mod
 const caseStudies = await import("@/app/(tool)/case-studies/actions");
 const clients = await import("@/app/(tool)/clients/actions");
 const organization = await import("@/app/(tool)/organization/actions");
+const configurator = await import("@/app/(wizard)/case-studies/[caseId]/configurator/actions");
 
 const OWNERS: readonly Role[] = ["owner_designer", "admin"];
 const ADMIN: readonly Role[] = ["admin"];
@@ -74,6 +75,8 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   ...Object.fromEntries(Object.entries(caseStudies).map(([name, call]) => [`case-studies.${name}`, { call: call as Action, allowed: OWNERS }])),
   ...Object.fromEntries(Object.entries(clients).map(([name, call]) => [`clients.${name}`, { call: call as Action, allowed: OWNERS }])),
   ...Object.fromEntries(Object.entries(organization).map(([name, call]) => [`organization.${name}`, { call: call as Action, allowed: ADMIN }])),
+  // The configurator's field edits (Story 4.3d): `fill details`.
+  "configurator.updateCaseFields": { call: configurator.updateCaseFields as Action, allowed: OWNERS },
 };
 
 /** The roles a person can hold. `system` is the worker's actor: it can't sign in, so it never gets this far (below). */
@@ -93,7 +96,7 @@ beforeEach(() => {
 describe("permission suite through the real actor resolver (Story 6.4)", () => {
   it("covers every server action of the tool", () => {
     expect(Object.keys(EXPECTED).length).toBe(
-      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length,
+      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 1,
     );
   });
 

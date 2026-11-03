@@ -5,6 +5,7 @@ import type {
   DeletableStatus,
   ListedCaseStudy,
   ListScope,
+  UpdateCaseFieldsInput,
   UpdateCaseStudyDetailsInput,
 } from "@/modules/case-study/domain/case-study";
 import type { TransitionEvent } from "@/modules/case-study/domain/transition";
@@ -31,6 +32,14 @@ export interface CaseStudyRepository {
    * Nothing is written on any `err`.
    */
   updateDetails(input: UpdateCaseStudyDetailsInput, actorId: string): Promise<Result<CaseStudy>>;
+  /**
+   * Saves a Da approvare case's year and business lines (Story 4.3d), with a
+   * `case_details_updated` event `{ year, businessLines }` when something changed,
+   * atomically. The code and number never change. `err NOT_FOUND` (unknown or
+   * soft-deleted), `err STALE_STATUS` (not `in_review`), `err INVALID_INPUT` (no business
+   * line), otherwise `err` only when the write fails. Nothing is written on any `err`.
+   */
+  updateFields(input: UpdateCaseFieldsInput, actorId: string): Promise<Result<CaseStudy>>;
   /** `ok(null)` when no non-deleted case has this id; `err` only when the lookup itself fails. */
   findById(id: string): Promise<Result<CaseStudy | null>>;
   /**

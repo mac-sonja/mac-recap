@@ -60,6 +60,7 @@ import {
 } from "@/modules/case-study/application/request-client-logo-upload";
 import { makeTransition } from "@/modules/case-study/application/transition";
 import { makeDeleteCaseStudy } from "@/modules/case-study/application/delete-case-study";
+import { makeUpdateCaseFields } from "@/modules/case-study/application/update-case-fields";
 import { makeUpdateCaseStudyDetails } from "@/modules/case-study/application/update-case-study-details";
 import { makeUpdateClient } from "@/modules/case-study/application/update-client";
 import type { CaseEvent } from "@/modules/case-study/domain/case-event";
@@ -125,6 +126,7 @@ export type {
   ListScope,
   Locale,
   LogoContentType,
+  UpdateCaseFieldsInput,
   UpdateCaseStudyDetailsInput,
   UpdateClientInput,
 } from "@/modules/case-study/domain/case-study";
@@ -190,6 +192,20 @@ export function create(actor: Actor, input: unknown): Promise<Result<CaseStudy>>
  */
 export function updateDetails(actor: Actor, input: unknown): Promise<Result<CaseStudy>> {
   return makeUpdateCaseStudyDetails(createSupabaseCaseStudyRepository())(actor, input);
+}
+
+/**
+ * Saves a Da approvare case's year and services from the configurator (Story 4.3d, owner
+ * 2026-11-03): input `{ caseId, year, businessLines }`, both as they should be after the
+ * save (year 1900–2100, at least one business line from `BUSINESS_LINES`). The code and
+ * number never change, even when the year does. A changed save writes one
+ * `case_details_updated` event `{ year, businessLines }` with the actor in the same
+ * transaction; an unchanged one writes nothing. Call only after
+ * `authorize(actor, 'fill details')`. `INVALID_INPUT` (naming each field), `NOT_FOUND`
+ * (unknown or deleted), `STALE_STATUS` (not Da approvare); nothing is written on any error.
+ */
+export function updateCaseFields(actor: Actor, input: unknown): Promise<Result<CaseStudy>> {
+  return makeUpdateCaseFields(createSupabaseCaseStudyRepository())(actor, input);
 }
 
 /**

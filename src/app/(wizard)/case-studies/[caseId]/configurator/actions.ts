@@ -52,6 +52,22 @@ export async function approveCase(input: unknown): Promise<ActionResult<{ waitin
 }
 
 /**
+ * The case's year and services from the configurator (Story 4.3d): input `{ caseId, year,
+ * businessLines }`, both as they should be after the save. The code never changes. 403
+ * `FORBIDDEN` unless the role may `fill details`; 400 `INVALID_INPUT` (naming each field: a
+ * year outside 1900–2100, no or an unknown business line); 404 `NOT_FOUND`; 409
+ * `STALE_STATUS` (the case is no longer Da approvare). Nothing is written on any error.
+ */
+export async function updateCaseFields(input: unknown): Promise<ActionResult<void>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "fill details");
+  if (!decision.ok) return failure(decision.error);
+  const saved = await caseStudy.updateCaseFields(actor.value, input);
+  return saved.ok ? { ok: true, value: undefined } : failure(saved.error);
+}
+
+/**
  * The render assets of files the Media tab listed after the page loaded (Story 4.5b): input
  * `{ caseId, assetIds }`; returns, by asset id, those that are this case's live images and
  * videos with a rendition ready (an id that isn't, or whose rendition is still being made,
