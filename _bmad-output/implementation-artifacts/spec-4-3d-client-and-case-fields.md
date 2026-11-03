@@ -75,18 +75,18 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/20261104120000_case_study_update_fields.sql` -- add `update_case_fields(p_case_id, p_year, p_business_lines, p_actor_id)`, service role only. It accepts only a case in `in_review` (anything else → `STALE_STATUS`; `NOT_FOUND`), and at least one known business line (else `INVALID_INPUT`). It never touches `code` or `number`. A changed save writes one `case_details_updated` event with `{year, businessLines}`; an unchanged one writes nothing. Then regenerate `src/shared/db.types.ts`.
-- [ ] `src/modules/case-study/{domain/case-study.ts,application/update-case-fields.ts,ports,adapters,index.ts}` -- add `updateCaseFields(actor, {caseId, year, businessLines})`, with the year validated as in `updateCaseStudyDetailsInputSchema`. Add unit tests.
-- [ ] `src/app/(wizard)/case-studies/[caseId]/configurator/actions.ts` -- add `updateCaseFields` (`fill details`). Add an action test and a row in `test/permissions.test.ts`.
-- [ ] `src/app/(wizard)/_lib/configurator-data.ts` + `page.tsx` -- add `editableFieldsOf` and pass `fields`, `sectors` and the actions.
-- [ ] `src/app/(wizard)/_components/configurator/bound-fields.ts` (new, + test) -- pure helpers:
+- [x] `supabase/migrations/20261104120000_case_study_update_fields.sql` -- add `update_case_fields(p_case_id, p_year, p_business_lines, p_actor_id)`, service role only. It accepts only a case in `in_review` (anything else → `STALE_STATUS`; `NOT_FOUND`), and at least one known business line (else `INVALID_INPUT`). It never touches `code` or `number`. A changed save writes one `case_details_updated` event with `{year, businessLines}`; an unchanged one writes nothing. Then regenerate `src/shared/db.types.ts`.
+- [x] `src/modules/case-study/{domain/case-study.ts,application/update-case-fields.ts,ports,adapters,index.ts}` -- add `updateCaseFields(actor, {caseId, year, businessLines})`, with the year validated as in `updateCaseStudyDetailsInputSchema`. Add unit tests.
+- [x] `src/app/(wizard)/case-studies/[caseId]/configurator/actions.ts` -- add `updateCaseFields` (`fill details`). Add an action test and a row in `test/permissions.test.ts`.
+- [x] `src/app/(wizard)/_lib/configurator-data.ts` + `page.tsx` -- add `editableFieldsOf` and pass `fields`, `sectors` and the actions.
+- [x] `src/app/(wizard)/_components/configurator/bound-fields.ts` (new, + test) -- pure helpers:
   - which editor a bound element opens: `name`, `meta`, `resultLabel`, `resultValue`, `testimonialQuote`, `testimonialAuthor`, `services` or `logos`;
   - the full input for each save from `fields` plus one change (the client's other fields, the other result rows, the other half of the testimonial);
   - trimming, and a no-op when nothing changed.
-- [ ] `configurator.tsx` + `canvas.tsx` + `in-place-text.ts` -- in-place typing for bound texts. It shows the current value and, on commit, calls the matching save (not `doc.change`), then `router.refresh()`. On failure it restores the old value and calls `say(message)`. The meta line goes to the panel's year field instead.
-- [ ] `left-panel.tsx` (+ a `bound-field-panel.tsx` if it grows) -- "Dati del cliente" / "Dati della case" section for a selected meta line (sector menu with "Aggiungi settore", year field), services (business-line pills) or logos ("Sostituisci logo"). Saving state is shown inline.
-- [ ] `src/shared/i18n/it.ts` + `it.test.ts` -- copy: section titles, labels, "Serve almeno un servizio.", "Aggiungi prima il logo del cliente.", an error message per code, using the agency voice from the `mac-recap-ui` skill.
-- [ ] Tests: `bound-fields.test.ts` (matrix rows), `configurator.test.tsx` (typing a name calls `updateClient` with full input; failure restores and shows the message; not editable → `editSoon`; meta line focuses the year), and a DB test for `update_case_fields` (draft or approved → `STALE_STATUS`; code unchanged; event written).
+- [x] `configurator.tsx` + `canvas.tsx` + `in-place-text.ts` -- in-place typing for bound texts. It shows the current value and, on commit, calls the matching save (not `doc.change`), then `router.refresh()`. On failure it restores the old value and calls `say(message)`. The meta line goes to the panel's year field instead.
+- [x] `left-panel.tsx` (+ a `bound-field-panel.tsx` if it grows) -- "Dati del cliente" / "Dati della case" section for a selected meta line (sector menu with "Aggiungi settore", year field), services (business-line pills) or logos ("Sostituisci logo"). Saving state is shown inline.
+- [x] `src/shared/i18n/it.ts` + `it.test.ts` -- copy: section titles, labels, "Serve almeno un servizio.", "Aggiungi prima il logo del cliente.", an error message per code, using the agency voice from the `mac-recap-ui` skill.
+- [x] Tests: `bound-fields.test.ts` (matrix rows), `configurator.test.tsx` (typing a name calls `updateClient` with full input; failure restores and shows the message; not editable → `editSoon`; meta line focuses the year), and a DB test for `update_case_fields` (draft or approved → `STALE_STATUS`; code unchanged; event written).
 
 **Acceptance Criteria:**
 - Given a case Da approvare, when the person changes the client name on one page, then every page in every format shows the new name without a reload, and the document's saved JSON is unchanged.
@@ -94,6 +94,12 @@ context:
 - Given an approved case or Anteprima, when the person double-clicks a bound text, then nothing is editable and the existing message shows.
 
 ## Implementation Notes
+
+- Bound editing is on only when the case is editable and the page passes `fields`, `fieldOptions` and `fieldActions`; without them (a later client file) a bound text still says `editSoon`.
+- A change shows at once (an overlay on the loaded values and fields, dropped when `router.refresh()` brings new ones) and saves one at a time; a refused or failed save restores the previous overlay and says why. `STALE_STATUS` / `NOT_FOUND` also refresh.
+- The sector's "Aggiungi settore" check is extracted to `clients/_components/new-sector.ts` and used by the client panel and the configurator. The logo reuses `useClientLogo`.
+- The client's description, sector or logo being missing refuses a client save before the call (`needClientInfo`, `needLogo`): `updateClient` requires them. A rename is refused at the double-click when the client has no logo.
+- `db.types.ts` was edited by hand for `update_case_fields` (no local Supabase): regenerate with `npm run db:types` to confirm.
 
 ## Spec Change Log
 
