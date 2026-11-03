@@ -1054,6 +1054,16 @@ export const it = {
         removed: "Tolto dalla pagina.",
       },
     },
+    /** Pages (Story 4.13, mockup `addPage`, `deletePage`). */
+    pages: {
+      add: "+ Aggiungi pagina",
+      newPage: "Nuova pagina",
+      deleted: "Pagina eliminata. ⌘Z per annullare.",
+      /** The bin on a page's label; `{n}` is its number. */
+      deleteLabel: "Elimina la pagina {n}",
+      /** `{n}` is the most pages a format holds. */
+      formatFull: "Questo formato ha già {n} pagine.",
+    },
     /** The Animazione dialog (Story 4.5c, C35, mockup `#anModal`). */
     animationDialog: {
       title: "Animazione",

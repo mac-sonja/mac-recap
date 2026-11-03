@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import { memo, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject } from "react";
 import type { Crop, Page } from "@/modules/generation";
 import { measureOverflow, renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
@@ -62,6 +63,10 @@ export interface CanvasProps {
   onCrop?: (pageKey: string, elementId: string, crop: Crop) => void;
   /** The drag let go after moving: the gesture is one undo step. */
   onCropDone?: () => void;
+  /** The bin on a page's label (Story 4.13); undefined: no bin. */
+  onDeletePage?: (pageKey: string) => void;
+  /** **+ Aggiungi pagina** after the last page (Story 4.13); undefined: no button. */
+  onAddPage?: () => void;
 }
 
 /** What a page needs to let its texts be typed in. */
@@ -144,9 +149,22 @@ function CanvasPage({
   onPlaceMedia,
   onCrop,
   onCropDone,
+  onDeletePage,
 }: Pick<
   CanvasProps,
-  "formatId" | "template" | "assets" | "values" | "onSelect" | "preview" | "animateTexts" | "onEditRequest" | "onResize" | "onPlaceMedia" | "onCrop" | "onCropDone"
+  | "formatId"
+  | "template"
+  | "assets"
+  | "values"
+  | "onSelect"
+  | "preview"
+  | "animateTexts"
+  | "onEditRequest"
+  | "onResize"
+  | "onPlaceMedia"
+  | "onCrop"
+  | "onCropDone"
+  | "onDeletePage"
 > &
   TextEditing & {
     page: Page;
@@ -354,8 +372,20 @@ function CanvasPage({
   const width = preview ? PREVIEW_WIDTH : PAGE_WIDTH[formatId];
   return (
     <>
-      <div className={cn("mt-3.5 flex w-full items-center font-label text-[12.5px] text-foreground-muted", width)}>
+      <div className={cn("mt-3.5 flex w-full items-center justify-between gap-2 font-label text-[12.5px] text-foreground-muted", width)}>
         <span className="truncate">{fill(it.configurator.canvas.pageLabel, { n: number, name: page.name })}</span>
+        {!preview && onDeletePage !== undefined && (
+          <button
+            type="button"
+            data-delete-page={page.pageKey}
+            onClick={() => onDeletePage(page.pageKey)}
+            aria-label={fill(it.configurator.pages.deleteLabel, { n: number })}
+            title={it.configurator.tools.deletePage}
+            className="grid size-[26px] shrink-0 place-items-center rounded-lg text-foreground-muted transition-colors duration-150 hover:bg-surface-hover hover:text-foreground"
+          >
+            <Trash2 aria-hidden="true" className="size-[15px]" />
+          </button>
+        )}
       </div>
       <div
         ref={host}
@@ -514,6 +544,8 @@ export function Canvas({
   onPlaceMedia,
   onCrop,
   onCropDone,
+  onDeletePage,
+  onAddPage,
 }: CanvasProps) {
   const frame = useRef<number | null>(null);
   const video = formatId === "video_9_16";
@@ -619,9 +651,37 @@ export function Canvas({
             onPlaceMedia={onPlaceMedia}
             onCrop={onCrop}
             onCropDone={onCropDone}
+            onDeletePage={
+              onDeletePage === undefined
+                ? undefined
+                : (pageKey) => {
+                    // The bin goes with its page: focus moves to the next page's bin, else the previous one's, else Aggiungi pagina.
+                    const next = pages[i + 1]?.pageKey ?? pages[i - 1]?.pageKey;
+                    onDeletePage(pageKey);
+                    requestAnimationFrame(() => {
+                      const root = scrollRef.current;
+                      const target =
+                        (next === undefined ? null : root?.querySelector<HTMLElement>(`[data-delete-page="${next}"]`)) ?? root?.querySelector<HTMLElement>("[data-add-page]");
+                      target?.focus();
+                    });
+                  }
+            }
           />,
         ];
       })}
+      {!preview && onAddPage !== undefined && (
+        <button
+          type="button"
+          data-add-page
+          onClick={onAddPage}
+          className={cn(
+            "mt-6 mb-8 h-11 w-full rounded-xl border-[1.5px] border-dashed border-border-strong font-label text-[13.5px] font-semibold text-foreground-muted transition-colors duration-150 hover:border-accent hover:text-foreground",
+            width,
+          )}
+        >
+          {it.configurator.pages.add}
+        </button>
+      )}
     </section>
   );
 }

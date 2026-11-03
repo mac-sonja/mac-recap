@@ -12,7 +12,22 @@ import { pageAssetIds, type MediaUploadRules } from "./media-files";
 import { MediaTab } from "./media-tab";
 import { ASPECT, EYEBROW, ICON_BUTTON, SEG, SEG_BUTTON } from "./styles";
 
-const SECTIONS: readonly PageSection[] = ["intro", "output", "risultati"];
+/**
+ * The pages in order, cut into runs of one section each, as the canvas groups them: a page
+ * moved into another section's place (Story 4.13) keeps its own label, where it now is.
+ */
+function runsOf<T extends { page: Page }>(items: readonly T[]): { section: PageSection; items: T[] }[] {
+  const runs: { section: PageSection; items: T[] }[] = [];
+  for (const item of items) {
+    const last = runs.at(-1);
+    if (last !== undefined && last.section === item.page.section) last.items.push(item);
+    else runs.push({ section: item.page.section, items: [item] });
+  }
+  return runs;
+}
+
+/** A Pagine thumbnail's drag data type (Story 4.13): its page key, in a type the canvas and the Media tab ignore. */
+const PAGE_DRAG_TYPE = "application/x-mac-page";
 
 /** The right panel's tabs. */
 export type RightTab = "pages" | "media";
@@ -28,6 +43,8 @@ export interface RightPanelProps {
   /** The selected page, marked `aria-current`. */
   currentPageKey: string | undefined;
   onSelectPage: (pageKey: string) => void;
+  /** A thumbnail dropped on another (Story 4.13); undefined: thumbnails don't drag. */
+  onMovePage?: (from: string, to: string) => void;
   /** The case whose Media the tab lists and uploads to (Story 4.5a). */
   caseId: string;
   /** The case's images and videos, oldest first. */
@@ -90,6 +107,7 @@ export function RightPanel({
   values,
   currentPageKey,
   onSelectPage,
+  onMovePage,
   caseId,
   media,
   mediaRules,
@@ -109,6 +127,11 @@ export function RightPanel({
   const numbered = pages.map((page, i) => ({ page, number: i + 1 }));
   const shown = q === "" ? numbered : numbered.filter(({ page }) => page.name.toLocaleLowerCase("it").includes(q));
   const onPage = useMemo(() => pageAssetIds(pages), [pages]);
+  /** The thumbnail a dragged page would land on (marked with an accent line). */
+  const [dropOn, setDropOn] = useState<string | null>(null);
+  /** The page being dragged. */
+  const [dragging, setDragging] = useState<string | null>(null);
+  const indexOf = (pageKey: string) => pages.findIndex((p) => p.pageKey === pageKey);
 
   return (
     <aside aria-label={it.configurator.panels.right} hidden={hidden} className="col-start-3 row-start-1 flex min-h-0 flex-col border-l border-border bg-surface-sidebar">
@@ -161,11 +184,9 @@ export function RightPanel({
 
       <div hidden={tab !== "pages"} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3.5">
         {shown.length === 0 && q !== "" && <p className="font-label text-[12.5px] text-foreground-muted">{fill(it.configurator.noMatch, { query: query.trim() })}</p>}
-        {SECTIONS.map((section) => {
-          const inSection = shown.filter(({ page }) => page.section === section);
-          if (inSection.length === 0) return null;
+        {runsOf(shown).map(({ section, items: inSection }, run) => {
           return (
-            <div key={section} className="mb-4 last:mb-0">
+            <div key={`${section}-${run}`} className="mb-4 last:mb-0">
               <p className={EYEBROW}>{it.configurator.sections[section]}</p>
               <div className="flex flex-col gap-1.5">
                 {inSection.map(({ page, number }) => (
@@ -175,8 +196,42 @@ export function RightPanel({
                     data-thumb={page.pageKey}
                     aria-current={page.pageKey === currentPageKey ? "true" : undefined}
                     onClick={() => onSelectPage(page.pageKey)}
+                    draggable={onMovePage !== undefined}
+                    onDragStart={(event) => {
+                      setDragging(page.pageKey);
+                      event.dataTransfer.setData(PAGE_DRAG_TYPE, page.pageKey);
+                      event.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragEnd={() => {
+                      setDragging(null);
+                      setDropOn(null);
+                    }}
+                    onDragOver={(event) => {
+                      if (onMovePage === undefined || !event.dataTransfer.types.includes(PAGE_DRAG_TYPE)) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      if (dropOn !== page.pageKey) setDropOn(page.pageKey);
+                    }}
+                    onDragLeave={() => setDropOn((current) => (current === page.pageKey ? null : current))}
+                    onDrop={(event) => {
+                      if (onMovePage === undefined || !event.dataTransfer.types.includes(PAGE_DRAG_TYPE)) return;
+                      event.preventDefault();
+                      setDropOn(null);
+                      const from = event.dataTransfer.getData(PAGE_DRAG_TYPE) || dragging;
+                      setDragging(null);
+                      if (from && from !== page.pageKey) onMovePage(from, page.pageKey);
+                    }}
+                    // Where the page lands: above this one when it comes from below, below it when it comes from above.
+                    data-drop={
+                      dropOn === page.pageKey && dragging !== null && dragging !== page.pageKey
+                        ? indexOf(dragging) > indexOf(page.pageKey)
+                          ? "before"
+                          : "after"
+                        : undefined
+                    }
                     className={cn(
                       "flex rounded-lg p-1.5 text-left transition-colors duration-150 hover:bg-surface-hover aria-[current=true]:bg-surface-selected",
+                      "data-[drop=before]:shadow-[0_-3px_0_var(--color-accent)] data-[drop=after]:shadow-[0_3px_0_var(--color-accent)]",
                       view === "grid" ? "flex-col gap-1.5" : "flex-row items-center gap-2.5",
                     )}
                   >

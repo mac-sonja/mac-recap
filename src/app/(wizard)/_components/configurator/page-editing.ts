@@ -11,6 +11,8 @@ export type NewElementKind = (typeof NEW_ELEMENTS)[number];
 /** The document's limits (`generation`'s `MAX_BLOCKS_PER_PAGE`, `MAX_ELEMENTS_PER_BLOCK`; the tests hold them to the schema). */
 export const MAX_BLOCKS_PER_PAGE = 6;
 export const MAX_ELEMENTS_PER_BLOCK = 30;
+/** The most pages a format holds (`generation`'s `MAX_PAGES_PER_FORMAT`). */
+export const MAX_PAGES_PER_FORMAT = 50;
 /** The most media an animation holds (`generation`'s `MAX_ANIMATION_ASSETS`). */
 export const MAX_ANIMATION_MEDIA = 30;
 
@@ -24,7 +26,7 @@ export const COLUMN_LAYOUT_ID = "column";
 export type PageEdit =
   | { ok: true; pages: readonly Page[]; selection: NonNullable<Selection> }
   /** `empty`: a default page with nothing to show (Story 4.4c); `offBlock`: a file dropped outside every block (Story 4.5b). */
-  | { ok: false; reason: "noBlock" | "pageFull" | "blockFull" | "nothing" | "empty" | "offBlock" }
+  | { ok: false; reason: "noBlock" | "pageFull" | "blockFull" | "nothing" | "empty" | "offBlock" | "formatFull" }
   /** A layout with fewer cells than the page's filled blocks: `over` blocks too many. */
   | { ok: false; reason: "over"; over: number };
 
@@ -438,4 +440,50 @@ export function removeSelection(pages: readonly Page[], selection: Selection, fo
     restartGrid(page, formatId, template);
   });
   return { ok: true, pages: next, selection: { pageKey } };
+}
+
+/**
+ * **+ Aggiungi pagina** (Story 4.13, mockup `addPage`): "Nuova pagina", white, one empty
+ * block, after page `after` in its section; with none, at the end of the Output section
+ * (after the last Output page, else the last Intro page, else first). Selected.
+ */
+export function addPage(pages: readonly Page[], after: string | undefined, formatId: FormatId, template: string, newId: () => string): PageEdit {
+  if (pages.length >= MAX_PAGES_PER_FORMAT) return refused("formatFull");
+  const anchor = after === undefined ? -1 : pages.findIndex((p) => p.pageKey === after);
+  const lastOf = (section: Page["section"]) => pages.reduce((at, p, i) => (p.section === section ? i : at), -1);
+  const output = lastOf("output");
+  const at = anchor >= 0 ? anchor + 1 : (output >= 0 ? output : lastOf("intro")) + 1;
+  const section = anchor >= 0 ? pages[anchor]!.section : "output";
+  const page: Page = {
+    pageKey: `p-${newId()}`,
+    name: it.configurator.pages.newPage,
+    role: "body",
+    section,
+    background: { kind: "colour", value: BACKGROUND_SWATCHES[0] },
+    grid: { layoutId: COLUMN_LAYOUT_ID, rows: [1], cols: [1] },
+    blocks: [emptyBlock(newId)],
+  };
+  restartGrid(page, formatId, template);
+  return { ok: true, pages: [...pages.slice(0, at), page, ...pages.slice(at)], selection: { pageKey: page.pageKey } };
+}
+
+/** **Elimina pagina** (Story 4.13): page `pageKey` taken out; `pages` itself when there is none. */
+export function deletePage(pages: readonly Page[], pageKey: string): readonly Page[] {
+  const next = pages.filter((p) => p.pageKey !== pageKey);
+  return next.length === pages.length ? pages : next;
+}
+
+/**
+ * A Pagine thumbnail dropped on another (Story 4.13): page `from` moves before page `to`
+ * when dragged up, after it when dragged down; it keeps its section. `pages` itself when
+ * nothing moves.
+ */
+export function movePage(pages: readonly Page[], from: string, to: string): readonly Page[] {
+  const a = pages.findIndex((p) => p.pageKey === from);
+  const b = pages.findIndex((p) => p.pageKey === to);
+  if (a < 0 || b < 0 || a === b) return pages;
+  const next = [...pages];
+  const [moved] = next.splice(a, 1);
+  next.splice(b, 0, moved!);
+  return next;
 }

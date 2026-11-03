@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   blockSchema,
   caseHistoryV2,
+  formatPagesSchema,
   pageSchema,
   validateNewDocument,
   type Block,
@@ -15,14 +16,18 @@ import { it as dict } from "@/shared/i18n/it";
 import {
   addBlock,
   addElement,
+  addPage,
   applyLayout,
   BACKGROUND_SWATCHES,
   clearAssets,
   COLUMN_LAYOUT_ID,
+  deletePage,
   insertAnimation,
   MAX_ANIMATION_MEDIA,
   MAX_BLOCKS_PER_PAGE,
   MAX_ELEMENTS_PER_BLOCK,
+  MAX_PAGES_PER_FORMAT,
+  movePage,
   NEW_BLOCK_COLOUR,
   NEW_ELEMENTS,
   newElement,
@@ -640,5 +645,84 @@ describe("insertAnimation and withAnimation (Story 4.5c)", () => {
     expect(next[0]!.blocks[0]!.elements[1]).toMatchObject({ animation: "wheel_02", assetIds: [A1, A2], fit: "fill", size: 150 });
     expect(withAnimation(next, P, id, { animation: "wheel_02", fit: "fill", size: 150 })).toBe(next);
     expect(withAnimation(next, P, "dddddddd-0000-4000-8000-000000000023", { fit: "fit" })).toBe(next);
+  });
+});
+
+describe("addPage, deletePage and movePage (Story 4.13)", () => {
+  const all = () => starter("presentazione_16_9");
+  const sections = (pages: readonly Page[]) => pages.map((p) => p.section);
+
+  it("adds Nuova pagina after the given page, in its section, white with one empty block, and selects it", () => {
+    const pages = all();
+    const at = pages.findIndex((p) => p.section === "intro");
+    const edit = addPage(pages, pages[at]!.pageKey, "presentazione_16_9", TEMPLATE, ids());
+    if (!edit.ok) throw new Error("add");
+    const added = edit.pages[at + 1]!;
+    expect(added).toMatchObject({ name: dict.configurator.pages.newPage, role: "body", section: "intro", background: { kind: "colour", value: BACKGROUND_SWATCHES[0] } });
+    expect(added.blocks).toHaveLength(1);
+    expect(added.blocks[0]!.elements).toEqual([]);
+    expect(added.pageKey).toMatch(/^p-/);
+    expect(edit.selection).toEqual({ pageKey: added.pageKey });
+    expect(() => pageSchema.parse(added)).not.toThrow();
+    expect(edit.pages).toHaveLength(pages.length + 1);
+  });
+
+  it("with no page given, adds at the end of Output, keeping the sections together", () => {
+    const pages = all();
+    const edit = addPage(pages, undefined, "presentazione_16_9", TEMPLATE, ids());
+    if (!edit.ok) throw new Error("add");
+    const order = sections(edit.pages);
+    expect(order.lastIndexOf("output")).toBe(order.indexOf("risultati") - 1);
+    expect(edit.pages[order.lastIndexOf("output")]!.name).toBe(dict.configurator.pages.newPage);
+    const empty = addPage([], undefined, "presentazione_16_9", TEMPLATE, ids());
+    expect(empty).toMatchObject({ ok: true });
+  });
+
+  it("MAX_PAGES_PER_FORMAT is the schema's limit", () => {
+    const one = all()[0]!;
+    const many = (n: number) => Array.from({ length: n }, (_, i) => ({ ...one, pageKey: `k${i}` }));
+    expect(formatPagesSchema.safeParse({ pages: many(MAX_PAGES_PER_FORMAT) }).success).toBe(true);
+    expect(formatPagesSchema.safeParse({ pages: many(MAX_PAGES_PER_FORMAT + 1) }).success).toBe(false);
+  });
+
+  it("with no Output page, adds after the last Intro page; an Intro page moved below Output doesn't pull it down", () => {
+    const pages = all();
+    const noOutput = pages.filter((pg) => pg.section !== "output");
+    const edit = addPage(noOutput, undefined, "presentazione_16_9", TEMPLATE, ids());
+    if (!edit.ok) throw new Error("add");
+    const at = edit.pages.findIndex((pg) => pg.name === dict.configurator.pages.newPage);
+    expect(at).toBe(noOutput.filter((pg) => pg.section === "intro").length);
+    const intro = pages.find((pg) => pg.section === "intro")!;
+    const moved = movePage(pages, intro.pageKey, pages.at(-1)!.pageKey);
+    const after = addPage(moved, undefined, "presentazione_16_9", TEMPLATE, ids());
+    if (!after.ok) throw new Error("add");
+    const order = after.pages.map((pg) => pg.section);
+    const added = after.pages.findIndex((pg) => pg.name === dict.configurator.pages.newPage);
+    expect(order.slice(added + 1)).not.toContain("output");
+    expect(order[added - 1]).toBe("output");
+  });
+
+  it("refuses a 51st page", () => {
+    const one = all()[0]!;
+    const full = Array.from({ length: MAX_PAGES_PER_FORMAT }, (_, i) => ({ ...one, pageKey: `k${i}` }));
+    expect(addPage(full, undefined, "presentazione_16_9", TEMPLATE, ids())).toEqual({ ok: false, reason: "formatFull" });
+  });
+
+  it("deletes a page, and changes nothing for an unknown one", () => {
+    const pages = all();
+    const next = deletePage(pages, pages[1]!.pageKey);
+    expect(next.map((p) => p.pageKey)).toEqual(pages.filter((_, i) => i !== 1).map((p) => p.pageKey));
+    expect(deletePage(pages, "missing")).toBe(pages);
+  });
+
+  it("moves a page before a page above it or after a page below it, keeping its section", () => {
+    const pages = all();
+    const keys = pages.map((p) => p.pageKey);
+    const down = movePage(pages, keys[0]!, keys[2]!);
+    expect(down.map((p) => p.pageKey).slice(0, 3)).toEqual([keys[1], keys[2], keys[0]]);
+    expect(down[2]!.section).toBe(pages[0]!.section);
+    const up = movePage(pages, keys[2]!, keys[0]!);
+    expect(up.map((p) => p.pageKey).slice(0, 3)).toEqual([keys[2], keys[0], keys[1]]);
+    expect(movePage(pages, keys[1]!, keys[1]!)).toBe(pages);
   });
 });

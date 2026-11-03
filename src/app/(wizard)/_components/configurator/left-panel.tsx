@@ -75,6 +75,8 @@ export interface LeftPanelProps {
   onAnimationFit: (fit: AnimationElement["fit"]) => void;
   onAnimationSize: (size: number) => void;
   onAnimationSizeDone: () => void;
+  /** **Elimina pagina** (Story 4.13): deletes the tools' page. */
+  onDeletePage: () => void;
   onHide: () => void;
   hideRef: Ref<HTMLButtonElement>;
 }
@@ -358,6 +360,7 @@ export function LeftPanel({
   onAnimationFit,
   onAnimationSize,
   onAnimationSizeDone,
+  onDeletePage,
   onHide,
   hideRef,
 }: LeftPanelProps) {
@@ -572,7 +575,12 @@ export function LeftPanel({
             </section>
 
             <section className={PANEL_SECTION}>
-              <button type="button" {...inactive} onClick={soon(t.deletePage)} className={cn(SECONDARY_ACTION, "h-7 w-full cursor-default text-[12.5px] aria-disabled:opacity-60")}>
+              <button
+                type="button"
+                {...(editable ? {} : inactive)}
+                onClick={editable ? onDeletePage : soon(t.deletePage)}
+                className={cn(SECONDARY_ACTION, "h-7 w-full text-[12.5px]", !editable && "cursor-default aria-disabled:opacity-60")}
+              >
                 {t.deletePage}
               </button>
             </section>
