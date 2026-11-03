@@ -4,16 +4,19 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // AD-3: `case_study.status` changes only through `case-study.transition()`, whose
-// adapter calls `transition_case_study`. This scans src/ and supabase/migrations/
-// for any other writer: no TS insert/update/upsert on `case_study` (its only writes
-// go through the two Postgres functions), and no SQL `update case_study set … status`
-// outside the sanctioned function body.
+// adapter calls `transition_case_study`, and through `case-study.approve()` (Story 4.8),
+// whose adapter calls `approve_revision` (the `approve` transition, with the revision
+// and `approved_revision_id`, in one transaction). This scans src/ and
+// supabase/migrations/ for any other writer: no TS insert/update/upsert on `case_study`,
+// and no SQL `update case_study set … status` outside the sanctioned function bodies.
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
-const SANCTIONED_MIGRATION = "supabase/migrations/20261012120000_case_study_transition.sql";
-/** The sanctioned writer's definition, through the end of its dollar-quoted body. */
-const SANCTIONED_FUNCTION = /create\s+function\s+public\.transition_case_study\s*\([\s\S]*?\$\$[\s\S]*?\$\$\s*;/i;
+/** The sanctioned writers: migration → their definition, through the end of the dollar-quoted body. */
+const SANCTIONED: Readonly<Record<string, RegExp>> = {
+  "supabase/migrations/20261012120000_case_study_transition.sql": /create\s+function\s+public\.transition_case_study\s*\([\s\S]*?\$\$[\s\S]*?\$\$\s*;/i,
+  "supabase/migrations/20261103120000_case_study_approve.sql": /create\s+function\s+public\.approve_revision\s*\([\s\S]*?\$\$[\s\S]*?\$\$\s*;/i,
+};
 
 const TS_WRITE = /\.from\(\s*["'`]case_study["'`]\s*\)\s*\.(insert|update|upsert)\s*\(/;
 
@@ -46,14 +49,15 @@ describe("case_study.status has one writer (AD-3)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("no migration writes status outside transition_case_study", () => {
+  it("no migration writes status outside transition_case_study and approve_revision", () => {
     const migrations = files("supabase/migrations", /\.sql$/);
-    expect(migrations).toContain(SANCTIONED_MIGRATION);
+    for (const rel of Object.keys(SANCTIONED)) expect(migrations).toContain(rel);
     const offenders = migrations.filter((rel) => {
       let sql = read(rel);
-      if (rel === SANCTIONED_MIGRATION) {
-        expect(sqlStatusWrites(sql.match(SANCTIONED_FUNCTION)?.[0] ?? "")).toBe(1);
-        sql = sql.replace(SANCTIONED_FUNCTION, "");
+      const fn = SANCTIONED[rel];
+      if (fn !== undefined) {
+        expect(sqlStatusWrites(sql.match(fn)?.[0] ?? "")).toBe(1);
+        sql = sql.replace(fn, "");
       }
       return sqlStatusWrites(sql) > 0;
     });

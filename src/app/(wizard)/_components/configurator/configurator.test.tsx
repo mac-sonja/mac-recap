@@ -31,7 +31,8 @@ vi.mock("next/link", () => ({
 }));
 
 const refresh = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push }) }));
 
 // The Media tab's server actions (Story 4.5a).
 const actions = vi.hoisted(() => ({
@@ -94,6 +95,8 @@ function setup(
     values = VALUES,
     media = MEDIA,
     onRenderAssets,
+    onApprove,
+    clientFiles,
   }: {
     editable?: boolean;
     onSave?: SaveFn;
@@ -102,6 +105,8 @@ function setup(
     values?: BoundValues;
     media?: readonly ListedAsset[];
     onRenderAssets?: ConfiguratorProps["onRenderAssets"];
+    onApprove?: ConfiguratorProps["onApprove"];
+    clientFiles?: ConfiguratorProps["clientFiles"];
   } = {},
 ) {
   return render(
@@ -122,6 +127,9 @@ function setup(
       media={media}
       mediaRules={MEDIA_RULES}
       onRenderAssets={onRenderAssets}
+      onApprove={onApprove}
+      headVersion={7}
+      clientFiles={clientFiles}
     />,
   );
 }
@@ -2908,5 +2916,160 @@ describe("Configurator pages (Story 4.13)", () => {
     fireEvent.click(button(dict.configurator.preview.enter));
     expect(within(canvas()).queryByRole("button", { name: p.add, hidden: true })).toBeNull();
     expect(within(canvas()).queryByRole("button", { name: fill(p.deleteLabel, { n: 1 }), hidden: true })).toBeNull();
+  });
+});
+
+describe("Configurator Approva (Story 4.8)", () => {
+  const a = dict.configurator.approval;
+  type ApproveFn = NonNullable<ConfiguratorProps["onApprove"]>;
+  const approveButton = () => button(dict.configurator.approve, document.querySelector<HTMLElement>("header")!);
+  const dialog = () => document.querySelector<HTMLElement>("dialog");
+  const flush = async () => {
+    for (let i = 0; i < 10; i++) await act(async () => {});
+  };
+
+  beforeEach(() => {
+    push.mockReset();
+    refresh.mockReset();
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+      this.removeAttribute("open");
+    };
+  });
+
+  it("with nothing overflowing and every file there, asks, then approves this version and goes to Case studies", async () => {
+    const onApprove = vi.fn<ApproveFn>(async () => ({ ok: true, value: { waiting: false } }));
+    setup(false, formats, { onApprove });
+    await flush();
+    expect(approveButton().hasAttribute("aria-disabled")).toBe(false);
+    fireEvent.click(approveButton());
+    expect(dialog()!.textContent).toContain(fill(a.title, { name: "Rebrand Lumen" }));
+    expect(dialog()!.textContent).toContain(a.description);
+    fireEvent.click(button(a.confirm, dialog()!));
+    await flush();
+    expect(onApprove).toHaveBeenCalledWith({
+      caseId: CASE_ID,
+      revisionId: REVISION_ID,
+      expectedRevisionVersion: 4,
+      expectedHeadVersion: 7,
+      overflow: Object.fromEntries(FORMAT_IDS.map((id) => [id, false])),
+    });
+    expect(push).toHaveBeenCalledWith("/case-studies?approvata=1");
+  });
+
+  it("goes to Da approvare when other cases wait", async () => {
+    const onApprove = vi.fn<ApproveFn>(async () => ({ ok: true, value: { waiting: true } }));
+    setup(false, formats, { onApprove });
+    await flush();
+    fireEvent.click(approveButton());
+    fireEvent.click(button(a.confirm, dialog()!));
+    await flush();
+    expect(push).toHaveBeenCalledWith("/case-studies?stato=in_review&approvata=1");
+  });
+
+  it("is inactive and names the page when a format overflows; pressing it does nothing", async () => {
+    // Only Carosello's pages overflow.
+    const scroll = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.closest('[data-measure-format="carosello_1_1"]') === null ? 100 : 200;
+    });
+    const client = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(100);
+    try {
+      const onApprove = vi.fn<ApproveFn>();
+      setup(false, formats, { onApprove });
+      await flush();
+      expect(approveButton().getAttribute("aria-disabled")).toBe("true");
+      const reason = document.getElementById(approveButton().getAttribute("aria-describedby")!)!;
+      expect(reason.textContent).toBe(fill(a.overflow, { format: dict.configurator.formats.carosello_1_1, n: 1 }));
+      fireEvent.click(approveButton());
+      expect(dialog()!.hasAttribute("open")).toBe(false);
+      expect(onApprove).not.toHaveBeenCalled();
+    } finally {
+      scroll.mockRestore();
+      client.mockRestore();
+    }
+  });
+
+  it("is inactive and names a file a page shows that is no longer there", async () => {
+    setup(false, formats, { onApprove: vi.fn<ApproveFn>(), media: [] });
+    await flush();
+    expect(approveButton().getAttribute("aria-disabled")).toBe("true");
+    expect(approveButton().getAttribute("title")).toBe(fill(a.missing, { name: a.unknownFile }));
+  });
+
+  it("counts the client's files as present", async () => {
+    setup(false, formats, { onApprove: vi.fn<ApproveFn>(), media: [], clientFiles: MEDIA.map((f) => ({ id: f.id, name: f.originalFileName })) });
+    await flush();
+    expect(approveButton().hasAttribute("aria-disabled")).toBe(false);
+  });
+
+  it("saves a pending edit first and approves the version that save returned", async () => {
+    const order: string[] = [];
+    const onSave = vi.fn<SaveFn>(async (input) => {
+      order.push("save");
+      return savedOk(input);
+    });
+    const onApprove = vi.fn<ApproveFn>(async () => {
+      order.push("approve");
+      return { ok: true, value: { waiting: false } };
+    });
+    setup(false, formats, { onApprove, onSave });
+    fireEvent.click(button(dict.configurator.pages.add, canvas()));
+    await flush();
+    fireEvent.click(approveButton());
+    fireEvent.click(button(a.confirm, dialog()!));
+    await flush();
+    expect(order).toEqual(["save", "approve"]);
+    expect(onApprove).toHaveBeenCalledWith(expect.objectContaining({ expectedRevisionVersion: 5 }));
+  });
+
+  it("a save that fails stops the approval and says so", async () => {
+    const onApprove = vi.fn<ApproveFn>();
+    setup(false, formats, { onApprove, onSave: vi.fn<SaveFn>().mockRejectedValue(new Error("offline")) });
+    fireEvent.click(button(dict.configurator.pages.add, canvas()));
+    await flush();
+    fireEvent.click(approveButton());
+    fireEvent.click(button(a.confirm, dialog()!));
+    await flush();
+    expect(onApprove).not.toHaveBeenCalled();
+    expect(dialog()!.hasAttribute("open")).toBe(false);
+    expect(status().textContent).toBe(a.notSaved);
+  });
+
+  it("MATERIAL_MISSING from the server names the file and keeps it disabled; a stale case reloads", async () => {
+    const onApprove = vi
+      .fn<ApproveFn>()
+      .mockResolvedValueOnce({ ok: false, status: 400, error: { code: "MATERIAL_MISSING", message: "m", assetIds: [VIDEO] } });
+    setup(false, formats, { onApprove });
+    await flush();
+    fireEvent.click(approveButton());
+    fireEvent.click(button(a.confirm, dialog()!));
+    await flush();
+    expect(approveButton().getAttribute("title")).toBe(fill(a.missing, { name: "LUM_reel.mp4" }));
+    expect(push).not.toHaveBeenCalled();
+    cleanup();
+    const stale = vi.fn<ApproveFn>(async () => ({ ok: false, status: 409, error: { code: "STALE_HEAD", message: "m" } }));
+    setup(false, formats, { onApprove: stale });
+    await flush();
+    fireEvent.click(approveButton());
+    fireEvent.click(button(a.confirm, dialog()!));
+    await flush();
+    expect(refresh).toHaveBeenCalled();
+    expect(status().textContent).toBe(a.stale);
+  });
+
+  it("Annulla closes the dialog without approving; on trial pages Approva still says it arrives soon", async () => {
+    const onApprove = vi.fn<ApproveFn>();
+    setup(false, formats, { onApprove });
+    await flush();
+    fireEvent.click(approveButton());
+    fireEvent.click(button(a.cancel, dialog()!));
+    expect(dialog()!.hasAttribute("open")).toBe(false);
+    expect(onApprove).not.toHaveBeenCalled();
+    cleanup();
+    setup(true, formats, { onApprove });
+    fireEvent.click(approveButton());
+    expect(status().textContent).toBe(`${dict.configurator.approve} arriva presto.`);
   });
 });

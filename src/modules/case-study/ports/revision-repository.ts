@@ -19,6 +19,14 @@ export interface RevisionDocSave {
   actorId: string;
 }
 
+export interface RevisionApproval {
+  caseId: string;
+  revisionId: string;
+  expectedRevisionVersion: number;
+  expectedHeadVersion: number;
+  actorId: string;
+}
+
 /** Reads and writes `revision`. Implemented by `adapters/supabase/revision-repository.ts`. */
 export interface RevisionRepository {
   /**
@@ -37,6 +45,14 @@ export interface RevisionRepository {
    * moved), otherwise `err` only when the write fails. Nothing is written on any `err`.
    */
   saveDoc(input: RevisionDocSave): Promise<Result<Revision>>;
+  /**
+   * Approves the `working` head of an `in_review` case (Story 4.8) by compare-and-set on
+   * `version` and `head_version`: the revision `approved`, the case `approved` with
+   * `approved_revision_id`, a `transition` and a `revision_approved` event, atomically.
+   * `err NOT_FOUND`, `STALE_HEAD`, `CASE_NOT_APPROVABLE`, `REVISION_NOT_WRITABLE`,
+   * `STALE_REVISION`, otherwise `err` only when the write fails. Nothing is written on any `err`.
+   */
+  approve(input: RevisionApproval): Promise<Result<Revision>>;
   /** `ok(null)` when no revision has this id; `err` only when the lookup itself fails. Documents as stored. */
   findById(id: string): Promise<Result<Revision | null>>;
 }

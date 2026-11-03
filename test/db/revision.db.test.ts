@@ -780,3 +780,132 @@ describe("save_revision_doc", () => {
     });
   });
 });
+
+describe("approve_revision (Story 4.8)", () => {
+  const approveSql = "select * from public.approve_revision($1, $2, $3, $4, $5)";
+
+  /** A fresh case moved to `in_review` with a working head revision, and its head version. */
+  async function reviewCase() {
+    const created = await createCase();
+    const revision = await createRevision(created.id, 0);
+    const { transition } = await loadCaseStudy();
+    const actor = await signedInActor();
+    for (const event of ["generate", "generation_succeeded"] as const) {
+      const moved = await transition(created.id, event, actor);
+      if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
+    }
+    const { head_version } = await caseRow(created.id);
+    return { caseId: created.id, revisionId: revision.id, headVersion: head_version as number };
+  }
+
+  const approve = (caseId: string, revisionId: string, version: number, headVersion: number) =>
+    pool.query(approveSql, [caseId, revisionId, version, headVersion, TEST_ACTOR_ID]);
+
+  async function state(caseId: string, revisionId: string) {
+    const { rows } = await pool.query(
+      `select c.status as case_status, c.approved_revision_id, r.status as revision_status
+         from public.case_study c join public.revision r on r.id = $2 where c.id = $1`,
+      [caseId, revisionId],
+    );
+    return rows[0];
+  }
+
+  async function events(caseId: string) {
+    const { rows } = await pool.query(
+      "select type, revision_id, actor_id, data from public.case_event where case_id = $1 and type in ('transition', 'revision_approved') order by at, type",
+      [caseId],
+    );
+    return rows.filter((row) => row.type === "revision_approved" || row.data.event === "approve");
+  }
+
+  it("is security definer with an empty search_path, executable by service_role only", async () => {
+    const { rows } = await pool.query(
+      `select p.prosecdef, p.proconfig,
+              has_function_privilege('service_role', p.oid, 'execute') as service,
+              has_function_privilege('authenticated', p.oid, 'execute') as authed,
+              has_function_privilege('anon', p.oid, 'execute') as anon
+         from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'approve_revision'`,
+    );
+    expect(rows).toEqual([{ prosecdef: true, proconfig: ["search_path=\"\""], service: true, authed: false, anon: false }]);
+  });
+
+  it("approves the revision and the case, sets approved_revision_id and writes both events with the actor", async () => {
+    const { caseId, revisionId, headVersion } = await reviewCase();
+    const { rows } = await approve(caseId, revisionId, 0, headVersion);
+    expect(rows[0]).toMatchObject({ id: revisionId, status: "approved" });
+    expect(await state(caseId, revisionId)).toEqual({ case_status: "approved", approved_revision_id: revisionId, revision_status: "approved" });
+    const written = await events(caseId);
+    expect(written).toHaveLength(2);
+    expect(written).toEqual(
+      expect.arrayContaining([
+        { type: "revision_approved", revision_id: revisionId, actor_id: TEST_ACTOR_ID, data: { revisionId, version: 0 } },
+        { type: "transition", revision_id: null, actor_id: TEST_ACTOR_ID, data: { event: "approve", from: "in_review", to: "approved" } },
+      ]),
+    );
+  });
+
+  it.each([
+    ["STALE_REVISION", (h: number) => [1, h] as const],
+    ["STALE_HEAD", (h: number) => [0, h + 1] as const],
+  ])("refuses %s and writes nothing", async (code, versions) => {
+    const { caseId, revisionId, headVersion } = await reviewCase();
+    const [version, head] = versions(headVersion);
+    await expect(approve(caseId, revisionId, version, head)).rejects.toMatchObject({ code: "P0001", message: code });
+    expect(await state(caseId, revisionId)).toEqual({ case_status: "in_review", approved_revision_id: null, revision_status: "working" });
+    expect(await events(caseId)).toEqual([]);
+  });
+
+  it("refuses a case that is not in_review with CASE_NOT_APPROVABLE", async () => {
+    const created = await createCase();
+    const revision = await createRevision(created.id, 0);
+    const { head_version } = await caseRow(created.id);
+    await expect(approve(created.id, revision.id, 0, head_version)).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_APPROVABLE" });
+  });
+
+  it("refuses an unknown revision, another case's, or a deleted case with NOT_FOUND", async () => {
+    const { caseId, revisionId, headVersion } = await reviewCase();
+    await expect(approve(caseId, UNKNOWN_ID, 0, headVersion)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+    const other = await reviewCase();
+    await expect(approve(caseId, other.revisionId, 0, headVersion)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [caseId]);
+    await expect(approve(caseId, revisionId, 0, headVersion)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+  });
+
+  it.each([
+    ["STALE_HEAD", async () => {
+      const c = await reviewCase();
+      return { ...c, headVersion: c.headVersion + 1 };
+    }],
+    ["CASE_NOT_APPROVABLE", async () => {
+      const created = await createCase();
+      const revision = await createRevision(created.id, 0);
+      const { head_version } = await caseRow(created.id);
+      return { caseId: created.id, revisionId: revision.id, headVersion: head_version as number };
+    }],
+    ["REVISION_NOT_WRITABLE", async () => {
+      const c = await reviewCase();
+      await pool.query("update public.revision set status = 'superseded' where id = $1", [c.revisionId]);
+      return c;
+    }],
+  ] as const)("approve maps the refusal %s through the adapter", async (code, arrange) => {
+    const { caseId, revisionId, headVersion } = await arrange();
+    const { approve: approveCase, referencedAssetIds } = await loadCaseStudy();
+    const overflow = Object.fromEntries(FORMAT_IDS.map((id) => [id, false]));
+    const all = async () => ok([...referencedAssetIds(v2())]);
+    const input = { caseId, revisionId, expectedRevisionVersion: 0, expectedHeadVersion: headVersion, overflow };
+    expect(await approveCase(await signedInActor(), input, all)).toMatchObject({ ok: false, error: { code } });
+  });
+
+  it("approve maps through the real adapter, MATERIAL_MISSING first when a referenced file is gone", async () => {
+    const { caseId, revisionId, headVersion } = await reviewCase();
+    const { approve: approveCase } = await loadCaseStudy();
+    const overflow = Object.fromEntries(FORMAT_IDS.map((id) => [id, false]));
+    const input = { caseId, revisionId, expectedRevisionVersion: 0, expectedHeadVersion: headVersion, overflow };
+    // The fixture references files this case doesn't have.
+    expect(await approveCase(await signedInActor(), input, noNewAssets)).toMatchObject({ ok: false, error: { code: "MATERIAL_MISSING" } });
+    const { referencedAssetIds } = await loadCaseStudy();
+    const all = async () => ok([...referencedAssetIds(v2())]);
+    expect(await approveCase(await signedInActor(), input, all)).toMatchObject({ ok: true, value: { id: revisionId, status: "approved" } });
+  });
+});

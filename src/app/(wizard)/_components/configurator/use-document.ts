@@ -57,6 +57,14 @@ export interface DocumentState {
   change: (next: Formats, formatId: FormatId, group?: string) => void;
   /** Saves the latest document now (e.g. when a text editing session ends). */
   flush: () => void;
+  /**
+   * Saves the latest document now and waits for it (Story 4.8, before approving): true
+   * once the server holds exactly what is shown, false when a save failed or the revision
+   * went stale.
+   */
+  settle: () => Promise<boolean>;
+  /** The revision `version` the last save returned (or the one read). */
+  version: () => number;
   /** Undoes or redoes one step and returns the format it changed, or undefined with nothing to do. */
   undo: () => FormatId | undefined;
   redo: () => FormatId | undefined;
@@ -67,6 +75,9 @@ export const HISTORY_LIMIT = 100;
 
 /** Waits before the 1st, 2nd and 3rd retry; later retries wait the last value here. */
 export const RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 15_000] as const;
+
+/** How long `settle` waits for a save in flight before giving up. */
+const SETTLE_TIMEOUT_MS = 30_000;
 
 /** After this many failures in a row the banner shows. */
 export const BANNER_AFTER = 3;
@@ -241,6 +252,26 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
     if (failures.current === 0) void run();
   }, [run]);
 
+  const settle = useCallback(async () => {
+    group.current = undefined;
+    const deadline = Date.now() + SETTLE_TIMEOUT_MS;
+    const drained = async () => {
+      while (inFlight.current) {
+        if (Date.now() > deadline) return false;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return true;
+    };
+    // A save in flight finishes first; then whatever was edited meanwhile goes now.
+    if (!(await drained()) || stopped.current) return false;
+    if (current.current !== saved.current) await run();
+    if (!(await drained())) return false;
+    // What's shown is what's stored (an earlier failure undone back to it counts as saved).
+    return !stopped.current && current.current === saved.current;
+  }, [run]);
+
+  const currentVersion = useCallback(() => version.current, []);
+
   useEffect(() => {
     // Closing or reloading the tab with an edit not yet saved asks first.
     function onBeforeUnload(event: BeforeUnloadEvent) {
@@ -260,5 +291,18 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
     };
   }, []);
 
-  return { formats, save: saveState, banner, refused, canUndo: history.undo > 0, canRedo: history.redo > 0, change, flush, undo, redo };
+  return {
+    formats,
+    save: saveState,
+    banner,
+    refused,
+    canUndo: history.undo > 0,
+    canRedo: history.redo > 0,
+    change,
+    flush,
+    settle,
+    version: currentVersion,
+    undo,
+    redo,
+  };
 }

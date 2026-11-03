@@ -24,7 +24,7 @@ vi.mock("next/navigation", () => ({
   }),
   useRouter: () => ({ refresh: vi.fn() }),
 }));
-vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn(), getRenderAssets: vi.fn() }));
+vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn(), getRenderAssets: vi.fn(), approveCase: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => (name === "mac-theme" ? { value: "dark" } : undefined) }) }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
 vi.mock("@/modules/case-study", async () => ({
@@ -34,7 +34,9 @@ vi.mock("@/modules/case-study", async () => ({
   getEditableRevision: (subject: unknown) => getEditableRevision(subject),
   getClientInfoForCase: (id: unknown) => getClientInfoForCase(id),
   getClient: (id: unknown) => getClient(id),
+  listClientMaterial: () => listClientMaterial(),
 }));
+const listClientMaterial = vi.fn(async (): Promise<unknown> => ({ ok: true, value: [{ id: "cccccccc-0000-4000-8000-000000000001", fileName: "logo.png" }] }));
 /** The props the page gives the configurator (Story 4.4c's Pagine di default inputs). */
 const configuratorProps = vi.fn<(props: Record<string, unknown>) => void>();
 vi.mock("../../../_components/configurator/configurator", async () => {
@@ -54,7 +56,7 @@ vi.mock("@/modules/material", async () => ({
 }));
 
 const { default: ConfiguratorPage } = await import("./page");
-const { getRenderAssets } = await import("./actions");
+const { approveCase, getRenderAssets } = await import("./actions");
 
 const ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
@@ -80,7 +82,7 @@ const inReview: CaseStudy = {
   projectOrderRef: null,
   headRevisionId: "dddddddd-0000-4000-8000-000000000001",
   approvedRevisionId: null,
-  headVersion: 1,
+  headVersion: 7,
   createdBy: "00000000-0000-4000-8000-000000000002",
   createdAt: "2026-10-14T10:00:00+00:00",
   updatedAt: "2026-10-14T10:00:00+00:00",
@@ -195,6 +197,17 @@ describe("ConfiguratorPage", () => {
     });
     // Story 4.5b: files uploaded later get their render assets through this action.
     expect(props.onRenderAssets).toBe(getRenderAssets);
+    // Story 4.8: Approva's action, the head version and the client's files.
+    expect(props.onApprove).toBe(approveCase);
+    expect(props.headVersion).toBe(7);
+    expect(props.clientFiles).toEqual([{ id: "cccccccc-0000-4000-8000-000000000001", name: "logo.png" }]);
+  });
+
+  it("still opens when the client's files can't be read: none count as present (Story 4.8)", async () => {
+    listClientMaterial.mockResolvedValueOnce({ ok: false, error: { code: "CLIENT_ASSET_LOOKUP_FAILED", message: "down" } });
+    configuratorProps.mockClear();
+    await render();
+    expect(configuratorProps.mock.calls.at(-1)![0].clientFiles).toEqual([]);
   });
 
   it("guards the surface with `edit` and reads the case's editable revision", async () => {

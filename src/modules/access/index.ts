@@ -138,6 +138,10 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   REVISION_NOT_WRITABLE: 409,
   CASE_NOT_EDITABLE: 409,
   ASSET_NOT_ALLOWED: 400,
+  // Story 4.8.
+  OVERFLOW_NOT_CLEARED: 400,
+  MATERIAL_MISSING: 400,
+  CASE_NOT_APPROVABLE: 409,
   // Clients and case history codes (Story 2.12, AD-21).
   CLIENT_NOT_FOUND: 404,
   CLIENT_NAME_TAKEN: 409,

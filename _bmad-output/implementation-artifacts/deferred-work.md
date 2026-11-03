@@ -292,3 +292,6 @@
 - source_spec: none
   summary: Story 4.5c-2: the Animazione dialog's drop zone ("Trascina qui immagini e video", "scegli dai file") uploading to the case's Media with Story 2.7's rules and adding the new files to the animation in order; needs the Media tab's upload logic pulled into a shared hook.
   evidence: Split from Story 4.5c at the owner's choice (2026-11-03); meanwhile files are added from the Media tab and picked in the dialog.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-8-approva.md`
+  summary: Approval checks the material (`allowedAssetIds`) before it calls `approve_revision`, in separate requests: a file deleted between the check and the write leaves an approved revision pointing at it. Closing it needs the material check inside the database transaction (or a lock on the case's and client's files while approving).
+  evidence: Review of 4.8 (Edge Case Hunter); rare: needs a file removed by someone else in the seconds between the check and the write.

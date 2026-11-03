@@ -96,6 +96,15 @@ describe("CaseStudiesPage", () => {
     expect(checked(unknown)).toBe(dict.caseStudies.filter.all);
   });
 
+  it("says the case is in the library after Approva (?approvata=1), and nothing otherwise", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(ok([caseStudy({ status: "approved" })]));
+    const after = renderToStaticMarkup(await CaseStudiesPage({ searchParams: Promise.resolve({ approvata: "1" }) }));
+    expect(after).toContain(dict.configurator.approval.done);
+    const plain = renderToStaticMarkup(await CaseStudiesPage({ searchParams: Promise.resolve({}) }));
+    expect(plain).not.toContain(dict.configurator.approval.done);
+  });
+
   it("queries approved cases only for account/sales/social", async () => {
     requireSurface.mockResolvedValue(shell("account_sales_social", "/library"));
     list.mockResolvedValue(ok([caseStudy({ status: "approved" })]));

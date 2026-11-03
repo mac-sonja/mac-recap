@@ -15,13 +15,16 @@ import { parseStatusFilter, type CaseStudyRow } from "./_components/filter-sort"
  * the policy denies is ever queried. The list loads once; search and sort run in
  * the browser. A failed load throws into Next's error boundary: no partial table.
  * `?stato=` starts the status filter on one status; `?stato=in_review` is the To review queue.
+ * `?approvata=1` (the configurator's redirect after **Approva**, Story 4.8) says the case
+ * is now in the library.
  */
 export default async function CaseStudiesPage({
   searchParams,
-}: { searchParams?: Promise<{ q?: string | string[]; stato?: string | string[] }> } = {}) {
+}: { searchParams?: Promise<{ q?: string | string[]; stato?: string | string[]; approvata?: string | string[] }> } = {}) {
   const params = await searchParams;
   const q = params?.q;
   const initialStatus = parseStatusFilter(params?.stato);
+  const justApproved = params?.approvata === "1";
   // The sidebar search lands here with `?q=`; the key restarts the table's search when it changes.
   const initialQuery = typeof q === "string" ? q.slice(0, 200) : "";
   const shell = await requireSurface("list cases");
@@ -51,6 +54,11 @@ export default async function CaseStudiesPage({
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={it.caseStudies.heading} lead={it.caseStudies.lead} />
+      {justApproved && (
+        <p role="status" className="rounded-xl bg-surface-raised px-4 py-3 font-label text-[13.5px] font-medium text-foreground-strong shadow-card">
+          {it.configurator.approval.done}
+        </p>
+      )}
       <CaseStudiesTable
         key={`${initialQuery}\u0000${initialStatus}`}
         rows={rows}

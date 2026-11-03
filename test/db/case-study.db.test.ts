@@ -414,16 +414,28 @@ describe("get", () => {
   });
 });
 
+/**
+ * Moves an in_review case to approved for a test's setup. The module's `transition`
+ * refuses `approve` (Story 4.8: only `approve`, which checks the pages, approves), so
+ * setup goes through the repository's adapter, as the database still allows it.
+ */
+async function approveForSetup(caseId: string) {
+  const { createSupabaseCaseStudyRepository } = await import("@/modules/case-study/adapters/supabase/case-study-repository");
+  const moved = await createSupabaseCaseStudyRepository().transition({ caseId, event: "approve", from: "in_review", to: "approved", actorId: TEST_ACTOR_ID });
+  if (!moved.ok) throw new Error(`setup approve failed: ${moved.error.code}`);
+}
+
 describe("list", () => {
   /** A committed case walked to `approved` through the real transition use case. */
   async function approvedCase(input: Record<string, unknown> = {}) {
     const { transition } = await loadCaseStudy();
     const actor = await signedInActor();
     const created = await createCase(input);
-    for (const event of ["generate", "generation_succeeded", "approve"]) {
+    for (const event of ["generate", "generation_succeeded"]) {
       const moved = await transition(created.id, event, actor);
       if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
     }
+    await approveForSetup(created.id);
     return created.id;
   }
 
@@ -1110,6 +1122,10 @@ describe("transition", () => {
     const actor = await signedInActor();
     const created = await createCase();
     for (const event of PATH[status]) {
+      if (event === "approve") {
+        await approveForSetup(created.id);
+        continue;
+      }
       const moved = await transition(created.id, event, actor);
       if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
     }
@@ -1138,7 +1154,6 @@ describe("transition", () => {
     ["draft", "generate", "generating"],
     ["generating", "generation_succeeded", "in_review"],
     ["generating", "generation_failed", "draft"],
-    ["in_review", "approve", "approved"],
   ] as const)("%s --%s--> %s writes the status and one transition event with the actor", async (from, event, to) => {
     const id = await caseIn(from);
     const before = await transitionEvents(id);
@@ -1155,6 +1170,8 @@ describe("transition", () => {
   });
 
   it.each([
+    // Approval goes through `approve` only, which checks the pages first (Story 4.8).
+    ["approve on in_review", "in_review", "approve"],
     ["approve on draft", "draft", "approve"],
     ["generation_succeeded on draft", "draft", "generation_succeeded"],
     ["generate on in_review", "in_review", "generate"],

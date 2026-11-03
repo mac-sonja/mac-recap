@@ -31,6 +31,27 @@ export async function saveRevisionDoc(input: unknown): Promise<ActionResult<{ ve
 }
 
 /**
+ * **Approva** (Story 4.8): input `{ caseId, revisionId, expectedRevisionVersion,
+ * expectedHeadVersion, overflow }` (each format of that revision version, `true` when a
+ * page overflows, as the browser measured it). Returns `{ waiting }`: whether other cases
+ * are still in Da approvare (the configurator goes there, else to Case studies). 403
+ * `FORBIDDEN` unless the role may `approve`; 400 `INVALID_INPUT`, `OVERFLOW_NOT_CLEARED`,
+ * `MATERIAL_MISSING` (with `assetIds`); 404 `NOT_FOUND`; 409 `STALE_REVISION`, `STALE_HEAD`,
+ * `CASE_NOT_APPROVABLE`, `REVISION_NOT_WRITABLE`. Nothing is written on any error.
+ */
+export async function approveCase(input: unknown): Promise<ActionResult<{ waiting: boolean }>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "approve");
+  if (!decision.ok) return failure(decision.error);
+  const approved = await caseStudy.approve(actor.value, input, material.liveAssetIds);
+  if (!approved.ok) return failure(approved.error);
+  // Other cases waiting decide where the person goes next; a failed read only sends them to Case studies.
+  const waiting = await caseStudy.list({ status: "in_review" });
+  return { ok: true, value: { waiting: waiting.ok && waiting.value.length > 0 } };
+}
+
+/**
  * The render assets of files the Media tab listed after the page loaded (Story 4.5b): input
  * `{ caseId, assetIds }`; returns, by asset id, those that are this case's live images and
  * videos with a rendition ready (an id that isn't, or whose rendition is still being made,

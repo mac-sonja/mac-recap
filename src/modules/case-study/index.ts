@@ -36,6 +36,7 @@ import { makeListClientSummaries } from "@/modules/case-study/application/list-c
 import { makeListClients } from "@/modules/case-study/application/list-clients";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
 import {
+  makeApprove,
   makeCreateWorkingRevision,
   makeGetEditableRevision,
   makeGetLiveRevision,
@@ -535,6 +536,23 @@ export function createWorkingRevision(actor: Actor, input: unknown): Promise<Res
  */
 export function saveRevisionDoc(actor: Actor, input: unknown, caseAssetIds: CaseAssetIds): Promise<Result<CaseStudyRevision>> {
   return makeSaveRevisionDoc({ ...revisionDeps(), clients: createSupabaseClientRepository(), caseAssetIds })(actor, input);
+}
+
+/**
+ * Approves a case (Story 4.8): input `{ caseId, revisionId, expectedRevisionVersion,
+ * expectedHeadVersion, overflow }`, `overflow` being each format of that revision version
+ * as measured in the person's browser (`true` = a page overflows). The only way a case
+ * becomes `approved`: a person's call, never in bulk or automatically. Authorize `approve`
+ * first; pass `material.liveAssetIds` as `caseAssetIds`.
+ *
+ * Errors, with nothing written: `INVALID_INPUT`, `NOT_FOUND`, `OVERFLOW_NOT_CLEARED`
+ * (a format missing or overflowing), `MATERIAL_MISSING` (`details.assetIds`: referenced
+ * files no longer there), the asset lookup errors, `STALE_HEAD`, `CASE_NOT_APPROVABLE`
+ * (not `in_review`), `REVISION_NOT_WRITABLE`, `STALE_REVISION`. `REVISION_WRITE_FAILED`
+ * may come after the write committed: re-read the case.
+ */
+export function approve(actor: Actor, input: unknown, caseAssetIds: CaseAssetIds): Promise<Result<CaseStudyRevision>> {
+  return makeApprove({ ...revisionDeps(), clients: createSupabaseClientRepository(), caseAssetIds })(actor, input);
 }
 
 /**

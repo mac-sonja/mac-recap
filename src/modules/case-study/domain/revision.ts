@@ -110,3 +110,17 @@ export const saveRevisionDocInputSchema = z.strictObject({
   expectedVersion: z.number().int().nonnegative().max(2_147_483_647),
 });
 export type SaveRevisionDocInput = z.infer<typeof saveRevisionDocInputSchema>;
+
+/**
+ * `approve` (Story 4.8): the head revision of a case, the versions it was read at, and
+ * whether each format of that revision version overflows, as the person's browser
+ * measured it with the shared renderer (the server does not measure again).
+ */
+export const approveInputSchema = z.strictObject({
+  caseId: z.uuid().transform((id) => id.toLowerCase()),
+  revisionId: z.uuid().transform((id) => id.toLowerCase()),
+  expectedRevisionVersion: z.number().int().nonnegative().max(2_147_483_647),
+  expectedHeadVersion: z.number().int().nonnegative().max(2_147_483_647),
+  overflow: z.record(z.string().max(64), z.boolean()),
+});
+export type ApproveInput = z.infer<typeof approveInputSchema>;

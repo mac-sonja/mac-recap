@@ -10,7 +10,7 @@ import { boundValuesOf, imagePoolOf, pagesOfDocument, renderAssetsOf, starterPag
 import { Configurator } from "../../../_components/configurator/configurator";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import { isMedia, type MediaUploadRules } from "../../../_components/configurator/media-files";
-import { getRenderAssets, saveRevisionDoc } from "./actions";
+import { approveCase, getRenderAssets, saveRevisionDoc } from "./actions";
 
 /** The Media tab's drop zone: Story 2.7's limits, images and videos only. */
 const MEDIA_RULES: MediaUploadRules = {
@@ -40,6 +40,9 @@ export interface ConfiguratorPageProps {
  * case's images the revision already uses (none with no revision).
  *
  * Story 4.5a: the Media tab gets the case's images and videos and the upload rules.
+ *
+ * Story 4.8: **Approva** gets its action, the case's `head_version` and the client's files
+ * (a page may show them, so they count as present).
  */
 export default async function ConfiguratorPage({ params }: ConfiguratorPageProps) {
   const shell = await requireSurface("edit");
@@ -66,11 +69,14 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
   if (!form.ok) throw new Error(`Details could not be loaded: ${form.error.code}`);
   if (!listed.ok) throw new Error(`Material could not be loaded: ${listed.error.code}`);
 
-  const [client, assets] = await Promise.all([
+  const [client, assets, clientMaterial] = await Promise.all([
     caseStudy.getClient(info.value.clientId),
     renderAssetsOf(listed.value, (assetId, spec) => material.getRendition(assetId, spec)),
+    caseStudy.listClientMaterial({ clientId: info.value.clientId }),
   ]);
   if (!client.ok) throw new Error(`Client could not be loaded: ${client.error.code}`);
+  // The client's files only widen what counts as present; without them a page that shows one says so, and the server checks again.
+  const clientFiles = clientMaterial.ok ? clientMaterial.value.map((file) => ({ id: file.id, name: file.fileName })) : [];
 
   const head = revision.value;
   const doc = head?.doc ?? null;
@@ -96,6 +102,9 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
       media={listed.value.filter(isMedia)}
       mediaRules={MEDIA_RULES}
       onRenderAssets={getRenderAssets}
+      onApprove={approveCase}
+      headVersion={current.headVersion}
+      clientFiles={clientFiles}
     />
   );
 }

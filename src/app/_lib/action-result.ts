@@ -6,7 +6,7 @@ import type { AppError } from "@/shared/result";
  * status with `{ error: { code, message } }`. `details` stays server-side;
  * only an `INVALID_INPUT`, `CLIENT_FIELD_INVALID` or `CLIENT_FIELD_TOO_LONG` adds the names of the failing fields,
  * a `CLIENT_LOGO_INVALID` for an SVG that failed the safety scan adds `reason: "unsafe_svg"`,
- * and an `ASSET_NOT_ALLOWED` adds the refused `assetIds` (the configurator names those files).
+ * and an `ASSET_NOT_ALLOWED` or `MATERIAL_MISSING` adds the files' `assetIds` (the configurator names them).
  */
 export type ActionResult<T> =
   | { ok: true; value: T }
@@ -30,7 +30,10 @@ export function failure(error: AppError): ActionResult<never> {
     typeof error.details === "object" &&
     error.details !== null &&
     (error.details as { reason?: unknown }).reason === "unsafe_svg";
-  const refused = code === "ASSET_NOT_ALLOWED" && typeof error.details === "object" && error.details !== null ? (error.details as { assetIds?: unknown }).assetIds : undefined;
+  const refused =
+    (code === "ASSET_NOT_ALLOWED" || code === "MATERIAL_MISSING") && typeof error.details === "object" && error.details !== null
+      ? (error.details as { assetIds?: unknown }).assetIds
+      : undefined;
   const assetIds = Array.isArray(refused) ? refused.filter((id): id is string => typeof id === "string") : undefined;
   return {
     ok: false,
