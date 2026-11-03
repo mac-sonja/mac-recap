@@ -318,9 +318,9 @@ describe("Configurator", () => {
     }
   });
 
-  it("shows the left panel's tools in place, inactive; pressing one says it comes soon for 3.5 s and changes nothing", () => {
+  it("shows the left panel's tools in place, inactive when the case can't be edited; pressing one says it comes soon for 3.5 s and changes nothing", () => {
     vi.useFakeTimers();
-    setup();
+    setup(false, formats, { editable: false });
     const panel = leftPanel();
     for (const tool of ["Layout", "Pagine di default", "Elementi", "Sfondo", "Elimina pagina"]) expect(panel.textContent).toContain(tool);
     expect(status().textContent).toBe("");
@@ -2778,5 +2778,135 @@ describe("Configurator Animazione (Story 4.5c)", () => {
     expect((within(panel()).getByLabelText(t.type) as HTMLSelectElement).disabled).toBe(true);
     expect((within(panel()).getByLabelText(t.size) as HTMLInputElement).disabled).toBe(true);
     expect(button(t.change, panel()).getAttribute("aria-disabled")).toBe("true");
+  });
+});
+
+describe("Configurator pages (Story 4.13)", () => {
+  const p = dict.configurator.pages;
+  const pagesNow = () => [...canvas().querySelectorAll<HTMLElement>("[data-canvas-page]")].map((n) => n.dataset.canvasPage);
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const savedKeys = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => (lastDoc(onSave).formats.presentazione_16_9.pages as Page[]).map((pg) => pg.pageKey);
+  const thumb = (key: string) => rightPanel().querySelector<HTMLElement>(`[data-thumb="${key}"]`)!;
+  const pageDrag = (key: string) => ({ dataTransfer: { types: ["application/x-mac-page"], getData: () => key, setData: () => {}, dropEffect: "none", effectAllowed: "all" } });
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  });
+
+  it("+ Aggiungi pagina adds Nuova pagina after the selected page, selected, in one undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, formats, { onSave });
+    const keys = formats.presentazione_16_9.map((pg) => pg.pageKey);
+    fireEvent.click(pageNode(keys[0]!));
+    fireEvent.click(button(p.add, canvas()));
+    const now = pagesNow();
+    expect(now).toHaveLength(keys.length + 1);
+    expect(now[0]).toBe(keys[0]);
+    expect(pageNode(now[1]!).hasAttribute("data-selected")).toBe(true);
+    expect(canvas().textContent).toContain(fill(dict.configurator.canvas.pageLabel, { n: 2, name: p.newPage }));
+    await settle();
+    expect(savedKeys(onSave)).toHaveLength(keys.length + 1);
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    await settle();
+    expect(savedKeys(onSave)).toEqual(keys);
+  });
+
+  it("with nothing selected, a new page goes at the end of Output and scrolls into view; a full format says so", async () => {
+    const onSave = vi.fn(savedOk);
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    setup(false, formats, { onSave });
+    fireEvent.click(button(p.add, canvas()));
+    const pages = formats.presentazione_16_9;
+    const lastOutput = pages.map((pg) => pg.section).lastIndexOf("output");
+    const added = pagesNow()[lastOutput + 1]!;
+    expect(canvas().querySelector(`[data-canvas-page="${added}"]`)!.hasAttribute("data-selected")).toBe(true);
+    expect(scroll).toHaveBeenCalled();
+    cleanup();
+    const one = pages[0]!;
+    setup(false, { ...formats, presentazione_16_9: Array.from({ length: 50 }, (_, i) => ({ ...one, pageKey: `k${i}` })) });
+    fireEvent.click(button(p.add, canvas()));
+    expect(status().textContent).toBe(fill(p.formatFull, { n: 50 }));
+    expect(pagesNow()).toHaveLength(50);
+  });
+
+  it("the bin on a page's label deletes it with a message; ⌘Z brings it back in place", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, formats, { onSave });
+    const keys = formats.presentazione_16_9.map((pg) => pg.pageKey);
+    fireEvent.click(button(fill(p.deleteLabel, { n: 2 }), canvas()));
+    expect(status().textContent).toBe(p.deleted);
+    expect(pagesNow()).toEqual(keys.filter((_, i) => i !== 1));
+    await settle();
+    expect(savedKeys(onSave)).toEqual(keys.filter((_, i) => i !== 1));
+    expect(lastDoc(onSave).formats.carosello_1_1.pages).toEqual(formats.carosello_1_1);
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    await settle();
+    expect(savedKeys(onSave)).toEqual(keys);
+  });
+
+  it("Elimina pagina in the left panel deletes the selected page and clears the selection", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, formats, { onSave });
+    const keys = formats.presentazione_16_9.map((pg) => pg.pageKey);
+    fireEvent.click(pageNode(keys[2]!));
+    fireEvent.click(button(dict.configurator.tools.deletePage, leftPanel()));
+    await settle();
+    expect(savedKeys(onSave)).toEqual(keys.filter((_, i) => i !== 2));
+    expect(canvas().querySelector("[data-selected]")).toBeNull();
+    expect(status().textContent).toBe(p.deleted);
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    await settle();
+    expect(savedKeys(onSave)).toEqual(keys);
+  });
+
+  it("a thumbnail dragged up lands before the target", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, formats, { onSave });
+    const keys = formats.presentazione_16_9.map((pg) => pg.pageKey);
+    const [first, last] = [keys[0]!, keys.at(-1)!];
+    fireEvent.dragStart(thumb(last), pageDrag(last));
+    fireEvent.dragOver(thumb(first), pageDrag(last));
+    expect(thumb(first).dataset.drop).toBe("before");
+    fireEvent.drop(thumb(first), pageDrag(last));
+    await settle();
+    expect(savedKeys(onSave)).toEqual([last, ...keys.slice(0, -1)]);
+  });
+
+  it("a thumbnail dropped on another moves the page, across sections too, keeping its section", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, formats, { onSave });
+    const pages = formats.presentazione_16_9;
+    const keys = pages.map((pg) => pg.pageKey);
+    const last = keys.length - 1;
+    fireEvent.dragStart(thumb(keys[0]!), pageDrag(keys[0]!));
+    fireEvent.dragOver(thumb(keys[last]!), pageDrag(keys[0]!));
+    expect(thumb(keys[last]!).dataset.drop).toBe("after");
+    fireEvent.drop(thumb(keys[last]!), pageDrag(keys[0]!));
+    await settle();
+    expect(savedKeys(onSave)).toEqual([...keys.slice(1), keys[0]]);
+    const moved = (lastDoc(onSave).formats.presentazione_16_9.pages as Page[]).at(-1)!;
+    expect(moved.section).toBe(pages[0]!.section);
+    // Pagine shows it where it now is, under its own section's label.
+    const thumbs = [...rightPanel().querySelectorAll<HTMLElement>("[data-thumb]")].map((t) => t.dataset.thumb);
+    expect(thumbs.at(-1)).toBe(keys[0]);
+  });
+
+  it("in Anteprima and when not editable there is no bin, no Aggiungi pagina, and thumbnails don't drag", () => {
+    setup(false, formats, { editable: false });
+    expect(within(canvas()).queryByRole("button", { name: p.add, hidden: true })).toBeNull();
+    expect(within(canvas()).queryByRole("button", { name: fill(p.deleteLabel, { n: 1 }), hidden: true })).toBeNull();
+    expect(thumb(formats.presentazione_16_9[0]!.pageKey).getAttribute("draggable")).toBe("false");
+    cleanup();
+    setup();
+    fireEvent.click(button(dict.configurator.preview.enter));
+    expect(within(canvas()).queryByRole("button", { name: p.add, hidden: true })).toBeNull();
+    expect(within(canvas()).queryByRole("button", { name: fill(p.deleteLabel, { n: 1 }), hidden: true })).toBeNull();
   });
 });

@@ -30,10 +30,14 @@ import { LeftPanel, type ElementKey } from "./left-panel";
 import {
   addBlock,
   addElement,
+  addPage,
   applyLayout,
   clearAssets,
+  deletePage,
   insertAnimation,
   MAX_ELEMENTS_PER_BLOCK,
+  MAX_PAGES_PER_FORMAT,
+  movePage,
   pasteBlock,
   placeMedia,
   removeSelection,
@@ -350,6 +354,7 @@ export function Configurator({
         else if (edit.reason === "empty") say(it.configurator.edit.defaultEmpty);
         else if (edit.reason === "blockFull") say(it.configurator.edit.blockFull);
         else if (edit.reason === "offBlock") say(it.configurator.media.dropOffBlock);
+        else if (edit.reason === "formatFull") say(fill(it.configurator.pages.formatFull, { n: MAX_PAGES_PER_FORMAT }));
         return false;
       }
       doc.change({ ...formats, [formatId]: edit.pages }, formatId);
@@ -584,6 +589,49 @@ export function Configurator({
     doc.flush();
   }, [doc]);
 
+  /** A page added (Story 4.13): to scroll into view once it renders. */
+  const scrollTo = useRef<string | null>(null);
+
+  /** **+ Aggiungi pagina**: after the selected page, else at the end of Output; selected and scrolled into view. */
+  const addNewPage = useCallback(() => {
+    if (!editable) return;
+    const edit = addPage(formats[formatId], selection?.pageKey, formatId, template, newId);
+    if (applyPageEdit(edit) && edit.ok) scrollTo.current = edit.selection.pageKey;
+  }, [applyPageEdit, editable, formatId, formats, selection, template]);
+
+  useEffect(() => {
+    const key = scrollTo.current;
+    if (key === null) return;
+    scrollTo.current = null;
+    canvasRef.current?.querySelector(`[data-canvas-page="${key}"]`)?.scrollIntoView?.({ block: "center", behavior: reducedMotion() ? "auto" : "smooth" });
+  });
+
+  /** The bin on a page's label, or **Elimina pagina**: that page out of the format in view (one undo step). */
+  const removePage = useCallback(
+    (pageKey: string) => {
+      if (!editable) return;
+      const current = formats[formatId];
+      const next = deletePage(current, pageKey);
+      if (next === current) return;
+      doc.change({ ...formats, [formatId]: next }, formatId);
+      if (selection?.pageKey === pageKey) setSelection(null);
+      if (inView === pageKey) setInView(null);
+      say(it.configurator.pages.deleted);
+    },
+    [doc, editable, formatId, formats, inView, say, selection],
+  );
+
+  /** A Pagine thumbnail dropped on another: the page moves there, keeping its section. */
+  const reorderPage = useCallback(
+    (from: string, to: string) => {
+      if (!editable) return;
+      const current = formats[formatId];
+      const next = movePage(current, from, to);
+      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+    },
+    [doc, editable, formatId, formats],
+  );
+
   /** Removes the selected element or block; false when there is nothing to remove. */
   const removeSelected = useCallback(() => {
     if (!editable) return false;
@@ -761,6 +809,9 @@ export function Configurator({
             onAnimationFit={(fit) => patchAnimation({ fit })}
             onAnimationSize={(size) => patchAnimation({ size }, true)}
             onAnimationSizeDone={mediaDone}
+            onDeletePage={() => {
+              if (toolPage !== undefined) removePage(toolPage.pageKey);
+            }}
             onHide={() => toggleLeft(false)}
             hideRef={hideLeft}
           />
@@ -795,6 +846,8 @@ export function Configurator({
               onPlaceMedia={editable ? (target, assetId) => placeFile(target, assetId, "before") : undefined}
               onCrop={cropMedia}
               onCropDone={mediaDone}
+              onDeletePage={editable ? removePage : undefined}
+              onAddPage={editable ? addNewPage : undefined}
             />
             <StatusMessage message={message} />
             <AnimationDialog
@@ -843,6 +896,7 @@ export function Configurator({
             values={values}
             currentPageKey={selectedPage?.pageKey}
             onSelectPage={selectPage}
+            onMovePage={editable ? reorderPage : undefined}
             caseId={caseId}
             media={media}
             mediaRules={mediaRules}
