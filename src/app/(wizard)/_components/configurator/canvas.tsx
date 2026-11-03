@@ -144,6 +144,7 @@ function CanvasPage({
   animateTexts,
   editable,
   editing,
+  editingBound,
   onEditRequest,
   onTextInput,
   onTextDone,

@@ -23,6 +23,23 @@ import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { Dialog } from "@/app/_components/dialog";
 import { AnimationDialog } from "./animation-dialog";
+import { BoundFieldPanel } from "./bound-field-panel";
+import {
+  boundEditorOf,
+  isTypedEditor,
+  planFieldSave,
+  refusalMessage,
+  runFieldSave,
+  saveErrorMessage,
+  shownValues,
+  typedChange,
+  typedValueOf,
+  type EditableFields,
+  type FieldActions,
+  type FieldChange,
+  type FieldOptions,
+  type TypedEditor,
+} from "./bound-fields";
 import { OverflowReport, type FormatPages, type OverflowByFormat } from "./overflow-report";
 import { Canvas } from "./canvas";
 import { applyDefaultPage, type GeneratedTexts } from "./default-pages";
@@ -60,6 +77,8 @@ import { ICON_BUTTON, SOON_ID } from "./styles";
 import { isOwnText, textElementAt, withGroupAlign, withText, withTextSettings, type TextSettings } from "./text-editing";
 import { TopBar, type ConfiguratorHeader } from "./top-bar";
 import { useDocument, type EditedRevision, type Formats, type SaveInput } from "./use-document";
+
+export type { EditableFields, FieldActions, FieldOptions } from "./bound-fields";
 
 export interface ConfiguratorProps {
   /** The top bar's document: name, code and status (a case today; a client's intro or file later). */
@@ -103,6 +122,14 @@ export interface ConfiguratorProps {
   clientFiles?: readonly { id: string; name: string }[];
   /** The render assets of files listed after the page loaded (Story 4.5b): a new upload can be drawn once its rendition is ready. */
   onRenderAssets?: (input: { caseId: string; assetIds: string[] }) => Promise<ActionResult<Record<string, RenderAsset>>>;
+  /**
+   * The client's and the case's stored fields (Story 4.3d), with what their editors need and
+   * the saves. All three given (and the case editable): bound texts and the meta line,
+   * services and logos can be changed; otherwise a bound text says it can't be edited yet.
+   */
+  fields?: EditableFields;
+  fieldOptions?: FieldOptions;
+  fieldActions?: FieldActions;
 }
 
 /** A fresh id for a new block or element. */
@@ -151,6 +178,14 @@ const NO_CLIENT_FILES: readonly { id: string; name: string }[] = [];
  * in its block and zoomed with **Zoom**, each gesture one undo step (Story 4.5b-3).
  * A file uploaded meanwhile gets its render asset once its rendition is ready. A save
  * refused for a file no longer in the Media names it and offers to take it off the page.
+ *
+ * Client and case fields (Story 4.3d): a text bound to the client's name, a result row or
+ * the testimonial is typed on the page like an own text (Enter or leaving it saves, Esc
+ * cancels); the meta line, the services and the logos are set in the left panel (a
+ * double-click on the meta line focuses its year). Each change saves through the client's or
+ * the case's own update, shows at once on every page and format, then the page reloads the
+ * bound values. They aren't document edits: no undo step, no new revision version. A refused
+ * or failed save puts the old value back and says why.
  */
 export function Configurator({
   header,
@@ -158,7 +193,6 @@ export function Configurator({
   template,
   formats: initial,
   assets: initialAssets,
-  values,
   generatedTexts,
   images,
   trial,
@@ -172,6 +206,10 @@ export function Configurator({
   onApprove,
   headVersion,
   clientFiles = NO_CLIENT_FILES,
+  fields,
+  fieldOptions,
+  fieldActions,
+  values: loadedValues,
 }: ConfiguratorProps) {
   const router = useRouter();
   const doc = useDocument({
@@ -184,7 +222,20 @@ export function Configurator({
   });
   const formats = doc.formats;
   const editable = revision !== null && revision.editable && !trial;
-  const [editing, setEditing] = useState<{ pageKey: string; elementId: string } | null>(null);
+  /** The text being typed in; a bound one (Story 4.3d) with its editor and stored words. */
+  const [editing, setEditing] = useState<{ pageKey: string; elementId: string; bound?: string; editor?: TypedEditor } | null>(null);
+  /** Client and case fields can be changed here (Story 4.3d). */
+  const fieldsOn = editable && fields !== undefined && fieldOptions !== undefined && fieldActions !== undefined;
+  /**
+   * A field change shown at once, while it saves and until the page reloads the bound values:
+   * kept only while the loaded values and fields are those it was made on.
+   */
+  const [fieldShown, setFieldShown] = useState<FieldShown | null>(null);
+  const shownLive = fieldShown !== null && fieldShown.base === loadedValues && fieldShown.baseFields === fields;
+  const values = shownLive ? fieldShown.values : loadedValues;
+  const fieldsNow = shownLive ? fieldShown.fields : fields;
+  /** A double-click on a meta line: its year field takes the focus once. */
+  const [focusYear, setFocusYear] = useState<{ elementId: string; n: number } | null>(null);
   /** One text editing session: its changes are one undo step. */
   const session = useRef(0);
   /** One crop drag, Zoom or Dimensione slide (Stories 4.5b-3, 4.5c): its changes are one undo step. */
@@ -325,15 +376,117 @@ export function Configurator({
       }
       const text = textElementAt(formats[formatId], pageKey, elementId);
       if (text === undefined) return;
-      if (!editable || !isOwnText(text)) {
+      const select = () =>
+        setSelection((current) => (current?.pageKey === pageKey && current.elementId === elementId ? current : selectionOf(formats[formatId], pageKey, elementId)));
+      if (editable && isOwnText(text)) {
+        session.current += 1;
+        select();
+        setEditing({ pageKey, elementId });
+        return;
+      }
+      // A client or case field (Story 4.3d); anything else can't be edited here.
+      const editor = fieldsOn && fieldsNow !== undefined ? boundEditorOf(text) : null;
+      if (editor === null || fieldsNow === undefined) {
         say(it.configurator.editSoon);
         return;
       }
+      if (editor.kind === "meta") {
+        select();
+        setLeftOpen(true);
+        setFocusYear((current) => ({ elementId, n: (current?.n ?? 0) + 1 }));
+        return;
+      }
+      if (!isTypedEditor(editor)) return;
+      if (editor.kind === "name" && fieldsNow.client.logoId === null) {
+        say(it.configurator.fields.needLogo);
+        return;
+      }
+      if ((editor.kind === "resultLabel" || editor.kind === "resultValue") && fieldsNow.case.results[editor.index] === undefined) {
+        say(it.configurator.fields.noRow);
+        return;
+      }
       session.current += 1;
-      setSelection((current) => (current?.pageKey === pageKey && current.elementId === elementId ? current : selectionOf(formats[formatId], pageKey, elementId)));
-      setEditing({ pageKey, elementId });
+      select();
+      setEditing({ pageKey, elementId, bound: typedValueOf(editor, fieldsNow), editor });
     },
-    [editable, formatId, formats, say],
+    [editable, fieldsNow, fieldsOn, formatId, formats, say],
+  );
+
+  /** The latest shown fields and values, for a save queued behind another. */
+  const fieldState = useRef({ loadedValues, fields, values, fieldsNow, fieldShown: shownLive ? fieldShown : null });
+  useEffect(() => {
+    fieldState.current = { loadedValues, fields, values, fieldsNow, fieldShown: shownLive ? fieldShown : null };
+  });
+  /** Field saves run one at a time, each on the fields the previous one left. */
+  const fieldQueue = useRef<Promise<unknown>>(Promise.resolve());
+
+  /**
+   * Saves one field change (Story 4.3d): the whole input from the stored fields plus the
+   * change, through the client's or the case's own action. It shows at once; once saved the
+   * page reloads the bound values. Refused or failed: the old value back, and the message.
+   * Resolves whether it saved (an unchanged value counts as saved).
+   */
+  const commitField = useCallback(
+    (change: FieldChange): Promise<boolean> => {
+      const run = async (): Promise<boolean> => {
+        const now = fieldState.current;
+        if (!fieldsOn || fieldActions === undefined || fieldOptions === undefined || now.fieldsNow === undefined) return false;
+        const plan = planFieldSave(now.fieldsNow, change, caseId, fieldOptions);
+        if (!plan.ok) {
+          if (plan.reason === "unchanged") return true;
+          say(refusalMessage(plan));
+          return false;
+        }
+        const before = now.fieldShown;
+        const shown: FieldShown = {
+          base: now.loadedValues,
+          baseFields: now.fields,
+          values: shownValues(now.values, plan.next, change, { sectors: fieldOptions.sectors, serviceLabel: (line) => it.businessLines[line] }),
+          fields: plan.next,
+        };
+        setFieldShown(shown);
+        fieldState.current = { ...now, values: shown.values, fieldsNow: shown.fields, fieldShown: shown };
+        let result: ActionResult<unknown> | undefined;
+        try {
+          result = await runFieldSave(fieldActions, plan.save);
+        } catch {
+          result = undefined;
+        }
+        if (result?.ok) {
+          router.refresh();
+          return true;
+        }
+        setFieldShown(before);
+        const after = fieldState.current;
+        fieldState.current = {
+          ...after,
+          values: before?.values ?? after.loadedValues,
+          fieldsNow: before?.fields ?? after.fields,
+          fieldShown: before,
+        };
+        const code = result === undefined ? undefined : result.error.code;
+        say(saveErrorMessage(code));
+        // The case moved on (approved, deleted): the page shows where it is now.
+        if (code === "STALE_STATUS" || code === "NOT_FOUND") router.refresh();
+        return false;
+      };
+      const next = fieldQueue.current.then(run, run);
+      fieldQueue.current = next;
+      return next;
+    },
+    [caseId, fieldActions, fieldOptions, fieldsOn, router, say],
+  );
+
+  /** A bound text's typing ended: what was typed saves, Esc (null) leaves it as it was. */
+  const fieldCommit = useCallback(
+    (_pageKey: string, _elementId: string, text: string | null) => {
+      const editor = editing?.editor;
+      session.current += 1;
+      setEditing(null);
+      if (text === null || editor === undefined) return;
+      void commitField(typedChange(editor, text));
+    },
+    [commitField, editing],
   );
 
   const textInput = useCallback(
@@ -834,6 +987,24 @@ export function Configurator({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [preview, slideshow, step]);
 
+  /** Dati del cliente / Dati della case for a selected meta line, services or logos (Story 4.3d). */
+  const panelEditor = fieldsOn ? boundEditorOf(element) : null;
+  const fieldsPanel =
+    panelEditor !== null && !isTypedEditor(panelEditor) && fieldsNow !== undefined && fieldOptions !== undefined && fieldActions !== undefined && selection?.elementId !== undefined ? (
+      <BoundFieldPanel
+        key={selection.elementId}
+        editor={panelEditor}
+        fields={fieldsNow}
+        options={fieldOptions}
+        logoUrl={values.client.logoUrl}
+        onChange={commitField}
+        onAddSector={fieldActions.addClientSector}
+        onLogoFailed={say}
+        focusYear={focusYear?.elementId === selection.elementId ? focusYear.n : 0}
+        onYearFocused={() => setFocusYear(null)}
+      />
+    ) : undefined;
+
   return (
     <div data-editable={editable} className="flex h-dvh flex-col bg-surface text-foreground">
       <p className="m-auto max-w-prose p-8 text-center font-body text-base text-foreground lg:hidden">{it.configurator.narrowScreen}</p>
@@ -943,6 +1114,7 @@ export function Configurator({
             onDeletePage={() => {
               if (toolPage !== undefined) removePage(toolPage.pageKey);
             }}
+            fieldsPanel={fieldsPanel}
             onHide={() => toggleLeft(false)}
             hideRef={hideLeft}
           />
@@ -973,6 +1145,7 @@ export function Configurator({
               onEditRequest={requestEdit}
               onTextInput={textInput}
               onTextDone={textDone}
+              onFieldCommit={fieldCommit}
               onResize={resize}
               onPlaceMedia={editable ? (target, assetId) => placeFile(target, assetId, "before") : undefined}
               onCrop={cropMedia}
@@ -1044,6 +1217,14 @@ export function Configurator({
       </div>
     </div>
   );
+}
+
+/** A field change shown before the page reloads (Story 4.3d): on the loaded values and fields it was made on. */
+interface FieldShown {
+  base: BoundValues;
+  baseFields: EditableFields | undefined;
+  values: BoundValues;
+  fields: EditableFields;
 }
 
 /** The selection of element `elementId` of page `pageKey`, with its block. */
