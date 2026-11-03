@@ -76,6 +76,9 @@ export const HISTORY_LIMIT = 100;
 /** Waits before the 1st, 2nd and 3rd retry; later retries wait the last value here. */
 export const RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 15_000] as const;
 
+/** How long `settle` waits for a save in flight before giving up. */
+const SETTLE_TIMEOUT_MS = 30_000;
+
 /** After this many failures in a row the banner shows. */
 export const BANNER_AFTER = 3;
 
@@ -251,12 +254,20 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
 
   const settle = useCallback(async () => {
     group.current = undefined;
+    const deadline = Date.now() + SETTLE_TIMEOUT_MS;
+    const drained = async () => {
+      while (inFlight.current) {
+        if (Date.now() > deadline) return false;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return true;
+    };
     // A save in flight finishes first; then whatever was edited meanwhile goes now.
-    while (inFlight.current) await new Promise((resolve) => setTimeout(resolve, 50));
-    if (stopped.current) return false;
+    if (!(await drained()) || stopped.current) return false;
     if (current.current !== saved.current) await run();
-    while (inFlight.current) await new Promise((resolve) => setTimeout(resolve, 50));
-    return !stopped.current && failures.current === 0 && current.current === saved.current;
+    if (!(await drained())) return false;
+    // What's shown is what's stored (an earlier failure undone back to it counts as saved).
+    return !stopped.current && current.current === saved.current;
   }, [run]);
 
   const currentVersion = useCallback(() => version.current, []);

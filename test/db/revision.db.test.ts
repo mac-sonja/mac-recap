@@ -872,6 +872,31 @@ describe("approve_revision (Story 4.8)", () => {
     await expect(approve(caseId, revisionId, 0, headVersion)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
   });
 
+  it.each([
+    ["STALE_HEAD", async () => {
+      const c = await reviewCase();
+      return { ...c, headVersion: c.headVersion + 1 };
+    }],
+    ["CASE_NOT_APPROVABLE", async () => {
+      const created = await createCase();
+      const revision = await createRevision(created.id, 0);
+      const { head_version } = await caseRow(created.id);
+      return { caseId: created.id, revisionId: revision.id, headVersion: head_version as number };
+    }],
+    ["REVISION_NOT_WRITABLE", async () => {
+      const c = await reviewCase();
+      await pool.query("update public.revision set status = 'superseded' where id = $1", [c.revisionId]);
+      return c;
+    }],
+  ] as const)("approve maps the refusal %s through the adapter", async (code, arrange) => {
+    const { caseId, revisionId, headVersion } = await arrange();
+    const { approve: approveCase, referencedAssetIds } = await loadCaseStudy();
+    const overflow = Object.fromEntries(FORMAT_IDS.map((id) => [id, false]));
+    const all = async () => ok([...referencedAssetIds(v2())]);
+    const input = { caseId, revisionId, expectedRevisionVersion: 0, expectedHeadVersion: headVersion, overflow };
+    expect(await approveCase(await signedInActor(), input, all)).toMatchObject({ ok: false, error: { code } });
+  });
+
   it("approve maps through the real adapter, MATERIAL_MISSING first when a referenced file is gone", async () => {
     const { caseId, revisionId, headVersion } = await reviewCase();
     const { approve: approveCase } = await loadCaseStudy();

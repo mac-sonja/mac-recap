@@ -4,8 +4,14 @@ import { memo, useLayoutEffect, useRef } from "react";
 import type { Page } from "@/modules/generation";
 import { FORMAT_IDS, measureOverflow, renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 
-/** Each format's first overflowing page (1-based), or null when nothing overflows. */
+/**
+ * Each format's first overflowing page (1-based), null when nothing overflows, or 0 when
+ * the format has pages but none could be measured (not cleared).
+ */
 export type OverflowByFormat = Readonly<Record<FormatId, number | null>>;
+
+/** The pages a report was measured on: a report for other pages is not this document's. */
+export type FormatPages = Readonly<Record<FormatId, readonly Page[]>>;
 
 /** The width each format is measured at (the editor's page widths; pages scale with it). */
 const MEASURE_WIDTH: Readonly<Record<FormatId, number>> = {
@@ -47,13 +53,12 @@ export function OverflowReport({
   onReport,
 }: {
   template: string;
-  formats: Readonly<Record<FormatId, readonly Page[]>>;
+  formats: FormatPages;
   assets: Readonly<Record<string, RenderAsset>>;
   values: BoundValues;
-  onReport: (report: OverflowByFormat) => void;
+  onReport: (report: OverflowByFormat, measured: FormatPages) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
-  const last = useRef<OverflowByFormat | null>(null);
   const report = useRef(onReport);
   useLayoutEffect(() => {
     report.current = onReport;
@@ -62,22 +67,27 @@ export function OverflowReport({
   useLayoutEffect(() => {
     const el = host.current;
     if (el === null) return;
+    let last: OverflowByFormat | null = null;
     const measure = () => {
       const next = Object.fromEntries(
         FORMAT_IDS.map((id) => {
           const root = el.querySelector(`[data-measure-format="${id}"]`);
           const pages = root === null ? [] : measureOverflow(root).pages;
+          // Pages that didn't draw can't be cleared.
+          if (pages.length === 0 && (formats[id]?.length ?? 0) > 0) return [id, 0];
           const at = pages.findIndex((page) => page.overflow);
           return [id, at < 0 ? null : at + 1];
         }),
       ) as OverflowByFormat;
-      if (sameReport(last.current, next)) return;
-      last.current = next;
-      report.current(next);
+      if (sameReport(last, next)) return;
+      last = next;
+      report.current(next, formats);
     };
-    measure();
+    // Text measured before the web fonts arrive is measured in the fallback font: wait for them.
+    const fonts = typeof document === "undefined" ? undefined : document.fonts;
+    if (fonts === undefined || fonts.status === "loaded") measure();
     let live = true;
-    void document.fonts?.ready.then(() => {
+    void fonts?.ready.then(() => {
       if (live) measure();
     });
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);

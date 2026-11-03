@@ -228,6 +228,10 @@ export function makeApprove(deps: SaveRevisionDocDeps) {
     if (found.value === null || found.value.caseId?.toLowerCase() !== caseId) {
       return err({ code: "NOT_FOUND", message: "No revision of this case study with this id.", details: { caseId, revisionId } });
     }
+    // The checks below read this version: a newer one was not the one measured.
+    if (found.value.version !== expectedRevisionVersion) {
+      return err({ code: "STALE_REVISION", message: "The revision changed since it was measured.", details: { revisionId, version: found.value.version } });
+    }
     const current = upgraded(found.value);
     if (!current.ok) return current;
 

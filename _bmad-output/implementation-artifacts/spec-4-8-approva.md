@@ -2,7 +2,7 @@
 title: 'Story 4.8: Approva'
 type: 'feature'
 created: '2026-11-03'
-status: 'in-review'
+status: 'done'
 baseline_commit: '11b4134b34f3f5d376f36ce17b1df7d1f4c26d55'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -71,10 +71,36 @@ context:
 - UI: `overflow-report.tsx` (every format off screen, still, measured with `measureOverflow`); `useDocument.settle()` and `version()` so approval saves what's pending and approves that exact version; Approva in the top bar with its reason (`aria-describedby`, title); the confirm `Dialog`; redirect with `?approvata=1`, shown on Case studies.
 - The browser checks the files the pages show against the case's and client's files; the server also checks texts' sources, and its `MATERIAL_MISSING` names the file until the next edit.
 - DB tests (`test/db/revision.db.test.ts`) not run here (no Docker daemon): CI's `db` job runs them.
+- After review: the generic `transition` refuses `approve` (DB test setups reach `approved` through the repository adapter); `approve` refuses a revision newer than the one measured before any check; Approva is `aria-disabled` (focusable, its reason readable); `settle` gives up after 30 s and counts what's shown = what's stored as saved; the overflow report waits for web fonts, counts a format whose pages didn't draw as not cleared, measures behind typing (`useDeferredValue`) and only counts for the pages it measured; a failed client-files load opens the page with none.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Finding | Verdict | Route / evidence |
+|---|---------|---------|------------------|
+| 1 | The generic `transition(…, "approve")` still approves, skipping every check | high | patch: `makeTransition` refuses `approve` (`INVALID_TRANSITION`); unit and DB tests; DB setups use the adapter |
+| 2 | A revision newer than the one measured passes the checks (the measure is of another version) | medium | patch: `STALE_REVISION` before any check; test |
+| 3 | Native `disabled` hides the reason from keyboard users | medium | patch: `aria-disabled` with a guarded click; tests |
+| 4 | `settle` can wait forever; an undone failure counts as unsaved | medium | patch: 30 s deadline; success = shown is stored |
+| 5 | Overflow measured before web fonts load | medium | patch: waits for `document.fonts.ready` when fonts are loading |
+| 6 | A format whose pages didn't draw counts as clear | medium | patch: reported as 0, Approva says it's measuring, payload `true` |
+| 7 | Report for older pages used after an edit; measured key by key while typing | medium | patch: report carries its pages, used only for those; `useDeferredValue` |
+| 8 | After success the button is active again until the next page shows | low | patch: stays pending |
+| 9 | `MATERIAL_MISSING` with no ids silently does nothing | low | patch: says it failed |
+| 10 | Failed save leaves the dialog open over the message | low | patch: dialog closes first; test |
+| 11 | Client file names never shown in "File mancante" | low | patch: names from the client's files |
+| 12 | Page throws when the client's files can't be read | low | patch: none count as present; test |
+| 13 | `headVersion` default 0 could approve against a made-up head | low | patch: no approval without it |
+| 14 | `REVISION_WRITE_FAILED` says "failed" without reloading | low | patch: reloads as stale |
+| 15 | Server's missing file kept after the file lists change | low | patch: keyed on files and client files too |
+| 16 | Top bar comment still says Approva arrives with 4.8 | low | patch |
+| 17 | Tests: overflow in one format only, edit then approve, failing save, client files present, adapter refusals, distinct head version | medium | patch: tests added |
+| 18 | File deleted between the material check and the write | low | defer: deferred-work (check inside the transaction) |
+| 19 | No cache revalidation after approve | false | the pages read are dynamic |
+| 20 | `?approvata=1` sticks on reload | low | rejected: one status line, harmless |
+| 21 | Code Map's `approve.ts` vs `revisions.ts` | low | rejected: fix edits this spec |
+| 22 | Measuring could stay forever | false | measured on layout, fonts and resize; the report follows each change |
 
 ## Verification
 

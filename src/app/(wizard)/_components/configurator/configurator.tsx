@@ -2,7 +2,7 @@
 
 import { PanelLeft, PanelRight, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
@@ -23,7 +23,7 @@ import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { Dialog } from "@/app/_components/dialog";
 import { AnimationDialog } from "./animation-dialog";
-import { OverflowReport, type OverflowByFormat } from "./overflow-report";
+import { OverflowReport, type FormatPages, type OverflowByFormat } from "./overflow-report";
 import { Canvas } from "./canvas";
 import { applyDefaultPage, type GeneratedTexts } from "./default-pages";
 import type { InstagramView } from "./instagram-overlay";
@@ -97,7 +97,7 @@ export interface ConfiguratorProps {
     expectedHeadVersion: number;
     overflow: Record<string, boolean>;
   }) => Promise<ActionResult<{ waiting: boolean }>>;
-  /** The case's `head_version` as read: approval's compare-and-set. */
+  /** The case's `head_version` as read: approval's compare-and-set; undefined: no approval. */
   headVersion?: number;
   /** The client's files (ids and names): a page may show them, so they count as present (Story 4.8). */
   clientFiles?: readonly { id: string; name: string }[];
@@ -115,6 +115,9 @@ const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.
 const typing = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || target.closest('input:not([type="checkbox"], [type="radio"]), textarea, select') !== null);
+
+/** A stable empty list, so the default keeps its identity across renders. */
+const NO_CLIENT_FILES: readonly { id: string; name: string }[] = [];
 
 /**
  * The configurator frame (Story 4.2a, C40, mockup `configurator.html`): full screen,
@@ -167,8 +170,8 @@ export function Configurator({
   mediaRules,
   onRenderAssets,
   onApprove,
-  headVersion = 0,
-  clientFiles = [],
+  headVersion,
+  clientFiles = NO_CLIENT_FILES,
 }: ConfiguratorProps) {
   const router = useRouter();
   const doc = useDocument({
@@ -205,6 +208,7 @@ export function Configurator({
   const [files, setFiles] = useState(media);
   /** Every file name listed this session, by lowercased id: a file deleted since is still named in the refused-save banner. */
   const [names, setNames] = useState<ReadonlyMap<string, string>>(() => new Map(media.map((f) => [f.id.toLowerCase(), f.originalFileName])));
+  const clientNames = useMemo<ReadonlyMap<string, string>>(() => new Map(clientFiles.map((f) => [f.id.toLowerCase(), f.name])), [clientFiles]);
   /** Ids whose render asset is being read. */
   const reading = useRef(new Set<string>());
   /** The latest assets: the Media tab's polling may call an older `listed`. */
@@ -649,18 +653,27 @@ export function Configurator({
     [doc, editable, formatId, formats],
   );
 
-  /** Each format's first overflowing page, measured off screen (Story 4.8); null until measured. */
-  const [overflowReport, setOverflowReport] = useState<OverflowByFormat | null>(null);
-  /** Files the server found missing at the last approval attempt (texts' sources included), for the document as it was then: any edit lets the server check again. */
-  const [serverMissingFor, setServerMissingFor] = useState<{ formats: Formats; ids: readonly string[] } | null>(null);
-  const serverMissing = serverMissingFor !== null && serverMissingFor.formats === formats ? serverMissingFor.ids : [];
+  const canApprove = editable && onApprove !== undefined && headVersion !== undefined;
+  /** The overflow report measures behind typing, so a burst of edits isn't re-measured key by key. */
+  const measuredFormats = useDeferredValue(formats);
+  /** Each format's first overflowing page, measured off screen (Story 4.8), with the pages it was measured on. */
+  const [overflowFor, setOverflowFor] = useState<{ formats: FormatPages; report: OverflowByFormat } | null>(null);
+  const onOverflowReport = useCallback((report: OverflowByFormat, measured: FormatPages) => setOverflowFor({ formats: measured, report }), []);
+  // null until the pages in view are the ones measured.
+  const overflowReport = overflowFor !== null && overflowFor.formats === formats ? overflowFor.report : null;
+  /** Files the server found missing at the last approval attempt (texts' sources included), for the document and file lists as they were then: any change lets the server check again. */
+  const [serverMissingFor, setServerMissingFor] = useState<{ formats: Formats; files: unknown; clientFiles: unknown; ids: readonly string[] } | null>(null);
+  const serverMissing =
+    serverMissingFor !== null && serverMissingFor.formats === formats && serverMissingFor.files === files && serverMissingFor.clientFiles === clientFiles
+      ? serverMissingFor.ids
+      : [];
   const [confirmApproval, setConfirmApproval] = useState(false);
   const [approving, setApproving] = useState(false);
 
   /** What still stops approval, in words: the first overflowing page, else the first missing file; null when clear. */
   const approvalBlocker = (() => {
     const a = it.configurator.approval;
-    if (overflowReport === null) return a.measuring;
+    if (overflowReport === null || FORMAT_IDS.some((id) => overflowReport[id] === 0)) return a.measuring;
     const over = FORMAT_IDS.find((id) => overflowReport[id] !== null);
     if (over !== undefined) return fill(a.overflow, { format: it.configurator.formats[over], n: overflowReport[over]! });
     const present = new Set([...files, ...clientFiles].map((f) => f.id.toLowerCase()));
@@ -668,16 +681,18 @@ export function Configurator({
     // The server's word wins: a file it found deleted may still be in the last listing.
     const missing = serverMissing[0]?.toLowerCase() ?? [...shown].find((id) => !present.has(id));
     if (missing === undefined) return null;
-    return fill(a.missing, { name: names.get(missing) ?? a.unknownFile });
+    return fill(a.missing, { name: names.get(missing) ?? clientNames.get(missing) ?? a.unknownFile });
   })();
 
   /** Confirmed in the dialog: saves what's pending, then approves this exact version. */
   const approve = useCallback(async () => {
-    if (onApprove === undefined || revision === null || overflowReport === null) return;
+    if (onApprove === undefined || headVersion === undefined || revision === null || overflowReport === null) return;
     const a = it.configurator.approval;
     setApproving(true);
+    let leaving = false;
     try {
       if (!(await doc.settle())) {
+        setConfirmApproval(false);
         say(a.notSaved);
         return;
       }
@@ -686,27 +701,39 @@ export function Configurator({
         revisionId: revision.id,
         expectedRevisionVersion: doc.version(),
         expectedHeadVersion: headVersion,
+        // 0 (not measured) counts as not cleared.
         overflow: Object.fromEntries(FORMAT_IDS.map((id) => [id, overflowReport[id] !== null])),
       });
       if (result.ok) {
+        // Stays pending until the next page shows: no second approval meanwhile.
+        leaving = true;
         setConfirmApproval(false);
         router.push(result.value.waiting ? "/case-studies?stato=in_review&approvata=1" : "/case-studies?approvata=1");
         return;
       }
       const code = result.error.code;
-      if (code === "MATERIAL_MISSING") setServerMissingFor({ formats, ids: result.error.assetIds ?? [] });
+      const ids = result.error.assetIds ?? [];
+      if (code === "MATERIAL_MISSING" && ids.length > 0) setServerMissingFor({ formats, files, clientFiles, ids });
       else if (code === "OVERFLOW_NOT_CLEARED") say(a.overflowServer);
-      else if (code === "STALE_REVISION" || code === "STALE_HEAD" || code === "CASE_NOT_APPROVABLE" || code === "REVISION_NOT_WRITABLE" || code === "NOT_FOUND") {
+      else if (
+        code === "STALE_REVISION" ||
+        code === "STALE_HEAD" ||
+        code === "CASE_NOT_APPROVABLE" ||
+        code === "REVISION_NOT_WRITABLE" ||
+        code === "REVISION_WRITE_FAILED" ||
+        code === "NOT_FOUND"
+      ) {
         say(a.stale);
         router.refresh();
       } else say(a.failed);
       setConfirmApproval(false);
     } catch {
+      setConfirmApproval(false);
       say(a.failed);
     } finally {
-      setApproving(false);
+      if (!leaving) setApproving(false);
     }
-  }, [caseId, doc, formats, headVersion, onApprove, overflowReport, revision, router, say]);
+  }, [caseId, clientFiles, doc, files, formats, headVersion, onApprove, overflowReport, revision, router, say]);
 
   /** Removes the selected element or block; false when there is nothing to remove. */
   const removeSelected = useCallback(() => {
@@ -830,14 +857,14 @@ export function Configurator({
           onUndo={undo}
           onRedo={redo}
           approval={
-            editable && onApprove !== undefined
+            canApprove
               ? { blocker: approvalBlocker, pending: approving, onApprove: () => setConfirmApproval(true) }
               : undefined
           }
         />
-        {editable && onApprove !== undefined && (
+        {canApprove && (
           <>
-            <OverflowReport template={template} formats={formats} assets={assets} values={values} onReport={setOverflowReport} />
+            <OverflowReport template={template} formats={measuredFormats} assets={assets} values={values} onReport={onOverflowReport} />
             <Dialog
               open={confirmApproval}
               onClose={() => {

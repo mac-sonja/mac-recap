@@ -515,6 +515,14 @@ describe("approve (Story 4.8)", () => {
     expect(d.revisions.approve).not.toHaveBeenCalled();
   });
 
+  it("refuses a revision newer than the one measured with STALE_REVISION, before any check", async () => {
+    const d = deps([stored(HEAD_ID, doc(), { version: 4 })]);
+    const result = await makeApprove(d)(actor, input({ overflow: {} }));
+    expect(result).toMatchObject({ ok: false, error: { code: "STALE_REVISION" } });
+    expect(d.caseAssetIds).not.toHaveBeenCalled();
+    expect(d.revisions.approve).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["an unknown revision", [] as Revision[]],
     ["another case's revision", [stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { caseId: "11111111-0000-4000-8000-000000000009" })]],

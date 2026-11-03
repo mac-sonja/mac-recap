@@ -96,6 +96,7 @@ function setup(
     media = MEDIA,
     onRenderAssets,
     onApprove,
+    clientFiles,
   }: {
     editable?: boolean;
     onSave?: SaveFn;
@@ -105,6 +106,7 @@ function setup(
     media?: readonly ListedAsset[];
     onRenderAssets?: ConfiguratorProps["onRenderAssets"];
     onApprove?: ConfiguratorProps["onApprove"];
+    clientFiles?: ConfiguratorProps["clientFiles"];
   } = {},
 ) {
   return render(
@@ -127,6 +129,7 @@ function setup(
       onRenderAssets={onRenderAssets}
       onApprove={onApprove}
       headVersion={7}
+      clientFiles={clientFiles}
     />,
   );
 }
@@ -2940,7 +2943,7 @@ describe("Configurator Approva (Story 4.8)", () => {
     const onApprove = vi.fn<ApproveFn>(async () => ({ ok: true, value: { waiting: false } }));
     setup(false, formats, { onApprove });
     await flush();
-    expect(approveButton().hasAttribute("disabled")).toBe(false);
+    expect(approveButton().hasAttribute("aria-disabled")).toBe(false);
     fireEvent.click(approveButton());
     expect(dialog()!.textContent).toContain(fill(a.title, { name: "Rebrand Lumen" }));
     expect(dialog()!.textContent).toContain(a.description);
@@ -2966,26 +2969,72 @@ describe("Configurator Approva (Story 4.8)", () => {
     expect(push).toHaveBeenCalledWith("/case-studies?stato=in_review&approvata=1");
   });
 
-  it("is disabled and names the page when a format overflows", async () => {
-    const scroll = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(200);
+  it("is inactive and names the page when a format overflows; pressing it does nothing", async () => {
+    // Only Carosello's pages overflow.
+    const scroll = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.closest('[data-measure-format="carosello_1_1"]') === null ? 100 : 200;
+    });
     const client = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(100);
     try {
-      setup(false, formats, { onApprove: vi.fn<ApproveFn>() });
+      const onApprove = vi.fn<ApproveFn>();
+      setup(false, formats, { onApprove });
       await flush();
-      expect(approveButton().hasAttribute("disabled")).toBe(true);
+      expect(approveButton().getAttribute("aria-disabled")).toBe("true");
       const reason = document.getElementById(approveButton().getAttribute("aria-describedby")!)!;
-      expect(reason.textContent).toBe(fill(a.overflow, { format: dict.configurator.formats.presentazione_16_9, n: 1 }));
+      expect(reason.textContent).toBe(fill(a.overflow, { format: dict.configurator.formats.carosello_1_1, n: 1 }));
+      fireEvent.click(approveButton());
+      expect(dialog()!.hasAttribute("open")).toBe(false);
+      expect(onApprove).not.toHaveBeenCalled();
     } finally {
       scroll.mockRestore();
       client.mockRestore();
     }
   });
 
-  it("is disabled and names a file a page shows that is no longer there", async () => {
+  it("is inactive and names a file a page shows that is no longer there", async () => {
     setup(false, formats, { onApprove: vi.fn<ApproveFn>(), media: [] });
     await flush();
-    expect(approveButton().hasAttribute("disabled")).toBe(true);
+    expect(approveButton().getAttribute("aria-disabled")).toBe("true");
     expect(approveButton().getAttribute("title")).toBe(fill(a.missing, { name: a.unknownFile }));
+  });
+
+  it("counts the client's files as present", async () => {
+    setup(false, formats, { onApprove: vi.fn<ApproveFn>(), media: [], clientFiles: MEDIA.map((f) => ({ id: f.id, name: f.originalFileName })) });
+    await flush();
+    expect(approveButton().hasAttribute("aria-disabled")).toBe(false);
+  });
+
+  it("saves a pending edit first and approves the version that save returned", async () => {
+    const order: string[] = [];
+    const onSave = vi.fn<SaveFn>(async (input) => {
+      order.push("save");
+      return savedOk(input);
+    });
+    const onApprove = vi.fn<ApproveFn>(async () => {
+      order.push("approve");
+      return { ok: true, value: { waiting: false } };
+    });
+    setup(false, formats, { onApprove, onSave });
+    fireEvent.click(button(dict.configurator.pages.add, canvas()));
+    await flush();
+    fireEvent.click(approveButton());
+    fireEvent.click(button(a.confirm, dialog()!));
+    await flush();
+    expect(order).toEqual(["save", "approve"]);
+    expect(onApprove).toHaveBeenCalledWith(expect.objectContaining({ expectedRevisionVersion: 5 }));
+  });
+
+  it("a save that fails stops the approval and says so", async () => {
+    const onApprove = vi.fn<ApproveFn>();
+    setup(false, formats, { onApprove, onSave: vi.fn<SaveFn>().mockRejectedValue(new Error("offline")) });
+    fireEvent.click(button(dict.configurator.pages.add, canvas()));
+    await flush();
+    fireEvent.click(approveButton());
+    fireEvent.click(button(a.confirm, dialog()!));
+    await flush();
+    expect(onApprove).not.toHaveBeenCalled();
+    expect(dialog()!.hasAttribute("open")).toBe(false);
+    expect(status().textContent).toBe(a.notSaved);
   });
 
   it("MATERIAL_MISSING from the server names the file and keeps it disabled; a stale case reloads", async () => {

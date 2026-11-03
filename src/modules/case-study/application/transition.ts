@@ -16,6 +16,8 @@ const notFound = (id: unknown) =>
  * `NOT_FOUND` (unknown, malformed or soft-deleted id), `INVALID_TRANSITION`
  * (pair not in the table, or unknown event), `STALE_STATUS` (status moved
  * since the read); nothing is written on any of them.
+ * `approve` is refused here (`INVALID_TRANSITION`): a case is approved only
+ * through `approve` (Story 4.8), which checks overflow and material first.
  */
 export function makeTransition(cases: CaseStudyRepository) {
   return async function transition(caseId: unknown, event: unknown, actor: Actor): Promise<Result<CaseStudy>> {
@@ -24,6 +26,9 @@ export function makeTransition(cases: CaseStudyRepository) {
     const found = await cases.findById(id.data);
     if (!found.ok) return found;
     if (found.value === null) return notFound(id.data);
+    if (event === "approve") {
+      return err({ code: "INVALID_TRANSITION", message: "Approve a case through approve, which checks it first.", details: { event } });
+    }
 
     const from = found.value.status;
     const to = nextStatus(from, event);

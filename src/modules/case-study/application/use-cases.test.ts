@@ -1540,7 +1540,6 @@ describe("transition", () => {
     ["draft", "generate", "generating"],
     ["generating", "generation_succeeded", "in_review"],
     ["generating", "generation_failed", "draft"],
-    ["in_review", "approve", "approved"],
   ] as const)("%s --%s--> %s with one transition event", async (from, event, to) => {
     const { repo, events, id } = await caseIn(from);
     const result = await makeTransition(repo)(id, event, actor);
@@ -1552,6 +1551,7 @@ describe("transition", () => {
   });
 
   it.each([
+    ["approve on in_review (only approve, Story 4.8)", "in_review", "approve"],
     ["approve on draft", "draft", "approve"],
     ["generate on generating", "generating", "generate"],
     ["approve on approved", "approved", "approve"],

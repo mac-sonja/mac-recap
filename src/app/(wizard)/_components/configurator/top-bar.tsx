@@ -41,7 +41,8 @@ export interface TopBarProps {
   onRedo: () => void;
   /**
    * **Approva** (Story 4.8): `blocker` names what's left (an overflowing page, a missing
-   * file) and disables it; undefined while it can't apply (trial pages, an approved case).
+   * file) and makes it inactive (still focusable, so the reason can be read); undefined
+   * while it can't apply (trial pages, an approved case).
    */
   approval?: { blocker: string | null; pending: boolean; onApprove: () => void };
 }
@@ -95,8 +96,9 @@ export function FormatSwitch({ formatId, onFormat }: Pick<TopBarProps, "formatId
  * left; the format switch and the Anteprima eye in the centre (a pencil, *Torna
  * all’editor*, while in Anteprima); the save state, undo, redo and **Approva** on the
  * right. The save state follows the autosave (Story 4.3a); undo and redo are disabled
- * with nothing to undo or redo. **Approva** arrives with Story 4.8: it shows, inactive,
- * and says so when pressed.
+ * with nothing to undo or redo. **Approva** (Story 4.8) is active once nothing overflows
+ * and no file is missing; without an approval to make it shows, inactive, and says it
+ * arrives soon when pressed.
  */
 export function TopBar({
   header,
@@ -191,11 +193,13 @@ export function TopBar({
             )}
             <button
               type="button"
-              disabled={approval.blocker !== null || approval.pending}
+              aria-disabled={approval.blocker !== null || approval.pending ? "true" : undefined}
               aria-describedby={approval.blocker !== null ? approvalReasonId : undefined}
               title={approval.blocker ?? undefined}
-              onClick={approval.onApprove}
-              className={cn(PRIMARY_ACTION, "disabled:cursor-not-allowed disabled:opacity-50")}
+              onClick={() => {
+                if (approval.blocker === null && !approval.pending) approval.onApprove();
+              }}
+              className={cn(PRIMARY_ACTION, "aria-disabled:cursor-not-allowed aria-disabled:opacity-50")}
             >
               {it.configurator.approve}
             </button>

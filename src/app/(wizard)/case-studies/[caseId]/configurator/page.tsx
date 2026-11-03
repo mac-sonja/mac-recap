@@ -75,7 +75,8 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
     caseStudy.listClientMaterial({ clientId: info.value.clientId }),
   ]);
   if (!client.ok) throw new Error(`Client could not be loaded: ${client.error.code}`);
-  if (!clientMaterial.ok) throw new Error(`Client material could not be loaded: ${clientMaterial.error.code}`);
+  // The client's files only widen what counts as present; without them a page that shows one says so, and the server checks again.
+  const clientFiles = clientMaterial.ok ? clientMaterial.value.map((file) => ({ id: file.id, name: file.fileName })) : [];
 
   const head = revision.value;
   const doc = head?.doc ?? null;
@@ -103,7 +104,7 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
       onRenderAssets={getRenderAssets}
       onApprove={approveCase}
       headVersion={current.headVersion}
-      clientFiles={clientMaterial.value.map((file) => ({ id: file.id, name: file.fileName }))}
+      clientFiles={clientFiles}
     />
   );
 }
