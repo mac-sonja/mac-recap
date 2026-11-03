@@ -1,5 +1,6 @@
 import type { Actor } from "@/modules/access";
 import {
+  approveInputSchema,
   createWorkingRevisionInputSchema,
   revisionSubjectSchema,
   saveRevisionDocInputSchema,
@@ -202,5 +203,49 @@ export function makeSaveRevisionDoc(deps: SaveRevisionDocDeps) {
     const saved = await deps.revisions.saveDoc({ revisionId, doc: valid.value, expectedVersion, actorId: actor.id });
     if (!saved.ok) return saved;
     return upgraded(saved.value);
+  };
+}
+
+/**
+ * Approves a case (Story 4.8, C39): a person's call, never automatic or in bulk. The
+ * revision must be `revisionId` of `caseId` (else `NOT_FOUND`). Every format of its
+ * `doc` must be in `overflow` and `false` (else `OVERFLOW_NOT_CLEARED`, naming them);
+ * every file it references (media, backgrounds, animations, texts' sources) must be a
+ * live file of the case or a file of its client (else `MATERIAL_MISSING`, naming up to
+ * 10). Then, in one transaction, the revision and the case become `approved` with
+ * `approved_revision_id` and the events (`STALE_REVISION`, `STALE_HEAD`,
+ * `CASE_NOT_APPROVABLE`, `REVISION_NOT_WRITABLE` from the database). The caller has
+ * authorized the actor to `approve`.
+ */
+export function makeApprove(deps: SaveRevisionDocDeps) {
+  return async function approve(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+    const parsed = parseInput(approveInputSchema, input);
+    if (!parsed.ok) return parsed;
+    const { caseId, revisionId, expectedRevisionVersion, expectedHeadVersion, overflow } = parsed.value;
+
+    const found = await deps.revisions.findById(revisionId);
+    if (!found.ok) return found;
+    if (found.value === null || found.value.caseId?.toLowerCase() !== caseId) {
+      return err({ code: "NOT_FOUND", message: "No revision of this case study with this id.", details: { caseId, revisionId } });
+    }
+    const current = upgraded(found.value);
+    if (!current.ok) return current;
+
+    const formats = Object.keys(current.value.doc.formats);
+    const notCleared = formats.filter((id) => overflow[id] !== false);
+    if (notCleared.length > 0) {
+      return err({ code: "OVERFLOW_NOT_CLEARED", message: "A format overflows, or was not measured.", details: { revisionId, formats: notCleared } });
+    }
+
+    const allowed = await allowedAssetIds(deps, caseId);
+    if (!allowed.ok) return allowed;
+    const missing = [...referencedAssetIds(current.value.doc)].filter((id) => !allowed.value.has(id));
+    if (missing.length > 0) {
+      return err({ code: "MATERIAL_MISSING", message: "The revision references a file that is no longer there.", details: { revisionId, assetIds: missing.slice(0, 10) } });
+    }
+
+    const approved = await deps.revisions.approve({ caseId, revisionId, expectedRevisionVersion, expectedHeadVersion, actorId: actor.id });
+    if (!approved.ok) return approved;
+    return upgraded(approved.value);
   };
 }

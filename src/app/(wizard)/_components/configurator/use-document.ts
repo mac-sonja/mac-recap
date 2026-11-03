@@ -57,6 +57,14 @@ export interface DocumentState {
   change: (next: Formats, formatId: FormatId, group?: string) => void;
   /** Saves the latest document now (e.g. when a text editing session ends). */
   flush: () => void;
+  /**
+   * Saves the latest document now and waits for it (Story 4.8, before approving): true
+   * once the server holds exactly what is shown, false when a save failed or the revision
+   * went stale.
+   */
+  settle: () => Promise<boolean>;
+  /** The revision `version` the last save returned (or the one read). */
+  version: () => number;
   /** Undoes or redoes one step and returns the format it changed, or undefined with nothing to do. */
   undo: () => FormatId | undefined;
   redo: () => FormatId | undefined;
@@ -241,6 +249,18 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
     if (failures.current === 0) void run();
   }, [run]);
 
+  const settle = useCallback(async () => {
+    group.current = undefined;
+    // A save in flight finishes first; then whatever was edited meanwhile goes now.
+    while (inFlight.current) await new Promise((resolve) => setTimeout(resolve, 50));
+    if (stopped.current) return false;
+    if (current.current !== saved.current) await run();
+    while (inFlight.current) await new Promise((resolve) => setTimeout(resolve, 50));
+    return !stopped.current && failures.current === 0 && current.current === saved.current;
+  }, [run]);
+
+  const currentVersion = useCallback(() => version.current, []);
+
   useEffect(() => {
     // Closing or reloading the tab with an edit not yet saved asks first.
     function onBeforeUnload(event: BeforeUnloadEvent) {
@@ -260,5 +280,18 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
     };
   }, []);
 
-  return { formats, save: saveState, banner, refused, canUndo: history.undo > 0, canRedo: history.redo > 0, change, flush, undo, redo };
+  return {
+    formats,
+    save: saveState,
+    banner,
+    refused,
+    canUndo: history.undo > 0,
+    canRedo: history.redo > 0,
+    change,
+    flush,
+    settle,
+    version: currentVersion,
+    undo,
+    redo,
+  };
 }

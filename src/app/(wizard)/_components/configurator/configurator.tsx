@@ -3,7 +3,7 @@
 import { PanelLeft, PanelRight, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { SECONDARY_ACTION } from "@/app/_components/button-styles";
+import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import {
@@ -21,7 +21,9 @@ import type { ListedAsset } from "@/modules/material";
 import { FORMAT_IDS, type BoundValues, type DefaultPage, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
+import { Dialog } from "@/app/_components/dialog";
 import { AnimationDialog } from "./animation-dialog";
+import { OverflowReport, type OverflowByFormat } from "./overflow-report";
 import { Canvas } from "./canvas";
 import { applyDefaultPage, type GeneratedTexts } from "./default-pages";
 import type { InstagramView } from "./instagram-overlay";
@@ -50,7 +52,7 @@ import {
   type MediaTarget,
   type PageEdit,
 } from "./page-editing";
-import { isMedia, type MediaUploadRules } from "./media-files";
+import { isMedia, pageAssetIds, type MediaUploadRules } from "./media-files";
 import { RightPanel, type RightTab } from "./right-panel";
 import { findElement, resolveSelection, stepOut, type Selection } from "./selection";
 import { StatusMessage, useStatusMessage } from "./status-message";
@@ -87,6 +89,18 @@ export interface ConfiguratorProps {
   media: readonly ListedAsset[];
   /** What the Media tab's drop zone uploads (Story 2.7's rules, images and videos only). */
   mediaRules: MediaUploadRules;
+  /** **Approva** (Story 4.8); undefined: it says it arrives soon. */
+  onApprove?: (input: {
+    caseId: string;
+    revisionId: string;
+    expectedRevisionVersion: number;
+    expectedHeadVersion: number;
+    overflow: Record<string, boolean>;
+  }) => Promise<ActionResult<{ waiting: boolean }>>;
+  /** The case's `head_version` as read: approval's compare-and-set. */
+  headVersion?: number;
+  /** The client's files (ids and names): a page may show them, so they count as present (Story 4.8). */
+  clientFiles?: readonly { id: string; name: string }[];
   /** The render assets of files listed after the page loaded (Story 4.5b): a new upload can be drawn once its rendition is ready. */
   onRenderAssets?: (input: { caseId: string; assetIds: string[] }) => Promise<ActionResult<Record<string, RenderAsset>>>;
 }
@@ -152,6 +166,9 @@ export function Configurator({
   media,
   mediaRules,
   onRenderAssets,
+  onApprove,
+  headVersion = 0,
+  clientFiles = [],
 }: ConfiguratorProps) {
   const router = useRouter();
   const doc = useDocument({
@@ -632,6 +649,65 @@ export function Configurator({
     [doc, editable, formatId, formats],
   );
 
+  /** Each format's first overflowing page, measured off screen (Story 4.8); null until measured. */
+  const [overflowReport, setOverflowReport] = useState<OverflowByFormat | null>(null);
+  /** Files the server found missing at the last approval attempt (texts' sources included), for the document as it was then: any edit lets the server check again. */
+  const [serverMissingFor, setServerMissingFor] = useState<{ formats: Formats; ids: readonly string[] } | null>(null);
+  const serverMissing = serverMissingFor !== null && serverMissingFor.formats === formats ? serverMissingFor.ids : [];
+  const [confirmApproval, setConfirmApproval] = useState(false);
+  const [approving, setApproving] = useState(false);
+
+  /** What still stops approval, in words: the first overflowing page, else the first missing file; null when clear. */
+  const approvalBlocker = (() => {
+    const a = it.configurator.approval;
+    if (overflowReport === null) return a.measuring;
+    const over = FORMAT_IDS.find((id) => overflowReport[id] !== null);
+    if (over !== undefined) return fill(a.overflow, { format: it.configurator.formats[over], n: overflowReport[over]! });
+    const present = new Set([...files, ...clientFiles].map((f) => f.id.toLowerCase()));
+    const shown = pageAssetIds(Object.values(formats));
+    // The server's word wins: a file it found deleted may still be in the last listing.
+    const missing = serverMissing[0]?.toLowerCase() ?? [...shown].find((id) => !present.has(id));
+    if (missing === undefined) return null;
+    return fill(a.missing, { name: names.get(missing) ?? a.unknownFile });
+  })();
+
+  /** Confirmed in the dialog: saves what's pending, then approves this exact version. */
+  const approve = useCallback(async () => {
+    if (onApprove === undefined || revision === null || overflowReport === null) return;
+    const a = it.configurator.approval;
+    setApproving(true);
+    try {
+      if (!(await doc.settle())) {
+        say(a.notSaved);
+        return;
+      }
+      const result = await onApprove({
+        caseId,
+        revisionId: revision.id,
+        expectedRevisionVersion: doc.version(),
+        expectedHeadVersion: headVersion,
+        overflow: Object.fromEntries(FORMAT_IDS.map((id) => [id, overflowReport[id] !== null])),
+      });
+      if (result.ok) {
+        setConfirmApproval(false);
+        router.push(result.value.waiting ? "/case-studies?stato=in_review&approvata=1" : "/case-studies?approvata=1");
+        return;
+      }
+      const code = result.error.code;
+      if (code === "MATERIAL_MISSING") setServerMissingFor({ formats, ids: result.error.assetIds ?? [] });
+      else if (code === "OVERFLOW_NOT_CLEARED") say(a.overflowServer);
+      else if (code === "STALE_REVISION" || code === "STALE_HEAD" || code === "CASE_NOT_APPROVABLE" || code === "REVISION_NOT_WRITABLE" || code === "NOT_FOUND") {
+        say(a.stale);
+        router.refresh();
+      } else say(a.failed);
+      setConfirmApproval(false);
+    } catch {
+      say(a.failed);
+    } finally {
+      setApproving(false);
+    }
+  }, [caseId, doc, formats, headVersion, onApprove, overflowReport, revision, router, say]);
+
   /** Removes the selected element or block; false when there is nothing to remove. */
   const removeSelected = useCallback(() => {
     if (!editable) return false;
@@ -753,7 +829,35 @@ export function Configurator({
           canRedo={doc.canRedo}
           onUndo={undo}
           onRedo={redo}
+          approval={
+            editable && onApprove !== undefined
+              ? { blocker: approvalBlocker, pending: approving, onApprove: () => setConfirmApproval(true) }
+              : undefined
+          }
         />
+        {editable && onApprove !== undefined && (
+          <>
+            <OverflowReport template={template} formats={formats} assets={assets} values={values} onReport={setOverflowReport} />
+            <Dialog
+              open={confirmApproval}
+              onClose={() => {
+                if (!approving) setConfirmApproval(false);
+              }}
+              title={fill(it.configurator.approval.title, { name: header.name })}
+              description={it.configurator.approval.description}
+              actions={
+                <>
+                  <button type="button" data-autofocus disabled={approving} onClick={() => setConfirmApproval(false)} className={cn(SECONDARY_ACTION, "h-9 px-4")}>
+                    {it.configurator.approval.cancel}
+                  </button>
+                  <button type="button" disabled={approving} onClick={() => void approve()} className={cn(PRIMARY_ACTION, "disabled:opacity-60")}>
+                    {it.configurator.approval.confirm}
+                  </button>
+                </>
+              }
+            />
+          </>
+        )}
         {doc.banner && (
           <div
             role="alert"

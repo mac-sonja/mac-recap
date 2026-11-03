@@ -802,6 +802,29 @@ export const it = {
     undoHint: "Annulla (⌘Z)",
     redoHint: "Ripeti (⇧⌘Z)",
     approve: "Approva",
+    /** Approval (Story 4.8, C39): why Approva is off, its dialog, and what can go wrong. */
+    approval: {
+      /** Approva is off: `{format}` and page `{n}` overflow. */
+      overflow: "Testo che non entra: {format}, pagina {n}.",
+      /** Approva is off: a file a page shows is gone; `{name}` is its name or `unknownFile`. */
+      missing: "File mancante: {name}.",
+      unknownFile: "un file",
+      /** While the formats not in view are being measured. */
+      measuring: "Controllo dei formati in corso.",
+      title: "Approvare {name}?",
+      description: "Una volta approvata, si può esportare e condividere.",
+      confirm: "Approva",
+      cancel: "Annulla",
+      /** A pending save didn't go through, so nothing was approved. */
+      notSaved: "Non abbiamo salvato le ultime modifiche, quindi non abbiamo approvato. Riprova tra poco.",
+      /** The server found a format overflowing (the page changed meanwhile). */
+      overflowServer: "Un formato ha ancora testo che non entra.",
+      /** Someone changed the case meanwhile: the page reloads. */
+      stale: "La case è cambiata nel frattempo: la ricarichiamo.",
+      failed: "Non siamo riusciti ad approvare. Riprova.",
+      /** On Case studies or Da approvare, after the redirect. */
+      done: "Approvata. Ora è in libreria.",
+    },
     /** A block whose text no longer fits (Story 4.3a). */
     overflow: "Il testo non entra",
     /** Double-click on a text that can't be edited yet: bound to the client or the case (4.3d), or an approved case (4.9). */

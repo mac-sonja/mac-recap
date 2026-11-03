@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Eye, Pencil, Redo2, Undo2 } from "lucide-react";
 import Link from "next/link";
-import type { Ref } from "react";
+import { useId, type Ref } from "react";
 import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
 import { StatusBadge } from "@/app/_components/status-badge";
 import type { CaseStatus } from "@/modules/access";
@@ -39,6 +39,11 @@ export interface TopBarProps {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  /**
+   * **Approva** (Story 4.8): `blocker` names what's left (an overflowing page, a missing
+   * file) and disables it; undefined while it can't apply (trial pages, an approved case).
+   */
+  approval?: { blocker: string | null; pending: boolean; onApprove: () => void };
 }
 
 /** *Salvato*, *Salvataggio…*, or *Non salvato. Nuovo tentativo…* after a failed save. */
@@ -93,7 +98,23 @@ export function FormatSwitch({ formatId, onFormat }: Pick<TopBarProps, "formatId
  * with nothing to undo or redo. **Approva** arrives with Story 4.8: it shows, inactive,
  * and says so when pressed.
  */
-export function TopBar({ header, back, formatId, onFormat, onSoon, preview, onPreview, previewRef, save, canUndo, canRedo, onUndo, onRedo }: TopBarProps) {
+export function TopBar({
+  header,
+  back,
+  formatId,
+  onFormat,
+  onSoon,
+  preview,
+  onPreview,
+  previewRef,
+  save,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
+  approval,
+}: TopBarProps) {
+  const approvalReasonId = useId();
   const previewLabel = preview ? it.configurator.preview.leave : it.configurator.preview.enter;
   return (
     <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-border bg-surface-sidebar px-3">
@@ -149,16 +170,37 @@ export function TopBar({ header, back, formatId, onFormat, onSoon, preview, onPr
           <Redo2 aria-hidden="true" className="size-4" />
         </button>
         <span aria-hidden="true" className="mx-1 h-5 w-px bg-border-strong" />
-        <button
-          type="button"
-          aria-disabled="true"
-          aria-describedby={SOON_ID}
-          title={it.configurator.soon}
-          onClick={() => onSoon(it.configurator.approve)}
-          className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, "cursor-default")}
-        >
-          {it.configurator.approve}
-        </button>
+        {approval === undefined ? (
+          <button
+            type="button"
+            aria-disabled="true"
+            aria-describedby={SOON_ID}
+            title={it.configurator.soon}
+            onClick={() => onSoon(it.configurator.approve)}
+            className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, "cursor-default")}
+          >
+            {it.configurator.approve}
+          </button>
+        ) : (
+          <>
+            {/* What's left before approving (Story 4.8): named for assistive tech and as the button's hint. */}
+            {approval.blocker !== null && (
+              <span id={approvalReasonId} className="sr-only">
+                {approval.blocker}
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={approval.blocker !== null || approval.pending}
+              aria-describedby={approval.blocker !== null ? approvalReasonId : undefined}
+              title={approval.blocker ?? undefined}
+              onClick={approval.onApprove}
+              className={cn(PRIMARY_ACTION, "disabled:cursor-not-allowed disabled:opacity-50")}
+            >
+              {it.configurator.approve}
+            </button>
+          </>
+        )}
       </div>
     </header>
   );

@@ -28,6 +28,16 @@ const SAVE_REFUSALS: Refusals = {
   INVALID_INPUT: { code: "INVALID_INPUT", message: "The document is malformed." },
 };
 
+/** `approve_revision` raises these as P0001; nothing is written then. */
+const APPROVE_REFUSALS: Refusals = {
+  NOT_FOUND: { code: "NOT_FOUND", message: "No revision of this case study with this id." },
+  STALE_HEAD: { code: "STALE_HEAD", message: "The case study's head revision changed since it was read." },
+  CASE_NOT_APPROVABLE: { code: "CASE_NOT_APPROVABLE", message: "Only a case study in review can be approved." },
+  REVISION_NOT_WRITABLE: { code: "REVISION_NOT_WRITABLE", message: "Only a working revision can be approved." },
+  STALE_REVISION: { code: "STALE_REVISION", message: "The revision changed since it was read." },
+  INVALID_INPUT: { code: "INVALID_INPUT", message: "The approval is malformed." },
+};
+
 /** Maps a `revision` row to the domain shape (documents as stored), rejecting values outside the domain. */
 export function toRevision(row: RevisionRow): Result<Revision> {
   const parsed = storedRevisionSchema.safeParse({
@@ -95,6 +105,27 @@ export function createSupabaseRevisionRepository(
       if (data === null) {
         log.error("revision save failed: no row returned", { actorId: input.actorId });
         return err({ code: "REVISION_WRITE_FAILED", message: "Could not save the revision.", details: { revisionId: input.revisionId } });
+      }
+      return toRevision(data);
+    },
+
+    async approve(input) {
+      const { data, error } = await client().rpc("approve_revision", {
+        p_case_id: input.caseId,
+        p_revision_id: input.revisionId,
+        p_expected_revision_version: input.expectedRevisionVersion,
+        p_expected_head_version: input.expectedHeadVersion,
+        p_actor_id: input.actorId,
+      });
+      if (error) {
+        const refused = refusalOf(error, APPROVE_REFUSALS);
+        if (refused) return err({ ...refused, details: { caseId: input.caseId, revisionId: input.revisionId } });
+        log.error(`revision approve failed: ${error.code}`, { actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not approve the revision.", details: { revisionId: input.revisionId } });
+      }
+      if (data === null) {
+        log.error("revision approve failed: no row returned", { actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not approve the revision.", details: { revisionId: input.revisionId } });
       }
       return toRevision(data);
     },

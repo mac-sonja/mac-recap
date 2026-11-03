@@ -9,7 +9,15 @@ import type { RevisionRepository } from "@/modules/case-study/ports/revision-rep
 import { caseHistoryV0, caseHistoryV1, caseHistoryV2, UPGRADE_ID_PREFIX } from "@/modules/generation";
 import { FORMAT_IDS, starterPages } from "@/modules/rendering";
 import { err, ok } from "@/shared/result";
-import { makeCreateWorkingRevision, makeGetEditableRevision, makeGetLiveRevision, makeSaveRevisionDoc, referencedAssetIds, type CaseAssetIds } from "./revisions";
+import {
+  makeApprove,
+  makeCreateWorkingRevision,
+  makeGetEditableRevision,
+  makeGetLiveRevision,
+  makeSaveRevisionDoc,
+  referencedAssetIds,
+  type CaseAssetIds,
+} from "./revisions";
 
 const actor: Actor = {
   id: "00000000-0000-4000-8000-000000000002",
@@ -77,6 +85,7 @@ function fakes(found: CaseStudy | null, rows: Revision[] = []) {
       const row = byId.get(input.revisionId)!;
       return ok({ ...row, doc: input.doc, version: input.expectedVersion + 1 });
     }),
+    approve: vi.fn<RevisionRepository["approve"]>(async (input) => ok({ ...byId.get(input.revisionId)!, status: "approved" })),
   };
   return { cases, revisions };
 }
@@ -453,5 +462,76 @@ describe("referencedAssetIds", () => {
       d: { assetId: null },
     });
     expect([...ids].sort()).toEqual(["aaaa", "bbbb", "cccc", "dddd"]);
+  });
+});
+
+describe("approve (Story 4.8)", () => {
+  const doc = () => caseHistoryV2(FORMAT_IDS);
+  const refs = () => [...referencedAssetIds(doc())];
+  const clear = () => Object.fromEntries(Object.keys(doc().formats).map((id) => [id, false]));
+  const input = (over: Record<string, unknown> = {}) => ({
+    caseId: CASE_ID,
+    revisionId: HEAD_ID,
+    expectedRevisionVersion: 3,
+    expectedHeadVersion: 2,
+    overflow: clear(),
+    ...over,
+  });
+  const head = () => stored(HEAD_ID, doc(), { version: 3 });
+  const deps = (rows: Revision[] = [head()], live: string[] = refs(), clientFiles: string[] = []) => ({
+    ...fakes(caseStudy(), rows),
+    caseAssetIds: vi.fn<CaseAssetIds>(async () => ok(live)),
+    clients: { listAssets: vi.fn<ClientRepository["listAssets"]>(async () => ok(clientFiles.map((id) => ({ id }) as ClientAsset))) },
+  });
+
+  it("approves once, with the actor and both expected versions, when every format is clear and the material is all there", async () => {
+    const d = deps();
+    const result = await makeApprove(d)(actor, input());
+    expect(result).toMatchObject({ ok: true, value: { id: HEAD_ID, status: "approved" } });
+    expect(d.revisions.approve).toHaveBeenCalledWith({ caseId: CASE_ID, revisionId: HEAD_ID, expectedRevisionVersion: 3, expectedHeadVersion: 2, actorId: actor.id });
+  });
+
+  it("counts the client's files as present", async () => {
+    const [first, ...rest] = refs();
+    const d = deps([head()], rest, [first!]);
+    expect((await makeApprove(d)(actor, input())).ok).toBe(true);
+  });
+
+  it.each([
+    ["a format overflowing", (o: Record<string, boolean>) => ({ ...o, carosello_1_1: true })],
+    ["a format not measured", (o: Record<string, boolean>) => Object.fromEntries(Object.entries(o).filter(([id]) => id !== "video_9_16"))],
+  ])("refuses %s with OVERFLOW_NOT_CLEARED, writing nothing", async (_name, change) => {
+    const d = deps();
+    const result = await makeApprove(d)(actor, input({ overflow: change(clear()) }));
+    expect(result).toMatchObject({ ok: false, error: { code: "OVERFLOW_NOT_CLEARED" } });
+    expect(d.revisions.approve).not.toHaveBeenCalled();
+  });
+
+  it("refuses a deleted referenced file with MATERIAL_MISSING, naming it, writing nothing", async () => {
+    const [gone, ...live] = refs();
+    const d = deps([head()], live);
+    const result = await makeApprove(d)(actor, input());
+    expect(result).toMatchObject({ ok: false, error: { code: "MATERIAL_MISSING", details: { assetIds: [gone] } } });
+    expect(d.revisions.approve).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["an unknown revision", [] as Revision[]],
+    ["another case's revision", [stored(HEAD_ID, caseHistoryV2(FORMAT_IDS), { caseId: "11111111-0000-4000-8000-000000000009" })]],
+  ])("refuses %s with NOT_FOUND", async (_name, rows) => {
+    const d = deps(rows);
+    expect(await makeApprove(d)(actor, input())).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect(d.revisions.approve).not.toHaveBeenCalled();
+  });
+
+  it("passes the database's refusal through", async () => {
+    const d = deps();
+    d.revisions.approve.mockResolvedValue(err({ code: "STALE_HEAD", message: "m" }));
+    expect(await makeApprove(d)(actor, input())).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
+  });
+
+  it("refuses bad input", async () => {
+    const d = deps();
+    expect(await makeApprove(d)(actor, input({ overflow: "none" }))).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
   });
 });
