@@ -870,6 +870,19 @@ export const it = {
         /** The section heading for a video. */
         video: "Video",
       },
+      /** A selected animation's settings (Story 4.5c, mockup `renderBlockProps` anim branch). */
+      animation: {
+        heading: "Animazione",
+        type: "Tipo",
+        media: "Media",
+        /** `{n}` files in the animation. */
+        mediaCount: "{n} file",
+        change: "Cambia animazione o media",
+        fit: "Adattamento",
+        size: "Dimensione",
+        /** `{n}` is the size in percent. */
+        sizeValue: "{n} %",
+      },
       /** A selected image's or video's fit (Story 4.5b-3, mockup `#fit`). */
       fit: {
         heading: "Adattamento",
@@ -1040,6 +1053,30 @@ export const it = {
         remove: "Togli dalla pagina",
         removed: "Tolto dalla pagina.",
       },
+    },
+    /** The Animazione dialog (Story 4.5c, C35, mockup `#anModal`). */
+    animationDialog: {
+      title: "Animazione",
+      lead: "Scegli come scorrono i media. L’anteprima si adatta a quanti ne carichi.",
+      names: {
+        carousel_01: "Carousel 01",
+        carousel_03: "Carousel 03",
+        carousel_04: "Carousel 04",
+        wheel_02: "Wheel 02",
+      },
+      /** The picker's heading. */
+      fromMedia: "Dai Media",
+      /** `{n}` files chosen. */
+      chosenOne: "· 1 scelto",
+      chosenMany: "· {n} scelti",
+      noMedia: "Ancora nessuna immagine o video nei Media della case. Aggiungili dalla scheda Media.",
+      insert: "Inserisci",
+      save: "Salva",
+      cancel: "Annulla",
+      /** Inserisci or Salva, while nothing is chosen. */
+      needMedia: "Carica almeno un’immagine o un video",
+      /** A picked file's order, for a screen reader: `{name}` and its position `{n}`. */
+      picked: "{name}, numero {n}",
     },
     view: {
       label: "Vista",

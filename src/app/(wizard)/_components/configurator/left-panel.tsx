@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type Ref } from
 import { PRESSABLE, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { ThemeSwitch } from "@/app/_components/theme-switch";
 import type { ThemeChoice } from "@/app/_lib/theme";
-import type { Background, Block, DocumentElement, MediaFit, Page, TextGroupAlign } from "@/modules/generation";
+import type { AnimationElement, AnimationId, Background, Block, DocumentElement, MediaFit, Page, TextGroupAlign } from "@/modules/generation";
 import type { ListedAsset } from "@/modules/material";
 import { defaultPages, layouts, textStyles, type DefaultPage, type FormatId, type Layout } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
@@ -14,6 +14,7 @@ import { BACKGROUND_SWATCHES, NEW_BLOCK_COLOUR, parseBackground, shuffleChoices,
 import { ASPECT, CHECKERBOARD, EYEBROW, ICON_BUTTON, PANEL_SECTION, SEG, SEG_BUTTON, SOON_ID } from "./styles";
 import type { TextSettings } from "./text-editing";
 import { GroupPanel, TextPanel } from "./text-panel";
+import { AnimationPanel } from "./animation-panel";
 import { MediaPanel } from "./media-panel";
 
 export type ElementKey = keyof typeof it.configurator.elements;
@@ -68,6 +69,12 @@ export interface LeftPanelProps {
   onFit: (fit: MediaFit) => void;
   onZoom: (zoom: number) => void;
   onZoomDone: () => void;
+  /** A selected animation's settings (Story 4.5c). */
+  onAnimationType: (animation: AnimationId) => void;
+  onAnimationChange: () => void;
+  onAnimationFit: (fit: AnimationElement["fit"]) => void;
+  onAnimationSize: (size: number) => void;
+  onAnimationSizeDone: () => void;
   onHide: () => void;
   hideRef: Ref<HTMLButtonElement>;
 }
@@ -346,6 +353,11 @@ export function LeftPanel({
   onFit,
   onZoom,
   onZoomDone,
+  onAnimationType,
+  onAnimationChange,
+  onAnimationFit,
+  onAnimationSize,
+  onAnimationSizeDone,
   onHide,
   hideRef,
 }: LeftPanelProps) {
@@ -407,6 +419,18 @@ export function LeftPanel({
             onFit={onFit}
             onZoom={onZoom}
             onZoomDone={onZoomDone}
+          />
+        )}
+        {element?.type === "animation" && (
+          <AnimationPanel
+            element={element}
+            editable={editable}
+            onType={onAnimationType}
+            onChange={onAnimationChange}
+            onFit={onAnimationFit}
+            onSize={onAnimationSize}
+            onSizeDone={onAnimationSizeDone}
+            onSoon={onSoon}
           />
         )}
 
@@ -477,14 +501,13 @@ export function LeftPanel({
           <div className="grid grid-cols-2 gap-1.5">
             {(Object.keys(it.configurator.elements) as ElementKey[]).map((key) => {
               const Icon = ELEMENT_ICONS[key];
-              // Animazione arrives with its dialog (Story 4.5).
-              const active = editable && key !== "animation";
+              const active = editable;
               return (
                 <button
                   key={key}
                   type="button"
                   {...(active ? {} : inactive)}
-                  onClick={active ? () => onAddElement(key) : soon(key === "animation" ? it.configurator.elements.animation : t.elements)}
+                  onClick={active ? () => onAddElement(key) : soon(t.elements)}
                   className={cn(
                     "flex h-9 items-center gap-2 rounded-md bg-surface-raised px-2.5 font-label text-[13px] font-medium text-foreground shadow-card",
                     active ? cn("hover:bg-surface-hover", PRESSABLE) : "cursor-default aria-disabled:opacity-60",
