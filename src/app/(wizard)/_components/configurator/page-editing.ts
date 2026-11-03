@@ -1,4 +1,4 @@
-import type { Background, Block, Crop, DocumentElement, MediaFit, Page, TextElement, TextStyle } from "@/modules/generation";
+import type { AnimationElement, AnimationId, Background, Block, Crop, DocumentElement, MediaFit, Page, TextElement, TextStyle } from "@/modules/generation";
 import { layouts, type FormatId, type Layout } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
 import { findElement, type Selection } from "./selection";
@@ -11,6 +11,8 @@ export type NewElementKind = (typeof NEW_ELEMENTS)[number];
 /** The document's limits (`generation`'s `MAX_BLOCKS_PER_PAGE`, `MAX_ELEMENTS_PER_BLOCK`; the tests hold them to the schema). */
 export const MAX_BLOCKS_PER_PAGE = 6;
 export const MAX_ELEMENTS_PER_BLOCK = 30;
+/** The most media an animation holds (`generation`'s `MAX_ANIMATION_ASSETS`). */
+export const MAX_ANIMATION_MEDIA = 30;
 
 /** A new block's background: the template's block grey (a template value, not a tool token). */
 export const NEW_BLOCK_COLOUR = "#ededf0";
@@ -166,6 +168,58 @@ function withMedia(
     if (el.type !== "image" && el.type !== "video") return pages;
     const next = edit(el);
     if (next === el) return pages;
+    return withPage(pages, index, (page) => {
+      page.blocks[b]!.elements[at] = next;
+    });
+  }
+  return pages;
+}
+
+/** What the Animazione dialog chose (Story 4.5c): the animation and its media, in order. */
+export interface AnimationChoice {
+  animation: AnimationId;
+  assetIds: readonly string[];
+}
+
+/** A new animation (C35) at the end of block `blockId` of page `pageKey`: Adatta, 100 %; selected. */
+export function insertAnimation(pages: readonly Page[], pageKey: string, blockId: string, choice: AnimationChoice, newId: () => string): PageEdit {
+  const index = pages.findIndex((p) => p.pageKey === pageKey);
+  const block = index < 0 ? undefined : pages[index]!.blocks.find((b) => b.blockId === blockId);
+  if (block === undefined) return refused("noBlock");
+  if (block.elements.length >= MAX_ELEMENTS_PER_BLOCK) return refused("blockFull");
+  const element: AnimationElement = { elementId: newId(), type: "animation", animation: choice.animation, assetIds: [...choice.assetIds], fit: "fit" };
+  const next = withPage(pages, index, (page) => page.blocks.find((b) => b.blockId === blockId)!.elements.push(element));
+  return { ok: true, pages: next, selection: { pageKey, blockId, elementId: element.elementId } };
+}
+
+const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
+
+/**
+ * Animation `elementId` of page `pageKey` (a block's top-level element) with `patch` applied:
+ * its type, media, fit or size (50–150). `pages` itself when nothing changes.
+ */
+export function withAnimation(
+  pages: readonly Page[],
+  pageKey: string,
+  elementId: string,
+  patch: Partial<Pick<AnimationElement, "animation" | "fit" | "size"> & { assetIds: readonly string[] }>,
+): readonly Page[] {
+  const index = pages.findIndex((p) => p.pageKey === pageKey);
+  if (index < 0) return pages;
+  for (const [b, block] of pages[index]!.blocks.entries()) {
+    const at = block.elements.findIndex((el) => el.elementId === elementId);
+    if (at < 0) continue;
+    const el = block.elements[at]!;
+    if (el.type !== "animation") return pages;
+    const size = patch.size === undefined ? el.size : Math.min(150, Math.max(50, patch.size));
+    const next: AnimationElement = {
+      ...el,
+      ...(patch.animation === undefined ? {} : { animation: patch.animation }),
+      ...(patch.assetIds === undefined ? {} : { assetIds: [...patch.assetIds] }),
+      ...(patch.fit === undefined ? {} : { fit: patch.fit }),
+      ...(size === undefined ? {} : { size }),
+    };
+    if (next.animation === el.animation && sameIds(next.assetIds, el.assetIds) && next.fit === el.fit && next.size === el.size) return pages;
     return withPage(pages, index, (page) => {
       page.blocks[b]!.elements[at] = next;
     });

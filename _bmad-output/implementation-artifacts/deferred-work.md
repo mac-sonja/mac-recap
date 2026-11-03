@@ -289,3 +289,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-5b-place-media.md`
   summary: A newly uploaded video's render asset is fetched only at the Media tab's re-lists, which stop once thumbnails are ready; if its display rendition can arrive later, a placed video stays blank until reload (unverified, medium).
   evidence: Review of 4.5b (finding 19); settle by checking whether one `rendition` job writes the thumbnail and `video.display` together.
+- source_spec: none
+  summary: Story 4.5c-2: the Animazione dialog's drop zone ("Trascina qui immagini e video", "scegli dai file") uploading to the case's Media with Story 2.7's rules and adding the new files to the animation in order; needs the Media tab's upload logic pulled into a shared hook.
+  evidence: Split from Story 4.5c at the owner's choice (2026-11-03); meanwhile files are added from the Media tab and picked in the dialog.

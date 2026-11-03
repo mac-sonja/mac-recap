@@ -1182,16 +1182,18 @@ describe("Configurator elements and blocks (Story 4.3c)", () => {
     expect(blockNode(page.pageKey, block.blockId).querySelectorAll(":scope > [data-element-id]")).toHaveLength(block.elements.length + 1);
   });
 
-  it("an element with no block selected says to select one; Animazione arrives with 4.5", () => {
+  it("an element with no block selected says to select one, Animazione too (Story 4.5c)", () => {
     const pages = fixture();
     const onSave = vi.fn(savedOk);
     setup(false, pages, { onSave });
     fireEvent.click(elementButton(dict.configurator.elements.text));
     expect(status().textContent).toBe(dict.configurator.edit.needBlock);
     const animation = elementButton(dict.configurator.elements.animation);
-    expect(animation.getAttribute("aria-disabled")).toBe("true");
+    expect(animation.getAttribute("aria-disabled")).toBeNull();
+    act(() => vi.advanceTimersByTime(STATUS_MESSAGE_MS));
     fireEvent.click(animation);
-    expect(status().textContent).toBe(`${dict.configurator.elements.animation} arriva presto.`);
+    expect(status().textContent).toBe(dict.configurator.edit.needBlock);
+    expect(document.querySelector("dialog")).toBeNull();
     expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
   });
 
@@ -2590,5 +2592,191 @@ describe("Configurator Sfondo · Immagine (Story 4.5b-2)", () => {
     expect(images()).toBeNull();
     await settle();
     expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
+describe("Configurator Animazione (Story 4.5c)", () => {
+  const P = "eeeeeeee-0000-4000-8000-000000000031";
+  const BLOCK = "eeeeeeee-0000-4000-8000-000000000032";
+  const ANIM = "eeeeeeee-0000-4000-8000-000000000033";
+  const d = dict.configurator.animationDialog;
+  const t = dict.configurator.tools.animation;
+
+  function fixture(withAnimation = false): Record<FormatId, Page[]> {
+    const pages = structuredClone(starterFormats());
+    const page = pages.presentazione_16_9[0]!;
+    page.pageKey = P;
+    page.blocks = [
+      {
+        blockId: BLOCK,
+        name: "Blocco",
+        background: { kind: "colour", value: NEW_BLOCK_COLOUR },
+        elements: withAnimation ? [{ elementId: ANIM, type: "animation", animation: "carousel_01", assetIds: [IMAGE], fit: "fit" }] : [],
+      },
+    ];
+    restartGrid(page, "presentazione_16_9", "mac-case@1");
+    return pages;
+  }
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const savedElements = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => (lastDoc(onSave).formats.presentazione_16_9.pages[0] as Page).blocks[0]!.elements;
+  const blockNode = () => pageNode(P).querySelector<HTMLElement>(`[data-block-id="${BLOCK}"]`)!;
+  const animNode = () => pageNode(P).querySelector<HTMLElement>(`[data-element-id="${ANIM}"]`)!;
+  const dialog = () => document.querySelector<HTMLElement>("dialog");
+  const option = (id: string) => dialog()!.querySelector<HTMLElement>(`[data-animation-option="${id}"]`)!;
+  const pick = (id: string) => fireEvent.click(dialog()!.querySelector<HTMLElement>(`[data-pick="${id}"]`)!);
+  const submit = (name: string) => button(name, dialog()!);
+  const elementsSection = () => within(leftPanel()).getByRole("region", { name: dict.configurator.tools.elements, hidden: true });
+  const panel = () => within(leftPanel()).getByRole("region", { name: t.heading, hidden: true });
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+      this.removeAttribute("open");
+    };
+  });
+
+  it("Animazione with a block selected opens the dialog; picks are numbered in order, a second click takes one out; Inserisci adds it, one undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    fireEvent.click(blockNode());
+    fireEvent.click(button(dict.configurator.elements.animation, elementsSection()));
+    expect(dialog()).not.toBeNull();
+    expect(submit(d.insert).hasAttribute("disabled")).toBe(true);
+    expect(submit(d.insert).getAttribute("title")).toBe(d.needMedia);
+    expect(option("carousel_01").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(option("carousel_03"));
+    pick(VIDEO);
+    pick(IMAGE);
+    expect(dialog()!.querySelector(`[data-pick="${IMAGE}"]`)!.getAttribute("aria-label")).toBe(fill(d.picked, { name: "LUM_cover.jpg", n: 2 }));
+    pick(VIDEO);
+    pick(VIDEO);
+    expect(dialog()!.textContent).toContain(fill(d.chosenMany, { n: 2 }));
+    fireEvent.click(submit(d.insert));
+    expect(dialog()).toBeNull();
+    await settle();
+    expect(savedElements(onSave)).toEqual([{ elementId: expect.any(String), type: "animation", animation: "carousel_03", assetIds: [IMAGE, VIDEO], fit: "fit" }]);
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    expect(within(panel()).getByLabelText(t.type)).toHaveProperty("value", "carousel_03");
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    await settle();
+    expect(savedElements(onSave)).toEqual([]);
+  });
+
+  it("Annulla changes nothing", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    fireEvent.click(blockNode());
+    fireEvent.click(button(dict.configurator.elements.animation, elementsSection()));
+    pick(IMAGE);
+    fireEvent.click(button(d.cancel, dialog()!));
+    expect(dialog()).toBeNull();
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("a double-click on an animation, or Cambia animazione o media, opens it with Salva; type and media change, fit and size stay", async () => {
+    const onSave = vi.fn(savedOk);
+    const pages = fixture(true);
+    (pages.presentazione_16_9[0]!.blocks[0]!.elements[0] as { size?: number; fit: string }).size = 120;
+    setup(false, pages, { onSave });
+    fireEvent.doubleClick(animNode());
+    expect(option("carousel_01").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(option("wheel_02"));
+    pick(VIDEO);
+    fireEvent.click(submit(d.save));
+    await settle();
+    expect(savedElements(onSave)).toEqual([{ elementId: ANIM, type: "animation", animation: "wheel_02", assetIds: [IMAGE, VIDEO], fit: "fit", size: 120 }]);
+    fireEvent.click(button(t.change, panel()));
+    expect(dialog()!.querySelector(`[data-pick="${VIDEO}"]`)!.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("the panel shows Tipo, the media count, Adattamento and Dimensione; each change saves, a Dimensione slide is one undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(true), { onSave });
+    fireEvent.click(animNode());
+    expect(panel().querySelector("[data-animation-count]")!.textContent).toBe(fill(t.mediaCount, { n: 1 }));
+    fireEvent.change(within(panel()).getByLabelText(t.type), { target: { value: "carousel_04" } });
+    fireEvent.click(button(dict.configurator.tools.fit.fill, panel()));
+    const size = within(panel()).getByLabelText(t.size) as HTMLInputElement;
+    fireEvent.change(size, { target: { value: "80" } });
+    fireEvent.change(size, { target: { value: "70" } });
+    fireEvent.pointerUp(size);
+    await settle();
+    expect(savedElements(onSave)[0]).toMatchObject({ animation: "carousel_04", fit: "fill", size: 70 });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    await settle();
+    expect(savedElements(onSave)[0]).toMatchObject({ animation: "carousel_04", fit: "fill" });
+    expect(savedElements(onSave)[0]).not.toHaveProperty("size");
+  });
+
+  it("the previews draw the picked media; Esc closes without changes, and keys in the dialog never reach the page", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(true), { onSave });
+    fireEvent.click(blockNode());
+    fireEvent.click(button(dict.configurator.elements.animation, elementsSection()));
+    expect(option("carousel_01").querySelector('img[src="https://cdn.test/a.webp"]')).toBeNull();
+    pick(IMAGE);
+    expect(option("carousel_01").querySelector('img[src="https://cdn.test/a.webp"]')).not.toBeNull();
+    fireEvent.keyDown(dialog()!.querySelector(`[data-pick="${IMAGE}"]`)!, { key: "Backspace" });
+    fireEvent.keyDown(dialog()!.querySelector(`[data-pick="${IMAGE}"]`)!, { key: "z", metaKey: true });
+    expect(animNode()).not.toBeNull();
+    fireEvent(dialog()!, new Event("cancel", { cancelable: true }));
+    expect(dialog()).toBeNull();
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("a full block says so before the dialog opens", () => {
+    const pages = fixture();
+    pages.presentazione_16_9[0]!.blocks[0]!.elements = Array.from({ length: 30 }, (_, i) => ({
+      elementId: `cccccccc-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
+      type: "divider" as const,
+    }));
+    setup(false, pages);
+    fireEvent.click(blockNode());
+    fireEvent.click(button(dict.configurator.elements.animation, elementsSection()));
+    expect(dialog()).toBeNull();
+    expect(status().textContent).toBe(dict.configurator.edit.blockFull);
+  });
+
+  it("Cambia animazione o media and Salva change the animation in one undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(true), { onSave });
+    fireEvent.click(animNode());
+    fireEvent.click(button(t.change, panel()));
+    pick(IMAGE);
+    pick(VIDEO);
+    fireEvent.click(submit(d.save));
+    await settle();
+    expect(savedElements(onSave)[0]).toMatchObject({ animation: "carousel_01", assetIds: [VIDEO] });
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    await settle();
+    expect(savedElements(onSave)[0]).toMatchObject({ assetIds: [IMAGE] });
+  });
+
+  it("says so when the case has no images or videos", () => {
+    setup(false, fixture(), { media: [] });
+    fireEvent.click(blockNode());
+    fireEvent.click(button(dict.configurator.elements.animation, elementsSection()));
+    expect(dialog()!.textContent).toContain(d.noMedia);
+  });
+
+  it("when not editable, the panel's controls are inactive and a double-click opens nothing", () => {
+    setup(false, fixture(true), { editable: false });
+    fireEvent.doubleClick(animNode());
+    expect(dialog()).toBeNull();
+    expect(status().textContent).toBe(fill(dict.configurator.soonMessage, { tool: t.change }));
+    fireEvent.click(animNode());
+    expect((within(panel()).getByLabelText(t.type) as HTMLSelectElement).disabled).toBe(true);
+    expect((within(panel()).getByLabelText(t.size) as HTMLInputElement).disabled).toBe(true);
+    expect(button(t.change, panel()).getAttribute("aria-disabled")).toBe("true");
   });
 });

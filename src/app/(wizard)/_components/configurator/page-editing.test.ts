@@ -19,6 +19,8 @@ import {
   BACKGROUND_SWATCHES,
   clearAssets,
   COLUMN_LAYOUT_ID,
+  insertAnimation,
+  MAX_ANIMATION_MEDIA,
   MAX_BLOCKS_PER_PAGE,
   MAX_ELEMENTS_PER_BLOCK,
   NEW_BLOCK_COLOUR,
@@ -33,6 +35,7 @@ import {
   shuffleChoices,
   shuffleLayout,
   swatchBackground,
+  withAnimation,
   withCrop,
   withFit,
   withFreshIds,
@@ -585,5 +588,57 @@ describe("withFit and withCrop (Story 4.5b-3)", () => {
     video[0]!.blocks[0]!.elements[1] = { elementId: IMG, type: "video", assetId: FILE, fit: "fill" };
     const next = withCrop(withFit(video, P, IMG, "crop"), P, IMG, { x: 0.1, y: 0.9, zoom: 1.5 });
     expect(media(next)).toEqual({ elementId: IMG, type: "video", assetId: FILE, fit: "crop", crop: { x: 0.1, y: 0.9, zoom: 1.5 } });
+  });
+});
+
+describe("insertAnimation and withAnimation (Story 4.5c)", () => {
+  const P = "dddddddd-0000-4000-8000-000000000021";
+  const B = "dddddddd-0000-4000-8000-000000000022";
+  const A1 = "aaaaaaaa-0000-4000-8000-000000000021";
+  const A2 = "aaaaaaaa-0000-4000-8000-000000000022";
+  function pages(): Page[] {
+    const page = structuredClone(starter("presentazione_16_9")[0]!);
+    page.pageKey = P;
+    page.blocks = [
+      { blockId: B, name: "Blocco", background: { kind: "colour", value: NEW_BLOCK_COLOUR }, elements: [{ elementId: "dddddddd-0000-4000-8000-000000000023", type: "text", style: "text", text: "Ciao", provenance: "human_added" }] },
+    ];
+    restartGrid(page, "presentazione_16_9", TEMPLATE);
+    return [page];
+  }
+
+  it("inserts the animation at the end of the block, Adatta, media in order, and selects it", () => {
+    const edit = insertAnimation(pages(), P, B, { animation: "carousel_03", assetIds: [A2, A1] }, ids());
+    expect(edit.ok).toBe(true);
+    if (!edit.ok) return;
+    const added = edit.pages[0]!.blocks[0]!.elements[1]!;
+    expect(added).toEqual({ elementId: expect.any(String), type: "animation", animation: "carousel_03", assetIds: [A2, A1], fit: "fit" });
+    expect(edit.selection).toEqual({ pageKey: P, blockId: B, elementId: added.elementId });
+    expect(() => pageSchema.parse(edit.pages[0])).not.toThrow();
+  });
+
+  it("MAX_ANIMATION_MEDIA is the schema's limit", () => {
+    const ok = insertAnimation(pages(), P, B, { animation: "wheel_02", assetIds: Array.from({ length: MAX_ANIMATION_MEDIA }, () => A1) }, ids());
+    if (!ok.ok) throw new Error("insert");
+    expect(() => pageSchema.parse(ok.pages[0])).not.toThrow();
+    const over = insertAnimation(pages(), P, B, { animation: "wheel_02", assetIds: Array.from({ length: MAX_ANIMATION_MEDIA + 1 }, () => A1) }, ids());
+    if (!over.ok) throw new Error("insert");
+    expect(() => pageSchema.parse(over.pages[0])).toThrow();
+  });
+
+  it("refuses an unknown block and a full one", () => {
+    expect(insertAnimation(pages(), P, "dddddddd-0000-4000-8000-000000000099", { animation: "wheel_02", assetIds: [A1] }, ids())).toEqual({ ok: false, reason: "noBlock" });
+    const full = pages();
+    full[0]!.blocks[0]!.elements = Array.from({ length: MAX_ELEMENTS_PER_BLOCK }, (_, i) => ({ elementId: `cccccccc-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, type: "divider" as const }));
+    expect(insertAnimation(full, P, B, { animation: "wheel_02", assetIds: [A1] }, ids())).toEqual({ ok: false, reason: "blockFull" });
+  });
+
+  it("patches type, media, fit and size (clamped), and changes nothing for the same values or another element", () => {
+    const edit = insertAnimation(pages(), P, B, { animation: "carousel_01", assetIds: [A1] }, ids());
+    if (!edit.ok) throw new Error("insert");
+    const id = edit.selection.elementId!;
+    const next = withAnimation(edit.pages, P, id, { animation: "wheel_02", assetIds: [A1, A2], fit: "fill", size: 200 });
+    expect(next[0]!.blocks[0]!.elements[1]).toMatchObject({ animation: "wheel_02", assetIds: [A1, A2], fit: "fill", size: 150 });
+    expect(withAnimation(next, P, id, { animation: "wheel_02", fit: "fill", size: 150 })).toBe(next);
+    expect(withAnimation(next, P, "dddddddd-0000-4000-8000-000000000023", { fit: "fit" })).toBe(next);
   });
 });

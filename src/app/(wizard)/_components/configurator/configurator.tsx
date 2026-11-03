@@ -6,11 +6,22 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import { SECONDARY_ACTION } from "@/app/_components/button-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
-import { CURRENT_SCHEMA_VERSION, type Background, type Block, type Crop, type DocumentKind, type MediaFit, type Page, type TextGroupAlign } from "@/modules/generation";
+import {
+  CURRENT_SCHEMA_VERSION,
+  type AnimationElement,
+  type Background,
+  type Block,
+  type Crop,
+  type DocumentKind,
+  type MediaFit,
+  type Page,
+  type TextGroupAlign,
+} from "@/modules/generation";
 import type { ListedAsset } from "@/modules/material";
 import { FORMAT_IDS, type BoundValues, type DefaultPage, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
+import { AnimationDialog } from "./animation-dialog";
 import { Canvas } from "./canvas";
 import { applyDefaultPage, type GeneratedTexts } from "./default-pages";
 import type { InstagramView } from "./instagram-overlay";
@@ -21,13 +32,17 @@ import {
   addElement,
   applyLayout,
   clearAssets,
+  insertAnimation,
+  MAX_ELEMENTS_PER_BLOCK,
   pasteBlock,
   placeMedia,
   removeSelection,
   setBackground,
   shuffleLayout,
+  withAnimation,
   withCrop,
   withFit,
+  type AnimationChoice,
   type MediaTarget,
   type PageEdit,
 } from "./page-editing";
@@ -148,6 +163,8 @@ export function Configurator({
   const [editing, setEditing] = useState<{ pageKey: string; elementId: string } | null>(null);
   /** One text editing session: its changes are one undo step. */
   const session = useRef(0);
+  /** One crop drag, Zoom or Dimensione slide (Stories 4.5b-3, 4.5c): its changes are one undo step. */
+  const mediaGesture = useRef(0);
   const [formatId, setFormatId] = useState<FormatId>(FORMAT_IDS[0]);
   const [selection, setSelection] = useState<Selection>(null);
   const [inView, setInView] = useState<string | null>(null);
@@ -264,9 +281,23 @@ export function Configurator({
     target?.current?.focus();
   }, [leftOpen, rightOpen]);
 
-  /** A double-click (or Enter) on an element: a text with its own words opens for typing; any other text says it can't yet. */
+  /** The Animazione dialog (Story 4.5c): a new animation for a block, or an existing one to change. */
+  const [animationDialog, setAnimationDialog] = useState<{ pageKey: string; blockId: string; elementId?: string } | null>(null);
+
+  /** A double-click (or Enter) on an element: a text with its own words opens for typing; any other text says it can't yet; an animation opens its dialog. */
   const requestEdit = useCallback(
     (pageKey: string, elementId: string) => {
+      const at = selectionOf(formats[formatId], pageKey, elementId);
+      const { element: target } = resolveSelection(formats[formatId], at);
+      if (target?.type === "animation" && at?.blockId !== undefined) {
+        if (!editable) {
+          say(fill(it.configurator.soonMessage, { tool: it.configurator.tools.animation.change }));
+          return;
+        }
+        setSelection(at);
+        setAnimationDialog({ pageKey, blockId: at.blockId, elementId });
+        return;
+      }
       const text = textElementAt(formats[formatId], pageKey, elementId);
       if (text === undefined) return;
       if (!editable || !isOwnText(text)) {
@@ -331,8 +362,16 @@ export function Configurator({
   /** An Elementi button: Blocco after the selected block (else at the end of the tools' page), anything else into the selected block. */
   const addFromElementi = useCallback(
     (key: ElementKey) => {
-      if (!editable || key === "animation") return;
+      if (!editable) return;
       const current = formats[formatId];
+      if (key === "animation") {
+        // The animation goes in once a style and media are chosen (mockup `addElement`).
+        if (selection?.blockId === undefined || block === undefined) say(it.configurator.edit.needBlock);
+        // A full block says so before any choice is made.
+        else if (block.elements.length >= MAX_ELEMENTS_PER_BLOCK) say(it.configurator.edit.blockFull);
+        else setAnimationDialog({ pageKey: selection.pageKey, blockId: selection.blockId });
+        return;
+      }
       if (key !== "block") {
         applyPageEdit(addElement(current, selection, key, newId));
         return;
@@ -340,7 +379,42 @@ export function Configurator({
       const pageKey = selection?.pageKey ?? toolPage?.pageKey;
       if (pageKey !== undefined) applyPageEdit(addBlock(current, pageKey, selection?.blockId, formatId, template, newId));
     },
-    [applyPageEdit, editable, formatId, formats, selection, template, toolPage],
+    [applyPageEdit, block, editable, formatId, formats, say, selection, template, toolPage],
+  );
+
+  /** The animation the dialog changes (its type and media), or null for a new one. */
+  const animationInitial = (() => {
+    if (animationDialog?.elementId === undefined) return null;
+    const { element: el } = resolveSelection(formats[formatId], animationDialog as NonNullable<Selection>);
+    return el?.type === "animation" ? { animation: el.animation, assetIds: el.assetIds, fit: el.fit, size: el.size } : null;
+  })();
+
+  /** The dialog's Inserisci or Salva: a new animation at the end of the block, or the existing one changed (one undo step). */
+  const submitAnimation = useCallback(
+    (choice: AnimationChoice) => {
+      const target = animationDialog;
+      setAnimationDialog(null);
+      if (!editable || target === null) return;
+      const current = formats[formatId];
+      if (target.elementId === undefined) {
+        applyPageEdit(insertAnimation(current, target.pageKey, target.blockId, choice, newId));
+        return;
+      }
+      const next = withAnimation(current, target.pageKey, target.elementId, { animation: choice.animation, assetIds: choice.assetIds });
+      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+    },
+    [animationDialog, applyPageEdit, doc, editable, formatId, formats],
+  );
+
+  /** A selected animation's Tipo, Adattamento or Dimensione; a Dimensione slide is one undo step. */
+  const patchAnimation = useCallback(
+    (patch: Partial<Pick<AnimationElement, "animation" | "fit" | "size">>, gesture = false) => {
+      if (!editable || selection?.elementId === undefined) return;
+      const current = formats[formatId];
+      const next = withAnimation(current, selection.pageKey, selection.elementId, patch);
+      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId, gesture ? `media-${mediaGesture.current}-${selection.elementId}` : undefined);
+    },
+    [doc, editable, formatId, formats, selection],
   );
 
   /** A Layout thumbnail (Story 4.4a): the tools' page takes it, then is selected. */
@@ -472,9 +546,6 @@ export function Configurator({
     say(it.configurator.media.missing.removed);
   }, [doc, formatId, formats, say]);
 
-  /** One crop drag or Zoom slide (Story 4.5b-3): its changes are one undo step. */
-  const mediaGesture = useRef(0);
-
   /** **Adattamento**: the selected image or video takes `fit` (one undo step). */
   const fitMedia = useCallback(
     (fit: MediaFit) => {
@@ -564,7 +635,8 @@ export function Configurator({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented || typing(event.target)) return;
+      // Keys pressed in a dialog (the Animazione dialog) are the dialog's, never the page's below.
+      if (event.defaultPrevented || typing(event.target) || (event.target instanceof Element && event.target.closest("dialog") !== null)) return;
       // ⌘Z / ⇧⌘Z (Ctrl elsewhere), in the editor and in Anteprima; inside a text the browser's own undo applies.
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "z") {
         event.preventDefault();
@@ -681,6 +753,14 @@ export function Configurator({
             onFit={fitMedia}
             onZoom={zoomMedia}
             onZoomDone={mediaDone}
+            onAnimationType={(animation) => patchAnimation({ animation })}
+            onAnimationChange={() => {
+              if (selection?.blockId !== undefined && selection.elementId !== undefined)
+                setAnimationDialog({ pageKey: selection.pageKey, blockId: selection.blockId, elementId: selection.elementId });
+            }}
+            onAnimationFit={(fit) => patchAnimation({ fit })}
+            onAnimationSize={(size) => patchAnimation({ size }, true)}
+            onAnimationSizeDone={mediaDone}
             onHide={() => toggleLeft(false)}
             hideRef={hideLeft}
           />
@@ -717,6 +797,17 @@ export function Configurator({
               onCropDone={mediaDone}
             />
             <StatusMessage message={message} />
+            <AnimationDialog
+              open={animationDialog !== null}
+              formatId={formatId}
+              template={template}
+              assets={assets}
+              values={values}
+              files={files}
+              initial={animationInitial}
+              onSubmit={submitAnimation}
+              onClose={() => setAnimationDialog(null)}
+            />
             {!leftOpen && !preview && (
               <button
                 ref={showLeft}
