@@ -308,20 +308,9 @@ export function Configurator({
   const [rightTab, setRightTab] = useState<RightTab>("pages");
   /** The render assets: the page's, then those of files uploaded since (Story 4.5b). */
   const [assets, setAssets] = useState(initialAssets);
-  /**
-   * The case's images and videos as last listed, and the one upload path into them (Story
-   * 4.5c-3): the Media tab, the Animazione dialog's picker and the render assets all follow
-   * this one list, read again after an upload from either place and while thumbnails are made.
-   */
-  const caseMedia = useCaseMedia({ caseId, initial: media, say, onListed: (fresh) => listed(fresh) });
-  const files = caseMedia.files;
-  const mediaUpload = useMediaUpload({ caseId, rules: mediaRules, say, media: caseMedia });
-
   /** Every file name listed this session, by lowercased id: a file deleted since is still named in the refused-save banner. */
   const [names, setNames] = useState<ReadonlyMap<string, string>>(() => new Map(media.map((f) => [f.id.toLowerCase(), f.originalFileName])));
   const clientNames = useMemo<ReadonlyMap<string, string>>(() => new Map(clientFiles.map((f) => [f.id.toLowerCase(), f.name])), [clientFiles]);
-  /** Every file that can go on a page: the case's images and videos as last listed, then the client's (Story 4.5c-2). */
-  const pickable = useMemo(() => [...files, ...clientMedia], [files, clientMedia]);
   /** Ids whose render asset is being read. */
   const reading = useRef(new Set<string>());
   /** The latest assets: the Media tab's polling may call an older `listed`. */
@@ -329,6 +318,45 @@ export function Configurator({
   useEffect(() => {
     assetsNow.current = assets;
   });
+  /** Reads the render assets of `of` not drawn yet (nor being read); one still without a rendition is asked for again next time. */
+  const readMissing = useCallback(
+    (of: readonly ListedAsset[]) => {
+      if (onRenderAssets === undefined) return;
+      const missing = of.filter((f) => !(f.id in assetsNow.current) && !reading.current.has(f.id)).map((f) => f.id);
+      if (missing.length === 0) return;
+      for (const id of missing) reading.current.add(id);
+      void onRenderAssets({ caseId, assetIds: missing })
+        .then((result) => {
+          if (result.ok && Object.keys(result.value).length > 0) setAssets((current) => ({ ...current, ...result.value }));
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          for (const id of missing) reading.current.delete(id);
+        });
+    },
+    [caseId, onRenderAssets],
+  );
+
+  /** The case's files were read again: name them, and read the render assets of new ones, the client's included (Story 4.5c-2). */
+  const listed = useCallback(
+    (fresh: readonly ListedAsset[]) => {
+      setNames((current) => new Map([...current, ...fresh.map((f) => [f.id.toLowerCase(), f.originalFileName] as const)]));
+      readMissing([...fresh, ...clientMedia]);
+    },
+    [clientMedia, readMissing],
+  );
+
+  /**
+   * The case's images and videos as last listed, and the one upload path into them (Story
+   * 4.5c-3): the Media tab, the Animazione dialog's picker and the render assets all follow
+   * this one list, read again after an upload from either place and while thumbnails are made.
+   */
+  const caseMedia = useCaseMedia({ caseId, initial: media, say, onListed: listed });
+  const files = caseMedia.files;
+  const mediaUpload = useMediaUpload({ caseId, rules: mediaRules, say, media: caseMedia });
+
+  /** Every file that can go on a page: the case's images and videos as last listed, then the client's (Story 4.5c-2). */
+  const pickable = useMemo(() => [...files, ...clientMedia], [files, clientMedia]);
   const mediaTab = useRef<HTMLButtonElement>(null);
   /** **Sostituisci dai Media** pressed: focus the Media tab once it shows. */
   const focusMedia = useRef(false);
@@ -813,34 +841,6 @@ export function Configurator({
       placeFile(selection, file.id, "end");
     },
     [block, placeFile, say, selection],
-  );
-
-  /** Reads the render assets of `of` not drawn yet (nor being read); one still without a rendition is asked for again next time. */
-  const readMissing = useCallback(
-    (of: readonly ListedAsset[]) => {
-      if (onRenderAssets === undefined) return;
-      const missing = of.filter((f) => !(f.id in assetsNow.current) && !reading.current.has(f.id)).map((f) => f.id);
-      if (missing.length === 0) return;
-      for (const id of missing) reading.current.add(id);
-      void onRenderAssets({ caseId, assetIds: missing })
-        .then((result) => {
-          if (result.ok && Object.keys(result.value).length > 0) setAssets((current) => ({ ...current, ...result.value }));
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          for (const id of missing) reading.current.delete(id);
-        });
-    },
-    [caseId, onRenderAssets],
-  );
-
-  /** The case's files were read again: name them, and read the render assets of new ones, the client's included (Story 4.5c-2). */
-  const listed = useCallback(
-    (fresh: readonly ListedAsset[]) => {
-      setNames((current) => new Map([...current, ...fresh.map((f) => [f.id.toLowerCase(), f.originalFileName] as const)]));
-      readMissing([...fresh, ...clientMedia]);
-    },
-    [clientMedia, readMissing],
   );
 
   // A client file whose rendition wasn't ready when the page loaded is asked for once on opening (Story 4.5c-2), then at every listing.
