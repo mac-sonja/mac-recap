@@ -70,12 +70,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Migration + `db.types.ts`; `domain/export.ts` bundle kind and hash (tests: stable, order-independent, changes when a format's hash changes).
-- [ ] `request-export.ts` + tests: one format unchanged; 2+ reuse, enqueue, refusals before enqueue.
-- [ ] `export-handler.ts` + tests: render only missing formats, zip the stored files with the layout above, no ZIP on any failure, size and page checks as 5.3.
-- [ ] `export-storage.ts` read and key, with tests.
-- [ ] `download-button.tsx`, `case-download.ts`, `case-view.tsx`, `case-studies-table.tsx`, `export-actions.ts` + tests: checkboxes, default from the view, disabled with none, one vs several.
-- [ ] `test/export-chromium.test.ts`: a two-format bundle with real Chromium contains the PDF and `Carosello/01.png`…; `test/db/export.db.test.ts`: a `bundle` row is accepted with its path, a wrong path is refused.
+- [x] Migration + `db.types.ts`; `domain/export.ts` bundle kind and hash (tests: stable, order-independent, changes when a format's hash changes).
+- [x] `request-export.ts` + tests: one format unchanged; 2+ reuse, enqueue, refusals before enqueue.
+- [x] `export-handler.ts` + tests: render only missing formats, zip the stored files with the layout above, no ZIP on any failure, size and page checks as 5.3.
+- [x] `export-storage.ts` read and key, with tests.
+- [x] `download-button.tsx`, `case-download.ts`, `case-view.tsx`, `case-studies-table.tsx`, `export-actions.ts` + tests: checkboxes, default from the view, disabled with none, one vs several.
+- [x] `test/export-chromium.test.ts`: a two-format bundle with real Chromium contains the PDF and `Carosello/01.png`…; `test/db/export.db.test.ts`: a `bundle` row is accepted with its path, a wrong path is refused.
 
 **Acceptance Criteria:**
 - Given both formats exported once, when both are exported again with nothing changed, then no job is enqueued and the same file downloads.
@@ -83,6 +83,9 @@ context:
 ## Implementation Notes
 
 - Resumed build (2026-11-04): the server side is already on the branch since `baseline_commit` — domain bundle kind and hash, `request-export.ts`, `export-handler.ts`, `store-zip.ts` read-back, `export-storage.ts` read and key, the migration, and tests including `test/db/export.db.test.ts` and `test/export-chromium.test.ts`. Check those against the spec and keep them; don't rewrite. Still open: the picker (radio → checkboxes) and its wiring in `case-download.ts`, `case-view.tsx`, `case-studies-table.tsx`, `export-actions.ts`, their tests, and a lint error in `domain/export.test.ts` (unused `_`).
+- Picker (2026-11-04): checkboxes over `EXPORT_FORMAT_IDS` (now also exported, pure, from `rendering/index.ts`). The ticked boxes reset to `currentFormat` each time the dialog opens (Presentazione when there is none, or when the view shows Video); `onDownload` gets them in the picker's order; **Riprova** asks again for the same set. `caseDownload` always sends `{ caseId, formats }` (one format takes 5.3's path on the server). Copy: `download.formats` "Formati", `download.caseDescription` "Scegli uno o più formati."
+- `db.types.ts` needs no change: the migration only widens check constraints, and `format`/`content_type`/`path` are `string` already.
+- Not run here: `npm run test:db` (no Docker) and `test/export-chromium.test.ts` (skipped without Playwright's Chromium); local Node is 22, not 24.
 
 ## Spec Change Log
 
