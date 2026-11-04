@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Page } from "@/modules/generation";
 import { FORMAT_IDS, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
 import { fill, it as dict } from "@/shared/i18n/it";
-import { CaseViewer } from "./case-viewer";
+import { CaseViewer, SWIPE_PX } from "./case-viewer";
 
 const IMAGE = "bbbbbbbb-0000-4000-8000-000000000001";
 
@@ -88,6 +88,36 @@ function stubFullscreen() {
   Object.defineProperty(Element.prototype, "requestFullscreen", { configurable: true, value: request });
   Object.defineProperty(document, "exitFullscreen", { configurable: true, value: exit });
   return { request, exit, browserExit: () => act(() => change(null)) };
+}
+
+/** A window narrower (or not) than 1024 px; `resize` flips it and tells the viewer. */
+function stubWidth(narrow: boolean) {
+  let matches = narrow;
+  const listeners = new Set<() => void>();
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        matches: query === "(width < 64rem)" && matches,
+        media: query,
+        addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+        removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+      }) as unknown as MediaQueryList,
+  );
+  return {
+    resize: (next: boolean) =>
+      act(() => {
+        matches = next;
+        for (const fn of listeners) fn();
+      }),
+  };
+}
+
+const select = () => screen.getByRole("combobox", { name: dict.configurator.formats.label, hidden: true }) as HTMLSelectElement;
+
+/** A pointer drag on the stage, from (x0, y0) to (x1, y1). */
+function drag(x0: number, y0: number, x1: number, y1: number) {
+  fireEvent.pointerDown(stage(), { clientX: x0, clientY: y0, pointerId: 1, isPrimary: true, button: 0 });
+  fireEvent.pointerUp(stage(), { clientX: x1, clientY: y1, pointerId: 1, isPrimary: true, button: 0 });
 }
 
 function unstubFullscreen() {
@@ -321,5 +351,152 @@ describe("CaseViewer", () => {
     fireEvent.click(button(copy.fullscreen));
     act(() => vi.advanceTimersByTime(5000));
     expect(document.querySelector("[data-viewer-controls]")!.hasAttribute("data-hidden")).toBe(false);
+  });
+
+  describe("below 1280 px", () => {
+    it("offers the formats in a labelled dropdown, with their ratios, showing the current one", () => {
+      stubWidth(false);
+      render(<Harness />);
+      expect(select().value).toBe("presentazione_16_9");
+      expect([...select().options].map((o) => o.textContent)).toEqual(["Presentazione · 16:9", "Carosello · 1:1", "Video · 9:16"]);
+      expect(select().closest("[data-viewer-toolbar]")).not.toBeNull();
+      expect(select().closest(".xl\\:hidden")).not.toBeNull();
+      expect(document.querySelector(`[role="group"][aria-label="${dict.configurator.formats.label}"]`)!.parentElement!.className).toContain("hidden xl:block");
+      // Zoom is hidden only below 1024 px.
+      expect(document.querySelector("[data-viewer-zoom]")!.className).toContain("lg:flex");
+    });
+
+    it("picks a format like a switch click: slide 1, at Adatta", () => {
+      stubWidth(false);
+      stubStageSize();
+      const onFormat = vi.fn();
+      function Spy() {
+        const [formatId, setFormatId] = useState<FormatId>(FORMAT_IDS[0]);
+        const [slide, setSlide] = useState(0);
+        return (
+          <CaseViewer
+            formatId={formatId}
+            onFormat={(next) => {
+              onFormat(next);
+              setFormatId(next);
+              setSlide(0);
+            }}
+            template="mac-case@1"
+            pages={FORMATS[formatId]}
+            assets={{}}
+            values={VALUES}
+            trial={false}
+            slide={slide}
+            onStep={(delta) => setSlide((s) => s + delta)}
+            caption="Rebrand Lumen"
+            reducedMotion={false}
+          />
+        );
+      }
+      render(<Spy />);
+      fireEvent.click(button(preview.next));
+      fireEvent.click(button(copy.zoomIn));
+      expect(zoomButton().textContent).toBe("125%");
+      fireEvent.change(select(), { target: { value: "carosello_1_1" } });
+      expect(onFormat).toHaveBeenCalledWith("carosello_1_1");
+      expect(select().value).toBe("carosello_1_1");
+      expect(counter()).toContain(`1 di ${FORMATS.carosello_1_1.length}`);
+      expect(zoomButton().textContent).toBe("100%");
+      expect(slideEl()!.style.width).toBe("552px");
+    });
+  });
+
+  describe("below 1024 px", () => {
+    it("fits the slide to the panel's width with no inline width, and the panel's height follows it", () => {
+      stubWidth(true);
+      stubStageSize();
+      render(<Harness />);
+      expect(slideEl()!.style.width).toBe("");
+      expect(slideEl()!.className).toContain("max-lg:w-full");
+      const root = document.querySelector<HTMLElement>("[data-viewer]")!;
+      expect(root.className).toContain("lg:h-[calc(100dvh-16rem)]");
+      expect(root.className).not.toMatch(/(^|\s)h-\[/);
+      expect(stage().className).toContain("touch-pan-y");
+      expect(stage().className).not.toMatch(/(^|\s)overflow-auto/);
+    });
+
+    it("pages with a horizontal swipe: left for the next slide, right for the previous, stopping at the ends", () => {
+      stubWidth(true);
+      render(<Harness />);
+      const n = FORMATS.presentazione_16_9.length;
+      drag(200, 100, 200 - SWIPE_PX, 100);
+      expect(counter()).toContain(`2 di ${n}`);
+      drag(100, 100, 200, 110);
+      expect(counter()).toContain(`1 di ${n}`);
+      drag(100, 100, 300, 100);
+      expect(counter()).toContain(`1 di ${n}`);
+      for (let i = 0; i < n + 2; i++) drag(300, 100, 100, 100);
+      expect(counter()).toContain(`${n} di ${n}`);
+    });
+
+    it("ignores a short drag and a mostly vertical one", () => {
+      stubWidth(true);
+      render(<Harness />);
+      drag(200, 100, 200 - SWIPE_PX + 1, 100);
+      expect(counter()).toContain("1 di");
+      drag(200, 100, 140, 180);
+      expect(counter()).toContain("1 di");
+      // A cancelled gesture (the browser took it for a scroll) does nothing either.
+      fireEvent.pointerDown(stage(), { clientX: 200, clientY: 100, pointerId: 1, isPrimary: true, button: 0 });
+      fireEvent.pointerCancel(stage(), { clientX: 200, clientY: 100, pointerId: 1 });
+      fireEvent.pointerUp(stage(), { clientX: 100, clientY: 100, pointerId: 1, isPrimary: true, button: 0 });
+      expect(counter()).toContain("1 di");
+    });
+
+    it("ignores a second finger, another mouse button and a pointerup from a different pointer", () => {
+      stubWidth(true);
+      render(<Harness />);
+      // A second finger (not primary).
+      fireEvent.pointerDown(stage(), { clientX: 300, clientY: 100, pointerId: 2, isPrimary: false, button: 0 });
+      fireEvent.pointerUp(stage(), { clientX: 100, clientY: 100, pointerId: 2, isPrimary: false, button: 0 });
+      expect(counter()).toContain("1 di");
+      // The right mouse button.
+      fireEvent.pointerDown(stage(), { clientX: 300, clientY: 100, pointerId: 1, isPrimary: true, button: 2 });
+      fireEvent.pointerUp(stage(), { clientX: 100, clientY: 100, pointerId: 1, isPrimary: true, button: 2 });
+      expect(counter()).toContain("1 di");
+      // A pointerup from another pointer than the one that started.
+      fireEvent.pointerDown(stage(), { clientX: 300, clientY: 100, pointerId: 1, isPrimary: true, button: 0 });
+      fireEvent.pointerUp(stage(), { clientX: 100, clientY: 100, pointerId: 3, isPrimary: true, button: 0 });
+      expect(counter()).toContain("1 di");
+    });
+
+    it("keeps the measured fit in full screen, and swipes there too", () => {
+      stubWidth(true);
+      stubFullscreen();
+      stubStageSize();
+      render(<Harness />);
+      fireEvent.click(button(copy.fullscreen));
+      expect(slideEl()!.style.width).toBe("1000px");
+      expect(slideEl()!.className).not.toContain("max-lg:w-full");
+      drag(300, 100, 100, 100);
+      expect(document.querySelector("[data-viewer-controls] p[aria-live]")?.textContent).toContain(`2 di ${FORMATS.presentazione_16_9.length}`);
+    });
+
+    it("returns to Adatta when a zoomed viewer narrows, and stays there widening again", () => {
+      const width = stubWidth(false);
+      stubStageSize();
+      render(<Harness />);
+      fireEvent.click(button(copy.zoomIn));
+      fireEvent.click(button(copy.zoomIn));
+      expect(stage().dataset.zoom).toBe("150");
+      width.resize(true);
+      expect(stage().dataset.zoom).toBe("100");
+      expect(slideEl()!.style.width).toBe("");
+      width.resize(false);
+      expect(stage().dataset.zoom).toBe("100");
+      expect(slideEl()!.style.width).toBe("952px");
+    });
+  });
+
+  it("does not swipe from 1024 px up", () => {
+    stubWidth(false);
+    render(<Harness />);
+    drag(300, 100, 100, 100);
+    expect(counter()).toContain("1 di");
   });
 });

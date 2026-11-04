@@ -175,7 +175,9 @@ describe("CaseViewPage", () => {
     expect(html).toContain('aria-label="Formato"');
     expect(html).toContain('aria-label="Scarica Rebrand Lumen 2026"');
     expect(html).toMatch(new RegExp(`href="/case-studies/${ID}/configurator"[^>]*>.*Modifica</a>`));
-    expect(html).toContain("L’anteprima ha bisogno di uno schermo più grande.");
+    // The preview at every width: the dropdown below 1280 px, no narrow-screen message.
+    expect(html).toMatch(/<select[^>]*>.*Presentazione · 16:9<\/option>/);
+    expect(html).not.toContain("L’anteprima ha bisogno di uno schermo più grande.");
     expect(html).not.toContain("Bozza di prova");
     // Read-only: no editor panels, no Anteprima eye, no Approva.
     expect(html).not.toContain('aria-label="Proprietà"');

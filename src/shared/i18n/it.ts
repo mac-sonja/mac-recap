@@ -1159,8 +1159,6 @@ export const it = {
     back: "Torna alle case history",
     /** Opens the configurator. */
     edit: "Modifica",
-    /** Below 1024 px, instead of the preview. */
-    narrowScreen: "L’anteprima ha bisogno di uno schermo più grande.",
     /** The collections the case appears in (filled by Story 5.10; empty until then). */
     collections: {
       heading: "Raccolte",
