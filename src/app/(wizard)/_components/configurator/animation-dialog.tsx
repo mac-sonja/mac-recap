@@ -34,7 +34,7 @@ export interface AnimationDialogProps {
   template: string;
   assets: Readonly<Record<string, RenderAsset>>;
   values: BoundValues;
-  /** The case's images and videos, oldest first: what can go in. */
+  /** The case's images and videos, oldest first, then the client's (Story 4.5c-2): what can go in. */
   files: readonly ListedAsset[];
   /** The animation being changed (**Salva**; its fit and size shape the previews), or null for a new one (**Inserisci**). */
   initial: (AnimationChoice & Pick<AnimationElement, "fit" | "size">) | null;

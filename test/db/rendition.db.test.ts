@@ -10,11 +10,11 @@ import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TEST_ACTOR_ID } from "../helpers/db-actor";
 import type { Job } from "@/modules/jobs";
-import { assetKey, renditionKey } from "@/modules/material/adapters/asset-key";
+import { assetKey, clientAssetKey, clientRenditionKey, renditionKey } from "@/modules/material/adapters/asset-key";
 import { createSupabaseAdminClient } from "@/modules/material/adapters/supabase/admin";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseObjectStorage, MATERIAL_BUCKET } from "@/modules/material/adapters/supabase/object-storage";
-import { createSupabaseRenditionRepository } from "@/modules/material/adapters/supabase/rendition-repository";
+import { createSupabaseClientRenditionRepository, createSupabaseRenditionRepository } from "@/modules/material/adapters/supabase/rendition-repository";
 import { makeGetRendition } from "@/modules/material/application/get-rendition";
 import { specHashOf } from "@/modules/material/application/spec-hash";
 import { RENDITION_CONTENT_TYPES } from "@/modules/material/domain/rendition";
@@ -415,5 +415,162 @@ describe("the renditions backfill (dev tooling)", () => {
       [image.assetId, video.assetId],
     ]);
     expect(again).toHaveLength(2);
+  });
+});
+
+describe("client renditions (Story 4.5c-2)", () => {
+  const clientUpsertSql = "select * from public.upsert_client_rendition($1, $2, $3, 'image/webp', 480, 320, 1234)";
+
+  /** A live client file row of a fresh client (no object stored). */
+  async function seedClientFile(kind: "image" | "video" = "image") {
+    const owner = (await createTestClient(pool, TEST_ACTOR_ID)).id;
+    const id = randomUUID();
+    const contentType = kind === "image" ? "image/png" : "video/mp4";
+    await pool.query("select public.insert_client_asset($1, $2, $3, 'f.png', $4, 10, $5, $6, $7)", [
+      id,
+      owner,
+      clientAssetKey(owner, id, contentType),
+      contentType,
+      kind === "image" ? 2400 : null,
+      kind === "image" ? 1600 : null,
+      TEST_ACTOR_ID,
+    ]);
+    return { clientId: owner, assetId: id, contentType };
+  }
+
+  const job = (assetId: string, owner: string): Job => ({
+    id: randomUUID(),
+    kind: "rendition",
+    subjectId: assetId,
+    inputHash: "h",
+    payload: { owner: "client", clientId: owner },
+    status: "running",
+    attempts: 1,
+    maxAttempts: 3,
+    lockedUntil: new Date(Date.now() + 600_000).toISOString(),
+    error: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    finishedAt: null,
+  });
+
+  it("creates client_rendition with RLS on, no policies, the rendition columns and an FK to client_asset", async () => {
+    const { rows } = await pool.query(
+      `select c.relrowsecurity as rls, (select count(*)::int from pg_catalog.pg_policy p where p.polrelid = c.oid) as policies
+         from pg_catalog.pg_class c where c.oid = 'public.client_rendition'::regclass`,
+    );
+    expect(rows).toEqual([{ rls: true, policies: 0 }]);
+    const { rows: columns } = await pool.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'client_rendition' order by column_name",
+    );
+    expect(columns.map((r) => r.column_name)).toEqual(["asset_id", "content_type", "created_at", "height", "path", "size_bytes", "spec_hash", "width"]);
+    const { rows: keys } = await pool.query<{ def: string }>(
+      `select pg_catalog.pg_get_constraintdef(oid) as def from pg_catalog.pg_constraint
+        where conrelid = 'public.client_rendition'::regclass and contype in ('p', 'f') order by contype desc`,
+    );
+    expect(keys.map((k) => k.def)).toEqual(["PRIMARY KEY (asset_id, spec_hash)", "FOREIGN KEY (asset_id) REFERENCES client_asset(id)"]);
+    const { rows: fn } = await pool.query(
+      `select p.prosecdef as definer, p.proconfig as config,
+              has_function_privilege('service_role', p.oid, 'execute') as service_role,
+              has_function_privilege('anon', p.oid, 'execute') as anon,
+              has_function_privilege('authenticated', p.oid, 'execute') as authenticated
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'upsert_client_rendition'`,
+    );
+    expect(fn).toEqual([{ definer: true, config: ['search_path=""'], service_role: true, anon: false, authenticated: false }]);
+  });
+
+  it("upsert_client_rendition writes one row per spec under the client's prefix, and replaces it on a retry", async () => {
+    const { clientId: owner, assetId } = await seedClientFile();
+    const path = clientRenditionKey(owner, assetId, THUMB, "webp");
+    await pool.query(clientUpsertSql, [assetId, THUMB, path]);
+    await pool.query("select * from public.upsert_client_rendition($1, $2, $3, 'image/webp', 400, 300, 999)", [assetId, THUMB, path]);
+    const { rows } = await pool.query("select spec_hash, path, width, size_bytes::int as size from public.client_rendition where asset_id = $1", [assetId]);
+    expect(rows).toEqual([{ spec_hash: THUMB, path, width: 400, size: 999 }]);
+    // A case rendition key, another file's, or the original's is refused.
+    for (const bad of [renditionKey(owner, assetId, THUMB, "webp"), clientRenditionKey(owner, UNKNOWN_ID, THUMB, "webp"), clientAssetKey(owner, assetId, "image/png")]) {
+      await expect(pool.query(clientUpsertSql, [assetId, DISPLAY, bad])).rejects.toMatchObject({ code: "P0001", message: "RENDITION_PATH_INVALID" });
+    }
+    await expect(pool.query(clientUpsertSql, [UNKNOWN_ID, THUMB, "x"])).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+  });
+
+  it("a removed client file, or one of a deleted client, → NOT_FOUND, nothing written", async () => {
+    const removed = await seedClientFile();
+    expect((await pool.query("select public.delete_client_asset($1) as deleted", [removed.assetId])).rows).toEqual([{ deleted: true }]);
+    await expect(pool.query(clientUpsertSql, [removed.assetId, THUMB, clientRenditionKey(removed.clientId, removed.assetId, THUMB, "webp")])).rejects.toMatchObject({
+      code: "P0001",
+      message: "NOT_FOUND",
+    });
+    const orphaned = await seedClientFile();
+    await pool.query("update public.client set deleted_at = now() where id = $1", [orphaned.clientId]);
+    await expect(pool.query(clientUpsertSql, [orphaned.assetId, THUMB, clientRenditionKey(orphaned.clientId, orphaned.assetId, THUMB, "webp")])).rejects.toMatchObject({
+      code: "P0001",
+      message: "NOT_FOUND",
+    });
+    const { rows } = await pool.query("select 1 from public.client_rendition where asset_id = any($1::uuid[])", [[removed.assetId, orphaned.assetId]]);
+    expect(rows).toEqual([]);
+  });
+
+  const statements = {
+    select: "select * from public.client_rendition",
+    insert: `insert into public.client_rendition (asset_id, spec_hash, path, content_type, width, height, size_bytes)
+             values ('${UNKNOWN_ID}', '0123456789abcdef', 'x', 'image/webp', 1, 1, 1)`,
+    update: "update public.client_rendition set width = 1",
+    delete: "delete from public.client_rendition",
+    upsert_client_rendition: `select public.upsert_client_rendition('${UNKNOWN_ID}', '0123456789abcdef', 'x', 'image/webp', 1, 1, 1)`,
+  };
+
+  it.each((["anon", "authenticated"] as const).flatMap((role) => Object.entries(statements).map(([verb, sql]) => [role, verb, sql] as const)))(
+    "%s gets permission denied on client_rendition %s",
+    async (role, _verb, sql) => {
+      await expect(inRolledBackTx(sql, [], role)).rejects.toMatchObject({ code: "42501" });
+    },
+  );
+
+  it("the service role may read client_rendition but write it only through upsert_client_rendition; the browser key is refused", async () => {
+    await inRolledBackTx("select * from public.client_rendition limit 1", [], "service_role");
+    for (const verb of ["insert", "update", "delete"] as const) {
+      await expect(inRolledBackTx(statements[verb], [], "service_role"), verb).rejects.toMatchObject({ code: "42501" });
+    }
+    const browser = createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const read = await browser.from("client_rendition").select("*");
+    expect(read.data).toBeNull();
+    expect(read.error?.code).toBe("42501");
+  });
+
+  it("the handler makes a client image's renditions with real sharp; getClientRendition signs them; the backfill enqueues a client job", async () => {
+    const { clientId: owner, assetId } = await seedClientFile("image");
+    const originalBytes = await sharp({ create: { width: 2400, height: 1600, channels: 3, background: "#3c3" } }).png().toBuffer();
+    const { error } = await createSupabaseAdminClient()
+      .storage.from(MATERIAL_BUCKET)
+      .upload(clientAssetKey(owner, assetId, "image/png"), originalBytes, { contentType: "image/png" });
+    expect(error).toBeNull();
+
+    // Before the worker: the backfill enqueues it with its client.
+    expect((await backfillRenditions()).ok).toBe(true);
+    const { rows: jobs } = await pool.query<{ payload: unknown }>("select payload from public.job where kind = 'rendition' and subject_id = $1", [assetId]);
+    expect(jobs.map((j) => j.payload)).toEqual([{ owner: "client", clientId: owner }]);
+
+    const { getClientRendition } = await import("@/modules/material");
+    expect(await getClientRendition(assetId, "image.display")).toMatchObject({ ok: false, error: { code: "RENDITION_NOT_READY" } });
+    expect(await renditionHandler().run(job(assetId, owner), new AbortController().signal)).toEqual({ ok: true, value: undefined });
+    const repo = createSupabaseClientRenditionRepository();
+    const made = await repo.listForAsset(assetId);
+    expect(made.ok && made.value.map((r) => [r.specHash, r.width, r.path]).sort()).toEqual(
+      [
+        [THUMB, 480, clientRenditionKey(owner, assetId, THUMB, "webp")],
+        [DISPLAY, 2048, clientRenditionKey(owner, assetId, DISPLAY, "webp")],
+      ].sort(),
+    );
+    const link = await getClientRendition(assetId, "image.display");
+    expect(link).toEqual({ ok: true, value: { url: expect.any(String), width: 2048, height: 1365, contentType: "image/webp" } });
+    if (link.ok) expect((await fetch(link.value.url)).status).toBe(200);
+
+    // Removed: no longer served, its rows and objects stay.
+    expect((await pool.query("select public.delete_client_asset($1) as deleted", [assetId])).rows).toEqual([{ deleted: true }]);
+    expect(await getClientRendition(assetId, "image.display")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect((await pool.query("select count(*)::int as n from public.client_rendition where asset_id = $1", [assetId])).rows).toEqual([{ n: 2 }]);
   });
 });

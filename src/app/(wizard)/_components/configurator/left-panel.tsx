@@ -64,7 +64,7 @@ export interface LeftPanelProps {
   /** Sfondo's field got something that isn't a colour. */
   onBadColour: () => void;
   onSoon: (tool: string) => void;
-  /** The case's images and videos: a selected image's or video's file (Story 4.5b). */
+  /** The case's images and videos, then the client's (Story 4.5c-2): a selected image's or video's file (Story 4.5b), Sfondo's images. */
   files: readonly ListedAsset[];
   /** **Sostituisci dai Media** / **Scegli dai Media**: shows the Media tab. */
   onOpenMedia: () => void;
@@ -168,7 +168,8 @@ function ImageTile({ file, pressed, editable, onPick }: { file: ListedAsset; pre
 }
 
 /**
- * Sfondo · Immagine (Story 4.5b-2, mockup `bgTools`): the case's images as small tiles,
+ * Sfondo · Immagine (Story 4.5b-2, mockup `bgTools`): the case's images, then the client's
+ * (Story 4.5c-2), as small tiles,
  * the background's own pressed; a press makes it the background, **Togli immagine**
  * puts the default colour back. Videos are not backgrounds.
  */

@@ -179,14 +179,14 @@ isOneToOne: false
                   ]
                 },"client_asset": {
                   Row: {
-                    "client_id": string,"created_at": string,"created_by": string,"file_name": string,"height": number | null,"id": string,"mime_type": string,"path": string,"position": number,"size_bytes": number,"width": number | null
+                    "client_id": string,"created_at": string,"created_by": string,"deleted_at": string | null,"file_name": string,"height": number | null,"id": string,"mime_type": string,"path": string,"position": number,"size_bytes": number,"width": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "client_id": string,"created_at"?: string,"created_by": string,"file_name": string,"height"?: number | null,"id"?: string,"mime_type": string,"path": string,"position": number,"size_bytes": number,"width"?: number | null
+                    "client_id": string,"created_at"?: string,"created_by": string,"deleted_at"?: string | null,"file_name": string,"height"?: number | null,"id"?: string,"mime_type": string,"path": string,"position": number,"size_bytes": number,"width"?: number | null
                   }
                   Update: {
-                    "client_id"?: string,"created_at"?: string,"created_by"?: string,"file_name"?: string,"height"?: number | null,"id"?: string,"mime_type"?: string,"path"?: string,"position"?: number,"size_bytes"?: number,"width"?: number | null
+                    "client_id"?: string,"created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"file_name"?: string,"height"?: number | null,"id"?: string,"mime_type"?: string,"path"?: string,"position"?: number,"size_bytes"?: number,"width"?: number | null
                   }
                   Relationships: [
                     {
@@ -252,6 +252,26 @@ isOneToOne: false
       columns: ["created_by"]
 isOneToOne: false
       referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"client_rendition": {
+                  Row: {
+                    "asset_id": string,"content_type": string,"created_at": string,"height": number,"path": string,"size_bytes": number,"spec_hash": string,"width": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "asset_id": string,"content_type": string,"created_at"?: string,"height": number,"path": string,"size_bytes": number,"spec_hash": string,"width": number
+                  }
+                  Update: {
+                    "asset_id"?: string,"content_type"?: string,"created_at"?: string,"height"?: number,"path"?: string,"size_bytes"?: number,"spec_hash"?: string,"width"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_rendition_asset_id_fkey"
+      columns: ["asset_id"]
+isOneToOne: false
+      referencedRelation: "client_asset"
       referencedColumns: ["id"]
     }
                   ]
@@ -569,6 +589,7 @@ isOneToOne: false
               "client_id": string,
 "created_at": string,
 "created_by": string,
+"deleted_at": string | null,
 "file_name": string,
 "height": number | null,
 "id": string,
@@ -800,6 +821,23 @@ isOneToOne: false
                           SetofOptions: {
         from: "*"
         to: "client"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"upsert_client_rendition":
+{ Args: { "p_asset_id": string,"p_content_type": string,"p_height": number,"p_path": string,"p_size_bytes": number,"p_spec_hash": string,"p_width": number }; Returns: {
+              "asset_id": string,
+"content_type": string,
+"created_at": string,
+"height": number,
+"path": string,
+"size_bytes": number,
+"spec_hash": string,
+"width": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "client_rendition"
         isOneToOne: true
         isSetofReturn: false
       } },

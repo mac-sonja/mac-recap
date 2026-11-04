@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { err, ok } from "@/shared/result";
 
-const { getActor, saveRevisionDocUseCase, approveUseCase, updateCaseFieldsUseCase, listCases, liveAssetIds, listAssets, getRendition, getCase, saveResultsUseCase, saveTestimonialUseCase } = vi.hoisted(() => ({
+const { getActor, saveRevisionDocUseCase, approveUseCase, updateCaseFieldsUseCase, listCases, liveAssetIds, listAssets, getRendition, getCase, saveResultsUseCase, saveTestimonialUseCase, listClientMaterial, getClientRendition } = vi.hoisted(() => ({
+  listClientMaterial: vi.fn(),
+  getClientRendition: vi.fn(),
   getActor: vi.fn(),
   getCase: vi.fn(),
   saveResultsUseCase: vi.fn(),
@@ -21,8 +23,8 @@ vi.mock("@/modules/access", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/modules/access")>()),
   getActor,
 }));
-vi.mock("@/modules/case-study", () => ({ saveRevisionDoc: saveRevisionDocUseCase, approve: approveUseCase, list: listCases, updateCaseFields: updateCaseFieldsUseCase, get: getCase }));
-vi.mock("@/modules/material", () => ({ liveAssetIds, listAssets, getRendition, saveCaseResults: saveResultsUseCase, saveCaseTestimonial: saveTestimonialUseCase }));
+vi.mock("@/modules/case-study", () => ({ saveRevisionDoc: saveRevisionDocUseCase, approve: approveUseCase, list: listCases, updateCaseFields: updateCaseFieldsUseCase, get: getCase, listClientMaterial }));
+vi.mock("@/modules/material", () => ({ liveAssetIds, listAssets, getRendition, getClientRendition, saveCaseResults: saveResultsUseCase, saveCaseTestimonial: saveTestimonialUseCase }));
 
 const { approveCase, getRenderAssets, saveCaseResults, saveCaseTestimonial, saveRevisionDoc, updateCaseFields } = await import("./actions");
 
@@ -77,6 +79,45 @@ describe("getRenderAssets", () => {
     getRendition.mockImplementation(async (id: string, spec: string) =>
       id === VIDEO && spec === "video.poster" ? err({ code: "RENDITION_NOT_READY", message: "m" }) : ok({ url: `https://x/${id}/${spec}` }),
     );
+    getCase.mockResolvedValue(ok({ id: input.caseId, client: { id: CLIENT_ID } }));
+    listClientMaterial.mockResolvedValue(ok([]));
+    getClientRendition.mockImplementation(async (id: string, spec: string) => ok({ url: `https://client/${id}/${spec}` }));
+  });
+
+  const CLIENT_ID = "eeeeeeee-0000-4000-8000-000000000001";
+  const C_IMAGE = "eeeeeeee-0000-4000-8000-000000000011";
+  const C_VIDEO = "eeeeeeee-0000-4000-8000-000000000012";
+  const clientFile = (id: string, kind: string) => ({ id, clientId: CLIENT_ID, kind, fileName: id, thumbnailUrl: null });
+
+  it("returns this case's client's images and videos from the client renditions, one file at a time (Story 4.5c-2)", async () => {
+    listClientMaterial.mockResolvedValue(ok([clientFile(C_IMAGE, "image"), clientFile(C_VIDEO, "video"), clientFile("eeeeeeee-0000-4000-8000-000000000013", "document")]));
+    getClientRendition.mockImplementation(async (id: string, spec: string) =>
+      id === C_VIDEO ? err({ code: "STORAGE_FAILED", message: "m" }) : ok({ url: `https://client/${id}/${spec}` }),
+    );
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const result = await getRenderAssets({ caseId: input.caseId, assetIds: [IMAGE, C_IMAGE.toUpperCase(), C_VIDEO, "eeeeeeee-0000-4000-8000-000000000013"] });
+      expect(result).toEqual({
+        ok: true,
+        value: { [IMAGE]: { kind: "image", url: `https://x/${IMAGE}/image.display` }, [C_IMAGE]: { kind: "image", url: `https://client/${C_IMAGE}/image.display` } },
+      });
+    } finally {
+      write.mockRestore();
+    }
+    expect(getCase).toHaveBeenCalledWith(input.caseId);
+    expect(listClientMaterial).toHaveBeenCalledWith({ clientId: CLIENT_ID });
+    expect(getClientRendition).not.toHaveBeenCalledWith(IMAGE, expect.anything());
+  });
+
+  it("never returns a file of another client, and reads no client file when every id is the case's", async () => {
+    // The case's client lists only its own files: an id it doesn't list is left out.
+    listClientMaterial.mockResolvedValue(ok([clientFile(C_IMAGE, "image")]));
+    expect(await getRenderAssets({ caseId: input.caseId, assetIds: ["ffffffff-0000-4000-8000-000000000099"] })).toEqual({ ok: true, value: {} });
+    expect(getClientRendition).not.toHaveBeenCalled();
+    getCase.mockClear();
+    await getRenderAssets({ caseId: input.caseId, assetIds: [IMAGE] });
+    expect(getCase).not.toHaveBeenCalled();
+    expect(listClientMaterial).toHaveBeenCalledTimes(1);
   });
 
   it("returns the asked-for media of this case with a rendition, and leaves out other ids", async () => {

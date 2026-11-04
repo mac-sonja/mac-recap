@@ -1,9 +1,14 @@
-import { listClientMaterialInputSchema, type ClientAsset, type ListedClientAsset } from "@/modules/case-study/domain/client-material";
+import {
+  listClientMaterialInputSchema,
+  type ClientAsset,
+  type ListedClientAsset,
+  type StoredClientAsset,
+} from "@/modules/case-study/domain/client-material";
 import { parseInput } from "@/modules/case-study/domain/validation";
 import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
 import type { ClientMaterialStorage } from "@/modules/case-study/ports/client-material-storage";
 import { log } from "@/shared/log";
-import { ok, type Result } from "@/shared/result";
+import { err, ok, type Result } from "@/shared/result";
 import { CLIENT_THUMBNAIL_TTL_SECONDS, clientNotFound } from "./client-material-deps";
 
 /**
@@ -44,5 +49,22 @@ export function makeListClientMaterial(clients: ClientRepository, storage: Clien
     const assets = await clients.listAssets(clientId);
     if (!assets.ok) return assets;
     return ok(await withThumbnails(storage, clientId, assets.value));
+  };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * One client file by id, removed or not (`deletedAt` set when it or its client is
+ * deleted), or `ok(null)` when there is none (Story 4.5c-2: the material module's
+ * rendition worker reads it). Reads only. Errors: `INVALID_INPUT` (malformed id),
+ * `CLIENT_LOOKUP_FAILED`, `CLIENT_INVALID`.
+ */
+export function makeGetClientAsset(clients: Pick<ClientRepository, "findAsset">) {
+  return async function getClientAsset(assetId: unknown): Promise<Result<StoredClientAsset | null>> {
+    if (typeof assetId !== "string" || !UUID.test(assetId)) {
+      return err({ code: "INVALID_INPUT", message: "Invalid input.", details: { fields: ["assetId"] } });
+    }
+    return clients.findAsset(assetId.toLowerCase());
   };
 }

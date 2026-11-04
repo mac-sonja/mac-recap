@@ -1,6 +1,6 @@
 import { JOB_ABORTED, type Job, type JobHandler, type JobOutcome } from "@/modules/jobs";
 import type { Asset } from "@/modules/material/domain/asset";
-import { MAX_FILE_BYTES } from "@/modules/material/domain/files";
+import { MAX_FILE_BYTES, type AssetKind } from "@/modules/material/domain/files";
 import {
   hasRenditions,
   RENDITION_SPECS,
@@ -8,7 +8,6 @@ import {
   SPECS_BY_KIND,
   type RenditionSpec,
 } from "@/modules/material/domain/rendition";
-import type { AssetRepository } from "@/modules/material/ports/asset-repository";
 import type { ImageProcessor, RenditionOutput, VideoProcessor, VideoSession } from "@/modules/material/ports/media-processing";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
 import type { RenditionRepository } from "@/modules/material/ports/rendition-repository";
@@ -16,19 +15,31 @@ import { log } from "@/shared/log";
 import { err, ok, type Result } from "@/shared/result";
 import { specHash } from "./spec-hash";
 
-/** Storage keys, built by `adapters/asset-key.ts` and injected by `worker.ts` (only adapters build keys). */
-export interface RenditionKeys {
-  original(asset: Asset): string;
-  rendition(asset: Asset, specHash: string, ext: RenditionSpec["ext"]): string;
+/**
+ * What the handler renders: a case asset, or a client file (Story 4.5c-2), as its own
+ * repository reads it. `deletedAt` is set once it is removed.
+ */
+export interface RenditionSource {
+  id: string;
+  kind: AssetKind;
+  deletedAt: string | null;
 }
 
-export interface RenditionWorkerDeps {
-  assets: Pick<AssetRepository, "getById">;
+/** Storage keys, built by `adapters/asset-key.ts` and injected by `worker.ts` (only adapters build keys). */
+export interface RenditionKeys<S extends RenditionSource = Asset> {
+  original(source: S): string;
+  rendition(source: S, specHash: string, ext: RenditionSpec["ext"]): string;
+}
+
+export interface RenditionWorkerDeps<S extends RenditionSource = Asset> {
+  assets: { getById(id: string): Promise<Result<S | null>> };
   renditions: Pick<RenditionRepository, "listForAsset" | "upsert">;
   storage: Pick<ObjectStorage, "download" | "upload">;
-  keys: RenditionKeys;
+  keys: RenditionKeys<S>;
   image: ImageProcessor;
   video: VideoProcessor;
+  /** The ids the log lines carry (never a key or a name): the case's by default, `{ clientId }` for a client file. */
+  logIds?: (source: S) => Record<string, string>;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,11 +60,12 @@ class AssetRemoved {}
  * cap, fails with `retryable: false`. A removed asset is skipped (ok), also
  * when it is removed while the copies are made (`upsert_rendition` refuses it).
  */
-export function makeRenditionHandler(deps: RenditionWorkerDeps): JobHandler {
+export function makeRenditionHandler<S extends RenditionSource = Asset>(deps: RenditionWorkerDeps<S>): JobHandler {
   const caseIdOf = (job: Job): string | null => {
     const caseId = job.payload.caseId;
     return typeof caseId === "string" && UUID.test(caseId) ? caseId : null;
   };
+  const idsOf = deps.logIds ?? ((source: S): Record<string, string> => ("caseId" in source && typeof source.caseId === "string" ? { caseId: source.caseId } : {}));
 
   return {
     caseIdOf,
@@ -68,7 +80,7 @@ export function makeRenditionHandler(deps: RenditionWorkerDeps): JobHandler {
         return err({ code: "NOT_FOUND", message: "The file of this rendition job does not exist.", retryable: false });
       }
       if (asset.deletedAt !== null) {
-        log.info("rendition skipped: the file was removed", { caseId: asset.caseId, jobId: job.id });
+        log.info("rendition skipped: the file was removed", { ...idsOf(asset), jobId: job.id });
         return ok(undefined);
       }
       if (!hasRenditions(asset.kind)) {
@@ -114,7 +126,7 @@ export function makeRenditionHandler(deps: RenditionWorkerDeps): JobHandler {
         return saved.ok ? ok(undefined) : saved;
       };
       const skipped = () => {
-        log.info("rendition skipped: the file was removed while rendering", { caseId: asset.caseId, jobId: job.id });
+        log.info("rendition skipped: the file was removed while rendering", { ...idsOf(asset), jobId: job.id });
         return ok(undefined);
       };
 
@@ -127,7 +139,7 @@ export function makeRenditionHandler(deps: RenditionWorkerDeps): JobHandler {
           if (stored instanceof AssetRemoved) return skipped();
           if (!stored.ok) return stored;
         }
-        log.info("renditions made", { caseId: caseId ?? asset.caseId, jobId: job.id });
+        log.info("renditions made", { ...idsOf(asset), ...(caseId === undefined ? {} : { caseId }), jobId: job.id });
         return ok(undefined);
       }
 
@@ -148,11 +160,27 @@ export function makeRenditionHandler(deps: RenditionWorkerDeps): JobHandler {
         try {
           await session.close();
         } catch {
-          log.warn("rendition temp files not removed", { caseId: asset.caseId, jobId: job.id });
+          log.warn("rendition temp files not removed", { ...idsOf(asset), jobId: job.id });
         }
       }
-      log.info("renditions made", { caseId: caseId ?? asset.caseId, jobId: job.id });
+      log.info("renditions made", { ...idsOf(asset), ...(caseId === undefined ? {} : { caseId }), jobId: job.id });
       return ok(undefined);
     },
+  };
+}
+
+/** A `rendition` job of a client file (Story 4.5c-2) carries `payload.owner = "client"` and its `clientId`. */
+export const isClientRenditionJob = (job: Pick<Job, "payload">): boolean => job.payload.owner === "client";
+
+/**
+ * The one `rendition` handler the worker registers: a client file's job (`owner:
+ * "client"`) runs `client`, any other runs `cases`. One job kind for both, so the `job`
+ * table, its kind check and the worker's claim stay as they are (Story 4.5c-2). A client
+ * job has no case, so a permanent failure is only logged.
+ */
+export function routeRenditionJobs(cases: JobHandler, client: JobHandler): JobHandler {
+  return {
+    caseIdOf: (job) => (isClientRenditionJob(job) ? null : (cases.caseIdOf?.(job) ?? null)),
+    run: (job, signal) => (isClientRenditionJob(job) ? client.run(job, signal) : cases.run(job, signal)),
   };
 }

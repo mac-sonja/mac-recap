@@ -8,7 +8,7 @@ import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import { CASE_TEMPLATE } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
-import { boundValuesOf, editableFieldsOf, imagePoolOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../../_lib/configurator-data";
+import { boundValuesOf, clientMediaFiles, clientMediaOf, clientRenderAssetsOf, editableFieldsOf, imagePoolOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../../_lib/configurator-data";
 import { Configurator } from "../../../_components/configurator/configurator";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import { isMedia, type MediaUploadRules } from "../../../_components/configurator/media-files";
@@ -53,6 +53,10 @@ export interface ConfiguratorPageProps {
  * Story 4.3d: the stored client and case fields (`editableFieldsOf`), the shared sector list
  * and the field saves. The key leaves the values out, so the `router.refresh()` after a field
  * save brings the new values in without starting the configurator afresh.
+ *
+ * Story 4.5c-2: the client's images and videos ("Del cliente" in the Media tab) with their
+ * render assets, drawn from the client renditions like a case file's. Without them the
+ * configurator still works: the client's files are then only counted as present.
  */
 export default async function ConfiguratorPage({ params }: ConfiguratorPageProps) {
   const shell = await requireSurface("edit");
@@ -88,6 +92,9 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
   if (!client.ok) throw new Error(`Client could not be loaded: ${client.error.code}`);
   // The client's files only widen what counts as present; without them a page that shows one says so, and the server checks again.
   const clientFiles = clientMaterial.ok ? clientMaterial.value.map((file) => ({ id: file.id, name: file.fileName })) : [];
+  // Their images and videos draw from their renditions; a failed read leaves them undrawn, never fails the page.
+  const clientListed = clientMaterial.ok ? clientMediaFiles(clientMaterial.value) : [];
+  const clientAssets = await clientRenderAssetsOf(clientListed, (assetId, spec) => material.getClientRendition(assetId, spec));
 
   const head = revision.value;
   const doc = head?.doc ?? null;
@@ -107,13 +114,14 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
       back={{ href: "/case-studies", label: it.configurator.back }}
       template={doc?.template ?? CASE_TEMPLATE}
       formats={doc === null ? starterPagesOf(listed.value, form.value) : pagesOfDocument(doc.formats)}
-      assets={assets}
+      assets={{ ...assets, ...clientAssets }}
       generatedTexts={generatedTextsOf(head?.generatedDoc ?? null)}
       images={head === null ? [] : imagePoolOf(listed.value, [head.doc, head.generatedDoc])}
       values={boundValuesOf(current, info.value, client.value.logoUrl, form.value)}
       trial={doc === null}
       theme={theme}
       media={listed.value.filter(isMedia)}
+      clientMedia={clientMediaOf(clientListed, clientAssets)}
       mediaRules={MEDIA_RULES}
       onRenderAssets={getRenderAssets}
       onApprove={approveCase}

@@ -350,6 +350,8 @@ describe("configurator copy", () => {
     expect(t("configurator.trial.title")).toBe("Bozza di prova");
     expect(fill(t("configurator.canvas.pageLabel"), { n: 2, name: "La sfida" })).toBe("2 · La sfida");
     expect(t("configurator.canvas.move")).toBe("⠿ Sposta");
+    // Story 4.5c-2: the client's images and videos in a case's Media tab.
+    expect(t("configurator.media.clientGroup")).toBe("Del cliente");
     expect(t("configurator.canvas.moveHint")).toBe("Trascina su un altro blocco per scambiarli, o su un’altra pagina per spostarlo");
     expect(Object.values(it.configurator.sections)).toEqual(["Intro", "Output", "Risultati"]);
     expect([

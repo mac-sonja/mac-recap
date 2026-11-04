@@ -17,6 +17,7 @@ const getClient = vi.fn<(id: unknown) => Promise<Result<ClientDetail>>>();
 const getDetailsForm = vi.fn<(input: unknown) => Promise<Result<DetailsForm>>>();
 const listAssets = vi.fn<(input: unknown) => Promise<Result<ListedAsset[]>>>();
 const getRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Result<RenditionLink>>>();
+const getClientRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Result<RenditionLink>>>();
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((path: string) => {
@@ -81,6 +82,7 @@ vi.mock("@/modules/material", async () => ({
   getDetailsForm: (input: unknown) => getDetailsForm(input),
   listAssets: (input: unknown) => listAssets(input),
   getRendition: (assetId: unknown, spec: unknown) => getRendition(assetId, spec),
+  getClientRendition: (assetId: unknown, spec: unknown) => getClientRendition(assetId, spec),
 }));
 
 const { default: ConfiguratorPage } = await import("./page");
@@ -180,7 +182,8 @@ const link = (url: string): Result<RenditionLink> => ok({ url, width: 100, heigh
 const render = async (caseId = ID) => renderToStaticMarkup(await ConfiguratorPage({ params: Promise.resolve({ caseId }) }));
 
 beforeEach(() => {
-  for (const fn of [requireSurface, get, getEditableRevision, getClientInfoForCase, getClient, getDetailsForm, listAssets, getRendition]) fn.mockReset();
+  for (const fn of [requireSurface, get, getEditableRevision, getClientInfoForCase, getClient, getDetailsForm, listAssets, getRendition, getClientRendition]) fn.mockReset();
+  getClientRendition.mockResolvedValue(err({ code: "RENDITION_NOT_READY", message: "Not ready." }));
   requireSurface.mockResolvedValue(shell);
   get.mockResolvedValue(ok(inReview));
   getEditableRevision.mockResolvedValue(ok(revision));
@@ -266,6 +269,91 @@ describe("ConfiguratorPage", () => {
     configuratorProps.mockClear();
     await render();
     expect((configuratorProps.mock.calls.at(-1)![0].fieldOptions as { sectors: unknown }).sectors).toEqual([{ key: "illuminazione", label: "Illuminazione" }]);
+  });
+
+  it("gives the Media tab the client's images and videos, drawn from the client renditions (Story 4.5c-2)", async () => {
+    const C_IMAGE = "cccccccc-0000-4000-8000-000000000011";
+    const C_VIDEO = "cccccccc-0000-4000-8000-000000000012";
+    const C_PDF = "cccccccc-0000-4000-8000-000000000013";
+    const clientFile = (id: string, kind: string, contentType: string, fileName: string, thumbnailUrl: string | null) => ({
+      id,
+      clientId: CLIENT_ID,
+      position: 1,
+      fileName,
+      kind,
+      contentType,
+      sizeBytes: 10,
+      width: null,
+      height: null,
+      createdAt: "2026-10-19T10:00:00+00:00",
+      thumbnailUrl,
+    });
+    listClientMaterial.mockResolvedValueOnce({
+      ok: true,
+      value: [
+        clientFile(C_IMAGE, "image", "image/jpeg", "Vetrina.jpg", "https://cdn.test/original.jpg"),
+        clientFile(C_PDF, "document", "application/pdf", "brief.pdf", null),
+        clientFile(C_VIDEO, "video", "video/mp4", "Spot.mp4", null),
+      ],
+    });
+    getClientRendition.mockImplementation(async (assetId, spec) => link(`https://cdn.test/client/${String(assetId)}/${String(spec)}`));
+    configuratorProps.mockClear();
+    await render();
+    const props = configuratorProps.mock.calls.at(-1)![0];
+    expect(getClientRendition.mock.calls.map(([id, spec]) => `${String(id)}:${String(spec)}`).sort()).toEqual(
+      [`${C_IMAGE}:image.display`, `${C_VIDEO}:video.display`, `${C_VIDEO}:video.poster`].sort(),
+    );
+    expect(getRendition.mock.calls.some(([id]) => String(id).startsWith("cccccccc"))).toBe(false);
+    expect((props.clientMedia as ListedAsset[]).map((f) => [f.id, f.kind, f.originalFileName, f.isFavourite, f.thumbnailUrl])).toEqual([
+      [C_IMAGE, "image", "Vetrina.jpg", false, `https://cdn.test/client/${C_IMAGE}/image.display`],
+      [C_VIDEO, "video", "Spot.mp4", false, `https://cdn.test/client/${C_VIDEO}/video.poster`],
+    ]);
+    const assets = props.assets as Record<string, { url: string; kind: string; posterUrl?: string }>;
+    expect(assets[C_IMAGE]).toEqual({ url: `https://cdn.test/client/${C_IMAGE}/image.display`, kind: "image" });
+    expect(assets[C_VIDEO]).toEqual({ url: `https://cdn.test/client/${C_VIDEO}/video.display`, kind: "video", posterUrl: `https://cdn.test/client/${C_VIDEO}/video.poster` });
+    expect(assets[IMAGE]).toBeDefined();
+    // Every client file still counts as present, the PDF included.
+    expect((props.clientFiles as { id: string }[]).map((f) => f.id)).toEqual([C_IMAGE, C_PDF, C_VIDEO]);
+  });
+
+  it("reads client renditions one file at a time: one that fails is left undrawn, the others still draw (Story 4.5c-2)", async () => {
+    const C_IMAGE = "cccccccc-0000-4000-8000-000000000011";
+    const C_OTHER = "cccccccc-0000-4000-8000-000000000012";
+    const file = (id: string, fileName: string) => ({
+      id,
+      clientId: CLIENT_ID,
+      position: 1,
+      fileName,
+      kind: "image",
+      contentType: "image/jpeg",
+      sizeBytes: 10,
+      width: 2400,
+      height: 1600,
+      createdAt: "t",
+      thumbnailUrl: "https://cdn.test/original.jpg",
+    });
+    listClientMaterial.mockResolvedValueOnce({ ok: true, value: [file(C_IMAGE, "Vetrina.jpg"), file(C_OTHER, "Banco.jpg")] });
+    getClientRendition.mockImplementation(async (assetId, spec) =>
+      assetId === C_IMAGE ? err({ code: "STORAGE_FAILED", message: "down" }) : link(`https://cdn.test/client/${String(assetId)}/${String(spec)}`),
+    );
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    configuratorProps.mockClear();
+    try {
+      await render();
+      const line = write.mock.calls.map((c) => String(c[0])).find((l) => l.includes("client rendition not read"));
+      expect(JSON.parse(line!)).toMatchObject({ clientId: CLIENT_ID });
+      expect(line).not.toContain("https://");
+    } finally {
+      write.mockRestore();
+    }
+    const props = configuratorProps.mock.calls.at(-1)![0];
+    expect((props.clientMedia as ListedAsset[]).map((f) => [f.id, f.thumbnailUrl])).toEqual([
+      [C_IMAGE, "https://cdn.test/original.jpg"],
+      [C_OTHER, `https://cdn.test/client/${C_OTHER}/image.display`],
+    ]);
+    const assets = props.assets as Record<string, unknown>;
+    expect(assets[C_IMAGE]).toBeUndefined();
+    expect(assets[C_OTHER]).toEqual({ url: `https://cdn.test/client/${C_OTHER}/image.display`, kind: "image" });
   });
 
   it("still opens when the client's files can't be read: none count as present (Story 4.8)", async () => {

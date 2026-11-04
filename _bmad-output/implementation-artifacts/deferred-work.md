@@ -298,3 +298,18 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3d-client-and-case-fields.md`
   summary: Map every export of the configurator actions module (`saveRevisionDoc`, `approveCase`, `getRenderAssets`, `updateCaseFields`, the field saves) in `test/permissions.test.ts`, replacing the hard-coded `+ 1`, so a new configurator action fails the "covers every server action" check.
   evidence: Review of 4.3d (Blind Hunter): the configurator's earlier actions were already outside the suite before this story.
+- source_spec: none
+  summary: Story 4.5c-3: the Animazione dialog's drop zone ("Trascina qui immagini e video", "scegli dai file") uploading to the case's Media with Story 2.7's rules and adding the new files to the animation in order, through a shared upload hook taken from the Media tab.
+  evidence: Split from 4.5c-2 at the owner's choice (2026-11-04): 4.5c-2 is client media in the configurator and the client-file soft delete; the dialog upload is independent and UI only.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5c-2-client-media.md`
+  summary: Exports (5.3) and `resolveRefs`/`buildManifest` must resolve client files through `client_rendition`, as the configurator and the approved case page do, or a page with a client image exports an empty cell.
+  evidence: Review of 4.5c-2 (blind): today only case `asset`/`rendition` are resolved outside the two pages.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5c-2-client-media.md`
+  summary: Purge soft-deleted client files (rows, originals, `client_rendition` objects) once no revision references them; `ClientMaterialStorage.remove` has no caller until then.
+  evidence: Review of 4.5c-2 (blind, edge): soft delete keeps objects by design; storage grows as freed slots refill.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5c-2-client-media.md`
+  summary: Tests: the renditions backfill skips removed client files and deleted clients' files (DB), and the Media tab of a case with only client media (empty and search states).
+  evidence: Review of 4.5c-2 (verification-gap): dev tooling and a cosmetic layout; the main paths are covered.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5c-2-client-media.md`
+  summary: Signed rendition URLs (case and client files) expire after `RENDITION_URL_TTL_SECONDS` (15 minutes) and the configurator never re-signs them on a timer, so images break in a long session until the next Media listing or a reload.
+  evidence: Review of 4.5c-2 (blind): pre-existing for case files; 4.5c-2 matched the case-file refresh, which has no timed re-sign.

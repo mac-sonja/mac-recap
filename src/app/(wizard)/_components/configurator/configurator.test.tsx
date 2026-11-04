@@ -97,6 +97,7 @@ function setup(
     images = [],
     values = VALUES,
     media = MEDIA,
+    clientMedia,
     onRenderAssets,
     onApprove,
     clientFiles,
@@ -110,6 +111,7 @@ function setup(
     images?: readonly string[];
     values?: BoundValues;
     media?: readonly ListedAsset[];
+    clientMedia?: readonly ListedAsset[];
     onRenderAssets?: ConfiguratorProps["onRenderAssets"];
     onApprove?: ConfiguratorProps["onApprove"];
     clientFiles?: ConfiguratorProps["clientFiles"];
@@ -134,6 +136,7 @@ function setup(
       trial={trial}
       theme="system"
       media={media}
+      clientMedia={clientMedia}
       mediaRules={MEDIA_RULES}
       onRenderAssets={onRenderAssets}
       onApprove={onApprove}
@@ -3992,5 +3995,160 @@ describe("Configurator drag-and-drop on the canvas (Story 4.3e)", () => {
     fireEvent.drop(elementNode(T2), { dataTransfer: data });
     await settle();
     expect(savedPages(onSave)[0]!.blocks[0]!.elements.map((e) => e.type)).toEqual(["text", "image", "text"]);
+  });
+});
+
+describe("Configurator client media (Story 4.5c-2)", () => {
+  const P = "eeeeeeee-0000-4000-8000-000000000041";
+  const BLOCK = "eeeeeeee-0000-4000-8000-000000000042";
+  const CLIENT_IMAGE = "cccccccc-0000-4000-8000-000000000041";
+  const CLIENT_VIDEO = "cccccccc-0000-4000-8000-000000000042";
+  const CLIENT_MEDIA: readonly ListedAsset[] = [listed(CLIENT_IMAGE, "image", "Vetrina.jpg"), listed(CLIENT_VIDEO, "video", "Spot.mp4")];
+  const tools = dict.configurator.tools;
+  const d = dict.configurator.animationDialog;
+
+  function fixture(): Record<FormatId, Page[]> {
+    const pages = structuredClone(starterFormats());
+    const page = pages.presentazione_16_9[0]!;
+    page.pageKey = P;
+    page.blocks = [{ blockId: BLOCK, name: "Blocco", background: { kind: "colour", value: NEW_BLOCK_COLOUR }, elements: [] }];
+    restartGrid(page, "presentazione_16_9", "mac-case@1");
+    return pages;
+  }
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const savedPage = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => lastDoc(onSave).formats.presentazione_16_9.pages[0] as Page;
+  const blockNode = () => pageNode(P).querySelector<HTMLElement>(`[data-block-id="${BLOCK}"]`)!;
+  const openMedia = () => fireEvent.click(button(dict.configurator.tabs.media, rightPanel()));
+  const clientGroup = () => within(rightPanel()).queryByRole("list", { name: dict.configurator.media.clientGroup, hidden: true });
+  const caseGroup = () => within(rightPanel()).queryByRole("list", { name: dict.configurator.media.label, hidden: true });
+  const drag = (id: string) => ({ dataTransfer: { types: [MEDIA_DRAG_TYPE], getData: (type: string) => (type === MEDIA_DRAG_TYPE ? id : ""), dropEffect: "none" } });
+  const dialog = () => document.querySelector<HTMLElement>("dialog");
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+
+  beforeEach(() => {
+    for (const fn of Object.values(actions)) fn.mockReset();
+    actions.listAssets.mockResolvedValue({ ok: true, value: MEDIA });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+      this.removeAttribute("open");
+    };
+  });
+
+  it("lists the client's images and videos under Del cliente, below the case's, with no star and no remove; search filters both", () => {
+    setup(false, fixture(), { clientMedia: CLIENT_MEDIA });
+    openMedia();
+    expect(within(caseGroup()!).getAllByRole("listitem", { hidden: true }).map((li) => li.dataset.media)).toEqual([IMAGE, VIDEO]);
+    const group = clientGroup()!;
+    expect(within(group).getAllByRole("listitem", { hidden: true }).map((li) => li.dataset.media)).toEqual([CLIENT_IMAGE, CLIENT_VIDEO]);
+    expect(within(rightPanel()).getByRole("heading", { name: dict.configurator.media.clientGroup, hidden: true })).not.toBeNull();
+    // Each client tile is one button (place it), with no favourite star and no remove.
+    for (const li of within(group).getAllByRole("listitem", { hidden: true })) {
+      expect(within(li).getAllByRole("button", { hidden: true })).toHaveLength(1);
+      expect(li.querySelector("[aria-pressed]")).toBeNull();
+    }
+    // Case tiles keep their star.
+    expect(within(caseGroup()!).getAllByRole("button", { name: new RegExp(`^${dict.configurator.media.favourite.add}|^${dict.configurator.media.favourite.remove}`), hidden: true })).toHaveLength(2);
+    fireEvent.change(within(rightPanel()).getByRole("searchbox", { hidden: true }), { target: { value: "vetrina" } });
+    expect(caseGroup()).toBeNull();
+    expect(within(clientGroup()!).getAllByRole("listitem", { hidden: true }).map((li) => li.dataset.media)).toEqual([CLIENT_IMAGE]);
+    expect(rightPanel().textContent).not.toContain(fill(dict.configurator.media.noMatch, { query: "vetrina" }));
+  });
+
+  it("hides the group when the client has no images or videos", () => {
+    setup(false, fixture(), { clientMedia: [] });
+    openMedia();
+    expect(clientGroup()).toBeNull();
+    expect(within(rightPanel()).queryByRole("heading", { name: dict.configurator.media.clientGroup, hidden: true })).toBeNull();
+    expect(caseGroup()).not.toBeNull();
+  });
+
+  it("a client tile clicked into the selected block, or dropped on it, goes on the page and saves", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave, clientMedia: CLIENT_MEDIA });
+    openMedia();
+    fireEvent.click(blockNode());
+    fireEvent.click(within(clientGroup()!).getByRole("button", { name: /^Vetrina\.jpg/, hidden: true }));
+    fireEvent.dragOver(blockNode(), drag(CLIENT_VIDEO));
+    fireEvent.drop(blockNode(), drag(CLIENT_VIDEO));
+    await settle();
+    expect(savedPage(onSave).blocks[0]!.elements.map((el) => [el.type, "assetId" in el ? el.assetId : null])).toEqual([
+      ["image", CLIENT_IMAGE],
+      ["video", CLIENT_VIDEO],
+    ]);
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    // Marked as on the page, like a case file.
+    expect(clientGroup()!.querySelector<HTMLElement>(`[data-media="${CLIENT_IMAGE}"]`)!.dataset.onPage).toBe("");
+  });
+
+  it("Sfondo · Immagine offers the client's images (no videos) and takes one as the page's background", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave, clientMedia: CLIENT_MEDIA });
+    fireEvent.click(pageNode(P));
+    const sfondo = within(leftPanel()).getByRole("region", { name: tools.background, hidden: true });
+    fireEvent.click(button(tools.image, sfondo));
+    const images = within(sfondo).getByRole("group", { name: tools.backgroundImages, hidden: true });
+    expect(within(images).getAllByRole("button", { hidden: true }).map((b) => b.getAttribute("aria-label"))).toEqual(["LUM_cover.jpg", "Vetrina.jpg"]);
+    fireEvent.click(button("Vetrina.jpg", images));
+    await settle();
+    expect(savedPage(onSave).background).toEqual({ kind: "image", assetId: CLIENT_IMAGE });
+  });
+
+  it("a save refused for a client file names it with the client file's name", async () => {
+    const GONE = "cccccccc-0000-4000-8000-000000000049";
+    const onSave = vi.fn<SaveFn>(savedOk).mockResolvedValueOnce({ ok: false, status: 400, error: { code: "ASSET_NOT_ALLOWED", message: "m", assetIds: [GONE] } });
+    setup(false, fixture(), { onSave, clientMedia: CLIENT_MEDIA, clientFiles: [{ id: GONE, name: "Catalogo.jpg" }] });
+    openMedia();
+    fireEvent.click(blockNode());
+    fireEvent.click(within(clientGroup()!).getByRole("button", { name: /^Vetrina\.jpg/, hidden: true }));
+    await settle();
+    expect(screen.getByRole("alert", { hidden: true }).textContent).toContain(fill(dict.configurator.media.missing.one, { name: "Catalogo.jpg" }));
+  });
+
+  it("asks once on opening for client files not drawn yet, then again when the Media tab lists files", async () => {
+    const onRenderAssets = vi.fn<NonNullable<ConfiguratorProps["onRenderAssets"]>>(async () => ({
+      ok: true as const,
+      value: { [CLIENT_VIDEO]: { url: "https://cdn.test/spot.mp4", kind: "video" as const } },
+    }));
+    // The page draws only IMAGE: both client files are missing at first.
+    setup(false, fixture(), { clientMedia: CLIENT_MEDIA, onRenderAssets });
+    await settle();
+    expect(onRenderAssets).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, assetIds: [CLIENT_IMAGE, CLIENT_VIDEO] });
+    // The image still without a rendition is asked for again when the Media tab lists files (after an upload).
+    const NEW = "bbbbbbbb-0000-4000-8000-000000000047";
+    actions.listAssets.mockResolvedValue({ ok: true, value: [...MEDIA, listed(NEW, "image", "nuova.png")] });
+    actions.presignAssetUpload.mockResolvedValue({ ok: true, value: { assetId: NEW, url: "https://storage.test/u", method: "PUT", headers: {} } });
+    actions.confirmAssetUpload.mockResolvedValue({ ok: true, value: { id: NEW } });
+    uploads.uploadFile.mockReset().mockResolvedValue(undefined);
+    onRenderAssets.mockClear();
+    vi.useRealTimers();
+    openMedia();
+    const zone = button(`${dict.configurator.media.drop.lead}, ${dict.configurator.media.drop.choose}`, rightPanel());
+    fireEvent.drop(zone, { dataTransfer: { files: [new File(["x"], "nuova.png", { type: "image/png" })], types: ["Files"] } });
+    for (let i = 0; i < 10; i++) await act(async () => {});
+    const asked = onRenderAssets.mock.calls.flatMap(([input]) => input.assetIds);
+    expect(asked).toEqual(expect.arrayContaining([NEW, CLIENT_IMAGE]));
+    expect(asked).not.toContain(CLIENT_VIDEO);
+  });
+
+  it("the Animazione dialog offers the client's files after the case's and inserts them", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave, clientMedia: CLIENT_MEDIA });
+    fireEvent.click(blockNode());
+    const elements = within(leftPanel()).getByRole("region", { name: tools.elements, hidden: true });
+    fireEvent.click(button(dict.configurator.elements.animation, elements));
+    expect([...dialog()!.querySelectorAll<HTMLElement>("[data-pick]")].map((b) => b.dataset.pick)).toEqual([IMAGE, VIDEO, CLIENT_IMAGE, CLIENT_VIDEO]);
+    fireEvent.click(dialog()!.querySelector<HTMLElement>(`[data-pick="${CLIENT_VIDEO}"]`)!);
+    fireEvent.click(dialog()!.querySelector<HTMLElement>(`[data-pick="${IMAGE}"]`)!);
+    fireEvent.click(button(d.insert, dialog()!));
+    await settle();
+    expect(savedPage(onSave).blocks[0]!.elements).toEqual([expect.objectContaining({ type: "animation", assetIds: [CLIENT_VIDEO, IMAGE] })]);
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
   });
 });

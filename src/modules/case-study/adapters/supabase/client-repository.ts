@@ -2,6 +2,7 @@ import { clientMaterialKey } from "@/modules/case-study/adapters/client-material
 import { logoKey } from "@/modules/case-study/adapters/logo-key";
 import type { ClientLogo, ClientRepository } from "@/modules/case-study/ports/client-repository";
 import {
+  CLIENT_MATERIAL_CONTENT_TYPES,
   CLIENT_MATERIAL_MAX_FILES,
   clientMaterialKindFor,
   isClientMaterialContentType,
@@ -36,6 +37,11 @@ const BRIEF_COLUMNS = "context, solution, results, testimonial_quote, testimonia
 const CLIENT_SUMMARY_COLUMNS = `${CLIENT_COLUMNS}, client_brief(${BRIEF_COLUMNS}), case_study(count), logo:client_logo!client_logo_id_fkey(id, mime_type)`;
 const LOGO_COLUMNS = "id, client_id, mime_type, size_bytes";
 const ASSET_COLUMNS = "id, client_id, position, file_name, mime_type, size_bytes, width, height, created_at";
+/** The client file types that get renditions (images and videos), for the renditions backfill. */
+const CLIENT_MEDIA_TYPES = CLIENT_MATERIAL_CONTENT_TYPES.filter((type) => {
+  const kind = clientMaterialKindFor(type);
+  return kind === "image" || kind === "video";
+});
 /**
  * A case's client, its sector (key and label, through `client.industry`) and its brief,
  * embedded through `case_study.client_id` (the only FK from case_study to client).
@@ -501,10 +507,50 @@ export function createSupabaseClientRepository(
         .from("client_asset")
         .select(ASSET_COLUMNS)
         .eq("client_id", clientId)
+        .is("deleted_at", null)
         .order("position", { ascending: true });
       if (error) {
         log.error(`client material list failed: ${error.code}`, { clientId });
         return err({ code: "CLIENT_LOOKUP_FAILED", message: "Could not list the client's files.", details: { clientId } });
+      }
+      const assets: ClientAsset[] = [];
+      for (const row of data) {
+        const mapped = toClientAsset(row);
+        if (!mapped.ok) return mapped;
+        assets.push(mapped.value);
+      }
+      return ok(assets);
+    },
+
+    async findAsset(id) {
+      const { data, error } = await client()
+        .from("client_asset")
+        .select(`${ASSET_COLUMNS}, deleted_at, client(deleted_at)`)
+        .eq("id", id)
+        .maybeSingle();
+      if (error) {
+        log.error(`client file lookup failed: ${error.code}`);
+        return err({ code: "CLIENT_LOOKUP_FAILED", message: "Could not read the client's file." });
+      }
+      if (data === null) return ok(null);
+      const mapped = toClientAsset(data);
+      if (!mapped.ok) return mapped;
+      // A deleted client's files count as removed.
+      return ok({ ...mapped.value, deletedAt: data.deleted_at ?? data.client?.deleted_at ?? null });
+    },
+
+    async listLiveMediaPage(afterId, limit) {
+      let query = client()
+        .from("client_asset")
+        .select(`${ASSET_COLUMNS}, client!inner(deleted_at)`)
+        .in("mime_type", CLIENT_MEDIA_TYPES)
+        .is("deleted_at", null)
+        .is("client.deleted_at", null);
+      if (afterId !== null) query = query.gt("id", afterId);
+      const { data, error } = await query.order("id", { ascending: true }).limit(limit);
+      if (error) {
+        log.error(`client media page failed: ${error.code}`);
+        return err({ code: "CLIENT_LOOKUP_FAILED", message: "Could not read the clients' files." });
       }
       const assets: ClientAsset[] = [];
       for (const row of data) {

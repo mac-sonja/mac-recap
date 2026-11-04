@@ -13,16 +13,16 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | # | Story | Status | Waits for | Overlaps with (same files) | Main code |
 |---|---|---|---|---|---|
 | A1 | 4.3d client and case fields on the page | ✅ #145 (migration on dev) | — | — | configurator, case-study |
-| A2 | 4.3e drag-and-drop | 🔄 PR open (Track A session) | A1 ✅ | A3, B7 | configurator |
-| A3 | 4.5c-2 upload in the dialog, client media, client-file soft delete | ⬜ | — | A2 | configurator, material |
+| A2 | 4.3e drag-and-drop | ✅ #147 | A1 ✅ | A3, B7 | configurator |
+| A3 | 4.5c-2 client media in the case configurator, client renditions, client-file soft delete (dialog upload split to 4.5c-3) | 🔄 PR open | — | A2 | configurator, material |
 | A4 | 4.8 Approva | ✅ #143 (migration on dev) | — | — | configurator, case-study |
 | A5 | 3.8 tell me when the draft is ready | ⬜ | — | — | jobs, notifications |
 | A6 | 3.11 client intro and outro with test text | ⬜ | **client cover/outro template design (owner)** | B3 (both add a job kind) | rendering/templates, jobs, migration |
 | A7 | 4.11 client intro in the configurator | ⬜ | A6 | B6, B7 | configurator (client mode) |
 | A8 | 4.12 client overview configurator, incl. the C38 shared-page confirmation | ⬜ | A7 | B6, B7 | configurator (client file) |
 | A9 | 4.9 edit an approved case | ⬜ | A4 ✅, B1 | B1 | approved-case page, case-study |
-| B1 | 5.2 the rest: narrow viewports | ⏸ waiting for the owner's answer (Track B session) | — | A9 | `(tool)/case-studies/[caseId]` |
-| B2 | 5.1 library of approved case studies | ⬜ | A4 ✅ | — | `(tool)/library` |
+| B1 | 5.2 the rest: narrow viewports | ✅ #146 | — | A9 | `(tool)/case-studies/[caseId]` |
+| B2 | 5.1 library of approved case studies | 🔄 built, reviewed; PR after A3 | A4 ✅ | — | `(tool)/library` |
 | B3 | 5.3 export a format as a file (Presentazione PDF, Carosello PNGs) | ⬜ | — | A6 (job kind) | worker, rendering (read only), export dialog |
 | B4 | 5.4 several formats as one ZIP | ⬜ | B3 | — | export dialog, worker |
 | B5 | 5.9 combined export and client pack | ⬜ | B4, **A6, A8** (pack follows 4.12's case order) | — | export, client page |

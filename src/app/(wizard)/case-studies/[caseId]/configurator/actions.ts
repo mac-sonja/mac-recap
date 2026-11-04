@@ -6,7 +6,7 @@ import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import type { CaseResultsSaved, CaseTestimonialSaved } from "@/modules/material";
 import type { RenderAsset } from "@/modules/rendering";
-import { renderAssetsOf } from "../../../_lib/configurator-data";
+import { clientMediaFiles, clientRenderAssetsOf, renderAssetsOf } from "../../../_lib/configurator-data";
 import { isMedia } from "../../../_components/configurator/media-files";
 
 /** The most render assets one call reads (the case holds at most 20 files). */
@@ -121,7 +121,9 @@ export async function saveCaseTestimonial(input: unknown): Promise<ActionResult<
  * `{ caseId, assetIds }`; returns, by asset id, those that are this case's live images and
  * videos with a rendition ready (an id that isn't, or whose rendition is still being made,
  * is left out, so the caller asks again later; so is one whose rendition can't be read,
- * without failing the others). 403 `FORBIDDEN` unless the role may `edit`; 400 `INVALID_INPUT`.
+ * without failing the others). Story 4.5c-2: an id may also be a live image or video of this
+ * case's client, read from the client renditions in the same way; a file of any other
+ * client is left out. 403 `FORBIDDEN` unless the role may `edit`; 400 `INVALID_INPUT`.
  */
 export async function getRenderAssets(input: unknown): Promise<ActionResult<Record<string, RenderAsset>>> {
   const actor = await getActor();
@@ -138,5 +140,18 @@ export async function getRenderAssets(input: unknown): Promise<ActionResult<Reco
   const files = listed.value.filter((asset) => isMedia(asset) && wanted.has(asset.id.toLowerCase()));
   const read = (assetId: string, spec: string) => material.getRendition(assetId, spec);
   const each = await Promise.all(files.map((file) => renderAssetsOf([file], read).catch(() => ({}))));
-  return { ok: true, value: Object.assign({}, ...each) };
+  for (const file of files) wanted.delete(file.id.toLowerCase());
+  // What's left may be the client's: only files of this case's client, read from the client renditions.
+  const ofClient = wanted.size === 0 ? {} : await clientAssetsOf(caseId, wanted);
+  return { ok: true, value: Object.assign({}, ...each, ofClient) };
+}
+
+/** The render assets of `wanted` among the live images and videos of `caseId`'s client; none when either can't be read. */
+async function clientAssetsOf(caseId: unknown, wanted: ReadonlySet<string>): Promise<Record<string, RenderAsset>> {
+  const found = await caseStudy.get(caseId);
+  if (!found.ok) return {};
+  const listed = await caseStudy.listClientMaterial({ clientId: found.value.client.id });
+  if (!listed.ok) return {};
+  const files = clientMediaFiles(listed.value).filter((file) => wanted.has(file.id.toLowerCase()));
+  return clientRenderAssetsOf(files, (assetId, spec) => material.getClientRendition(assetId, spec));
 }
