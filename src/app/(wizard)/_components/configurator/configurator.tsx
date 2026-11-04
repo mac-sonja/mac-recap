@@ -192,6 +192,12 @@ const NO_CLIENT_FILES: readonly { id: string; name: string }[] = [];
  * the case's own update, shows at once on every page and format, then the page reloads the
  * bound values. They aren't document edits: no undo step, no new revision version. A refused
  * or failed save puts the old value back and says why.
+ *
+ * Drag-and-drop (Story 4.3e), in the editor of an editable case: an Elementi button dragged
+ * into a block goes before the element under the pointer (Blocco onto a page goes at its
+ * end); an element dragged moves there, out of its Testi group or row; "⠿ Sposta", or a
+ * block's only element, swaps its block with the one it's dropped on, or moves it to the
+ * end of another page. Each drop is one undo step; a refused one says why and changes nothing.
  */
 export function Configurator({
   header,

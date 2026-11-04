@@ -668,7 +668,8 @@ function CanvasPage({
  * renderer at the format's editor width. A click selects the element, block or page
  * under the pointer. It reports the page nearest its middle as the page in view. A Media
  * tile dragged over a page frames the block it would go in, and dropped puts its file
- * there (Story 4.5b).
+ * there (Story 4.5b). In the editor of an editable case its elements and "⠿ Sposta" drag,
+ * and its blocks and pages take those drops and the Elementi buttons' (Story 4.3e).
  *
  * Above the Video pages sits the meta row: **Animazione testi** in the editor, the
  * Instagram switch in Anteprima. Anteprima of Presentazione stacks the pages at up to
