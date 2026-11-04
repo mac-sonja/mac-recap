@@ -282,6 +282,31 @@ describe("LibraryPage", () => {
     }
   });
 
+  it("draws the covers without the logo when the client lookup fails", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      getClient.mockResolvedValue(err({ code: "CLIENT_LOOKUP_FAILED", message: "x" }));
+      list.mockResolvedValue(ok([listedCase(1), listedCase(2)]));
+      const html = await render();
+      expect(html.match(/data-cover=""/g)).toHaveLength(2);
+      expect(html).not.toContain("data-cover-placeholder=");
+      expect(getClient).toHaveBeenCalledTimes(1);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("has no focusable arrow before the first page or after the last", async () => {
+    list.mockResolvedValue(ok(Array.from({ length: 30 }, (_, i) => listedCase(i + 1))));
+    const first = await render();
+    expect(first).not.toContain("Pagina precedente");
+    expect(first).toMatch(/<a href="\/library\?pagina=2" aria-label="Pagina successiva"/);
+    const last = await render({ pagina: "2" });
+    expect(last).not.toContain("Pagina successiva");
+    expect(last).toMatch(/<a href="\/library" aria-label="Pagina precedente"/);
+    expect(first).not.toContain('role="link"');
+  });
+
   it("searches as the table does and combines the facets", async () => {
     list.mockResolvedValue(
       ok([

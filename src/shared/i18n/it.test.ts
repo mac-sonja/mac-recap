@@ -70,6 +70,7 @@ describe("library copy (Story 5.1)", () => {
     expect(Object.values(it.library.facets)).toEqual(["Cliente", "Anno"]);
     expect(t("library.active.clearAll")).toBe("Azzera tutto");
     expect(fill(t("library.active.remove"), { value: "Lumen Srl" })).toBe("Togli Lumen Srl");
+    expect(fill(t("library.active.query"), { query: "lum" })).toBe("“lum”");
     expect(fill(t("library.noResults"), { query: "lum" })).toBe("Nessun risultato per “lum”.");
     expect(t("library.noResultsFilters")).toBe("Nessun risultato con questi filtri.");
     expect(t("library.clearSearch")).toBe("Azzera ricerca e filtri");

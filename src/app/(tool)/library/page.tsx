@@ -116,10 +116,15 @@ export default async function LibraryPage({ searchParams }: { searchParams?: Pro
   const logoOf: LogoOf = (clientId) => {
     let logo = logos.get(clientId);
     if (logo === undefined) {
-      logo = caseStudy.getClient(clientId).then((client) => {
-        if (!client.ok) throw new Error(client.error.code);
-        return client.value.logoUrl;
-      });
+      // A failed lookup draws the covers without the logo; it never blanks them.
+      logo = caseStudy.getClient(clientId).then(
+        (client) => {
+          if (client.ok) return client.value.logoUrl;
+          log.warn(`library logo could not be read: ${client.error.code}`, { clientId });
+          return null;
+        },
+        () => null,
+      );
       logos.set(clientId, logo);
     }
     return logo;

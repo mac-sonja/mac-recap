@@ -2,7 +2,7 @@
 
 import { Check, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
 import { PRESSABLE } from "@/app/_components/button-styles";
 import { SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
 import { fill, it } from "@/shared/i18n/it";
@@ -84,30 +84,49 @@ export function LibraryFilters({
   const searchId = useId();
   const [pending, startTransition] = useTransition();
   const [input, setInput] = useState(state.q);
-  // The search text last sent to the address: a new `q` from elsewhere (Back, a removed chip) refills the field.
+  // The search text last sent to the address, and the `q` last received. Only a received `q`
+  // that changed and isn't the one just sent (Back, reload of another entry) refills the field:
+  // a navigation still pending never puts an older query back.
   const [sent, setSent] = useState(state.q);
-  if (state.q !== sent) {
-    setSent(state.q);
-    setInput(state.q);
+  const [received, setReceived] = useState(state.q);
+  if (state.q !== received) {
+    setReceived(state.q);
+    if (state.q !== sent) {
+      setSent(state.q);
+      setInput(state.q);
+    }
   }
+  // The pending search, and the latest state it builds on.
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef(state);
+  useEffect(() => {
+    latest.current = state;
+  });
 
+  /** Navigates to `next` (page 1). Cancels a pending search, so it can never undo this change. */
   function go(next: LibraryState, mode: "push" | "replace" = "push") {
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
     setSent(next.q);
+    setInput(next.q);
     startTransition(() => router[mode](libraryHref({ ...next, page: 1 }), { scroll: false }));
   }
 
   useEffect(() => {
     if (input === sent) return;
-    const timer = setTimeout(() => go({ ...state, q: input }, "replace"), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-    // `go` and `state` change with every render; the input and the last sent text decide.
+    timer.current = setTimeout(() => go({ ...latest.current, q: input }, "replace"), SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+      timer.current = null;
+    };
+    // `go` is the same every render (router, transition and setters); the input and the last sent text decide.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input, sent]);
 
   const clientName = new Map(options.clients.map((c) => [c.code, c.name]));
   const query = state.q.trim();
   const active: { key: string; label: string; remove: LibraryState }[] = [
-    ...(query === "" ? [] : [{ key: "q", label: `“${query}”`, remove: { ...state, q: "" } }]),
+    ...(query === "" ? [] : [{ key: "q", label: fill(it.library.active.query, { query }), remove: { ...state, q: "" } }]),
     ...state.clients.map((code) => ({
       key: `c:${code}`,
       label: clientName.get(code) ?? code,
@@ -143,14 +162,14 @@ export function LibraryFilters({
           values={options.clients.map((c) => c.code)}
           selected={state.clients}
           labelOf={(code) => clientName.get(code) ?? code}
-          onToggle={(code) => go({ ...state, clients: toggled(state.clients, code) })}
+          onToggle={(code) => go({ ...state, q: input, clients: toggled(state.clients, code) })}
         />
         <Facet
           label={it.library.facets.year}
           values={options.years}
           selected={state.years}
           labelOf={String}
-          onToggle={(year) => go({ ...state, years: toggled(state.years, year) })}
+          onToggle={(year) => go({ ...state, q: input, years: toggled(state.years, year) })}
         />
       </div>
 
@@ -163,7 +182,7 @@ export function LibraryFilters({
                 type="button"
                 aria-label={fill(it.library.active.remove, { value: chip.label })}
                 title={fill(it.library.active.remove, { value: chip.label })}
-                onClick={() => go(chip.remove)}
+                onClick={() => go(chip.key === "q" ? chip.remove : { ...chip.remove, q: input })}
                 className={cn("inline-flex size-5 items-center justify-center rounded-full text-foreground-muted hover:bg-surface-hover hover:text-foreground-strong", PRESSABLE)}
               >
                 <X aria-hidden="true" className="size-3.5" />

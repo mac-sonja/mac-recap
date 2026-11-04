@@ -2,7 +2,7 @@
 title: 'Story 5.1: library of approved case studies'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-review'
+status: 'done'
 baseline_commit: '4f9427681766e791dc2571a41c4cf1df6641399c'
 route: 'dispatch'
 review_loop_iteration: 0

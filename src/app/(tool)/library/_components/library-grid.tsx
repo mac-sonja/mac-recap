@@ -19,9 +19,10 @@ function Pager({ state, page, pageCount }: { state: LibraryState; page: number; 
   const copy = it.library.pager;
   const hrefOf = (n: number) => libraryHref({ ...state, page: n });
   const step = (n: number, label: string, Icon: typeof ChevronLeft) =>
+    // On the first or last page the arrow is only a dimmed shape: nothing to focus or announce.
     n < 1 || n > pageCount ? (
-      <span aria-disabled="true" aria-label={label} role="link" className={cn(PAGER_ITEM, "opacity-40")}>
-        <Icon aria-hidden="true" className="size-4" />
+      <span aria-hidden="true" className={cn(PAGER_ITEM, "opacity-40")}>
+        <Icon className="size-4" />
       </span>
     ) : (
       <Link href={hrefOf(n)} aria-label={label} title={label} className={PAGER_LINK}>

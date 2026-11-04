@@ -766,7 +766,6 @@ export const it = {
       failed: "Non siamo riusciti a salvare. Riprova.",
     },
   },
-  /** Library of approved cases (Story 5.1); until it ships, a placeholder. */
   /**
    * The library of approved cases (Story 5.1): a card grid with the table's search, the
    * Cliente and Anno facets, the active filters and numbered pages of 24.
@@ -788,6 +787,8 @@ export const it = {
       label: "Filtri attivi",
       /** A chip's remove button, read by screen readers; `{value}` is the client or the year. */
       remove: "Togli {value}",
+      /** The search text's chip; `{query}` is the search text. */
+      query: "“{query}”",
       clearAll: "Azzera tutto",
     },
     /** Read by screen readers before the grid; `{n}` is how many cases match. */
