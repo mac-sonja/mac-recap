@@ -1,0 +1,108 @@
+---
+title: 'Story 4.5c-2: client media in the case configurator, with renditions and soft delete'
+type: 'feature'
+created: '2026-11-04'
+status: 'in-progress'
+baseline_commit: '674b373a6c01427a1d1fb3d12ab77a05c4b4a835'
+route: 'dispatch'
+review_loop_iteration: 0
+context:
+  - '{project-root}/_bmad-output/implementation-artifacts/epic-4-context.md'
+  - '{project-root}/.claude/skills/mac-recap-ui/SKILL.md'
+---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** A client's photos and videos (up to three files per client, uploaded on the client page) can't be used on a case's pages. The configurator lists only the case's own files. Client files also have no display-sized renditions, so the canvas has nothing light to draw. And deleting a client file erases it for good, so a page that used it couldn't report it as missing at approval.
+
+**Approach:** Give client images and videos renditions, made by the same worker pipeline as case files. Show them in the case configurator's Media tab as a second group, "Del cliente", usable everywhere a case file is. Make deleting a client file a soft delete.
+
+**Decisions (owner, 2026-11-04):**
+- 4.5c-2 is client media and the soft delete. The Animazione dialog's own upload is a separate story, 4.5c-3, in deferred-work.
+- In a case's configurator, the Media tab shows the client's images and videos as a second group, "Del cliente", below the case's files. They work like case files for placing on a page, Sostituisci/Scegli dai Media, Sfondo · Immagine and the Animazione dialog.
+- Client images and videos get renditions like case files, so pages and later exports stay light and videos get a poster.
+
+## Boundaries & Constraints
+
+**Always:**
+- Client renditions use the same specs (`image.display`, `video.display`, `video.poster`) and the same processors as case renditions.
+- Only the server signs URLs.
+- The media guardrail stays as it is: it accepts non-deleted files of the case or of its client.
+- A soft-deleted client file disappears from every list and frees its 1–3 slot, but a revision that references it reports `MATERIAL_MISSING` at approval, as case files already do.
+- Upload, favourite and removal never change case status.
+
+**Never:**
+- Upload client files from the configurator. They're added on the client page, as today.
+- Favourites on client files.
+- Client PDFs or text files on pages.
+- The client-mode Media tab ("Del cliente" / "Dalle sue case" in 4.11).
+- The Animazione dialog's drop zone (4.5c-3).
+- Hard-deleting a client file's object on removal: the object stays, as a soft-deleted case file's does.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|----------|--------------|---------------------------|----------------|
+| Client image uploaded | Image confirmed on the client page | A `rendition` job for it. Once done, it appears under "Del cliente" with its display copy. | Failed job → the tile shows no preview; the page still works, as for case files |
+| Client video | Video confirmed | Display copy and poster. The tile shows its length, as case videos do. | As above |
+| Client PDF/text | Non-media file | No job, and not shown under "Del cliente" | N/A |
+| Place a client file | Drag or click a "Del cliente" tile onto a page, into Sfondo · Immagine, or into the Animazione dialog | Same as a case file. It saves and draws from its rendition. | N/A |
+| Remove a client file | Removed on the client page | The row gets `deleted_at` and its slot frees, so a new upload can take position 1–3. The object stays. | Unknown or other client's file → `NOT_FOUND`, as today |
+| Approve with a removed client file | A page uses a client file that has since been soft-deleted | Approva refuses with `MATERIAL_MISSING`, naming the file | N/A |
+| Existing client files | Uploaded before this story | The renditions backfill also makes theirs | N/A |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `supabase/migrations/20261019140000_case_study_client_material.sql` -- `client_asset`: positions 1–3, `client_asset_client_position_key unique (client_id, position)`, `insert_client_asset` picks the lowest free slot, `delete_client_asset` hard-deletes.
+- `supabase/migrations/20261020120000_material_rendition.sql` -- `rendition` (PK `(asset_id, spec_hash)`, FK to `asset`) and `upsert_rendition`, which checks the path. Mirror both for client files rather than loosening the FK.
+- `src/modules/material/worker.ts` (`renditionHandler`) + `application/make-renditions.ts` -- the handler is built from an asset repository, a rendition repository, storage and key functions. Build a client variant from client-side adapters. Don't fork the processing code.
+- `src/modules/material/application/confirm-upload.ts` (`enqueueRenditions`, around line 72) -- the pattern for enqueueing after a confirmed upload. Client uploads confirm in `src/modules/case-study/application/confirm-client-material-upload.ts`.
+- `src/modules/jobs/domain/job.ts` (`JOB_KINDS`) and `src/worker/run.ts` (`workerHandlers`) -- either reuse `rendition` with an owner in the payload, or add a `client_rendition` kind. Pick the one with less migration and DB-check churn, and note why.
+- `src/modules/material/application/backfill-renditions.ts` + `dev:renditions-backfill` -- extend it to client files.
+- `src/modules/case-study/application/remove-client-material.ts`, `adapters/supabase/client-repository.ts` (`listAssets`, `deleteAsset`) -- move to a soft delete. Lists filter `deleted_at is null`.
+- `src/modules/case-study/application/revisions.ts` (`allowedAssetIds`, around line 147) and the approval material check (4.8) -- they must see soft-deleted client files as deleted.
+- `src/app/(wizard)/case-studies/[caseId]/configurator/page.tsx` -- already loads `listClientMaterial` for `clientFiles` (names only). Add the client files' render assets (as `renderAssetsOf` does for case files) and pass the listed client media.
+- `src/app/(wizard)/_components/configurator/media-tab.tsx`, `right-panel.tsx`, `configurator.tsx`, `animation-dialog.tsx`, the Sfondo image grid -- add the "Del cliente" group and include client files wherever a case file can be picked. There's no favourite star and no remove button on client tiles.
+- `src/shared/i18n/it.ts` -- `configurator.media.clientGroup: "Del cliente"`.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [ ] `supabase/migrations/20261105120000_case_study_client_media.sql` -- the client file changes:
+  - add `client_asset.deleted_at`;
+  - replace the unique `(client_id, position)` with a partial unique index `where deleted_at is null`;
+  - make `insert_client_asset` ignore deleted rows when picking a slot;
+  - make `delete_client_asset` set `deleted_at` instead of deleting;
+  - add `client_rendition` with `upsert_client_rendition`, mirroring `rendition` with keys under the client's prefix;
+  - all service role only.
+
+  Then regenerate `db.types.ts`.
+- [ ] `src/modules/case-study` -- soft delete in the use case and the adapter. Lists ignore deleted rows. The client-file lookup the guardrail and approval use reports deleted ones as missing. Add tests.
+- [ ] `src/modules/material` (+ `jobs`, `worker/run.ts`) -- a client rendition repository, a key function, the handler variant, the job wiring, the enqueue on client confirm, the backfill, and `getClientRendition`. Add tests mirroring the case ones.
+- [ ] `configurator/page.tsx` + `_lib/configurator-data.ts` -- client render assets and the client media list (images and videos only).
+- [ ] Configurator UI (`media-tab.tsx`, `right-panel.tsx`, `configurator.tsx`, `animation-dialog.tsx`, the Sfondo grid) -- the "Del cliente" group and the pickers. Tests: a client tile placed, used as a background and used in an animation; no star or remove on client tiles; the group is hidden when the client has no media.
+- [ ] `src/shared/i18n/it.ts` + `it.test.ts` -- the copy.
+- [ ] `test/db/*.db.test.ts` -- a soft delete frees the slot, so a fourth upload after a removal succeeds; `client_rendition` writes and its RLS lockout; approval with a soft-deleted client file → `MATERIAL_MISSING`.
+
+**Acceptance Criteria:**
+- Given a client with an image, when a person opens one of that client's cases in the configurator, then the image is under "Del cliente" and can be placed on a page, and the saved document passes the guardrail.
+- Given a client file removed on the client page, when a person opens the client page, then it's gone from the list, and its slot takes a new upload.
+
+## Implementation Notes
+
+## Spec Change Log
+
+## Review Triage Log
+
+## Verification
+
+**Commands:**
+- `npm run lint && npm run typecheck && npm test` (Node 24) -- expected: all green
+- `npm run test:db` (CI) -- expected: green, including the new migration
+
+**Manual checks:**
+- On mac-recap-dev, once the migration is applied (only after green CI and the owner's agreement): upload a client image, run `npm run dev:renditions-backfill`, open a case of that client and place the image; remove a client file and approve a case that used it.

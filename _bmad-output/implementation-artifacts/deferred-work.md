@@ -298,3 +298,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3d-client-and-case-fields.md`
   summary: Map every export of the configurator actions module (`saveRevisionDoc`, `approveCase`, `getRenderAssets`, `updateCaseFields`, the field saves) in `test/permissions.test.ts`, replacing the hard-coded `+ 1`, so a new configurator action fails the "covers every server action" check.
   evidence: Review of 4.3d (Blind Hunter): the configurator's earlier actions were already outside the suite before this story.
+- source_spec: none
+  summary: Story 4.5c-3: the Animazione dialog's drop zone ("Trascina qui immagini e video", "scegli dai file") uploading to the case's Media with Story 2.7's rules and adding the new files to the animation in order, through a shared upload hook taken from the Media tab.
+  evidence: Split from 4.5c-2 at the owner's choice (2026-11-04): 4.5c-2 is client media in the configurator and the client-file soft delete; the dialog upload is independent and UI only.
