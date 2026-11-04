@@ -123,7 +123,9 @@ describe("CaseView", () => {
     expect(screen.queryByRole("button", { name: preview.enter, hidden: true })).toBeNull();
     expect(screen.queryByRole("button", { name: dict.configurator.approve, hidden: true })).toBeNull();
     expect(document.querySelector("aside")).toBeNull();
-    expect(screen.getByText(dict.caseView.narrowScreen)).toBeTruthy();
+    // No narrow-screen message: the preview shows at every width.
+    expect(screen.queryByText("L’anteprima ha bisogno di uno schermo più grande.")).toBeNull();
+    expect(document.querySelector("[data-viewer]")).not.toBeNull();
   });
 
   it("shows Raccolte with its empty line, and Elimina bottom left after it", () => {

@@ -411,7 +411,6 @@ describe("case view copy", () => {
   test("has the approved strings", () => {
     expect(t("caseView.back")).toBe("Torna alle case history");
     expect(t("caseView.edit")).toBe("Modifica");
-    expect(t("caseView.narrowScreen")).toBe("L’anteprima ha bisogno di uno schermo più grande.");
     expect(t("caseView.collections.heading")).toBe("Raccolte");
     expect(t("caseView.collections.empty")).toBe("Non è in nessuna raccolta.");
     expect(t("caseStudies.table.edit")).toBe("Modifica");

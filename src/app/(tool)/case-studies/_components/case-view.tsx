@@ -63,9 +63,10 @@ const typing = (target: EventTarget | null) =>
  * like a client's page: back link; the name, code and badge, with **Scarica** (the picker,
  * still inactive until Story 5.3) and, for a role that may `edit`, **Modifica** to the
  * configurator on the right. Below them the preview (`CaseViewer`), read-only, in a panel of
- * fixed height: every format one slide at a time (← →), with the format switch, zoom and full
- * screen in its toolbar and Instagram's interface over Video. Nothing on it can be selected
- * or edited; below 1024 px a message shows instead. Then **Raccolte**, the collections the
+ * fixed height from 1024 px (below it, the panel's height follows the slide): every format one slide at a time (← →), with the format switch (a dropdown
+ * below 1280 px), zoom and full screen in its toolbar and Instagram's interface over Video.
+ * Nothing on it can be selected or edited; below 1024 px it is simplified (no zoom, the slide
+ * fits the width, swipe pages). Then **Raccolte**, the collections the
  * case appears in (empty until Story 5.10), **Attività** (this case's event log, as on Home,
  * without links), and bottom left **Elimina** for a role that may delete an approved case.
  */
@@ -152,23 +153,20 @@ export function CaseView({
         </div>
       </div>
 
-      <p className="font-body text-[15px] text-foreground-muted lg:hidden">{it.caseView.narrowScreen}</p>
-      <div className="hidden flex-col lg:flex">
-        {/* One slide stays in view: the panel fills the viewport under the header, never less than 560 px. */}
-        <CaseViewer
-          formatId={formatId}
-          onFormat={pickFormat}
-          template={template}
-          pages={pages}
-          assets={assets}
-          values={values}
-          trial={trial}
-          slide={slide}
-          onStep={step}
-          caption={header.name}
-          reducedMotion={still}
-        />
-      </div>
+      {/* One slide stays in view: from 1024 px the panel fills the viewport under the header, never less than 560 px; below it, its height follows the slide. */}
+      <CaseViewer
+        formatId={formatId}
+        onFormat={pickFormat}
+        template={template}
+        pages={pages}
+        assets={assets}
+        values={values}
+        trial={trial}
+        slide={slide}
+        onStep={step}
+        caption={header.name}
+        reducedMotion={still}
+      />
 
       <section className="flex flex-col gap-4" aria-labelledby="case-collections-heading">
         <h2 id="case-collections-heading" className="font-heading text-lg font-semibold tracking-[-0.01em] text-foreground-strong">

@@ -230,7 +230,7 @@
   summary: Resolved by `spec-5-2-preview-controls.md` (2026-10-29). Was: Story 5.2 preview controls on the approved case detail page: pager ("Slide 1 of 12"), zoom − / 100% / +, fit and full screen.
   evidence: Split from the remaining Story 5.2 scope at the owner's choice (2026-10-28); Elimina goes first, this is independently shippable.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-approved-case-detail-and-edit.md`
-  summary: Story 5.2 narrow viewports on the approved case detail page: the format list as a dropdown at 1024–1279 px, and a working preview below 1024 px (replacing the larger-screen message).
+  summary: Resolved by `spec-5-2-narrow-viewports.md` (2026-11-03). Was: Story 5.2 narrow viewports on the approved case detail page: the format list as a dropdown at 1024–1279 px, and a working preview below 1024 px (replacing the larger-screen message).
   evidence: Split from the remaining Story 5.2 scope at the owner's choice (2026-10-28); Elimina goes first, this is independently shippable.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-elimina-approved-case.md`
   summary: Resolved by `spec-5-2-case-activity-log.md` (2026-10-29). Was: activity log on the approved case detail page: Home's *Attività* lines (same sentences and icons, from `case_event`) filtered to this case, below the preview.
