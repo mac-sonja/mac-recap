@@ -4100,6 +4100,43 @@ describe("Configurator client media (Story 4.5c-2)", () => {
     expect(savedPage(onSave).background).toEqual({ kind: "image", assetId: CLIENT_IMAGE });
   });
 
+  it("a save refused for a client file names it with the client file's name", async () => {
+    const GONE = "cccccccc-0000-4000-8000-000000000049";
+    const onSave = vi.fn<SaveFn>(savedOk).mockResolvedValueOnce({ ok: false, status: 400, error: { code: "ASSET_NOT_ALLOWED", message: "m", assetIds: [GONE] } });
+    setup(false, fixture(), { onSave, clientMedia: CLIENT_MEDIA, clientFiles: [{ id: GONE, name: "Catalogo.jpg" }] });
+    openMedia();
+    fireEvent.click(blockNode());
+    fireEvent.click(within(clientGroup()!).getByRole("button", { name: /^Vetrina\.jpg/, hidden: true }));
+    await settle();
+    expect(screen.getByRole("alert", { hidden: true }).textContent).toContain(fill(dict.configurator.media.missing.one, { name: "Catalogo.jpg" }));
+  });
+
+  it("asks once on opening for client files not drawn yet, then again when the Media tab lists files", async () => {
+    const onRenderAssets = vi.fn<NonNullable<ConfiguratorProps["onRenderAssets"]>>(async () => ({
+      ok: true as const,
+      value: { [CLIENT_VIDEO]: { url: "https://cdn.test/spot.mp4", kind: "video" as const } },
+    }));
+    // The page draws only IMAGE: both client files are missing at first.
+    setup(false, fixture(), { clientMedia: CLIENT_MEDIA, onRenderAssets });
+    await settle();
+    expect(onRenderAssets).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, assetIds: [CLIENT_IMAGE, CLIENT_VIDEO] });
+    // The image still without a rendition is asked for again when the Media tab lists files (after an upload).
+    const NEW = "bbbbbbbb-0000-4000-8000-000000000047";
+    actions.listAssets.mockResolvedValue({ ok: true, value: [...MEDIA, listed(NEW, "image", "nuova.png")] });
+    actions.presignAssetUpload.mockResolvedValue({ ok: true, value: { assetId: NEW, url: "https://storage.test/u", method: "PUT", headers: {} } });
+    actions.confirmAssetUpload.mockResolvedValue({ ok: true, value: { id: NEW } });
+    uploads.uploadFile.mockReset().mockResolvedValue(undefined);
+    onRenderAssets.mockClear();
+    vi.useRealTimers();
+    openMedia();
+    const zone = button(`${dict.configurator.media.drop.lead}, ${dict.configurator.media.drop.choose}`, rightPanel());
+    fireEvent.drop(zone, { dataTransfer: { files: [new File(["x"], "nuova.png", { type: "image/png" })], types: ["Files"] } });
+    for (let i = 0; i < 10; i++) await act(async () => {});
+    const asked = onRenderAssets.mock.calls.flatMap(([input]) => input.assetIds);
+    expect(asked).toEqual(expect.arrayContaining([NEW, CLIENT_IMAGE]));
+    expect(asked).not.toContain(CLIENT_VIDEO);
+  });
+
   it("the Animazione dialog offers the client's files after the case's and inserts them", async () => {
     const onSave = vi.fn(savedOk);
     setup(false, fixture(), { onSave, clientMedia: CLIENT_MEDIA });

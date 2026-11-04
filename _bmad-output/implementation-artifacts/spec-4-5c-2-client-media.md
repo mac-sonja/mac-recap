@@ -2,7 +2,7 @@
 title: 'Story 4.5c-2: client media in the case configurator, with renditions and soft delete'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-review'
+status: 'done'
 baseline_commit: '674b373a6c01427a1d1fb3d12ab77a05c4b4a835'
 route: 'dispatch'
 review_loop_iteration: 0

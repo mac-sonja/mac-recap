@@ -310,3 +310,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-5c-2-client-media.md`
   summary: Tests: the renditions backfill skips removed client files and deleted clients' files (DB), and the Media tab of a case with only client media (empty and search states).
   evidence: Review of 4.5c-2 (verification-gap): dev tooling and a cosmetic layout; the main paths are covered.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5c-2-client-media.md`
+  summary: Signed rendition URLs (case and client files) expire after `RENDITION_URL_TTL_SECONDS` (15 minutes) and the configurator never re-signs them on a timer, so images break in a long session until the next Media listing or a reload.
+  evidence: Review of 4.5c-2 (blind): pre-existing for case files; 4.5c-2 matched the case-file refresh, which has no timed re-sign.

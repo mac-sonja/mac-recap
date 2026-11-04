@@ -776,13 +776,11 @@ export function Configurator({
     [block, placeFile, say, selection],
   );
 
-  /** The Media tab read the files again: keep them, and read the render assets of new ones. */
-  const listed = useCallback(
-    (fresh: readonly ListedAsset[]) => {
-      setFiles(fresh);
-      setNames((current) => new Map([...current, ...fresh.map((f) => [f.id.toLowerCase(), f.originalFileName] as const)]));
+  /** Reads the render assets of `of` not drawn yet (nor being read); one still without a rendition is asked for again next time. */
+  const readMissing = useCallback(
+    (of: readonly ListedAsset[]) => {
       if (onRenderAssets === undefined) return;
-      const missing = fresh.filter((f) => !(f.id in assetsNow.current) && !reading.current.has(f.id)).map((f) => f.id);
+      const missing = of.filter((f) => !(f.id in assetsNow.current) && !reading.current.has(f.id)).map((f) => f.id);
       if (missing.length === 0) return;
       for (const id of missing) reading.current.add(id);
       void onRenderAssets({ caseId, assetIds: missing })
@@ -790,13 +788,27 @@ export function Configurator({
           if (result.ok && Object.keys(result.value).length > 0) setAssets((current) => ({ ...current, ...result.value }));
         })
         .catch(() => undefined)
-        // A file still without a rendition is asked for again at the next listing.
         .finally(() => {
           for (const id of missing) reading.current.delete(id);
         });
     },
     [caseId, onRenderAssets],
   );
+
+  /** The Media tab read the files again: keep them, and read the render assets of new ones, the client's included (Story 4.5c-2). */
+  const listed = useCallback(
+    (fresh: readonly ListedAsset[]) => {
+      setFiles(fresh);
+      setNames((current) => new Map([...current, ...fresh.map((f) => [f.id.toLowerCase(), f.originalFileName] as const)]));
+      readMissing([...fresh, ...clientMedia]);
+    },
+    [clientMedia, readMissing],
+  );
+
+  // A client file whose rendition wasn't ready when the page loaded is asked for once on opening (Story 4.5c-2), then at every listing.
+  useEffect(() => {
+    readMissing(clientMedia);
+  }, [clientMedia, readMissing]);
 
   /** **Sostituisci dai Media** / **Scegli dai Media**: the right panel shows, on its Media tab. */
   const openMedia = useCallback(() => {

@@ -173,7 +173,7 @@ export async function clientRenderAssetsOf(
   const each = await Promise.all(
     clientMediaFiles(files).map((file) =>
       renderAssetsOf([file], getClientRendition).catch(() => {
-        log.warn("client rendition not read", { clientId: file.clientId, assetId: file.id });
+        log.warn("client rendition not read", { clientId: file.clientId });
         return {};
       }),
     ),

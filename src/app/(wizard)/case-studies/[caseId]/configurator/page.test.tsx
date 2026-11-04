@@ -341,7 +341,7 @@ describe("ConfiguratorPage", () => {
     try {
       await render();
       const line = write.mock.calls.map((c) => String(c[0])).find((l) => l.includes("client rendition not read"));
-      expect(JSON.parse(line!)).toMatchObject({ clientId: CLIENT_ID, assetId: C_IMAGE });
+      expect(JSON.parse(line!)).toMatchObject({ clientId: CLIENT_ID });
       expect(line).not.toContain("https://");
     } finally {
       write.mockRestore();

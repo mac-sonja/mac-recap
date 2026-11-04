@@ -409,11 +409,11 @@ export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES,
           <p className="font-label text-[12.5px] text-foreground-muted">{fill(copy.noMatch, { query: query.trim() })}</p>
         )}
         {clientShown.length > 0 && (
-          <section aria-labelledby={clientHeadingId} className={cn(shown.length > 0 || q === "" ? "mt-5" : undefined)}>
+          <div className={cn(shown.length > 0 || q === "" ? "mt-5" : undefined)}>
             <h3 id={clientHeadingId} className={EYEBROW}>
               {copy.clientGroup}
             </h3>
-            <ul aria-label={copy.clientGroup} className={listClass(view)}>
+            <ul aria-labelledby={clientHeadingId} className={listClass(view)}>
               {clientShown.map((file) => (
                 <MediaTile
                   key={file.id}
@@ -425,7 +425,7 @@ export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES,
                 />
               ))}
             </ul>
-          </section>
+          </div>
         )}
       </div>
       <div className="shrink-0 border-t border-border bg-surface-sidebar px-3.5 py-3">
