@@ -510,6 +510,30 @@ describe("list", () => {
     expect(byId.get(approved)).toBeNull();
   });
 
+  it("gives an Approvato case the time of its approve event (Story 5.1); null for Bozza and Da approvare", async () => {
+    const { transition } = await loadCaseStudy();
+    const actor = await signedInActor();
+    const approved = await approvedCase({ name: "List approved at" });
+    const waiting = await createCase({ name: "List waiting, not approved" });
+    for (const event of ["generate", "generation_succeeded"]) {
+      const moved = await transition(waiting.id, event, actor);
+      if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
+    }
+    const draft = (await createCase({ name: "List draft, not approved" })).id;
+
+    const { rows } = await pool.query<{ at: Date }>(
+      "select at from public.case_event where case_id = $1 and type = 'transition' and data->>'event' = 'approve'",
+      [approved],
+    );
+    const byId = new Map((await listed({})).map((c) => [c.id, c.approvedAt]));
+    expect(rows).toHaveLength(1);
+    expect(Date.parse(byId.get(approved) ?? "")).toBe(rows[0].at.getTime());
+    expect(byId.get(waiting.id)).toBeNull();
+    expect(byId.get(draft)).toBeNull();
+    const approvedOnly = new Map((await listed({ status: "approved" })).map((c) => [c.id, c.approvedAt]));
+    expect(approvedOnly.get(approved)).toBe(byId.get(approved));
+  });
+
   it("rejects a malformed scope without querying", async () => {
     const { list } = await loadCaseStudy();
     const result = await list({ status: "archived" } as unknown as { status?: CaseStatus });

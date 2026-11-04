@@ -13,7 +13,6 @@ export interface LibraryCase extends SearchableCase {
   businessLines: readonly BusinessLine[];
   /** When the case was approved (its latest `approve` event); null without that event. */
   approvedAt: string | null;
-  /** The case's last update: the approval time's stand-in when it has none. */
   updatedAt: string;
 }
 
@@ -113,14 +112,19 @@ export function withKnownFacets(state: LibraryState, options: FacetOptions): Lib
   return { ...state, clients: state.clients.filter((code) => codes.has(code)), years: state.years.filter((year) => years.has(year)) };
 }
 
-/** When the case was approved, for sorting: its approval time, else its last update. */
-const approvalTime = (c: Pick<LibraryCase, "approvedAt" | "updatedAt">) => Date.parse(c.approvedAt ?? c.updatedAt);
-
-/** A copy, newest approval first; ties keep their incoming order. */
-export function sortByApproval<T extends Pick<LibraryCase, "approvedAt" | "updatedAt">>(cases: readonly T[]): T[] {
+/**
+ * A copy, newest approval first. A case without an approval time (no `approve` event) goes
+ * after every case with one, so an edit never moves it up; ties keep their incoming order.
+ */
+export function sortByApproval<T extends Pick<LibraryCase, "approvedAt">>(cases: readonly T[]): T[] {
+  const time = (c: T) => (c.approvedAt === null ? Number.NEGATIVE_INFINITY : Date.parse(c.approvedAt));
   return cases
     .map((c, index) => ({ c, index }))
-    .sort((a, b) => approvalTime(b.c) - approvalTime(a.c) || a.index - b.index)
+    .sort((a, b) => {
+      const ta = time(a.c);
+      const tb = time(b.c);
+      return ta === tb ? a.index - b.index : tb > ta ? 1 : -1;
+    })
     .map(({ c }) => c);
 }
 

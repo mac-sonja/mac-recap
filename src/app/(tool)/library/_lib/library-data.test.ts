@@ -129,11 +129,12 @@ describe("sortByApproval", () => {
     expect(sortByApproval([first, second]).map((c) => c.id)).toEqual(["second", "first"]);
   });
 
-  it("falls back to the last update without an approval time, and keeps ties in order", () => {
-    const noEvent = libraryCase({ id: "none", approvedAt: null, updatedAt: "2026-10-07T10:00:00+00:00" });
+  it("puts cases without an approval time last, however recently updated, and keeps ties in order", () => {
+    const noEvent = libraryCase({ id: "none", approvedAt: null, updatedAt: "2026-10-30T10:00:00+00:00" });
+    const alsoNone = libraryCase({ id: "none-2", approvedAt: null, updatedAt: "2026-10-01T10:00:00+00:00" });
     const a = libraryCase({ id: "a", approvedAt: "2026-10-05T10:00:00+00:00" });
     const b = libraryCase({ id: "b", approvedAt: "2026-10-05T10:00:00+00:00" });
-    expect(sortByApproval([a, noEvent, b]).map((c) => c.id)).toEqual(["none", "a", "b"]);
+    expect(sortByApproval([noEvent, a, alsoNone, b]).map((c) => c.id)).toEqual(["a", "b", "none", "none-2"]);
   });
 });
 
