@@ -407,12 +407,21 @@ describe("CaseViewer", () => {
   });
 
   describe("below 1024 px", () => {
+    it("caps a tall slide at the viewport's height through its aspect ratio (9:16 Video)", () => {
+      stubWidth(true);
+      stubStageSize();
+      render(<Harness />);
+      fireEvent.change(screen.getByRole("combobox", { name: dict.configurator.formats.label }), { target: { value: "video_9_16" } });
+      expect(slideEl()!.style.getPropertyValue("--slide-ratio")).toBe(String(1080 / 1920));
+    });
+
     it("fits the slide to the panel's width with no inline width, and the panel's height follows it", () => {
       stubWidth(true);
       stubStageSize();
       render(<Harness />);
       expect(slideEl()!.style.width).toBe("");
       expect(slideEl()!.className).toContain("max-lg:w-full");
+      expect(slideEl()!.className).toContain("max-lg:max-w-[calc((100dvh-10rem)*var(--slide-ratio))]");
       const root = document.querySelector<HTMLElement>("[data-viewer]")!;
       expect(root.className).toContain("lg:h-[calc(100dvh-16rem)]");
       expect(root.className).not.toMatch(/(^|\s)h-\[/);

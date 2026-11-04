@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, Maximize, Minimize, Minus, Plus } from "lucide-react";
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent } from "react";
 import { InstagramSwitch, RenderedPage } from "@/app/(wizard)/_components/configurator/canvas";
 import { InstagramOverlay, type InstagramView } from "@/app/(wizard)/_components/configurator/instagram-overlay";
 import { NAV } from "@/app/(wizard)/_components/configurator/slideshow";
@@ -164,7 +164,8 @@ export function CaseViewer({
   const pad = full ? 0 : PAD;
   const fit = Math.max(0, Math.min(size.width - 2 * pad, (size.height - 2 * pad) * (w / h)));
   // Floored: Adatta never spills past the panel by a rounding pixel. Narrow and in the
-  // panel, the slide simply takes the panel's width (`max-lg:w-full`, CSS so the first paint is right).
+  // panel, the slide simply takes the panel's width (`max-lg:w-full`, CSS so the first paint is right),
+  // capped so a tall slide (9:16 Video) is never taller than the viewport less the toolbar and pager.
   const fluid = narrow && !full;
   const slideWidth = !fluid && fit > 0 ? Math.floor((fit * zoom) / FIT) : undefined;
 
@@ -397,8 +398,12 @@ export function CaseViewer({
           <div
             key={page.pageKey}
             data-slide={page.pageKey}
-            className={cn("relative m-auto shrink-0", !full && "max-lg:w-full shadow-page", !reducedMotion && "animate-enter")}
-            style={slideWidth === undefined ? undefined : { width: slideWidth }}
+            className={cn(
+              "relative m-auto shrink-0",
+              !full && "shadow-page max-lg:w-full max-lg:max-w-[calc((100dvh-10rem)*var(--slide-ratio))]",
+              !reducedMotion && "animate-enter",
+            )}
+            style={{ ...(full ? {} : { "--slide-ratio": w / h }), ...(slideWidth === undefined ? {} : { width: slideWidth }) } as CSSProperties}
           >
             <div data-canvas-page={page.pageKey}>
               <RenderedPage formatId={formatId} template={template} page={page} number={index + 1} assets={assets} values={values} animateTexts />

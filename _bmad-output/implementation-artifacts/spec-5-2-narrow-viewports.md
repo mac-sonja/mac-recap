@@ -27,6 +27,8 @@ There is no zoom below 1024 px, and the panel height follows the slide.
 
 **Decisions (owner, 2026-10-29):** Below 1024 px only the preview changes. The header, Raccolte, Attività and Elimina stack as they already do, and the shell stays desktop-first.
 
+**Decision (owner, 2026-11-04, on PR #146):** below 1024 px the slide's height is capped at the viewport less the toolbar and pager (`100dvh − 10rem`), so a 9:16 Video shrinks and stays centred instead of running past the screen.
+
 ## Boundaries & Constraints
 
 **Always:** Keep everything the ≥1280 px viewer does today, including keys, zoom, full screen, the Instagram switch on Video, the trial note and reduced motion. A dropdown change works exactly like a switch click: slide 1, at Adatta. Italian copy comes from `it.ts` only, and the dropdown reuses the format names with their ratios. Follow the mac-recap-ui house rules (native `<select>` styled like the Clienti sort).
