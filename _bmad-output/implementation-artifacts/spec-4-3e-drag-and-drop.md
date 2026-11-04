@@ -2,7 +2,7 @@
 title: 'Story 4.3e: drag-and-drop on the canvas'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '4663e1891762527112efe9a99dc95d88b04bed38'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -65,22 +65,22 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `page-editing.ts` (+ `page-editing.test.ts`) -- pure edits:
+- [x] `page-editing.ts` (+ `page-editing.test.ts`) -- pure edits:
   - `insertNewElement(pages, target, kind, newId)`;
   - `moveElement(pages, from, target)`, which leaves a group or row cleanly and is a no-op in place;
   - `swapBlocks(pages, a, b)`, across pages too, keeping each page's grid;
   - `moveBlockToPage(pages, from, toPageKey, formatId, template)`, with `restartGrid` on both pages.
 
   A `target` is `{ pageKey, blockId, beforeElementId? }`. Test each matrix row, check ids stay unique and the result passes `validateNewDocument`, and check the limits.
-- [ ] `canvas.tsx` -- in the editor of an editable case:
+- [x] `canvas.tsx` -- in the editor of an editable case:
   - top-level elements are draggable, except the text being typed in;
   - the grip drags its block, and so does a block's only element;
   - blocks and pages take drops, with a drop frame on the block and a line before the element under the pointer;
   - nothing in Anteprima.
-- [ ] `left-panel.tsx` -- the Elementi buttons are draggable, carrying their element kind. Blocco is dropped on a page.
-- [ ] `configurator.tsx` -- callbacks run the edits, one undo step each, select the result and `say` refusals. Clear the drag state on drag end.
-- [ ] `src/shared/i18n/it.ts` + `it.test.ts` -- the new copy.
-- [ ] `configurator.test.tsx` -- drag events for each matrix row (fire `dragStart`/`dragOver`/`drop` with the drag types): undo restores the document, nothing can be dragged in Anteprima or on an approved case, and a refused drop leaves no undo step.
+- [x] `left-panel.tsx` -- the Elementi buttons are draggable, carrying their element kind. Blocco is dropped on a page.
+- [x] `configurator.tsx` -- callbacks run the edits, one undo step each, select the result and `say` refusals. Clear the drag state on drag end.
+- [x] `src/shared/i18n/it.ts` + `it.test.ts` -- the new copy.
+- [x] `configurator.test.tsx` -- drag events for each matrix row (fire `dragStart`/`dragOver`/`drop` with the drag types): undo restores the document, nothing can be dragged in Anteprima or on an approved case, and a refused drop leaves no undo step.
 
 **Acceptance Criteria:**
 - Given an editable case, when the person drags an element to another page and presses ⌘Z, then both pages are as before and the next autosave sends that document.
