@@ -72,7 +72,7 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/20261105120000_case_study_client_media.sql` -- the client file changes:
+- [x] `supabase/migrations/20261105120000_case_study_client_media.sql` -- the client file changes:
   - add `client_asset.deleted_at`;
   - replace the unique `(client_id, position)` with a partial unique index `where deleted_at is null`;
   - make `insert_client_asset` ignore deleted rows when picking a slot;
@@ -81,18 +81,26 @@ context:
   - all service role only.
 
   Then regenerate `db.types.ts`.
-- [ ] `src/modules/case-study` -- soft delete in the use case and the adapter. Lists ignore deleted rows. The client-file lookup the guardrail and approval use reports deleted ones as missing. Add tests.
-- [ ] `src/modules/material` (+ `jobs`, `worker/run.ts`) -- a client rendition repository, a key function, the handler variant, the job wiring, the enqueue on client confirm, the backfill, and `getClientRendition`. Add tests mirroring the case ones.
-- [ ] `configurator/page.tsx` + `_lib/configurator-data.ts` -- client render assets and the client media list (images and videos only).
-- [ ] Configurator UI (`media-tab.tsx`, `right-panel.tsx`, `configurator.tsx`, `animation-dialog.tsx`, the Sfondo grid) -- the "Del cliente" group and the pickers. Tests: a client tile placed, used as a background and used in an animation; no star or remove on client tiles; the group is hidden when the client has no media.
-- [ ] `src/shared/i18n/it.ts` + `it.test.ts` -- the copy.
-- [ ] `test/db/*.db.test.ts` -- a soft delete frees the slot, so a fourth upload after a removal succeeds; `client_rendition` writes and its RLS lockout; approval with a soft-deleted client file → `MATERIAL_MISSING`.
+- [x] `src/modules/case-study` -- soft delete in the use case and the adapter. Lists ignore deleted rows. The client-file lookup the guardrail and approval use reports deleted ones as missing. Add tests.
+- [x] `src/modules/material` (+ `jobs`, `worker/run.ts`) -- a client rendition repository, a key function, the handler variant, the job wiring, the enqueue on client confirm, the backfill, and `getClientRendition`. Add tests mirroring the case ones.
+- [x] `configurator/page.tsx` + `_lib/configurator-data.ts` -- client render assets and the client media list (images and videos only).
+- [x] Configurator UI (`media-tab.tsx`, `right-panel.tsx`, `configurator.tsx`, `animation-dialog.tsx`, the Sfondo grid) -- the "Del cliente" group and the pickers. Tests: a client tile placed, used as a background and used in an animation; no star or remove on client tiles; the group is hidden when the client has no media.
+- [x] `src/shared/i18n/it.ts` + `it.test.ts` -- the copy.
+- [x] `test/db/*.db.test.ts` -- a soft delete frees the slot, so a fourth upload after a removal succeeds; `client_rendition` writes and its RLS lockout; approval with a soft-deleted client file → `MATERIAL_MISSING`.
 
 **Acceptance Criteria:**
 - Given a client with an image, when a person opens one of that client's cases in the configurator, then the image is under "Del cliente" and can be placed on a page, and the saved document passes the guardrail.
 - Given a client file removed on the client page, when a person opens the client page, then it's gone from the list, and its slot takes a new upload.
 
 ## Implementation Notes
+
+- **Job kind: reused `rendition`**, with `payload: { owner: "client", clientId }` for a client file. `routeRenditionJobs` (material) sends a client job to the client handler and any other to the case handler. A new `client_rendition` kind would have meant dropping and recreating the `job.kind` check (jobs module), touching `JOB_KINDS` and its migration test, and registering a second handler, for no gain: the subject id (a UUID) and the input hash already keep the two apart. A client job has no case, so a permanent failure is only logged.
+- **One handler, generic source.** `makeRenditionHandler` / `makeBackfillRenditions` take any source with `{ id, kind, deletedAt }` (defaults keep the case shape); the client variant is built in `material/worker.ts` from `case-study.getClientAsset`, `createSupabaseClientRenditionRepository` and `clientAssetKey` / `clientRenditionKey`. No processing code is forked.
+- **Ownership.** `client_asset` stays case-study's: material reads client files only through `case-study.getClientAsset` and `listLiveClientMediaPage` (module-only). `client_rendition` is material's, like `rendition`. The original's key is duplicated in `material/adapters/asset-key.ts` (`clientAssetKey`); `test/client-material-types.test.ts` keeps it equal to case-study's `clientMaterialKey`.
+- **Enqueue on confirm** happens in the clients server action (`material.enqueueClientRenditions` after `case-study.confirmClientMaterialUpload`): case-study cannot import jobs or material (jobs and material already import case-study). It never fails the confirm.
+- **Object storage**: the rendition-only write guard now also allows `clients/{clientId}/material/{assetId}/renditions/{hash}.{webp|mp4}`.
+- **Guardrail and approval** need no code change: both read `clients.listAssets`, which now ignores soft-deleted rows.
+- **Configurator**: client media reach the UI shaped as `ListedAsset` (`clientMediaOf`: never a favourite, never pending; thumbnail = image display copy, else the signed original; video poster). A failed client rendition read leaves the file undrawn and never fails the page. A client file whose rendition isn't ready at load stays undrawn until the page is reloaded (case files are polled; client files are not uploaded from here).
 
 ## Spec Change Log
 
