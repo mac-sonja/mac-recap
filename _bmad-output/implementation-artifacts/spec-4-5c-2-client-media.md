@@ -2,7 +2,7 @@
 title: 'Story 4.5c-2: client media in the case configurator, with renditions and soft delete'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '674b373a6c01427a1d1fb3d12ab77a05c4b4a835'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -105,6 +105,28 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|-------|---------|---------|----------|-------|
+| 1 | gap, edge | The approved case page never reads client renditions, so a placed client image is an empty cell once approved | high | `(tool)/case-studies/[caseId]/page.tsx` builds `assets` from `material.listAssets` only | patch |
+| 2 | blind, edge | One failing client rendition read drops every client file's assets | medium | One `renderAssetsOf(clientListed).catch(() => ({}))` for the batch | patch |
+| 3 | blind, edge | Client files aren't refreshed by `getRenderAssets`: a pending rendition never draws, and signed URLs break after the 15-minute TTL | medium | `getRenderAssets` keeps only `material.listAssets` ids; case files refresh, client files don't | patch |
+| 4 | blind | Exports and `resolveRefs` resolve case assets only | medium | No export exists yet (5.3); the configurator and case page are the renderers today | defer (5.3 must include client files) |
+| 5 | blind | Removing a client file no longer records the actor | low | Previously only a failure log; no event existed for removal | rejected |
+| 6 | blind, edge | Removed client files and renditions are never purged; `remove()` port unused | low | Soft delete keeps objects by design (spec Never) | defer |
+| 7 | blind | `client_rendition` FK has no `on delete cascade` | low | Client files are never hard-deleted after this story | rejected |
+| 8 | blind | Only the clients action enqueues renditions | low | One caller today; backfill covers misses | rejected |
+| 9 | blind | Backfill's default `payloadOf` double cast | low | Type hygiene, no runtime path reaches it | rejected |
+| 10 | blind, gap | Media tab empty-state ternary; case "empty" copy above a full client group | low | Cosmetic | defer (with #19) |
+| 11 | blind | `getClientAsset` has its own UUID regex | low | Same result; style | rejected |
+| 12 | blind | Upload failure logs lose the client id | low | Log detail only | rejected |
+| 13 | blind, gap | No test: refused-save banner names a client file | gap | `missingMessage` falls back to `clientNames`, untested | patch (test) |
+| 14 | blind | "Del cliente" announced twice (section + list label) | low | Direct correction | patch |
+| 15 | edge | Malformed client job id retries | low | Ids are written by code | rejected |
+| 16 | edge | Job router drops `onPermanentFailure` | false | Neither handler defines it | rejected |
+| 17 | edge | Client backfill skipped when the case half errors | low | Dev tooling | rejected |
+| 18 | gap | Backfill's deleted-client/removed-file filters only stub-tested | gap | Dev tooling; handler skips such files | defer |
+| 19 | gap | No test for a case with only client media | gap | Cosmetic layout | defer |
 
 ## Verification
 
