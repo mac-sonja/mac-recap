@@ -1239,7 +1239,18 @@ export const it = {
       /** `{n}` files chosen. */
       chosenOne: "· 1 scelto",
       chosenMany: "· {n} scelti",
-      noMedia: "Ancora nessuna immagine o video nei Media della case. Aggiungili dalla scheda Media.",
+      noMedia: "Ancora nessuna immagine o video nei Media della case. Trascinali qui sotto.",
+      /** The drop zone under the picker (Story 4.5c-3, mockup `#anDrop`): `{choose}` is `choose`, in bold. */
+      drop: {
+        lead: "Trascina qui immagini e video",
+        hint: "Finiscono nei Media di questa case. Oppure {choose}.",
+        choose: "scegli dai file",
+        /** The zone's accessible name: as a button it opens the file picker. */
+        label: "Trascina qui immagini e video, oppure scegli dai file",
+      },
+      /** Uploaded files past the {max} an animation holds: they stay in Media. */
+      overOne: "Un file è nei Media ma non nell’animazione: ne tiene al massimo {max}.",
+      overMany: "{n} file sono nei Media ma non nell’animazione: ne tiene al massimo {max}.",
       insert: "Inserisci",
       save: "Salva",
       cancel: "Annulla",

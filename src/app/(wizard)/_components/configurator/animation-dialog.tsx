@@ -1,7 +1,7 @@
 "use client";
 
 import { Film, ImageIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { Dialog } from "@/app/_components/dialog";
 import { ANIMATIONS, type AnimationElement, type AnimationId, type Page } from "@/modules/generation";
@@ -9,8 +9,11 @@ import type { ListedAsset } from "@/modules/material";
 import { renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
+import type { MediaUploadRules } from "./media-files";
+import { MediaDropZone } from "./media-tab";
 import { BACKGROUND_SWATCHES, MAX_ANIMATION_MEDIA, type AnimationChoice } from "./page-editing";
 import { ASPECT, EYEBROW } from "./styles";
+import type { MediaUpload } from "./use-media-upload";
 
 const copy = it.configurator.animationDialog;
 
@@ -36,6 +39,12 @@ export interface AnimationDialogProps {
   values: BoundValues;
   /** The case's images and videos, oldest first, then the client's (Story 4.5c-2): what can go in. */
   files: readonly ListedAsset[];
+  /** The case's upload rules (the file picker's types). */
+  rules: MediaUploadRules;
+  /** The case's one upload path, shared with the Media tab (Story 4.5c-3). */
+  upload: MediaUpload;
+  /** The configurator's status line, shown inside the dialog while it is open. */
+  status?: ReactNode;
   /** The animation being changed (**Salva**; its fit and size shape the previews), or null for a new one (**Inserisci**). */
   initial: (AnimationChoice & Pick<AnimationElement, "fit" | "size">) | null;
   onSubmit: (choice: AnimationChoice) => void;
@@ -47,14 +56,18 @@ export interface AnimationDialogProps {
  * 04 and Wheel 02, each previewed with the chosen media by the shared renderer; the case's
  * images and videos picked in order (numbered; a second click takes one out). **Inserisci**
  * (a new animation) or **Salva** (an existing one) stays disabled until a file is chosen.
- * Each opening starts from `initial`; Annulla or Esc changes nothing.
+ * Under the picker, the drop zone (Story 4.5c-3, mockup `#anDrop`) uploads to the case's
+ * Media through the Media tab's own upload; each file that goes is added to the picks in
+ * the order dropped, up to `MAX_ANIMATION_MEDIA` (the rest stay in Media, with a line).
+ * Each opening starts from `initial`; Annulla or Esc changes nothing (uploaded files stay
+ * in Media).
  */
 export function AnimationDialog(props: AnimationDialogProps) {
   // Mounted only while open, so the choice starts afresh at each opening.
   return props.open ? <OpenAnimationDialog {...props} /> : null;
 }
 
-function OpenAnimationDialog({ formatId, template, assets, values, files, initial, onSubmit, onClose }: AnimationDialogProps) {
+function OpenAnimationDialog({ formatId, template, assets, values, files, rules, upload, status, initial, onSubmit, onClose }: AnimationDialogProps) {
   const media = files.filter((file) => file.kind === "image" || file.kind === "video");
   const [animation, setAnimation] = useState<AnimationId>(initial?.animation ?? ANIMATIONS[0]);
   // Only files the picker shows, once each: one no longer listed could not be taken out.
@@ -62,6 +75,41 @@ function OpenAnimationDialog({ formatId, template, assets, values, files, initia
   const full = picked.length >= MAX_ANIMATION_MEDIA;
   const toggle = (id: string) =>
     setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : current.length >= MAX_ANIMATION_MEDIA ? current : [...current, id]));
+  // An upload may end after Annulla: its files then only stay in Media.
+  const pickedNow = useRef(picked);
+  const alive = useRef(true);
+  useEffect(() => {
+    pickedNow.current = picked;
+  });
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  /** The line for uploaded files past the animation's limit, or null when they all fit. */
+  const overLine = (ids: readonly string[]): string | null => {
+    if (!alive.current) return null;
+    const now = pickedNow.current;
+    const fresh = [...new Set(ids)].filter((id) => !now.includes(id));
+    const left = fresh.length - Math.max(0, MAX_ANIMATION_MEDIA - now.length);
+    if (left <= 0) return null;
+    return left === 1 ? fill(copy.overOne, { max: MAX_ANIMATION_MEDIA }) : fill(copy.overMany, { n: left, max: MAX_ANIMATION_MEDIA });
+  };
+
+  /** Dropped or chosen files: uploaded to the case's Media; those that go join the picks in order. */
+  async function add(dropped: File[]) {
+    const ids = await upload.upload(dropped, overLine);
+    if (!alive.current || ids.length === 0) return;
+    setPicked((current) => {
+      const next = [...current];
+      for (const id of ids) if (!next.includes(id) && next.length < MAX_ANIMATION_MEDIA) next.push(id);
+      return next;
+    });
+  }
+
+  const [hintBefore, hintAfter = ""] = copy.drop.hint.split("{choose}");
   const action = initial === null ? copy.insert : copy.save;
   const ready = picked.length > 0;
 
@@ -172,6 +220,22 @@ function OpenAnimationDialog({ formatId, template, assets, values, files, initia
           })}
         </div>
       )}
+      <MediaDropZone
+        label={copy.drop.label}
+        lead={copy.drop.lead}
+        hint={
+          <>
+            {hintBefore}
+            <b className="font-semibold text-foreground">{copy.drop.choose}</b>
+            {hintAfter}
+          </>
+        }
+        rules={rules}
+        upload={upload}
+        onFiles={(chosen) => void add(chosen)}
+        className="mt-4"
+      />
+      {status}
     </Dialog>
   );
 }
