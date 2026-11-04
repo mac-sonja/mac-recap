@@ -35,12 +35,24 @@ export const exportFormatIdSchema = z.enum(EXPORT_FORMAT_IDS);
 export const isExportFormatId = (value: unknown): value is ExportFormatId =>
   typeof value === "string" && (EXPORT_FORMAT_IDS as readonly string[]).includes(value);
 
-/** The file each export format makes: a PDF, or a ZIP of one PNG per slide. */
-export const EXPORT_FILES: Readonly<Record<ExportFormatId, { extension: "pdf" | "zip"; contentType: "application/pdf" | "application/zip" }>> =
-  Object.freeze({
-    presentazione_16_9: Object.freeze({ extension: "pdf", contentType: "application/pdf" }),
-    carosello_1_1: Object.freeze({ extension: "zip", contentType: "application/zip" }),
-  });
+/**
+ * Several formats of one case in one ZIP (Story 5.4): the `export` row's format. Its file
+ * is `exports/{hash}/bundle.zip`; it holds each ticked format's own stored export.
+ */
+export const EXPORT_BUNDLE = "bundle" as const;
+
+/** What an `export` row holds: one format's file, or a bundle of several. */
+export const EXPORT_RECORD_FORMATS = [...EXPORT_FORMAT_IDS, EXPORT_BUNDLE] as const;
+export type ExportRecordFormat = (typeof EXPORT_RECORD_FORMATS)[number];
+
+/** The file each export makes: a PDF, a ZIP of one PNG per slide, or (a bundle) a ZIP of those files. */
+export const EXPORT_FILES: Readonly<
+  Record<ExportRecordFormat, { extension: "pdf" | "zip"; contentType: "application/pdf" | "application/zip" }>
+> = Object.freeze({
+  presentazione_16_9: Object.freeze({ extension: "pdf", contentType: "application/pdf" }),
+  carosello_1_1: Object.freeze({ extension: "zip", contentType: "application/zip" }),
+  bundle: Object.freeze({ extension: "zip", contentType: "application/zip" }),
+});
 
 /** What an export is made of (5.3: a case; 5.9 and 5.10 add client intros and collections). */
 export const exportSubjectSchema = z.object({ kind: z.literal("case"), id: z.uuid() });
@@ -50,17 +62,37 @@ export type ExportSubject = z.infer<typeof exportSubjectSchema>;
 export const exportPartSchema = z.object({ subject: exportSubjectSchema, revisionId: z.uuid() });
 export type ExportPart = z.infer<typeof exportPartSchema>;
 
-/** An `export` job's payload: the ordered parts, the format and who asked (the row's `created_by`). */
-export const exportPayloadSchema = z.object({
-  parts: z.array(exportPartSchema).length(1),
-  format: exportFormatIdSchema,
-  requestedBy: z.uuid(),
-});
+/** A bundle's formats: two or more distinct export formats, sorted (the order the hash takes them in). */
+export const bundleFormatsSchema = z
+  .array(exportFormatIdSchema)
+  .min(2)
+  .refine((formats) => new Set(formats).size === formats.length, "formats must be distinct")
+  .refine((formats) => formats.every((f, i) => i === 0 || formats[i - 1] < f), "formats must be sorted");
+
+/**
+ * An `export` job's payload: the ordered parts, the format and who asked (the row's
+ * `created_by`). A bundle (Story 5.4) names its formats; one job renders each that has
+ * no export yet, then zips them.
+ */
+export const exportPayloadSchema = z.union([
+  z.object({ parts: z.array(exportPartSchema).length(1), format: exportFormatIdSchema, requestedBy: z.uuid() }).strict(),
+  z
+    .object({ parts: z.array(exportPartSchema).length(1), format: z.literal(EXPORT_BUNDLE), formats: bundleFormatsSchema, requestedBy: z.uuid() })
+    .strict(),
+]);
 export type ExportPayload = z.infer<typeof exportPayloadSchema>;
 
-/** What a person asks for: one case in one format (`format` is checked against the registry afterwards). */
-export const requestExportInputSchema = z.object({ caseId: z.uuid(), format: z.string().min(1).max(64) });
-export type RequestExportInput = z.infer<typeof requestExportInputSchema>;
+/**
+ * What a person asks for: one case in one format (`format`, Story 5.3) or in one or more
+ * (`formats`, Story 5.4). The ids are checked against the registry afterwards.
+ */
+export const requestOneExportInputSchema = z.object({ caseId: z.uuid(), format: z.string().min(1).max(64) });
+export const requestExportsInputSchema = z.object({ caseId: z.uuid(), formats: z.array(z.string().min(1).max(64)).min(1).max(8) });
+export type RequestExportInput = z.infer<typeof requestOneExportInputSchema> | z.infer<typeof requestExportsInputSchema>;
+
+/** The schema an input is read with: `formats` when it has that key, else `format`. */
+export const requestExportInputSchema = (input: unknown) =>
+  typeof input === "object" && input !== null && Object.hasOwn(input, "formats") ? requestExportsInputSchema : requestOneExportInputSchema;
 
 /** The state of a request: by the job it enqueued, or by the export it found. */
 export const exportStatusInputSchema = z.union([
@@ -73,7 +105,7 @@ export type ExportStatusInput = z.infer<typeof exportStatusInputSchema>;
 export const exportRecordSchema = z.object({
   id: z.uuid(),
   contentHash: z.string().regex(/^[0-9a-f]{64}$/),
-  format: exportFormatIdSchema,
+  format: z.enum(EXPORT_RECORD_FORMATS),
   parts: z.array(exportPartSchema).min(1),
   path: z.string().min(1),
   contentType: z.enum(["application/pdf", "application/zip"]),
@@ -149,6 +181,22 @@ export function contentHashInput(parts: readonly ExportPartContent[], format: Ex
   ]);
 }
 
+/**
+ * The canonical text a bundle's content hash is taken of (Story 5.4): its formats, sorted,
+ * each with its own 5.3 content hash, and the names of the files inside (they carry the
+ * case's code and name, which the formats' hashes don't cover). Any change to a format
+ * gives a new bundle; the same formats with nothing changed give the same one back.
+ */
+export function bundleHashInput(formats: readonly { format: ExportFormatId; contentHash: string }[], entryNames: readonly string[]): string {
+  const sorted = [...formats].sort((a, b) => (a.format < b.format ? -1 : a.format > b.format ? 1 : 0));
+  return JSON.stringify([
+    "export.bundle.v1",
+    EXPORT_RENDER_VERSION,
+    sorted.map(({ format, contentHash }) => [format, contentHash.toLowerCase()]),
+    [...entryNames].sort(),
+  ]);
+}
+
 /** Characters a file name can't hold on common systems, and control characters. */
 // eslint-disable-next-line no-control-regex -- control characters are exactly what is removed
 const UNSAFE_IN_FILE_NAME = /[\u0000-\u001f\u007f/\\:*?"<>|]+/g;
@@ -159,10 +207,34 @@ const UNSAFE_IN_FILE_NAME = /[\u0000-\u001f\u007f/\\:*?"<>|]+/g;
  * become a space; runs of spaces collapse; the name part is cut to 120 characters.
  */
 export function exportFileName(code: string, name: string, format: ExportFormatId): string {
-  const clean = (text: string) => text.replace(UNSAFE_IN_FILE_NAME, " ").replace(/\s+/g, " ").trim();
-  const shortName = Array.from(clean(name)).slice(0, 120).join("").trim();
-  const head = [clean(code), shortName].filter(Boolean).join(" ");
-  return `${head} – ${getFormat(format).name}.${EXPORT_FILES[format].extension}`;
+  return `${fileHead(code, name)} – ${getFormat(format).name}.${EXPORT_FILES[format].extension}`;
+}
+
+const cleanName = (text: string) => text.replace(UNSAFE_IN_FILE_NAME, " ").replace(/\s+/g, " ").trim();
+
+/** `{code} {name}`, made safe for a file system; the name part cut to 120 characters. */
+function fileHead(code: string, name: string): string {
+  const shortName = Array.from(cleanName(name)).slice(0, 120).join("").trim();
+  return [cleanName(code), shortName].filter(Boolean).join(" ");
+}
+
+/** A bundle's downloaded name (Story 5.4): `{code} {name}.zip`, cleaned as `exportFileName`. */
+export function bundleFileName(code: string, name: string): string {
+  return `${fileHead(code, name)}.zip`;
+}
+
+/** The downloaded name of any export row's file: a format's (`exportFileName`) or a bundle's. */
+export function recordFileName(code: string, name: string, format: ExportRecordFormat): string {
+  return format === EXPORT_BUNDLE ? bundleFileName(code, name) : exportFileName(code, name, format);
+}
+
+/**
+ * Where each format's file sits inside a bundle (Story 5.4): a PDF at the root under its
+ * 5.3 name, a ZIP of PNGs unpacked into a folder named after the format (`Carosello/01.png`…).
+ * Returns the PDF's file name or the folder with a trailing `/`.
+ */
+export function bundleEntryName(code: string, name: string, format: ExportFormatId): string {
+  return EXPORT_FILES[format].extension === "pdf" ? exportFileName(code, name, format) : `${cleanName(getFormat(format).name)}/`;
 }
 
 /** `FORMAT_NOT_EXPORTABLE` for a registry format that does not export yet; `null` for an export format or an unknown id. */
