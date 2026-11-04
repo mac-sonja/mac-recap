@@ -1,8 +1,11 @@
-// Public surface of the rendering module. Code outside this module imports only this file.
+// Public surface of the rendering module. Code outside this module imports only this file (server actions also `server.ts`, src/worker also `worker.ts`).
 // Pure and safe for web code: the format registry (Story 3.3), the templates (Story 3.4),
 // their renderers and the overflow helper (Story 3.5), and composeParts for combined files.
 // The templates import generation's types only (`import type`): generation's index
 // imports this module at runtime, so there is no cycle.
+// Exports (Story 5.3) live in two other entries, so this file stays safe for client
+// components: `server.ts` (the export use cases, for server actions) and `worker.ts`
+// (the `export` job handler with Playwright, for src/worker only).
 export {
   FILE_TYPES,
   FORMAT_IDS,

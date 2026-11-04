@@ -23,6 +23,7 @@ export interface CaseViewPageProps {
  * (`getLiveRevision`), never the working head; with none approved yet, it shows the
  * template's starter pages with the *Bozza di prova* note, as the configurator does.
  * **Elimina** shows only to a role that may `delete case` an approved case (owner, 2026-10-28).
+ * **Scarica** (Story 5.3) exports the live approved revision; with none it stays inactive.
  * **Attività** lists this case's events as Home does, without links; a log that can't be
  * read shows Home's failed line and the rest of the page still renders.
  */
@@ -89,6 +90,7 @@ export default async function CaseViewPage({ params }: CaseViewPageProps) {
       trial={doc === null}
       editHref={canEdit ? configuratorHref(id) : null}
       deleteCaseId={canDelete ? id : null}
+      exportCaseId={doc !== null && can(actor, "export", { status: "approved" }) ? id : null}
       activity={lines}
       now={new Date().toISOString()}
     />

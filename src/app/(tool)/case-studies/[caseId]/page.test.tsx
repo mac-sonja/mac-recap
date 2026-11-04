@@ -36,6 +36,7 @@ vi.mock("next/navigation", () => ({
 }));
 // Elimina's dialog calls the server action; the page test never presses it.
 vi.mock("@/app/(tool)/case-studies/actions", () => ({ deleteCaseStudy: vi.fn() }));
+vi.mock("@/app/(tool)/case-studies/export-actions", () => ({ requestCaseExport: vi.fn(), getCaseExportStatus: vi.fn() }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string, resource?: unknown) => requireSurface(action, resource) }));
 vi.mock("@/modules/case-study", () => ({
   get: (id: unknown) => get(id),
@@ -244,6 +245,18 @@ describe("CaseViewPage", () => {
     requireSurface.mockResolvedValue(shell);
     const owner = await render();
     expect(owner.indexOf("case-activity-heading")).toBeLessThan(owner.search(/<button[^>]*>Elimina<\/button>/));
+  });
+
+  it.each(["owner_designer", "admin", "account_sales_social"] as const)("wires Scarica to this case's export for %s (Story 5.3)", async (role) => {
+    requireSurface.mockResolvedValue(shellFor(role));
+    await render();
+    expect(caseViewProps).toHaveBeenLastCalledWith(expect.objectContaining({ exportCaseId: ID }));
+  });
+
+  it("leaves Scarica inactive while the case has no approved revision", async () => {
+    getLiveRevision.mockResolvedValue(ok(null));
+    await render();
+    expect(caseViewProps).toHaveBeenLastCalledWith(expect.objectContaining({ exportCaseId: null }));
   });
 
   it("shows its empty line when the case has no events", async () => {

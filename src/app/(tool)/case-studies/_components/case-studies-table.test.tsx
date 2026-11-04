@@ -10,6 +10,11 @@ const push = vi.fn();
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
 vi.mock("@/app/(tool)/case-studies/actions", () => ({ deleteCaseStudy: vi.fn() }));
+const requestCaseExport = vi.fn();
+vi.mock("@/app/(tool)/case-studies/export-actions", () => ({
+  requestCaseExport: (input: unknown) => requestCaseExport(input),
+  getCaseExportStatus: vi.fn(),
+}));
 
 const { CaseStudiesTable, SEARCH_DEBOUNCE_MS } = await import("./case-studies-table");
 
@@ -420,6 +425,18 @@ describe("CaseStudiesTable", () => {
     const upcoming = radios.filter((r) => r.disabled).map((r) => r.parentElement?.textContent ?? "");
     expect(upcoming.some((text) => text.includes(dict.download.upcoming.video) && text.includes(dict.download.soon))).toBe(true);
     expect(dialog.textContent).not.toContain("Post 1080×1080");
+  });
+
+  it("exports the row's case from its Scarica (Story 5.3)", async () => {
+    requestCaseExport.mockResolvedValue({ ok: false, status: 400, error: { code: "FORMAT_NOT_IN_REVISION", message: "x" } });
+    const user = userEvent.setup();
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    await user.click(screen.getByRole("button", { name: fill(dict.download.caseLabel, { name: "Zeta" }) }));
+    const dialog = screen.getByRole("dialog", { hidden: true });
+    await user.click(within(dialog).getByRole("radio", { name: new RegExp(dict.download.format.carosello_1_1.name), hidden: true }));
+    await user.click(within(dialog).getByRole("button", { name: dict.download.action, hidden: true }));
+    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: "aaaaaaaa-0000-4000-8000-000000000001", format: "carosello_1_1" });
+    expect(within(dialog).getByRole("alert", { hidden: true }).textContent).toBe(dict.download.formatMissing);
   });
 
   it("offers no Elimina in the list: a draft is deleted from inside it (owner, 2026-10-22)", () => {

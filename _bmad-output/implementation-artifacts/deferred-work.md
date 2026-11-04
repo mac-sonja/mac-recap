@@ -302,7 +302,7 @@
   summary: Story 4.5c-3: the Animazione dialog's drop zone ("Trascina qui immagini e video", "scegli dai file") uploading to the case's Media with Story 2.7's rules and adding the new files to the animation in order, through a shared upload hook taken from the Media tab.
   evidence: Split from 4.5c-2 at the owner's choice (2026-11-04): 4.5c-2 is client media in the configurator and the client-file soft delete; the dialog upload is independent and UI only.
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-5c-2-client-media.md`
-  summary: Exports (5.3) and `resolveRefs`/`buildManifest` must resolve client files through `client_rendition`, as the configurator and the approved case page do, or a page with a client image exports an empty cell.
+  summary: Exports resolved by Story 5.3 (the export handler draws client files from `client_rendition`). Still open: `resolveRefs`/`buildManifest` must resolve client files through `client_rendition`, as the configurator and the approved case page do.
   evidence: Review of 4.5c-2 (blind): today only case `asset`/`rendition` are resolved outside the two pages.
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-5c-2-client-media.md`
   summary: Purge soft-deleted client files (rows, originals, `client_rendition` objects) once no revision references them; `ClientMaterialStorage.remove` has no caller until then.

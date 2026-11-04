@@ -2,6 +2,7 @@ import { getSystemActor, type Actor } from "@/modules/access";
 import { startJobLoop, type JobHandlers, type JobLoop, type JobLoopOptions } from "@/modules/jobs";
 import * as generationWorker from "@/modules/generation/worker";
 import * as materialWorker from "@/modules/material/worker";
+import * as renderingWorker from "@/modules/rendering/worker";
 import { getEnv } from "@/shared/env";
 import { log } from "@/shared/log";
 import type { Result } from "@/shared/result";
@@ -25,10 +26,11 @@ export interface WorkerDeps {
   handlers: () => JobHandlers;
 }
 
-/** Every handler the worker runs: `rendition` (Story 3.2) and `generate` (Story 3.7). Kinds without one are never claimed. */
+/** Every handler the worker runs: `rendition` (Story 3.2), `generate` (Story 3.7) and `export` (Story 5.3). */
 export const workerHandlers = (): JobHandlers => ({
   rendition: materialWorker.renditionHandler(),
   generate: generationWorker.generateHandler(),
+  export: renderingWorker.exportHandler(),
 });
 
 const defaultDeps: WorkerDeps = { loadEnv: getEnv, getSystemActor, startJobLoop, handlers: workerHandlers };
@@ -39,7 +41,7 @@ const defaultDeps: WorkerDeps = { loadEnv: getEnv, getSystemActor, startJobLoop,
  * logs one readiness line with the actor id (exit 1 without it when the loop
  * fails to start). On SIGTERM or SIGINT it stops the
  * loop (the running job is released after at most 10 s) and exits 0, once.
- * The loop claims only kinds with a handler: `rendition` and `generate` so far.
+ * The loop claims only kinds with a handler: `rendition`, `generate` and `export`.
  */
 export async function runWorker(host: WorkerHost, overrides: Partial<WorkerDeps> = {}): Promise<void> {
   const deps = { ...defaultDeps, ...overrides };

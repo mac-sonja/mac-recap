@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Page } from "@/modules/generation";
 import { FORMAT_IDS, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
@@ -10,6 +10,11 @@ import { CaseView } from "./case-view";
 const deleteCaseStudy = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/app/(tool)/case-studies/actions", () => ({ deleteCaseStudy: (input: unknown) => deleteCaseStudy(input) }));
+const requestCaseExport = vi.fn();
+vi.mock("@/app/(tool)/case-studies/export-actions", () => ({
+  requestCaseExport: (input: unknown) => requestCaseExport(input),
+  getCaseExportStatus: vi.fn(),
+}));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
@@ -67,6 +72,7 @@ function setup({
   editHref = EDIT_HREF as string | null,
   deleteCaseId = CASE_ID as string | null,
   activity = LINES as ActivityCardLine[] | null,
+  exportCaseId = CASE_ID as string | null,
 } = {}) {
   return render(
     <CaseView
@@ -79,6 +85,7 @@ function setup({
       trial={trial}
       editHref={editHref}
       deleteCaseId={deleteCaseId}
+      exportCaseId={exportCaseId}
       activity={activity}
       now={NOW}
     />,
@@ -102,10 +109,34 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   deleteCaseStudy.mockReset();
+  requestCaseExport.mockReset();
   vi.restoreAllMocks();
 });
 
 describe("CaseView", () => {
+  it("wires Scarica to the export of this case's approved version (Story 5.3)", async () => {
+    requestCaseExport.mockResolvedValue({ ok: false, status: 409, error: { code: "NOT_APPROVED", message: "x" } });
+    setup();
+    fireEvent.click(button(fill(dict.download.caseLabel, { name: "Rebrand Lumen" })));
+    const dialog = document.querySelector("dialog")!;
+    const confirm = within(dialog).getByRole("button", { name: dict.download.action, hidden: true });
+    expect(confirm.getAttribute("aria-disabled")).toBeNull();
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, format: "presentazione_16_9" });
+    expect(within(dialog).getByRole("alert", { hidden: true }).textContent).toBe(dict.download.notApproved);
+  });
+
+  it("leaves Scarica inactive without an approved version to export", () => {
+    setup({ exportCaseId: null, trial: true });
+    fireEvent.click(button(fill(dict.download.caseLabel, { name: "Rebrand Lumen" })));
+    const confirm = within(document.querySelector("dialog")!).getByRole("button", { name: dict.download.action, hidden: true });
+    expect(confirm.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(confirm);
+    expect(requestCaseExport).not.toHaveBeenCalled();
+  });
+
   it("shows the header like a client's page: back, name, code, badge, formats, Scarica and Modifica to the configurator", () => {
     setup();
     expect(screen.getByRole("link", { name: dict.caseView.back, hidden: true }).getAttribute("href")).toBe("/case-studies");

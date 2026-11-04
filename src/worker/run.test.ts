@@ -57,9 +57,11 @@ afterEach(() => {
 });
 
 describe("workerHandlers", () => {
-  it("registers the rendition (Story 3.2) and generate (Story 3.7) handlers", () => {
+  it("registers the rendition (Story 3.2), generate (Story 3.7) and export (Story 5.3) handlers", () => {
     const handlers = workerHandlers();
-    expect(Object.keys(handlers).sort()).toEqual(["generate", "rendition"]);
+    expect(Object.keys(handlers).sort()).toEqual(["export", "generate", "rendition"]);
+    expect(typeof handlers.export?.run).toBe("function");
+    expect(typeof handlers.export?.caseIdOf).toBe("function");
     expect(typeof handlers.rendition?.run).toBe("function");
     expect(typeof handlers.rendition?.caseIdOf).toBe("function");
     expect(typeof handlers.generate?.run).toBe("function");

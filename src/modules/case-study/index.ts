@@ -35,6 +35,7 @@ import { makeListCaseStudies } from "@/modules/case-study/application/list-case-
 import { makeListClientSummaries } from "@/modules/case-study/application/list-client-summaries";
 import { makeListClients } from "@/modules/case-study/application/list-clients";
 import { makeListReadyDrafts } from "@/modules/case-study/application/list-ready-drafts";
+import { makeReadClientLogo, type ClientLogoFile } from "@/modules/case-study/application/read-client-logo";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
 import {
   makeApprove,
@@ -82,7 +83,7 @@ import type { ClientMaterialStorage } from "@/modules/case-study/ports/client-ma
 import type { LogoStorage } from "@/modules/case-study/ports/logo-storage";
 import type { Result } from "@/shared/result";
 
-export { CASE_CREATED, CASE_DELETED, CASE_DETAILS_UPDATED, TRANSITION } from "@/modules/case-study/domain/case-event";
+export { CASE_CREATED, CASE_DELETED, CASE_DETAILS_UPDATED, CASE_EXPORTED, TRANSITION } from "@/modules/case-study/domain/case-event";
 export type { CaseEvent, RecordEventInput } from "@/modules/case-study/domain/case-event";
 export { ACTIVITY_TYPES } from "@/modules/case-study/domain/case-activity";
 export type { ActivityType, CaseActivity } from "@/modules/case-study/domain/case-activity";
@@ -156,6 +157,7 @@ export type {
   ClientTestimonialSaved,
 } from "@/modules/case-study/application/save-client-brief-field";
 export type { ClientDeleted } from "@/modules/case-study/application/delete-client";
+export type { ClientLogoFile } from "@/modules/case-study/application/read-client-logo";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
 export { REVISION_CREATED, REVISION_SAVED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
 export type {
@@ -519,6 +521,16 @@ export function listLiveClientMediaPage(afterId: string | null, limit: number): 
  */
 export function getClientInfoForCase(caseId: unknown): Promise<Result<CaseClientInfo>> {
   return makeGetClientInfoForCase(createSupabaseClientRepository())(caseId);
+}
+
+/**
+ * The bytes and type of a client's current logo, or null when it has none or its file is
+ * missing (Story 5.3: exports draw the logo inline). Module-only: the rendering worker reads
+ * it; no authorization of its own, so call only after the caller's own. Errors:
+ * `CLIENT_NOT_FOUND` (unknown, malformed or deleted), the lookup and `STORAGE_FAILED`.
+ */
+export function readClientLogo(clientId: unknown): Promise<Result<ClientLogoFile | null>> {
+  return makeReadClientLogo(createSupabaseClientRepository(), logoStorage())(clientId);
 }
 
 /**

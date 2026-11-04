@@ -652,6 +652,19 @@ export const it = {
       linkedinCover: "Cover LinkedIn 1200×675",
       pngPack: "Pack PNG HD + ZIP",
     },
+    /** Story 5.3: on the button while the file is made; the person can keep browsing. */
+    working: "Preparo il file…",
+    /** Read by screen readers once the file is downloading. */
+    ready: "Il file è pronto e sta scaricando.",
+    /** The toast when the export job failed for good; **Riprova** asks again. */
+    failed: "L’esportazione non è finita.",
+    /** The same toast on a case's Scarica: names the case, as several toasts may show at once. */
+    failedCase: "L’esportazione di {name} non è finita.",
+    retry: "Riprova",
+    /** In the dialog: the case has no approved version (`NOT_APPROVED`). */
+    notApproved: "Questa case non ha ancora una versione approvata. Approvala e poi scaricala.",
+    /** In the dialog: the approved version has no pages in this format (`FORMAT_NOT_IN_REVISION`). */
+    formatMissing: "La versione approvata non ha pagine in questo formato. Scegline un altro.",
   },
   /** Sign-in, sign-up and passwords (Story 6.1; open sign-up per owner, 2026-10-28). */
   auth: {
