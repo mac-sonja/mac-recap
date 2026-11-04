@@ -1093,6 +1093,31 @@ describe("editing an approved case (Story 4.9)", () => {
     await expect(pool.query(updateSql, [review.id, head.id, 0, head_version, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_APPROVABLE" });
   });
 
+  it("an approved case with no approved revision (from before Story 4.8) can't be forked, saved or updated", async () => {
+    const created = await createCase();
+    const head = await createRevision(created.id, 0);
+    // Approved the old way: the status only, no approved_revision_id.
+    await pool.query(
+      `begin; select pg_catalog.set_config('mac_recap.status_transition', 'on', true); update public.case_study set status = 'approved' where id = '${created.id}'; commit;`,
+    );
+    const { head_version } = await caseRow(created.id);
+    await expect(fork(created.id, head_version)).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_EDITABLE" });
+    await expect(pool.query(saveSql, [head.id, JSON.stringify(edited()), 0, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_EDITABLE" });
+    await expect(pool.query(updateSql, [created.id, head.id, 0, head_version, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_APPROVABLE" });
+    expect(await caseState(created.id)).toMatchObject({ status: "approved", approved_revision_id: null, head_revision_id: head.id });
+    expect(await statusOf(head.id)).toBe("working");
+  });
+
+  it("update_approved_revision refuses when the approved pointer is not an approved revision, writing nothing", async () => {
+    const { caseId, approvedId, headVersion } = await approvedCase();
+    const { revision } = await fork(caseId, headVersion);
+    await pool.query("update public.revision set status = 'superseded' where id = $1", [approvedId]);
+    await expect(pool.query(updateSql, [caseId, revision.id, 0, headVersion + 1, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_APPROVABLE" });
+    expect(await statusOf(revision.id)).toBe("working");
+    expect(await caseState(caseId)).toMatchObject({ approved_revision_id: approvedId, head_revision_id: revision.id });
+    expect(await eventsOf(caseId, "approved_version_updated")).toEqual([]);
+  });
+
   it("approve_revision (Story 4.8) still refuses an approved case's copy", async () => {
     const { caseId, headVersion } = await approvedCase();
     const { revision } = await fork(caseId, headVersion);

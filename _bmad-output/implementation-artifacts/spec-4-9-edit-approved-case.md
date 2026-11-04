@@ -2,7 +2,7 @@
 title: 'Story 4.9: edit an approved case and update the approved version'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'a8e082efb3ef01886ccd9ca0d4891b3d697f9cbb'
 route: 'dispatch'
 review_loop_iteration: 0

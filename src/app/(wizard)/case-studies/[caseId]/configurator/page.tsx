@@ -116,7 +116,8 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
   const doc = head?.doc ?? null;
   // Story 4.9: an approved case's head is its approved revision (forked on the first save) or its working copy.
   const fork = current.status === "approved" && head !== null && head.status === "approved" && head.id === current.approvedRevisionId;
-  const pendingCopy = current.status === "approved" && head !== null && head.status === "working" && head.id !== current.approvedRevisionId;
+  const pendingCopy =
+    current.status === "approved" && current.approvedRevisionId !== null && head !== null && head.status === "working" && head.id !== current.approvedRevisionId;
   const editable = head !== null && ((head.status === "working" && current.status === "in_review") || fork || pendingCopy);
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   // Without the shared list the panel still shows the client's own sector.

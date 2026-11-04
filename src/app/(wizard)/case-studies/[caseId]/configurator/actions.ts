@@ -47,7 +47,8 @@ export async function approveCase(input: unknown): Promise<ActionResult<{ waitin
   if (!decision.ok) return failure(decision.error);
   // An approved case's copy is updated through updateApprovedVersion (Story 4.9), never approved again here.
   const found = await caseStudy.get(typeof input === "object" && input !== null ? (input as { caseId?: unknown }).caseId : undefined);
-  if (found.ok && found.value?.status === "approved") {
+  if (!found.ok) return failure(found.error);
+  if (found.value?.status === "approved") {
     return failure({ code: "CASE_NOT_APPROVABLE", message: "Only a case study in review can be approved.", details: { status: "approved" } });
   }
   const approved = await caseStudy.approve(actor.value, input, material.liveAssetIds);

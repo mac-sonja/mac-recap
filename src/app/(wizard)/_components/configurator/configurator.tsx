@@ -170,7 +170,7 @@ const typing = (target: EventTarget | null) =>
 /** A stable empty list, so the default keeps its identity across renders. */
 const NO_CLIENT_FILES: readonly { id: string; name: string }[] = [];
 /** Story 4.9: refusals of Aggiorna or Scarta that mean the case moved on meanwhile: the page reads it again. */
-const STALE_COPY_CODES = new Set(["STALE_REVISION", "STALE_HEAD", "CASE_NOT_APPROVABLE", "CASE_NOT_EDITABLE", "REVISION_NOT_WRITABLE", "REVISION_WRITE_FAILED", "NOT_FOUND"]);
+const STALE_COPY_CODES = new Set(["STALE_REVISION", "STALE_HEAD", "CASE_NOT_APPROVABLE", "CASE_NOT_EDITABLE", "REVISION_NOT_WRITABLE", "NOT_FOUND"]);
 /** A stable empty list of client media, likewise. */
 const NO_CLIENT_MEDIA: readonly ListedAsset[] = [];
 
@@ -1045,8 +1045,12 @@ export function Configurator({
   const updateApproved = useCallback(async () => {
     const copyId = doc.revisionId();
     const head = doc.headVersion();
-    if (onUpdateApproved === undefined || copyId === undefined || head === undefined || overflowReport === null) return;
     const u = it.configurator.approvedEdit;
+    if (onUpdateApproved === undefined || copyId === undefined || head === undefined || overflowReport === null) {
+      setConfirmCopy(null);
+      say(u.updateFailed);
+      return;
+    }
     setCopyBusy(true);
     try {
       if (!(await doc.settle())) {
@@ -1089,15 +1093,25 @@ export function Configurator({
   const discardCopy = useCallback(async () => {
     const copyId = doc.revisionId();
     const head = doc.headVersion();
-    if (onDiscard === undefined || copyId === undefined || head === undefined) return;
     const u = it.configurator.approvedEdit;
+    if (onDiscard === undefined || copyId === undefined || head === undefined) {
+      setConfirmCopy(null);
+      say(u.discardFailed);
+      return;
+    }
     setCopyBusy(true);
     let leaving = false;
     try {
       // A save in flight lands first, so nothing reaches the copy after it is dropped.
-      await doc.settle();
+      if (!(await doc.settle())) {
+        setConfirmCopy(null);
+        say(u.discardFailed);
+        return;
+      }
       const result = await onDiscard({ caseId, revisionId: doc.revisionId() ?? copyId, expectedHeadVersion: doc.headVersion() ?? head });
       setConfirmCopy(null);
+      // Dropped: edits made before the page shows the approved version must not reach the copy.
+      if (result.ok) doc.stop();
       if (result.ok || STALE_COPY_CODES.has(result.error.code)) {
         if (!result.ok) say(it.configurator.approval.stale);
         // The page reads the head again: the approved version, in a fresh configurator.

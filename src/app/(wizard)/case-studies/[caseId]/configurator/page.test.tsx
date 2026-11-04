@@ -472,6 +472,14 @@ describe("ConfiguratorPage", () => {
     expect(html).toContain(dict.configurator.approvedEdit.discard);
   });
 
+  it("keeps an approved case with no approved revision (from before Story 4.8) read-only, with no pending copy", async () => {
+    get.mockResolvedValue(ok({ ...inReview, status: "approved", approvedRevisionId: null }));
+    getEditableRevision.mockResolvedValue(ok(revision));
+    const html = await render();
+    expect(html).toContain('data-editable="false"');
+    expect(html).not.toContain(dict.configurator.approvedEdit.update);
+  });
+
   it("keeps an approved case read-only when its head is neither its approved revision nor a working copy", async () => {
     get.mockResolvedValue(ok({ ...inReview, status: "approved", approvedRevisionId: "dddddddd-0000-4000-8000-000000000009" }));
     getEditableRevision.mockResolvedValue(ok({ ...revision, status: "approved" }));

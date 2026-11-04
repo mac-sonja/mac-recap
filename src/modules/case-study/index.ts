@@ -162,7 +162,14 @@ export type {
 export type { ClientDeleted } from "@/modules/case-study/application/delete-client";
 export type { ClientLogoFile } from "@/modules/case-study/application/read-client-logo";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
-export { REVISION_CREATED, REVISION_DISCARDED, REVISION_FORKED, REVISION_SAVED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
+export {
+  APPROVED_VERSION_UPDATED,
+  REVISION_CREATED,
+  REVISION_DISCARDED,
+  REVISION_FORKED,
+  REVISION_SAVED,
+  REVISION_STATUSES,
+} from "@/modules/case-study/domain/revision";
 export type {
   CreateWorkingRevisionInput,
   DiscardHeadInput,

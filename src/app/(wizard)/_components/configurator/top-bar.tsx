@@ -133,8 +133,9 @@ export function TopBar({
     <header
       className={cn(
         "grid h-14 shrink-0 items-center gap-4 border-b border-border bg-surface-sidebar px-3",
-        // Scarta and Aggiorna (Story 4.9) are wider than Approva: the right side takes its width and the name truncates.
-        update === undefined ? "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)_auto_auto]",
+        // Scarta and Aggiorna (Story 4.9) are wider than Approva: on an approved case the right side is
+        // reserved for them from the start (no jump on the first fork) and the name truncates.
+        approvedCase ? "grid-cols-[minmax(0,1fr)_auto_34rem]" : "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]",
       )}
     >
       <DocumentHeading header={header} back={back} />

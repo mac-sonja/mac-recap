@@ -156,6 +156,12 @@ describe("approveCase (Story 4.8)", () => {
     getCase.mockResolvedValue(ok({ id: input.caseId, status: "in_review" }));
   });
 
+  it("returns a failed case read instead of approving (an approved case must never reach the update path from here)", async () => {
+    getCase.mockResolvedValue(err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "m" }));
+    expect(await approveCase(approval)).toMatchObject({ ok: false, error: { code: "CASE_STUDY_LOOKUP_FAILED" } });
+    expect(approveUseCase).not.toHaveBeenCalled();
+  });
+
   it("never approves an approved case again (its copy is updated through updateApprovedVersion, Story 4.9)", async () => {
     getCase.mockResolvedValue(ok({ id: input.caseId, status: "approved" }));
     expect(await approveCase(approval)).toMatchObject({ ok: false, status: 409, error: { code: "CASE_NOT_APPROVABLE" } });

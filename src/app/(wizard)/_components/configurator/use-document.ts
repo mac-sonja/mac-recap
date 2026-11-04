@@ -98,6 +98,8 @@ export interface DocumentState {
   forkPending: boolean;
   /** Story 4.9: the copy just became the approved revision; the next edit forks again. */
   approved: () => void;
+  /** Story 4.9: no more saves or retries (the copy was discarded; the page reloads). */
+  stop: () => void;
   /** Undoes or redoes one step and returns the format it changed, or undefined with nothing to do. */
   undo: () => FormatId | undefined;
   redo: () => FormatId | undefined;
@@ -120,6 +122,13 @@ const PERMANENT_CODES = new Set(["INVALID_INPUT", "DOCUMENT_INVALID", "DOCUMENT_
 
 /** Refusals a retry can't fix because the server holds something newer: read it again instead. */
 const STALE_CODES = new Set(["STALE_REVISION", "STALE_HEAD", "REVISION_NOT_WRITABLE", "CASE_NOT_EDITABLE", "NOT_FOUND"]);
+
+/**
+ * Whether a fork made a fresh copy (Story 4.9): `fork_head` returns an existing copy as it is,
+ * so one with edits (`version` > 0) or a head that moved by more than this fork belongs to
+ * someone else's session.
+ */
+const createdByThisFork = (forked: ForkResult, expected: number) => forked.version === 0 && forked.headVersion === expected + 1;
 
 interface Step {
   formats: Formats;
@@ -153,6 +162,8 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
   const version = useRef(revision?.version ?? 0);
   const revisionId = useRef(revision?.id);
   const head = useRef(headVersion);
+  /** The `headVersion` prop last seen: a refresh that brings a new one replaces `head`. */
+  const headProp = useRef(headVersion);
   const needsFork = useRef(revision?.fork === true);
   const [forkPending, setForkPending] = useState(revision?.fork === true);
   const past = useRef<Step[]>([]);
@@ -169,6 +180,10 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
   const latest = useRef({ caseId, revision, base, save, onStale, fork });
   useEffect(() => {
     latest.current = { caseId, revision, base, save, onStale, fork };
+    if (headVersion !== headProp.current) {
+      headProp.current = headVersion;
+      head.current = headVersion;
+    }
   });
 
   const clearTimers = () => {
@@ -197,13 +212,21 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
     // Story 4.9: the approved revision is never written; the first save forks a working copy.
     if (needsFork.current) {
       let forked: ActionResult<ForkResult> | null;
+      const expected = head.current;
       try {
-        forked = fork === undefined || head.current === undefined ? null : await fork({ caseId, expectedHeadVersion: head.current });
+        forked = fork === undefined || expected === undefined ? null : await fork({ caseId, expectedHeadVersion: expected });
       } catch {
         forked = null;
       }
       inFlight.current = false;
       if (stopped.current) return;
+      // A copy this call didn't create (another tab forked, maybe edited): saving to it would overwrite. Reload.
+      if (forked?.ok === true && !createdByThisFork(forked.value, expected!)) {
+        stopped.current = true;
+        clearTimers();
+        onStale();
+        return;
+      }
       if (forked?.ok === true) {
         revisionId.current = forked.value.revisionId;
         version.current = forked.value.version;
@@ -343,6 +366,10 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
   const currentVersion = useCallback(() => version.current, []);
   const currentRevisionId = useCallback(() => revisionId.current, []);
   const currentHeadVersion = useCallback(() => head.current, []);
+  const stop = useCallback(() => {
+    stopped.current = true;
+    clearTimers();
+  }, []);
   const approved = useCallback(() => {
     needsFork.current = true;
     setForkPending(true);
@@ -366,8 +393,9 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
           // Story 4.9: still on the approved revision: fork first, then save to the copy.
           if (needsFork.current) {
             if (fork === undefined || head.current === undefined) return;
-            const forked = await fork({ caseId, expectedHeadVersion: head.current });
-            if (!forked.ok) return;
+            const expected = head.current;
+            const forked = await fork({ caseId, expectedHeadVersion: expected });
+            if (!forked.ok || !createdByThisFork(forked.value, expected)) return;
             target = { revisionId: forked.value.revisionId, version: forked.value.version };
           }
           await save({ caseId, revisionId: target.revisionId, doc, expectedVersion: target.version });
@@ -394,6 +422,7 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
     headVersion: currentHeadVersion,
     forkPending,
     approved,
+    stop,
     undo,
     redo,
   };

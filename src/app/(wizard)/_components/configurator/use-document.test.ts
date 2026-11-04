@@ -243,3 +243,89 @@ describe("useDocument", () => {
     expect(save).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("useDocument on an approved case (Story 4.9)", () => {
+  const CASE = "aaaaaaaa-0000-4000-8000-000000000001";
+  const APPROVED = "dddddddd-0000-4000-8000-000000000001";
+  const COPY = "dddddddd-0000-4000-8000-000000000002";
+  type Fork = NonNullable<UseDocumentOptions["fork"]>;
+  const fresh: Fork = async (input) => ({ ok: true, value: { revisionId: COPY, version: 0, headVersion: input.expectedHeadVersion + 1 } });
+  const approved = (over: Partial<UseDocumentOptions> = {}) =>
+    setup({ revision: { id: APPROVED, version: 2, editable: true, fork: true }, headVersion: 7, fork: vi.fn<Fork>(fresh), ...over });
+
+  it("an edit pending at unmount forks, then saves to the copy's id and version", async () => {
+    const fork = vi.fn<Fork>(fresh);
+    const { hook, save } = approved({ fork });
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    hook.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(fork).toHaveBeenCalledExactlyOnceWith({ caseId: CASE, expectedHeadVersion: 7 });
+    expect(save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ revisionId: COPY, expectedVersion: 0 }));
+  });
+
+  it("after a completed fork, an edit pending at unmount saves to the copy without forking again", async () => {
+    const fork = vi.fn<Fork>(fresh);
+    const { hook, save } = approved({ fork });
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    act(() => hook.result.current.change(formatsNamed("b"), "presentazione_16_9"));
+    hook.unmount();
+    await advance(0);
+    expect(fork).toHaveBeenCalledTimes(1);
+    expect(save.mock.calls.map((call) => [call[0].revisionId, call[0].expectedVersion])).toEqual([
+      [COPY, 0],
+      [COPY, 1],
+    ]);
+  });
+
+  it.each([
+    ["with edits (version > 0)", { revisionId: COPY, version: 3, headVersion: 8 }],
+    ["made before this tab's head version moved", { revisionId: COPY, version: 0, headVersion: 9 }],
+  ])("a fork that returns another session's copy %s reloads and saves nothing", async (_name, value) => {
+    const { hook, save, onStale } = approved({ fork: vi.fn<Fork>(async () => ({ ok: true, value })) });
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(onStale).toHaveBeenCalledTimes(1);
+    expect(save).not.toHaveBeenCalled();
+    hook.unmount();
+    await advance(0);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("follows a new headVersion prop after a refresh", async () => {
+    const fork = vi.fn<Fork>(fresh);
+    const options = (headVersion: number): UseDocumentOptions => ({
+      caseId: CASE,
+      revision: { id: APPROVED, version: 2, editable: true, fork: true },
+      base: { schemaVersion: 2, kind: "case_history", template: "mac-case@1" },
+      initial: START,
+      save: vi.fn<Save>(okSave),
+      onStale: vi.fn(),
+      fork,
+      headVersion,
+    });
+    const hook = renderHook((props: UseDocumentOptions) => useDocument(props), { initialProps: options(7) });
+    expect(hook.result.current.headVersion()).toBe(7);
+    hook.rerender(options(9));
+    expect(hook.result.current.headVersion()).toBe(9);
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(fork).toHaveBeenCalledWith({ caseId: CASE, expectedHeadVersion: 9 });
+    expect(hook.result.current.headVersion()).toBe(10);
+    // The same prop again keeps the fork's newer head version.
+    hook.rerender(options(9));
+    expect(hook.result.current.headVersion()).toBe(10);
+  });
+
+  it("stop ends saving: an edit after it is never sent", async () => {
+    const { hook, save } = approved({ revision: { id: COPY, version: 1, editable: true } });
+    act(() => hook.result.current.stop());
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    hook.unmount();
+    await advance(0);
+    expect(save).not.toHaveBeenCalled();
+  });
+});

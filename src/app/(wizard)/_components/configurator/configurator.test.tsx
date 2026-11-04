@@ -3243,6 +3243,70 @@ describe("Configurator on an approved case (Story 4.9)", () => {
     expect(onFork).toHaveBeenLastCalledWith({ caseId: CASE_ID, expectedHeadVersion: 8 });
   });
 
+  it("a pending save lands first, and the update carries the version it returned", async () => {
+    const order: string[] = [];
+    const onSave = vi.fn<SaveFn>(async (input) => {
+      order.push("save");
+      return savedOk(input);
+    });
+    const onUpdateApproved = vi.fn<UpdateFn>(async () => {
+      order.push("update");
+      return { ok: true, value: undefined };
+    });
+    approved({ fork: false, onSave, onUpdateApproved });
+    await tick();
+    addPage();
+    fireEvent.click(updateButton()!);
+    fireEvent.click(button(u.updateConfirm, dialog()!));
+    await tick();
+    expect(order).toEqual(["save", "update"]);
+    expect(onUpdateApproved).toHaveBeenCalledWith(expect.objectContaining({ revisionId: REVISION_ID, expectedRevisionVersion: 5, expectedHeadVersion: 7 }));
+  });
+
+  it("a save that fails at Aggiorna stops the update and says so", async () => {
+    const { onUpdateApproved } = approved({ fork: false, onSave: vi.fn<SaveFn>().mockRejectedValue(new Error("offline")) });
+    await tick();
+    addPage();
+    fireEvent.click(updateButton()!);
+    fireEvent.click(button(u.updateConfirm, dialog()!));
+    await tick();
+    expect(onUpdateApproved).not.toHaveBeenCalled();
+    expect(dialog()!.hasAttribute("open")).toBe(false);
+    expect(status().textContent).toBe(u.notSaved);
+  });
+
+  it("REVISION_WRITE_FAILED at Aggiorna is a failure, not a change made meanwhile", async () => {
+    approved({ fork: false, onUpdateApproved: async () => ({ ok: false, status: 500, error: { code: "REVISION_WRITE_FAILED", message: "m" } }) });
+    await tick();
+    fireEvent.click(updateButton()!);
+    fireEvent.click(button(u.updateConfirm, dialog()!));
+    await tick();
+    expect(status().textContent).toBe(u.updateFailed);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("after a discard, an edit made before the page reloads is never saved to the dropped copy", async () => {
+    const { onSave, onDiscard } = approved({ fork: false });
+    await tick();
+    fireEvent.click(discardButton()!);
+    fireEvent.click(button(u.discardConfirm, dialog()!));
+    await tick();
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+    addPage();
+    await tick();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("the top bar keeps its columns on an approved case before and after the first fork", async () => {
+    approved();
+    const columns = () => [...header().classList].find((c) => c.startsWith("grid-cols-"));
+    const before = columns();
+    addPage();
+    await tick();
+    expect(updateButton()).not.toBeNull();
+    expect(columns()).toBe(before);
+  });
+
   it("Aggiorna is inactive and names the page while a format overflows", async () => {
     const scroll = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) {
       return this.closest('[data-measure-format="carosello_1_1"]') === null ? 100 : 200;

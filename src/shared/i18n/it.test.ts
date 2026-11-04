@@ -329,6 +329,15 @@ describe("configurator copy", () => {
     ]);
     expect([t("configurator.approvedEdit.discardConfirm"), t("configurator.approvedEdit.cancel")]).toEqual(["Scarta", "Annulla"]);
     expect([t("configurator.approvedEdit.updateTitle"), t("configurator.approvedEdit.updateConfirm")]).toEqual(["Aggiornare la versione approvata?", "Aggiorna"]);
+    expect(t("configurator.approvedEdit.updateDescription")).toBe(
+      "Le modifiche vanno online: la pagina della case, la libreria e gli export mostrano la nuova versione.",
+    );
+    expect(t("configurator.approvedEdit.notSaved")).toBe("Non abbiamo salvato le ultime modifiche, quindi non abbiamo aggiornato. Riprova tra poco.");
+    expect(t("configurator.approvedEdit.updated")).toBe("Versione approvata aggiornata. Ora è online.");
+    expect([t("configurator.approvedEdit.updateFailed"), t("configurator.approvedEdit.discardFailed")]).toEqual([
+      "Non siamo riusciti ad aggiornare. Riprova.",
+      "Non siamo riusciti a scartare le modifiche. Riprova.",
+    ]);
     expect([t("configurator.fields.clientHeading"), t("configurator.fields.caseHeading"), t("configurator.fields.replaceLogo")]).toEqual([
       "Dati del cliente",
       "Dati della case",

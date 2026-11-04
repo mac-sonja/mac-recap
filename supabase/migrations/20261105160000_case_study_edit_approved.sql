@@ -117,7 +117,7 @@ grant execute on function public.fork_head(uuid, integer, uuid) to service_role;
 -- the `working` head revision `p_revision_id` when its `version` still equals
 -- `p_expected_version`, increments `version`, keeps `schema_version` in step and writes
 -- one `revision_saved` case event (`{ version }`). The case must be `in_review`, or
--- `approved` with a head other than its approved revision (the fork); the approved
+-- `approved` with an approved revision and a head other than it (the fork); the approved
 -- revision itself is never written.
 --
 -- Raises P0001 with the message, checked in this order, `INVALID_INPUT`, `NOT_FOUND`,
@@ -166,7 +166,8 @@ begin
   if c_head_revision_id is distinct from p_revision_id then
     raise exception 'STALE_HEAD' using errcode = 'P0001';
   end if;
-  if not (c_status = 'in_review' or (c_status = 'approved' and c_head_revision_id is distinct from c_approved_revision_id)) then
+  if not (c_status = 'in_review'
+          or (c_status = 'approved' and c_approved_revision_id is not null and c_head_revision_id is distinct from c_approved_revision_id)) then
     raise exception 'CASE_NOT_EDITABLE' using errcode = 'P0001';
   end if;
 
@@ -206,7 +207,8 @@ grant execute on function public.save_revision_doc(uuid, jsonb, integer, uuid) t
 --
 -- Raises P0001 with the message, checked in this order, `INVALID_INPUT`, `NOT_FOUND`
 -- (unknown or soft-deleted case, or a revision of another case), `STALE_HEAD` (not the
--- head, or `head_version` moved), `CASE_NOT_APPROVABLE` (the case is not `approved`),
+-- head, or `head_version` moved), `CASE_NOT_APPROVABLE` (the case is not `approved`, has no
+-- approved revision, or its approved pointer is not an `approved` revision),
 -- `REVISION_NOT_WRITABLE` (the revision is not a `working` fork: e.g. the head is the
 -- approved revision itself) or `STALE_REVISION` (`version` moved); nothing is written
 -- then. Service role only.
@@ -251,10 +253,11 @@ begin
   if c_head_revision_id is distinct from p_revision_id or c_head_version <> p_expected_head_version then
     raise exception 'STALE_HEAD' using errcode = 'P0001';
   end if;
-  if c_status <> 'approved' then
+  -- An approved case from before Story 4.8 may have no approved revision: nothing to update.
+  if c_status <> 'approved' or c_approved_revision_id is null then
     raise exception 'CASE_NOT_APPROVABLE' using errcode = 'P0001';
   end if;
-  if current_rev.status <> 'working' or c_approved_revision_id is not distinct from p_revision_id then
+  if current_rev.status <> 'working' or c_approved_revision_id = p_revision_id then
     raise exception 'REVISION_NOT_WRITABLE' using errcode = 'P0001';
   end if;
   if current_rev.version <> p_expected_revision_version then
@@ -265,6 +268,9 @@ begin
   update public.revision
      set status = 'superseded'
    where id = c_approved_revision_id and status = 'approved';
+  if not found then
+    raise exception 'CASE_NOT_APPROVABLE' using errcode = 'P0001';
+  end if;
 
   update public.revision
      set status = 'approved'

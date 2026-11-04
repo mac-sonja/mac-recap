@@ -26,8 +26,9 @@ const APPROVE_CALLER = "src/app/(wizard)/case-studies/[caseId]/configurator/acti
 
 describe("approval happens only through a person's call to approve (Story 4.8)", () => {
   it("the case-study module exports one approve and no bulk or automatic variant", async () => {
-    const api = Object.keys(await import("@/modules/case-study"));
-    expect(api.filter((name) => /approv/i.test(name))).toEqual(["approve"]);
+    // Functions only: event-name constants (`APPROVED_VERSION_UPDATED`) approve nothing.
+    const api = Object.entries(await import("@/modules/case-study")).filter(([, value]) => typeof value === "function");
+    expect(api.map(([name]) => name).filter((name) => /approv/i.test(name))).toEqual(["approve"]);
   });
 
   it("no source moves a case to approved through the generic transition", () => {
