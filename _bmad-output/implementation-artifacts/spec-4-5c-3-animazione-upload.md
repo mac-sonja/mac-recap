@@ -81,6 +81,26 @@ context:
 
 ## Spec Change Log
 
+## Review Triage Log
+
+Review 1 (2026-11-04): Blind Hunter (BH), Edge Case Hunter (EC), Verification Gap (VG).
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | BH, EC | An upload whose closing relist fails still returns its id; the dialog picks a file with no tile (can't be unpicked) and Inserisci saves a file never previewed | medium | `useMediaUpload.upload` returns `ids` whatever `relist()` returned; `add` appends them | patch |
+| 2 | BH | Concurrent relists (uploads, retry check, poll) can land out of order and drop a just-uploaded file | maybe-false → medium if true | Same pattern in the Media tab before this story (`media-tab.tsx` `relist` at baseline); not caused here | defer |
+| 3 | BH, EC | A drop inside the dialog but outside its zone falls to the browser, which opens the file and leaves the configurator | medium | Only `MediaDropZone` handles drag events in the dialog; the Media tab guards its whole container | patch |
+| 4 | BH, EC | The status region remounts when the dialog opens or closes, so a line said in that instant isn't announced | low | Insert and Salva say nothing (`submitAnimation`); upload lines are said while the dialog is open and announced there. A fix needs a portal/top-layer region | reject |
+| 5 | EC | The disabled zone still takes drops when storage is off and "starts an upload call" | false | `upload` returns at once with the storage line when `storageOff`; no server call | reject |
+| 6 | BH, EC | `pickedNow` is stale when two dialog uploads end in one tick: the over-limit line can miscount | low | Needs two drops finishing together near 30 picks; picks themselves stay right (functional update) | reject |
+| 7 | BH | `noMedia` says "Trascinali qui sotto" even when storage is off | low | Storage off only in a misconfigured environment; the zone then says it's off | reject |
+| 8 | BH | `drop.label` is a separate string; `hint.split("{choose}")` is a one-off parser | low | Cosmetic; copy changes go through `it.ts` review | reject |
+| 9 | BH | The uploading count is shared by both zones | false | One upload path is the spec's intent, and the modal hides the tab while the dialog is open | reject |
+| 10 | BH | No direct hook tests; no storage-off test from the dialog | low | The hooks run through the configurator's Media tab tests (storage off included) and the new suite | reject |
+| 11 | VG | Nothing checks that the status line is inside the open dialog | medium | Pre-verified: every check reads `getByRole("status", { hidden: true })` document-wide | patch |
+| 12 | VG, BH | `overMany` never runs in a test | low | Pre-verified: only the `overOne` path is tested | patch |
+| 13 | VG, BH | No test cancels while an upload is running (`alive` guard) | low | Pre-verified; the Annulla test cancels after the upload ends. Small test | patch |
+
 ## Verification
 
 **Commands:**
