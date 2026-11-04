@@ -55,7 +55,8 @@ context:
 | Testimonial | Type a new author | `saveCaseTestimonial` with the stored quote and the new author | Author without a quote → message, old text back |
 | Replace the logo | Choose a file | Upload, confirm, then `updateClient` with the new `logoId` | Upload failure or `CLIENT_LOGO_INVALID` → message, old logo stays |
 | Client without a logo | Rename the client | Refused: `updateClient` requires a logo | "Aggiungi prima il logo del cliente." |
-| Not editable | Approved case, or Anteprima | No controls. Double-click shows `editSoon`. | N/A |
+| Not editable | Approved case | No controls. Double-click shows `editSoon`. | N/A |
+| Anteprima (owner, 2026-11-04) | Editable case in Anteprima, click or double-click on a bound text or the meta line | No controls, nothing saved. A message at the top of the canvas says to change it from the editor ("Modificalo dall'editor.") | N/A |
 
 </frozen-after-approval>
 

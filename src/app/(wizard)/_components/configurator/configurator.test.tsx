@@ -3367,6 +3367,66 @@ describe("Configurator client and case fields", () => {
     expect(actions.updateClient).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Lampade.", logoId: NEW_LOGO });
   });
 
+  /** Picks `logo.png` with Sostituisci logo on Carosello's logos. */
+  async function replaceLogo() {
+    const logos = find((el) => el.type === "logos", "carosello_1_1");
+    fireEvent.click(button(/Carosello/));
+    fireEvent.click(node(logos));
+    const input = leftPanel().querySelector<HTMLInputElement>('input[type="file"]')!;
+    const file = new File([new Uint8Array(10)], "logo.png", { type: "image/png" });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
+    await flush();
+  }
+  const canvasLogos = () => [...canvas().querySelectorAll<HTMLImageElement>("img.mr-clogo")].map((img) => img.getAttribute("src"));
+
+  it("an upload that fails says so at the top of the canvas and leaves the old logo; nothing is linked", async () => {
+    const { actions } = open();
+    clientActions.requestClientLogoUpload.mockResolvedValue({ ok: true, value: { logoId: NEW_LOGO, url: "https://upload.test", method: "PUT", headers: {} } });
+    clientActions.confirmClientLogoUpload.mockResolvedValue({ ok: true, value: { logoId: NEW_LOGO } });
+    uploads.uploadFile.mockRejectedValueOnce(new Error("offline"));
+    await replaceLogo();
+    expect(status().textContent).toBe(t.errors.failed);
+    expect(actions.updateClient).not.toHaveBeenCalled();
+    expect(canvasLogos().length).toBeGreaterThan(0);
+    for (const src of canvasLogos()) expect(src).toBe("https://cdn.test/logo.png");
+  });
+
+  it("CLIENT_LOGO_INVALID from updateClient says so at the top of the canvas and puts the old logo back", async () => {
+    const actions = fieldActions();
+    actions.updateClient.mockResolvedValueOnce({ ok: false, status: 400, error: { code: "CLIENT_LOGO_INVALID", message: "m" } } as never);
+    open({ actions });
+    clientActions.requestClientLogoUpload.mockResolvedValue({ ok: true, value: { logoId: NEW_LOGO, url: "https://upload.test", method: "PUT", headers: {} } });
+    clientActions.confirmClientLogoUpload.mockResolvedValue({ ok: true, value: { logoId: NEW_LOGO } });
+    uploads.uploadFile.mockResolvedValue(undefined);
+    await replaceLogo();
+    expect(actions.updateClient).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Lampade.", logoId: NEW_LOGO });
+    expect(status().textContent).toBe(t.errors.CLIENT_LOGO_INVALID);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(canvasLogos().length).toBeGreaterThan(0);
+    for (const src of canvasLogos()) expect(src).toBe("https://cdn.test/logo.png");
+  });
+
+  it("in Anteprima of an editable case a bound text takes no typing and no field section shows; nothing saves", async () => {
+    const { actions, onSave } = open();
+    fireEvent.click(button(dict.configurator.preview.enter));
+    const name = find(bound("client", "name"));
+    fireEvent.click(node(name));
+    fireEvent.doubleClick(node(name));
+    expect(node(name).hasAttribute("contenteditable")).toBe(false);
+    expect(node(name).textContent).toBe("Lumen Srl");
+    const meta = find((el) => el.type === "text" && el.bindings !== undefined);
+    fireEvent.doubleClick(node(meta));
+    expect(node(meta).hasAttribute("contenteditable")).toBe(false);
+    expect(within(leftPanel()).queryByText(t.clientHeading)).toBeNull();
+    expect(within(leftPanel()).queryByText(t.caseHeading)).toBeNull();
+    expect(within(leftPanel()).queryByLabelText(t.year)).toBeNull();
+    await flush();
+    for (const save of Object.values(actions)) expect(save).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("without field saves (a client's file, later) a bound text still says it can't be edited yet", () => {
     setup(false, formats, { values: FIELD_VALUES });
     const name = find(bound("client", "name"));
