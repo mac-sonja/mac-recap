@@ -11,7 +11,7 @@ import {
   sourceDeps,
 } from "@/modules/rendering/application/export.fixtures";
 import { contentHash } from "@/modules/rendering/application/content-hash";
-import { readExportSource } from "@/modules/rendering/application/export-source";
+import { bundleHashOf, readExportSource, readExportSources } from "@/modules/rendering/application/export-source";
 import { EXPORT_URL_TTL_SECONDS, makeExportStatus, makeRequestExport, type RequestExportDeps } from "@/modules/rendering/application/request-export";
 import type { ExportRecord } from "@/modules/rendering/domain/export";
 import { err, ok } from "@/shared/result";
@@ -244,5 +244,121 @@ describe("exportStatus (Story 5.3)", () => {
       ok: true,
       value: { fileName: "LUM-2026-01 Nuovo nome – Carosello.zip" },
     });
+  });
+});
+
+describe("requestExport, several formats (Story 5.4)", () => {
+  const BOTH = { caseId: CASE_ID, formats: ["presentazione_16_9", "carosello_1_1"] };
+
+  async function bundleHashNow(d: ReturnType<typeof deps>) {
+    const sources = await readExportSources(d, CASE_ID, ["presentazione_16_9", "carosello_1_1"]);
+    if (!sources.ok) throw new Error(sources.error.code);
+    return bundleHashOf(sources.value);
+  }
+
+  it("asks for one format exactly as 5.3 when only one is ticked", async () => {
+    const one = deps();
+    const asFormats = await makeRequestExport(one)(ACTOR, { caseId: CASE_ID, formats: ["carosello_1_1"] });
+    const asFormat = deps();
+    expect(await makeRequestExport(asFormat)(ACTOR, { caseId: CASE_ID, format: "carosello_1_1" })).toEqual(asFormats);
+    expect(one.enqueue.mock.calls).toEqual(asFormat.enqueue.mock.calls);
+    expect(one.enqueue).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ inputHash: await hashNow(one, "carosello_1_1"), payload: expect.objectContaining({ format: "carosello_1_1" }) }),
+    );
+  });
+
+  it("enqueues one bundle job, hashed over the sorted formats and each one's hash, when no bundle is stored", async () => {
+    const d = deps();
+    expect(await makeRequestExport(d)(ACTOR, BOTH)).toEqual(ok({ status: "pending", jobId: JOB_ID }));
+    const hash = await bundleHashNow(d);
+    expect(d.exports.findByHash).toHaveBeenCalledExactlyOnceWith(hash);
+    expect(d.enqueue).toHaveBeenCalledExactlyOnceWith({
+      kind: "export",
+      subjectId: CASE_ID,
+      inputHash: hash,
+      payload: {
+        parts: [{ subject: { kind: "case", id: CASE_ID }, revisionId: REVISION_ID }],
+        format: "bundle",
+        formats: ["carosello_1_1", "presentazione_16_9"],
+        requestedBy: ACTOR.id,
+      },
+    });
+    expect(hash).not.toBe(await hashNow(d, "presentazione_16_9"));
+    expect(hash).not.toBe(await hashNow(d, "carosello_1_1"));
+  });
+
+  it("reuses a stored bundle with the same hash: no job, `{code} {name}.zip`, one export event", async () => {
+    const d = deps();
+    const hash = await bundleHashNow(d);
+    vi.mocked(d.exports.findByHash).mockResolvedValue(
+      ok(record(hash, { format: "bundle", path: `exports/${hash}/bundle.zip`, contentType: "application/zip" })),
+    );
+    const result = await makeRequestExport(d)(ACTOR, { caseId: CASE_ID, formats: ["carosello_1_1", "presentazione_16_9"] });
+    expect(result).toEqual(ok({ status: "ready", exportId: EXPORT_ID, url: "https://storage.test/signed", fileName: "LUM-2026-01 Rebrand Lumen.zip" }));
+    expect(d.enqueue).not.toHaveBeenCalled();
+    expect(d.storage.presignDownload).toHaveBeenCalledWith(`exports/${hash}/bundle.zip`, EXPORT_URL_TTL_SECONDS, "LUM-2026-01 Rebrand Lumen.zip");
+    expect(d.recordEvent).toHaveBeenCalledExactlyOnceWith(ACTOR, {
+      caseId: CASE_ID,
+      type: "export",
+      revisionId: REVISION_ID,
+      data: { exportId: EXPORT_ID, format: "bundle" },
+    });
+  });
+
+  it("makes a new bundle after the client's name changed", async () => {
+    const d = deps();
+    const before = await bundleHashNow(d);
+    vi.mocked(d.exports.findByHash).mockImplementation(async (hash: string) => ok(hash === before ? record(before, { format: "bundle" }) : null));
+    vi.mocked(d.getClientInfoForCase).mockResolvedValue(ok(clientInfo({ name: "Lumen Spa" })));
+    expect(await makeRequestExport(d)(ACTOR, BOTH)).toEqual(ok({ status: "pending", jobId: JOB_ID }));
+    const [[job]] = vi.mocked(d.enqueue).mock.calls as unknown as [[{ inputHash: string }]];
+    expect(job.inputHash).not.toBe(before);
+  });
+
+  it("refuses NOT_APPROVED before anything is enqueued", async () => {
+    const d = deps({ getLiveRevision: vi.fn(async () => ok<CaseStudyRevision | null>(null)) });
+    expect(await makeRequestExport(d)(ACTOR, BOTH)).toMatchObject({ ok: false, error: { code: "NOT_APPROVED" } });
+    expect(d.enqueue).not.toHaveBeenCalled();
+    expect(d.exports.findByHash).not.toHaveBeenCalled();
+  });
+
+  it("refuses FORMAT_NOT_IN_REVISION when any ticked format has no pages, before anything is enqueued", async () => {
+    const doc = caseHistoryV2(["presentazione_16_9", "carosello_1_1", "video_9_16"]);
+    const empty = { ...doc, formats: { ...doc.formats, carosello_1_1: { pages: [] } } };
+    const d = deps({ getLiveRevision: vi.fn(async () => ok<CaseStudyRevision | null>(revision({ doc: empty }))) });
+    expect(await makeRequestExport(d)(ACTOR, BOTH)).toMatchObject({ ok: false, error: { code: "FORMAT_NOT_IN_REVISION" } });
+    expect(d.enqueue).not.toHaveBeenCalled();
+    expect(d.exports.findByHash).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ caseId: CASE_ID, formats: [] }, "INVALID_INPUT"],
+    [{ caseId: CASE_ID, formats: ["presentazione_16_9", "presentazione_16_9"] }, "INVALID_INPUT"],
+    [{ caseId: CASE_ID, formats: ["presentazione_16_9", "deck_16_9"] }, "INVALID_INPUT"],
+    [{ caseId: CASE_ID, formats: "presentazione_16_9" }, "INVALID_INPUT"],
+    [{ caseId: "nope", formats: ["presentazione_16_9", "carosello_1_1"] }, "INVALID_INPUT"],
+    [{ caseId: CASE_ID, formats: ["presentazione_16_9", "video_9_16"] }, "FORMAT_NOT_EXPORTABLE"],
+  ])("refuses %j as %s without reading or enqueueing anything", async (input, code) => {
+    const d = deps();
+    expect(await makeRequestExport(d)(ACTOR, input)).toMatchObject({ ok: false, error: { code } });
+    expect(d.getCase).not.toHaveBeenCalled();
+    expect(d.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("names `formats` for a bad id among them", async () => {
+    expect(await makeRequestExport(deps())(ACTOR, { caseId: CASE_ID, formats: ["presentazione_16_9", "deck_16_9"] })).toMatchObject({
+      error: { code: "INVALID_INPUT", details: { fields: ["formats"] } },
+    });
+  });
+});
+
+describe("exportStatus, bundles (Story 5.4)", () => {
+  it("hands out a finished bundle job's ZIP as `{code} {name}.zip`", async () => {
+    const hash = "b".repeat(64);
+    const d = deps({ getJobsFor: vi.fn(async () => ok([{ id: JOB_ID, kind: "export", status: "succeeded" as const, inputHash: hash }])) });
+    vi.mocked(d.exports.findByHash).mockResolvedValue(ok(record(hash, { format: "bundle", path: `exports/${hash}/bundle.zip`, contentType: "application/zip" })));
+    expect(await makeExportStatus(d)(ACTOR, { caseId: CASE_ID, jobId: JOB_ID })).toEqual(
+      ok({ status: "ready", exportId: EXPORT_ID, url: "https://storage.test/signed", fileName: "LUM-2026-01 Rebrand Lumen.zip" }),
+    );
   });
 });

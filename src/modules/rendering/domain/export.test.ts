@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  bundleEntryName,
+  bundleFileName,
   contentHashInput,
   EXPORT_FILES,
   EXPORT_FORMAT_IDS,
@@ -8,6 +10,8 @@ import {
   exportStatusInputSchema,
   isExportFormatId,
   notExportable,
+  recordFileName,
+  requestExportInputSchema,
 } from "@/modules/rendering/domain/export";
 import { FORMAT_IDS, getFormat } from "@/modules/rendering/domain/formats";
 
@@ -77,5 +81,49 @@ describe("payloads and inputs", () => {
     );
     expect(JSON.parse(text)[0]).toBe("export.v1");
     expect(text).not.toContain("{");
+  });
+});
+
+describe("bundles (Story 5.4)", () => {
+  it("are a ZIP at `bundle.zip`", () => {
+    expect(EXPORT_FILES.bundle).toEqual({ extension: "zip", contentType: "application/zip" });
+  });
+
+  it("download as `{code} {name}.zip`, cleaned like a format's file", () => {
+    expect(bundleFileName("LUM-2026-01", "Rebrand Lumen")).toBe("LUM-2026-01 Rebrand Lumen.zip");
+    expect(bundleFileName("LUM-2026-01", ' A/B:\\C*?"<>| \n  D ')).toBe("LUM-2026-01 A B C D.zip");
+    expect(recordFileName("LUM-2026-01", "Rebrand Lumen", "bundle")).toBe("LUM-2026-01 Rebrand Lumen.zip");
+    expect(recordFileName("LUM-2026-01", "Rebrand Lumen", "carosello_1_1")).toBe("LUM-2026-01 Rebrand Lumen – Carosello.zip");
+  });
+
+  it("hold the PDF at the root under its 5.3 name and the Carosello in a folder", () => {
+    expect(bundleEntryName("LUM-2026-01", "Rebrand Lumen", "presentazione_16_9")).toBe("LUM-2026-01 Rebrand Lumen – Presentazione.pdf");
+    expect(bundleEntryName("LUM-2026-01", "Rebrand Lumen", "carosello_1_1")).toBe("Carosello/");
+  });
+
+  it("take a payload of two or more distinct formats, sorted", () => {
+    const payload = {
+      parts: [{ subject: { kind: "case", id: CASE }, revisionId: REV }],
+      format: "bundle",
+      formats: ["carosello_1_1", "presentazione_16_9"],
+      requestedBy: CASE,
+    };
+    expect(exportPayloadSchema.safeParse(payload).success).toBe(true);
+    for (const formats of [["carosello_1_1"], ["presentazione_16_9", "carosello_1_1"], ["carosello_1_1", "carosello_1_1"], ["carosello_1_1", "video_9_16"]]) {
+      expect(exportPayloadSchema.safeParse({ ...payload, formats }).success).toBe(false);
+    }
+    // A single format's payload names no formats; a bundle always does.
+    expect(exportPayloadSchema.safeParse({ ...payload, format: "carosello_1_1" }).success).toBe(false);
+    const { formats: _, ...withoutFormats } = payload;
+    expect(exportPayloadSchema.safeParse(withoutFormats).success).toBe(false);
+  });
+
+  it("are asked for as `formats`; `format` still asks for one", () => {
+    const several = { caseId: CASE, formats: ["presentazione_16_9", "carosello_1_1"] };
+    expect(requestExportInputSchema(several).safeParse(several).success).toBe(true);
+    const one = { caseId: CASE, format: "carosello_1_1" };
+    expect(requestExportInputSchema(one).safeParse(one).success).toBe(true);
+    const none = { caseId: CASE, formats: [] };
+    expect(requestExportInputSchema(none).safeParse(none).success).toBe(false);
   });
 });
