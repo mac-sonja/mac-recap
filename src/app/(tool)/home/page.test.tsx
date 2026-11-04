@@ -48,6 +48,7 @@ const caseStudy = (over: Partial<ListedCaseStudy>): ListedCaseStudy => ({
   updatedAt: "2026-10-13T07:05:00+00:00",
   deletedAt: null,
   inReviewSince: null,
+  approvedAt: null,
   ...over,
 });
 

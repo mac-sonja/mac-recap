@@ -223,7 +223,7 @@ describe("another check violation", () => {
 
 describe("toCaseStudy", () => {
   it("maps a legacy case without a business line to null, and rejects one outside the list", async () => {
-    const legacy = stubClient({ data: [row({ business_lines: [] })], error: null });
+    const legacy = stubClient({ data: [row({ business_lines: [], status: "draft" })], error: null });
     const listed = await createSupabaseCaseStudyRepository(legacy.factory).list({});
     expect(listed.ok && listed.value[0].businessLines).toEqual([]);
     const bad = stubClient({ data: [row({ business_lines: ["moda"] })], error: null });
@@ -278,7 +278,8 @@ describe("createSupabaseCaseStudyRepository().list", () => {
   });
 
   it("lists every status without a status filter, non-deleted, newest first with an id tie-break", async () => {
-    const { factory, from, is, eq, order } = stubClient({ data: [row()], error: null });
+    // A Bozza: no status reads its transition events.
+    const { factory, from, is, eq, order } = stubClient({ data: [row({ status: "draft" })], error: null });
     const result = await createSupabaseCaseStudyRepository(factory).list({});
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.map((c) => c.id)).toEqual([row().id]);
@@ -331,7 +332,7 @@ describe("createSupabaseCaseStudyRepository().list: when a case entered Da appro
 
   it("takes each Da approvare case's latest generation_succeeded event; null for other statuses", async () => {
     const { factory, calls } = listClient(
-      { data: [row({ status: "approved" }), row({ id: WAITING, status: "in_review" }), row({ id: OTHER_WAITING, status: "in_review" })], error: null },
+      { data: [row({ status: "draft" }), row({ id: WAITING, status: "in_review" }), row({ id: OTHER_WAITING, status: "in_review" })], error: null },
       {
         // Newest first, as the query orders them: a case sent back and regenerated has two.
         data: [
@@ -354,6 +355,55 @@ describe("createSupabaseCaseStudyRepository().list: when a case entered Da appro
       ["in", "case_id", [WAITING, OTHER_WAITING]],
       ["order", "at", { ascending: false }],
     ]);
+  });
+
+  it("takes each Approvato case's latest approve event as approvedAt; null for other statuses (Story 5.1)", async () => {
+    const APPROVED = "bbbbbbbb-0000-4000-8000-000000000004";
+    const { factory, calls } = listClient(
+      { data: [row({ id: APPROVED, status: "approved" }), row({ status: "approved" }), row({ id: WAITING, status: "draft" })], error: null },
+      {
+        data: [
+          { case_id: APPROVED, at: "2026-10-22T09:00:00+00:00" },
+          { case_id: APPROVED, at: "2026-10-21T09:00:00+00:00" },
+        ],
+        error: null,
+      },
+    );
+    const result = await createSupabaseCaseStudyRepository(factory).list({ status: "approved" });
+    expect(result.ok && result.value.map((c) => [c.id, c.approvedAt, c.inReviewSince])).toEqual([
+      [APPROVED, "2026-10-22T09:00:00+00:00", null],
+      [row().id, null, null],
+      [WAITING, null, null],
+    ]);
+    expect(calls.case_event).toEqual([
+      ["select", "case_id, at"],
+      ["eq", "type", "transition"],
+      ["eq", "data->>event", "approve"],
+      ["in", "case_id", [APPROVED, row().id]],
+      ["order", "at", { ascending: false }],
+    ]);
+  });
+
+  it("reads approve events in chunks of 100 ids, merged into one map", async () => {
+    const ids = Array.from({ length: 250 }, (_, i) => `bbbbbbbb-0000-4000-8000-${String(i).padStart(12, "0")}`);
+    const { factory, calls } = listClient(
+      { data: ids.map((id) => row({ id, status: "approved" })), error: null },
+      { data: [{ case_id: ids[0], at: "2026-10-22T09:00:00+00:00" }, { case_id: ids[249], at: "2026-10-23T09:00:00+00:00" }], error: null },
+    );
+    const result = await createSupabaseCaseStudyRepository(factory).list({ status: "approved" });
+    const chunks = calls.case_event.filter(([method]) => method === "in").map(([, , chunk]) => chunk as string[]);
+    expect(chunks.map((chunk) => chunk.length)).toEqual([100, 100, 50]);
+    expect(chunks.flat()).toEqual(ids);
+    expect(result.ok && result.value[0].approvedAt).toBe("2026-10-22T09:00:00+00:00");
+    expect(result.ok && result.value[249].approvedAt).toBe("2026-10-23T09:00:00+00:00");
+    expect(result.ok && result.value[1].approvedAt).toBeNull();
+  });
+
+  it("reads no approve events for a scope that can't hold approved cases", async () => {
+    const { factory, calls } = listClient({ data: [row({ status: "approved" })], error: null });
+    const result = await createSupabaseCaseStudyRepository(factory).list({ status: "draft" });
+    expect(result.ok && result.value[0].approvedAt).toBeNull();
+    expect(calls.case_event).toEqual([]);
   });
 
   it("reads no events when nothing is in Da approvare", async () => {

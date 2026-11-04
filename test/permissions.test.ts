@@ -51,6 +51,14 @@ vi.mock("@/modules/access/adapters/supabase/auth-admin", () => ({
 }));
 
 vi.mock("@/app/_lib/origin", () => ({ requestOrigin: async () => "http://localhost:3000" }));
+// Pages (the library, Story 5.1) resolve the actor outside a request here.
+vi.mock("next/server", () => ({ connection: async () => undefined }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
+  redirect: (path: string) => {
+    throw new Error(`REDIRECT ${path}`);
+  },
+}));
 
 /** Every export of a module replaced by a use case that succeeds: what runs after `authorize` doesn't matter here. */
 async function stubbedUseCases(load: () => Promise<Record<string, unknown>>) {
@@ -64,6 +72,8 @@ const caseStudies = await import("@/app/(tool)/case-studies/actions");
 const clients = await import("@/app/(tool)/clients/actions");
 const organization = await import("@/app/(tool)/organization/actions");
 const configurator = await import("@/app/(wizard)/case-studies/[caseId]/configurator/actions");
+const { default: LibraryPage } = await import("@/app/(tool)/library/page");
+const caseStudyModule = await import("@/modules/case-study");
 
 const OWNERS: readonly Role[] = ["owner_designer", "admin"];
 const ADMIN: readonly Role[] = ["admin"];
@@ -160,4 +170,42 @@ describe("no role, admin included, changes a guardrail or a permission (Story 6.
     const writable = cells.filter((c) => c.role === "account_sales_social" && c.allowed);
     expect(writable).toEqual([]);
   });
+});
+
+describe("the library listing (Story 5.1)", () => {
+  const APPROVED_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+  const WAITING_ID = "aaaaaaaa-0000-4000-8000-000000000002";
+  const listed = (id: string, status: string) => ({
+    id,
+    code: `LUM-2026-${id.slice(-2)}`,
+    name: `Caso ${id.slice(-1)}`,
+    client: { id: "cccccccc-0000-4000-8000-000000000001", name: "Lumen Srl", code: "LUM" },
+    year: 2026,
+    businessLines: [],
+    status,
+    updatedAt: "2026-10-20T10:00:00+00:00",
+    approvedAt: status === "approved" ? "2026-10-20T10:00:00+00:00" : null,
+  });
+
+  it.each(["account_sales_social", "owner_designer", "admin"] as const)(
+    "as %s lists approved cases only, and covers read only the live revision",
+    async (role) => {
+      session.role = role;
+      const list = vi.mocked(caseStudyModule.list);
+      const getLiveRevision = vi.mocked(caseStudyModule.getLiveRevision);
+      const getEditableRevision = vi.mocked(caseStudyModule.getEditableRevision);
+      list.mockClear();
+      getLiveRevision.mockClear();
+      getEditableRevision.mockClear();
+      // Even if a working case slipped into the list, it never becomes a card.
+      list.mockResolvedValueOnce(ok([listed(APPROVED_ID, "approved"), listed(WAITING_ID, "in_review")]) as never);
+      const { renderToStaticMarkup } = await import("react-dom/server");
+      const html = renderToStaticMarkup(await LibraryPage({ searchParams: Promise.resolve({}) }));
+      expect(list).toHaveBeenCalledExactlyOnceWith({ status: "approved" });
+      expect(html).toContain(`/case-studies/${APPROVED_ID}`);
+      expect(html).not.toContain(WAITING_ID);
+      expect(getLiveRevision).toHaveBeenCalledExactlyOnceWith({ kind: "case", id: APPROVED_ID });
+      expect(getEditableRevision).not.toHaveBeenCalled();
+    },
+  );
 });

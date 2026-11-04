@@ -7,6 +7,7 @@ import { PageHeader } from "@/app/_components/page-header";
 import { it } from "@/shared/i18n/it";
 import { formatDateTime } from "@/shared/i18n/format";
 import { CaseStudiesTable } from "./_components/case-studies-table";
+import { CaseViewsToggle } from "./_components/case-views-toggle";
 import { parseStatusFilter, type CaseStudyRow } from "./_components/filter-sort";
 
 /**
@@ -16,7 +17,7 @@ import { parseStatusFilter, type CaseStudyRow } from "./_components/filter-sort"
  * the browser. A failed load throws into Next's error boundary: no partial table.
  * `?stato=` starts the status filter on one status; `?stato=in_review` is the To review queue.
  * `?approvata=1` (the configurator's redirect after **Approva**, Story 4.8) says the case
- * is now in the library.
+ * is now in the library. The header's Tabella / Libreria switch (Story 5.1) leads to the library.
  */
 export default async function CaseStudiesPage({
   searchParams,
@@ -53,7 +54,12 @@ export default async function CaseStudiesPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title={it.caseStudies.heading} lead={it.caseStudies.lead} />
+      <PageHeader
+        title={it.caseStudies.heading}
+        lead={it.caseStudies.lead}
+        // Tabella / Libreria (Story 5.1): for the roles that see every status, the owner/designer's.
+        action={can(actor, "list cases", {}) ? <CaseViewsToggle current="table" /> : undefined}
+      />
       {justApproved && (
         <p role="status" className="rounded-xl bg-surface-raised px-4 py-3 font-label text-[13.5px] font-medium text-foreground-strong shadow-card">
           {it.configurator.approval.done}

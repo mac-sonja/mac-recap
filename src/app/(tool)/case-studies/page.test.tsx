@@ -58,6 +58,19 @@ afterEach(() => {
 });
 
 describe("CaseStudiesPage", () => {
+  it("shows the Tabella / Libreria switch to an owner/designer, Tabella current (Story 5.1)", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    list.mockResolvedValue(ok([caseStudy({})]));
+    const html = await renderPage();
+    const toggle = html.match(/<nav aria-label="Vista"[^>]*>(.*?)<\/nav>/)?.[1] ?? "";
+    const table = toggle.match(/<a ([^>]*)>Tabella<\/a>/)?.[1] ?? "";
+    const library = toggle.match(/<a ([^>]*)>Libreria<\/a>/)?.[1] ?? "";
+    expect(table).toContain('href="/case-studies"');
+    expect(table).toContain('aria-current="page"');
+    expect(library).toContain('href="/library"');
+    expect(library).not.toContain("aria-current");
+  });
+
   it("lists every status for owner/designer and shows Updated in Europe/Rome", async () => {
     // Same year as the case, so the date omits it.
     vi.useFakeTimers({ toFake: ["Date"] });

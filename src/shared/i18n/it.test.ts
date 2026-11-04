@@ -61,6 +61,27 @@ describe("case studies table copy", () => {
   });
 });
 
+describe("library copy (Story 5.1)", () => {
+  test("has the approved strings", () => {
+    expect(t("library.title")).toBe("Libreria");
+    expect("soon" in it.library).toBe(false);
+    expect(t("library.search.label")).toBe(t("caseStudies.search.label"));
+    expect(t("library.search.placeholder")).toBe(t("caseStudies.search.placeholder"));
+    expect(Object.values(it.library.facets)).toEqual(["Cliente", "Anno"]);
+    expect(t("library.active.clearAll")).toBe("Azzera tutto");
+    expect(fill(t("library.active.remove"), { value: "Lumen Srl" })).toBe("Togli Lumen Srl");
+    expect(fill(t("library.active.query"), { query: "lum" })).toBe("“lum”");
+    expect(fill(t("library.noResults"), { query: "lum" })).toBe("Nessun risultato per “lum”.");
+    expect(t("library.noResultsFilters")).toBe("Nessun risultato con questi filtri.");
+    expect(t("library.clearSearch")).toBe("Azzera ricerca e filtri");
+    expect(t("library.empty")).toBe("Ancora nessuna case history approvata.");
+    expect(fill(t("library.pager.page"), { n: 2 })).toBe("Pagina 2");
+    expect(t("library.pager.previous")).toBe("Pagina precedente");
+    expect(t("library.pager.next")).toBe("Pagina successiva");
+    expect(Object.values(it.caseViews)).toEqual(["Vista", "Tabella", "Libreria"]);
+  });
+});
+
 describe("clients copy", () => {
   test("has the approved strings", () => {
     expect(t("shell.nav.clients")).toBe("Clienti");
