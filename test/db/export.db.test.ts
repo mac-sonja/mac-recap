@@ -89,8 +89,8 @@ describe("migration", () => {
   });
 
   it("creates the private rendering bucket for PDF and ZIP only", async () => {
-    const { rows } = await pool.query("select public, file_size_limit, allowed_mime_types from storage.buckets where id = $1", [RENDERING_BUCKET]);
-    expect(rows).toEqual([{ public: false, file_size_limit: 52428800, allowed_mime_types: ["application/pdf", "application/zip"] }]);
+    const { rows } = await pool.query("select public, file_size_limit::text as file_size_limit, allowed_mime_types from storage.buckets where id = $1", [RENDERING_BUCKET]);
+    expect(rows).toEqual([{ public: false, file_size_limit: "52428800", allowed_mime_types: ["application/pdf", "application/zip"] }]);
   });
 });
 
