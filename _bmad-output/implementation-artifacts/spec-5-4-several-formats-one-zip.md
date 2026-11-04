@@ -2,7 +2,7 @@
 title: 'Story 5.4: several formats as one ZIP'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '8b0091c109e03c27ab33afc8a619eb5eb566e8a3'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -90,6 +90,30 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+Review 1 (2026-11-04): Blind Hunter (BH), Edge Case Hunter (EC), Verification Gap (VG).
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | BH | Riprova test now ticks both formats; single-format retry no longer tested, name says "same format" | low | `download-button.test.tsx`: `choose(CAROSELLO)` with Presentazione ticked by default, asserts both | patch |
+| 2 | BH | `EXPORT_TOO_LARGE` checked only after every format is drawn and read; peak memory ~3–4× limit | low | True, but the formats are stored and reused either way; 4× 50 MB fits the worker. Rare, fix adds a pre-check | reject |
+| 3 | BH | A bundle over the limit fails for good behind a generic toast whose Riprova fails again | low | Real but needs two formats each under 50 MB summing over it; the matrix's failure toast is the intended path; fix adds UI | reject |
+| 4 | BH | No copy tells the person two or more formats come as a ZIP | low | Spec sets no such copy; the file name ends `.zip`. Cosmetic | reject |
+| 5 | BH | Case event records `format: "bundle"` without the formats | low | Only two formats export, so a bundle is always both today | reject |
+| 6 | BH | Migration header, `bundleHash` and `makeRequestExport` docs say the hash covers only formats and their hashes | low | `bundleHashInput` also takes `EXPORT_RENDER_VERSION` and the entry names (code and name); direct doc correction | patch |
+| 7 | BH | `readStoredZip` bounds checks partial (name length, local vs central header, ZIP64) | low | Reads only ZIPs `storeZip` wrote; each entry's CRC is checked; fix adds guards | reject |
+| 8 | BH | `storage.read` checks the size after the whole download | low | The bucket's `file_size_limit` is the same 50 MB, so no stored object can be larger; the check is a backstop | reject |
+| 9 | BH | No bundle tests for abort, `read` failure, bundle `findByHash` error | low | `ensureFormat` and the entries loop check the signal; `store` checks after upload. The read failure is VG #15 | reject (read failure: see 15) |
+| 10 | BH | Chromium test's fake `read` turns a missing file into an empty one | low | `ok(files.get(path) ?? new Uint8Array())` hides the cause on failure; direct correction | patch |
+| 11 | BH | Nothing tells why Scarica is inactive with none ticked; checkboxes not grouped | false (grouping) / low (reason) | They sit in a `fieldset` with legend "Formati" (`download-button.tsx:255`). Inactive-with-none is the spec's behaviour | reject |
+| 12 | BH | Reopening resets the ticked boxes | false | Spec decision: the format in view is ticked by default; the test pins it | reject |
+| 13 | BH | Test "…to its checkboxes" misnamed; long unwrapped JSDoc lines in `case-download.ts`, `export-handler.ts`, `request-export.ts` | low | Checkboxes don't take ← →; the lines are unwrapped. Direct corrections | patch |
+| 14 | BH | `formats` capped at `.max(8)` without a reason | low | Duplicates and non-export ids are refused anyway; nobody meets it | reject |
+| 15 | VG | Bundle failures reading or unpacking a stored Carosello are untested (unzip throws, short ZIP, read fails) | medium | Pre-verified gap: only the PDF page-count branch is tested | patch |
+| 16 | VG | `storage.read` size limit untested | low | Pre-verified gap; one test with an oversized Blob | patch |
+| 17 | VG, EC | A damaged stored format, or a row whose object is missing, makes every bundle of that content fail for good; nothing repairs it | medium | Rows are immutable and reused by hash since 5.3 (single downloads would hand out the same bad or missing file); no repair path exists. Pre-existing design | defer |
+| 18 | EC | A bundle job and a single-format job drawing the same format at once: upsert can replace the file, row `sizeBytes` mismatch | low | Insert conflict returns the existing row (`export-repository.ts:73`); both renders draw the same content, so only `sizeBytes` can differ. Rare; fix adds locking | reject |
+| 19 | EC | Input with both `format` and `formats` silently drops `format` | low | `formats` wins; the app never sends both and the caller gets exactly the `formats` it named | reject |
 
 ## Verification
 
