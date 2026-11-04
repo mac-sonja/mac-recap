@@ -10,6 +10,7 @@ import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { pageAssetIds, type MediaUploadRules } from "./media-files";
 import { MediaTab } from "./media-tab";
+import type { MediaUpload } from "./use-media-upload";
 import { ASPECT, EYEBROW, ICON_BUTTON, SEG, SEG_BUTTON } from "./styles";
 
 /**
@@ -45,15 +46,15 @@ export interface RightPanelProps {
   onSelectPage: (pageKey: string) => void;
   /** A thumbnail dropped on another (Story 4.13); undefined: thumbnails don't drag. */
   onMovePage?: (from: string, to: string) => void;
-  /** The case whose Media the tab lists and uploads to (Story 4.5a). */
-  caseId: string;
-  /** The case's images and videos, oldest first. */
+  /** The case's images and videos, oldest first, as last listed (Story 4.5a; the configurator owns the list). */
   media: readonly ListedAsset[];
   /** The client's images and videos, in position order: the Media tab's "Del cliente" group (Story 4.5c-2). */
   clientMedia?: readonly ListedAsset[];
   mediaRules: MediaUploadRules;
-  /** A message at the top of the canvas. */
-  say: (text: string) => void;
+  /** The case's one upload path (Story 4.5c-3: shared with the Animazione dialog). */
+  mediaUpload: MediaUpload;
+  /** A Media tile's star. */
+  onStarMedia: (file: ListedAsset) => void;
   /** The tab shown; the configurator owns it, so **Sostituisci dai Media** can open Media (Story 4.5b). */
   tab: RightTab;
   onTab: (tab: RightTab) => void;
@@ -61,8 +62,6 @@ export interface RightPanelProps {
   mediaTabRef?: Ref<HTMLButtonElement>;
   /** A Media tile clicked (Story 4.5b); undefined while nothing can be placed. */
   onPickMedia?: (file: ListedAsset) => void;
-  /** The case's images and videos as the Media tab read them again. */
-  onMediaListed?: (files: readonly ListedAsset[]) => void;
   onHide: () => void;
   hideRef: Ref<HTMLButtonElement>;
 }
@@ -110,16 +109,15 @@ export function RightPanel({
   currentPageKey,
   onSelectPage,
   onMovePage,
-  caseId,
   media,
   clientMedia,
   mediaRules,
-  say,
+  mediaUpload,
+  onStarMedia,
   tab,
   onTab: setTab,
   mediaTabRef,
   onPickMedia,
-  onMediaListed,
   onHide,
   hideRef,
 }: RightPanelProps) {
@@ -253,17 +251,16 @@ export function RightPanel({
       </div>
       <MediaTab
         hidden={tab !== "media"}
-        caseId={caseId}
-        initialFiles={media}
+        files={media}
         clientFiles={clientMedia}
         rules={mediaRules}
         assets={assets}
         onPage={onPage}
         query={query}
         view={view}
-        say={say}
+        onStar={onStarMedia}
+        upload={mediaUpload}
         onPick={onPickMedia}
-        onListed={onMediaListed}
       />
     </aside>
   );

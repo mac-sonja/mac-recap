@@ -79,6 +79,7 @@ import { isMedia, pageAssetIds, type MediaUploadRules } from "./media-files";
 import { RightPanel, type RightTab } from "./right-panel";
 import { findElement, resolveSelection, stepOut, type Selection } from "./selection";
 import { StatusMessage, useStatusMessage } from "./status-message";
+import { useCaseMedia, useMediaUpload } from "./use-media-upload";
 import { ICON_BUTTON, SOON_ID } from "./styles";
 import { isOwnText, textElementAt, withGroupAlign, withText, withTextSettings, type TextSettings } from "./text-editing";
 import { TopBar, type ConfiguratorHeader } from "./top-bar";
@@ -307,13 +308,9 @@ export function Configurator({
   const [rightTab, setRightTab] = useState<RightTab>("pages");
   /** The render assets: the page's, then those of files uploaded since (Story 4.5b). */
   const [assets, setAssets] = useState(initialAssets);
-  /** The case's images and videos as last listed. */
-  const [files, setFiles] = useState(media);
   /** Every file name listed this session, by lowercased id: a file deleted since is still named in the refused-save banner. */
   const [names, setNames] = useState<ReadonlyMap<string, string>>(() => new Map(media.map((f) => [f.id.toLowerCase(), f.originalFileName])));
   const clientNames = useMemo<ReadonlyMap<string, string>>(() => new Map(clientFiles.map((f) => [f.id.toLowerCase(), f.name])), [clientFiles]);
-  /** Every file that can go on a page: the case's images and videos as last listed, then the client's (Story 4.5c-2). */
-  const pickable = useMemo(() => [...files, ...clientMedia], [files, clientMedia]);
   /** Ids whose render asset is being read. */
   const reading = useRef(new Set<string>());
   /** The latest assets: the Media tab's polling may call an older `listed`. */
@@ -321,6 +318,47 @@ export function Configurator({
   useEffect(() => {
     assetsNow.current = assets;
   });
+
+  /** Reads the render assets of `of` not drawn yet (nor being read); one still without a rendition is asked for again next time. */
+  const readMissing = useCallback(
+    (of: readonly ListedAsset[]) => {
+      if (onRenderAssets === undefined) return;
+      const missing = of.filter((f) => !(f.id in assetsNow.current) && !reading.current.has(f.id)).map((f) => f.id);
+      if (missing.length === 0) return;
+      for (const id of missing) reading.current.add(id);
+      void onRenderAssets({ caseId, assetIds: missing })
+        .then((result) => {
+          if (result.ok && Object.keys(result.value).length > 0) setAssets((current) => ({ ...current, ...result.value }));
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          for (const id of missing) reading.current.delete(id);
+        });
+    },
+    [caseId, onRenderAssets],
+  );
+
+  /** The case's files were read again: name them, and read the render assets of new ones, the client's included (Story 4.5c-2). */
+  const listed = useCallback(
+    (fresh: readonly ListedAsset[]) => {
+      setNames((current) => new Map([...current, ...fresh.map((f) => [f.id.toLowerCase(), f.originalFileName] as const)]));
+      readMissing([...fresh, ...clientMedia]);
+    },
+    [clientMedia, readMissing],
+  );
+
+  /**
+   * The case's images and videos as last listed, and the one upload path into them (Story
+   * 4.5c-3): the Media tab, the Animazione dialog's picker and the render assets all follow
+   * this one list, read again after an upload from either place and while thumbnails are made.
+   */
+  const caseMedia = useCaseMedia({ caseId, initial: media, say, onListed: listed });
+  const files = caseMedia.files;
+  const mediaUpload = useMediaUpload({ caseId, rules: mediaRules, say, media: caseMedia });
+
+  /** Every file that can go on a page: the case's images and videos as last listed, then the client's (Story 4.5c-2). */
+  const pickable = useMemo(() => [...files, ...clientMedia], [files, clientMedia]);
+
   const mediaTab = useRef<HTMLButtonElement>(null);
   /** **Sostituisci dai Media** pressed: focus the Media tab once it shows. */
   const focusMedia = useRef(false);
@@ -805,35 +843,6 @@ export function Configurator({
       placeFile(selection, file.id, "end");
     },
     [block, placeFile, say, selection],
-  );
-
-  /** Reads the render assets of `of` not drawn yet (nor being read); one still without a rendition is asked for again next time. */
-  const readMissing = useCallback(
-    (of: readonly ListedAsset[]) => {
-      if (onRenderAssets === undefined) return;
-      const missing = of.filter((f) => !(f.id in assetsNow.current) && !reading.current.has(f.id)).map((f) => f.id);
-      if (missing.length === 0) return;
-      for (const id of missing) reading.current.add(id);
-      void onRenderAssets({ caseId, assetIds: missing })
-        .then((result) => {
-          if (result.ok && Object.keys(result.value).length > 0) setAssets((current) => ({ ...current, ...result.value }));
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          for (const id of missing) reading.current.delete(id);
-        });
-    },
-    [caseId, onRenderAssets],
-  );
-
-  /** The Media tab read the files again: keep them, and read the render assets of new ones, the client's included (Story 4.5c-2). */
-  const listed = useCallback(
-    (fresh: readonly ListedAsset[]) => {
-      setFiles(fresh);
-      setNames((current) => new Map([...current, ...fresh.map((f) => [f.id.toLowerCase(), f.originalFileName] as const)]));
-      readMissing([...fresh, ...clientMedia]);
-    },
-    [clientMedia, readMissing],
   );
 
   // A client file whose rendition wasn't ready when the page loaded is asked for once on opening (Story 4.5c-2), then at every listing.
@@ -1436,7 +1445,8 @@ export function Configurator({
               onDragSource={editable ? setDragging : undefined}
               onCanvasDrop={editable ? canvasDrop : undefined}
             />
-            <StatusMessage message={message} />
+            {/* The one status line: inside the Animazione dialog while it is open (the page under a modal is inert). */}
+            {animationDialog === null && <StatusMessage message={message} />}
             <AnimationDialog
               open={animationDialog !== null}
               formatId={formatId}
@@ -1444,6 +1454,9 @@ export function Configurator({
               assets={assets}
               values={values}
               files={pickable}
+              rules={mediaRules}
+              upload={mediaUpload}
+              status={<StatusMessage message={message} />}
               initial={animationInitial}
               onSubmit={submitAnimation}
               onClose={() => setAnimationDialog(null)}
@@ -1484,16 +1497,15 @@ export function Configurator({
             currentPageKey={selectedPage?.pageKey}
             onSelectPage={selectPage}
             onMovePage={editable ? reorderPage : undefined}
-            caseId={caseId}
-            media={media}
+            media={files}
             clientMedia={clientMedia}
             mediaRules={mediaRules}
-            say={say}
+            mediaUpload={mediaUpload}
+            onStarMedia={(file) => void caseMedia.star(file)}
             tab={rightTab}
             onTab={setRightTab}
             mediaTabRef={mediaTab}
             onPickMedia={editable ? pickFile : undefined}
-            onMediaListed={listed}
             onHide={() => toggleRight(false)}
             hideRef={hideRight}
           />

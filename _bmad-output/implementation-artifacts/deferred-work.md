@@ -329,3 +329,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-4-several-formats-one-zip.md`
   summary: A stored export whose file is damaged or missing from the bucket is reused by its hash forever (single downloads hand it out; since 5.4 every bundle of that content fails for good), with no way to redraw or retire it.
   evidence: Export rows are immutable and `ensureFormat`/`requestExport` reuse a row by content hash without checking the object; `bundleEntries` fails permanently on a page/slide mismatch or unreadable ZIP, and retries `STORAGE_FAILED` until attempts run out. Only reachable through storage damage or manual deletion; review 1 of 5.4 (findings 17).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-5c-3-animazione-upload.md`
+  summary: The case media list applies every `listAssets` read as it lands; overlapping reads (an upload's relist, the late-confirm check, the thumbnail poll) can finish out of order and briefly drop a just-uploaded file from the Media tab and the Animazione picker. Apply only the latest read (a request counter).
+  evidence: Unverified, medium if true; review 1 of 4.5c-3 (Blind Hunter). The same pattern was in the Media tab before 4.5c-3; settle it with a test that resolves two `listAssets` calls in reverse order.

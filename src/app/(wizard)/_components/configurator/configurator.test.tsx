@@ -2818,6 +2818,295 @@ describe("Configurator Animazione (Story 4.5c)", () => {
   });
 });
 
+describe("Configurator Animazione upload (Story 4.5c-3)", () => {
+  const P = "eeeeeeee-0000-4000-8000-000000000041";
+  const BLOCK = "eeeeeeee-0000-4000-8000-000000000042";
+  const X = "bbbbbbbb-0000-4000-8000-000000000041";
+  const Y = "bbbbbbbb-0000-4000-8000-000000000042";
+  const d = dict.configurator.animationDialog;
+  const m = dict.wizard.material;
+
+  function fixture(): Record<FormatId, Page[]> {
+    const pages = structuredClone(starterFormats());
+    const page = pages.presentazione_16_9[0]!;
+    page.pageKey = P;
+    page.blocks = [{ blockId: BLOCK, name: "Blocco", background: { kind: "colour", value: NEW_BLOCK_COLOUR }, elements: [] }];
+    restartGrid(page, "presentazione_16_9", "mac-case@1");
+    return pages;
+  }
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const savedElements = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => (lastDoc(onSave).formats.presentazione_16_9.pages[0] as Page).blocks[0]!.elements;
+  const blockNode = () => pageNode(P).querySelector<HTMLElement>(`[data-block-id="${BLOCK}"]`)!;
+  const dialog = () => document.querySelector<HTMLElement>("dialog");
+  const pick = (id: string) => fireEvent.click(dialog()!.querySelector<HTMLElement>(`[data-pick="${id}"]`)!);
+  const picks = () => [...dialog()!.querySelectorAll<HTMLElement>('[data-pick][aria-pressed="true"]')].sort((a, b) => order(a) - order(b)).map((b) => b.dataset.pick);
+  const order = (tile: HTMLElement) => Number(tile.querySelector("b")?.textContent ?? 0);
+  const elementsSection = () => within(leftPanel()).getByRole("region", { name: dict.configurator.tools.elements, hidden: true });
+  const dropZone = () => button(d.drop.label, dialog()!);
+  const drop = (files: File[]) => fireEvent.drop(dropZone(), { dataTransfer: { files, types: ["Files"], dropEffect: "copy" } });
+  const file = (name: string, type: string) => new File(["x"], name, { type });
+  const tiles = () => [...rightPanel().querySelectorAll<HTMLElement>("[data-media]")].map((t) => t.dataset.media);
+  const flush = async () => {
+    for (let i = 0; i < 10; i++) await act(async () => {});
+  };
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+  function open() {
+    fireEvent.click(blockNode());
+    fireEvent.click(button(dict.configurator.elements.animation, elementsSection()));
+    expect(dialog()).not.toBeNull();
+  }
+  /** Each presign gives the next of `ids`; the list read again holds `media` then the files that went. */
+  function server(ids: readonly string[], media: readonly ListedAsset[] = MEDIA) {
+    const stored: ListedAsset[] = [];
+    let n = 0;
+    actions.presignAssetUpload.mockImplementation(async () => ({ ok: true, value: { assetId: ids[n++]!, url: "https://storage.test/u", method: "PUT", headers: {} } }));
+    actions.confirmAssetUpload.mockImplementation(async ({ assetId, fileName, contentType }: { assetId: string; fileName: string; contentType: string }) => {
+      stored.push(listed(assetId, contentType.startsWith("video/") ? "video" : "image", fileName));
+      return { ok: true, value: { id: assetId } };
+    });
+    actions.listAssets.mockImplementation(async () => ({ ok: true, value: [...media, ...[...stored].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))] }));
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+      this.removeAttribute("open");
+    };
+    for (const fn of Object.values(actions)) fn.mockReset();
+    uploads.uploadFile.mockReset().mockResolvedValue(undefined);
+    actions.listAssets.mockResolvedValue({ ok: true, value: MEDIA });
+  });
+
+  it("drops two files: both go to Media, join the picks after the earlier ones in order, and Inserisci keeps that order; the Media tab lists them", async () => {
+    const onSave = vi.fn(savedOk);
+    server([X, Y]);
+    setup(false, fixture(), { onSave });
+    open();
+    expect(dialog()!.textContent).toContain(d.drop.lead);
+    pick(IMAGE);
+    drop([file("x.jpg", "image/jpeg"), file("y.mp4", "video/mp4")]);
+    await flush();
+    expect(actions.presignAssetUpload).toHaveBeenCalledTimes(2);
+    expect(picks()).toEqual([IMAGE, X, Y]);
+    expect(status().textContent).toBe(fill(dict.configurator.media.uploaded, { n: 2 }));
+    // The one status line sits inside the open dialog.
+    expect(dialog()!.contains(status())).toBe(true);
+    fireEvent.click(button(d.insert, dialog()!));
+    await settle();
+    expect(savedElements(onSave)).toEqual([{ elementId: expect.any(String), type: "animation", animation: "carousel_01", assetIds: [IMAGE, X, Y], fit: "fit" }]);
+    fireEvent.click(button(dict.configurator.tabs.media, rightPanel()));
+    expect(tiles()).toEqual([IMAGE, VIDEO, X, Y]);
+  });
+
+  it("scegli dai file: the files chosen upload and are picked, as a drop; Enter opens the picker", async () => {
+    server([X]);
+    setup(false, fixture());
+    open();
+    const input = dialog()!.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const click = vi.spyOn(input, "click").mockImplementation(() => {});
+    fireEvent.keyDown(dropZone(), { key: "Enter" });
+    fireEvent.keyDown(dropZone(), { key: " " });
+    fireEvent.click(dropZone());
+    expect(click).toHaveBeenCalledTimes(3);
+    fireEvent.change(input, { target: { files: [file("x.jpg", "image/jpeg")] } });
+    await flush();
+    expect(picks()).toEqual([X]);
+    expect(status().textContent).toBe(fill(m.announce.done, { name: "x.jpg" }));
+  });
+
+  it("shows that it is uploading while the files go", async () => {
+    server([X]);
+    let release: () => void = () => {};
+    uploads.uploadFile.mockImplementation(() => new Promise<void>((resolve) => (release = resolve)));
+    setup(false, fixture());
+    open();
+    drop([file("x.jpg", "image/jpeg")]);
+    await flush();
+    expect(dropZone().textContent).toContain(fill(dict.configurator.media.drop.uploading, { n: 1 }));
+    release();
+    await flush();
+    expect(dropZone().textContent).not.toContain(fill(dict.configurator.media.drop.uploading, { n: 1 }));
+    expect(picks()).toEqual([X]);
+  });
+
+  it("a file of another type is refused by name without a call; the others upload and are picked", async () => {
+    server([X]);
+    setup(false, fixture());
+    open();
+    drop([file("notes.pdf", "application/pdf"), file("x.jpg", "image/jpeg")]);
+    await flush();
+    expect(actions.presignAssetUpload).toHaveBeenCalledTimes(1);
+    expect(actions.presignAssetUpload).toHaveBeenCalledWith({ caseId: CASE_ID, contentType: "image/jpeg", sizeBytes: 1 });
+    expect(picks()).toEqual([X]);
+    expect(status().textContent).toContain(fill(m.announce.error, { name: "notes.pdf", message: dict.configurator.media.errors.type }));
+  });
+
+  it("a file over the size limit is neither uploaded nor picked", async () => {
+    setup(false, fixture());
+    open();
+    const big = file("enorme.mp4", "video/mp4");
+    Object.defineProperty(big, "size", { value: 60 * 1024 * 1024 });
+    drop([big]);
+    await flush();
+    expect(actions.presignAssetUpload).not.toHaveBeenCalled();
+    expect(picks()).toEqual([]);
+    expect(status().textContent).toBe(fill(m.announce.error, { name: "enorme.mp4", message: fill(m.errors.tooLarge, { size: 50 }) }));
+  });
+
+  it("a full case adds nothing and says the limit", async () => {
+    actions.presignAssetUpload.mockResolvedValue({ ok: false, status: 409, error: { code: "FILE_LIMIT_REACHED", message: "m" } });
+    setup(false, fixture());
+    open();
+    drop([file("x.jpg", "image/jpeg")]);
+    await flush();
+    expect(picks()).toEqual([]);
+    expect(status().textContent).toBe(fill(m.announce.error, { name: "x.jpg", message: fill(m.errors.limit, { max: 20 }) }));
+  });
+
+  it("one file failing after its retry: the other is picked, and the failure is named", async () => {
+    server([X, Y, Y]);
+    uploads.uploadFile.mockImplementation(async (_target: unknown, f: File) => {
+      if (f.name === "y.jpg") throw new Error("network");
+    });
+    setup(false, fixture());
+    open();
+    drop([file("x.jpg", "image/jpeg"), file("y.jpg", "image/jpeg")]);
+    await flush();
+    expect(actions.presignAssetUpload).toHaveBeenCalledTimes(3);
+    expect(picks()).toEqual([X]);
+    expect(status().textContent).toBe(`${fill(m.announce.done, { name: "x.jpg" })} ${fill(m.announce.error, { name: "y.jpg", message: m.errors.failed })}`);
+  });
+
+  it("with 29 picked, a drop of two picks the first; both stay in Media, with a line for the other", async () => {
+    const many = Array.from({ length: 29 }, (_, i) => listed(`cccccccc-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, "image", `f${i + 1}.jpg`));
+    server([X, Y], many);
+    setup(false, fixture(), { media: many });
+    open();
+    for (const f of many) pick(f.id);
+    drop([file("x.jpg", "image/jpeg"), file("y.jpg", "image/jpeg")]);
+    await flush();
+    expect(picks()).toHaveLength(30);
+    expect(picks().at(-1)).toBe(X);
+    expect(dialog()!.querySelector(`[data-pick="${Y}"]`)!.getAttribute("aria-pressed")).toBe("false");
+    expect(status().textContent).toBe(`${fill(dict.configurator.media.uploaded, { n: 2 })} ${fill(d.overOne, { max: 30 })}`);
+    fireEvent.click(button(d.cancel, dialog()!));
+    fireEvent.click(button(dict.configurator.tabs.media, rightPanel()));
+    expect(tiles().slice(-2)).toEqual([X, Y]);
+  });
+
+  it("with 29 picked, a drop of three picks the first and says two weren't added", async () => {
+    const Z = "bbbbbbbb-0000-4000-8000-000000000043";
+    const many = Array.from({ length: 29 }, (_, i) => listed(`cccccccc-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, "image", `f${i + 1}.jpg`));
+    server([X, Y, Z], many);
+    setup(false, fixture(), { media: many });
+    open();
+    for (const f of many) pick(f.id);
+    drop([file("x.jpg", "image/jpeg"), file("y.jpg", "image/jpeg"), file("z.jpg", "image/jpeg")]);
+    await flush();
+    expect(picks()).toHaveLength(30);
+    expect(picks().at(-1)).toBe(X);
+    expect(status().textContent).toBe(`${fill(dict.configurator.media.uploaded, { n: 3 })} ${fill(d.overMany, { n: 2, max: 30 })}`);
+  });
+
+  it("Annulla while an upload is still going: the file lands in Media, no over-limit line, the animation unchanged", async () => {
+    const onSave = vi.fn(savedOk);
+    const many = Array.from({ length: 29 }, (_, i) => listed(`cccccccc-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, "image", `f${i + 1}.jpg`));
+    server([X, Y], many);
+    let release: () => void = () => {};
+    uploads.uploadFile.mockImplementation(() => new Promise<void>((resolve) => (release = resolve)));
+    setup(false, fixture(), { media: many, onSave });
+    open();
+    for (const f of many) pick(f.id);
+    drop([file("x.jpg", "image/jpeg")]);
+    await flush();
+    fireEvent.click(button(d.cancel, dialog()!));
+    expect(dialog()).toBeNull();
+    release();
+    await flush();
+    expect(status().textContent).toBe(fill(m.announce.done, { name: "x.jpg" }));
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.click(button(dict.configurator.tabs.media, rightPanel()));
+    expect(tiles().at(-1)).toBe(X);
+  });
+
+  it("an upload whose list can't be read again is not picked; the success line still names it", async () => {
+    server([X, Y]);
+    actions.listAssets.mockResolvedValueOnce({ ok: false, status: 500, error: { code: "ASSET_READ_FAILED", message: "m" } });
+    setup(false, fixture());
+    open();
+    drop([file("x.jpg", "image/jpeg")]);
+    await flush();
+    expect(actions.confirmAssetUpload).toHaveBeenCalledTimes(1);
+    expect(dialog()!.querySelector(`[data-pick="${X}"]`)).toBeNull();
+    expect(status().textContent).toBe(fill(m.announce.done, { name: "x.jpg" }));
+    // The next read shows it, unpicked; the file uploaded then is picked alone.
+    drop([file("y.jpg", "image/jpeg")]);
+    await flush();
+    expect(dialog()!.querySelector(`[data-pick="${X}"]`)!.getAttribute("aria-pressed")).toBe("false");
+    expect(picks()).toEqual([Y]);
+  });
+
+  it("a file dropped on the picker, off the drop zone, is taken and uploads nothing", async () => {
+    setup(false, fixture());
+    open();
+    const area = dialog()!.querySelector<HTMLElement>(`[data-pick="${IMAGE}"]`)!;
+    const data = { dataTransfer: { files: [file("x.jpg", "image/jpeg")], types: ["Files"], dropEffect: "copy" } };
+    expect(fireEvent.dragOver(area, data)).toBe(false);
+    expect(fireEvent.drop(area, data)).toBe(false);
+    await flush();
+    expect(actions.presignAssetUpload).not.toHaveBeenCalled();
+    expect(picks()).toEqual([]);
+  });
+
+  it("on a case with no media yet, a dropped file shows in the picker, picked, and Inserisci is on", async () => {
+    server([X], []);
+    setup(false, fixture(), { media: [] });
+    open();
+    expect(dialog()!.textContent).toContain(d.noMedia);
+    expect(button(d.insert, dialog()!).hasAttribute("disabled")).toBe(true);
+    drop([file("x.jpg", "image/jpeg")]);
+    await flush();
+    expect(dialog()!.textContent).not.toContain(d.noMedia);
+    expect(picks()).toEqual([X]);
+    expect(button(d.insert, dialog()!).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("Annulla after an upload leaves the files in Media and the animation unchanged", async () => {
+    const onSave = vi.fn(savedOk);
+    server([X]);
+    setup(false, fixture(), { onSave });
+    open();
+    drop([file("x.jpg", "image/jpeg")]);
+    await flush();
+    fireEvent.click(button(d.cancel, dialog()!));
+    expect(dialog()).toBeNull();
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.click(button(dict.configurator.tabs.media, rightPanel()));
+    expect(tiles()).toEqual([IMAGE, VIDEO, X]);
+  });
+
+  it("an upload from the Media tab shows in the dialog's picker", async () => {
+    server([X]);
+    setup(false, fixture());
+    fireEvent.click(button(dict.configurator.tabs.media, rightPanel()));
+    fireEvent.drop(button(`${dict.configurator.media.drop.lead}, ${dict.configurator.media.drop.choose}`, rightPanel()), {
+      dataTransfer: { files: [file("x.jpg", "image/jpeg")], types: ["Files"], dropEffect: "copy" },
+    });
+    await flush();
+    open();
+    expect(dialog()!.querySelector(`[data-pick="${X}"]`)).not.toBeNull();
+  });
+});
+
 describe("Configurator pages (Story 4.13)", () => {
   const p = dict.configurator.pages;
   const pagesNow = () => [...canvas().querySelectorAll<HTMLElement>("[data-canvas-page]")].map((n) => n.dataset.canvasPage);
