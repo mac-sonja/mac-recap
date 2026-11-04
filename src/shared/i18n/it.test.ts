@@ -296,6 +296,16 @@ describe("configurator copy", () => {
     expect([t("configurator.undoHint"), t("configurator.redoHint")]).toEqual(["Annulla (⌘Z)", "Ripeti (⇧⌘Z)"]);
     expect(t("configurator.overflow")).toBe("Il testo non entra");
     expect(t("configurator.editSoon")).toBe("Questo testo si potrà modificare presto.");
+    expect([t("configurator.fields.clientHeading"), t("configurator.fields.caseHeading"), t("configurator.fields.replaceLogo")]).toEqual([
+      "Dati del cliente",
+      "Dati della case",
+      "Sostituisci logo",
+    ]);
+    expect(t("configurator.fields.needService")).toBe("Serve almeno un servizio.");
+    expect(t("configurator.fields.needLogo")).toBe("Aggiungi prima il logo del cliente.");
+    expect(t("configurator.fields.fromEditor")).toBe("Modificalo dall’editor.");
+    expect(fill(t("configurator.fields.yearRange"), { min: 1900, max: 2100 })).toBe("Scrivi un anno tra 1900 e 2100.");
+    expect(t("configurator.fields.errors.CLIENT_NAME_TAKEN")).toBe("C’è già un cliente con questo nome.");
     expect(fill(t("configurator.text.heading"), { format: "Carosello" })).toBe("Testo · Carosello");
     expect([t("configurator.text.style"), t("configurator.text.align"), t("configurator.text.colour"), t("configurator.text.columns")]).toEqual([
       "Stile",

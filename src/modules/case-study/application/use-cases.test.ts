@@ -31,6 +31,7 @@ import { makeUpdateClient } from "./update-client";
 import { makeRecordEvent } from "./record-event";
 import { makeSaveClientBriefField, makeSaveClientResults, makeSaveClientTestimonial } from "./save-client-brief-field";
 import { makeTransition } from "./transition";
+import { makeUpdateCaseFields } from "./update-case-fields";
 import { makeUpdateCaseStudyDetails } from "./update-case-study-details";
 
 const actor: Actor = {
@@ -131,6 +132,17 @@ function fakeRepository() {
       const updated: CaseStudy = { ...row, ...fields, client, number, code };
       cases.set(caseId, updated);
       events.push({ id: uuid(), caseId, revisionId: null, actorId, type: CASE_DETAILS_UPDATED, at: now, data: { ...fields } });
+      return ok(updated);
+    }),
+    // Mirrors update_case_fields: a non-deleted Da approvare case; the code never changes; an unchanged save writes nothing.
+    updateFields: vi.fn<CaseStudyRepository["updateFields"]>(async ({ caseId, year, businessLines }, actorId) => {
+      const row = cases.get(caseId);
+      if (!row || row.deletedAt !== null) return err({ code: "NOT_FOUND", message: "No case study with this id." });
+      if (row.status !== "in_review") return err({ code: "STALE_STATUS", message: "Not Da approvare." });
+      if (row.year === year && row.businessLines.join() === businessLines.join()) return ok(row);
+      const updated: CaseStudy = { ...row, year, businessLines };
+      cases.set(caseId, updated);
+      events.push({ id: uuid(), caseId, revisionId: null, actorId, type: CASE_DETAILS_UPDATED, at: now, data: { year, businessLines } });
       return ok(updated);
     }),
     findById: vi.fn<CaseStudyRepository["findById"]>(async (id) => {
@@ -348,6 +360,65 @@ describe("updateDetails", () => {
     cases.set(created.id, { ...created, status: "in_review" });
     const stale = await makeUpdateCaseStudyDetails(repo)(actor, { caseId: created.id, ...fields });
     expect(stale.ok ? null : stale.error.code).toBe("STALE_STATUS");
+  });
+});
+
+describe("updateCaseFields (Story 4.3d)", () => {
+  async function inReview() {
+    const fake = fakeRepository();
+    const created = await makeCreateCaseStudy(fake.repo)(actor, { name: "Rebrand", clientId: ACME.id, year: 2026, businessLines: ["branding"] });
+    if (!created.ok) throw new Error("setup");
+    const reviewed = { ...created.value, status: "in_review" as const };
+    fake.cases.set(reviewed.id, reviewed);
+    fake.events.length = 0;
+    return { ...fake, created: reviewed };
+  }
+
+  it("saves the year and the business lines (in display order), keeps the code, drops unknown keys, and records case_details_updated", async () => {
+    const { repo, events, created } = await inReview();
+    const result = await makeUpdateCaseFields(repo)(actor, { caseId: created.id, year: 2025, businessLines: ["video", "branding"], code: "ZZZ-1999-01" });
+    expect(repo.updateFields).toHaveBeenCalledExactlyOnceWith({ caseId: created.id, year: 2025, businessLines: ["branding", "video"] }, actor.id);
+    expect(result.ok && [result.value.year, result.value.businessLines, result.value.code, result.value.number]).toEqual([
+      2025,
+      ["branding", "video"],
+      created.code,
+      created.number,
+    ]);
+    expect(events).toEqual([expect.objectContaining({ caseId: created.id, type: CASE_DETAILS_UPDATED, actorId: actor.id, data: { year: 2025, businessLines: ["branding", "video"] } })]);
+  });
+
+  it("writes nothing when nothing changed", async () => {
+    const { repo, events, created } = await inReview();
+    expect(await makeUpdateCaseFields(repo)(actor, { caseId: created.id, year: 2026, businessLines: ["branding"] })).toEqual(ok(created));
+    expect(events).toEqual([]);
+  });
+
+  it.each([
+    ["no business line", { year: 2026, businessLines: [] }, ["businessLines"]],
+    ["an unknown business line", { year: 2026, businessLines: ["moda"] }, ["businessLines"]],
+    ["year out of range", { year: 1899, businessLines: ["video"] }, ["year"]],
+    ["a year that isn't whole", { year: 2026.5, businessLines: ["video"] }, ["year"]],
+    ["no year", { businessLines: ["video"] }, ["year"]],
+  ])("%s → INVALID_INPUT naming the fields; nothing written", async (_label, input, fields) => {
+    const { repo, events, created } = await inReview();
+    const result = await makeUpdateCaseFields(repo)(actor, { caseId: created.id, ...input });
+    expect(result.ok ? null : [result.error.code, (result.error.details as { fields: string[] }).fields]).toEqual(["INVALID_INPUT", fields]);
+    expect(repo.updateFields).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
+  it.each(["draft", "generating", "approved"] as const)("a %s case → STALE_STATUS; nothing written", async (status) => {
+    const { repo, cases, events, created } = await inReview();
+    cases.set(created.id, { ...created, status });
+    const result = await makeUpdateCaseFields(repo)(actor, { caseId: created.id, year: 2025, businessLines: ["video"] });
+    expect(result.ok ? null : result.error.code).toBe("STALE_STATUS");
+    expect(events).toEqual([]);
+  });
+
+  it("an unknown case → NOT_FOUND", async () => {
+    const { repo } = await inReview();
+    const result = await makeUpdateCaseFields(repo)(actor, { caseId: "11111111-1111-4111-8111-111111111111", year: 2025, businessLines: ["video"] });
+    expect(result.ok ? null : result.error.code).toBe("NOT_FOUND");
   });
 });
 

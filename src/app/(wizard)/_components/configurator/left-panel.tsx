@@ -1,7 +1,7 @@
 "use client";
 
 import { GalleryHorizontal, Hash, Heading, Image, LayoutGrid, PanelLeft, Quote, Tag, Type, Video, type LucideIcon } from "lucide-react";
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { PRESSABLE, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { ThemeSwitch } from "@/app/_components/theme-switch";
 import type { ThemeChoice } from "@/app/_lib/theme";
@@ -77,6 +77,8 @@ export interface LeftPanelProps {
   onAnimationSizeDone: () => void;
   /** **Elimina pagina** (Story 4.13): deletes the tools' page. */
   onDeletePage: () => void;
+  /** Dati del cliente / Dati della case for a selected meta line, services or logos (Story 4.3d); only where the case can change. */
+  fieldsPanel?: ReactNode;
   onHide: () => void;
   hideRef: Ref<HTMLButtonElement>;
 }
@@ -329,7 +331,8 @@ function BackgroundColour({
  * Elementi adds a block or an element, and the selection has its **Rimuovi** button
  * (Story 4.3c). Layout, **Mescola** and Sfondo's colours change the page (Story 4.4a).
  * The rest arrive with Stories 4.4b–c, 4.5 and 4.13: here they show in place, inactive,
- * and say so when pressed. The theme switch sits at its foot.
+ * and say so when pressed. The theme switch sits at its foot. A selected meta line, services
+ * or logos also get **Dati del cliente** / **Dati della case** (Story 4.3d, `fieldsPanel`).
  */
 export function LeftPanel({
   hidden = false,
@@ -361,6 +364,7 @@ export function LeftPanel({
   onAnimationSize,
   onAnimationSizeDone,
   onDeletePage,
+  fieldsPanel,
   onHide,
   hideRef,
 }: LeftPanelProps) {
@@ -436,6 +440,7 @@ export function LeftPanel({
             onSoon={onSoon}
           />
         )}
+        {fieldsPanel}
 
         {page !== undefined && (
           <>

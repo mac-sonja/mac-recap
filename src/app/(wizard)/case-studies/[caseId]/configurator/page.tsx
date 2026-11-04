@@ -1,16 +1,22 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { THEME_COOKIE, parseTheme } from "@/app/_lib/theme";
+import { addClientSector, updateClient } from "@/app/(tool)/clients/actions";
+import { clientLimits } from "@/app/(tool)/clients/_lib/client-limits";
 import { requireSurface } from "@/app/_lib/surface";
 import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import { CASE_TEMPLATE } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
-import { boundValuesOf, imagePoolOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../../_lib/configurator-data";
+import { boundValuesOf, editableFieldsOf, imagePoolOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../../_lib/configurator-data";
 import { Configurator } from "../../../_components/configurator/configurator";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import { isMedia, type MediaUploadRules } from "../../../_components/configurator/media-files";
-import { approveCase, getRenderAssets, saveRevisionDoc } from "./actions";
+import type { FieldActions } from "../../../_components/configurator/configurator";
+import { approveCase, getRenderAssets, saveCaseResults, saveCaseTestimonial, saveRevisionDoc, updateCaseFields } from "./actions";
+
+/** The field edits' saves (Story 4.3d): each through the client's or the case's own action, with its validation and permission. */
+const FIELD_ACTIONS: FieldActions = { updateClient, addClientSector, updateCaseFields, saveCaseResults, saveCaseTestimonial };
 
 /** The Media tab's drop zone: Story 2.7's limits, images and videos only. */
 const MEDIA_RULES: MediaUploadRules = {
@@ -43,6 +49,10 @@ export interface ConfiguratorPageProps {
  *
  * Story 4.8: **Approva** gets its action, the case's `head_version` and the client's files
  * (a page may show them, so they count as present).
+ *
+ * Story 4.3d: the stored client and case fields (`editableFieldsOf`), the shared sector list
+ * and the field saves. The key leaves the values out, so the `router.refresh()` after a field
+ * save brings the new values in without starting the configurator afresh.
  */
 export default async function ConfiguratorPage({ params }: ConfiguratorPageProps) {
   const shell = await requireSurface("edit");
@@ -69,10 +79,11 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
   if (!form.ok) throw new Error(`Details could not be loaded: ${form.error.code}`);
   if (!listed.ok) throw new Error(`Material could not be loaded: ${listed.error.code}`);
 
-  const [client, assets, clientMaterial] = await Promise.all([
+  const [client, assets, clientMaterial, sectorList] = await Promise.all([
     caseStudy.getClient(info.value.clientId),
     renderAssetsOf(listed.value, (assetId, spec) => material.getRendition(assetId, spec)),
     caseStudy.listClientMaterial({ clientId: info.value.clientId }),
+    caseStudy.listClientSectors(),
   ]);
   if (!client.ok) throw new Error(`Client could not be loaded: ${client.error.code}`);
   // The client's files only widen what counts as present; without them a page that shows one says so, and the server checks again.
@@ -82,6 +93,9 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
   const doc = head?.doc ?? null;
   const editable = head !== null && head.status === "working" && current.status === "in_review";
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
+  // Without the shared list the panel still shows the client's own sector.
+  const currentSector = info.value.industry;
+  const sectors = sectorList.ok ? sectorList.value : currentSector === null ? [] : [currentSector];
 
   return (
     <Configurator
@@ -105,6 +119,14 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
       onApprove={approveCase}
       headVersion={current.headVersion}
       clientFiles={clientFiles}
+      fields={editableFieldsOf(current, info.value, form.value)}
+      fieldOptions={{
+        sectors,
+        limits: clientLimits(),
+        years: { min: caseStudy.YEAR_MIN, max: caseStudy.YEAR_MAX },
+        businessLines: caseStudy.BUSINESS_LINES,
+      }}
+      fieldActions={FIELD_ACTIONS}
     />
   );
 }

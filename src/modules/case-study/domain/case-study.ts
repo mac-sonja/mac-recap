@@ -487,6 +487,19 @@ export const updateCaseStudyDetailsInputSchema = z.object({
 });
 export type UpdateCaseStudyDetailsInput = z.infer<typeof updateCaseStudyDetailsInputSchema>;
 
+/**
+ * The case's year and services as the configurator edits them while it is Da approvare
+ * (Story 4.3d, owner 2026-11-03): both as they should be after the save. The year is
+ * checked as in `updateCaseStudyDetailsInputSchema`; at least one business line. The
+ * code never changes, even when the year does.
+ */
+export const updateCaseFieldsInputSchema = z.object({
+  caseId: z.uuid("Required."),
+  year: yearSchema,
+  businessLines: businessLinesSchema.refine((lines) => lines.length > 0, "Required."),
+});
+export type UpdateCaseFieldsInput = z.infer<typeof updateCaseFieldsInputSchema>;
+
 /** The statuses a case may be deleted in (AR3, amended by the owner on 2026-10-28). */
 export const DELETABLE_STATUSES = ["draft", "approved"] as const;
 

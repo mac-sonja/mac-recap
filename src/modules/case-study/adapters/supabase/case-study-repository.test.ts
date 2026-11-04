@@ -160,6 +160,48 @@ describe("createSupabaseCaseStudyRepository().updateDetails", () => {
   });
 });
 
+describe("createSupabaseCaseStudyRepository().updateFields (Story 4.3d)", () => {
+  const input = { caseId: row().id, year: 2025, businessLines: ["video" as const] };
+
+  it("calls update_case_fields, then re-reads the case with its client", async () => {
+    const { factory, rpc, eq } = stubClient({ data: row({ status: "in_review", year: 2025, business_lines: ["video"] }), error: null }, { data: { id: row().id }, error: null });
+    const result = await createSupabaseCaseStudyRepository(factory).updateFields(input, ACTOR_ID);
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("update_case_fields", {
+      p_case_id: row().id,
+      p_year: 2025,
+      p_business_lines: ["video"],
+      p_actor_id: ACTOR_ID,
+    });
+    expect(eq).toHaveBeenCalledWith("id", row().id);
+    expect(result).toEqual({ ok: true, value: expect.objectContaining({ year: 2025, code: "LUM-2026-01", businessLines: ["video"] }) });
+  });
+
+  it.each([
+    ["NOT_FOUND", { code: "P0001", message: "NOT_FOUND" }, { code: "NOT_FOUND", details: { id: row().id } }],
+    ["STALE_STATUS", { code: "P0001", message: "STALE_STATUS" }, { code: "STALE_STATUS", details: { id: row().id } }],
+    ["INVALID_INPUT", { code: "P0001", message: "INVALID_INPUT" }, { code: "INVALID_INPUT", details: { fields: ["businessLines"] } }],
+    ["the business line check", { code: "23514", message: "violates check constraint \"case_study_business_lines_check\"" }, { code: "INVALID_INPUT", details: { fields: ["businessLines"] } }],
+  ])("maps %s", async (_label, error, expected) => {
+    const { factory, from } = stubClient({ data: null, error: null }, { data: null, error });
+    const result = await createSupabaseCaseStudyRepository(factory).updateFields(input, ACTOR_ID);
+    expect(result).toEqual({ ok: false, error: expect.objectContaining(expected) });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("returns CASE_STUDY_WRITE_FAILED for any other error, logging only the code", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const { factory } = stubClient({ data: null, error: null }, { data: null, error: { code: "XX000", message: "boom" } });
+      const result = await createSupabaseCaseStudyRepository(factory).updateFields(input, ACTOR_ID);
+      expect(result.ok ? null : result.error.code).toBe("CASE_STUDY_WRITE_FAILED");
+      expect(String(write.mock.calls[0][0])).toContain("XX000");
+      expect(String(write.mock.calls[0][0])).not.toContain("boom");
+    } finally {
+      write.mockRestore();
+    }
+  });
+});
+
 describe("another check violation", () => {
   it.each(["create", "updateDetails"] as const)("%s: maps it to CASE_STUDY_WRITE_FAILED, not a bad business line, and logs the code", async (write) => {
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);

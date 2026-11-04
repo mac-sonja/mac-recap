@@ -48,7 +48,6 @@ import type {
   ListedClientAsset,
 } from "@/modules/case-study";
 import { fill, it } from "@/shared/i18n/it";
-import { normalizeSectorLabel, sectorLabelKey } from "@/shared/sector-label";
 import { cn } from "@/shared/utils";
 import type { ClientLimits, ClientMaterialLimits } from "../_lib/client-limits";
 import { ClientImageSlots, useClientImages } from "./client-image-slots";
@@ -70,6 +69,7 @@ import {
   type Testimonial,
 } from "@/app/_components/results-fields";
 import { DeleteClientButton } from "./delete-client-button";
+import { checkNewSector, newSectorError } from "./new-sector";
 import { IndustryPills } from "./industry-pills";
 import { LogoTile } from "./logo-tile";
 import {
@@ -591,22 +591,14 @@ export function ClientPanel({
    */
   async function addSector() {
     if (busy.current || addingSector) return;
-    const label = normalizeSectorLabel(newSector);
-    if (label === "") return;
-    const length = charCount(label);
-    if (length < limits.sectorLabelMin || length > limits.sectorLabelMax) {
-      setSectorError(
-        fill(copy.sector.length, {
-          min: limits.sectorLabelMin,
-          max: limits.sectorLabelMax,
-        }),
-      );
+    const check = checkNewSector(newSector, options, limits);
+    if (check.kind === "empty") return;
+    if (check.kind === "length") {
+      setSectorError(newSectorError("length", limits));
       return;
     }
-    const known = options.find(
-      (sector) => sectorLabelKey(sector.label) === sectorLabelKey(label),
-    );
-    if (known !== undefined) return chooseSector(known, picks.current);
+    if (check.kind === "known") return chooseSector(check.sector, picks.current);
+    const { label } = check;
     const picksBefore = picks.current;
     setAddingSector(true);
     setSectorError(null);
@@ -614,14 +606,7 @@ export function ClientPanel({
       const added = await addClientSector({ label });
       if (unmounted.current) return;
       if (!added.ok) {
-        setSectorError(
-          added.error.code === "SECTOR_LABEL_INVALID"
-            ? fill(copy.sector.length, {
-                min: limits.sectorLabelMin,
-                max: limits.sectorLabelMax,
-              })
-            : copy.sector.addFailed,
-        );
+        setSectorError(newSectorError(added.error.code, limits));
         return;
       }
       chooseSector(added.value, picksBefore);

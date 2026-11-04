@@ -47,14 +47,18 @@ export interface CanvasProps {
   reducedMotion: boolean;
   /** Texts can be typed in (Story 4.3a): a `working` head of an In revisione case. */
   editable: boolean;
-  /** The text being edited in the editor, if any. */
-  editing: { pageKey: string; elementId: string } | null;
+  /** The text being edited in the editor, if any; `bound`: a client or case field's stored words (Story 4.3d). */
+  editing: { pageKey: string; elementId: string; bound?: string } | null;
   /** A double-click on an element: the configurator decides whether it can be edited. */
   onEditRequest: (pageKey: string, elementId: string) => void;
   /** The words of a text as typed so far. */
   onTextInput: (pageKey: string, elementId: string, text: string) => void;
   /** A text editing session ended. */
   onTextDone: (pageKey: string, elementId: string) => void;
+  /** A bound text's typing ended (Story 4.3d): what was typed, or null when Esc cancelled it. */
+  onFieldCommit?: (pageKey: string, elementId: string, text: string | null) => void;
+  /** Anteprima: a click on an element (Story 4.3d: a client or case field says where to change it). */
+  onPreviewPick?: (pageKey: string, elementId: string) => void;
   /** A border dragged and released (Story 4.4b): the page's new track sizes on `axis`. */
   onResize: (pageKey: string, axis: Axis, sizes: number[]) => void;
   /** A Media tile dropped on a page (Story 4.5b): where, and its asset id. Undefined: the canvas takes no drop. */
@@ -70,7 +74,7 @@ export interface CanvasProps {
 }
 
 /** What a page needs to let its texts be typed in. */
-type TextEditing = Pick<CanvasProps, "editable" | "onTextInput" | "onTextDone">;
+type TextEditing = Pick<CanvasProps, "editable" | "onTextInput" | "onTextDone" | "onFieldCommit" | "onPreviewPick">;
 
 /** How far (px) a press moves before it is a Ritaglia drag. */
 const CROP_DEAD_ZONE_PX = 3;
@@ -142,9 +146,12 @@ function CanvasPage({
   animateTexts,
   editable,
   editing,
+  editingBound,
   onEditRequest,
   onTextInput,
   onTextDone,
+  onFieldCommit,
+  onPreviewPick,
   onResize,
   onPlaceMedia,
   onCrop,
@@ -172,15 +179,18 @@ function CanvasPage({
     selection: Selection;
     /** The element of this page being edited in the editor. */
     editing: string | null;
+    /** A bound text's stored words, when `editing` is one (Story 4.3d). */
+    editingBound?: string;
   }) {
   const host = useRef<HTMLDivElement>(null);
   const still = useRef<HTMLDivElement>(null);
   const { shown, renderKey } = useInPlaceText({
     host,
     page,
-    mode: !editable ? null : preview ? { kind: "preview" } : { kind: "editor", editing },
+    mode: !editable ? null : preview ? { kind: "preview" } : { kind: "editor", editing, ...(editingBound === undefined ? {} : { bound: editingBound }) },
     onInput: (elementId, text) => onTextInput(page.pageKey, elementId, text),
     onDone: (elementId) => onTextDone(page.pageKey, elementId),
+    onCommit: (elementId, text) => onFieldCommit?.(page.pageKey, elementId, text),
   });
   // Video's texts mid-loop are translated: its overflow is measured on a still copy (renderer's rule).
   const measureStill = formatId === "video_9_16" && animateTexts && !preview;
@@ -392,7 +402,7 @@ function CanvasPage({
         id={`page-${page.pageKey}`}
         data-canvas-page={page.pageKey}
         data-selected={pageSelected ? "" : undefined}
-        onClick={preview ? undefined : onClick}
+        onClick={preview ? (event) => previewPick(event, page.pageKey, onPreviewPick) : onClick}
         onDoubleClick={preview ? undefined : onDoubleClick}
         onDragOver={dropsMedia ? onDragOver : undefined}
         onDragLeave={dropsMedia ? onDragLeave : undefined}
@@ -540,6 +550,8 @@ export function Canvas({
   onEditRequest,
   onTextInput,
   onTextDone,
+  onFieldCommit,
+  onPreviewPick,
   onResize,
   onPlaceMedia,
   onCrop,
@@ -610,6 +622,7 @@ export function Canvas({
           editable={editable}
           onTextInput={onTextInput}
           onTextDone={onTextDone}
+          onPreviewPick={onPreviewPick}
         />
       )}
       {/* The editor, and Anteprima of Presentazione: the pages stacked. */}
@@ -644,9 +657,12 @@ export function Canvas({
             animateTexts={animate}
             editable={editable}
             editing={editing !== null && editing.pageKey === page.pageKey ? editing.elementId : null}
+            editingBound={editing !== null && editing.pageKey === page.pageKey ? editing.bound : undefined}
             onEditRequest={onEditRequest}
             onTextInput={onTextInput}
             onTextDone={onTextDone}
+            onFieldCommit={onFieldCommit}
+            onPreviewPick={onPreviewPick}
             onResize={onResize}
             onPlaceMedia={onPlaceMedia}
             onCrop={onCrop}
@@ -701,6 +717,7 @@ function SlideshowOf({
   editable,
   onTextInput,
   onTextDone,
+  onPreviewPick,
 }: Pick<CanvasProps, "template" | "pages" | "assets" | "values" | "slide" | "onStep" | "instagram" | "caption" | "reducedMotion"> &
   TextEditing & {
     formatId: Exclude<FormatId, "presentazione_16_9">;
@@ -720,6 +737,7 @@ function SlideshowOf({
         editable={editable}
         onTextInput={onTextInput}
         onTextDone={onTextDone}
+        onPreviewPick={onPreviewPick}
       />
       {instagram !== "off" && <InstagramOverlay view={instagram} caption={caption} />}
     </Slideshow>
@@ -737,6 +755,7 @@ function Slide({
   editable,
   onTextInput,
   onTextDone,
+  onPreviewPick,
 }: Pick<CanvasProps, "formatId" | "template" | "assets" | "values"> & TextEditing & { page: Page; number: number }) {
   const host = useRef<HTMLDivElement>(null);
   const { shown, renderKey } = useInPlaceText({
@@ -747,10 +766,25 @@ function Slide({
     onDone: (elementId) => onTextDone(page.pageKey, elementId),
   });
   return (
-    <div ref={host} data-canvas-page={page.pageKey} className={TYPING_PREVIEW}>
+    <div
+      ref={host}
+      data-canvas-page={page.pageKey}
+      className={TYPING_PREVIEW}
+      onClick={(event) => previewPick(event, page.pageKey, onPreviewPick)}
+    >
       <RenderedPage key={renderKey} formatId={formatId} template={template} page={shown} number={number} assets={assets} values={values} animateTexts />
     </div>
   );
+}
+
+/**
+ * Anteprima: a click on an element not being typed in tells the configurator (it selects
+ * nothing). Only a double-click's first click reports, so its message shows once.
+ */
+function previewPick(event: MouseEvent<HTMLDivElement>, pageKey: string, onPreviewPick: CanvasProps["onPreviewPick"]) {
+  if (onPreviewPick === undefined || event.detail > 1 || (event.target as Element).closest?.("[contenteditable]")) return;
+  const elementId = selectionAt(event.target as Element, pageKey).elementId;
+  if (elementId !== undefined) onPreviewPick(pageKey, elementId);
 }
 
 /** Anteprima of Video: Nessuna, Reel or Storia over the page (mockup `.ig-switch`). */

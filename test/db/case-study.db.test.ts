@@ -985,6 +985,71 @@ describe("business line and details (Story 2.17)", () => {
   });
 });
 
+describe("update_case_fields: year and services of a Da approvare case (Story 4.3d)", () => {
+  /** A committed case walked to `status` through the real transitions (approved through the repository). */
+  async function caseIn(status: "draft" | "in_review" | "approved") {
+    const { transition } = await loadCaseStudy();
+    const actor = await signedInActor();
+    const created = await createCase();
+    if (status === "draft") return created;
+    for (const event of ["generate", "generation_succeeded"]) {
+      const moved = await transition(created.id, event, actor);
+      if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
+    }
+    if (status === "approved") await approveForSetup(created.id);
+    return created;
+  }
+  const rowOf = async (caseId: string) =>
+    (await pool.query("select code, number, year, business_lines from public.case_study where id = $1", [caseId])).rows[0];
+  const detailsEvents = async (caseId: string) =>
+    (await pool.query("select actor_id, data from public.case_event where case_id = $1 and type = 'case_details_updated' order by at, id", [caseId])).rows;
+
+  it("saves the year and services, keeps the code and number, and writes one case_details_updated event", async () => {
+    const created = await caseIn("in_review");
+    const { updateCaseFields } = await loadCaseStudy();
+    const actor = await signedInActor();
+    const saved = await updateCaseFields(actor, { caseId: created.id, year: 2024, businessLines: ["video", "branding"] });
+    expect(saved.ok && [saved.value.year, saved.value.businessLines, saved.value.code]).toEqual([2024, ["branding", "video"], created.code]);
+    expect(await rowOf(created.id)).toEqual({ code: created.code, number: created.number, year: 2024, business_lines: ["branding", "video"] });
+    expect(await detailsEvents(created.id)).toEqual([{ actor_id: actor.id, data: { year: 2024, businessLines: ["branding", "video"] } }]);
+  });
+
+  it("an unchanged save writes nothing", async () => {
+    const created = await caseIn("in_review");
+    const before = await counts();
+    await pool.query("select public.update_case_fields($1, 2026, array['branding'], $2)", [created.id, TEST_ACTOR_ID]);
+    expect(await counts()).toEqual(before);
+    expect(await detailsEvents(created.id)).toEqual([]);
+  });
+
+  it.each(["draft", "approved"] as const)("a %s case → STALE_STATUS; nothing written", async (status) => {
+    const created = await caseIn(status);
+    const before = await rowOf(created.id);
+    await expect(pool.query("select public.update_case_fields($1, 2024, array['video'], $2)", [created.id, TEST_ACTOR_ID])).rejects.toMatchObject({
+      code: "P0001",
+      message: "STALE_STATUS",
+    });
+    expect(await rowOf(created.id)).toEqual(before);
+    expect(await detailsEvents(created.id)).toEqual([]);
+  });
+
+  it("refuses an unknown or deleted case (NOT_FOUND), no business line (INVALID_INPUT) and an unknown one (the check)", async () => {
+    const created = await caseIn("in_review");
+    await expect(pool.query("select public.update_case_fields($1, 2024, array['video'], $2)", [UNKNOWN_ID, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "NOT_FOUND" });
+    await expect(pool.query("select public.update_case_fields($1, 2024, '{}', $2)", [created.id, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    await expect(pool.query("select public.update_case_fields($1, 2024, array['moda'], $2)", [created.id, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "23514" });
+    expect(await detailsEvents(created.id)).toEqual([]);
+  });
+
+  it("through the module: a draft is STALE_STATUS, and the code never changes", async () => {
+    const draft = await caseIn("draft");
+    const { updateCaseFields } = await loadCaseStudy();
+    const stale = await updateCaseFields(await signedInActor(), { caseId: draft.id, year: 2024, businessLines: ["video"] });
+    expect(stale.ok ? null : stale.error.code).toBe("STALE_STATUS");
+    expect((await rowOf(draft.id)).code).toBe(draft.code);
+  });
+});
+
 describe("RLS lockout", () => {
   const browser = () =>
     createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
@@ -1059,6 +1124,7 @@ describe("RLS lockout", () => {
   const FUNCTIONS = [
     `public.create_case_study('I', '${UNKNOWN_ID}'::uuid, 2026, 'it', array['branding'], '${TEST_ACTOR_ID}')`,
     `public.update_case_study_details('${UNKNOWN_ID}'::uuid, 'I', '${UNKNOWN_ID}'::uuid, 2026, 'it', array['branding'], '${TEST_ACTOR_ID}')`,
+    `public.update_case_fields('${UNKNOWN_ID}'::uuid, 2026, array['branding'], '${TEST_ACTOR_ID}')`,
     `public.create_client('Intruder', null, null, '${TEST_ACTOR_ID}')`,
     `public.update_client('${UNKNOWN_ID}', 'Intruder', null, null, null, '${TEST_ACTOR_ID}')`,
     `public.add_client_sector('Intruder', '${TEST_ACTOR_ID}')`,

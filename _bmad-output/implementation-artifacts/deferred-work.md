@@ -295,3 +295,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-8-approva.md`
   summary: Approval checks the material (`allowedAssetIds`) before it calls `approve_revision`, in separate requests: a file deleted between the check and the write leaves an approved revision pointing at it. Closing it needs the material check inside the database transaction (or a lock on the case's and client's files while approving).
   evidence: Review of 4.8 (Edge Case Hunter); rare: needs a file removed by someone else in the seconds between the check and the write.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3d-client-and-case-fields.md`
+  summary: Map every export of the configurator actions module (`saveRevisionDoc`, `approveCase`, `getRenderAssets`, `updateCaseFields`, the field saves) in `test/permissions.test.ts`, replacing the hard-coded `+ 1`, so a new configurator action fails the "covers every server action" check.
+  evidence: Review of 4.3d (Blind Hunter): the configurator's earlier actions were already outside the suite before this story.

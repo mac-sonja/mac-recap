@@ -42,6 +42,12 @@ const UPDATE_DETAILS_REFUSALS: Refusals = {
   INVALID_INPUT: { code: "INVALID_INPUT", message: "businessLines: Required." },
   CLIENT_NOT_FOUND: { code: "CLIENT_NOT_FOUND", message: "No client with this id." },
 };
+/** `update_case_fields` raises these (Story 4.3d); nothing is written then. */
+const UPDATE_FIELDS_REFUSALS: Refusals = {
+  NOT_FOUND: { code: "NOT_FOUND", message: "No case study with this id." },
+  STALE_STATUS: { code: "STALE_STATUS", message: "The case study is no longer Da approvare." },
+  INVALID_INPUT: { code: "INVALID_INPUT", message: "businessLines: Required." },
+};
 /** `delete_case_study` raises these (Stories 4.1, 5.2); nothing is written then. */
 const DELETE_REFUSALS: Refusals = {
   NOT_FOUND: { code: "NOT_FOUND", message: "No case study with this id." },
@@ -194,6 +200,29 @@ export function createSupabaseCaseStudyRepository(
         return err({ code: "CASE_STUDY_WRITE_FAILED", message: "Could not save the case study details." });
       }
       return reread(data.id, { actorId, what: "details update" });
+    },
+
+    async updateFields(input, actorId) {
+      // One Postgres function saves the year and business lines and appends `case_details_updated` atomically (Story 4.3d).
+      const { data, error } = await client().rpc("update_case_fields", {
+        p_case_id: input.caseId,
+        p_year: input.year,
+        p_business_lines: input.businessLines,
+        p_actor_id: actorId,
+      });
+      if (error) {
+        const refused = refusalOf(error, UPDATE_FIELDS_REFUSALS);
+        if (refused?.code === "INVALID_INPUT") return err({ ...refused, details: { fields: ["businessLines"] } });
+        if (refused) return err({ ...refused, details: { id: input.caseId } });
+        if (isBusinessLineCheck(error)) return businessLineRefused();
+        log.error(`case_study fields update failed: ${error.code}`, { caseId: input.caseId, actorId });
+        return err({ code: "CASE_STUDY_WRITE_FAILED", message: "Could not save the case study fields.", details: { caseId: input.caseId } });
+      }
+      if (data === null) {
+        log.error("case_study fields update failed: no row returned", { caseId: input.caseId, actorId });
+        return err({ code: "CASE_STUDY_WRITE_FAILED", message: "Could not save the case study fields." });
+      }
+      return reread(data.id, { actorId, what: "fields update" });
     },
 
     async findById(id) {

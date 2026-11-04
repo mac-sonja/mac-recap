@@ -4,6 +4,7 @@ import type { Page } from "@/modules/generation";
 import type { DetailsForm, ListedAsset, RenditionLink } from "@/modules/material";
 import { CASE_TEMPLATE, FORMAT_IDS, starterPages, type BoundValues, type FormatId, type RenderAsset, type TemplateContext } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
+import type { EditableFields } from "../_components/configurator/bound-fields";
 import type { Result } from "@/shared/result";
 
 /** Each registry format's pages, in order (`[]` for a format the document lacks). */
@@ -30,6 +31,29 @@ export function boundValuesOf(caseStudy: CaseStudy, info: CaseClientInfo, logoUr
       services: caseStudy.businessLines.map((line) => it.businessLines[line]),
       results: form.results,
       testimonial: form.testimonialQuote === "" ? null : { quote: form.testimonialQuote, author: form.testimonialAuthor },
+    },
+  };
+}
+
+/**
+ * The stored values the configurator's field edits start from (Story 4.3d): every field
+ * `updateClient` needs, and the case's year, services, results and testimonial. Each save
+ * sends the whole input built from these plus one change, so it never drops another field.
+ */
+export function editableFieldsOf(caseStudy: CaseStudy, info: CaseClientInfo, form: DetailsForm): EditableFields {
+  return {
+    client: {
+      id: info.clientId,
+      name: info.name,
+      industry: info.industry?.key ?? null,
+      description: info.description ?? "",
+      logoId: info.logoId,
+    },
+    case: {
+      year: caseStudy.year,
+      businessLines: [...caseStudy.businessLines],
+      results: form.results.map((row) => ({ label: row.label, value: row.value })),
+      testimonial: { quote: form.testimonialQuote, author: form.testimonialAuthor },
     },
   };
 }

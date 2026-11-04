@@ -17,6 +17,8 @@ export const CASE_DELETED = "case_deleted";
  * (Story 2.17; client and multi-select 2026-10-21), in the same transaction; `data` is
  * `{ name, clientId, year, locale, businessLines }`, plus `previousClientId` on a client
  * change and `{ previousYear, previousCode, code }` when the draft was renumbered.
+ * Story 4.3d: the configurator's year and services of a Da approvare case write it too,
+ * with `data` `{ year, businessLines }` (the code never changes then).
  */
 export const CASE_DETAILS_UPDATED = "case_details_updated";
 

@@ -829,6 +829,54 @@ export const it = {
     overflow: "Il testo non entra",
     /** Double-click on a text that can't be edited yet: bound to the client or the case (4.3d), or an approved case (4.9). */
     editSoon: "Questo testo si potrà modificare presto.",
+    /**
+     * Texts and elements bound to the client or the case (Story 4.3d): typed on the page
+     * (name, results, testimonial), or set in the left panel (sector, year, services, logo).
+     */
+    fields: {
+      clientHeading: "Dati del cliente",
+      caseHeading: "Dati della case",
+      /** Under the client's section: client values are live for every case of the client. */
+      clientHint: "Cambia in tutte le case di questo cliente.",
+      caseHint: "Cambia in ogni pagina e in ogni formato.",
+      sector: "Settore",
+      year: "Anno",
+      services: "Servizi",
+      logo: "Logo",
+      replaceLogo: "Sostituisci logo",
+      noLogo: "Ancora nessun logo.",
+      saving: "Salvataggio…",
+      saved: "Salvato",
+      /** The last Servizi pill can't be turned off. */
+      needService: "Serve almeno un servizio.",
+      /** Saving the client needs its logo (`updateClient`). */
+      needLogo: "Aggiungi prima il logo del cliente.",
+      /** Saving the client needs its sector and description. */
+      needClientInfo: "Completa prima il cliente dalla sua scheda.",
+      required: "Questo testo non può restare vuoto.",
+      /** `{max}` characters at most. */
+      tooLong: "Al massimo {max} caratteri.",
+      /** `{min}`–`{max}`: the years a case can have. */
+      yearRange: "Scrivi un anno tra {min} e {max}.",
+      /** A result row the page shows but the case doesn't have. */
+      noRow: "Questa riga non c’è tra i risultati della case.",
+      authorWithoutQuote: "Prima scrivi la citazione, poi l’autore.",
+      /** Anteprima: a click on a client or case field (owner, 2026-11-04). */
+      fromEditor: "Modificalo dall’editor.",
+      /** A save refused by the server, by code. */
+      errors: {
+        CLIENT_NAME_TAKEN: "C’è già un cliente con questo nome.",
+        CLIENT_FIELD_INVALID: "Questo valore non va bene. Controllalo e riprova.",
+        CLIENT_FIELD_TOO_LONG: "Il testo è troppo lungo. Accorcialo e riprova.",
+        CLIENT_LOGO_INVALID: "Questo logo non va bene. Prova con un altro file.",
+        INVALID_INPUT: "Questo valore non va bene. Controllalo e riprova.",
+        STALE_STATUS: "La case non è più da approvare: la ricarichiamo.",
+        NOT_FOUND: "Non troviamo più questa case. Ricarica la pagina.",
+        CLIENT_NOT_FOUND: "Non troviamo più questo cliente. Ricarica la pagina.",
+        FORBIDDEN: "Non puoi fare questa modifica.",
+        failed: "Non siamo riusciti a salvare. Riprova.",
+      },
+    },
     /** The hint on a tool that arrives with a later story. */
     soon: "Arriva presto",
     /** The canvas message when a tool that isn't here yet is pressed. */

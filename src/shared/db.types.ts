@@ -730,6 +730,32 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"update_case_fields":
+{ Args: { "p_actor_id": string,"p_business_lines": (string)[],"p_case_id": string,"p_year": number }; Returns: {
+              "approved_revision_id": string | null,
+"business_lines": (string)[],
+"client_id": string,
+"code": string,
+"created_at": string,
+"created_by": string,
+"deleted_at": string | null,
+"head_revision_id": string | null,
+"head_version": number,
+"id": string,
+"locale": string,
+"name": string,
+"number": number,
+"project_order_ref": string | null,
+"status": string,
+"updated_at": string,
+"year": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "case_study"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "update_case_study_details":
 { Args: { "p_actor_id": string,"p_business_lines": (string)[],"p_case_id": string,"p_client_id": string,"p_locale": string,"p_name": string,"p_year": number }; Returns: {
               "approved_revision_id": string | null,

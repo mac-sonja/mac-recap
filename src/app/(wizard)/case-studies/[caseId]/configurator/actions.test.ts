@@ -2,8 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { err, ok } from "@/shared/result";
 
-const { getActor, saveRevisionDocUseCase, approveUseCase, listCases, liveAssetIds, listAssets, getRendition } = vi.hoisted(() => ({
+const { getActor, saveRevisionDocUseCase, approveUseCase, updateCaseFieldsUseCase, listCases, liveAssetIds, listAssets, getRendition, getCase, saveResultsUseCase, saveTestimonialUseCase } = vi.hoisted(() => ({
   getActor: vi.fn(),
+  getCase: vi.fn(),
+  saveResultsUseCase: vi.fn(),
+  saveTestimonialUseCase: vi.fn(),
+  updateCaseFieldsUseCase: vi.fn(),
   saveRevisionDocUseCase: vi.fn(),
   approveUseCase: vi.fn(),
   listCases: vi.fn(),
@@ -17,10 +21,10 @@ vi.mock("@/modules/access", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/modules/access")>()),
   getActor,
 }));
-vi.mock("@/modules/case-study", () => ({ saveRevisionDoc: saveRevisionDocUseCase, approve: approveUseCase, list: listCases }));
-vi.mock("@/modules/material", () => ({ liveAssetIds, listAssets, getRendition }));
+vi.mock("@/modules/case-study", () => ({ saveRevisionDoc: saveRevisionDocUseCase, approve: approveUseCase, list: listCases, updateCaseFields: updateCaseFieldsUseCase, get: getCase }));
+vi.mock("@/modules/material", () => ({ liveAssetIds, listAssets, getRendition, saveCaseResults: saveResultsUseCase, saveCaseTestimonial: saveTestimonialUseCase }));
 
-const { approveCase, getRenderAssets, saveRevisionDoc } = await import("./actions");
+const { approveCase, getRenderAssets, saveCaseResults, saveCaseTestimonial, saveRevisionDoc, updateCaseFields } = await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({ id: "00000000-0000-4000-8000-000000000002", email: "a@b.it", displayName: "A", role });
 const input = { caseId: "aaaaaaaa-0000-4000-8000-000000000001", revisionId: "bbbbbbbb-0000-4000-8000-000000000001", doc: {}, expectedVersion: 2 };
@@ -130,5 +134,65 @@ describe("approveCase (Story 4.8)", () => {
     approveUseCase.mockResolvedValue(err({ code: "STALE_HEAD", message: "m" }));
     expect(await approveCase(approval)).toMatchObject({ ok: false, status: 409, error: { code: "STALE_HEAD" } });
     expect(listCases).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateCaseFields (Story 4.3d)", () => {
+  const fields = { caseId: input.caseId, year: 2025, businessLines: ["branding", "video"] };
+
+  it("saves with the actor and returns nothing else", async () => {
+    updateCaseFieldsUseCase.mockResolvedValue(ok({ id: input.caseId, year: 2025, code: "LUM-2026-01" }));
+    expect(await updateCaseFields(fields)).toEqual({ ok: true, value: undefined });
+    expect(updateCaseFieldsUseCase).toHaveBeenCalledWith(actor("owner_designer"), fields);
+  });
+
+  it("refuses account/sales/social with 403 and no session with 401, before any save", async () => {
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
+    expect(await updateCaseFields(fields)).toMatchObject({ ok: false, status: 403, error: { code: "FORBIDDEN" } });
+    getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "m" }));
+    expect(await updateCaseFields(fields)).toMatchObject({ ok: false, status: 401 });
+    expect(updateCaseFieldsUseCase).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["INVALID_INPUT", 400],
+    ["NOT_FOUND", 404],
+    ["STALE_STATUS", 409],
+  ] as const)("maps %s to %i", async (code, status) => {
+    updateCaseFieldsUseCase.mockResolvedValue(err({ code, message: "m", details: code === "INVALID_INPUT" ? { fields: ["year"] } : { id: "x" } }));
+    expect(await updateCaseFields(fields)).toMatchObject({ ok: false, status, error: { code } });
+  });
+});
+
+describe("saveCaseResults and saveCaseTestimonial from the configurator (Story 4.3d)", () => {
+  const results = { caseId: input.caseId, results: [{ label: "Vendite", value: "+30%" }] };
+  const testimonial = { caseId: input.caseId, quote: "Bravi.", author: "Ada" };
+  const calls = [
+    ["saveCaseResults", () => saveCaseResults(results), saveResultsUseCase, results],
+    ["saveCaseTestimonial", () => saveCaseTestimonial(testimonial), saveTestimonialUseCase, testimonial],
+  ] as const;
+
+  it.each(calls)("%s saves through the material use case while the case is Da approvare", async (_name, call, useCase, sent) => {
+    getCase.mockResolvedValue(ok({ id: input.caseId, status: "in_review" }));
+    useCase.mockResolvedValue(ok({ saved: true }));
+    expect(await call()).toEqual({ ok: true, value: { saved: true } });
+    expect(getCase).toHaveBeenCalledWith(input.caseId);
+    expect(useCase).toHaveBeenCalledWith(actor("owner_designer"), sent);
+  });
+
+  it.each(calls)("%s refuses an approved case (a stale tab) with 409 STALE_STATUS, writing nothing", async (_name, call, useCase) => {
+    getCase.mockResolvedValue(ok({ id: input.caseId, status: "approved" }));
+    expect(await call()).toMatchObject({ ok: false, status: 409, error: { code: "STALE_STATUS" } });
+    expect(useCase).not.toHaveBeenCalled();
+  });
+
+  it.each(calls)("%s: an unknown or deleted case is 404 NOT_FOUND; account/sales/social 403 before any read", async (_name, call, useCase) => {
+    getCase.mockResolvedValue(err({ code: "NOT_FOUND", message: "m" }));
+    expect(await call()).toMatchObject({ ok: false, status: 404, error: { code: "NOT_FOUND" } });
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
+    getCase.mockClear();
+    expect(await call()).toMatchObject({ ok: false, status: 403 });
+    expect(getCase).not.toHaveBeenCalled();
+    expect(useCase).not.toHaveBeenCalled();
   });
 });
