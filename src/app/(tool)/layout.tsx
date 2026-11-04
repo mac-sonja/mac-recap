@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { cookies } from "next/headers";
+import { DraftReadyNotifier } from "@/app/_components/draft-ready-notifier";
 import { NoActor } from "@/app/_components/no-actor";
 import { listScopeFor } from "@/app/_lib/list-scope";
 import { resolveShellActor } from "@/app/_lib/surface";
@@ -28,7 +30,8 @@ async function toReviewCount(actor: Actor): Promise<number | null> {
 /**
  * The tool frame: left sidebar plus content. Nav items come from the access policy
  * (`can`), never from role names. With no usable actor, only the no-actor message
- * renders: no shell, no nav. Desktop only (≥1024 px).
+ * renders: no shell, no nav. Desktop only (≥1024 px). A role that may `generate` gets the
+ * draft-ready toast (Story 3.8), its session starting at this render.
  */
 export default async function ToolLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const shell = await resolveShellActor();
@@ -52,6 +55,12 @@ export default async function ToolLayout({ children }: Readonly<{ children: Reac
       <main className="min-w-0 flex-1 px-8 py-10 xl:px-12">
         <div className="mx-auto w-full max-w-6xl">{children}</div>
       </main>
+      {can(actor, "generate") && (
+        // The notifier reads the search params (the case page open); Suspense keeps that from opting the page out of server rendering.
+        <Suspense fallback={null}>
+          <DraftReadyNotifier startedAt={new Date().toISOString()} />
+        </Suspense>
+      )}
     </div>
   );
 }

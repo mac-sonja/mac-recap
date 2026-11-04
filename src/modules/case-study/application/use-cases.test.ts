@@ -3,6 +3,7 @@ import type { Actor } from "@/modules/access";
 import { CASE_CREATED, CASE_DELETED, CASE_DETAILS_UPDATED, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import type { CaseStatus } from "@/shared/case-status";
 import { isClientComplete, type CaseStudy, type Client, type ClientBrief, type ClientRef, type ClientSummary } from "@/modules/case-study/domain/case-study";
+import { selectReadyDrafts } from "@/modules/case-study/domain/ready-draft";
 import { normalizeClientConfirmName } from "@/shared/client-name";
 import { err, ok } from "@/shared/result";
 import { makeCreateCaseStudy } from "./create-case-study";
@@ -195,6 +196,15 @@ function fakeRepository() {
         data: { reason: `${status}_deleted`, clientId: row.client.id, code: row.code, status: row.status },
       });
       return ok(undefined);
+    }),
+    // Story 3.8: reads the in-memory transition events the way the Supabase adapter reads the real ones.
+    listReadyDrafts: vi.fn<CaseStudyRepository["listReadyDrafts"]>(async (actorId, since) => {
+      const transitions = events
+        .filter((e) => e.type === TRANSITION)
+        .map((e) => ({ caseId: e.caseId, actorId: e.actorId, event: String((e.data as { event?: unknown }).event), at: e.at }));
+      const rows = [...cases.values()].map((c) => ({ id: c.id, name: c.name, status: c.status, deletedAt: c.deletedAt }));
+      const after = transitions.filter((t) => t.event !== "generation_succeeded" || Date.parse(t.at) > Date.parse(since));
+      return ok(selectReadyDrafts(after, rows, actorId));
     }),
   } satisfies CaseStudyRepository;
 

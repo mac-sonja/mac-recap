@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor, Role } from "@/modules/access";
+import { it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
 const getActor = vi.fn<() => Promise<Result<Actor>>>();
@@ -13,6 +14,7 @@ vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined })
 vi.mock("@/modules/case-study", () => ({ list: () => list(), listClients: () => listClients() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/case-studies",
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: vi.fn() }),
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT ${path}`);
@@ -97,6 +99,18 @@ describe("ToolLayout", () => {
     const html = await renderLayout();
     expect(html).toContain("<nav");
     expect(html).not.toContain("da approvare");
+  });
+
+  it("mounts the draft-ready toast for the roles that may generate, and no other (Story 3.8)", async () => {
+    // Its live region is always there; the toast stack (`draftReady.region`) only while toasts show.
+    for (const role of ["owner_designer", "admin"] as const) {
+      getActor.mockResolvedValue(ok(actor(role)));
+      const html = await renderLayout();
+      expect(html).toContain("data-draft-ready-live");
+      expect(html).not.toContain(`aria-label="${dict.draftReady.region}"`);
+    }
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
+    expect(await renderLayout()).not.toContain("data-draft-ready-live");
   });
 
   it("redirects to sign-in on UNAUTHENTICATED", async () => {

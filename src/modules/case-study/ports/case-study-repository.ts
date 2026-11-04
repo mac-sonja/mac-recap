@@ -8,6 +8,7 @@ import type {
   UpdateCaseFieldsInput,
   UpdateCaseStudyDetailsInput,
 } from "@/modules/case-study/domain/case-study";
+import type { ReadyDraft } from "@/modules/case-study/domain/ready-draft";
 import type { TransitionEvent } from "@/modules/case-study/domain/transition";
 import type { CaseStatus } from "@/shared/case-status";
 import type { Result } from "@/shared/result";
@@ -64,6 +65,15 @@ export interface CaseStudyRepository {
    * only when the write fails. Nothing is written on any `err`; no row or object is ever removed.
    */
   softDelete(caseId: string, status: DeletableStatus, actorId: string): Promise<Result<void>>;
+  /**
+   * Story 3.8: the cases Da approvare, not deleted, with a `generation_succeeded`
+   * transition strictly after `since` that follows their latest `generate`, made by
+   * `actorId` (the worker writes `generation_succeeded` as the system actor, so "mine"
+   * comes from `generate`). Reads only the actor's latest presses (bounded by time and
+   * count). One entry per case, `readyAt` its newest such transition, oldest first. `err`
+   * only when a read fails.
+   */
+  listReadyDrafts(actorId: string, since: string): Promise<Result<ReadyDraft[]>>;
 }
 
 export interface StatusChange {

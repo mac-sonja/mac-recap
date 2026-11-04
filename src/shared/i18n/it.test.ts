@@ -432,6 +432,19 @@ describe("configurator copy", () => {
   });
 });
 
+describe("draft ready toast copy (Story 3.8)", () => {
+  test("has the approved strings", () => {
+    expect(fill(t("draftReady.title"), { name: "Rebrand Lumen" })).toBe("Rebrand Lumen è pronta da rivedere.");
+    expect(t("draftReady.open")).toBe("Apri");
+    expect(t("draftReady.close")).toBe("Chiudi notifica");
+    expect(t("draftReady.region")).toBe("Notifiche");
+  });
+
+  test("its call to action is at most three words", () => {
+    expect(it.draftReady.open.split(/\s+/).length).toBeLessThanOrEqual(3);
+  });
+});
+
 describe("case view copy", () => {
   test("has the approved strings", () => {
     expect(t("caseView.back")).toBe("Torna alle case history");

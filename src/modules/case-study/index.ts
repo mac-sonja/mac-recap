@@ -34,6 +34,7 @@ import { makeGetClientInfoForCase } from "@/modules/case-study/application/get-c
 import { makeListCaseStudies } from "@/modules/case-study/application/list-case-studies";
 import { makeListClientSummaries } from "@/modules/case-study/application/list-client-summaries";
 import { makeListClients } from "@/modules/case-study/application/list-clients";
+import { makeListReadyDrafts } from "@/modules/case-study/application/list-ready-drafts";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
 import {
   makeApprove,
@@ -76,6 +77,7 @@ import type {
   ListScope,
 } from "@/modules/case-study/domain/case-study";
 import type { ClientAsset, ListedClientAsset, StoredClientAsset } from "@/modules/case-study/domain/client-material";
+import type { ReadyDraft } from "@/modules/case-study/domain/ready-draft";
 import type { ClientMaterialStorage } from "@/modules/case-study/ports/client-material-storage";
 import type { LogoStorage } from "@/modules/case-study/ports/logo-storage";
 import type { Result } from "@/shared/result";
@@ -168,6 +170,7 @@ export type { CaseAssetIds, CaseStudyRevision } from "@/modules/case-study/appli
 /** Every asset id a document references, as `saveRevisionDoc` checks it (pure; Story 4.4c's image pool). */
 export { referencedAssetIds } from "@/modules/case-study/application/revisions";
 export type { TransitionEvent } from "@/modules/case-study/domain/transition";
+export type { ListReadyDraftsInput, ReadyDraft } from "@/modules/case-study/domain/ready-draft";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
 
 /**
@@ -239,6 +242,19 @@ export function get(id: unknown): Promise<Result<CaseStudy>> {
  */
 export function list(scope: ListScope): Promise<Result<ListedCaseStudy[]>> {
   return makeListCaseStudies(createSupabaseCaseStudyRepository())(scope);
+}
+
+/**
+ * The drafts that became ready for `actor` (Story 3.8): input `{ since }`, an ISO
+ * timestamp with an offset (the start of the person's page session), clamped to no
+ * earlier than 24 hours ago. Returns `{ id, name, readyAt }` for each non-deleted case
+ * now Da approvare with a `generation_succeeded` transition after `since` that follows its
+ * latest `generate`, made by `actor` (a failed generation never counts), oldest first,
+ * one per case. Call only after
+ * `authorize(actor, 'generate')`. `INVALID_INPUT`, `CASE_STUDY_LOOKUP_FAILED`.
+ */
+export function listReadyDrafts(actor: Actor, input: unknown): Promise<Result<ReadyDraft[]>> {
+  return makeListReadyDrafts(createSupabaseCaseStudyRepository())(actor, input);
 }
 
 /**

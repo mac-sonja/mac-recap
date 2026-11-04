@@ -10,7 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DEV_ACTOR_ID } from "@/modules/access/domain/actor";
+import { DEV_ACTOR_ID, SYSTEM_ACTOR_ID } from "@/modules/access/domain/actor";
 import { TEST_ACTOR_ID, TEST_ACTOR_NAME } from "../helpers/db-actor";
 import { CASE_DELETED, CASE_DETAILS_UPDATED } from "@/modules/case-study/domain/case-event";
 import { BUSINESS_LINES, LOCALES, YEAR_MAX, YEAR_MIN } from "@/modules/case-study/domain/case-study";
@@ -539,6 +539,95 @@ describe("list", () => {
     const result = await list({ status: "archived" } as unknown as { status?: CaseStatus });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("INVALID_INPUT");
+  });
+});
+
+describe("listReadyDrafts (Story 3.8)", () => {
+  /** Moves a case through the adapter, as `actorId` (the worker writes the outcome as the system actor). */
+  async function move(caseId: string, event: "generate" | "generation_succeeded" | "generation_failed", actorId: string) {
+    const { createSupabaseCaseStudyRepository } = await import("@/modules/case-study/adapters/supabase/case-study-repository");
+    const edges = {
+      generate: { from: "draft", to: "generating" },
+      generation_succeeded: { from: "generating", to: "in_review" },
+      generation_failed: { from: "generating", to: "draft" },
+    } as const;
+    const moved = await createSupabaseCaseStudyRepository().transition({ caseId, event, ...edges[event], actorId });
+    if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
+  }
+
+  /** The database's clock, as a page session's start. */
+  async function dbNow() {
+    const { rows } = await pool.query<{ now: Date }>("select clock_timestamp() as now");
+    return rows[0].now.toISOString();
+  }
+
+  async function readyFor(since: string) {
+    const { listReadyDrafts } = await loadCaseStudy();
+    const result = await listReadyDrafts(await signedInActor(), { since });
+    if (!result.ok) throw new Error(`listReadyDrafts failed: ${result.error.code}`);
+    return result.value;
+  }
+
+  it("returns my case that reached Da approvare after the session began, with its name and the time", async () => {
+    const actor = await signedInActor();
+    const since = await dbNow();
+    const created = await createCase({ name: "Ready mine" });
+    await move(created.id, "generate", actor.id);
+    await move(created.id, "generation_succeeded", SYSTEM_ACTOR_ID);
+    const { rows } = await pool.query<{ at: Date }>(
+      "select at from public.case_event where case_id = $1 and type = 'transition' and data->>'event' = 'generation_succeeded'",
+      [created.id],
+    );
+    const ready = (await readyFor(since)).filter((d) => d.id === created.id);
+    expect(ready).toHaveLength(1);
+    expect(ready[0].name).toBe("Ready mine");
+    expect(Date.parse(ready[0].readyAt)).toBe(rows[0].at.getTime());
+  });
+
+  it("leaves out someone else's generation, a failed one, one ready before the session and a deleted case", async () => {
+    const actor = await signedInActor();
+    const before = await createCase({ name: "Ready before" });
+    await move(before.id, "generate", actor.id);
+    await move(before.id, "generation_succeeded", SYSTEM_ACTOR_ID);
+    const since = await dbNow();
+
+    const theirs = await createCase({ name: "Ready theirs" });
+    await move(theirs.id, "generate", DEV_ACTOR_ID);
+    await move(theirs.id, "generation_succeeded", SYSTEM_ACTOR_ID);
+    const failed = await createCase({ name: "Ready failed" });
+    await move(failed.id, "generate", actor.id);
+    await move(failed.id, "generation_failed", SYSTEM_ACTOR_ID);
+    const deleted = await createCase({ name: "Ready deleted" });
+    await move(deleted.id, "generate", actor.id);
+    await move(deleted.id, "generation_succeeded", SYSTEM_ACTOR_ID);
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [deleted.id]);
+    const mine = await createCase({ name: "Ready control" });
+    await move(mine.id, "generate", actor.id);
+    await move(mine.id, "generation_succeeded", SYSTEM_ACTOR_ID);
+
+    const ids = (await readyFor(since)).map((d) => d.id);
+    expect(ids).toContain(mine.id);
+    expect(ids).not.toContain(before.id);
+    expect(ids).not.toContain(theirs.id);
+    expect(ids).not.toContain(failed.id);
+    expect(ids).not.toContain(deleted.id);
+  });
+
+  it("goes by the latest generate: my retry after someone else's failed run is mine", async () => {
+    const actor = await signedInActor();
+    const since = await dbNow();
+    const retried = await createCase({ name: "Ready retried" });
+    await move(retried.id, "generate", DEV_ACTOR_ID);
+    await move(retried.id, "generation_failed", SYSTEM_ACTOR_ID);
+    await move(retried.id, "generate", actor.id);
+    await move(retried.id, "generation_succeeded", SYSTEM_ACTOR_ID);
+    expect((await readyFor(since)).map((d) => d.id)).toContain(retried.id);
+  });
+
+  it("rejects a malformed since without querying", async () => {
+    const { listReadyDrafts } = await loadCaseStudy();
+    const result = await listReadyDrafts(await signedInActor(), { since: "ieri" });
+    expect(result).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
   });
 });
 

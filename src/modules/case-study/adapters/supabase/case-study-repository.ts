@@ -1,6 +1,7 @@
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import { caseEventSchema, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import { caseStudySchema, type CaseStudy } from "@/modules/case-study/domain/case-study";
+import { READY_DRAFTS_GENERATE_LOOKBACK_MS, READY_DRAFTS_LIMIT, selectReadyDrafts } from "@/modules/case-study/domain/ready-draft";
 import type { Json, Tables } from "@/shared/db.types";
 import { log } from "@/shared/log";
 import { err, type Result } from "@/shared/result";
@@ -106,6 +107,13 @@ export function toCaseEvent(row: CaseEventRow): Result<CaseEvent> {
     return err({ code: "CASE_EVENT_INVALID", message: "A case_event row failed validation.", details: { id: row.id } });
   }
   return { ok: true, value: parsed.data };
+}
+
+/** `data.event` of a `transition` case event, or `""` when it has none. */
+function transitionEventOf(data: Json): string {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return "";
+  const event = data.event;
+  return typeof event === "string" ? event : "";
 }
 
 /** The business line check refused the value: the domain schema should have caught it first. */
@@ -331,6 +339,61 @@ export function createSupabaseCaseStudyRepository(
         return err({ code: "CASE_STUDY_WRITE_FAILED", message: "Could not change the case study status." });
       }
       return reread(data.id, { actorId: change.actorId, what: "transition" });
+    },
+
+    async listReadyDrafts(actorId, since) {
+      const lookupFailed = (what: string, code: string): Result<never> => {
+        log.error(`ready drafts ${what} failed: ${code}`, { actorId });
+        return err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "Could not list the ready drafts." });
+      };
+      // 1. The cases this actor pressed Generate on lately: the only ones that can be theirs.
+      // Bounded by time and count, and per actor, so other people's work never crowds them out.
+      const pressedAfter = new Date(Date.parse(since) - READY_DRAFTS_GENERATE_LOOKBACK_MS).toISOString();
+      const pressed = await client()
+        .from("case_event")
+        .select("case_id")
+        .eq("type", TRANSITION)
+        .eq("data->>event", "generate")
+        .eq("actor_id", actorId)
+        .gt("at", pressedAfter)
+        .order("at", { ascending: false })
+        .limit(READY_DRAFTS_LIMIT);
+      if (pressed.error) return lookupFailed("case_event generate lookup", pressed.error.code);
+      const caseIds = [...new Set(pressed.data.map((e) => e.case_id))];
+      if (caseIds.length === 0) return { ok: true, value: [] };
+
+      // 2. Their successes after `since`, 3. every press on them (someone may have pressed
+      // after this actor) and 4. their names, statuses and whether they are deleted.
+      const [succeeded, generated, named] = await Promise.all([
+        client()
+          .from("case_event")
+          .select("case_id, actor_id, at, data")
+          .eq("type", TRANSITION)
+          .eq("data->>event", "generation_succeeded")
+          .in("case_id", caseIds)
+          .gt("at", since)
+          .order("at", { ascending: false })
+          .limit(READY_DRAFTS_LIMIT),
+        client()
+          .from("case_event")
+          .select("case_id, actor_id, at, data")
+          .eq("type", TRANSITION)
+          .eq("data->>event", "generate")
+          .in("case_id", caseIds),
+        client().from("case_study").select("id, name, status, deleted_at").in("id", caseIds),
+      ]);
+      if (succeeded.error) return lookupFailed("case_event lookup", succeeded.error.code);
+      if (generated.error) return lookupFailed("case_event generate lookup", generated.error.code);
+      if (named.error) return lookupFailed("case_study lookup", named.error.code);
+
+      const transitions = [...succeeded.data, ...generated.data].map((e) => ({
+        caseId: e.case_id,
+        actorId: e.actor_id,
+        event: transitionEventOf(e.data),
+        at: e.at,
+      }));
+      const cases = named.data.map((row) => ({ id: row.id, name: row.name, status: row.status, deletedAt: row.deleted_at }));
+      return { ok: true, value: selectReadyDrafts(transitions, cases, actorId) };
     },
 
     async softDelete(caseId, status, actorId) {
