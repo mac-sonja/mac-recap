@@ -9,8 +9,9 @@ import { cn } from "@/shared/utils";
 import { useInPlaceText } from "./in-place-text";
 import type { Axis } from "./grid-resize";
 import { INSTAGRAM_VIEWS, InstagramOverlay, type InstagramView } from "./instagram-overlay";
+import { canvasDragKind, readDrag, writeDrag, type CanvasDrag } from "./canvas-drag";
 import { MEDIA_DRAG_TYPE } from "./media-files";
-import type { MediaTarget } from "./page-editing";
+import type { DropTarget, MediaTarget } from "./page-editing";
 import { ResizeHandles } from "./resize-handles";
 import { findElement, selectionAt, type Selection } from "./selection";
 import { Slideshow } from "./slideshow";
@@ -71,6 +72,12 @@ export interface CanvasProps {
   onDeletePage?: (pageKey: string) => void;
   /** **+ Aggiungi pagina** after the last page (Story 4.13); undefined: no button. */
   onAddPage?: () => void;
+  /** The canvas drag in progress (Story 4.3e), started here or from Elementi; null: none. */
+  dragging?: CanvasDrag | null;
+  /** A drag on the canvas starts (its source) or ends (null). Undefined: nothing on the canvas drags. */
+  onDragSource?: (drag: CanvasDrag | null) => void;
+  /** An element, a block or an Elementi button dropped on a page. Undefined: the canvas takes no such drop. */
+  onCanvasDrop?: (drag: CanvasDrag, target: DropTarget) => void;
 }
 
 /** What a page needs to let its texts be typed in. */
@@ -103,6 +110,17 @@ const TYPING_PREVIEW =
 
 const sameBoxes = (a: readonly Box[], b: readonly Box[]) =>
   a.length === b.length && a.every((x, i) => x.top === b[i]!.top && x.left === b[i]!.left && x.width === b[i]!.width && x.height === b[i]!.height);
+
+/** The top-level element node of `block` holding element `elementId` (itself or inside it), or null. */
+function topLevelNode(block: Element, elementId: string | undefined): Element | null {
+  if (elementId === undefined) return null;
+  let node = block.querySelector(`[data-element-id="${elementId}"]`);
+  if (node === null) return null;
+  for (let up = node.parentElement?.closest("[data-element-id]"); up !== null && up !== undefined && block.contains(up); up = up.parentElement?.closest("[data-element-id]")) {
+    node = up;
+  }
+  return node;
+}
 
 /** One page drawn by the format's renderer (Story 3.5). Memoised: a selection change never redraws it. */
 export const RenderedPage = memo(function RenderedPage({
@@ -157,6 +175,9 @@ function CanvasPage({
   onCrop,
   onCropDone,
   onDeletePage,
+  dragging = null,
+  onDragSource,
+  onCanvasDrop,
 }: Pick<
   CanvasProps,
   | "formatId"
@@ -172,6 +193,9 @@ function CanvasPage({
   | "onCrop"
   | "onCropDone"
   | "onDeletePage"
+  | "dragging"
+  | "onDragSource"
+  | "onCanvasDrop"
 > &
   TextEditing & {
     page: Page;
@@ -286,30 +310,122 @@ function CanvasPage({
 
   // A Media tile dragged over the page (Story 4.5b): the block it would go in framed; off every block, no frame.
   const dropsMedia = !preview && onPlaceMedia !== undefined;
+  // Elements, blocks and Elementi dragged on the canvas (Story 4.3e): in the editor of an editable case only.
+  const drags = !preview && editable && onDragSource !== undefined && onCanvasDrop !== undefined;
   const [dropFrame, setDropFrame] = useState<Box | null>(null);
-  const takes = (event: DragEvent<HTMLDivElement>) => dropsMedia && event.dataTransfer.types.includes(MEDIA_DRAG_TYPE);
+  /** The line before the element a drop would go before. */
+  const [dropLine, setDropLine] = useState<Box | null>(null);
+  /** The page itself framed: a block or Blocco dropped here goes at its end. */
+  const [dropPage, setDropPage] = useState(false);
+  const takesMedia = (event: DragEvent<HTMLDivElement>) => dropsMedia && event.dataTransfer.types.includes(MEDIA_DRAG_TYPE);
+  const canvasKind = (event: DragEvent<HTMLDivElement>) => (drags ? canvasDragKind([...event.dataTransfer.types]) : null);
+
+  function clearMarks() {
+    setDropFrame(null);
+    setDropLine(null);
+    setDropPage(false);
+  }
+
+  /** `node`'s box in the page, or null. */
+  const boxOf = (node: Element | null | undefined) => (host.current === null || node === null || node === undefined ? null : boxIn(host.current, node));
+  const sameBox = (prev: Box | null, box: Box | null) => (prev === null || box === null ? box : sameBoxes([prev], [box]) ? prev : box);
+
+  // Every element of the page drags, but not the text being typed in, nor what holds it. Rerun on
+  // everything the renderer draws from: a new rendition or bound value can redraw the element nodes.
+  useLayoutEffect(() => {
+    const el = host.current;
+    if (el === null) return;
+    for (const node of el.querySelectorAll<HTMLElement>("[data-element-id]")) {
+      if (!drags || node.closest("[inert]") !== null) {
+        node.removeAttribute("draggable");
+        continue;
+      }
+      const typing = editing !== null && (node.dataset.elementId === editing || node.querySelector(`[data-element-id="${editing}"]`) !== null);
+      node.setAttribute("draggable", typing ? "false" : "true");
+    }
+  }, [drags, editing, page, shown, renderKey, formatId, template, number, assets, values, animateTexts]);
+
+  /** A drag starting on an element: the element, or its block when it is the block's only element (mockup `renderItem`). */
+  function onDragStart(event: DragEvent<HTMLDivElement>) {
+    if (!drags) return;
+    const node = (event.target as Element).closest?.("[data-element-id]");
+    if (node === null || node === undefined || node.closest("[inert]") !== null) return;
+    const at = selectionAt(node, page.pageKey);
+    const block = page.blocks.find((b) => b.blockId === at.blockId);
+    if (block === undefined || at.elementId === undefined) return;
+    if (editing !== null && (at.elementId === editing || node.querySelector(`[data-element-id="${editing}"]`) !== null)) {
+      event.preventDefault();
+      return;
+    }
+    const only = block.elements.length === 1 && block.elements[0]!.elementId === at.elementId;
+    const drag: CanvasDrag = only
+      ? { kind: "block", formatId, pageKey: page.pageKey, blockId: block.blockId }
+      : { kind: "element", formatId, pageKey: page.pageKey, elementId: at.elementId };
+    writeDrag(event.dataTransfer, drag);
+    event.dataTransfer.effectAllowed = "move";
+    onDragSource?.(drag);
+  }
+
+  /** "⠿ Sposta" dragged: its block. */
+  function onGripDragStart(event: DragEvent<HTMLSpanElement>) {
+    if (!drags || blockId === undefined) return;
+    event.stopPropagation();
+    const drag: CanvasDrag = { kind: "block", formatId, pageKey: page.pageKey, blockId };
+    writeDrag(event.dataTransfer, drag);
+    event.dataTransfer.effectAllowed = "move";
+    const node = host.current?.querySelector(`[data-block-id="${blockId}"]`);
+    if (node !== null && node !== undefined) event.dataTransfer.setDragImage?.(node, 24, 24);
+    onDragSource?.(drag);
+  }
 
   function onDragOver(event: DragEvent<HTMLDivElement>) {
-    if (!takes(event)) return;
+    const kind = canvasKind(event);
+    if (kind === null) {
+      if (!takesMedia(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      const target = dropTarget(event.target as Element);
+      const block = target.blockId === undefined ? null : host.current?.querySelector(`[data-block-id="${target.blockId}"]`);
+      setDropFrame((prev) => sameBox(prev, boxOf(block)));
+      return;
+    }
+    const target = canvasTarget(event.target as Element);
+    const from = dragging !== null && dragging.kind === kind ? dragging : null;
+    // A block (or Blocco) goes on a block to swap with it, or at the end of the page; never on itself, nor its own page's end.
+    const asBlock = kind === "block" || (from?.kind === "new" && from.element === "block");
+    const own = from?.kind === "block" && from.pageKey === page.pageKey && (target.blockId === undefined || from.blockId === target.blockId);
+    if (own) {
+      clearMarks();
+      return;
+    }
     event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    const el = host.current;
-    const target = dropTarget(event.target as Element);
-    const block = target.blockId === undefined ? null : el?.querySelector(`[data-block-id="${target.blockId}"]`);
-    const box = el === null || block === null || block === undefined ? null : boxIn(el, block);
-    setDropFrame((prev) => (prev === null || box === null ? box : sameBoxes([prev], [box]) ? prev : box));
+    event.dataTransfer.dropEffect = kind === "new" ? "copy" : "move";
+    const blockNode = target.blockId === undefined || (asBlock && kind === "new") ? null : host.current?.querySelector(`[data-block-id="${target.blockId}"]`);
+    setDropPage(asBlock && (blockNode === null || blockNode === undefined));
+    setDropFrame((prev) => sameBox(prev, boxOf(blockNode)));
+    // Elements go before the top-level element under the pointer: a line marks it.
+    const before = asBlock || blockNode === null || blockNode === undefined ? null : topLevelNode(blockNode, target.beforeElementId);
+    const box = boxOf(before);
+    setDropLine((prev) => sameBox(prev, box === null ? null : { top: box.top, left: box.left, width: box.width, height: 0 }));
   }
 
   function onDragLeave(event: DragEvent<HTMLDivElement>) {
     // Leaving for a child is not leaving the page.
     if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
-    setDropFrame(null);
+    clearMarks();
   }
 
   function onDrop(event: DragEvent<HTMLDivElement>) {
-    if (!takes(event)) return;
+    if (canvasKind(event) !== null) {
+      event.preventDefault();
+      clearMarks();
+      const drag = readDrag(event.dataTransfer, dragging);
+      if (drag !== null) onCanvasDrop?.(drag, canvasTarget(event.target as Element));
+      return;
+    }
+    if (!takesMedia(event)) return;
     event.preventDefault();
-    setDropFrame(null);
+    clearMarks();
     const assetId = event.dataTransfer.getData(MEDIA_DRAG_TYPE);
     if (assetId !== "") onPlaceMedia?.(dropTarget(event.target as Element), assetId);
   }
@@ -318,6 +434,18 @@ function CanvasPage({
   function dropTarget(target: Element): MediaTarget {
     if (target.closest?.('[data-frame="crop"]') && blockId !== undefined && elementId !== undefined) return { pageKey: page.pageKey, blockId, elementId };
     return selectionAt(target, page.pageKey);
+  }
+
+  /** Where a canvas drag at `target` lands: "⠿ Sposta" stands for its block. */
+  function canvasTarget(target: Element): DropTarget {
+    const grip = target.closest?.("[data-grip]")?.getAttribute("data-grip");
+    if (grip !== null && grip !== undefined) return { pageKey: page.pageKey, blockId: grip };
+    const at = dropTarget(target);
+    return {
+      pageKey: page.pageKey,
+      ...(at.blockId === undefined ? {} : { blockId: at.blockId }),
+      ...(at.elementId === undefined ? {} : { beforeElementId: at.elementId }),
+    };
   }
 
   // Ritaglia (Story 4.5b-3): the selected cropped image or video is dragged to choose what shows.
@@ -404,11 +532,14 @@ function CanvasPage({
         data-selected={pageSelected ? "" : undefined}
         onClick={preview ? (event) => previewPick(event, page.pageKey, onPreviewPick) : onClick}
         onDoubleClick={preview ? undefined : onDoubleClick}
-        onDragOver={dropsMedia ? onDragOver : undefined}
-        onDragLeave={dropsMedia ? onDragLeave : undefined}
-        onDrop={dropsMedia ? onDrop : undefined}
+        data-drop-over={dropPage ? "" : undefined}
+        onDragStart={drags ? onDragStart : undefined}
+        onDragEnd={drags ? () => onDragSource?.(null) : undefined}
+        onDragOver={dropsMedia || drags ? onDragOver : undefined}
+        onDragLeave={dropsMedia || drags ? onDragLeave : undefined}
+        onDrop={dropsMedia || drags ? onDrop : undefined}
         className={cn(
-          "relative w-full shrink-0 shadow-page transition-shadow duration-150 data-selected:ring-2 data-selected:ring-accent",
+          "relative w-full shrink-0 shadow-page transition-shadow duration-150 data-selected:ring-2 data-selected:ring-accent data-drop-over:ring-[3px] data-drop-over:ring-accent",
           // The text being typed in is framed by the selection; no second outline (mockup).
           preview ? TYPING_PREVIEW : TYPING,
           !preview && "cursor-pointer",
@@ -463,7 +594,18 @@ function CanvasPage({
             style={{ top: frames.block.top - 2, left: frames.block.left - 2, width: frames.block.width + 4, height: frames.block.height + 4 }}
           >
             {elementId === undefined && (
-              <span className="absolute -top-[11px] left-1/2 inline-flex h-[22px] -translate-x-1/2 items-center rounded-full bg-accent px-2.5 font-label text-[11.5px] leading-none font-semibold whitespace-nowrap text-accent-foreground shadow-control">
+              <span
+                // Dragged onto another block, the two swap; onto another page, the block goes at its end (Story 4.3e).
+                data-grip={drags ? blockId : undefined}
+                draggable={drags}
+                title={drags ? it.configurator.canvas.moveHint : undefined}
+                onDragStart={drags ? onGripDragStart : undefined}
+                onClick={(event) => event.stopPropagation()}
+                className={cn(
+                  "absolute -top-[11px] left-1/2 inline-flex h-[22px] -translate-x-1/2 items-center rounded-full bg-accent px-2.5 font-label text-[11.5px] leading-none font-semibold whitespace-nowrap text-accent-foreground shadow-control",
+                  drags && "pointer-events-auto cursor-grab active:cursor-grabbing",
+                )}
+              >
                 {it.configurator.canvas.move}
               </span>
             )}
@@ -478,6 +620,14 @@ function CanvasPage({
             data-frame="drop"
             className="pointer-events-none absolute z-10 rounded-lg border-2 border-dashed border-accent bg-accent/5"
             style={{ top: dropFrame.top - 2, left: dropFrame.left - 2, width: dropFrame.width + 4, height: dropFrame.height + 4 }}
+          />
+        )}
+        {dropLine !== null && (
+          <div
+            aria-hidden="true"
+            data-frame="drop-line"
+            className="pointer-events-none absolute z-10 h-[3px] rounded-full bg-accent"
+            style={{ top: dropLine.top - 3, left: dropLine.left, width: dropLine.width }}
           />
         )}
         {crops && frames.element !== null && (
@@ -519,7 +669,8 @@ function CanvasPage({
  * renderer at the format's editor width. A click selects the element, block or page
  * under the pointer. It reports the page nearest its middle as the page in view. A Media
  * tile dragged over a page frames the block it would go in, and dropped puts its file
- * there (Story 4.5b).
+ * there (Story 4.5b). In the editor of an editable case its elements and "⠿ Sposta" drag,
+ * and its blocks and pages take those drops and the Elementi buttons' (Story 4.3e).
  *
  * Above the Video pages sits the meta row: **Animazione testi** in the editor, the
  * Instagram switch in Anteprima. Anteprima of Presentazione stacks the pages at up to
@@ -558,6 +709,9 @@ export function Canvas({
   onCropDone,
   onDeletePage,
   onAddPage,
+  dragging = null,
+  onDragSource,
+  onCanvasDrop,
 }: CanvasProps) {
   const frame = useRef<number | null>(null);
   const video = formatId === "video_9_16";
@@ -667,6 +821,9 @@ export function Canvas({
             onPlaceMedia={onPlaceMedia}
             onCrop={onCrop}
             onCropDone={onCropDone}
+            dragging={dragging}
+            onDragSource={onDragSource}
+            onCanvasDrop={onCanvasDrop}
             onDeletePage={
               onDeletePage === undefined
                 ? undefined

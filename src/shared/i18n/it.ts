@@ -893,6 +893,8 @@ export const it = {
       empty: "Nessuna pagina in questo formato.",
       /** On the selected block. */
       move: "⠿ Sposta",
+      /** The grip's hint (Story 4.3e). */
+      moveHint: "Trascina su un altro blocco per scambiarli, o su un’altra pagina per spostarlo",
     },
     /** Section labels, keyed by `PageSection`. */
     sections: {
@@ -1026,6 +1028,8 @@ export const it = {
       removeBlock: "Rimuovi blocco",
       /** In an empty block, in the editor only. */
       emptyBlock: "Trascina qui un elemento",
+      /** An element or Elementi button dropped on a page outside every block (Story 4.3e). */
+      dropOffBlock: "Trascina l’elemento dentro un blocco.",
       /** A new block's name. */
       newBlock: "Blocco",
       /** A layout with fewer cells than the page's filled blocks (Story 4.4a); `{k}` blocks over. */
