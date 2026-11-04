@@ -82,6 +82,8 @@ context:
 
 ## Implementation Notes
 
+- Resumed build (2026-11-04): the server side is already on the branch since `baseline_commit` — domain bundle kind and hash, `request-export.ts`, `export-handler.ts`, `store-zip.ts` read-back, `export-storage.ts` read and key, the migration, and tests including `test/db/export.db.test.ts` and `test/export-chromium.test.ts`. Check those against the spec and keep them; don't rewrite. Still open: the picker (radio → checkboxes) and its wiring in `case-download.ts`, `case-view.tsx`, `case-studies-table.tsx`, `export-actions.ts`, their tests, and a lint error in `domain/export.test.ts` (unused `_`).
+
 ## Spec Change Log
 
 ## Review Triage Log
