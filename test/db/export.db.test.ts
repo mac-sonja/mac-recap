@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TEST_ACTOR_ID } from "../helpers/db-actor";
 import { createSupabaseExportRepository } from "@/modules/rendering/adapters/supabase/export-repository";
 import { createSupabaseExportStorage, exportKey, RENDERING_BUCKET } from "@/modules/rendering/adapters/supabase/export-storage";
-import { EXPORT_FORMAT_IDS, type ExportFormatId, type NewExport } from "@/modules/rendering/domain/export";
+import { EXPORT_RECORD_FORMATS, type ExportFormatId, type ExportRecordFormat, type NewExport } from "@/modules/rendering/domain/export";
 
 const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -32,7 +32,7 @@ afterAll(async () => {
 
 const freshHash = () => createHash("sha256").update(randomUUID()).digest("hex");
 
-const row = (format: ExportFormatId = "presentazione_16_9", hash = freshHash()): NewExport => ({
+const row = (format: ExportRecordFormat = "presentazione_16_9", hash = freshHash()): NewExport => ({
   contentHash: hash,
   format,
   parts: [{ subject: { kind: "case", id: CASE_ID }, revisionId: REVISION_ID }],
@@ -80,12 +80,12 @@ describe("migration", () => {
     expect(rows.map((r) => r.column_name)).toEqual(["content_hash", "content_type", "created_at", "created_by", "format", "id", "parts", "path", "size_bytes"]);
   });
 
-  it("checks format against exactly EXPORT_FORMAT_IDS", async () => {
+  it("checks format against exactly EXPORT_RECORD_FORMATS (the export formats and `bundle`, Story 5.4)", async () => {
     const { rows } = await pool.query<{ def: string }>(
       `select pg_catalog.pg_get_constraintdef(oid) as def from pg_catalog.pg_constraint
         where conrelid = 'public.export'::regclass and conname = 'export_format_check'`,
     );
-    expect([...rows[0].def.matchAll(/'([^']+)'/g)].map((m) => m[1]).sort()).toEqual([...EXPORT_FORMAT_IDS].sort());
+    expect([...rows[0].def.matchAll(/'([^']+)'/g)].map((m) => m[1]).sort()).toEqual([...EXPORT_RECORD_FORMATS].sort());
   });
 
   it("creates the private rendering bucket for PDF and ZIP only", async () => {
@@ -108,7 +108,15 @@ describe("rows", () => {
     }
   });
 
+  it("accepts a bundle row: a ZIP at exports/{hash}/bundle.zip (Story 5.4)", async () => {
+    const bundle = row("bundle");
+    expect(bundle.path).toBe(`exports/${bundle.contentHash}/bundle.zip`);
+    expect((await inRolledBackTx(INSERT, params(bundle), "service_role")).rowCount).toBe(1);
+  });
+
   it.each([
+    ["a bundle at another path", (r: NewExport) => ({ ...r, format: "bundle" as const, contentType: "application/zip" as const, path: `exports/${r.contentHash}/carosello_1_1.zip` })],
+    ["a bundle as a PDF", (r: NewExport) => ({ ...r, format: "bundle" as const, contentType: "application/pdf" as const, path: `exports/${r.contentHash}/bundle.pdf` })],
     ["a path that is not the export's key", (r: NewExport) => ({ ...r, path: `exports/${r.contentHash}/other.pdf` })],
     ["a Presentazione as a ZIP", (r: NewExport) => ({ ...r, contentType: "application/zip" as const })],
     ["Video", (r: NewExport) => ({ ...r, format: "video_9_16" as ExportFormatId })],
@@ -198,6 +206,18 @@ describe("export repository and storage adapters", () => {
     expect(response.status).toBe(200);
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
     expect(response.headers.get("content-disposition") ?? "").toContain("attachment");
+  });
+
+  it("stores a bundle at exports/{hash}/bundle.zip and reads it back (Story 5.4)", async () => {
+    const storage = createSupabaseExportStorage();
+    const hash = freshHash();
+    const bytes = new Uint8Array([0x50, 0x4b, 0x05, 0x06, ...new Array(18).fill(0)]);
+    const stored = await storage.upload({ contentHash: hash, format: "bundle" }, bytes);
+    expect(stored).toEqual({ ok: true, value: { path: `exports/${hash}/bundle.zip` } });
+    if (!stored.ok) return;
+    expect(await storage.read(stored.value.path)).toEqual({ ok: true, value: bytes });
+    const inserted = await createSupabaseExportRepository().insert(row("bundle", hash));
+    expect(inserted).toMatchObject({ ok: true, value: { format: "bundle", path: stored.value.path, contentType: "application/zip" } });
   });
 
   it("refuses to sign anything but an export key", async () => {

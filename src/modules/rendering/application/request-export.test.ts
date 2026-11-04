@@ -261,7 +261,7 @@ describe("requestExport, several formats (Story 5.4)", () => {
     const asFormats = await makeRequestExport(one)(ACTOR, { caseId: CASE_ID, formats: ["carosello_1_1"] });
     const asFormat = deps();
     expect(await makeRequestExport(asFormat)(ACTOR, { caseId: CASE_ID, format: "carosello_1_1" })).toEqual(asFormats);
-    expect(one.enqueue.mock.calls).toEqual(asFormat.enqueue.mock.calls);
+    expect(vi.mocked(one.enqueue).mock.calls).toEqual(vi.mocked(asFormat.enqueue).mock.calls);
     expect(one.enqueue).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ inputHash: await hashNow(one, "carosello_1_1"), payload: expect.objectContaining({ format: "carosello_1_1" }) }),
     );
