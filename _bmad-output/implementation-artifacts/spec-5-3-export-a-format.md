@@ -2,7 +2,7 @@
 title: 'Story 5.3: export a format as a file'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'd3bf032d8beafad7c957ec1e88e9eb439c6892af'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -94,6 +94,34 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|-------|---------|---------|----------|-------|
+| 1 | blind, edge | A rendition not ready yet is skipped; the file without it is stored under a hash reused forever | high | `mediaAssets` skips `RENDITION_NOT_READY`/`NOT_FOUND`; rows are immutable and found by hash | patch |
+| 2 | blind | The hash has no template or renderer version, so a deploy that changes rendering keeps serving old files | medium | `contentHashInput` is data only, pinned to `export.v1` | patch |
+| 3 | blind, edge | A bad SVG logo fails the export (retried) | medium | `LOGO_UNSAFE`/`LOGO_RASTERISE_FAILED` aren't permanent; deterministic | patch (draw without the logo) |
+| 4 | edge | An oversized logo is dropped and cached | low | Deterministic for that logo id; the same result every time | rejected |
+| 5 | blind, edge | Polling never ends while a job waits | medium | No deadline in `download-button.tsx` | patch |
+| 6 | blind | The PDF page count isn't checked | medium | Carosello is checked; Presentazione isn't | patch |
+| 7 | blind | Hand-edited `db.types.ts` is mis-indented | medium | CI's drift check compares generated types | patch |
+| 8 | edge | A file over the bucket limit retries forever | low | Direct permanent failure | patch |
+| 9 | edge | `page.evaluate(READY)` can hang past the timeout | low | No race with a timeout | patch |
+| 10 | edge | A double click sends two requests | low | Direct guard | patch |
+| 11 | blind | An unknown format gets `FORMAT_NOT_IN_REVISION`; wrong invalid-field names | low | Direct correction | patch |
+| 12 | blind | Failure toasts stack in the table and don't name the case | low | Put the case name in the toast | patch |
+| 13 | blind | No visible progress while the request starts | low | Only `aria-busy` | patch |
+| 14 | blind | `ensureExport` exported but unused | low | Direct deletion | patch |
+| 15 | blind, edge, gap | Job lookup scans the 50 newest jobs of the case | low | Needs 50+ newer jobs during one export | rejected |
+| 16 | blind | The event is per link handed out, and its write failure blocks the download | low | A real download can't be observed; audit before delivery is deliberate | rejected |
+| 17 | blind | Poll cost | low | Demo scale | rejected |
+| 18 | blind, edge | Images fetched one by one and buffered | low | Renditions come from our storage with a length; the cap holds | rejected |
+| 19 | edge | Table Scarica without the export permission | false | Every role has `export` on approved cases | rejected |
+| 20 | edge | Status hands out a file made before a field edit | low | Consistent with the request moment; the next Scarica re-renders | rejected |
+| 21 | edge | Navigating away loses the download | false | The matrix row says exactly that | rejected |
+| 22 | blind, gap | The acceptance criterion isn't tested end to end | gap | Pre-verified | patch (test) |
+| 23 | gap | `rasteriseSvgLogo` and `fetchBytes` have no tests | gap | Pre-verified | patch (test) |
+| 24 | gap | `exportStatus` "succeeded but no row" branch untested | gap | Pre-verified | patch (test) |
+| 25 | gap | `FORMAT_NOT_IN_REVISION` now 400 for configurator actions too | low | Consumers read the code, not the status | rejected |
 
 ## Verification
 
