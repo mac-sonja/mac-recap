@@ -2896,6 +2896,8 @@ describe("Configurator Animazione upload (Story 4.5c-3)", () => {
     expect(actions.presignAssetUpload).toHaveBeenCalledTimes(2);
     expect(picks()).toEqual([IMAGE, X, Y]);
     expect(status().textContent).toBe(fill(dict.configurator.media.uploaded, { n: 2 }));
+    // The one status line sits inside the open dialog.
+    expect(dialog()!.contains(status())).toBe(true);
     fireEvent.click(button(d.insert, dialog()!));
     await settle();
     expect(savedElements(onSave)).toEqual([{ elementId: expect.any(String), type: "animation", animation: "carousel_01", assetIds: [IMAGE, X, Y], fit: "fit" }]);
@@ -2997,6 +2999,71 @@ describe("Configurator Animazione upload (Story 4.5c-3)", () => {
     fireEvent.click(button(d.cancel, dialog()!));
     fireEvent.click(button(dict.configurator.tabs.media, rightPanel()));
     expect(tiles().slice(-2)).toEqual([X, Y]);
+  });
+
+  it("with 29 picked, a drop of three picks the first and says two weren't added", async () => {
+    const Z = "bbbbbbbb-0000-4000-8000-000000000043";
+    const many = Array.from({ length: 29 }, (_, i) => listed(`cccccccc-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, "image", `f${i + 1}.jpg`));
+    server([X, Y, Z], many);
+    setup(false, fixture(), { media: many });
+    open();
+    for (const f of many) pick(f.id);
+    drop([file("x.jpg", "image/jpeg"), file("y.jpg", "image/jpeg"), file("z.jpg", "image/jpeg")]);
+    await flush();
+    expect(picks()).toHaveLength(30);
+    expect(picks().at(-1)).toBe(X);
+    expect(status().textContent).toBe(`${fill(dict.configurator.media.uploaded, { n: 3 })} ${fill(d.overMany, { n: 2, max: 30 })}`);
+  });
+
+  it("Annulla while an upload is still going: the file lands in Media, no over-limit line, the animation unchanged", async () => {
+    const onSave = vi.fn(savedOk);
+    const many = Array.from({ length: 29 }, (_, i) => listed(`cccccccc-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, "image", `f${i + 1}.jpg`));
+    server([X, Y], many);
+    let release: () => void = () => {};
+    uploads.uploadFile.mockImplementation(() => new Promise<void>((resolve) => (release = resolve)));
+    setup(false, fixture(), { media: many, onSave });
+    open();
+    for (const f of many) pick(f.id);
+    drop([file("x.jpg", "image/jpeg")]);
+    await flush();
+    fireEvent.click(button(d.cancel, dialog()!));
+    expect(dialog()).toBeNull();
+    release();
+    await flush();
+    expect(status().textContent).toBe(fill(m.announce.done, { name: "x.jpg" }));
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.click(button(dict.configurator.tabs.media, rightPanel()));
+    expect(tiles().at(-1)).toBe(X);
+  });
+
+  it("an upload whose list can't be read again is not picked; the success line still names it", async () => {
+    server([X, Y]);
+    actions.listAssets.mockResolvedValueOnce({ ok: false, status: 500, error: { code: "ASSET_READ_FAILED", message: "m" } });
+    setup(false, fixture());
+    open();
+    drop([file("x.jpg", "image/jpeg")]);
+    await flush();
+    expect(actions.confirmAssetUpload).toHaveBeenCalledTimes(1);
+    expect(dialog()!.querySelector(`[data-pick="${X}"]`)).toBeNull();
+    expect(status().textContent).toBe(fill(m.announce.done, { name: "x.jpg" }));
+    // The next read shows it, unpicked; the file uploaded then is picked alone.
+    drop([file("y.jpg", "image/jpeg")]);
+    await flush();
+    expect(dialog()!.querySelector(`[data-pick="${X}"]`)!.getAttribute("aria-pressed")).toBe("false");
+    expect(picks()).toEqual([Y]);
+  });
+
+  it("a file dropped on the picker, off the drop zone, is taken and uploads nothing", async () => {
+    setup(false, fixture());
+    open();
+    const area = dialog()!.querySelector<HTMLElement>(`[data-pick="${IMAGE}"]`)!;
+    const data = { dataTransfer: { files: [file("x.jpg", "image/jpeg")], types: ["Files"], dropEffect: "copy" } };
+    expect(fireEvent.dragOver(area, data)).toBe(false);
+    expect(fireEvent.drop(area, data)).toBe(false);
+    await flush();
+    expect(actions.presignAssetUpload).not.toHaveBeenCalled();
+    expect(picks()).toEqual([]);
   });
 
   it("on a case with no media yet, a dropped file shows in the picker, picked, and Inserisci is on", async () => {

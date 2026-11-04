@@ -130,8 +130,8 @@ type Attempt =
 /** What a drop zone needs: the upload, how many files are still going, and whether storage is off. */
 export interface MediaUpload {
   /**
-   * Uploads `dropped` to the case's Media and resolves to the ids of the files that went, in
-   * drop order. One message at the end says what happened; `note`, given those ids, may add
+   * Uploads `dropped` to the case's Media and resolves to the ids of the files that went and
+   * that the list read again shows, in drop order. One message at the end says what happened; `note`, given those ids, may add
    * a line of the caller's own (or null).
    */
   upload: (dropped: readonly File[], note?: (ids: readonly string[]) => string | null) => Promise<string[]>;
@@ -231,8 +231,8 @@ export function useMediaUpload({ caseId, rules, say, media }: { caseId: string; 
       );
       if (unmounted.current) return [];
 
-      const ids: string[] = [];
-      for (const { outcome } of outcomes) if (outcome.kind === "done") ids.push(outcome.assetId);
+      const uploaded: string[] = [];
+      for (const { outcome } of outcomes) if (outcome.kind === "done") uploaded.push(outcome.assetId);
       if (outcomes.some(({ outcome }) => outcome.kind === "storage")) {
         setStorageOff(true);
         lines.push(materialCopy.errors.storage);
@@ -240,12 +240,15 @@ export function useMediaUpload({ caseId, rules, say, media }: { caseId: string; 
       for (const { name, outcome } of outcomes) {
         if (outcome.kind === "rejected") lines.push(fill(materialCopy.announce.error, { name, message: outcome.message }));
       }
-      if (ids.length > 0) {
-        await relist();
+      // Only files the fresh list shows are handed back (none when it can't be read): the rest appear at the next read.
+      let ids: string[] = [];
+      if (uploaded.length > 0) {
+        const fresh = await relist();
+        ids = uploaded.filter((id) => fresh?.some((f) => f.id === id) === true);
         poll();
         const done = outcomes.filter(({ outcome }) => outcome.kind === "done");
         lines.unshift(done.length === 1 ? fill(materialCopy.announce.done, { name: done[0].name }) : fill(copy.uploaded, { n: done.length }));
-        const extra = note?.(ids) ?? null;
+        const extra = ids.length > 0 ? (note?.(ids) ?? null) : null;
         if (extra !== null) lines.push(extra);
       }
       if (lines.length > 0) say(lines.join(" "));

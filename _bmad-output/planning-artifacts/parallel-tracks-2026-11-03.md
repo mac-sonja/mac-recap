@@ -15,7 +15,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | A1 | 4.3d client and case fields on the page | ✅ #145 (migration on dev) | — | — | configurator, case-study |
 | A2 | 4.3e drag-and-drop | ✅ #147 | A1 ✅ | A3, B7 | configurator |
 | A3 | 4.5c-2 client media in the case configurator, client renditions, client-file soft delete (dialog upload split to 4.5c-3) | ✅ #148 (migration on dev) | — | A2 | configurator, material |
-| A3b | 4.5c-3 upload in the Animazione dialog (owner, 2026-11-04: while A6 waits) | 🔄 in progress | A3 ✅ | A7, A8 (configurator) | configurator |
+| A3b | 4.5c-3 upload in the Animazione dialog (owner, 2026-11-04: while A6 waits) | 🔄 PR open | A3 ✅ | A7, A8 (configurator) | configurator |
 | A4 | 4.8 Approva | ✅ #143 (migration on dev) | — | — | configurator, case-study |
 | A5 | 3.8 tell me when the draft is ready | ✅ #150 | — | — | jobs, notifications |
 | A6 | 3.11 client intro and outro with test text | ⬜ | **client cover/outro template design (owner)** | B3 (both add a job kind) | rendering/templates, jobs, migration |
