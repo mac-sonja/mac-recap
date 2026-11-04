@@ -77,6 +77,8 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   ...Object.fromEntries(Object.entries(organization).map(([name, call]) => [`organization.${name}`, { call: call as Action, allowed: ADMIN }])),
   // The configurator's field edits (Story 4.3d): `fill details`.
   "configurator.updateCaseFields": { call: configurator.updateCaseFields as Action, allowed: OWNERS },
+  "configurator.saveCaseResults": { call: configurator.saveCaseResults as Action, allowed: OWNERS },
+  "configurator.saveCaseTestimonial": { call: configurator.saveCaseTestimonial as Action, allowed: OWNERS },
 };
 
 /** The roles a person can hold. `system` is the worker's actor: it can't sign in, so it never gets this far (below). */
@@ -96,7 +98,7 @@ beforeEach(() => {
 describe("permission suite through the real actor resolver (Story 6.4)", () => {
   it("covers every server action of the tool", () => {
     expect(Object.keys(EXPECTED).length).toBe(
-      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 1,
+      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 3,
     );
   });
 

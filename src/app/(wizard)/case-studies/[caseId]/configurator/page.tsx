@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { THEME_COOKIE, parseTheme } from "@/app/_lib/theme";
-import { saveCaseResults, saveCaseTestimonial } from "@/app/(tool)/case-studies/actions";
 import { addClientSector, updateClient } from "@/app/(tool)/clients/actions";
 import { clientLimits } from "@/app/(tool)/clients/_lib/client-limits";
 import { requireSurface } from "@/app/_lib/surface";
@@ -14,7 +13,7 @@ import { Configurator } from "../../../_components/configurator/configurator";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import { isMedia, type MediaUploadRules } from "../../../_components/configurator/media-files";
 import type { FieldActions } from "../../../_components/configurator/configurator";
-import { approveCase, getRenderAssets, saveRevisionDoc, updateCaseFields } from "./actions";
+import { approveCase, getRenderAssets, saveCaseResults, saveCaseTestimonial, saveRevisionDoc, updateCaseFields } from "./actions";
 
 /** The field edits' saves (Story 4.3d): each through the client's or the case's own action, with its validation and permission. */
 const FIELD_ACTIONS: FieldActions = { updateClient, addClientSector, updateCaseFields, saveCaseResults, saveCaseTestimonial };

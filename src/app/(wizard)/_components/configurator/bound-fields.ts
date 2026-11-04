@@ -108,7 +108,8 @@ export type FieldChange =
   | { field: "name"; text: string }
   | { field: "resultLabel" | "resultValue"; index: number; text: string }
   | { field: "testimonialQuote" | "testimonialAuthor"; text: string }
-  | { field: "sector"; key: string }
+  /** `label`: the sector's name, for one just added (not in the loaded list yet). */
+  | { field: "sector"; key: string; label?: string }
   | { field: "logo"; logoId: string; previewUrl: string | null }
   | { field: "year"; text: string }
   | { field: "service"; line: BusinessLine };
@@ -176,7 +177,7 @@ const refuse = (refusal: FieldRefusal): FieldPlan => ({ ok: false, ...refusal })
  * Words are trimmed; the same value again saves nothing (`unchanged`). The checks are the
  * server's, so most refusals never reach it.
  */
-export function planFieldSave(fields: EditableFields, change: FieldChange, caseId: string, options: Pick<FieldOptions, "limits" | "years">): FieldPlan {
+export function planFieldSave(fields: EditableFields, change: FieldChange, caseId: string, options: Pick<FieldOptions, "limits" | "years" | "businessLines">): FieldPlan {
   const { limits, years } = options;
   const client = fields.client;
   const story = fields.case;
@@ -220,7 +221,8 @@ export function planFieldSave(fields: EditableFields, change: FieldChange, caseI
     }
     case "service": {
       const on = story.businessLines.includes(change.line);
-      const lines = on ? story.businessLines.filter((line) => line !== change.line) : [...story.businessLines, change.line];
+      // In `BUSINESS_LINES` order, as the server stores them.
+      const lines = options.businessLines.filter((line) => (line === change.line ? !on : story.businessLines.includes(line)));
       if (lines.length === 0) return refuse({ reason: "needService" });
       return saveYearAndServices(story.year, lines);
     }
@@ -288,7 +290,8 @@ export interface ShownContext {
  */
 export function shownValues(values: BoundValues, next: EditableFields, change: FieldChange, ctx: ShownContext): BoundValues {
   const story = next.case;
-  const sector = ctx.sectors.find((s) => s.key === next.client.industry)?.label;
+  const sector =
+    change.field === "sector" && change.label !== undefined ? change.label : ctx.sectors.find((s) => s.key === next.client.industry)?.label;
   return {
     client: {
       ...values.client,

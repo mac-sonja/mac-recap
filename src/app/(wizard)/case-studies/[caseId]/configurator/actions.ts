@@ -4,6 +4,7 @@ import { failure, type ActionResult } from "@/app/_lib/action-result";
 import { authorize, getActor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
+import type { CaseResultsSaved, CaseTestimonialSaved } from "@/modules/material";
 import type { RenderAsset } from "@/modules/rendering";
 import { renderAssetsOf } from "../../../_lib/configurator-data";
 import { isMedia } from "../../../_components/configurator/media-files";
@@ -65,6 +66,54 @@ export async function updateCaseFields(input: unknown): Promise<ActionResult<voi
   if (!decision.ok) return failure(decision.error);
   const saved = await caseStudy.updateCaseFields(actor.value, input);
   return saved.ok ? { ok: true, value: undefined } : failure(saved.error);
+}
+
+/**
+ * The case's own words a page binds to are saved from the configurator only while the case
+ * is Da approvare (Story 4.3d, owner): an approved case open in a stale tab is refused.
+ * `NOT_FOUND` for an unknown or deleted case, `STALE_STATUS` for any other status.
+ */
+async function whileInReview(input: unknown): Promise<ActionResult<never> | null> {
+  const caseId = typeof input === "object" && input !== null ? (input as { caseId?: unknown }).caseId : undefined;
+  const found = await caseStudy.get(caseId);
+  if (!found.ok) return failure(found.error);
+  const status = found.value?.status;
+  if (status !== "in_review") {
+    return failure({ code: "STALE_STATUS", message: "The case study is no longer Da approvare.", details: { status } });
+  }
+  return null;
+}
+
+/**
+ * The case's Risultati from the configurator (Story 4.3d): input `{ caseId, results }` as
+ * `saveCaseResults` takes it (the whole list). 403 `FORBIDDEN` unless the role may `fill
+ * details`; 404 `NOT_FOUND`; 409 `STALE_STATUS` unless the case is Da approvare; then the
+ * material save's own errors (400 `INVALID_INPUT`). Nothing is written on any error.
+ */
+export async function saveCaseResults(input: unknown): Promise<ActionResult<CaseResultsSaved>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "fill details");
+  if (!decision.ok) return failure(decision.error);
+  const refused = await whileInReview(input);
+  if (refused !== null) return refused;
+  const saved = await material.saveCaseResults(actor.value, input);
+  return saved.ok ? saved : failure(saved.error);
+}
+
+/**
+ * The case's Testimonial from the configurator (Story 4.3d): input `{ caseId, quote, author }`
+ * as `saveCaseTestimonial` takes it. Same refusals as `saveCaseResults` here.
+ */
+export async function saveCaseTestimonial(input: unknown): Promise<ActionResult<CaseTestimonialSaved>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "fill details");
+  if (!decision.ok) return failure(decision.error);
+  const refused = await whileInReview(input);
+  if (refused !== null) return refused;
+  const saved = await material.saveCaseTestimonial(actor.value, input);
+  return saved.ok ? saved : failure(saved.error);
 }
 
 /**

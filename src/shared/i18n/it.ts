@@ -862,7 +862,7 @@ export const it = {
       noRow: "Questa riga non c’è tra i risultati della case.",
       authorWithoutQuote: "Prima scrivi la citazione, poi l’autore.",
       /** Anteprima: a click on a client or case field (owner, 2026-11-04). */
-      fromEditor: "Modificalo dall'editor.",
+      fromEditor: "Modificalo dall’editor.",
       /** A save refused by the server, by code. */
       errors: {
         CLIENT_NAME_TAKEN: "C’è già un cliente con questo nome.",

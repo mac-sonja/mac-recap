@@ -32,7 +32,11 @@ const LIMITS = {
   testimonialQuoteMax: 600,
   testimonialAuthorMax: 120,
 } as ClientLimits;
-const OPTIONS = { limits: LIMITS, years: { min: 1900, max: 2100 } };
+const OPTIONS = {
+  limits: LIMITS,
+  years: { min: 1900, max: 2100 },
+  businessLines: ["branding", "social_media", "video", "web_design", "advertising", "eventi", "sviluppo"] as const,
+};
 
 const FIELDS: EditableFields = {
   client: { id: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Lampade.", logoId: LOGO },
@@ -145,6 +149,8 @@ describe("planFieldSave: the I/O matrix", () => {
       save: { action: "updateCaseFields", input: { caseId: CASE_ID, year: 2026, businessLines: ["branding", "video", "eventi"] } },
     });
     expect(plan({ field: "service", line: "video" })).toMatchObject({ ok: true, save: { input: { businessLines: ["branding"] } } });
+    // A service turned on takes its place in BUSINESS_LINES order, as the server stores it.
+    expect(plan({ field: "service", line: "social_media" })).toMatchObject({ ok: true, save: { input: { businessLines: ["branding", "social_media", "video"] } } });
   });
 
   it("the last service turned off is refused: Serve almeno un servizio.", () => {
@@ -257,6 +263,13 @@ describe("shownValues", () => {
       results: FIELDS.case.results,
       testimonial: { quote: "Bravi.", author: "Ada" },
     });
+  });
+
+  it("a sector just added shows its own label, though the loaded list lacks it", () => {
+    const change: FieldChange = { field: "sector", key: "nautica", label: "Nautica" };
+    const added = plan(change);
+    if (!added.ok) throw new Error("setup");
+    expect(shownValues(VALUES, added.next, change, ctx).client.sector).toBe("Nautica");
   });
 
   it("a new logo shows its picked file", () => {

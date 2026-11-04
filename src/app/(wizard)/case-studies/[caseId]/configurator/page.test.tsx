@@ -24,7 +24,14 @@ vi.mock("next/navigation", () => ({
   }),
   useRouter: () => ({ refresh: vi.fn() }),
 }));
-vi.mock("./actions", () => ({ saveRevisionDoc: vi.fn(), getRenderAssets: vi.fn(), approveCase: vi.fn(), updateCaseFields: vi.fn() }));
+vi.mock("./actions", () => ({
+  saveRevisionDoc: vi.fn(),
+  getRenderAssets: vi.fn(),
+  approveCase: vi.fn(),
+  updateCaseFields: vi.fn(),
+  saveCaseResults: vi.fn(),
+  saveCaseTestimonial: vi.fn(),
+}));
 // The field saves (Story 4.3d) are the client's and the case's own actions.
 vi.mock("@/app/(tool)/clients/actions", () => ({
   updateClient: vi.fn(),
@@ -33,8 +40,6 @@ vi.mock("@/app/(tool)/clients/actions", () => ({
   confirmClientLogoUpload: vi.fn(),
 }));
 vi.mock("@/app/(tool)/case-studies/actions", () => ({
-  saveCaseResults: vi.fn(),
-  saveCaseTestimonial: vi.fn(),
   listAssets: vi.fn(),
   presignAssetUpload: vi.fn(),
   confirmAssetUpload: vi.fn(),
@@ -79,9 +84,8 @@ vi.mock("@/modules/material", async () => ({
 }));
 
 const { default: ConfiguratorPage } = await import("./page");
-const { approveCase, getRenderAssets, updateCaseFields } = await import("./actions");
+const { approveCase, getRenderAssets, updateCaseFields, saveCaseResults, saveCaseTestimonial } = await import("./actions");
 const clientActions = await import("@/app/(tool)/clients/actions");
-const caseActions = await import("@/app/(tool)/case-studies/actions");
 
 const ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
@@ -251,8 +255,9 @@ describe("ConfiguratorPage", () => {
       updateClient: clientActions.updateClient,
       addClientSector: clientActions.addClientSector,
       updateCaseFields,
-      saveCaseResults: caseActions.saveCaseResults,
-      saveCaseTestimonial: caseActions.saveCaseTestimonial,
+      // The configurator's own: they refuse a case no longer Da approvare.
+      saveCaseResults,
+      saveCaseTestimonial,
     });
   });
 

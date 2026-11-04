@@ -89,7 +89,7 @@ export function BoundFieldPanel({ editor, fields, options, logoUrl, onChange, on
             {note("client")}
           </p>
           <p className="-mt-1 mb-2.5 font-label text-[12px] text-foreground-muted">{t.clientHint}</p>
-          {editor.kind === "meta" && <SectorField fields={fields} options={options} onPick={(key) => void save({ field: "sector", key })} onAddSector={onAddSector} />}
+          {editor.kind === "meta" && <SectorField fields={fields} options={options} onPick={(sector) => void save({ field: "sector", key: sector.key, label: sector.label })} onAddSector={onAddSector} />}
           {editor.kind === "logos" && (
             <LogoField
               fields={fields}
@@ -138,7 +138,7 @@ function SectorField({
 }: {
   fields: EditableFields;
   options: FieldOptions;
-  onPick: (key: string) => void;
+  onPick: (sector: ClientSector) => void;
   onAddSector: BoundFieldPanelProps["onAddSector"];
 }) {
   const t = it.configurator.fields;
@@ -159,7 +159,7 @@ function SectorField({
     if (check.kind === "known") {
       setTyped("");
       setError(null);
-      onPick(check.sector.key);
+      onPick(check.sector);
       return;
     }
     setAdding(true);
@@ -169,7 +169,7 @@ function SectorField({
       if (!result.ok) return setError(newSectorError(result.error.code, options.limits));
       setAdded((current) => [...current, result.value]);
       setTyped("");
-      onPick(result.value.key);
+      onPick(result.value);
     } catch {
       setError(newSectorError("failed", options.limits));
     } finally {
@@ -182,7 +182,15 @@ function SectorField({
       <span id={`${id}-label`} className="font-label text-[12.5px] text-foreground-muted">
         {t.sector}
       </span>
-      <IndustryPills options={sectors} selected={fields.client.industry} onSelect={onPick} labelledBy={`${id}-label`} />
+      <IndustryPills
+        options={sectors}
+        selected={fields.client.industry}
+        onSelect={(key) => {
+          const sector = sectors.find((s) => s.key === key);
+          if (sector !== undefined) onPick(sector);
+        }}
+        labelledBy={`${id}-label`}
+      />
       <div className="flex items-center gap-2">
         <input
           type="text"
@@ -315,6 +323,7 @@ function LogoField({
   onFailed: (message: string) => void;
 }) {
   const t = it.configurator.fields;
+  const errorId = useId();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const logo = useClientLogo(options.limits, { logoId: fields.client.logoId, logoUrl }, () => busyRef.current);
@@ -322,13 +331,16 @@ function LogoField({
   const picked = logo.logo.kind === "new" ? logo.logo : null;
   /** The picked file already sent: a failed one is sent again only when picked again. */
   const sent = useRef<File | null>(null);
+  const linkable = fields.client.industry !== null && fields.client.description.trim() !== "";
 
   useEffect(() => {
     if (picked === null || sent.current === picked.file) return;
     sent.current = picked.file;
+    // The link (`updateClient`) needs the client's sector and description: without them nothing is uploaded (the button said why).
+    if (!linkable) return;
     busyRef.current = true;
-    setBusy(true);
     void (async () => {
+      setBusy(true);
       try {
         const logoId = await upload(fields.client.id);
         if (await onLinked(logoId, picked.previewUrl)) linked(logoId);
@@ -340,7 +352,7 @@ function LogoField({
         setBusy(false);
       }
     })();
-  }, [picked, upload, linked, onLinked, onFailed, fields.client.id, t]);
+  }, [picked, upload, linked, onLinked, onFailed, fields.client.id, linkable, t]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -356,15 +368,19 @@ function LogoField({
         type="button"
         aria-disabled={busy || undefined}
         aria-busy={busy || undefined}
-        aria-describedby={error === null ? undefined : "configurator-logo-error"}
-        onClick={choose}
+        aria-describedby={error === null ? undefined : errorId}
+        onClick={() => {
+          // Checked before any upload, so no logo is left unlinked.
+          if (linkable) choose();
+          else onFailed(t.needClientInfo);
+        }}
         className={cn(SECONDARY_ACTION, "h-8 w-full gap-1.5 text-[12.5px] aria-disabled:cursor-not-allowed aria-disabled:opacity-60")}
       >
         <ImageUp aria-hidden="true" className="size-4" />
         {t.replaceLogo}
       </button>
       {error !== null && (
-        <p id="configurator-logo-error" className={ERROR}>
+        <p id={errorId} className={ERROR}>
           {error}
         </p>
       )}

@@ -57,7 +57,7 @@ export interface CanvasProps {
   onTextDone: (pageKey: string, elementId: string) => void;
   /** A bound text's typing ended (Story 4.3d): what was typed, or null when Esc cancelled it. */
   onFieldCommit?: (pageKey: string, elementId: string, text: string | null) => void;
-  /** Anteprima: a click or double-click on an element (Story 4.3d: a client or case field says where to change it). */
+  /** Anteprima: a click on an element (Story 4.3d: a client or case field says where to change it). */
   onPreviewPick?: (pageKey: string, elementId: string) => void;
   /** A border dragged and released (Story 4.4b): the page's new track sizes on `axis`. */
   onResize: (pageKey: string, axis: Axis, sizes: number[]) => void;
@@ -278,10 +278,6 @@ function CanvasPage({
   }
 
   function onDoubleClick(event: MouseEvent<HTMLDivElement>) {
-    if (preview) {
-      previewPick(event, page.pageKey, onPreviewPick);
-      return;
-    }
     // A double-click inside the text being typed in selects a word; it opens nothing.
     if ((event.target as Element).closest?.("[contenteditable]")) return;
     const target = selectionAt(event.target as Element, page.pageKey);
@@ -407,7 +403,7 @@ function CanvasPage({
         data-canvas-page={page.pageKey}
         data-selected={pageSelected ? "" : undefined}
         onClick={preview ? (event) => previewPick(event, page.pageKey, onPreviewPick) : onClick}
-        onDoubleClick={preview ? (onPreviewPick === undefined ? undefined : onDoubleClick) : onDoubleClick}
+        onDoubleClick={preview ? undefined : onDoubleClick}
         onDragOver={dropsMedia ? onDragOver : undefined}
         onDragLeave={dropsMedia ? onDragLeave : undefined}
         onDrop={dropsMedia ? onDrop : undefined}
@@ -775,16 +771,18 @@ function Slide({
       data-canvas-page={page.pageKey}
       className={TYPING_PREVIEW}
       onClick={(event) => previewPick(event, page.pageKey, onPreviewPick)}
-      onDoubleClick={(event) => previewPick(event, page.pageKey, onPreviewPick)}
     >
       <RenderedPage key={renderKey} formatId={formatId} template={template} page={shown} number={number} assets={assets} values={values} animateTexts />
     </div>
   );
 }
 
-/** Anteprima: a click or double-click on an element not being typed in tells the configurator (it selects nothing). */
+/**
+ * Anteprima: a click on an element not being typed in tells the configurator (it selects
+ * nothing). Only a double-click's first click reports, so its message shows once.
+ */
 function previewPick(event: MouseEvent<HTMLDivElement>, pageKey: string, onPreviewPick: CanvasProps["onPreviewPick"]) {
-  if (onPreviewPick === undefined || (event.target as Element).closest?.("[contenteditable]")) return;
+  if (onPreviewPick === undefined || event.detail > 1 || (event.target as Element).closest?.("[contenteditable]")) return;
   const elementId = selectionAt(event.target as Element, pageKey).elementId;
   if (elementId !== undefined) onPreviewPick(pageKey, elementId);
 }

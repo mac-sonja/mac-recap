@@ -401,6 +401,11 @@ export function Configurator({
         say(it.configurator.fields.needLogo);
         return;
       }
+      // The rename saves through `updateClient`, which needs the sector and description: refused before any typing.
+      if (editor.kind === "name" && (fieldsNow.client.industry === null || fieldsNow.client.description.trim() === "")) {
+        say(it.configurator.fields.needClientInfo);
+        return;
+      }
       if ((editor.kind === "resultLabel" || editor.kind === "resultValue") && fieldsNow.case.results[editor.index] === undefined) {
         say(it.configurator.fields.noRow);
         return;
