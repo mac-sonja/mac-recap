@@ -49,6 +49,8 @@ export interface RightPanelProps {
   caseId: string;
   /** The case's images and videos, oldest first. */
   media: readonly ListedAsset[];
+  /** The client's images and videos, in position order: the Media tab's "Del cliente" group (Story 4.5c-2). */
+  clientMedia?: readonly ListedAsset[];
   mediaRules: MediaUploadRules;
   /** A message at the top of the canvas. */
   say: (text: string) => void;
@@ -110,6 +112,7 @@ export function RightPanel({
   onMovePage,
   caseId,
   media,
+  clientMedia,
   mediaRules,
   say,
   tab,
@@ -252,6 +255,7 @@ export function RightPanel({
         hidden={tab !== "media"}
         caseId={caseId}
         initialFiles={media}
+        clientFiles={clientMedia}
         rules={mediaRules}
         assets={assets}
         onPage={onPage}

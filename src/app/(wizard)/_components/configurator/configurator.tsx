@@ -114,6 +114,12 @@ export interface ConfiguratorProps {
   media: readonly ListedAsset[];
   /** What the Media tab's drop zone uploads (Story 2.7's rules, images and videos only). */
   mediaRules: MediaUploadRules;
+  /**
+   * The client's images and videos, in position order (Story 4.5c-2): the Media tab's
+   * "Del cliente" group, usable wherever a case file is (placed on a page, Sostituisci,
+   * Sfondo · Immagine, the Animazione dialog). Never starred, removed or uploaded here.
+   */
+  clientMedia?: readonly ListedAsset[];
   /** **Approva** (Story 4.8); undefined: it says it arrives soon. */
   onApprove?: (input: {
     caseId: string;
@@ -151,6 +157,8 @@ const typing = (target: EventTarget | null) =>
 
 /** A stable empty list, so the default keeps its identity across renders. */
 const NO_CLIENT_FILES: readonly { id: string; name: string }[] = [];
+/** A stable empty list of client media, likewise. */
+const NO_CLIENT_MEDIA: readonly ListedAsset[] = [];
 
 /**
  * The configurator frame (Story 4.2a, C40, mockup `configurator.html`): full screen,
@@ -177,7 +185,7 @@ const NO_CLIENT_FILES: readonly { id: string; name: string }[] = [];
  * Delete or **Rimuovi** removes the selection (Story 4.3c). **Pagine di default** lays the
  * tools' page out as a template page, filled with the generated texts (Story 4.4c).
  * The right panel's **Media** tab lists, stars and uploads the case's images and videos
- * (Story 4.5a). A tile dragged onto an image or video replaces its file, dropped elsewhere
+ * (Story 4.5a), then the client's under "Del cliente", used like the case's (Story 4.5c-2). A tile dragged onto an image or video replaces its file, dropped elsewhere
  * in a block adds it there; a tile clicked fills the selected image or video, else joins
  * the selected block; the left panel's **Sostituisci dai Media** opens the tab (Story 4.5b).
  * Its **Adattamento** sets Riempi, Adatta or Ritaglia; with Ritaglia the image is dragged
@@ -214,6 +222,7 @@ export function Configurator({
   onSave,
   media,
   mediaRules,
+  clientMedia = NO_CLIENT_MEDIA,
   onRenderAssets,
   onApprove,
   headVersion,
@@ -272,6 +281,8 @@ export function Configurator({
   /** Every file name listed this session, by lowercased id: a file deleted since is still named in the refused-save banner. */
   const [names, setNames] = useState<ReadonlyMap<string, string>>(() => new Map(media.map((f) => [f.id.toLowerCase(), f.originalFileName])));
   const clientNames = useMemo<ReadonlyMap<string, string>>(() => new Map(clientFiles.map((f) => [f.id.toLowerCase(), f.name])), [clientFiles]);
+  /** Every file that can go on a page: the case's images and videos as last listed, then the client's (Story 4.5c-2). */
+  const pickable = useMemo(() => [...files, ...clientMedia], [files, clientMedia]);
   /** Ids whose render asset is being read. */
   const reading = useRef(new Set<string>());
   /** The latest assets: the Media tab's polling may call an older `listed`. */
@@ -746,11 +757,11 @@ export function Configurator({
     (target: MediaTarget, assetId: string, at: "before" | "end") => {
       if (!editable) return;
       const id = assetId.toLowerCase();
-      const file = files.find((f) => f.id.toLowerCase() === id);
+      const file = pickable.find((f) => f.id.toLowerCase() === id);
       if (file === undefined || !isMedia(file)) return;
       applyPageEdit(placeMedia(formats[formatId], target, { id: file.id, kind: file.kind as "image" | "video" }, at, newId));
     },
-    [applyPageEdit, editable, files, formatId, formats],
+    [applyPageEdit, editable, pickable, formatId, formats],
   );
 
   /** A tile clicked: it fills the selected image or video, else joins the selected block. */
@@ -1152,7 +1163,7 @@ export function Configurator({
             className="flex shrink-0 items-center justify-center gap-2 border-b border-border bg-surface-raised px-4 py-2 font-label text-[13px] font-medium text-danger"
           >
             <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
-            {doc.refused === null ? it.configurator.saveBanner : missingMessage(doc.refused, names)}
+            {doc.refused === null ? it.configurator.saveBanner : missingMessage(doc.refused, names, clientNames)}
             {doc.refused !== null && canClear(formats, doc.refused) && (
               <button type="button" onClick={removeRefused} className={cn(SECONDARY_ACTION, "ml-2 h-7 px-3 text-[12.5px]")}>
                 {it.configurator.media.missing.remove}
@@ -1189,7 +1200,7 @@ export function Configurator({
             onBackground={background}
             onBadColour={() => say(it.configurator.edit.badColour)}
             onSoon={soon}
-            files={files}
+            files={pickable}
             onOpenMedia={openMedia}
             onFit={fitMedia}
             onZoom={zoomMedia}
@@ -1255,7 +1266,7 @@ export function Configurator({
               template={template}
               assets={assets}
               values={values}
-              files={files}
+              files={pickable}
               initial={animationInitial}
               onSubmit={submitAnimation}
               onClose={() => setAnimationDialog(null)}
@@ -1298,6 +1309,7 @@ export function Configurator({
             onMovePage={editable ? reorderPage : undefined}
             caseId={caseId}
             media={media}
+            clientMedia={clientMedia}
             mediaRules={mediaRules}
             say={say}
             tab={rightTab}
@@ -1330,10 +1342,11 @@ function selectionOf(pages: readonly Page[], pageKey: string, elementId: string)
 }
 
 /** The refused-file banner's words: the file's name when it was listed this session, else "Un file"; several by count. */
-function missingMessage(refused: readonly string[], names: ReadonlyMap<string, string>): string {
+function missingMessage(refused: readonly string[], names: ReadonlyMap<string, string>, clientNames: ReadonlyMap<string, string>): string {
   const t = it.configurator.media.missing;
   if (refused.length > 1) return fill(t.many, { n: refused.length });
-  return fill(t.one, { name: names.get(refused[0]!.toLowerCase()) ?? t.unknown });
+  const id = refused[0]!.toLowerCase();
+  return fill(t.one, { name: names.get(id) ?? clientNames.get(id) ?? t.unknown });
 }
 
 /** Whether **Togli dalla pagina** would change anything: some image or video shows a refused file. */

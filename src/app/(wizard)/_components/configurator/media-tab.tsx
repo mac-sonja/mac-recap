@@ -10,8 +10,17 @@ import { cn } from "@/shared/utils";
 import { acceptFor, normalizeContentType, uploadFile } from "../../_lib/upload";
 import { THUMBNAIL_POLL_MAX_MS, THUMBNAIL_POLL_MS } from "../material-step";
 import { formatLength, isMedia, MEDIA_DRAG_TYPE, type MediaUploadRules } from "./media-files";
+import { EYEBROW } from "./styles";
 
 const copy = it.configurator.media;
+
+/** A stable empty list, so the default keeps its identity across renders. */
+const NO_FILES: readonly ListedAsset[] = [];
+
+const listClass = (view: "grid" | "list") => (view === "grid" ? "grid grid-cols-2 gap-2" : "flex flex-col gap-0.5");
+
+/** A video's display copy, whose metadata gives its length. */
+const videoUrlOf = (assets: Readonly<Record<string, RenderAsset>>, id: string) => (assets[id]?.kind === "video" ? assets[id]?.url : undefined);
 const materialCopy = it.wizard.material;
 
 /** A video's length, read in the browser from its metadata; null until known (or without a URL). */
@@ -47,7 +56,8 @@ function MediaTile({
   view: "grid" | "list";
   onPage: boolean;
   videoUrl: string | undefined;
-  onStar: (file: ListedAsset) => void;
+  /** The favourite star; undefined for a client file (Story 4.5c-2: no star there). */
+  onStar?: (file: ListedAsset) => void;
   /** A click: the file goes on the page (Story 4.5b); undefined while nothing can be placed. */
   onPick: ((file: ListedAsset) => void) | undefined;
 }) {
@@ -111,6 +121,7 @@ function MediaTile({
           {notes.length > 0 && <span className="sr-only">{`, ${notes.join(", ")}`}</span>}
         </small>
       </Pick>
+      {onStar !== undefined && (
       <button
         type="button"
         aria-pressed={file.isFavourite}
@@ -126,6 +137,7 @@ function MediaTile({
       >
         <Star aria-hidden="true" className={cn("size-3", file.isFavourite && "fill-current")} />
       </button>
+      )}
     </li>
   );
 }
@@ -143,6 +155,12 @@ export interface MediaTabProps {
   caseId: string;
   /** The case's images and videos, oldest first, as the page listed them. */
   initialFiles: readonly ListedAsset[];
+  /**
+   * The client's images and videos, in position order (Story 4.5c-2): the "Del cliente"
+   * group below the case's files, hidden when there are none. Placed like the case's; no
+   * star, no removal, never uploaded to from here.
+   */
+  clientFiles?: readonly ListedAsset[];
   rules: MediaUploadRules;
   /** By asset id: a video's `url` gives its length. */
   assets: Readonly<Record<string, RenderAsset>>;
@@ -167,10 +185,12 @@ export interface MediaTabProps {
  * material with Story 2.7's rules: each file presigned, sent and confirmed, retried once;
  * a refused file is named in one message at the end. Then the list is read again, and
  * again every few seconds while a thumbnail is being made. A tile clicked or dragged onto a
- * block puts its file on the page (Story 4.5b). Kept mounted while hidden, so uploads and
- * stars survive a tab switch.
+ * block puts its file on the page (Story 4.5b). Below them, under "Del cliente", the
+ * client's images and videos (Story 4.5c-2): filtered and placed the same way, with no star;
+ * the group is hidden when the client has none (or none matches **Cerca**). Kept mounted
+ * while hidden, so uploads and stars survive a tab switch.
  */
-export function MediaTab({ hidden, caseId, initialFiles, rules, assets, onPage, query, view, say, onPick, onListed }: MediaTabProps) {
+export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES, rules, assets, onPage, query, view, say, onPick, onListed }: MediaTabProps) {
   const [files, setFiles] = useState<readonly ListedAsset[]>(initialFiles);
   const [uploading, setUploading] = useState(0);
   const [storageOff, setStorageOff] = useState(false);
@@ -181,6 +201,7 @@ export function MediaTab({ hidden, caseId, initialFiles, rules, assets, onPage, 
   const favouriteBusy = useRef(new Set<string>());
   const unmounted = useRef(false);
   const hintId = useId();
+  const clientHeadingId = useId();
 
   useEffect(() => {
     unmounted.current = false;
@@ -190,7 +211,9 @@ export function MediaTab({ hidden, caseId, initialFiles, rules, assets, onPage, 
   }, []);
 
   const q = query.trim().toLocaleLowerCase("it");
-  const shown = q === "" ? files : files.filter((file) => file.originalFileName.toLocaleLowerCase("it").includes(q));
+  const matches = (file: ListedAsset) => q === "" || file.originalFileName.toLocaleLowerCase("it").includes(q);
+  const shown = files.filter(matches);
+  const clientShown = clientFiles.filter(matches);
 
   /** Reads the case's files again; the list keeps what it had on a failure. */
   async function relist(): Promise<readonly ListedAsset[] | null> {
@@ -366,24 +389,43 @@ export function MediaTab({ hidden, caseId, initialFiles, rules, assets, onPage, 
     // Files dropped anywhere on the tab upload too: the browser never opens them in place of the configurator.
     <div hidden={hidden} onDragOver={onDragOver} onDrop={onDrop} className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3.5">
-        {files.length === 0 ? (
-          <p className="font-label text-[12.5px] text-foreground-muted">{copy.empty}</p>
-        ) : shown.length === 0 ? (
-          <p className="font-label text-[12.5px] text-foreground-muted">{fill(copy.noMatch, { query: query.trim() })}</p>
-        ) : (
-          <ul aria-label={copy.label} className={cn(view === "grid" ? "grid grid-cols-2 gap-2" : "flex flex-col gap-0.5")}>
+        {shown.length > 0 ? (
+          <ul aria-label={copy.label} className={listClass(view)}>
             {shown.map((file) => (
               <MediaTile
                 key={file.id}
                 file={file}
                 view={view}
                 onPage={onPage.has(file.id.toLowerCase())}
-                videoUrl={assets[file.id]?.kind === "video" ? assets[file.id]?.url : undefined}
+                videoUrl={videoUrlOf(assets, file.id)}
                 onStar={(f) => void star(f)}
                 onPick={onPick}
               />
             ))}
           </ul>
+        ) : q !== "" && clientShown.length > 0 ? null : files.length === 0 && (q === "" || clientFiles.length === 0) ? (
+          <p className="font-label text-[12.5px] text-foreground-muted">{copy.empty}</p>
+        ) : (
+          <p className="font-label text-[12.5px] text-foreground-muted">{fill(copy.noMatch, { query: query.trim() })}</p>
+        )}
+        {clientShown.length > 0 && (
+          <section aria-labelledby={clientHeadingId} className={cn(shown.length > 0 || q === "" ? "mt-5" : undefined)}>
+            <h3 id={clientHeadingId} className={EYEBROW}>
+              {copy.clientGroup}
+            </h3>
+            <ul aria-label={copy.clientGroup} className={listClass(view)}>
+              {clientShown.map((file) => (
+                <MediaTile
+                  key={file.id}
+                  file={file}
+                  view={view}
+                  onPage={onPage.has(file.id.toLowerCase())}
+                  videoUrl={videoUrlOf(assets, file.id)}
+                  onPick={onPick}
+                />
+              ))}
+            </ul>
+          </section>
         )}
       </div>
       <div className="shrink-0 border-t border-border bg-surface-sidebar px-3.5 py-3">

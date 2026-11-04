@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { referencedAssetIds, type CaseClientInfo, type CaseStudy } from "@/modules/case-study";
+import { referencedAssetIds, type CaseClientInfo, type CaseStudy, type ListedClientAsset } from "@/modules/case-study";
 import type { Page } from "@/modules/generation";
 import type { DetailsForm, ListedAsset, RenditionLink } from "@/modules/material";
 import { CASE_TEMPLATE, FORMAT_IDS, starterPages, type BoundValues, type FormatId, type RenderAsset, type TemplateContext } from "@/modules/rendering";
@@ -101,7 +101,10 @@ const SKIPPABLE = new Set(["RENDITION_NOT_READY", "NOT_FOUND"]);
  * its asset out (an empty cell; a video without its poster keeps no poster). Any other
  * failure throws into the error boundary.
  */
-export async function renderAssetsOf(assets: readonly ListedAsset[], getRendition: GetRendition): Promise<Record<string, RenderAsset>> {
+export async function renderAssetsOf(
+  assets: readonly Pick<ListedAsset, "id" | "kind">[],
+  getRendition: GetRendition,
+): Promise<Record<string, RenderAsset>> {
   const read = async (assetId: string, spec: string): Promise<string | null> => {
     const link = await getRendition(assetId, spec);
     if (link.ok) return link.value.url;
@@ -123,4 +126,32 @@ export async function renderAssetsOf(assets: readonly ListedAsset[], getRenditio
     }),
   );
   return Object.fromEntries(entries.filter((entry) => entry !== null));
+}
+
+/**
+ * The client's images and videos as the configurator's Media lists them (Story 4.5c-2,
+ * "Del cliente"), in position order, shaped as a case file's listing: never a favourite,
+ * never pending, the file name as listed on the client page. The tile shows the image's
+ * display copy (else its signed original) and the video's poster (else no thumbnail).
+ * PDFs and text files are left out: they never go on a page.
+ */
+export function clientMediaOf(files: readonly ListedClientAsset[], assets: Readonly<Record<string, RenderAsset>>): ListedAsset[] {
+  return files.flatMap((file): ListedAsset[] => {
+    if (file.kind !== "image" && file.kind !== "video") return [];
+    const drawn = assets[file.id];
+    const thumbnailUrl = file.kind === "image" ? (drawn?.url ?? file.thumbnailUrl) : drawn?.kind === "video" ? (drawn.posterUrl ?? null) : null;
+    return [
+      {
+        id: file.id,
+        kind: file.kind,
+        originalFileName: file.fileName,
+        contentType: file.contentType,
+        sizeBytes: file.sizeBytes,
+        createdAt: file.createdAt,
+        isFavourite: false,
+        thumbnailUrl,
+        thumbnailPending: false,
+      },
+    ];
+  });
 }

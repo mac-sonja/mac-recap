@@ -12,8 +12,12 @@ type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
 const keyOf = (target: UploadTarget) => assetKey(target.caseId, target.assetId, target.contentType);
 
-/** The only keys `upload` writes: `cases/{caseId}/assets/{assetId}/renditions/{specHash}.{webp|mp4}`. */
-const RENDITION_KEY = /^cases\/[0-9a-f-]{36}\/assets\/[0-9a-f-]{36}\/renditions\/[0-9a-f]{16}\.(webp|mp4)$/;
+/**
+ * The only keys `upload` writes: `cases/{caseId}/assets/{assetId}/renditions/{specHash}.{webp|mp4}`,
+ * and a client file's `clients/{clientId}/material/{assetId}/renditions/{specHash}.{webp|mp4}` (Story 4.5c-2).
+ */
+const RENDITION_KEY =
+  /^(cases\/[0-9a-f-]{36}\/assets|clients\/[0-9a-f-]{36}\/material)\/[0-9a-f-]{36}\/renditions\/[0-9a-f]{16}\.(webp|mp4)$/;
 
 /** The case id at the start of a key, for logs (never the key itself). */
 const caseIdOfKey = (key: string) => /^cases\/([0-9a-f-]{36})\//.exec(key)?.[1];

@@ -2548,10 +2548,13 @@ describe("client material (Story 2.16)", () => {
       [id, clientId, `clients/${clientId}/material/${id}.x`, mime, over.width === undefined ? (image ? 2400 : null) : over.width, over.height === undefined ? (image ? 1600 : null) : over.height, TEST_ACTOR_ID],
     );
   };
+  /** The positions of the client's non-removed files. */
   const positions = async (clientId: string) =>
-    (await pool.query<{ position: number }>("select position from public.client_asset where client_id = $1 order by position", [clientId])).rows.map(
-      (r) => r.position,
-    );
+    (
+      await pool.query<{ position: number }>("select position from public.client_asset where client_id = $1 and deleted_at is null order by position", [
+        clientId,
+      ])
+    ).rows.map((r) => r.position);
 
   it("creates client_asset with the 2.16 columns, RLS on and an index on client_id", async () => {
     const { rows } = await pool.query<{ column_name: string }>(
@@ -2561,6 +2564,7 @@ describe("client material (Story 2.16)", () => {
       "client_id",
       "created_at",
       "created_by",
+      "deleted_at",
       "file_name",
       "height",
       "id",
@@ -2619,6 +2623,26 @@ describe("client material (Story 2.16)", () => {
     expect((await pool.query("select public.delete_client_asset($1) as deleted", [first.id])).rows).toEqual([{ deleted: true }]);
     expect(await positions(client.id)).toEqual([2, 3]);
     expect((await insert(client.id)).rows[0].position).toBe(1);
+  });
+
+  it("delete_client_asset soft-deletes (Story 4.5c-2): the row stays with deleted_at, its slot frees, a 4th upload then succeeds", async () => {
+    const client = await createTestClient(pool, TEST_ACTOR_ID);
+    const first = (await insert(client.id)).rows[0];
+    await insert(client.id);
+    await insert(client.id);
+    await expect(insert(client.id)).rejects.toMatchObject({ code: "P0001", message: "CLIENT_MATERIAL_LIMIT" });
+    expect((await pool.query("select public.delete_client_asset($1) as deleted", [first.id])).rows).toEqual([{ deleted: true }]);
+    const row = await pool.query<{ deleted_at: Date | null; position: number }>("select deleted_at, position from public.client_asset where id = $1", [first.id]);
+    expect(row.rows).toHaveLength(1);
+    expect(row.rows[0].deleted_at).toBeInstanceOf(Date);
+    expect(row.rows[0].position).toBe(1);
+    // The fourth upload takes the freed position; two rows now hold position 1, one removed.
+    const fourth = (await insert(client.id)).rows[0];
+    expect(fourth.position).toBe(1);
+    expect(await positions(client.id)).toEqual([1, 2, 3]);
+    // Removing it again answers false and changes nothing; the same id can never be confirmed again.
+    expect((await pool.query("select public.delete_client_asset($1) as deleted", [first.id])).rows).toEqual([{ deleted: false }]);
+    await expect(insert(client.id, { id: first.id })).rejects.toMatchObject({ code: "P0001", message: "ASSET_ALREADY_CONFIRMED" });
   });
 
   it("insert_client_asset refuses an unknown client and an id confirmed twice", async () => {
@@ -2719,12 +2743,16 @@ describe("client material (Story 2.16)", () => {
     });
     expect(await counts()).toEqual(before);
 
+    // Story 4.5c-2: a soft delete; the object stays, the slot frees.
     expect(await removeClientMaterial({ clientId, assetId: b.assetId })).toEqual({ ok: true, value: undefined });
     expect(await positions(clientId)).toEqual([1, 2]);
-    expect(await objects()).toEqual([`${a.assetId}.jpg`, `${doc.assetId}.pdf`].sort());
+    expect(await objects()).toEqual([`${a.assetId}.jpg`, `${doc.assetId}.pdf`, `${b.assetId}.jpg`].sort());
     expect(await removeClientMaterial({ clientId, assetId: b.assetId })).toMatchObject({ ok: false, status: 404, error: { code: "NOT_FOUND" } });
     const listed = await listClientMaterial({ clientId });
     expect(listed.ok && listed.value.map((x) => x.id)).toEqual([a.assetId, doc.assetId]);
+    // The freed slot takes a new upload.
+    const c = await upload(await jpeg(2400, 1600), "image/jpeg", "nuova.jpg");
+    expect(c.confirmed).toMatchObject({ ok: true, value: { position: 3 } });
   });
 
   it.each([

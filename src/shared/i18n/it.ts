@@ -1092,6 +1092,8 @@ export const it = {
      */
     media: {
       label: "Media della case",
+      /** The client's images and videos, below the case's (Story 4.5c-2): a heading and the list's name. */
+      clientGroup: "Del cliente",
       empty: "Ancora nessuna immagine o video. Trascinali qui sotto.",
       /** `{query}` is the search text. */
       noMatch: "Nessun file per “{query}”.",

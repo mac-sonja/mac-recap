@@ -2,6 +2,7 @@
 // and the real case-study revision reads and write, against the local Supabase
 // stack. Run with `npm run test:db`. Cases and revisions are never deleted, so
 // every test works on its own fresh case.
+import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -785,9 +786,9 @@ describe("approve_revision (Story 4.8)", () => {
   const approveSql = "select * from public.approve_revision($1, $2, $3, $4, $5)";
 
   /** A fresh case moved to `in_review` with a working head revision, and its head version. */
-  async function reviewCase() {
+  async function reviewCase(doc: unknown = v2()) {
     const created = await createCase();
-    const revision = await createRevision(created.id, 0);
+    const revision = await createRevision(created.id, 0, doc);
     const { transition } = await loadCaseStudy();
     const actor = await signedInActor();
     for (const event of ["generate", "generation_succeeded"] as const) {
@@ -907,5 +908,35 @@ describe("approve_revision (Story 4.8)", () => {
     const { referencedAssetIds } = await loadCaseStudy();
     const all = async () => ok([...referencedAssetIds(v2())]);
     expect(await approveCase(await signedInActor(), input, all)).toMatchObject({ ok: true, value: { id: revisionId, status: "approved" } });
+  });
+
+  it("a client file counts as present until it is removed (a soft delete); then approval is MATERIAL_MISSING naming it (Story 4.5c-2)", async () => {
+    const { approve: approveCase, referencedAssetIds, removeClientMaterial } = await loadCaseStudy();
+    const [first, ...caseFiles] = [...referencedAssetIds(v2())];
+    const clientFile = randomUUID();
+    // The fixture's first file is the client's here.
+    const doc = JSON.parse(JSON.stringify(v2()).replaceAll(first, clientFile)) as unknown;
+    await pool.query("select public.insert_client_asset($1, $2, $3, 'vetrina.pdf', 'application/pdf', 10, null, null, $4)", [
+      clientFile,
+      clientId,
+      `clients/${clientId}/material/${clientFile}.pdf`,
+      TEST_ACTOR_ID,
+    ]);
+    const ofCase = async () => ok(caseFiles);
+    const overflow = Object.fromEntries(FORMAT_IDS.map((id) => [id, false]));
+
+    const live = await reviewCase(doc);
+    const liveInput = { caseId: live.caseId, revisionId: live.revisionId, expectedRevisionVersion: 0, expectedHeadVersion: live.headVersion, overflow };
+    const removedCase = await reviewCase(doc);
+    expect(await approveCase(await signedInActor(), liveInput, ofCase)).toMatchObject({ ok: true, value: { status: "approved" } });
+
+    expect(await removeClientMaterial(await signedInActor(), { clientId, assetId: clientFile })).toEqual({ ok: true, value: undefined });
+    expect((await pool.query("select deleted_at is not null as removed from public.client_asset where id = $1", [clientFile])).rows).toEqual([{ removed: true }]);
+    const input = { caseId: removedCase.caseId, revisionId: removedCase.revisionId, expectedRevisionVersion: 0, expectedHeadVersion: removedCase.headVersion, overflow };
+    expect(await approveCase(await signedInActor(), input, ofCase)).toMatchObject({
+      ok: false,
+      error: { code: "MATERIAL_MISSING", details: { assetIds: [clientFile] } },
+    });
+    expect(await state(removedCase.caseId, removedCase.revisionId)).toMatchObject({ case_status: "in_review", revision_status: "working" });
   });
 });

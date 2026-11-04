@@ -10,7 +10,7 @@ import { EYEBROW, PANEL_SECTION, SEG, SEG_BUTTON, SOON_ID } from "./styles";
 
 export interface MediaPanelProps {
   element: ImageElement | VideoElement;
-  /** The case's images and videos: the element's file, by id. */
+  /** The case's images and videos, then the client's (Story 4.5c-2): the element's file, by id. */
   files: readonly ListedAsset[];
   /** False on an approved case or the trial pages: the file shows, the button says it arrives soon. */
   editable: boolean;

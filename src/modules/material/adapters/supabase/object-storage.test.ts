@@ -231,7 +231,21 @@ describe("createSupabaseObjectStorage", () => {
       expect(stub.bucket.upload).toHaveBeenCalledExactlyOnceWith(RENDITION, bytes, { contentType: "image/webp", upsert: true });
     });
 
-    it.each([KEY, `cases/${CASE_ID}/assets/${ASSET_ID}/renditions/../original.mov`, `cases/${CASE_ID}/logos/x.webp`, "renditions/0123456789abcdef.webp"])(
+    it("upload writes a client file's rendition key (Story 4.5c-2)", async () => {
+      const stub = stubClient();
+      const key = `clients/${CASE_ID}/material/${ASSET_ID}/renditions/0123456789abcdef.mp4`;
+      expect(await createSupabaseObjectStorage(stub.factory).upload(key, new Uint8Array([7]), "video/mp4")).toEqual({ ok: true, value: undefined });
+      expect(stub.bucket.upload).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+      KEY,
+      `cases/${CASE_ID}/assets/${ASSET_ID}/renditions/../original.mov`,
+      `cases/${CASE_ID}/logos/x.webp`,
+      "renditions/0123456789abcdef.webp",
+      `clients/${CASE_ID}/material/${ASSET_ID}.jpg`,
+      `clients/${CASE_ID}/logos/${ASSET_ID}/renditions/0123456789abcdef.webp`,
+    ])(
       "upload refuses anything but a rendition key: %s",
       async (key) => {
         const stub = stubClient();
