@@ -16,6 +16,10 @@ const listCaseActivity = vi.fn<(id: unknown) => Promise<Result<CaseActivity[]>>>
 const getDetailsForm = vi.fn<(input: unknown) => Promise<Result<DetailsForm>>>();
 const listAssets = vi.fn<(input: unknown) => Promise<Result<ListedAsset[]>>>();
 const getRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Result<RenditionLink>>>();
+const getClientRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Result<RenditionLink>>>();
+const listClientMaterial = vi.fn<(input: unknown) => Promise<Result<unknown[]>>>();
+/** The props the page gives `CaseView` (Story 4.5c-2: the client's render assets). */
+const caseViewProps = vi.fn<(props: Record<string, unknown>) => void>();
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -39,12 +43,23 @@ vi.mock("@/modules/case-study", () => ({
   getClientInfoForCase: (id: unknown) => getClientInfoForCase(id),
   getClient: (id: unknown) => getClient(id),
   listCaseActivity: (id: unknown) => listCaseActivity(id),
+  listClientMaterial: (input: unknown) => listClientMaterial(input),
 }));
 vi.mock("@/modules/material", () => ({
   getDetailsForm: (input: unknown) => getDetailsForm(input),
   listAssets: (input: unknown) => listAssets(input),
   getRendition: (assetId: unknown, spec: unknown) => getRendition(assetId, spec),
+  getClientRendition: (assetId: unknown, spec: unknown) => getClientRendition(assetId, spec),
 }));
+vi.mock("../_components/case-view", async () => {
+  const actual = await vi.importActual<typeof import("../_components/case-view")>("../_components/case-view");
+  return {
+    CaseView: (props: Parameters<typeof actual.CaseView>[0]) => {
+      caseViewProps(props as unknown as Record<string, unknown>);
+      return actual.CaseView(props);
+    },
+  };
+});
 
 const { default: CaseViewPage } = await import("./page");
 
@@ -142,7 +157,9 @@ const link = (url: string): Result<RenditionLink> => ok({ url, width: 100, heigh
 const render = async (caseId = ID) => renderToStaticMarkup(await CaseViewPage({ params: Promise.resolve({ caseId }) }));
 
 beforeEach(() => {
-  for (const fn of [requireSurface, get, getLiveRevision, getClientInfoForCase, getClient, getDetailsForm, listAssets, getRendition, listCaseActivity]) fn.mockReset();
+  for (const fn of [requireSurface, get, getLiveRevision, getClientInfoForCase, getClient, getDetailsForm, listAssets, getRendition, listCaseActivity, getClientRendition, listClientMaterial, caseViewProps]) fn.mockReset();
+  listClientMaterial.mockResolvedValue(ok([]));
+  getClientRendition.mockResolvedValue(err({ code: "RENDITION_NOT_READY", message: "Not ready." }));
   listCaseActivity.mockResolvedValue(ok([]));
   requireSurface.mockResolvedValue(shell);
   get.mockResolvedValue(ok(approved));
@@ -272,6 +289,27 @@ describe("CaseViewPage", () => {
     html = await render();
     expect(html).toContain(`src="https://cdn.test/${VIDEO}/video.display"`);
     expect(html).toContain(`poster="https://cdn.test/${VIDEO}/video.poster"`);
+  });
+
+  it("draws the client's images and videos a page shows from the client renditions (Story 4.5c-2)", async () => {
+    const C_IMAGE = "cccccccc-0000-4000-8000-000000000011";
+    const C_VIDEO = "cccccccc-0000-4000-8000-000000000012";
+    const file = (id: string, kind: string) => ({ id, clientId: CLIENT_ID, kind, fileName: "f", thumbnailUrl: null });
+    listClientMaterial.mockResolvedValue(ok([file(C_IMAGE, "image"), file(C_VIDEO, "video"), file("cccccccc-0000-4000-8000-000000000013", "document")]));
+    getClientRendition.mockImplementation(async (assetId, spec) => link(`https://cdn.test/client/${String(assetId)}/${String(spec)}`));
+    await render();
+    expect(listClientMaterial).toHaveBeenCalledWith({ clientId: CLIENT_ID });
+    const assets = caseViewProps.mock.calls.at(-1)![0].assets as Record<string, { url: string; posterUrl?: string }>;
+    expect(assets[C_IMAGE]).toEqual({ url: `https://cdn.test/client/${C_IMAGE}/image.display`, kind: "image" });
+    expect(assets[C_VIDEO]?.posterUrl).toBe(`https://cdn.test/client/${C_VIDEO}/video.poster`);
+    expect(assets[IMAGE]).toBeDefined();
+    expect(getClientRendition).toHaveBeenCalledTimes(3);
+  });
+
+  it("still renders when the client's files can't be read: their cells stay empty", async () => {
+    listClientMaterial.mockResolvedValue(err({ code: "CLIENT_LOOKUP_FAILED", message: "down" }));
+    await render();
+    expect(Object.keys(caseViewProps.mock.calls.at(-1)![0].assets as object).some((id) => id.startsWith("cccccccc"))).toBe(false);
   });
 
   it("shows the template's starter pages read-only with the Bozza di prova note when nothing is approved yet", async () => {

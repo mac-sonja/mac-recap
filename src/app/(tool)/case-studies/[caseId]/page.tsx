@@ -6,7 +6,7 @@ import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import { CASE_TEMPLATE } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
-import { boundValuesOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "@/app/(wizard)/_lib/configurator-data";
+import { boundValuesOf, clientRenderAssetsOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "@/app/(wizard)/_lib/configurator-data";
 import { activityLines } from "../../_lib/activity-lines";
 import { CaseView } from "../_components/case-view";
 
@@ -60,11 +60,18 @@ export default async function CaseViewPage({ params }: CaseViewPageProps) {
   if (!form.ok) throw new Error(`Details could not be loaded: ${form.error.code}`);
   if (!listed.ok) throw new Error(`Material could not be loaded: ${listed.error.code}`);
 
-  const [client, assets] = await Promise.all([
+  const [client, caseAssets, clientMaterial] = await Promise.all([
     caseStudy.getClient(info.value.clientId),
     renderAssetsOf(listed.value, (assetId, spec) => material.getRendition(assetId, spec)),
+    // Story 4.5c-2: a page may show the client's images and videos; reading them is read-only.
+    caseStudy.listClientMaterial({ clientId: info.value.clientId }),
   ]);
   if (!client.ok) throw new Error(`Client could not be loaded: ${client.error.code}`);
+  // Without the client's files their cells stay empty; the rest of the page still draws.
+  const clientAssets = clientMaterial.ok
+    ? await clientRenderAssetsOf(clientMaterial.value, (assetId, spec) => material.getClientRendition(assetId, spec))
+    : {};
+  const assets = { ...caseAssets, ...clientAssets };
 
   const doc = revision.value?.doc ?? null;
   const canDelete = can(actor, "delete case", { status: "approved" });

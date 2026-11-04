@@ -4,6 +4,7 @@ import type { Page } from "@/modules/generation";
 import type { DetailsForm, ListedAsset, RenditionLink } from "@/modules/material";
 import { CASE_TEMPLATE, FORMAT_IDS, starterPages, type BoundValues, type FormatId, type RenderAsset, type TemplateContext } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
+import { log } from "@/shared/log";
 import type { EditableFields } from "../_components/configurator/bound-fields";
 import type { Result } from "@/shared/result";
 
@@ -154,4 +155,28 @@ export function clientMediaOf(files: readonly ListedClientAsset[], assets: Reado
       },
     ];
   });
+}
+
+/** A client's images and videos (Story 4.5c-2): the only client files a page shows. */
+export const clientMediaFiles = <F extends Pick<ListedClientAsset, "kind">>(files: readonly F[]): F[] =>
+  files.filter((file) => file.kind === "image" || file.kind === "video");
+
+/**
+ * The render assets of a client's images and videos (Story 4.5c-2), from the client
+ * renditions, one file at a time: a file whose rendition can't be read is left out (logged
+ * with its ids only) and never drops the others.
+ */
+export async function clientRenderAssetsOf(
+  files: readonly Pick<ListedClientAsset, "id" | "kind" | "clientId">[],
+  getClientRendition: GetRendition,
+): Promise<Record<string, RenderAsset>> {
+  const each = await Promise.all(
+    clientMediaFiles(files).map((file) =>
+      renderAssetsOf([file], getClientRendition).catch(() => {
+        log.warn("client rendition not read", { clientId: file.clientId, assetId: file.id });
+        return {};
+      }),
+    ),
+  );
+  return Object.assign({}, ...each) as Record<string, RenderAsset>;
 }

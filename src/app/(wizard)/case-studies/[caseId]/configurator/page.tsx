@@ -8,7 +8,7 @@ import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import { CASE_TEMPLATE } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
-import { boundValuesOf, clientMediaOf, editableFieldsOf, imagePoolOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../../_lib/configurator-data";
+import { boundValuesOf, clientMediaFiles, clientMediaOf, clientRenderAssetsOf, editableFieldsOf, imagePoolOf, pagesOfDocument, renderAssetsOf, starterPagesOf } from "../../../_lib/configurator-data";
 import { Configurator } from "../../../_components/configurator/configurator";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import { isMedia, type MediaUploadRules } from "../../../_components/configurator/media-files";
@@ -93,8 +93,8 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
   // The client's files only widen what counts as present; without them a page that shows one says so, and the server checks again.
   const clientFiles = clientMaterial.ok ? clientMaterial.value.map((file) => ({ id: file.id, name: file.fileName })) : [];
   // Their images and videos draw from their renditions; a failed read leaves them undrawn, never fails the page.
-  const clientListed = clientMaterial.ok ? clientMaterial.value.filter((file) => file.kind === "image" || file.kind === "video") : [];
-  const clientAssets = await renderAssetsOf(clientListed, (assetId, spec) => material.getClientRendition(assetId, spec)).catch(() => ({}));
+  const clientListed = clientMaterial.ok ? clientMediaFiles(clientMaterial.value) : [];
+  const clientAssets = await clientRenderAssetsOf(clientListed, (assetId, spec) => material.getClientRendition(assetId, spec));
 
   const head = revision.value;
   const doc = head?.doc ?? null;

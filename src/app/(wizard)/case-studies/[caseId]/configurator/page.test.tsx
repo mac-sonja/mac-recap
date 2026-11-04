@@ -316,18 +316,44 @@ describe("ConfiguratorPage", () => {
     expect((props.clientFiles as { id: string }[]).map((f) => f.id)).toEqual([C_IMAGE, C_PDF, C_VIDEO]);
   });
 
-  it("still opens when a client rendition can't be read: the file is listed but not drawn (Story 4.5c-2)", async () => {
+  it("reads client renditions one file at a time: one that fails is left undrawn, the others still draw (Story 4.5c-2)", async () => {
     const C_IMAGE = "cccccccc-0000-4000-8000-000000000011";
-    listClientMaterial.mockResolvedValueOnce({
-      ok: true,
-      value: [{ id: C_IMAGE, clientId: CLIENT_ID, position: 1, fileName: "Vetrina.jpg", kind: "image", contentType: "image/jpeg", sizeBytes: 10, width: 2400, height: 1600, createdAt: "t", thumbnailUrl: "https://cdn.test/original.jpg" }],
+    const C_OTHER = "cccccccc-0000-4000-8000-000000000012";
+    const file = (id: string, fileName: string) => ({
+      id,
+      clientId: CLIENT_ID,
+      position: 1,
+      fileName,
+      kind: "image",
+      contentType: "image/jpeg",
+      sizeBytes: 10,
+      width: 2400,
+      height: 1600,
+      createdAt: "t",
+      thumbnailUrl: "https://cdn.test/original.jpg",
     });
-    getClientRendition.mockResolvedValue(err({ code: "STORAGE_FAILED", message: "down" }));
+    listClientMaterial.mockResolvedValueOnce({ ok: true, value: [file(C_IMAGE, "Vetrina.jpg"), file(C_OTHER, "Banco.jpg")] });
+    getClientRendition.mockImplementation(async (assetId, spec) =>
+      assetId === C_IMAGE ? err({ code: "STORAGE_FAILED", message: "down" }) : link(`https://cdn.test/client/${String(assetId)}/${String(spec)}`),
+    );
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     configuratorProps.mockClear();
-    await render();
+    try {
+      await render();
+      const line = write.mock.calls.map((c) => String(c[0])).find((l) => l.includes("client rendition not read"));
+      expect(JSON.parse(line!)).toMatchObject({ clientId: CLIENT_ID, assetId: C_IMAGE });
+      expect(line).not.toContain("https://");
+    } finally {
+      write.mockRestore();
+    }
     const props = configuratorProps.mock.calls.at(-1)![0];
-    expect((props.clientMedia as ListedAsset[]).map((f) => [f.id, f.thumbnailUrl])).toEqual([[C_IMAGE, "https://cdn.test/original.jpg"]]);
-    expect((props.assets as Record<string, unknown>)[C_IMAGE]).toBeUndefined();
+    expect((props.clientMedia as ListedAsset[]).map((f) => [f.id, f.thumbnailUrl])).toEqual([
+      [C_IMAGE, "https://cdn.test/original.jpg"],
+      [C_OTHER, `https://cdn.test/client/${C_OTHER}/image.display`],
+    ]);
+    const assets = props.assets as Record<string, unknown>;
+    expect(assets[C_IMAGE]).toBeUndefined();
+    expect(assets[C_OTHER]).toEqual({ url: `https://cdn.test/client/${C_OTHER}/image.display`, kind: "image" });
   });
 
   it("still opens when the client's files can't be read: none count as present (Story 4.8)", async () => {
