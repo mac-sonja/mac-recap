@@ -3408,23 +3408,45 @@ describe("Configurator client and case fields", () => {
     for (const src of canvasLogos()) expect(src).toBe("https://cdn.test/logo.png");
   });
 
-  it("in Anteprima of an editable case a bound text takes no typing and no field section shows; nothing saves", async () => {
+  it("in Anteprima of an editable case a click or double-click on a bound text says Modificalo dall'editor., takes no typing and no field section shows; nothing saves", async () => {
     const { actions, onSave } = open();
     fireEvent.click(button(dict.configurator.preview.enter));
     const name = find(bound("client", "name"));
     fireEvent.click(node(name));
+    expect(status().textContent).toBe(t.fromEditor);
     fireEvent.doubleClick(node(name));
     expect(node(name).hasAttribute("contenteditable")).toBe(false);
     expect(node(name).textContent).toBe("Lumen Srl");
+    expect(status().textContent).toBe(t.fromEditor);
+    for (const at of [find(bound("case", "resultValue", 0)), find(bound("case", "testimonialAuthor"))]) {
+      fireEvent.click(node(at));
+      expect(node(at).hasAttribute("contenteditable")).toBe(false);
+      expect(status().textContent).toBe(t.fromEditor);
+    }
     const meta = find((el) => el.type === "text" && el.bindings !== undefined);
     fireEvent.doubleClick(node(meta));
     expect(node(meta).hasAttribute("contenteditable")).toBe(false);
+    expect(status().textContent).toBe(t.fromEditor);
     expect(within(leftPanel()).queryByText(t.clientHeading)).toBeNull();
     expect(within(leftPanel()).queryByText(t.caseHeading)).toBeNull();
     expect(within(leftPanel()).queryByLabelText(t.year)).toBeNull();
     await flush();
     for (const save of Object.values(actions)) expect(save).not.toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("in Anteprima an own text still types on a click and says nothing; an approved case says nothing new", () => {
+    open();
+    fireEvent.click(button(dict.configurator.preview.enter));
+    const own = find((el) => el.type === "text" && el.text !== undefined);
+    expect(node(own).getAttribute("contenteditable")).toBe("plaintext-only");
+    fireEvent.click(node(own));
+    expect(status().textContent).not.toBe(t.fromEditor);
+    cleanup();
+    open({ editable: false });
+    fireEvent.click(button(dict.configurator.preview.enter));
+    fireEvent.click(node(find(bound("client", "name"))));
+    expect(status().textContent).not.toBe(t.fromEditor);
   });
 
   it("without field saves (a client's file, later) a bound text still says it can't be edited yet", () => {

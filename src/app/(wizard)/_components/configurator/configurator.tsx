@@ -477,6 +477,19 @@ export function Configurator({
     [caseId, fieldActions, fieldOptions, fieldsOn, router, say],
   );
 
+  /**
+   * Anteprima (owner, 2026-11-04): a client or case field (name, result rows, testimonial,
+   * meta line) is changed only in the editor, and a click on it says so. Own texts type as before.
+   */
+  const previewPick = useCallback(
+    (pageKey: string, elementId: string) => {
+      if (!fieldsOn) return;
+      const editor = boundEditorOf(textElementAt(formats[formatId], pageKey, elementId));
+      if (isTypedEditor(editor) || editor?.kind === "meta") say(it.configurator.fields.fromEditor);
+    },
+    [fieldsOn, formatId, formats, say],
+  );
+
   /** A bound text's typing ended: what was typed saves, Esc (null) leaves it as it was. */
   const fieldCommit = useCallback(
     (_pageKey: string, _elementId: string, text: string | null) => {
@@ -1146,6 +1159,7 @@ export function Configurator({
               onTextInput={textInput}
               onTextDone={textDone}
               onFieldCommit={fieldCommit}
+              onPreviewPick={preview ? previewPick : undefined}
               onResize={resize}
               onPlaceMedia={editable ? (target, assetId) => placeFile(target, assetId, "before") : undefined}
               onCrop={cropMedia}
