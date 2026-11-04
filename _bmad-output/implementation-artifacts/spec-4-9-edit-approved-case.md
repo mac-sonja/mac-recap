@@ -2,7 +2,7 @@
 title: 'Story 4.9: edit an approved case and update the approved version'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'a8e082efb3ef01886ccd9ca0d4891b3d697f9cbb'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -98,6 +98,25 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|-------|---------|---------|----------|-------|
+| 1 | blind, edge | A second tab's first save overwrites the first tab's edits on the copy | high | `fork_head` returns the existing copy's current version; `useDocument` adopts it, so compare-and-set passes | patch |
+| 2 | blind, edge | `save_revision_doc` and `update_approved_revision` accept an approved case with no approved revision | medium | The guard is true when `approved_revision_id` is null; pre-4.8 approved cases exist (5.2's interim) | patch |
+| 3 | blind | `head.current` never follows the prop, so Aggiorna, Scarta and fork stay stale after a refresh with the same key | medium | `useRef(headVersion)` set once | patch |
+| 4 | blind, edge | Scarta ignores whether the pending save landed, and edits after a discard (before the remount) write to the discarded copy | medium | `discardCopy` ignores `settle()`; the document isn't stopped | patch |
+| 5 | blind, edge | `approveCase` carries on when the case read fails, so an Approva click can run the update path | medium | `if (!found.ok)` is missing | patch |
+| 6 | blind, edge | Some Aggiorna failures give no feedback; `REVISION_WRITE_FAILED` shows as "changed" | low | Early returns with no message; direct correction | patch |
+| 7 | blind | The top bar's grid changes on the first fork, so the switch jumps off centre | low | A visible jump mid-edit; reserve the column on an approved case | patch |
+| 8 | blind | `APPROVED_VERSION_UPDATED` not re-exported from `index.ts` | low | Direct correction | patch |
+| 9 | blind | New events don't appear in Attività | low | Not in the spec; worth adding | defer |
+| 10 | blind | A pending copy is invisible outside the configurator | low | Not in the spec; a marker is new UI | defer |
+| 11 | blind | Aggiorna offered when the copy's content equals the approved one | low | "Differs" is by revision id; an identical update is harmless | rejected |
+| 12 | blind | Superseded copies accumulate with no retention | low | Same as every revision since 3.3 | defer |
+| 13 | gap | No test: an unsent edit at unmount forks, then saves to the copy | gap | Pre-verified | patch (test) |
+| 14 | gap | No test: Aggiorna waits for the save and stops on `notSaved` | gap | Pre-verified | patch (test) |
+| 15 | blind | Missing `it.test.ts` checks for several new strings; guardrail is a regex over SQL | low | Direct additions | patch (test) |
+| 16 | blind | Spec status vs sprint status | false | The workflow syncs them at finalize | rejected |
 
 ## Verification
 
