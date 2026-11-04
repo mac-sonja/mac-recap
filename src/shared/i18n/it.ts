@@ -1280,6 +1280,16 @@ export const it = {
       exitFullscreen: "Esci dallo schermo intero",
     },
   },
+  /** The toast anywhere in the app when a draft I started generating is ready (Story 3.8). */
+  draftReady: {
+    title: "{name} è pronta da rivedere.",
+    /** Opens the case in the configurator. */
+    open: "Apri",
+    /** The toast's close button (icon only; its accessible name). */
+    close: "Chiudi notifica",
+    /** The toast stack's accessible name. */
+    region: "Notifiche",
+  },
   /** Case status labels (IR-OP8 interim set), keyed by `CaseStatus`. */
   status: {
     draft: "Bozza",

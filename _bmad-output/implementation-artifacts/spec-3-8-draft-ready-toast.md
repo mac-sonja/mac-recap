@@ -66,17 +66,22 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/case-study` -- `listReadyDrafts` (port, Supabase adapter, use case, index), with unit tests for: mine vs others, after `since`, failed generation excluded, deleted case excluded.
-- [ ] `src/app/_lib/draft-ready-actions.ts` + test -- the server action, with 403 for roles without `generate`.
-- [ ] `src/app/_lib/draft-ready.ts` + test -- the session's `since`, dedupe and the cap.
-- [ ] `src/app/_components/draft-ready-notifier.tsx` + test -- the 15-second poll (fake timers), pausing while hidden, the toasts (announced, no focus taken, close, 10-second timeout paused on hover or focus, reduced motion) and **Apri** to `/case-studies/{id}/configurator`.
-- [ ] `src/app/(tool)/layout.tsx`, `src/app/(wizard)/layout.tsx` (+ their tests) -- mount it for roles that may `generate`.
-- [ ] `src/shared/i18n/it.ts` + `it.test.ts`; `test/permissions.test.ts`; `test/db/case-study.db.test.ts`: `listReadyDrafts` against real events.
+- [x] `src/modules/case-study` -- `listReadyDrafts` (port, Supabase adapter, use case, index), with unit tests for: mine vs others, after `since`, failed generation excluded, deleted case excluded.
+- [x] `src/app/_lib/draft-ready-actions.ts` + test -- the server action, with 403 for roles without `generate`.
+- [x] `src/app/_lib/draft-ready.ts` + test -- the session's `since`, dedupe and the cap.
+- [x] `src/app/_components/draft-ready-notifier.tsx` + test -- the 15-second poll (fake timers), pausing while hidden, the toasts (announced, no focus taken, close, 10-second timeout paused on hover or focus, reduced motion) and **Apri** to `/case-studies/{id}/configurator`.
+- [x] `src/app/(tool)/layout.tsx`, `src/app/(wizard)/layout.tsx` (+ their tests) -- mount it for roles that may `generate`.
+- [x] `src/shared/i18n/it.ts` + `it.test.ts`; `test/permissions.test.ts`; `test/db/case-study.db.test.ts`: `listReadyDrafts` against real events.
 
 **Acceptance Criteria:**
 - Given I'm in the configurator of another case when my draft finishes, when the next poll runs, then the toast shows there too and my typing isn't interrupted.
 
 ## Implementation Notes
+
+- The selection rule is a pure domain function, `selectReadyDrafts` (`domain/ready-draft.ts`); the Supabase adapter only fetches the `generation_succeeded` events after `since`, then those cases' `generate` events and rows, and hands them to it. The unit tests exercise that function through the use case.
+- The session's `since` is the server's time when the layout rendered (`startedAt` prop), so a skewed browser clock neither replays nor misses drafts. The session (start, seen ids) and the toasts on screen live at module level in the notifier, so client navigation between `(tool)` and `(wizard)` keeps them; only a new page load starts a new session.
+- A new toast's message fills in one tick after its `role="status"` element mounts, so screen readers announce it. **Apri** is described by the message (`aria-describedby`), since several toasts can be on screen.
+- A failed poll (`ok: false` or a thrown network error) is logged once per session with `console.warn` and never shown.
 
 ## Spec Change Log
 

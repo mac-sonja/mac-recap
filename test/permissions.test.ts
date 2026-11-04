@@ -74,13 +74,14 @@ const organization = await import("@/app/(tool)/organization/actions");
 const configurator = await import("@/app/(wizard)/case-studies/[caseId]/configurator/actions");
 const { default: LibraryPage } = await import("@/app/(tool)/library/page");
 const caseStudyModule = await import("@/modules/case-study");
+const draftReady = await import("@/app/_lib/draft-ready-actions");
 
 const OWNERS: readonly Role[] = ["owner_designer", "admin"];
 const ADMIN: readonly Role[] = ["admin"];
 
 type Action = (input: unknown) => Promise<{ ok: boolean; status?: number }>;
 
-/** Server action → the roles allowed to call it. Every exported action of the three files must be here. */
+/** Server action → the roles allowed to call it. Every exported action of the three files must be here, and the draft-ready poll. */
 const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   ...Object.fromEntries(Object.entries(caseStudies).map(([name, call]) => [`case-studies.${name}`, { call: call as Action, allowed: OWNERS }])),
   ...Object.fromEntries(Object.entries(clients).map(([name, call]) => [`clients.${name}`, { call: call as Action, allowed: OWNERS }])),
@@ -89,6 +90,8 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   "configurator.updateCaseFields": { call: configurator.updateCaseFields as Action, allowed: OWNERS },
   "configurator.saveCaseResults": { call: configurator.saveCaseResults as Action, allowed: OWNERS },
   "configurator.saveCaseTestimonial": { call: configurator.saveCaseTestimonial as Action, allowed: OWNERS },
+  // The draft-ready poll (Story 3.8): `generate`, a read only.
+  "draft-ready.listReadyDrafts": { call: draftReady.listReadyDrafts as Action, allowed: OWNERS },
 };
 
 /** The roles a person can hold. `system` is the worker's actor: it can't sign in, so it never gets this far (below). */
@@ -108,7 +111,7 @@ beforeEach(() => {
 describe("permission suite through the real actor resolver (Story 6.4)", () => {
   it("covers every server action of the tool", () => {
     expect(Object.keys(EXPECTED).length).toBe(
-      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 3,
+      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 3 + Object.keys(draftReady).length,
     );
   });
 

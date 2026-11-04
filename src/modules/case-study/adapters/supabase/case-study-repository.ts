@@ -1,6 +1,7 @@
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import { caseEventSchema, TRANSITION, type CaseEvent } from "@/modules/case-study/domain/case-event";
 import { caseStudySchema, type CaseStudy } from "@/modules/case-study/domain/case-study";
+import { selectReadyDrafts } from "@/modules/case-study/domain/ready-draft";
 import type { Json, Tables } from "@/shared/db.types";
 import { log } from "@/shared/log";
 import { err, type Result } from "@/shared/result";
@@ -106,6 +107,13 @@ export function toCaseEvent(row: CaseEventRow): Result<CaseEvent> {
     return err({ code: "CASE_EVENT_INVALID", message: "A case_event row failed validation.", details: { id: row.id } });
   }
   return { ok: true, value: parsed.data };
+}
+
+/** `data.event` of a `transition` case event, or `""` when it has none. */
+function transitionEventOf(data: Json): string {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return "";
+  const event = data.event;
+  return typeof event === "string" ? event : "";
 }
 
 /** The business line check refused the value: the domain schema should have caught it first. */
@@ -331,6 +339,45 @@ export function createSupabaseCaseStudyRepository(
         return err({ code: "CASE_STUDY_WRITE_FAILED", message: "Could not change the case study status." });
       }
       return reread(data.id, { actorId: change.actorId, what: "transition" });
+    },
+
+    async listReadyDrafts(actorId, since) {
+      const lookupFailed = (what: string, code: string): Result<never> => {
+        log.error(`ready drafts ${what} failed: ${code}`, { actorId });
+        return err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "Could not list the ready drafts." });
+      };
+      // 1. The cases that reached Da approvare after `since`.
+      const succeeded = await client()
+        .from("case_event")
+        .select("case_id, actor_id, at, data")
+        .eq("type", TRANSITION)
+        .eq("data->>event", "generation_succeeded")
+        .gt("at", since);
+      if (succeeded.error) return lookupFailed("case_event lookup", succeeded.error.code);
+      const caseIds = [...new Set(succeeded.data.map((e) => e.case_id))];
+      if (caseIds.length === 0) return { ok: true, value: [] };
+
+      // 2. Who pressed Generate on them, and 3. their names and whether they are deleted.
+      const [generated, named] = await Promise.all([
+        client()
+          .from("case_event")
+          .select("case_id, actor_id, at, data")
+          .eq("type", TRANSITION)
+          .eq("data->>event", "generate")
+          .in("case_id", caseIds),
+        client().from("case_study").select("id, name, deleted_at").in("id", caseIds),
+      ]);
+      if (generated.error) return lookupFailed("case_event generate lookup", generated.error.code);
+      if (named.error) return lookupFailed("case_study lookup", named.error.code);
+
+      const transitions = [...succeeded.data, ...generated.data].map((e) => ({
+        caseId: e.case_id,
+        actorId: e.actor_id,
+        event: transitionEventOf(e.data),
+        at: e.at,
+      }));
+      const cases = named.data.map((row) => ({ id: row.id, name: row.name, deletedAt: row.deleted_at }));
+      return { ok: true, value: selectReadyDrafts(transitions, cases, actorId, since) };
     },
 
     async softDelete(caseId, status, actorId) {

@@ -99,6 +99,15 @@ describe("ToolLayout", () => {
     expect(html).not.toContain("da approvare");
   });
 
+  it("mounts the draft-ready toast for the roles that may generate, and no other (Story 3.8)", async () => {
+    for (const role of ["owner_designer", "admin"] as const) {
+      getActor.mockResolvedValue(ok(actor(role)));
+      expect(await renderLayout()).toContain('aria-label="Notifiche"');
+    }
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
+    expect(await renderLayout()).not.toContain('aria-label="Notifiche"');
+  });
+
   it("redirects to sign-in on UNAUTHENTICATED", async () => {
     getActor.mockResolvedValue(err({ code: "UNAUTHENTICATED", message: "m" }));
     await expect(renderLayout()).rejects.toThrow("REDIRECT /sign-in");
