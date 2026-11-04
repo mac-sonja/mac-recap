@@ -25,7 +25,7 @@ describe("web code never imports worker-only packages (AD-10)", () => {
 
 describe("worker-only module entries (Story 3.2)", () => {
   /** A module's worker entry and the adapters only it uses (sharp, ffmpeg; Story 3.6: Anthropic, document text). */
-  const WORKER_ONLY = /^src\/modules\/[^/]+\/(worker\.ts$|adapters\/(sharp|ffmpeg|anthropic|documents)\/)/;
+  const WORKER_ONLY = /^src\/modules\/[^/]+\/(worker\.ts$|adapters\/(sharp|ffmpeg|anthropic|documents|playwright|fonts)\/)/;
 
   it("no web entry reaches src/modules/*/worker.ts or the sharp/ffmpeg adapters", async () => {
     const reached = await reachedSources(root, webEntries());
@@ -48,6 +48,16 @@ describe("worker-only module entries (Story 3.2)", () => {
     expect(reached).toContain("src/modules/generation/worker.ts");
     expect(reached).toContain("src/modules/generation/adapters/anthropic/narrative-generator.ts");
     expect(reached).toContain("src/modules/generation/adapters/documents/document-reader.ts");
+    // Story 5.3: exports render in the worker only, with Playwright.
+    expect(reached).toContain("src/modules/rendering/worker.ts");
+    expect(reached).toContain("src/modules/rendering/adapters/playwright/export-browser.ts");
+    expect(paths).toContain("playwright");
+  });
+
+  it("web code reaches the export use cases (rendering's server entry) but never Chromium (Story 5.3)", async () => {
+    const reached = await reachedSources(root, webEntries());
+    expect(reached).toContain("src/modules/rendering/server.ts");
+    expect(reached).not.toContain("src/modules/rendering/application/export-handler.ts");
   });
 });
 

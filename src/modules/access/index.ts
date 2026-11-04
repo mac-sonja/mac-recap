@@ -142,6 +142,11 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   OVERFLOW_NOT_CLEARED: 400,
   MATERIAL_MISSING: 400,
   CASE_NOT_APPROVABLE: 409,
+  // Exports (Story 5.3): approved only, a format the revision has, a format that exports, content unchanged.
+  NOT_APPROVED: 409,
+  FORMAT_NOT_IN_REVISION: 400,
+  FORMAT_NOT_EXPORTABLE: 400,
+  EXPORT_STALE: 409,
   // Clients and case history codes (Story 2.12, AD-21).
   CLIENT_NOT_FOUND: 404,
   CLIENT_NAME_TAKEN: 409,

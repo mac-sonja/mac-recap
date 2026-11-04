@@ -76,6 +76,28 @@ describe("module boundaries (I/O matrix)", () => {
     });
   });
 
+  describe("server-only module entries (Story 5.3)", () => {
+    it("a server action importing a module's server entry passes", async () => {
+      expect(await ruleIds("src/app/(tool)/case-studies/export-actions.ts", `import "@/modules/rendering/server";\n`)).toEqual([]);
+      expect(await ruleIds("src/app/x/actions.ts", `import "@/modules/rendering/server";\n`)).toEqual([]);
+    });
+
+    it.each(["src/app/x/c.tsx", "src/app/x/helper.ts", "src/worker/x.ts", "src/modules/sharing/index.ts"])(
+      "%s importing a module's server entry fails",
+      async (file) => {
+        expect(await ruleIds(file, `import "@/modules/rendering/server";\n`)).toContain("no-restricted-imports");
+      },
+    );
+
+    it("a server action still can't reach other internals", async () => {
+      expect(await ruleIds("src/app/x/actions.ts", `import "@/modules/rendering/servers";\n`)).toContain("no-restricted-imports");
+      expect(await ruleIds("src/app/x/actions.ts", `import "@/modules/rendering/application/request-export";\n`)).toContain(
+        "no-restricted-imports",
+      );
+      expect(await ruleIds("src/app/x/actions.ts", `import "@/modules/rendering/worker";\n`)).toContain("no-restricted-imports");
+    });
+  });
+
   it("a module importing another module's internals fails", async () => {
     expect(
       await ruleIds(

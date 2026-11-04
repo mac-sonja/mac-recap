@@ -321,6 +321,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"export": {
+                  Row: {
+                    "content_hash": string,"content_type": string,"created_at": string,"created_by": string,"format": string,"id": string,"parts": NonNullable<Json>,"path": string,"size_bytes": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "content_hash": string,"content_type": string,"created_at"?: string,"created_by": string,"format": string,"id"?: string,"parts": NonNullable<Json>,"path": string,"size_bytes": number
+                  }
+                  Update: {
+                    "content_hash"?: string,"content_type"?: string,"created_at"?: string,"created_by"?: string,"format"?: string,"id"?: string,"parts"?: NonNullable<Json>,"path"?: string,"size_bytes"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "export_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"job": {
                   Row: {
                     "attempts": number,"created_at": string,"error": Json | null,"finished_at": string | null,"id": string,"input_hash": string,"kind": string,"locked_until": string | null,"max_attempts": number,"payload": NonNullable<Json>,"status": string,"subject_id": string,"updated_at": string

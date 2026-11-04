@@ -11,6 +11,7 @@ import type { Page } from "@/modules/generation";
 import { FORMAT_IDS, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { ActivityCard, type ActivityCardLine } from "../../_components/activity-card";
+import { caseDownload } from "./case-download";
 import { CaseViewer } from "./case-viewer";
 import { DeleteCaseButton } from "./delete-case-button";
 
@@ -31,6 +32,11 @@ export interface CaseViewProps {
   editHref: string | null;
   /** The case's id for **Elimina**; `null` for a role that may not `delete case` an approved case, which sees no Elimina. */
   deleteCaseId: string | null;
+  /**
+   * The case's id for **Scarica** (Story 5.3); `null` without an approved revision (or the
+   * `export` permission): the picker shows but its **Scarica** stays inactive.
+   */
+  exportCaseId?: string | null;
   /** This case's *Attività*, newest first, with no links; `null` when the log could not be read. */
   activity: readonly ActivityCardLine[] | null;
   /** The server's "now" (ISO): the relative times read the same on the server and after hydration. */
@@ -80,6 +86,7 @@ export function CaseView({
   trial,
   editHref,
   deleteCaseId,
+  exportCaseId = null,
   activity,
   now,
 }: CaseViewProps) {
@@ -143,6 +150,7 @@ export function CaseView({
             label={fill(it.download.caseLabel, { name: header.name })}
             title={fill(it.download.caseTitle, { name: header.name })}
             description={it.download.caseDescription}
+            {...(exportCaseId ? caseDownload(exportCaseId) : {})}
           />
           {editHref !== null && (
             <Link href={editHref} className={PRIMARY_ACTION}>

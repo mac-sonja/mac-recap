@@ -67,16 +67,22 @@ async function stubbedUseCases(load: () => Promise<Record<string, unknown>>) {
 }
 vi.mock("@/modules/case-study", () => stubbedUseCases(() => vi.importActual("@/modules/case-study")));
 vi.mock("@/modules/material", () => stubbedUseCases(() => vi.importActual("@/modules/material")));
+// Exports (Story 5.3): the job queue is a spy, so the guardrail sees whether anything was enqueued.
+vi.mock("@/modules/jobs", () => stubbedUseCases(() => vi.importActual("@/modules/jobs")));
 
 const caseStudies = await import("@/app/(tool)/case-studies/actions");
 const clients = await import("@/app/(tool)/clients/actions");
 const organization = await import("@/app/(tool)/organization/actions");
 const configurator = await import("@/app/(wizard)/case-studies/[caseId]/configurator/actions");
+const exportActions = await import("@/app/(tool)/case-studies/export-actions");
+const jobsModule = await import("@/modules/jobs");
 const { default: LibraryPage } = await import("@/app/(tool)/library/page");
 const caseStudyModule = await import("@/modules/case-study");
 const draftReady = await import("@/app/_lib/draft-ready-actions");
 
 const OWNERS: readonly Role[] = ["owner_designer", "admin"];
+/** `export` an approved case: every role that may see one (AD-11). */
+const SHARERS: readonly Role[] = ["owner_designer", "admin", "account_sales_social"];
 const ADMIN: readonly Role[] = ["admin"];
 
 type Action = (input: unknown) => Promise<{ ok: boolean; status?: number }>;
@@ -92,6 +98,8 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   "configurator.saveCaseTestimonial": { call: configurator.saveCaseTestimonial as Action, allowed: OWNERS },
   // The draft-ready poll (Story 3.8): `generate`, a read only.
   "draft-ready.listReadyDrafts": { call: draftReady.listReadyDrafts as Action, allowed: OWNERS },
+  // Story 5.3: Scarica on an approved case.
+  ...Object.fromEntries(Object.entries(exportActions).map(([name, call]) => [`export.${name}`, { call: call as Action, allowed: SHARERS }])),
 };
 
 /** The roles a person can hold. `system` is the worker's actor: it can't sign in, so it never gets this far (below). */
@@ -111,7 +119,7 @@ beforeEach(() => {
 describe("permission suite through the real actor resolver (Story 6.4)", () => {
   it("covers every server action of the tool", () => {
     expect(Object.keys(EXPECTED).length).toBe(
-      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 3 + Object.keys(draftReady).length,
+      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 3 + Object.keys(draftReady).length + Object.keys(exportActions).length,
     );
   });
 
@@ -170,8 +178,12 @@ describe("no role, admin included, changes a guardrail or a permission (Story 6.
   });
 
   it("gives account/sales/social no write action: no create, edit, approve, delete or client change", () => {
-    const writable = cells.filter((c) => c.role === "account_sales_social" && c.allowed);
+    // Exporting an approved case writes no content (only its file and an `export` event).
+    const writable = cells.filter((c) => c.role === "account_sales_social" && c.allowed && !c.name.startsWith("export."));
     expect(writable).toEqual([]);
+    expect(cells.filter((c) => c.name.startsWith("export.") && c.allowed).map((c) => c.role)).toEqual(
+      expect.arrayContaining(["account_sales_social"]),
+    );
   });
 });
 
@@ -211,4 +223,32 @@ describe("the library listing (Story 5.1)", () => {
       expect(getEditableRevision).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("no role exports a case without an approved revision (Story 5.3, NFR1)", () => {
+  const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+
+  it.each(["owner_designer", "admin", "account_sales_social"] as const)("as %s: NOT_APPROVED, nothing enqueued", async (role) => {
+    session.role = role;
+    const get = vi.mocked(caseStudyModule.get);
+    const getLiveRevision = vi.mocked(caseStudyModule.getLiveRevision);
+    const getEditableRevision = vi.mocked(caseStudyModule.getEditableRevision);
+    const enqueue = vi.mocked(jobsModule.enqueue);
+    enqueue.mockClear();
+    getEditableRevision.mockClear();
+    get.mockResolvedValue(ok({ id: CASE_ID, code: "LUM-2026-01", name: "Caso", year: 2026, businessLines: [], status: "in_review" }) as never);
+    // The case has a working head, but nothing approved.
+    getLiveRevision.mockResolvedValue(ok(null) as never);
+    for (const format of ["presentazione_16_9", "carosello_1_1"]) {
+      const result = await exportActions.requestCaseExport({ caseId: CASE_ID, format });
+      expect(result).toMatchObject({ ok: false, status: 409, error: { code: "NOT_APPROVED" } });
+    }
+    expect(await exportActions.getCaseExportStatus({ caseId: CASE_ID, exportId: CASE_ID })).toMatchObject({
+      ok: false,
+      error: { code: "NOT_APPROVED" },
+    });
+    expect(getLiveRevision).toHaveBeenCalledWith({ kind: "case", id: CASE_ID });
+    expect(getEditableRevision).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
+  });
 });

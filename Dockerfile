@@ -32,6 +32,11 @@ COPY --from=build --chown=pwuser:pwuser /app/dist ./dist
 COPY --from=build --chown=pwuser:pwuser /app/node_modules/sharp ./node_modules/sharp
 COPY --from=build --chown=pwuser:pwuser /app/node_modules/@img ./node_modules/@img
 COPY --from=build --chown=pwuser:pwuser /app/node_modules/detect-libc ./node_modules/detect-libc
+# Exports (Story 5.3): dist/worker.js also leaves Playwright external (it drives the base
+# image's Chromium) and reads the Inter woff2 files (OFL) from node_modules at runtime.
+COPY --from=build --chown=pwuser:pwuser /app/node_modules/playwright ./node_modules/playwright
+COPY --from=build --chown=pwuser:pwuser /app/node_modules/playwright-core ./node_modules/playwright-core
+COPY --from=build --chown=pwuser:pwuser /app/node_modules/@fontsource-variable/inter ./node_modules/@fontsource-variable/inter
 USER pwuser
 EXPOSE 3000
 ENTRYPOINT ["/usr/bin/tini", "--"]

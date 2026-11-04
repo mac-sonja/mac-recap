@@ -22,6 +22,13 @@ export const CASE_DELETED = "case_deleted";
  */
 export const CASE_DETAILS_UPDATED = "case_details_updated";
 
+/**
+ * The event written when a person downloads an export (Story 5.3), with the actor;
+ * `revisionId` is the approved revision drawn and `data` is `{ exportId, format }`. A
+ * failed export writes nothing here and never changes the case's status.
+ */
+export const CASE_EXPORTED = "export";
+
 /** The event written with every status change, in the same transaction; `data` is `{ event, from, to }`. */
 export const TRANSITION = "transition";
 

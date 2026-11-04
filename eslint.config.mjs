@@ -41,6 +41,12 @@ const MODULE_INTERNALS = {
   regex: "^@/modules/[^/]+/.+",
   message: "Import a module only through its public index: `@/modules/<module>` (AD-1).",
 };
+// Server code in src/app may also import a module's server-only entry, `@/modules/<module>/server`
+// (Story 5.3: rendering's export use cases), when its index must stay safe for client components.
+const MODULE_INTERNALS_BUT_SERVER = {
+  regex: "^@/modules/[^/]+/(?!server$).+",
+  message: "Import a module only through its public index `@/modules/<module>`, or its server entry `@/modules/<module>/server` (AD-1).",
+};
 // The worker entry may also import a module's worker-only entry, `@/modules/<module>/worker`
 // (sharp, ffmpeg; Story 3.2). Nothing else may: web code must never reach it (AD-10).
 const MODULE_INTERNALS_BUT_WORKER = {
@@ -155,6 +161,14 @@ const OUTSIDE_MODULES = [
   RELATIVE_INTO_MODULES,
   ALIAS_DOTDOT,
 ];
+const APP = [
+  VENDOR_SDK,
+  RESERVED_INTEGRATION,
+  DB_TYPES,
+  MODULE_INTERNALS_BUT_SERVER,
+  RELATIVE_INTO_MODULES,
+  ALIAS_DOTDOT,
+];
 const WORKER = [
   VENDOR_SDK,
   RESERVED_INTEGRATION,
@@ -205,6 +219,8 @@ export default defineConfig(
 
   // UI: modules only through index.ts, no vendor SDKs.
   layer([`src/app/${SOURCE}`, `src/*.{ts,tsx}`], OUTSIDE_MODULES),
+  // Server actions may also use a module's server entry (`@/modules/<module>/server`).
+  layer([`src/app/**/actions.ts`, `src/app/**/*-actions.ts`], APP),
 
   // Worker entry: the same, plus each module's worker-only entry (`@/modules/<module>/worker`).
   layer([`src/worker/${SOURCE}`], WORKER),

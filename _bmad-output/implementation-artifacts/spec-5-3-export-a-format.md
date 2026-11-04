@@ -72,16 +72,24 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Migration + `db.types.ts`; `rendering` domain (`contentHash`, with tests for stability and each input changing it), the export repository and storage adapters (signed GET ≤ 15 minutes).
-- [ ] `rendering.requestExport(actor, {caseId, format})`: approval and format checks, `ensureExport` reuse, or enqueue; `rendering.exportStatus(actor, {jobId|exportId})` returning `pending`, `ready` with a signed URL, or `failed`. Server actions with `authorize(actor, "export")` (or the policy's existing name), plus tests and permissions rows.
-- [ ] `exportHandler`: re-check approval; build values and assets (case and client renditions); `renderToStaticMarkup` of every page with the inlined fonts; Playwright `setContent`, wait for images and fonts, then `page.pdf` (1920×1080 pages) or one `screenshot` per page into a ZIP; store; insert the `export` row. Unit tests use a fake browser; one integration test renders a two-page Presentazione with real Chromium.
-- [ ] `download-button.tsx` + `case-view.tsx` + `case-studies-table.tsx` -- **Scarica** requests, polls status every 2 s, downloads on ready, shows the failure toast with Riprova; tests.
-- [ ] `src/worker/run.ts` wiring and its test; `it.ts` copy; `test/permissions.test.ts`; a DB test for `export` (unique hash, RLS lockout) and the guardrail test.
+- [x] Migration + `db.types.ts`; `rendering` domain (`contentHash`, with tests for stability and each input changing it), the export repository and storage adapters (signed GET ≤ 15 minutes).
+- [x] `rendering.requestExport(actor, {caseId, format})`: approval and format checks, `ensureExport` reuse, or enqueue; `rendering.exportStatus(actor, {jobId|exportId})` returning `pending`, `ready` with a signed URL, or `failed`. Server actions with `authorize(actor, "export")` (or the policy's existing name), plus tests and permissions rows.
+- [x] `exportHandler`: re-check approval; build values and assets (case and client renditions); `renderToStaticMarkup` of every page with the inlined fonts; Playwright `setContent`, wait for images and fonts, then `page.pdf` (1920×1080 pages) or one `screenshot` per page into a ZIP; store; insert the `export` row. Unit tests use a fake browser; one integration test renders a two-page Presentazione with real Chromium.
+- [x] `download-button.tsx` + `case-view.tsx` + `case-studies-table.tsx` -- **Scarica** requests, polls status every 2 s, downloads on ready, shows the failure toast with Riprova; tests.
+- [x] `src/worker/run.ts` wiring and its test; `it.ts` copy; `test/permissions.test.ts`; a DB test for `export` (unique hash, RLS lockout) and the guardrail test.
 
 **Acceptance Criteria:**
 - Given a case exported once, when its client's name is edited and it is exported again, then a second `export` row exists and the new file has the new name.
 
 ## Implementation Notes
+
+- **Entries.** `rendering/index.ts` is imported by client components (the preview), so it stays pure. The export use cases live in `rendering/server.ts` (`requestExport`, `exportStatus`, `ensureExport`), which eslint lets only `src/app/**/actions.ts` and `*-actions.ts` import (`test/lint-boundaries.test.ts`); the job handler lives in `rendering/worker.ts` (Playwright, sharp, fonts), reached only from `src/worker` (`test/web-imports.test.ts`).
+- **Hash.** `domain/export.ts` builds the canonical input (`contentHashInput`); the sha256 is in `application/content-hash.ts` (domain may not import `node:crypto`). Besides the listed fields it also covers the client's results and testimonial, which pages draw too.
+- **Status.** `exportStatus` takes `{ caseId, jobId }` or `{ caseId, exportId }` (the case scopes the job lookup) and checks the live revision before anything else. A succeeded job's file is handed out only while its revision is still the live one (`EXPORT_STALE` otherwise). The worker re-reads everything; if the content hash moved since the request (an edit while queued) it fails with `EXPORT_STALE` (no retry), so a file is never stored under a hash it doesn't match; **Riprova** asks again.
+- **Events.** The `export` case event (`CASE_EXPORTED`, `data { exportId, format }`, the revision drawn) is written when a ready link is handed out. A failed export writes only the job loop's `job_failed`; the handler has no `onPermanentFailure`, so status never changes.
+- **Files.** Fonts, renditions (case `rendition`, client `client_rendition`; image display copy, video poster) and the logo are inlined as `data:` URLs by the worker; Chromium runs offline with every request aborted. An SVG logo is scanned again and rasterised with sharp (librsvg from a buffer, no base URL). The ZIP is a deterministic stored ZIP (`adapters/zip/store-zip.ts`, no new dependency). Bucket: private `rendering`, PDF and ZIP only, 50 MB.
+- **Build.** `@fontsource-variable/inter@5.3.0` added; `build:dist` leaves `playwright` external; the Dockerfile copies `playwright`, `playwright-core` and the font package; `scripts/smoke-image.sh` checks Chromium prints a PDF in the image; CI installs Playwright's Chromium for `test/export-chromium.test.ts` (skipped locally without it).
+- **Not run here.** `npm run test:db` (no Docker daemon in this environment): `test/db/export.db.test.ts` and the hand-written `export` entry in `db.types.ts` are unverified against the generator's drift check.
 
 ## Spec Change Log
 

@@ -9,6 +9,8 @@
 #                             is unreachable (no system actor)
 #   ffmpeg -version        -> 6.1.1 (and ffprobe 6.1.1: the rendition worker uses both)
 #   sharp                  -> resolves from /app/dist (dist/worker.js leaves it external) and encodes WebP
+#   playwright             -> resolves from /app/dist (external too) and prints a 1920x1080 PDF with the
+#                             base image's Chromium; the Inter woff2 files resolve from /app (Story 5.3)
 #   PID 1                  -> tini (ENTRYPOINT), for web and worker commands
 #   id -un                 -> pwuser
 # Usage: scripts/smoke-image.sh <image-tag>. Needs docker, curl and jq. Exits non-zero on any failure.
@@ -290,6 +292,25 @@ worker_sharp() {
   grep -q "sharp ok webp 8x4" <<<"$out" && pass "worker: sharp resolves from dist and encodes WebP" || fail "worker: sharp: '$out'"
 }
 
+# Exports (Story 5.3): dist/worker.js leaves playwright external; it drives the base image's
+# Chromium, offline, and the export HTML inlines Inter from node_modules/@fontsource-variable/inter.
+worker_chromium() {
+  local out
+  out="$(docker run --rm --name "$PREFIX-chromium" -w /app "$IMAGE" node -e '
+    const { chromium } = require(require.resolve("playwright", { paths: ["/app/dist"] }));
+    require.resolve("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2", { paths: ["/app"] });
+    (async () => {
+      const browser = await chromium.launch();
+      const page = await (await browser.newContext({ offline: true })).newPage();
+      await page.setContent("<p>MAC</p>");
+      const pdf = await page.pdf({ width: "1920px", height: "1080px" });
+      await browser.close();
+      console.log(`chromium ok ${pdf.subarray(0, 5).toString()}`);
+    })().catch((e) => { console.error(e.message); process.exit(1); });
+  ' 2>&1)"
+  grep -q "chromium ok %PDF-" <<<"$out" && pass "worker: playwright resolves from dist and prints a PDF" || fail "worker: chromium: '$out'"
+}
+
 # tini is PID 1 for the web command and for an overridden (worker) command.
 init_tini() {
   local comm
@@ -319,6 +340,7 @@ worker_no_system_actor
 ffmpeg_version
 ffprobe_version
 worker_sharp
+worker_chromium
 init_tini
 image_user
 

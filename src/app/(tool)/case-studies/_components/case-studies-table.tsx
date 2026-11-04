@@ -8,6 +8,7 @@ import { PRESSABLE, PRIMARY_ACTION, ROW_PILL, SECONDARY_ACTION } from "@/app/_co
 import { CARD, SEARCH_FIELD, SEARCH_ICON, TH } from "@/app/_components/field-styles";
 import { DownloadButton } from "@/app/_components/download-button";
 import { StatusBadge } from "@/app/_components/status-badge";
+import { caseDownload } from "./case-download";
 import { caseHref, configuratorHref } from "@/app/_lib/routes";
 import { CASE_STATUSES, GENERATING_REFRESH_MS } from "@/shared/case-status";
 import { fill, it } from "@/shared/i18n/it";
@@ -414,6 +415,7 @@ export function CaseStudiesTable({
                             label={fill(it.download.caseLabel, { name: row.name })}
                             title={fill(it.download.caseTitle, { name: row.name })}
                             description={it.download.caseDescription}
+                            {...caseDownload(row.id)}
                           />
                           {canEdit && (
                             <Link
