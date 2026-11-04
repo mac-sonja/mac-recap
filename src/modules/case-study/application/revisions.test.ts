@@ -12,6 +12,8 @@ import { err, ok } from "@/shared/result";
 import {
   makeApprove,
   makeCreateWorkingRevision,
+  makeDiscardHead,
+  makeForkHead,
   makeGetEditableRevision,
   makeGetLiveRevision,
   makeSaveRevisionDoc,
@@ -86,6 +88,9 @@ function fakes(found: CaseStudy | null, rows: Revision[] = []) {
       return ok({ ...row, doc: input.doc, version: input.expectedVersion + 1 });
     }),
     approve: vi.fn<RevisionRepository["approve"]>(async (input) => ok({ ...byId.get(input.revisionId)!, status: "approved" })),
+    updateApproved: vi.fn<RevisionRepository["updateApproved"]>(async (input) => ok({ ...byId.get(input.revisionId)!, status: "approved" })),
+    forkHead: vi.fn<RevisionRepository["forkHead"]>(async (input) => ok({ revision: stored(HEAD_ID, caseHistoryV2(FORMAT_IDS)), headVersion: input.expectedHeadVersion + 1 })),
+    discardHead: vi.fn<RevisionRepository["discardHead"]>(async () => ok(stored(APPROVED_ID, caseHistoryV2(FORMAT_IDS), { status: "approved" }))),
   };
   return { cases, revisions };
 }
@@ -541,5 +546,175 @@ describe("approve (Story 4.8)", () => {
   it("refuses bad input", async () => {
     const d = deps();
     expect(await makeApprove(d)(actor, input({ overflow: "none" }))).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+  });
+});
+
+describe("editing an approved case (Story 4.9)", () => {
+  const FORK_ID = "22222222-0000-4000-8000-000000000003";
+  const approvedDoc = () => caseHistoryV2(FORMAT_IDS);
+  const editedDoc = () => {
+    const doc = caseHistoryV2(FORMAT_IDS);
+    doc.formats.presentazione_16_9!.pages[0]!.name = "Copertina corretta";
+    return doc;
+  };
+  const clear = () => Object.fromEntries(FORMAT_IDS.map((id) => [id, false]));
+
+  /**
+   * An in-memory database with the migration's rules: an approved case whose head is its
+   * approved revision; fork, save, update and discard as `fork_head`, `save_revision_doc`,
+   * `update_approved_revision` and `discard_head` behave.
+   */
+  function world() {
+    const rows = new Map<string, Revision>([[APPROVED_ID, stored(APPROVED_ID, approvedDoc(), { status: "approved", version: 2 })]]);
+    let current = caseStudy({ status: "approved", headRevisionId: APPROVED_ID, approvedRevisionId: APPROVED_ID, headVersion: 1 });
+    const stale = (code: Uppercase<string>) => err({ code, message: code });
+    const cases = { findById: vi.fn(async () => ok(current)) } as unknown as CaseStudyRepository;
+    const revisions: RevisionRepository = {
+      findById: async (id) => ok(rows.get(id) ?? null),
+      createWorking: async () => stale("NOT_USED"),
+      approve: async () => stale("CASE_NOT_APPROVABLE"),
+      forkHead: vi.fn<RevisionRepository["forkHead"]>(async ({ expectedHeadVersion, actorId }) => {
+        if (current.status !== "approved") return stale("CASE_NOT_EDITABLE");
+        if (current.headRevisionId !== current.approvedRevisionId) return ok({ revision: rows.get(current.headRevisionId!)!, headVersion: current.headVersion });
+        if (current.headVersion !== expectedHeadVersion) return stale("STALE_HEAD");
+        const from = rows.get(current.approvedRevisionId!)!;
+        const copy = { ...from, id: FORK_ID, status: "working" as const, version: 0, createdBy: actorId };
+        rows.set(FORK_ID, copy);
+        current = { ...current, headRevisionId: FORK_ID, headVersion: current.headVersion + 1 };
+        return ok({ revision: copy, headVersion: current.headVersion });
+      }),
+      saveDoc: async ({ revisionId, doc, expectedVersion }) => {
+        const row = rows.get(revisionId)!;
+        if (current.headRevisionId !== revisionId) return stale("STALE_HEAD");
+        if (row.status !== "working") return stale("REVISION_NOT_WRITABLE");
+        if (row.version !== expectedVersion) return stale("STALE_REVISION");
+        const saved = { ...row, doc, version: row.version + 1 };
+        rows.set(revisionId, saved);
+        return ok(saved);
+      },
+      updateApproved: vi.fn<RevisionRepository["updateApproved"]>(async ({ revisionId, expectedRevisionVersion, expectedHeadVersion }) => {
+        const row = rows.get(revisionId)!;
+        if (current.headRevisionId !== revisionId || current.headVersion !== expectedHeadVersion) return stale("STALE_HEAD");
+        if (row.status !== "working") return stale("REVISION_NOT_WRITABLE");
+        if (row.version !== expectedRevisionVersion) return stale("STALE_REVISION");
+        rows.set(current.approvedRevisionId!, { ...rows.get(current.approvedRevisionId!)!, status: "superseded" });
+        const approved = { ...row, status: "approved" as const };
+        rows.set(revisionId, approved);
+        current = { ...current, approvedRevisionId: revisionId };
+        return ok(approved);
+      }),
+      discardHead: vi.fn<RevisionRepository["discardHead"]>(async ({ revisionId, expectedHeadVersion }) => {
+        if (current.headRevisionId !== revisionId || current.headVersion !== expectedHeadVersion) return stale("STALE_HEAD");
+        if (revisionId === current.approvedRevisionId) return stale("REVISION_NOT_WRITABLE");
+        rows.set(revisionId, { ...rows.get(revisionId)!, status: "superseded" });
+        current = { ...current, headRevisionId: current.approvedRevisionId, headVersion: current.headVersion + 1 };
+        return ok(rows.get(current.approvedRevisionId!)!);
+      }),
+    };
+    const refs = [...referencedAssetIds(approvedDoc())];
+    const deps = {
+      cases,
+      revisions,
+      caseAssetIds: vi.fn<CaseAssetIds>(async () => ok(refs)),
+      clients: { listAssets: vi.fn<ClientRepository["listAssets"]>(async () => ok([])) },
+    };
+    return { deps, rows, now: () => current };
+  }
+
+  const live = async (w: ReturnType<typeof world>) => {
+    const read = await makeGetLiveRevision(w.deps)({ kind: "case", id: CASE_ID });
+    return read.ok ? read.value : null;
+  };
+
+  it("forkHead creates one working copy of the approved revision, and is idempotent", async () => {
+    const w = world();
+    const first = await makeForkHead(w.deps)(actor, { caseId: CASE_ID, expectedHeadVersion: 1 });
+    expect(first).toEqual({ ok: true, value: { revisionId: FORK_ID, version: 0, headVersion: 2 } });
+    expect(w.rows.get(FORK_ID)).toMatchObject({ status: "working", doc: approvedDoc(), generatedDoc: approvedDoc() });
+    // Called again (a retry, another tab with the old head version): the same copy, nothing new.
+    const again = await makeForkHead(w.deps)(actor, { caseId: CASE_ID, expectedHeadVersion: 1 });
+    expect(again).toEqual(first);
+    expect(w.rows.size).toBe(2);
+    expect(w.deps.revisions.forkHead).toHaveBeenCalledWith({ caseId: CASE_ID, expectedHeadVersion: 1, actorId: actor.id });
+  });
+
+  it("forkHead refuses bad input before the repository, and passes STALE_HEAD through", async () => {
+    const w = world();
+    expect(await makeForkHead(w.deps)(actor, { caseId: "nope", expectedHeadVersion: 1 })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+    expect(w.deps.revisions.forkHead).not.toHaveBeenCalled();
+    expect(await makeForkHead(w.deps)(actor, { caseId: CASE_ID, expectedHeadVersion: 0 })).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
+  });
+
+  it("the live read returns the approved revision while the copy is edited, and the copy once updated; the old one is superseded", async () => {
+    const w = world();
+    await makeForkHead(w.deps)(actor, { caseId: CASE_ID, expectedHeadVersion: 1 });
+    const saved = await makeSaveRevisionDoc(w.deps)(actor, { caseId: CASE_ID, revisionId: FORK_ID, doc: editedDoc(), expectedVersion: 0 });
+    expect(saved).toMatchObject({ ok: true, value: { id: FORK_ID, version: 1 } });
+    expect(await live(w)).toMatchObject({ id: APPROVED_ID, doc: approvedDoc() });
+    const editable = await makeGetEditableRevision(w.deps)({ kind: "case", id: CASE_ID });
+    expect(editable).toMatchObject({ ok: true, value: { id: FORK_ID, doc: editedDoc() } });
+
+    const updated = await makeApprove(w.deps)(actor, { caseId: CASE_ID, revisionId: FORK_ID, expectedRevisionVersion: 1, expectedHeadVersion: 2, overflow: clear() });
+    expect(updated).toMatchObject({ ok: true, value: { id: FORK_ID, status: "approved" } });
+    expect(w.deps.revisions.updateApproved).toHaveBeenCalledTimes(1);
+    expect(await live(w)).toMatchObject({ id: FORK_ID, doc: editedDoc() });
+    expect(w.rows.get(APPROVED_ID)?.status).toBe("superseded");
+    expect(w.now()).toMatchObject({ status: "approved", approvedRevisionId: FORK_ID, headRevisionId: FORK_ID });
+  });
+
+  it.each([
+    ["an overflowing format", { overflow: { ...clear(), carosello_1_1: true } }, "OVERFLOW_NOT_CLEARED"],
+    ["a version newer than the one measured", { expectedRevisionVersion: 0 }, "STALE_REVISION"],
+    ["a head version that moved", { expectedHeadVersion: 1 }, "STALE_HEAD"],
+  ] as const)("update refuses %s and nothing changes", async (_name, over, code) => {
+    const w = world();
+    await makeForkHead(w.deps)(actor, { caseId: CASE_ID, expectedHeadVersion: 1 });
+    await makeSaveRevisionDoc(w.deps)(actor, { caseId: CASE_ID, revisionId: FORK_ID, doc: editedDoc(), expectedVersion: 0 });
+    const input = { caseId: CASE_ID, revisionId: FORK_ID, expectedRevisionVersion: 1, expectedHeadVersion: 2, overflow: clear(), ...over };
+    expect(await makeApprove(w.deps)(actor, input)).toMatchObject({ ok: false, error: { code } });
+    expect(await live(w)).toMatchObject({ id: APPROVED_ID, doc: approvedDoc() });
+    expect(w.now()).toMatchObject({ status: "approved", approvedRevisionId: APPROVED_ID });
+  });
+
+  it("update refuses a deleted referenced file with MATERIAL_MISSING, writing nothing", async () => {
+    const w = world();
+    await makeForkHead(w.deps)(actor, { caseId: CASE_ID, expectedHeadVersion: 1 });
+    w.deps.caseAssetIds.mockResolvedValue(ok([]));
+    const input = { caseId: CASE_ID, revisionId: FORK_ID, expectedRevisionVersion: 0, expectedHeadVersion: 2, overflow: clear() };
+    expect(await makeApprove(w.deps)(actor, input)).toMatchObject({ ok: false, error: { code: "MATERIAL_MISSING" } });
+    expect(w.deps.revisions.updateApproved).not.toHaveBeenCalled();
+  });
+
+  it("discardHead supersedes the copy and returns the approved revision as the head; a second discard is stale", async () => {
+    const w = world();
+    await makeForkHead(w.deps)(actor, { caseId: CASE_ID, expectedHeadVersion: 1 });
+    await makeSaveRevisionDoc(w.deps)(actor, { caseId: CASE_ID, revisionId: FORK_ID, doc: editedDoc(), expectedVersion: 0 });
+    const discarded = await makeDiscardHead(w.deps)(actor, { caseId: CASE_ID, revisionId: FORK_ID, expectedHeadVersion: 2 });
+    expect(discarded).toMatchObject({ ok: true, value: { id: APPROVED_ID, status: "approved", doc: approvedDoc() } });
+    expect(w.rows.get(FORK_ID)?.status).toBe("superseded");
+    expect(w.now()).toMatchObject({ status: "approved", headRevisionId: APPROVED_ID, approvedRevisionId: APPROVED_ID, headVersion: 3 });
+    expect(await live(w)).toMatchObject({ id: APPROVED_ID });
+    expect(await makeDiscardHead(w.deps)(actor, { caseId: CASE_ID, revisionId: FORK_ID, expectedHeadVersion: 2 })).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
+    // The next edit forks again, from the approved revision.
+    expect(await makeForkHead(w.deps)(actor, { caseId: CASE_ID, expectedHeadVersion: 3 })).toMatchObject({ ok: true, value: { headVersion: 4 } });
+  });
+
+  it("discardHead refuses bad input before the repository", async () => {
+    const w = world();
+    expect(await makeDiscardHead(w.deps)(actor, { caseId: CASE_ID, expectedHeadVersion: 2 })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+    expect(w.deps.revisions.discardHead).not.toHaveBeenCalled();
+  });
+
+  it("approve on an in_review case still goes through approve, never updateApproved", async () => {
+    const d = { ...fakes(caseStudy(), [stored(HEAD_ID, approvedDoc(), { version: 3 })]) };
+    const deps = {
+      ...d,
+      caseAssetIds: vi.fn<CaseAssetIds>(async () => ok([...referencedAssetIds(approvedDoc())])),
+      clients: { listAssets: vi.fn<ClientRepository["listAssets"]>(async () => ok([])) },
+    };
+    const input = { caseId: CASE_ID, revisionId: HEAD_ID, expectedRevisionVersion: 3, expectedHeadVersion: 2, overflow: clear() };
+    expect((await makeApprove(deps)(actor, input)).ok).toBe(true);
+    expect(deps.revisions.approve).toHaveBeenCalledTimes(1);
+    expect(deps.revisions.updateApproved).not.toHaveBeenCalled();
   });
 });

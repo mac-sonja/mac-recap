@@ -13,7 +13,17 @@ import { Configurator } from "../../../_components/configurator/configurator";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import { isMedia, type MediaUploadRules } from "../../../_components/configurator/media-files";
 import type { FieldActions } from "../../../_components/configurator/configurator";
-import { approveCase, getRenderAssets, saveCaseResults, saveCaseTestimonial, saveRevisionDoc, updateCaseFields } from "./actions";
+import {
+  approveCase,
+  discardCaseChanges,
+  forkCaseHead,
+  getRenderAssets,
+  saveCaseResults,
+  saveCaseTestimonial,
+  saveRevisionDoc,
+  updateApprovedVersion,
+  updateCaseFields,
+} from "./actions";
 
 /** The field edits' saves (Story 4.3d): each through the client's or the case's own action, with its validation and permission. */
 const FIELD_ACTIONS: FieldActions = { updateClient, addClientSector, updateCaseFields, saveCaseResults, saveCaseTestimonial };
@@ -39,8 +49,14 @@ export interface ConfiguratorPageProps {
  * out) and the bound values go to one client component.
  *
  * Story 4.3a: the head revision's id and `version` go with them, and whether it can be
- * edited (a `working` head of an In revisione case; an approved case waits for 4.9). The
- * component is keyed by both, so a refresh after a stale save starts it afresh.
+ * edited (a `working` head of an In revisione case). The component is keyed by both, so a
+ * refresh after a stale save starts it afresh.
+ *
+ * Story 4.9: an Approvato case is editable too. Its head is either the approved revision
+ * (`fork`: the first save forks a working copy through `forkCaseHead`) or a copy already
+ * pending (shown with its edits, with Aggiorna and Scarta). Updating keeps the head where it
+ * is, so the configurator stays; discarding moves it back, so the key starts it afresh on the
+ * approved version.
  *
  * Story 4.4c: Pagine di default gets the generated texts (from `generatedDoc`) and the
  * case's images the revision already uses (none with no revision).
@@ -98,7 +114,11 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
 
   const head = revision.value;
   const doc = head?.doc ?? null;
-  const editable = head !== null && head.status === "working" && current.status === "in_review";
+  // Story 4.9: an approved case's head is its approved revision (forked on the first save) or its working copy.
+  const fork = current.status === "approved" && head !== null && head.status === "approved" && head.id === current.approvedRevisionId;
+  const pendingCopy =
+    current.status === "approved" && current.approvedRevisionId !== null && head !== null && head.status === "working" && head.id !== current.approvedRevisionId;
+  const editable = head !== null && ((head.status === "working" && current.status === "in_review") || fork || pendingCopy);
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   // Without the shared list the panel still shows the client's own sector.
   const currentSector = info.value.industry;
@@ -107,7 +127,7 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
   return (
     <Configurator
       key={head === null ? "trial" : `${head.id}:${head.version}:${editable}`}
-      revision={head === null ? null : { id: head.id, version: head.version, editable, kind: head.doc.kind }}
+      revision={head === null ? null : { id: head.id, version: head.version, editable, kind: head.doc.kind, fork }}
       caseId={id}
       onSave={saveRevisionDoc}
       header={{ name: current.name, code: current.code, status: current.status }}
@@ -126,6 +146,9 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
       onRenderAssets={getRenderAssets}
       onApprove={approveCase}
       headVersion={current.headVersion}
+      onFork={forkCaseHead}
+      onUpdateApproved={updateApprovedVersion}
+      onDiscard={discardCaseChanges}
       clientFiles={clientFiles}
       fields={editableFieldsOf(current, info.value, form.value)}
       fieldOptions={{

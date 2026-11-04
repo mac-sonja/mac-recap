@@ -40,6 +40,8 @@ import { makeRecordEvent } from "@/modules/case-study/application/record-event";
 import {
   makeApprove,
   makeCreateWorkingRevision,
+  makeDiscardHead,
+  makeForkHead,
   makeGetEditableRevision,
   makeGetLiveRevision,
   makeSaveRevisionDoc,
@@ -79,6 +81,7 @@ import type {
 } from "@/modules/case-study/domain/case-study";
 import type { ClientAsset, ListedClientAsset, StoredClientAsset } from "@/modules/case-study/domain/client-material";
 import type { ReadyDraft } from "@/modules/case-study/domain/ready-draft";
+import type { ForkedHead } from "@/modules/case-study/domain/revision";
 import type { ClientMaterialStorage } from "@/modules/case-study/ports/client-material-storage";
 import type { LogoStorage } from "@/modules/case-study/ports/logo-storage";
 import type { Result } from "@/shared/result";
@@ -159,9 +162,19 @@ export type {
 export type { ClientDeleted } from "@/modules/case-study/application/delete-client";
 export type { ClientLogoFile } from "@/modules/case-study/application/read-client-logo";
 export { TRANSITION_EVENTS } from "@/modules/case-study/domain/transition";
-export { REVISION_CREATED, REVISION_SAVED, REVISION_STATUSES } from "@/modules/case-study/domain/revision";
+export {
+  APPROVED_VERSION_UPDATED,
+  REVISION_CREATED,
+  REVISION_DISCARDED,
+  REVISION_FORKED,
+  REVISION_SAVED,
+  REVISION_STATUSES,
+} from "@/modules/case-study/domain/revision";
 export type {
   CreateWorkingRevisionInput,
+  DiscardHeadInput,
+  ForkedHead,
+  ForkHeadInput,
   RevisionManifest,
   RevisionMeta,
   RevisionStatus,
@@ -589,7 +602,8 @@ export function createWorkingRevision(actor: Actor, input: unknown): Promise<Res
  * on. Writes `doc` (never `generatedDoc`) by compare-and-set on `version`, increments
  * it and records one `revision_saved` case event `{ version }`, in one transaction;
  * returns the saved revision. Call only after `authorize(actor, 'edit')`; the write
- * itself refuses a case that is not `in_review` and a revision of another case.
+ * itself refuses a case that is not `in_review` (or, Story 4.9, an approved case whose head is
+ * not a working copy from `forkHead`) and a revision of another case.
  *
  * Errors, with nothing written: `INVALID_INPUT`, `DOCUMENT_INVALID`,
  * `DOCUMENT_SCHEMA_UNSUPPORTED`, `FORMAT_NOT_IN_REVISION`, `NOT_FOUND` (unknown
@@ -597,7 +611,7 @@ export function createWorkingRevision(actor: Actor, input: unknown): Promise<Res
  * media guardrail, Story 4.5a: a newly referenced asset that is neither a non-deleted file
  * of this case, by `caseAssetIds` (pass `material.liveAssetIds`), nor a file of its client;
  * references the stored `doc` or `generatedDoc` already has are kept), the asset lookup errors, `STALE_HEAD` (no longer the head),
- * `CASE_NOT_EDITABLE` (the case is not `in_review`), `REVISION_NOT_WRITABLE` (not
+ * `CASE_NOT_EDITABLE` (neither `in_review` nor an approved case's copy), `REVISION_NOT_WRITABLE` (not
  * `working`), `STALE_REVISION` (saved by someone else since it was read).
  * `REVISION_WRITE_FAILED` may come after the write committed: re-read the head.
  */
@@ -617,6 +631,12 @@ export function saveRevisionDoc(actor: Actor, input: unknown, caseAssetIds: Case
  * files no longer there), the asset lookup errors, `STALE_HEAD`, `CASE_NOT_APPROVABLE`
  * (not `in_review`), `REVISION_NOT_WRITABLE`, `STALE_REVISION`. `REVISION_WRITE_FAILED`
  * may come after the write committed: re-read the case.
+ *
+ * Story 4.9 (**Aggiorna la versione approvata**): on an approved case, `revisionId` is its
+ * working copy (the head, from `forkHead`); after the same checks it becomes the approved
+ * revision and the previous one `superseded`, with one `approved_version_updated` event. The
+ * case stays approved. `CASE_NOT_APPROVABLE` there means the case is not approved any more,
+ * `REVISION_NOT_WRITABLE` that the head is the approved revision itself (nothing to update).
  */
 export function approve(actor: Actor, input: unknown, caseAssetIds: CaseAssetIds): Promise<Result<CaseStudyRevision>> {
   return makeApprove({ ...revisionDeps(), clients: createSupabaseClientRepository(), caseAssetIds })(actor, input);
@@ -645,4 +665,36 @@ export function getLiveRevision(subject: unknown): Promise<Result<CaseStudyRevis
  */
 export function getEditableRevision(subject: unknown): Promise<Result<CaseStudyRevision | null>> {
   return makeGetEditableRevision(revisionDeps())(subject);
+}
+
+/**
+ * Forks an approved case's head (Story 4.9), on its first edit: input `{ caseId,
+ * expectedHeadVersion }`. Creates one `working` copy of the approved revision (`doc` and
+ * `generatedDoc`), makes it the head by compare-and-set on `headVersion` (then incremented)
+ * and writes one `revision_forked` case event, in one transaction; when the head already is a
+ * working copy, returns it and writes nothing (idempotent). Live reads (`getLiveRevision`)
+ * keep returning the approved revision until `approve` updates it. Returns `{ revisionId,
+ * version, headVersion }`. Call only after `authorize(actor, 'edit')`.
+ *
+ * Errors, with nothing written: `INVALID_INPUT`, `NOT_FOUND` (unknown or soft-deleted case),
+ * `CASE_NOT_EDITABLE` (not approved), `REVISION_NOT_WRITABLE`, `STALE_HEAD` (the head moved).
+ * `REVISION_WRITE_FAILED` may come after the write committed: call it again (it is idempotent).
+ */
+export function forkHead(actor: Actor, input: unknown): Promise<Result<ForkedHead>> {
+  return makeForkHead(revisionDeps())(actor, input);
+}
+
+/**
+ * **Scarta le modifiche** (Story 4.9): input `{ caseId, revisionId, expectedHeadVersion }`,
+ * `revisionId` the approved case's working copy (its head). The copy becomes `superseded` and
+ * the head points back at the approved revision (compare-and-set on `headVersion`, then
+ * incremented), with one `revision_discarded` case event, in one transaction. The case stays
+ * approved. Returns the approved revision. Call only after `authorize(actor, 'discard')`.
+ *
+ * Errors, with nothing written: `INVALID_INPUT`, `NOT_FOUND`, `STALE_HEAD`,
+ * `CASE_NOT_EDITABLE` (not approved), `REVISION_NOT_WRITABLE` (no copy to discard).
+ * `REVISION_WRITE_FAILED` may come after the write committed: re-read the case.
+ */
+export function discardHead(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+  return makeDiscardHead(revisionDeps())(actor, input);
 }

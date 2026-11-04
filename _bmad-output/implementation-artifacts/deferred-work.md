@@ -319,3 +319,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-8-draft-ready-toast.md`
   summary: Keyboard access to the draft-ready toast before it closes itself (e.g. a shortcut to the notification stack, or no timeout while the stack holds an action), for WCAG 2.2.1.
   evidence: Review of 3.8 (blind): the toast never takes focus by design and the case stays in the table; adding a shortcut changes the intent.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-9-edit-approved-case.md`
+  summary: Show a pending copy of an approved case outside the configurator (a marker on the case page and the Case studies row, with who made it), and add `revision_forked`, `approved_version_updated` and `revision_discarded` to Attività.
+  evidence: Review of 4.9 (blind): unpublished edits are invisible to colleagues, and the most consequential change on an approved case leaves no trace in Attività; not in the 4.9 spec.
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-9-edit-approved-case.md`
+  summary: A retention policy for superseded revisions (full documents kept forever, pinning the files only they reference).
+  evidence: Review of 4.9 (blind): every fork and discard adds one; true of every revision since 3.3.

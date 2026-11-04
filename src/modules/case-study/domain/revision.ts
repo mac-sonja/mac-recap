@@ -11,6 +11,18 @@ export const REVISION_CREATED = "revision_created";
 export const REVISION_SAVED = "revision_saved";
 
 /**
+ * Story 4.9: the case event written when an approved case's head is forked into a working
+ * copy (`{ fromRevisionId, headVersion }`).
+ */
+export const REVISION_FORKED = "revision_forked";
+
+/** Story 4.9: the case event written when the copy becomes the approved revision (`{ revisionId, version, supersededRevisionId }`). */
+export const APPROVED_VERSION_UPDATED = "approved_version_updated";
+
+/** Story 4.9: the case event written when the copy is discarded (`{ discardedRevisionId, headVersion }`). */
+export const REVISION_DISCARDED = "revision_discarded";
+
+/**
  * Whose revision it is: a case study, or a client intro (Story 3.9; until then
  * every read for it is `SUBJECT_NOT_SUPPORTED`).
  */
@@ -124,3 +136,28 @@ export const approveInputSchema = z.strictObject({
   overflow: z.record(z.string().max(64), z.boolean()),
 });
 export type ApproveInput = z.infer<typeof approveInputSchema>;
+
+/**
+ * `forkHead` (Story 4.9): the approved case whose first edit needs a working copy, and the
+ * `headVersion` the configurator read.
+ */
+export const forkHeadInputSchema = z.strictObject({
+  caseId: z.uuid().transform((id) => id.toLowerCase()),
+  expectedHeadVersion: z.number().int().nonnegative().max(2_147_483_647),
+});
+export type ForkHeadInput = z.infer<typeof forkHeadInputSchema>;
+
+/** `discardHead` (Story 4.9): the working copy to drop, and the `headVersion` it was read at. */
+export const discardHeadInputSchema = z.strictObject({
+  caseId: z.uuid().transform((id) => id.toLowerCase()),
+  revisionId: z.uuid().transform((id) => id.toLowerCase()),
+  expectedHeadVersion: z.number().int().nonnegative().max(2_147_483_647),
+});
+export type DiscardHeadInput = z.infer<typeof discardHeadInputSchema>;
+
+/** What `forkHead` returns: the working copy's id and `version`, and the case's `headVersion` after the fork. */
+export interface ForkedHead {
+  revisionId: string;
+  version: number;
+  headVersion: number;
+}

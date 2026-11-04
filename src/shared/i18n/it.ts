@@ -884,6 +884,29 @@ export const it = {
       /** On Case studies or Da approvare, after the redirect. */
       done: "Approvata. Ora è in libreria.",
     },
+    /**
+     * Story 4.9: an Approvato case is edited on a copy; the changes go online only with
+     * **Aggiorna la versione approvata**, or are dropped with **Scarta le modifiche**.
+     */
+    approvedEdit: {
+      /** Under the top bar of an approved case. */
+      banner: "Approvata. Le modifiche vanno online quando aggiorni la versione approvata.",
+      update: "Aggiorna la versione approvata",
+      discard: "Scarta le modifiche",
+      updateTitle: "Aggiornare la versione approvata?",
+      updateDescription: "Le modifiche vanno online: la pagina della case, la libreria e gli export mostrano la nuova versione.",
+      updateConfirm: "Aggiorna",
+      discardTitle: "Scartare le modifiche?",
+      discardDescription: "Torni alla versione approvata.",
+      discardConfirm: "Scarta",
+      cancel: "Annulla",
+      /** A pending save didn't go through, so nothing was updated. */
+      notSaved: "Non abbiamo salvato le ultime modifiche, quindi non abbiamo aggiornato. Riprova tra poco.",
+      /** After the update: the copy is now what people see. */
+      updated: "Versione approvata aggiornata. Ora è online.",
+      updateFailed: "Non siamo riusciti ad aggiornare. Riprova.",
+      discardFailed: "Non siamo riusciti a scartare le modifiche. Riprova.",
+    },
     /** A block whose text no longer fits (Story 4.3a). */
     overflow: "Il testo non entra",
     /** Double-click on a text that can't be edited yet: bound to the client or the case (4.3d), or an approved case (4.9). */

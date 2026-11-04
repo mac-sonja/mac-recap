@@ -104,7 +104,18 @@ function setup(
     fields,
     fieldOptions,
     fieldActions,
+    status = "in_review",
+    fork,
+    onFork,
+    onUpdateApproved,
+    onDiscard,
   }: {
+    status?: ConfiguratorProps["header"]["status"];
+    /** Story 4.9: the head is the approved revision, forked on the first save. */
+    fork?: boolean;
+    onFork?: ConfiguratorProps["onFork"];
+    onUpdateApproved?: ConfiguratorProps["onUpdateApproved"];
+    onDiscard?: ConfiguratorProps["onDiscard"];
     editable?: boolean;
     onSave?: SaveFn;
     generatedTexts?: GeneratedTexts;
@@ -123,9 +134,9 @@ function setup(
   return render(
     <Configurator
       caseId={CASE_ID}
-      revision={trial ? null : { id: REVISION_ID, version: 4, editable, kind: "case_history" }}
+      revision={trial ? null : { id: REVISION_ID, version: 4, editable, kind: "case_history", ...(fork === undefined ? {} : { fork }) }}
       onSave={onSave}
-      header={{ name: "Rebrand Lumen", code: "LUM-2026-01", status: "in_review" }}
+      header={{ name: "Rebrand Lumen", code: "LUM-2026-01", status }}
       back={{ href: "/case-studies", label: dict.configurator.back }}
       template="mac-case@1"
       formats={pagesByFormat}
@@ -141,6 +152,9 @@ function setup(
       onRenderAssets={onRenderAssets}
       onApprove={onApprove}
       headVersion={7}
+      onFork={onFork}
+      onUpdateApproved={onUpdateApproved}
+      onDiscard={onDiscard}
       clientFiles={clientFiles}
       fields={fields}
       fieldOptions={fieldOptions}
@@ -3089,6 +3103,313 @@ describe("Configurator Approva (Story 4.8)", () => {
   });
 });
 
+/** Story 4.9: an Approvato case, edited on a working copy that goes online only through Aggiorna. */
+describe("Configurator on an approved case (Story 4.9)", () => {
+  const u = dict.configurator.approvedEdit;
+  const COPY_ID = "dddddddd-0000-4000-8000-000000000002";
+  type ForkFn = NonNullable<ConfiguratorProps["onFork"]>;
+  type UpdateFn = NonNullable<ConfiguratorProps["onUpdateApproved"]>;
+  type DiscardFn = NonNullable<ConfiguratorProps["onDiscard"]>;
+  const header = () => document.querySelector<HTMLElement>("header")!;
+  const updateButton = () => within(header()).queryByRole("button", { name: u.update, hidden: true });
+  const discardButton = () => within(header()).queryByRole("button", { name: u.discard, hidden: true });
+  const dialog = () => document.querySelector<HTMLElement>("dialog");
+  const forked = vi.fn<ForkFn>(async () => ({ ok: true, value: { revisionId: COPY_ID, version: 0, headVersion: 8 } }));
+  const tick = async (ms = 1_000) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  };
+  const addPage = () => fireEvent.click(button(dict.configurator.pages.add, canvas()));
+
+  function approved(over: { fork?: boolean; onFork?: ForkFn; onSave?: SaveFn; onUpdateApproved?: UpdateFn; onDiscard?: DiscardFn; media?: readonly ListedAsset[] } = {}) {
+    const onSave = vi.fn<SaveFn>(over.onSave ?? savedOk);
+    const onFork = vi.fn<ForkFn>(over.onFork ?? forked);
+    const onUpdateApproved = vi.fn<UpdateFn>(over.onUpdateApproved ?? (async () => ({ ok: true, value: undefined })));
+    const onDiscard = vi.fn<DiscardFn>(over.onDiscard ?? (async () => ({ ok: true, value: undefined })));
+    const onApprove = vi.fn<NonNullable<ConfiguratorProps["onApprove"]>>();
+    setup(false, formats, { status: "approved", fork: over.fork ?? true, onFork, onSave, onUpdateApproved, onDiscard, onApprove, media: over.media ?? MEDIA });
+    return { onSave, onFork, onUpdateApproved, onDiscard, onApprove };
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    push.mockReset();
+    refresh.mockReset();
+    forked.mockClear();
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+      this.removeAttribute("open");
+    };
+  });
+
+  it("opens editable under the banner, with no Approva, Aggiorna or Scarta in the top bar", async () => {
+    const { onFork, onSave } = approved();
+    await tick();
+    expect(document.querySelector('[data-editable="true"]')).not.toBeNull();
+    expect(screen.getByText(u.banner)).toBeTruthy();
+    expect(updateButton()).toBeNull();
+    expect(discardButton()).toBeNull();
+    expect(within(header()).queryByRole("button", { name: dict.configurator.approve, hidden: true })).toBeNull();
+    // Opening and looking never forks.
+    expect(onFork).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("the first edit forks once, saves to the copy, and Aggiorna and Scarta appear; later edits and an undo save to the same copy", async () => {
+    const { onFork, onSave } = approved();
+    addPage();
+    await tick();
+    expect(onFork).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, expectedHeadVersion: 7 });
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0]![0]).toMatchObject({ caseId: CASE_ID, revisionId: COPY_ID, expectedVersion: 0 });
+    expect(updateButton()).not.toBeNull();
+    expect(discardButton()).not.toBeNull();
+
+    addPage();
+    await tick();
+    fireEvent.click(button(dict.configurator.undo, header()));
+    await tick();
+    expect(onFork).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls.map((call) => [call[0].revisionId, call[0].expectedVersion])).toEqual([
+      [COPY_ID, 0],
+      [COPY_ID, 1],
+      [COPY_ID, 2],
+    ]);
+  });
+
+  it("a stale fork reloads the case and saves nothing", async () => {
+    const { onSave } = approved({ onFork: async () => ({ ok: false, status: 409, error: { code: "STALE_HEAD", message: "m" } }) });
+    addPage();
+    await tick();
+    expect(refresh).toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(updateButton()).toBeNull();
+  });
+
+  it("a fork that fails on the network is retried like a save, then saves to the copy", async () => {
+    const onFork = vi.fn<ForkFn>().mockRejectedValueOnce(new Error("offline")).mockImplementation(forked);
+    const { onSave } = approved({ onFork });
+    addPage();
+    await tick();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText(dict.configurator.retrying)).toBeTruthy();
+    await tick(3_000);
+    expect(onFork).toHaveBeenCalledTimes(2);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ revisionId: COPY_ID, expectedVersion: 0 }));
+  });
+
+  it("reopened with a copy pending: Aggiorna and Scarta show at once, and edits save to the copy without a fork", async () => {
+    const { onFork, onSave } = approved({ fork: false });
+    await tick();
+    expect(updateButton()).not.toBeNull();
+    expect(discardButton()).not.toBeNull();
+    addPage();
+    await tick();
+    expect(onFork).not.toHaveBeenCalled();
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ revisionId: REVISION_ID, expectedVersion: 4 }));
+  });
+
+  it("Aggiorna asks, then updates the copy at the version the last save returned; the buttons go and the next edit forks again", async () => {
+    const { onFork, onUpdateApproved } = approved();
+    addPage();
+    await tick();
+    expect(updateButton()!.hasAttribute("aria-disabled")).toBe(false);
+    fireEvent.click(updateButton()!);
+    expect(dialog()!.hasAttribute("open")).toBe(true);
+    expect(dialog()!.textContent).toContain(u.updateTitle);
+    expect(dialog()!.textContent).toContain(u.updateDescription);
+    fireEvent.click(button(u.updateConfirm, dialog()!));
+    await tick();
+    expect(onUpdateApproved).toHaveBeenCalledExactlyOnceWith({
+      caseId: CASE_ID,
+      revisionId: COPY_ID,
+      expectedRevisionVersion: 1,
+      expectedHeadVersion: 8,
+      overflow: Object.fromEntries(FORMAT_IDS.map((id) => [id, false])),
+    });
+    expect(updateButton()).toBeNull();
+    expect(discardButton()).toBeNull();
+    expect(status().textContent).toBe(u.updated);
+    expect(refresh).toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    // Approvato stays: no Approva, and the next edit forks a new copy.
+    expect(within(header()).queryByRole("button", { name: dict.configurator.approve, hidden: true })).toBeNull();
+    addPage();
+    await tick();
+    expect(onFork).toHaveBeenCalledTimes(2);
+    expect(onFork).toHaveBeenLastCalledWith({ caseId: CASE_ID, expectedHeadVersion: 8 });
+  });
+
+  it("a pending save lands first, and the update carries the version it returned", async () => {
+    const order: string[] = [];
+    const onSave = vi.fn<SaveFn>(async (input) => {
+      order.push("save");
+      return savedOk(input);
+    });
+    const onUpdateApproved = vi.fn<UpdateFn>(async () => {
+      order.push("update");
+      return { ok: true, value: undefined };
+    });
+    approved({ fork: false, onSave, onUpdateApproved });
+    await tick();
+    addPage();
+    fireEvent.click(updateButton()!);
+    fireEvent.click(button(u.updateConfirm, dialog()!));
+    await tick();
+    expect(order).toEqual(["save", "update"]);
+    expect(onUpdateApproved).toHaveBeenCalledWith(expect.objectContaining({ revisionId: REVISION_ID, expectedRevisionVersion: 5, expectedHeadVersion: 7 }));
+  });
+
+  it("a save that fails at Aggiorna stops the update and says so", async () => {
+    const { onUpdateApproved } = approved({ fork: false, onSave: vi.fn<SaveFn>().mockRejectedValue(new Error("offline")) });
+    await tick();
+    addPage();
+    fireEvent.click(updateButton()!);
+    fireEvent.click(button(u.updateConfirm, dialog()!));
+    await tick();
+    expect(onUpdateApproved).not.toHaveBeenCalled();
+    expect(dialog()!.hasAttribute("open")).toBe(false);
+    expect(status().textContent).toBe(u.notSaved);
+  });
+
+  it("REVISION_WRITE_FAILED at Aggiorna is a failure, not a change made meanwhile", async () => {
+    approved({ fork: false, onUpdateApproved: async () => ({ ok: false, status: 500, error: { code: "REVISION_WRITE_FAILED", message: "m" } }) });
+    await tick();
+    fireEvent.click(updateButton()!);
+    fireEvent.click(button(u.updateConfirm, dialog()!));
+    await tick();
+    expect(status().textContent).toBe(u.updateFailed);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("after a discard, an edit made before the page reloads is never saved to the dropped copy", async () => {
+    const { onSave, onDiscard } = approved({ fork: false });
+    await tick();
+    fireEvent.click(discardButton()!);
+    fireEvent.click(button(u.discardConfirm, dialog()!));
+    await tick();
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+    addPage();
+    await tick();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("the top bar keeps its columns on an approved case before and after the first fork", async () => {
+    approved();
+    const columns = () => [...header().classList].find((c) => c.startsWith("grid-cols-"));
+    const before = columns();
+    addPage();
+    await tick();
+    expect(updateButton()).not.toBeNull();
+    expect(columns()).toBe(before);
+  });
+
+  it("Aggiorna is inactive and names the page while a format overflows", async () => {
+    const scroll = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.closest('[data-measure-format="carosello_1_1"]') === null ? 100 : 200;
+    });
+    const client = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(100);
+    try {
+      const { onUpdateApproved } = approved({ fork: false });
+      await tick();
+      expect(updateButton()!.getAttribute("aria-disabled")).toBe("true");
+      const reason = document.getElementById(updateButton()!.getAttribute("aria-describedby")!)!;
+      expect(reason.textContent).toBe(fill(dict.configurator.approval.overflow, { format: dict.configurator.formats.carosello_1_1, n: 1 }));
+      fireEvent.click(updateButton()!);
+      expect(dialog()?.hasAttribute("open") ?? false).toBe(false);
+      expect(onUpdateApproved).not.toHaveBeenCalled();
+    } finally {
+      scroll.mockRestore();
+      client.mockRestore();
+    }
+  });
+
+  it("Aggiorna is inactive and names a file a page shows that is no longer there", async () => {
+    approved({ fork: false, media: [] });
+    await tick();
+    expect(updateButton()!.getAttribute("aria-disabled")).toBe("true");
+    expect(updateButton()!.getAttribute("title")).toBe(fill(dict.configurator.approval.missing, { name: dict.configurator.approval.unknownFile }));
+  });
+
+  it("a refused update changes nothing: MATERIAL_MISSING names the file, a stale case reloads", async () => {
+    const onUpdateApproved = vi
+      .fn<UpdateFn>()
+      .mockResolvedValueOnce({ ok: false, status: 400, error: { code: "MATERIAL_MISSING", message: "m", assetIds: [VIDEO] } })
+      .mockResolvedValueOnce({ ok: false, status: 409, error: { code: "STALE_HEAD", message: "m" } });
+    approved({ fork: false, onUpdateApproved });
+    await tick();
+    fireEvent.click(updateButton()!);
+    fireEvent.click(button(u.updateConfirm, dialog()!));
+    await tick();
+    expect(updateButton()!.getAttribute("title")).toBe(fill(dict.configurator.approval.missing, { name: "LUM_reel.mp4" }));
+    expect(refresh).not.toHaveBeenCalled();
+    cleanup();
+    approved({ fork: false, onUpdateApproved });
+    await tick();
+    fireEvent.click(updateButton()!);
+    fireEvent.click(button(u.updateConfirm, dialog()!));
+    await tick();
+    expect(refresh).toHaveBeenCalled();
+    expect(status().textContent).toBe(dict.configurator.approval.stale);
+    // Still a pending copy until the page reads the case again.
+    expect(updateButton()).not.toBeNull();
+  });
+
+  it("Scarta asks first, then drops the copy and reads the case again", async () => {
+    const { onDiscard, onUpdateApproved } = approved();
+    addPage();
+    await tick();
+    fireEvent.click(discardButton()!);
+    expect(dialog()!.hasAttribute("open")).toBe(true);
+    expect(dialog()!.textContent).toContain(u.discardTitle);
+    expect(dialog()!.textContent).toContain(u.discardDescription);
+    fireEvent.click(button(u.discardConfirm, dialog()!));
+    await tick();
+    expect(onDiscard).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, revisionId: COPY_ID, expectedHeadVersion: 8 });
+    expect(refresh).toHaveBeenCalled();
+    expect(onUpdateApproved).not.toHaveBeenCalled();
+  });
+
+  it("Annulla in the Scarta dialog changes nothing", async () => {
+    const { onDiscard } = approved({ fork: false });
+    await tick();
+    fireEvent.click(discardButton()!);
+    fireEvent.click(button(u.cancel, dialog()!));
+    expect(dialog()!.hasAttribute("open")).toBe(false);
+    await tick();
+    expect(onDiscard).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(discardButton()).not.toBeNull();
+  });
+
+  it("a failed discard says so and keeps the copy", async () => {
+    approved({ fork: false, onDiscard: async () => ({ ok: false, status: 500, error: { code: "REVISION_LOOKUP_FAILED", message: "m" } }) });
+    await tick();
+    fireEvent.click(discardButton()!);
+    fireEvent.click(button(u.discardConfirm, dialog()!));
+    await tick();
+    expect(status().textContent).toBe(u.discardFailed);
+    expect(discardButton()!.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("a Da approvare case is unchanged: Approva, no banner, no Aggiorna or Scarta, and its saves never fork", async () => {
+    const onFork = vi.fn<ForkFn>();
+    const onSave = vi.fn<SaveFn>(savedOk);
+    setup(false, formats, { onFork, onSave, onApprove: vi.fn(), onUpdateApproved: vi.fn(), onDiscard: vi.fn() });
+    addPage();
+    await tick();
+    expect(within(header()).getByRole("button", { name: dict.configurator.approve, hidden: true })).toBeTruthy();
+    expect(screen.queryByText(u.banner)).toBeNull();
+    expect(updateButton()).toBeNull();
+    expect(discardButton()).toBeNull();
+    expect(onFork).not.toHaveBeenCalled();
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ revisionId: REVISION_ID, expectedVersion: 4 }));
+  });
+});
+
 /** Story 4.3d: the client's and the case's fields, typed on the page or set in the left panel. */
 describe("Configurator client and case fields", () => {
   const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
@@ -3145,10 +3466,13 @@ describe("Configurator client and case fields", () => {
     } satisfies NonNullable<ConfiguratorProps["fieldActions"]>;
   }
 
-  function open(over: { editable?: boolean; fields?: typeof FIELDS; actions?: ReturnType<typeof fieldActions>; onSave?: SaveFn } = {}) {
+  function open(over: { editable?: boolean; approved?: boolean; fields?: typeof FIELDS; actions?: ReturnType<typeof fieldActions>; onSave?: SaveFn } = {}) {
     const actions = over.actions ?? fieldActions();
     const onSave = vi.fn(over.onSave ?? savedOk);
     setup(false, formats, {
+      ...(over.approved === true
+        ? { status: "approved" as const, fork: true, onFork: vi.fn(async () => ({ ok: true as const, value: { revisionId: REVISION_ID, version: 0, headVersion: 8 } })) }
+        : {}),
       editable: over.editable ?? true,
       onSave,
       values: FIELD_VALUES,
@@ -3268,6 +3592,20 @@ describe("Configurator client and case fields", () => {
     fireEvent.click(node(services));
     expect(pageNode(services.pageKey).querySelector('[data-frame="element"]')).not.toBeNull();
     expect(within(leftPanel()).queryByText(t.caseHeading)).toBeNull();
+  });
+
+  it("an editable approved case (Story 4.9): client and case fields stay read-only, with the existing message", () => {
+    const { actions } = open({ approved: true });
+    expect(document.querySelector('[data-editable="true"]')).not.toBeNull();
+    const name = find(bound("client", "name"));
+    fireEvent.doubleClick(node(name));
+    expect(node(name).hasAttribute("contenteditable")).toBe(false);
+    expect(status().textContent).toBe(dict.configurator.editSoon);
+    const services = find((el) => el.type === "services", "carosello_1_1");
+    fireEvent.click(button(/Carosello/));
+    fireEvent.click(node(services));
+    expect(within(leftPanel()).queryByText(t.caseHeading)).toBeNull();
+    expect(actions.updateClient).not.toHaveBeenCalled();
   });
 
   it("a result number typed in row 2 saves the stored rows with only row 2 changed", async () => {

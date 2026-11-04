@@ -26,8 +26,9 @@ const APPROVE_CALLER = "src/app/(wizard)/case-studies/[caseId]/configurator/acti
 
 describe("approval happens only through a person's call to approve (Story 4.8)", () => {
   it("the case-study module exports one approve and no bulk or automatic variant", async () => {
-    const api = Object.keys(await import("@/modules/case-study"));
-    expect(api.filter((name) => /approv/i.test(name))).toEqual(["approve"]);
+    // Functions only: event-name constants (`APPROVED_VERSION_UPDATED`) approve nothing.
+    const api = Object.entries(await import("@/modules/case-study")).filter(([, value]) => typeof value === "function");
+    expect(api.map(([name]) => name).filter((name) => /approv/i.test(name))).toEqual(["approve"]);
   });
 
   it("no source moves a case to approved through the generic transition", () => {
@@ -52,5 +53,41 @@ describe("approval happens only through a person's call to approve (Story 4.8)",
     expect(overflow).toBeGreaterThan(0);
     expect(material).toBeGreaterThan(overflow);
     expect(write).toBeGreaterThan(material);
+    // Story 4.9: **Aggiorna la versione approvata** writes through the same checks.
+    expect(body.indexOf("deps.revisions.updateApproved(")).toBeGreaterThan(material);
+  });
+});
+
+// Story 4.9: Approvato is terminal. Editing an approved case forks, updates or discards a
+// copy; none of it, nor anything else, moves the case back to Da approvare or Bozza.
+describe("no path from Approvato back to Da approvare or Bozza (Story 4.9)", () => {
+  const migrations = () => files("supabase/migrations", /\.sql$/);
+
+  it("the transition table has no edge out of approved", async () => {
+    const { TRANSITIONS, TRANSITION_EVENTS, nextStatus } = await import("@/modules/case-study/domain/transition");
+    expect(Object.values(TRANSITIONS).filter((edge) => edge.from === "approved")).toEqual([]);
+    for (const event of TRANSITION_EVENTS) expect(nextStatus("approved", event).ok).toBe(false);
+  });
+
+  it("the edit-approved migration never changes a case's status", () => {
+    const sql = read("supabase/migrations/20261105160000_case_study_edit_approved.sql");
+    expect(sql).not.toMatch(/status_transition/);
+    expect(sql).not.toMatch(/update\s+public\.case_study\s+set[^;]*\bstatus\s*=/i);
+  });
+
+  it("only the status-transition functions write case_study.status, and they leave approved only as a soft delete", () => {
+    // Every write of `status` on case_study is behind the transition flag (the status guard
+    // refuses any other), and the flag is set only by the generic transition and approval.
+    const setters = migrations().filter((rel) => /set_config\('mac_recap\.status_transition', 'on'/.test(read(rel)));
+    expect(setters.sort()).toEqual(["supabase/migrations/20261012120000_case_study_transition.sql", "supabase/migrations/20261103120000_case_study_approve.sql"]);
+    const approve = read("supabase/migrations/20261103120000_case_study_approve.sql");
+    expect(approve).toMatch(/set status = 'approved'/);
+    expect(approve).not.toMatch(/set status = '(?:draft|in_review|generating)'/);
+  });
+
+  it("the module's API has no transition, fork, update or discard that goes back", async () => {
+    const api = Object.keys(await import("@/modules/case-study"));
+    expect(api.filter((name) => /reopen|unapprove|revert|backTo|toDraft|toReview/i.test(name))).toEqual([]);
+    expect(api).toEqual(expect.arrayContaining(["forkHead", "discardHead", "approve"]));
   });
 });

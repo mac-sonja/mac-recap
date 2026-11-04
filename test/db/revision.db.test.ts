@@ -940,3 +940,234 @@ describe("approve_revision (Story 4.8)", () => {
     expect(await state(removedCase.caseId, removedCase.revisionId)).toMatchObject({ case_status: "in_review", revision_status: "working" });
   });
 });
+
+describe("editing an approved case (Story 4.9)", () => {
+  const forkSql = "select public.fork_head($1, $2, $3) as result";
+  const updateSql = "select * from public.update_approved_revision($1, $2, $3, $4, $5)";
+  const discardSql = "select * from public.discard_head($1, $2, $3, $4)";
+  const saveSql = "select * from public.save_revision_doc($1, $2, $3, $4)";
+  const edited = () => {
+    const doc = v2();
+    doc.formats.presentazione_16_9!.pages[0]!.name = "Copertina corretta";
+    return doc;
+  };
+  const allFiles = async () => {
+    const { referencedAssetIds } = await loadCaseStudy();
+    return ok([...referencedAssetIds(v2())]);
+  };
+  const clear = () => Object.fromEntries(FORMAT_IDS.map((id) => [id, false]));
+
+  /** A fresh approved case: its head is its approved revision. */
+  async function approvedCase() {
+    const created = await createCase();
+    const revision = await createRevision(created.id, 0);
+    const { transition } = await loadCaseStudy();
+    const actor = await signedInActor();
+    for (const event of ["generate", "generation_succeeded"] as const) {
+      const moved = await transition(created.id, event, actor);
+      if (!moved.ok) throw new Error(`setup transition ${event} failed: ${moved.error.code}`);
+    }
+    const { head_version } = await caseRow(created.id);
+    await pool.query("select * from public.approve_revision($1, $2, 0, $3, $4)", [created.id, revision.id, head_version, TEST_ACTOR_ID]);
+    return { caseId: created.id, approvedId: revision.id, headVersion: head_version as number };
+  }
+
+  const fork = async (caseId: string, expected: number) =>
+    (await pool.query(forkSql, [caseId, expected, TEST_ACTOR_ID])).rows[0].result as { revision: { id: string; status: string; version: number }; headVersion: number };
+
+  async function caseState(caseId: string) {
+    const { rows } = await pool.query("select status, head_revision_id, approved_revision_id, head_version from public.case_study where id = $1", [caseId]);
+    return rows[0];
+  }
+
+  const statusOf = async (id: string) => (await pool.query("select status from public.revision where id = $1", [id])).rows[0].status as string;
+
+  async function eventsOf(caseId: string, type: string) {
+    const { rows } = await pool.query("select revision_id, actor_id, data from public.case_event where case_id = $1 and type = $2 order by at", [caseId, type]);
+    return rows;
+  }
+
+  async function live(caseId: string) {
+    const { getLiveRevision } = await loadCaseStudy();
+    const read = await getLiveRevision({ kind: "case", id: caseId });
+    if (!read.ok || read.value === null) throw new Error("no live revision");
+    return read.value;
+  }
+
+  it.each(["fork_head", "update_approved_revision", "discard_head", "save_revision_doc"])(
+    "%s is security definer with an empty search_path, executable by service_role only",
+    async (name) => {
+      const { rows } = await pool.query(
+        `select p.prosecdef, p.proconfig,
+                has_function_privilege('service_role', p.oid, 'execute') as service,
+                has_function_privilege('authenticated', p.oid, 'execute') as authed,
+                has_function_privilege('anon', p.oid, 'execute') as anon
+           from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.proname = $1`,
+        [name],
+      );
+      expect(rows).toEqual([{ prosecdef: true, proconfig: ["search_path=\"\""], service: true, authed: false, anon: false }]);
+    },
+  );
+
+  it("fork_head copies the approved revision into one working head, and is idempotent", async () => {
+    const { caseId, approvedId, headVersion } = await approvedCase();
+    const first = await fork(caseId, headVersion);
+    expect(first).toMatchObject({ revision: { status: "working", version: 0 }, headVersion: headVersion + 1 });
+    const copyId = first.revision.id;
+    const { rows } = await pool.query("select doc, generated_doc, created_by from public.revision where id = $1", [copyId]);
+    expect(rows[0]).toEqual({ doc: v2(), generated_doc: v2(), created_by: TEST_ACTOR_ID });
+    expect(await caseState(caseId)).toEqual({ status: "approved", head_revision_id: copyId, approved_revision_id: approvedId, head_version: headVersion + 1 });
+    expect(await eventsOf(caseId, "revision_forked")).toEqual([
+      { revision_id: copyId, actor_id: TEST_ACTOR_ID, data: { fromRevisionId: approvedId, headVersion: headVersion + 1 } },
+    ]);
+    // Again, even with the old head version: the same copy, nothing written.
+    expect(await fork(caseId, headVersion)).toEqual(first);
+    expect((await pool.query("select count(*)::int as n from public.revision where case_id = $1", [caseId])).rows[0].n).toBe(2);
+    expect(await eventsOf(caseId, "revision_forked")).toHaveLength(1);
+  });
+
+  it("fork_head refuses a stale head, a case that isn't approved and an unknown case", async () => {
+    const { caseId, headVersion } = await approvedCase();
+    await expect(fork(caseId, headVersion + 1)).rejects.toMatchObject({ code: "P0001", message: "STALE_HEAD" });
+    const review = await createCase();
+    await createRevision(review.id, 0);
+    await expect(fork(review.id, 1)).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_EDITABLE" });
+    await expect(fork(UNKNOWN_ID, 0)).rejects.toMatchObject({ code: "P0001", message: "NOT_FOUND" });
+  });
+
+  it("save_revision_doc writes the fork and never the approved revision itself", async () => {
+    const { caseId, approvedId, headVersion } = await approvedCase();
+    await expect(pool.query(saveSql, [approvedId, JSON.stringify(edited()), 0, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_EDITABLE" });
+    const { revision } = await fork(caseId, headVersion);
+    const { rows } = await pool.query(saveSql, [revision.id, JSON.stringify(edited()), 0, TEST_ACTOR_ID]);
+    expect(rows[0]).toMatchObject({ id: revision.id, version: 1, doc: edited(), generated_doc: v2() });
+    expect((await pool.query("select doc from public.revision where id = $1", [approvedId])).rows[0].doc).toEqual(v2());
+  });
+
+  it("getLiveRevision returns the approved revision until the update, then the copy; the old one is superseded and the case stays approved", async () => {
+    const { caseId, approvedId, headVersion } = await approvedCase();
+    const { revision } = await fork(caseId, headVersion);
+    await pool.query(saveSql, [revision.id, JSON.stringify(edited()), 0, TEST_ACTOR_ID]);
+    expect(await live(caseId)).toMatchObject({ id: approvedId, doc: v2() });
+    const { getEditableRevision } = await loadCaseStudy();
+    expect(await getEditableRevision({ kind: "case", id: caseId })).toMatchObject({ ok: true, value: { id: revision.id, doc: edited() } });
+
+    const { rows } = await pool.query(updateSql, [caseId, revision.id, 1, headVersion + 1, TEST_ACTOR_ID]);
+    expect(rows[0]).toMatchObject({ id: revision.id, status: "approved", version: 1 });
+    expect(await live(caseId)).toMatchObject({ id: revision.id, doc: edited() });
+    expect(await statusOf(approvedId)).toBe("superseded");
+    expect(await caseState(caseId)).toEqual({ status: "approved", head_revision_id: revision.id, approved_revision_id: revision.id, head_version: headVersion + 1 });
+    expect(await eventsOf(caseId, "approved_version_updated")).toEqual([
+      { revision_id: revision.id, actor_id: TEST_ACTOR_ID, data: { revisionId: revision.id, version: 1, supersededRevisionId: approvedId } },
+    ]);
+    // No transition event: the case never left Approvato.
+    const transitions = await eventsOf(caseId, "transition");
+    expect(transitions.map((row) => row.data.to)).toEqual(["generating", "in_review", "approved"]);
+    // The next edit forks from the new approved revision.
+    expect((await fork(caseId, headVersion + 1)).revision.id).not.toBe(revision.id);
+  });
+
+  it.each([
+    ["STALE_REVISION", (h: number) => [0, h + 1] as const],
+    ["STALE_HEAD", (h: number) => [1, h] as const],
+  ])("update_approved_revision refuses %s and writes nothing", async (code, versions) => {
+    const { caseId, approvedId, headVersion } = await approvedCase();
+    const { revision } = await fork(caseId, headVersion);
+    await pool.query(saveSql, [revision.id, JSON.stringify(edited()), 0, TEST_ACTOR_ID]);
+    const [version, head] = versions(headVersion);
+    await expect(pool.query(updateSql, [caseId, revision.id, version, head, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: code });
+    expect(await caseState(caseId)).toMatchObject({ approved_revision_id: approvedId, head_revision_id: revision.id });
+    expect([await statusOf(approvedId), await statusOf(revision.id)]).toEqual(["approved", "working"]);
+    expect(await eventsOf(caseId, "approved_version_updated")).toEqual([]);
+  });
+
+  it("update_approved_revision refuses the approved revision itself and a case in review", async () => {
+    const { caseId, approvedId, headVersion } = await approvedCase();
+    await expect(pool.query(updateSql, [caseId, approvedId, 0, headVersion, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "REVISION_NOT_WRITABLE" });
+    const review = await createCase();
+    const head = await createRevision(review.id, 0);
+    const { transition } = await loadCaseStudy();
+    for (const event of ["generate", "generation_succeeded"] as const) await transition(review.id, event, await signedInActor());
+    const { head_version } = await caseRow(review.id);
+    await expect(pool.query(updateSql, [review.id, head.id, 0, head_version, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_APPROVABLE" });
+  });
+
+  it("an approved case with no approved revision (from before Story 4.8) can't be forked, saved or updated", async () => {
+    const created = await createCase();
+    const head = await createRevision(created.id, 0);
+    // Approved the old way: the status only, no approved_revision_id.
+    await pool.query(
+      `begin; select pg_catalog.set_config('mac_recap.status_transition', 'on', true); update public.case_study set status = 'approved' where id = '${created.id}'; commit;`,
+    );
+    const { head_version } = await caseRow(created.id);
+    await expect(fork(created.id, head_version)).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_EDITABLE" });
+    await expect(pool.query(saveSql, [head.id, JSON.stringify(edited()), 0, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_EDITABLE" });
+    await expect(pool.query(updateSql, [created.id, head.id, 0, head_version, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_APPROVABLE" });
+    expect(await caseState(created.id)).toMatchObject({ status: "approved", approved_revision_id: null, head_revision_id: head.id });
+    expect(await statusOf(head.id)).toBe("working");
+  });
+
+  it("update_approved_revision refuses when the approved pointer is not an approved revision, writing nothing", async () => {
+    const { caseId, approvedId, headVersion } = await approvedCase();
+    const { revision } = await fork(caseId, headVersion);
+    await pool.query("update public.revision set status = 'superseded' where id = $1", [approvedId]);
+    await expect(pool.query(updateSql, [caseId, revision.id, 0, headVersion + 1, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "CASE_NOT_APPROVABLE" });
+    expect(await statusOf(revision.id)).toBe("working");
+    expect(await caseState(caseId)).toMatchObject({ approved_revision_id: approvedId, head_revision_id: revision.id });
+    expect(await eventsOf(caseId, "approved_version_updated")).toEqual([]);
+  });
+
+  it("approve_revision (Story 4.8) still refuses an approved case's copy", async () => {
+    const { caseId, headVersion } = await approvedCase();
+    const { revision } = await fork(caseId, headVersion);
+    await expect(pool.query("select * from public.approve_revision($1, $2, 0, $3, $4)", [caseId, revision.id, headVersion + 1, TEST_ACTOR_ID])).rejects.toMatchObject({
+      code: "P0001",
+      message: "CASE_NOT_APPROVABLE",
+    });
+  });
+
+  it("discard_head supersedes the copy and points the head back at the approved revision; a second discard is stale", async () => {
+    const { caseId, approvedId, headVersion } = await approvedCase();
+    const { revision } = await fork(caseId, headVersion);
+    await pool.query(saveSql, [revision.id, JSON.stringify(edited()), 0, TEST_ACTOR_ID]);
+    const { rows } = await pool.query(discardSql, [caseId, revision.id, headVersion + 1, TEST_ACTOR_ID]);
+    expect(rows[0]).toMatchObject({ id: approvedId, status: "approved" });
+    expect(await statusOf(revision.id)).toBe("superseded");
+    expect(await caseState(caseId)).toEqual({ status: "approved", head_revision_id: approvedId, approved_revision_id: approvedId, head_version: headVersion + 2 });
+    expect(await eventsOf(caseId, "revision_discarded")).toEqual([
+      { revision_id: revision.id, actor_id: TEST_ACTOR_ID, data: { discardedRevisionId: revision.id, headVersion: headVersion + 2 } },
+    ]);
+    expect(await live(caseId)).toMatchObject({ id: approvedId, doc: v2() });
+    await expect(pool.query(discardSql, [caseId, revision.id, headVersion + 1, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "STALE_HEAD" });
+    await expect(pool.query(discardSql, [caseId, approvedId, headVersion + 2, TEST_ACTOR_ID])).rejects.toMatchObject({ code: "P0001", message: "REVISION_NOT_WRITABLE" });
+  });
+
+  it("the module's forkHead, saveRevisionDoc, approve and discardHead go through the real adapter", async () => {
+    const { forkHead, saveRevisionDoc, approve, discardHead } = await loadCaseStudy();
+    const actor = await signedInActor();
+    const { caseId, approvedId, headVersion } = await approvedCase();
+
+    const forked = await forkHead(actor, { caseId, expectedHeadVersion: headVersion });
+    expect(forked).toMatchObject({ ok: true, value: { version: 0, headVersion: headVersion + 1 } });
+    if (!forked.ok) return;
+    expect(await forkHead(actor, { caseId, expectedHeadVersion: headVersion })).toEqual(forked);
+    const copyId = forked.value.revisionId;
+    expect(await saveRevisionDoc(actor, { caseId, revisionId: copyId, doc: edited(), expectedVersion: 0 }, noNewAssets)).toMatchObject({ ok: true, value: { version: 1 } });
+
+    const input = { caseId, revisionId: copyId, expectedRevisionVersion: 1, expectedHeadVersion: headVersion + 1, overflow: clear() };
+    expect(await approve(actor, { ...input, expectedHeadVersion: headVersion }, allFiles)).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
+    expect(await approve(actor, input, allFiles)).toMatchObject({ ok: true, value: { id: copyId, status: "approved" } });
+    expect(await live(caseId)).toMatchObject({ id: copyId, doc: edited() });
+    expect(await statusOf(approvedId)).toBe("superseded");
+
+    const again = await forkHead(actor, { caseId, expectedHeadVersion: headVersion + 1 });
+    if (!again.ok) throw new Error(again.error.code);
+    expect(await discardHead(actor, { caseId, revisionId: again.value.revisionId, expectedHeadVersion: headVersion + 1 })).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
+    expect(await discardHead(actor, { caseId, revisionId: again.value.revisionId, expectedHeadVersion: again.value.headVersion })).toMatchObject({
+      ok: true,
+      value: { id: copyId, status: "approved" },
+    });
+    expect(await forkHead(actor, { caseId: UNKNOWN_ID, expectedHeadVersion: 0 })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+  });
+});
