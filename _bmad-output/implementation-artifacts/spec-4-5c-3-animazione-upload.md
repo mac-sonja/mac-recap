@@ -2,7 +2,7 @@
 title: 'Story 4.5c-3: upload in the Animazione dialog'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '43ffb2c63274e89d081d68e459a3ad444a97241f'
 route: 'dispatch'
 review_loop_iteration: 0
