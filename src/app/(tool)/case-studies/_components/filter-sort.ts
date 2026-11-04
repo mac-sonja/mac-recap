@@ -70,21 +70,28 @@ export const businessLineLabel = (row: Pick<CaseStudyRow, "businessLines">) =>
 /** The status filter: every status (*Tutti*) or exactly one. */
 export type StatusFilter = CaseStatus | "all";
 
+/** What the case search reads of a case: the table's rows and the library's cards (Story 5.1) alike. */
+export type SearchableCase = Pick<CaseStudyRow, "name" | "clientName" | "clientCode" | "code" | "businessLines">;
+
 /**
- * Rows with the filtered status (`"all"` keeps every status) whose name, client
- * name, client code, case code or business line label contains `query`
- * (normalized); both must match. A blank query keeps every row of the status.
+ * The case search (the table's and the library's): whether the case's name, client name,
+ * client code, case code or business line label contains `query`, case- and
+ * accent-insensitively. A blank query matches every case.
+ */
+export function matchesCaseSearch(item: SearchableCase, query: string): boolean {
+  const needle = normalizeForSearch(query.trim());
+  if (needle === "") return true;
+  return [item.name, item.clientName, item.clientCode, item.code, businessLineLabel(item)].some((field) =>
+    normalizeForSearch(field).includes(needle),
+  );
+}
+
+/**
+ * Rows with the filtered status (`"all"` keeps every status) that match `query`
+ * (`matchesCaseSearch`); both must match. A blank query keeps every row of the status.
  */
 export function filterRows(rows: readonly CaseStudyRow[], query: string, status: StatusFilter = "all"): CaseStudyRow[] {
-  const needle = normalizeForSearch(query.trim());
-  return rows.filter(
-    (row) =>
-      (status === "all" || row.status === status) &&
-      (needle === "" ||
-        [row.name, row.clientName, row.clientCode, row.code, businessLineLabel(row)].some((field) =>
-          normalizeForSearch(field).includes(needle),
-        )),
-  );
+  return rows.filter((row) => (status === "all" || row.status === status) && matchesCaseSearch(row, query));
 }
 
 const collator = new Intl.Collator("it", { sensitivity: "base", numeric: true });

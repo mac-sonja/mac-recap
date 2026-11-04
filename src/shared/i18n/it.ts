@@ -767,10 +767,55 @@ export const it = {
     },
   },
   /** Library of approved cases (Story 5.1); until it ships, a placeholder. */
+  /**
+   * The library of approved cases (Story 5.1): a card grid with the table's search, the
+   * Cliente and Anno facets, the active filters and numbered pages of 24.
+   */
   library: {
     title: "Libreria",
-    lead: "Qui troverai i case approvati, pronti da scaricare e condividere.",
-    soon: "La libreria è in arrivo. Ti avvisiamo appena è pronta.",
+    lead: "Le case history approvate, pronte da mostrare ai tuoi clienti.",
+    search: {
+      label: "Cerca progetto o cliente",
+      placeholder: "Cerca progetto o cliente…",
+    },
+    /** The facets: values in one facet add up (OR), facets narrow each other (AND). */
+    facets: {
+      client: "Cliente",
+      year: "Anno",
+    },
+    /** The active filters above the grid, each removable. */
+    active: {
+      label: "Filtri attivi",
+      /** A chip's remove button, read by screen readers; `{value}` is the client or the year. */
+      remove: "Togli {value}",
+      clearAll: "Azzera tutto",
+    },
+    /** Read by screen readers before the grid; `{n}` is how many cases match. */
+    count: "{n} case history",
+    /** `{query}` is the search text. */
+    noResults: "Nessun risultato per “{query}”.",
+    /** The facets alone leave nothing. */
+    noResultsFilters: "Nessun risultato con questi filtri.",
+    clearSearch: "Azzera ricerca e filtri",
+    empty: "Ancora nessuna case history approvata.",
+    pager: {
+      label: "Pagine della libreria",
+      previous: "Pagina precedente",
+      next: "Pagina successiva",
+      /** A page number's accessible name. */
+      page: "Pagina {n}",
+    },
+    /** Read by screen readers while the library loads. */
+    loading: "Un attimo…",
+  },
+  /**
+   * The owner/designer's switch between the Case history table and the library (Story 5.1),
+   * in both pages' headers.
+   */
+  caseViews: {
+    label: "Vista",
+    table: "Tabella",
+    library: "Libreria",
   },
   /**
    * The configurator (Story 4.2a, mockup `configurator.html`): top bar, left panel

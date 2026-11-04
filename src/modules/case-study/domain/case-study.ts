@@ -448,8 +448,11 @@ export type CaseStudy = z.infer<typeof caseStudySchema>;
  * A case as the lists read it (Story 4.1). `inReviewSince` is when a Da approvare case
  * entered that status: the time of its latest `generation_succeeded` transition event.
  * Null for every other status, and for a Da approvare case without that event.
+ * `approvedAt` (Story 5.1) is when an Approvato case entered that status: the time of its
+ * latest `approve` transition event. Null for every other status, and for an Approvato
+ * case without that event.
  */
-export type ListedCaseStudy = CaseStudy & { inReviewSince: string | null };
+export type ListedCaseStudy = CaseStudy & { inReviewSince: string | null; approvedAt: string | null };
 
 const requiredText = z.string().trim().min(1, "Required.");
 

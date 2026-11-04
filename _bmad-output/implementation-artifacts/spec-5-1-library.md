@@ -2,7 +2,7 @@
 title: 'Story 5.1: library of approved case studies'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '4f9427681766e791dc2571a41c4cf1df6641399c'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -70,17 +70,17 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/case-study` -- `approvedAt` on approved listings (repository, domain type, tests).
-- [ ] `src/app/(tool)/library/_lib/library-data.ts` (new, + test) -- pure helpers:
+- [x] `src/modules/case-study` -- `approvedAt` on approved listings (repository, domain type, tests).
+- [x] `src/app/(tool)/library/_lib/library-data.ts` (new, + test) -- pure helpers:
   - parse and serialise the URL state;
   - filter by search and facets;
   - build the facet options from the approved list;
   - paginate 24 per page, clamping an out-of-range page;
   - sort by `approvedAt` descending.
-- [ ] `src/app/(tool)/library/page.tsx` + `loading.tsx` + `_components/library-grid.tsx`, `library-card.tsx`, `library-filters.tsx` -- the page as in the matrix: covers through the shared renderer, skeleton cards in `loading.tsx`, and keyboard-reachable cards that are links.
-- [ ] `src/app/(tool)/case-studies/page.tsx` (+ header component) -- the Tabella / Libreria toggle for owner/designer.
-- [ ] `src/shared/i18n/it.ts` + `it.test.ts` -- the copy.
-- [ ] Tests: `library-data.test.ts` (every matrix row that's pure), `page.test.tsx` (approved only, card link, cover from the live revision page 1, empty, no results, toggle, role redirect) and the permissions row.
+- [x] `src/app/(tool)/library/page.tsx` + `loading.tsx` + `_components/library-grid.tsx`, `library-card.tsx`, `library-filters.tsx` -- the page as in the matrix: covers through the shared renderer, skeleton cards in `loading.tsx`, and keyboard-reachable cards that are links.
+- [x] `src/app/(tool)/case-studies/page.tsx` (+ header component) -- the Tabella / Libreria toggle for owner/designer.
+- [x] `src/shared/i18n/it.ts` + `it.test.ts` -- the copy.
+- [x] Tests: `library-data.test.ts` (every matrix row that's pure), `page.test.tsx` (approved only, card link, cover from the live revision page 1, empty, no results, toggle, role redirect) and the permissions row.
 
 **Acceptance Criteria:**
 - Given a case approved after another, when the library loads, then it comes first.

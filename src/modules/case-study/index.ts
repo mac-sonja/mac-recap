@@ -230,7 +230,8 @@ export function get(id: unknown): Promise<Result<CaseStudy>> {
 
 /**
  * The non-deleted case studies within exactly `scope`, newest `updated_at` first,
- * each Da approvare case with `inReviewSince` (when it entered that status):
+ * each Da approvare case with `inReviewSince` (when it entered that status) and each
+ * Approvato case with `approvedAt` (Story 5.1, when it was approved):
  * `{}` lists every status, `{ status: "approved" }` approved only; `clientId`
  * limits it to that client's cases. Derive the status scope
  * from the `list cases` policy and authorize it first, so no scope the policy

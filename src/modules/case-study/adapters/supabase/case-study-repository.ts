@@ -127,25 +127,25 @@ export function createSupabaseCaseStudyRepository(
   }
 
   /**
-   * When each of `caseIds` last entered Da approvare: the newest `generation_succeeded`
-   * transition event per case (Story 4.1). No query when there are none.
+   * When each of `caseIds` last took the transition `event`: the newest such transition
+   * event per case. No query when there are none.
    */
-  async function inReviewSince(caseIds: string[]): Promise<Result<Map<string, string>>> {
+  async function enteredAt(caseIds: string[], event: "generation_succeeded" | "approve"): Promise<Result<Map<string, string>>> {
     const since = new Map<string, string>();
     if (caseIds.length === 0) return { ok: true, value: since };
     const { data, error } = await client()
       .from("case_event")
       .select("case_id, at")
       .eq("type", TRANSITION)
-      .eq("data->>event", "generation_succeeded")
+      .eq("data->>event", event)
       .in("case_id", caseIds)
       .order("at", { ascending: false });
     if (error) {
-      log.error(`case_event review time lookup failed: ${error.code}`);
+      log.error(`case_event ${event} time lookup failed: ${error.code}`);
       return err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "Could not list the case studies." });
     }
     // Newest first, so the first event seen per case is its latest.
-    for (const event of data) if (!since.has(event.case_id)) since.set(event.case_id, event.at);
+    for (const row of data) if (!since.has(row.case_id)) since.set(row.case_id, row.at);
     return { ok: true, value: since };
   }
 
@@ -255,11 +255,19 @@ export function createSupabaseCaseStudyRepository(
         if (!mapped.ok) return mapped;
         cases.push(mapped.value);
       }
-      const since = await inReviewSince(cases.filter((c) => c.status === "in_review").map((c) => c.id));
+      const idsIn = (status: CaseStudy["status"]) => cases.filter((c) => c.status === status).map((c) => c.id);
+      // When each Da approvare case entered it (Story 4.1), and each Approvato case (Story 5.1).
+      const since = await enteredAt(idsIn("in_review"), "generation_succeeded");
       if (!since.ok) return since;
+      const approved = await enteredAt(idsIn("approved"), "approve");
+      if (!approved.ok) return approved;
       return {
         ok: true,
-        value: cases.map((c) => ({ ...c, inReviewSince: c.status === "in_review" ? (since.value.get(c.id) ?? null) : null })),
+        value: cases.map((c) => ({
+          ...c,
+          inReviewSince: c.status === "in_review" ? (since.value.get(c.id) ?? null) : null,
+          approvedAt: c.status === "approved" ? (approved.value.get(c.id) ?? null) : null,
+        })),
       };
     },
 
