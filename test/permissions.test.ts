@@ -96,6 +96,10 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   "configurator.updateCaseFields": { call: configurator.updateCaseFields as Action, allowed: OWNERS },
   "configurator.saveCaseResults": { call: configurator.saveCaseResults as Action, allowed: OWNERS },
   "configurator.saveCaseTestimonial": { call: configurator.saveCaseTestimonial as Action, allowed: OWNERS },
+  // Editing an approved case (Story 4.9): `edit`, `update approved version`, `discard`.
+  "configurator.forkCaseHead": { call: configurator.forkCaseHead as Action, allowed: OWNERS },
+  "configurator.updateApprovedVersion": { call: configurator.updateApprovedVersion as Action, allowed: OWNERS },
+  "configurator.discardCaseChanges": { call: configurator.discardCaseChanges as Action, allowed: OWNERS },
   // The draft-ready poll (Story 3.8): `generate`, a read only.
   "draft-ready.listReadyDrafts": { call: draftReady.listReadyDrafts as Action, allowed: OWNERS },
   // Story 5.3: Scarica on an approved case.
@@ -119,7 +123,7 @@ beforeEach(() => {
 describe("permission suite through the real actor resolver (Story 6.4)", () => {
   it("covers every server action of the tool", () => {
     expect(Object.keys(EXPECTED).length).toBe(
-      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 3 + Object.keys(draftReady).length + Object.keys(exportActions).length,
+      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 6 + Object.keys(draftReady).length + Object.keys(exportActions).length,
     );
   });
 

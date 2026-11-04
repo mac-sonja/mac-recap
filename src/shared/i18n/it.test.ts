@@ -269,11 +269,14 @@ describe("voice", () => {
     it.clientPanel.delete.button,
     it.caseStudies.delete.barButton,
     it.caseStudies.delete.approvedButton,
+    it.configurator.approvedEdit.update,
+    it.configurator.approvedEdit.discard,
   ];
 
   test("calls to action are at most three words", () => {
-    // owner wording, 2026-10-21: the client page's button keeps its four words.
-    const allowedLonger = new Set<string>([it.clients.detail.newCase]);
+    // owner wording, 2026-10-21: the client page's button keeps its four words; Story 4.9's
+    // spec names **Aggiorna la versione approvata** (owner, 2026-11-04).
+    const allowedLonger = new Set<string>([it.clients.detail.newCase, it.configurator.approvedEdit.update]);
     for (const label of actions) {
       if (allowedLonger.has(label)) continue;
       expect(label.split(/\s+/).length, label).toBeLessThanOrEqual(3);
@@ -317,6 +320,15 @@ describe("configurator copy", () => {
     expect([t("configurator.undoHint"), t("configurator.redoHint")]).toEqual(["Annulla (⌘Z)", "Ripeti (⇧⌘Z)"]);
     expect(t("configurator.overflow")).toBe("Il testo non entra");
     expect(t("configurator.editSoon")).toBe("Questo testo si potrà modificare presto.");
+    // Story 4.9: an approved case's copy.
+    expect(t("configurator.approvedEdit.banner")).toBe("Approvata. Le modifiche vanno online quando aggiorni la versione approvata.");
+    expect([t("configurator.approvedEdit.update"), t("configurator.approvedEdit.discard")]).toEqual(["Aggiorna la versione approvata", "Scarta le modifiche"]);
+    expect([t("configurator.approvedEdit.discardTitle"), t("configurator.approvedEdit.discardDescription")]).toEqual([
+      "Scartare le modifiche?",
+      "Torni alla versione approvata.",
+    ]);
+    expect([t("configurator.approvedEdit.discardConfirm"), t("configurator.approvedEdit.cancel")]).toEqual(["Scarta", "Annulla"]);
+    expect([t("configurator.approvedEdit.updateTitle"), t("configurator.approvedEdit.updateConfirm")]).toEqual(["Aggiornare la versione approvata?", "Aggiorna"]);
     expect([t("configurator.fields.clientHeading"), t("configurator.fields.caseHeading"), t("configurator.fields.replaceLogo")]).toEqual([
       "Dati del cliente",
       "Dati della case",

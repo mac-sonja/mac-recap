@@ -14,8 +14,26 @@ export type Formats = Readonly<Record<FormatId, readonly Page[]>>;
 export interface EditedRevision {
   id: string;
   version: number;
-  /** A `working` head of an In revisione case; otherwise nothing is edited or saved. */
+  /** A `working` head of an In revisione case, or an Approvato case's head (Story 4.9); otherwise nothing is edited or saved. */
   editable: boolean;
+  /**
+   * Story 4.9: the head is an Approvato case's approved revision itself, so the first save
+   * forks a working copy (`fork`) and saves there; later saves go to the copy.
+   */
+  fork?: boolean;
+}
+
+/** What a fork sends (Story 4.9): the case and the `headVersion` read. */
+export interface ForkInput {
+  caseId: string;
+  expectedHeadVersion: number;
+}
+
+/** What a fork returns: the working copy's id and `version`, and the case's `headVersion` after it. */
+export interface ForkResult {
+  revisionId: string;
+  version: number;
+  headVersion: number;
 }
 
 /** What a save sends: the whole document (each format as `{ pages }`, as stored), and the version it was based on. */
@@ -39,6 +57,10 @@ export interface UseDocumentOptions {
   save: (input: SaveInput) => Promise<ActionResult<{ version: number }>>;
   /** Someone else saved first, or the case can no longer be edited: read it again (no retry). */
   onStale: () => void;
+  /** Story 4.9: forks an Approvato case's head before its first save (`revision.fork`). */
+  fork?: (input: ForkInput) => Promise<ActionResult<ForkResult>>;
+  /** The case's `head_version` as read (approval's and the fork's compare-and-set). */
+  headVersion?: number;
 }
 
 export interface DocumentState {
@@ -65,6 +87,17 @@ export interface DocumentState {
   settle: () => Promise<boolean>;
   /** The revision `version` the last save returned (or the one read). */
   version: () => number;
+  /** The revision saves go to: the one read, or the working copy a fork made (Story 4.9). */
+  revisionId: () => string | undefined;
+  /** The case's `head_version`: the one read, or the one the fork returned (Story 4.9). */
+  headVersion: () => number | undefined;
+  /**
+   * Story 4.9: the next save forks first (the head is the approved revision). False once a
+   * fork made the working copy: the copy is pending, so Aggiorna and Scarta show.
+   */
+  forkPending: boolean;
+  /** Story 4.9: the copy just became the approved revision; the next edit forks again. */
+  approved: () => void;
   /** Undoes or redoes one step and returns the format it changed, or undefined with nothing to do. */
   undo: () => FormatId | undefined;
   redo: () => FormatId | undefined;
@@ -102,8 +135,13 @@ interface Step {
  * {@link RETRY_DELAYS_MS}; after {@link BANNER_AFTER} failures the banner shows until a
  * save goes through. A stale save is never retried: `onStale` reloads. An undo or redo
  * saves like any edit. Nothing is saved for a revision that isn't editable.
+ *
+ * Story 4.9: on an Approvato case whose head is the approved revision (`revision.fork`), the
+ * first save forks a working copy (`fork`, idempotent) and then saves to the copy's id and
+ * version; a failed fork is retried like a failed save, a stale one reloads. Edits never fork
+ * by themselves: only a save does.
  */
-export function useDocument({ caseId, revision, base, initial, save, onStale }: UseDocumentOptions): DocumentState {
+export function useDocument({ caseId, revision, base, initial, save, onStale, fork, headVersion }: UseDocumentOptions): DocumentState {
   const [formats, setFormats] = useState<Formats>(initial);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [banner, setBanner] = useState(false);
@@ -113,6 +151,10 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
   const current = useRef<Formats>(initial);
   const saved = useRef<Formats>(initial);
   const version = useRef(revision?.version ?? 0);
+  const revisionId = useRef(revision?.id);
+  const head = useRef(headVersion);
+  const needsFork = useRef(revision?.fork === true);
+  const [forkPending, setForkPending] = useState(revision?.fork === true);
   const past = useRef<Step[]>([]);
   const future = useRef<Step[]>([]);
   const group = useRef<string | undefined>(undefined);
@@ -124,9 +166,9 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The latest props, for the save loop running across renders.
-  const latest = useRef({ caseId, revision, base, save, onStale });
+  const latest = useRef({ caseId, revision, base, save, onStale, fork });
   useEffect(() => {
-    latest.current = { caseId, revision, base, save, onStale };
+    latest.current = { caseId, revision, base, save, onStale, fork };
   });
 
   const clearTimers = () => {
@@ -137,7 +179,7 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
   };
 
   const run = useCallback(async function run(): Promise<void> {
-    const { caseId, revision, base, save, onStale } = latest.current;
+    const { caseId, revision, base, save, onStale, fork } = latest.current;
     if (stopped.current || revision === null || !revision.editable || inFlight.current) return;
     if (current.current === saved.current) {
       // Undone back to what the server holds: nothing to send.
@@ -151,10 +193,32 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
 
     inFlight.current = true;
     setSaveState("saving");
+
+    // Story 4.9: the approved revision is never written; the first save forks a working copy.
+    if (needsFork.current) {
+      let forked: ActionResult<ForkResult> | null;
+      try {
+        forked = fork === undefined || head.current === undefined ? null : await fork({ caseId, expectedHeadVersion: head.current });
+      } catch {
+        forked = null;
+      }
+      inFlight.current = false;
+      if (stopped.current) return;
+      if (forked?.ok === true) {
+        revisionId.current = forked.value.revisionId;
+        version.current = forked.value.version;
+        head.current = forked.value.headVersion;
+        needsFork.current = false;
+        setForkPending(false);
+        return run();
+      }
+      return failed(forked);
+    }
+
     const sent = current.current;
     let result: ActionResult<{ version: number }> | null;
     try {
-      result = await save({ caseId, revisionId: revision.id, doc: { ...base, formats: stored(sent) }, expectedVersion: version.current });
+      result = await save({ caseId, revisionId: revisionId.current ?? revision.id, doc: { ...base, formats: stored(sent) }, expectedVersion: version.current });
     } catch {
       result = null;
     }
@@ -172,26 +236,32 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
       setSaveState("saved");
       return;
     }
-    if (result !== null && STALE_CODES.has(result.error.code)) {
-      stopped.current = true;
-      clearTimers();
-      onStale();
-      return;
+    return failed(result);
+
+    /** A save or fork that didn't go through: reload when stale, else retry (or wait for the next edit). */
+    function failed(result: { ok: false; error: { code: string; assetIds?: string[] } } | { ok: true } | null): void {
+      if (result?.ok === true) return;
+      if (result !== null && STALE_CODES.has(result.error.code)) {
+        stopped.current = true;
+        clearTimers();
+        onStale();
+        return;
+      }
+      failures.current += 1;
+      setSaveState("retrying");
+      // Only a refusal that names its files keeps them; any other failure shows the plain banner.
+      const named = result?.ok === false && result.error.code === "ASSET_NOT_ALLOWED" ? (result.error.assetIds ?? []) : [];
+      setRefused(named.length > 0 ? named : null);
+      if (result !== null && PERMANENT_CODES.has(result.error.code)) {
+        // The same document would be refused again: wait for the next edit.
+        blocked.current = true;
+        setBanner(true);
+        return;
+      }
+      if (failures.current >= BANNER_AFTER) setBanner(true);
+      const wait = RETRY_DELAYS_MS[Math.min(failures.current, RETRY_DELAYS_MS.length) - 1];
+      retry.current = setTimeout(() => void run(), wait);
     }
-    failures.current += 1;
-    setSaveState("retrying");
-    // Only a refusal that names its files keeps them; any other failure shows the plain banner.
-    const named = result?.ok === false && result.error.code === "ASSET_NOT_ALLOWED" ? (result.error.assetIds ?? []) : [];
-    setRefused(named.length > 0 ? named : null);
-    if (result !== null && PERMANENT_CODES.has(result.error.code)) {
-      // The same document would be refused again: wait for the next edit.
-      blocked.current = true;
-      setBanner(true);
-      return;
-    }
-    if (failures.current >= BANNER_AFTER) setBanner(true);
-    const wait = RETRY_DELAYS_MS[Math.min(failures.current, RETRY_DELAYS_MS.length) - 1];
-    retry.current = setTimeout(() => void run(), wait);
   }, []);
 
   const schedule = useCallback(() => {
@@ -271,6 +341,12 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
   }, [run]);
 
   const currentVersion = useCallback(() => version.current, []);
+  const currentRevisionId = useCallback(() => revisionId.current, []);
+  const currentHeadVersion = useCallback(() => head.current, []);
+  const approved = useCallback(() => {
+    needsFork.current = true;
+    setForkPending(true);
+  }, []);
 
   useEffect(() => {
     // Closing or reloading the tab with an edit not yet saved asks first.
@@ -282,9 +358,21 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
       window.removeEventListener("beforeunload", onBeforeUnload);
       clearTimers();
       // Leaving in the app (no beforeunload) with an edit not yet sent: send it, best effort.
-      const { caseId, revision, base, save } = latest.current;
+      const { caseId, revision, base, save, fork } = latest.current;
       if (!stopped.current && !inFlight.current && current.current !== saved.current && revision?.editable === true) {
-        void save({ caseId, revisionId: revision.id, doc: { ...base, formats: stored(current.current) }, expectedVersion: version.current }).catch(() => undefined);
+        const doc = { ...base, formats: stored(current.current) };
+        const send = async () => {
+          let target = { revisionId: revisionId.current ?? revision.id, version: version.current };
+          // Story 4.9: still on the approved revision: fork first, then save to the copy.
+          if (needsFork.current) {
+            if (fork === undefined || head.current === undefined) return;
+            const forked = await fork({ caseId, expectedHeadVersion: head.current });
+            if (!forked.ok) return;
+            target = { revisionId: forked.value.revisionId, version: forked.value.version };
+          }
+          await save({ caseId, revisionId: target.revisionId, doc, expectedVersion: target.version });
+        };
+        void send().catch(() => undefined);
       }
       // A save still in flight must not retry or reload after unmount.
       stopped.current = true;
@@ -302,6 +390,10 @@ export function useDocument({ caseId, revision, base, initial, save, onStale }: 
     flush,
     settle,
     version: currentVersion,
+    revisionId: currentRevisionId,
+    headVersion: currentHeadVersion,
+    forkPending,
+    approved,
     undo,
     redo,
   };

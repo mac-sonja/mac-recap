@@ -3,7 +3,7 @@
 import { ArrowLeft, Eye, Pencil, Redo2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useId, type Ref } from "react";
-import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE } from "@/app/_components/button-styles";
+import { PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { StatusBadge } from "@/app/_components/status-badge";
 import type { CaseStatus } from "@/modules/access";
 import { FORMATS, type FormatId } from "@/modules/rendering";
@@ -45,6 +45,13 @@ export interface TopBarProps {
    * while it can't apply (trial pages, an approved case).
    */
   approval?: { blocker: string | null; pending: boolean; onApprove: () => void };
+  /**
+   * Story 4.9: an Approvato case. **Approva** never shows; while a copy is pending, `update`
+   * shows **Scarta le modifiche** and **Aggiorna la versione approvata** (inactive with
+   * `blocker`, as Approva); without one, nothing does.
+   */
+  approvedCase?: boolean;
+  update?: { blocker: string | null; pending: boolean; onUpdate: () => void; onDiscard: () => void };
 }
 
 /** *Salvato*, *Salvataggio…*, or *Non salvato. Nuovo tentativo…* after a failed save. */
@@ -98,7 +105,8 @@ export function FormatSwitch({ formatId, onFormat }: Pick<TopBarProps, "formatId
  * right. The save state follows the autosave (Story 4.3a); undo and redo are disabled
  * with nothing to undo or redo. **Approva** (Story 4.8) is active once nothing overflows
  * and no file is missing; without an approval to make it shows, inactive, and says it
- * arrives soon when pressed.
+ * arrives soon when pressed. On an Approvato case (Story 4.9) it never shows: a pending copy
+ * gets **Scarta le modifiche** and **Aggiorna la versione approvata** instead.
  */
 export function TopBar({
   header,
@@ -115,11 +123,20 @@ export function TopBar({
   onUndo,
   onRedo,
   approval,
+  approvedCase = false,
+  update,
 }: TopBarProps) {
   const approvalReasonId = useId();
+  const updateReasonId = useId();
   const previewLabel = preview ? it.configurator.preview.leave : it.configurator.preview.enter;
   return (
-    <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-border bg-surface-sidebar px-3">
+    <header
+      className={cn(
+        "grid h-14 shrink-0 items-center gap-4 border-b border-border bg-surface-sidebar px-3",
+        // Scarta and Aggiorna (Story 4.9) are wider than Approva: the right side takes its width and the name truncates.
+        update === undefined ? "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)_auto_auto]",
+      )}
+    >
       <DocumentHeading header={header} back={back} />
 
       <div className="flex items-center gap-2">
@@ -171,8 +188,42 @@ export function TopBar({
         >
           <Redo2 aria-hidden="true" className="size-4" />
         </button>
-        <span aria-hidden="true" className="mx-1 h-5 w-px bg-border-strong" />
-        {approval === undefined ? (
+        {approvedCase ? (
+          update !== undefined && (
+            <>
+              <span aria-hidden="true" className="mx-1 h-5 w-px bg-border-strong" />
+              <button
+                type="button"
+                disabled={update.pending}
+                onClick={update.onDiscard}
+                className={cn(SECONDARY_ACTION, "shrink-0 disabled:opacity-50")}
+              >
+                {it.configurator.approvedEdit.discard}
+              </button>
+              {/* What's left before updating, as for Approva (Story 4.8). */}
+              {update.blocker !== null && (
+                <span id={updateReasonId} className="sr-only">
+                  {update.blocker}
+                </span>
+              )}
+              <button
+                type="button"
+                aria-disabled={update.blocker !== null || update.pending ? "true" : undefined}
+                aria-describedby={update.blocker !== null ? updateReasonId : undefined}
+                title={update.blocker ?? undefined}
+                onClick={() => {
+                  if (update.blocker === null && !update.pending) update.onUpdate();
+                }}
+                className={cn(PRIMARY_ACTION, "shrink-0 aria-disabled:cursor-not-allowed aria-disabled:opacity-50")}
+              >
+                {it.configurator.approvedEdit.update}
+              </button>
+            </>
+          )
+        ) : (
+          <span aria-hidden="true" className="mx-1 h-5 w-px bg-border-strong" />
+        )}
+        {approvedCase ? null : approval === undefined ? (
           <button
             type="button"
             aria-disabled="true"

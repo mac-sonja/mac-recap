@@ -45,11 +45,72 @@ export async function approveCase(input: unknown): Promise<ActionResult<{ waitin
   if (!actor.ok) return failure(actor.error);
   const decision = authorize(actor.value, "approve");
   if (!decision.ok) return failure(decision.error);
+  // An approved case's copy is updated through updateApprovedVersion (Story 4.9), never approved again here.
+  const found = await caseStudy.get(typeof input === "object" && input !== null ? (input as { caseId?: unknown }).caseId : undefined);
+  if (found.ok && found.value?.status === "approved") {
+    return failure({ code: "CASE_NOT_APPROVABLE", message: "Only a case study in review can be approved.", details: { status: "approved" } });
+  }
   const approved = await caseStudy.approve(actor.value, input, material.liveAssetIds);
   if (!approved.ok) return failure(approved.error);
   // Other cases waiting decide where the person goes next; a failed read only sends them to Case studies.
   const waiting = await caseStudy.list({ status: "in_review" });
   return { ok: true, value: { waiting: waiting.ok && waiting.value.length > 0 } };
+}
+
+/**
+ * The first edit of an approved case (Story 4.9): input `{ caseId, expectedHeadVersion }`.
+ * Forks the approved revision into the working copy every later save goes to, or returns the
+ * copy that already exists (idempotent); live reads keep the approved revision. Returns
+ * `{ revisionId, version, headVersion }`. 403 `FORBIDDEN` unless the role may `edit`; 400
+ * `INVALID_INPUT`; 404 `NOT_FOUND`; 409 `STALE_HEAD`, `CASE_NOT_EDITABLE` (not approved),
+ * `REVISION_NOT_WRITABLE`. Nothing is written on any error.
+ */
+export async function forkCaseHead(input: unknown): Promise<ActionResult<caseStudy.ForkedHead>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "edit");
+  if (!decision.ok) return failure(decision.error);
+  const forked = await caseStudy.forkHead(actor.value, input);
+  return forked.ok ? { ok: true, value: forked.value } : failure(forked.error);
+}
+
+/**
+ * **Aggiorna la versione approvata** (Story 4.9): input as `approveCase`, `revisionId` the
+ * approved case's working copy. Runs Story 4.8's checks on the copy, which then becomes the
+ * approved revision (the previous one `superseded`); the case stays approved. 403 `FORBIDDEN`
+ * unless the role may `update approved version`; 400 `INVALID_INPUT`, `OVERFLOW_NOT_CLEARED`,
+ * `MATERIAL_MISSING` (with `assetIds`); 404 `NOT_FOUND`; 409 `STALE_REVISION`, `STALE_HEAD`,
+ * `CASE_NOT_APPROVABLE`, `REVISION_NOT_WRITABLE`. Nothing is written on any error.
+ */
+export async function updateApprovedVersion(input: unknown): Promise<ActionResult<void>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "update approved version");
+  if (!decision.ok) return failure(decision.error);
+  const found = await caseStudy.get(typeof input === "object" && input !== null ? (input as { caseId?: unknown }).caseId : undefined);
+  if (!found.ok) return failure(found.error);
+  // Only an approved case's copy: Da approvare is approved through approveCase, with its own redirect.
+  if (found.value?.status !== "approved") {
+    return failure({ code: "CASE_NOT_APPROVABLE", message: "Only an approved case study's approved version can be updated.", details: { status: found.value?.status } });
+  }
+  const updated = await caseStudy.approve(actor.value, input, material.liveAssetIds);
+  return updated.ok ? { ok: true, value: undefined } : failure(updated.error);
+}
+
+/**
+ * **Scarta le modifiche** (Story 4.9): input `{ caseId, revisionId, expectedHeadVersion }`,
+ * `revisionId` the approved case's working copy. The copy is superseded and the head goes
+ * back to the approved revision. 403 `FORBIDDEN` unless the role may `discard`; 400
+ * `INVALID_INPUT`; 404 `NOT_FOUND`; 409 `STALE_HEAD`, `CASE_NOT_EDITABLE`,
+ * `REVISION_NOT_WRITABLE`. Nothing is written on any error.
+ */
+export async function discardCaseChanges(input: unknown): Promise<ActionResult<void>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "discard");
+  if (!decision.ok) return failure(decision.error);
+  const discarded = await caseStudy.discardHead(actor.value, input);
+  return discarded.ok ? { ok: true, value: undefined } : failure(discarded.error);
 }
 
 /**

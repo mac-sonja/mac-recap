@@ -73,21 +73,27 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/20261105160000_case_study_edit_approved.sql` + `db.types.ts`:
+- [x] `supabase/migrations/20261105160000_case_study_edit_approved.sql` + `db.types.ts`:
   - `fork_head` (idempotent);
   - `save_revision_doc` accepting an approved case's working fork;
   - the update path (same checks as `approve_revision`; previous approved → `superseded`; status stays approved);
   - `discard_head`;
   - events, service role only.
-- [ ] `src/modules/case-study` use cases, ports and adapters, with unit tests: fork idempotent, update supersedes, discard returns, live read unchanged until update, stale errors.
-- [ ] Configurator page, actions and autosave fork path; top bar Aggiorna/Scarta with the confirm dialogs; the banner; fields off when approved. Tests for every matrix row.
-- [ ] `src/shared/i18n/it.ts` + `it.test.ts`; `test/permissions.test.ts` rows; `test/db/revision.db.test.ts`: fork, save on the fork, update, discard, and `getLiveRevision` before and after.
-- [ ] A guardrail test: no path from Approvato back to Da approvare or Bozza.
+- [x] `src/modules/case-study` use cases, ports and adapters, with unit tests: fork idempotent, update supersedes, discard returns, live read unchanged until update, stale errors.
+- [x] Configurator page, actions and autosave fork path; top bar Aggiorna/Scarta with the confirm dialogs; the banner; fields off when approved. Tests for every matrix row.
+- [x] `src/shared/i18n/it.ts` + `it.test.ts`; `test/permissions.test.ts` rows; `test/db/revision.db.test.ts`: fork, save on the fork, update, discard, and `getLiveRevision` before and after.
+- [x] A guardrail test: no path from Approvato back to Da approvare or Bozza.
 
 **Acceptance Criteria:**
 - Given a pending copy, when a person opens the approved case's page or the library, then they see the approved version, not the copy.
 
 ## Implementation Notes
+
+- **Update path.** A sibling SQL function `update_approved_revision` (4.8's `approve_revision` is untouched and still refuses an approved case). The `approve` use case runs the same checks (stale version, overflow, material) and then calls `updateApproved` when the case is `approved`, `approve` otherwise, so the module still exports a single `approve` (the 4.8 guardrail). Server actions: `updateApprovedVersion` (`update approved version`, refuses a case that isn't approved) and `approveCase` now refuses an approved case, so neither path crosses into the other.
+- **Fork.** `fork_head(case, expectedHeadVersion, actor)` returns `{ revision, headVersion }` as JSON; idempotent: an existing working copy is returned with nothing written, whatever the expected head version (a retry after a lost response, or a second tab, lands on the same copy; its stale `version` then reloads). It bumps `head_version`; update leaves it as approval does; discard bumps it.
+- **Events.** `revision_forked`, `approved_version_updated`, `revision_discarded` (all with the actor). No `transition` event: the status never changes.
+- **Autosave.** `useDocument` forks on the first save when `revision.fork` (head = approved revision), then saves to the copy's id and version; a failed fork retries like a save, a stale one reloads. After **Aggiorna** the hook re-arms the fork; the configurator stays mounted (same key) and says "Versione approvata aggiornata. Ora è online.". **Scarta** settles pending saves, discards, and refreshes: the head changes, so the configurator remounts on the approved version.
+- **Top bar.** With a copy pending, the right column grows to fit **Scarta le modifiche** and **Aggiorna la versione approvata**; the name truncates instead. "Aggiorna la versione approvata" is four words, allowed in the CTA test as the spec's own wording.
 
 ## Spec Change Log
 

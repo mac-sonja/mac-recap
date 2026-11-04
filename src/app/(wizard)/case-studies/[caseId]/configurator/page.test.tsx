@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { it as dict } from "@/shared/i18n/it";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { CaseClientInfo, CaseStudy, CaseStudyRevision, ClientDetail } from "@/modules/case-study";
 import { randomUUID } from "node:crypto";
@@ -29,6 +30,9 @@ vi.mock("./actions", () => ({
   saveRevisionDoc: vi.fn(),
   getRenderAssets: vi.fn(),
   approveCase: vi.fn(),
+  forkCaseHead: vi.fn(),
+  updateApprovedVersion: vi.fn(),
+  discardCaseChanges: vi.fn(),
   updateCaseFields: vi.fn(),
   saveCaseResults: vi.fn(),
   saveCaseTestimonial: vi.fn(),
@@ -442,11 +446,36 @@ describe("ConfiguratorPage", () => {
     expect(getEditableRevision).not.toHaveBeenCalled();
   });
 
-  it("opens an approved case, not editable until Story 4.9", async () => {
-    get.mockResolvedValue(ok({ ...inReview, status: "approved" }));
+  it("opens an approved case editable under the banner, with no Approva, Aggiorna or Scarta while nothing is pending (Story 4.9)", async () => {
+    get.mockResolvedValue(ok({ ...inReview, status: "approved", approvedRevisionId: revision.id }));
+    getEditableRevision.mockResolvedValue(ok({ ...revision, status: "approved" }));
     const html = await render();
     expect(html).toContain('data-status="approved"');
-    expect(html).toContain('data-editable="false"');
+    expect(html).toContain('data-editable="true"');
+    expect(html).toContain(dict.configurator.approvedEdit.banner);
+    expect(html).not.toContain(dict.configurator.approvedEdit.update);
+    expect(html).not.toContain(dict.configurator.approvedEdit.discard);
+    expect(html).not.toContain(`>${dict.configurator.approve}</button>`);
+  });
+
+  it("reopens an approved case with its pending copy: the copy's edits, Aggiorna and Scarta (Story 4.9)", async () => {
+    const COPY = "dddddddd-0000-4000-8000-000000000002";
+    get.mockResolvedValue(ok({ ...inReview, status: "approved", approvedRevisionId: revision.id, headRevisionId: COPY }));
+    const doc = caseHistoryV2(FORMAT_IDS);
+    doc.formats.presentazione_16_9!.pages[0]!.name = "Copertina corretta";
+    getEditableRevision.mockResolvedValue(ok({ ...revision, id: COPY, status: "working", doc }));
+    const html = await render();
+    expect(html).toContain('data-editable="true"');
+    expect(html).toContain("1 · Copertina corretta");
+    expect(html).toContain(dict.configurator.approvedEdit.banner);
+    expect(html).toContain(dict.configurator.approvedEdit.update);
+    expect(html).toContain(dict.configurator.approvedEdit.discard);
+  });
+
+  it("keeps an approved case read-only when its head is neither its approved revision nor a working copy", async () => {
+    get.mockResolvedValue(ok({ ...inReview, status: "approved", approvedRevisionId: "dddddddd-0000-4000-8000-000000000009" }));
+    getEditableRevision.mockResolvedValue(ok({ ...revision, status: "approved" }));
+    expect(await render()).toContain('data-editable="false"');
   });
 
   it("lets the working head of an In revisione case be edited, and nothing else (Story 4.3a)", async () => {

@@ -1,9 +1,9 @@
 "use client";
 
-import { PanelLeft, PanelRight, TriangleAlert } from "lucide-react";
+import { BadgeCheck, PanelLeft, PanelRight, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
+import { DANGER_ACTION, PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type { ThemeChoice } from "@/app/_lib/theme";
 import {
@@ -82,7 +82,7 @@ import { StatusMessage, useStatusMessage } from "./status-message";
 import { ICON_BUTTON, SOON_ID } from "./styles";
 import { isOwnText, textElementAt, withGroupAlign, withText, withTextSettings, type TextSettings } from "./text-editing";
 import { TopBar, type ConfiguratorHeader } from "./top-bar";
-import { useDocument, type EditedRevision, type Formats, type SaveInput } from "./use-document";
+import { useDocument, type EditedRevision, type ForkInput, type ForkResult, type Formats, type SaveInput } from "./use-document";
 
 export type { EditableFields, FieldActions, FieldOptions } from "./bound-fields";
 
@@ -128,8 +128,20 @@ export interface ConfiguratorProps {
     expectedHeadVersion: number;
     overflow: Record<string, boolean>;
   }) => Promise<ActionResult<{ waiting: boolean }>>;
-  /** The case's `head_version` as read: approval's compare-and-set; undefined: no approval. */
+  /** The case's `head_version` as read: approval's (and Story 4.9's fork's) compare-and-set; undefined: no approval. */
   headVersion?: number;
+  /** Story 4.9: forks an Approvato case's approved revision before its first save (`revision.fork`). */
+  onFork?: (input: ForkInput) => Promise<ActionResult<ForkResult>>;
+  /** Story 4.9: **Aggiorna la versione approvata**, with Approva's input, on the copy. */
+  onUpdateApproved?: (input: {
+    caseId: string;
+    revisionId: string;
+    expectedRevisionVersion: number;
+    expectedHeadVersion: number;
+    overflow: Record<string, boolean>;
+  }) => Promise<ActionResult<void>>;
+  /** Story 4.9: **Scarta le modifiche**, the copy dropped. */
+  onDiscard?: (input: { caseId: string; revisionId: string; expectedHeadVersion: number }) => Promise<ActionResult<void>>;
   /** The client's files (ids and names): a page may show them, so they count as present (Story 4.8). */
   clientFiles?: readonly { id: string; name: string }[];
   /** The render assets of files listed after the page loaded (Story 4.5b): a new upload can be drawn once its rendition is ready. */
@@ -157,6 +169,8 @@ const typing = (target: EventTarget | null) =>
 
 /** A stable empty list, so the default keeps its identity across renders. */
 const NO_CLIENT_FILES: readonly { id: string; name: string }[] = [];
+/** Story 4.9: refusals of Aggiorna or Scarta that mean the case moved on meanwhile: the page reads it again. */
+const STALE_COPY_CODES = new Set(["STALE_REVISION", "STALE_HEAD", "CASE_NOT_APPROVABLE", "CASE_NOT_EDITABLE", "REVISION_NOT_WRITABLE", "REVISION_WRITE_FAILED", "NOT_FOUND"]);
 /** A stable empty list of client media, likewise. */
 const NO_CLIENT_MEDIA: readonly ListedAsset[] = [];
 
@@ -206,6 +220,13 @@ const NO_CLIENT_MEDIA: readonly ListedAsset[] = [];
  * end); an element dragged moves there, out of its Testi group or row; "⠿ Sposta", or a
  * block's only element, swaps its block with the one it's dropped on, or moves it to the
  * end of another page. Each drop is one undo step; a refused one says why and changes nothing.
+ *
+ * An Approvato case (Story 4.9) is edited under a banner: the first save forks a working copy
+ * of the approved revision (`onFork`) and every edit stages there, while the case page, the
+ * library and the exports keep the approved version. With a copy pending the top bar offers
+ * **Scarta le modifiche** and **Aggiorna la versione approvata**, each after a dialog; Aggiorna
+ * follows Approva's rules (no overflow, no missing file, else it names what's left). Client
+ * and case fields stay read-only there: they live on the records and can't be staged.
  */
 export function Configurator({
   header,
@@ -226,6 +247,9 @@ export function Configurator({
   onRenderAssets,
   onApprove,
   headVersion,
+  onFork,
+  onUpdateApproved,
+  onDiscard,
   clientFiles = NO_CLIENT_FILES,
   fields,
   fieldOptions,
@@ -240,13 +264,20 @@ export function Configurator({
     initial: initial as Formats,
     save: onSave,
     onStale: () => router.refresh(),
+    fork: onFork,
+    headVersion,
   });
   const formats = doc.formats;
-  const editable = revision !== null && revision.editable && !trial;
+  /** Story 4.9: an Approvato case, edited on a copy that goes online only through Aggiorna. */
+  const approvedCase = header.status === "approved";
+  // An approved revision is edited only when its first save can fork.
+  const editable = revision !== null && revision.editable && !trial && (revision.fork !== true || (onFork !== undefined && headVersion !== undefined));
+  /** Story 4.9: an approved case's working copy exists (its first save forked, or it was pending when the page loaded). */
+  const copyPending = approvedCase && editable && !doc.forkPending;
   /** The text being typed in; a bound one (Story 4.3d) with its editor and stored words. */
   const [editing, setEditing] = useState<{ pageKey: string; elementId: string; bound?: string; editor?: TypedEditor } | null>(null);
-  /** Client and case fields can be changed here (Story 4.3d). */
-  const fieldsOn = editable && fields !== undefined && fieldOptions !== undefined && fieldActions !== undefined;
+  /** Client and case fields can be changed here (Story 4.3d); never on an approved case (Story 4.9: they can't be staged). */
+  const fieldsOn = editable && !approvedCase && fields !== undefined && fieldOptions !== undefined && fieldActions !== undefined;
   /**
    * A field change shown at once, while it saves and until the page reloads the bound values:
    * kept only while the loaded values and fields are those it was made on.
@@ -919,7 +950,9 @@ export function Configurator({
     [doc, editable, formatId, formats],
   );
 
-  const canApprove = editable && onApprove !== undefined && headVersion !== undefined;
+  const canApprove = editable && !approvedCase && onApprove !== undefined && headVersion !== undefined;
+  /** Story 4.9: Aggiorna and Scarta, only while the head differs from the approved revision. */
+  const canUpdate = copyPending && onUpdateApproved !== undefined && onDiscard !== undefined;
   /** The overflow report measures behind typing, so a burst of edits isn't re-measured key by key. */
   const measuredFormats = useDeferredValue(formats);
   /** Each format's first overflowing page, measured off screen (Story 4.8), with the pages it was measured on. */
@@ -935,6 +968,9 @@ export function Configurator({
       : [];
   const [confirmApproval, setConfirmApproval] = useState(false);
   const [approving, setApproving] = useState(false);
+  /** Story 4.9: which confirm dialog shows, and whether its call runs. */
+  const [confirmCopy, setConfirmCopy] = useState<"update" | "discard" | null>(null);
+  const [copyBusy, setCopyBusy] = useState(false);
 
   /** What still stops approval, in words: the first overflowing page, else the first missing file; null when clear. */
   const approvalBlocker = (() => {
@@ -1000,6 +1036,83 @@ export function Configurator({
       if (!leaving) setApproving(false);
     }
   }, [caseId, clientFiles, doc, files, formats, headVersion, onApprove, overflowReport, revision, router, say]);
+
+  /**
+   * **Aggiorna la versione approvata**, confirmed (Story 4.9): saves what's pending, then runs
+   * Approva's checks on the copy, which becomes the approved version. The case stays here; the
+   * next edit forks again.
+   */
+  const updateApproved = useCallback(async () => {
+    const copyId = doc.revisionId();
+    const head = doc.headVersion();
+    if (onUpdateApproved === undefined || copyId === undefined || head === undefined || overflowReport === null) return;
+    const u = it.configurator.approvedEdit;
+    setCopyBusy(true);
+    try {
+      if (!(await doc.settle())) {
+        setConfirmCopy(null);
+        say(u.notSaved);
+        return;
+      }
+      const result = await onUpdateApproved({
+        caseId,
+        revisionId: doc.revisionId() ?? copyId,
+        expectedRevisionVersion: doc.version(),
+        expectedHeadVersion: doc.headVersion() ?? head,
+        // 0 (not measured) counts as not cleared.
+        overflow: Object.fromEntries(FORMAT_IDS.map((id) => [id, overflowReport[id] !== null])),
+      });
+      setConfirmCopy(null);
+      if (result.ok) {
+        doc.approved();
+        say(u.updated);
+        router.refresh();
+        return;
+      }
+      const code = result.error.code;
+      const ids = result.error.assetIds ?? [];
+      if (code === "MATERIAL_MISSING" && ids.length > 0) setServerMissingFor({ formats, files, clientFiles, ids });
+      else if (code === "OVERFLOW_NOT_CLEARED") say(it.configurator.approval.overflowServer);
+      else if (STALE_COPY_CODES.has(code)) {
+        say(it.configurator.approval.stale);
+        router.refresh();
+      } else say(u.updateFailed);
+    } catch {
+      setConfirmCopy(null);
+      say(u.updateFailed);
+    } finally {
+      setCopyBusy(false);
+    }
+  }, [caseId, clientFiles, doc, files, formats, onUpdateApproved, overflowReport, router, say]);
+
+  /** **Scarta le modifiche**, confirmed (Story 4.9): the copy is dropped and the page shows the approved version again. */
+  const discardCopy = useCallback(async () => {
+    const copyId = doc.revisionId();
+    const head = doc.headVersion();
+    if (onDiscard === undefined || copyId === undefined || head === undefined) return;
+    const u = it.configurator.approvedEdit;
+    setCopyBusy(true);
+    let leaving = false;
+    try {
+      // A save in flight lands first, so nothing reaches the copy after it is dropped.
+      await doc.settle();
+      const result = await onDiscard({ caseId, revisionId: doc.revisionId() ?? copyId, expectedHeadVersion: doc.headVersion() ?? head });
+      setConfirmCopy(null);
+      if (result.ok || STALE_COPY_CODES.has(result.error.code)) {
+        if (!result.ok) say(it.configurator.approval.stale);
+        // The page reads the head again: the approved version, in a fresh configurator.
+        leaving = result.ok;
+        router.refresh();
+        return;
+      }
+      say(u.discardFailed);
+    } catch {
+      setConfirmCopy(null);
+      say(u.discardFailed);
+    } finally {
+      if (!leaving) setCopyBusy(false);
+    }
+  }, [caseId, doc, onDiscard, router, say]);
 
   /** Removes the selected element or block; false when there is nothing to remove. */
   const removeSelected = useCallback(() => {
@@ -1145,10 +1258,48 @@ export function Configurator({
               ? { blocker: approvalBlocker, pending: approving, onApprove: () => setConfirmApproval(true) }
               : undefined
           }
+          approvedCase={approvedCase}
+          update={
+            canUpdate
+              ? { blocker: approvalBlocker, pending: copyBusy, onUpdate: () => setConfirmCopy("update"), onDiscard: () => setConfirmCopy("discard") }
+              : undefined
+          }
         />
+        {(canApprove || canUpdate) && <OverflowReport template={template} formats={measuredFormats} assets={assets} values={values} onReport={onOverflowReport} />}
+        {canUpdate && (
+          <Dialog
+            open={confirmCopy !== null}
+            onClose={() => {
+              if (!copyBusy) setConfirmCopy(null);
+            }}
+            title={confirmCopy === "discard" ? it.configurator.approvedEdit.discardTitle : it.configurator.approvedEdit.updateTitle}
+            description={confirmCopy === "discard" ? it.configurator.approvedEdit.discardDescription : it.configurator.approvedEdit.updateDescription}
+            actions={
+              <>
+                <button type="button" data-autofocus disabled={copyBusy} onClick={() => setConfirmCopy(null)} className={cn(SECONDARY_ACTION, "h-9 px-4")}>
+                  {it.configurator.approvedEdit.cancel}
+                </button>
+                {confirmCopy === "discard" ? (
+                  <button type="button" disabled={copyBusy} onClick={() => void discardCopy()} className={cn(DANGER_ACTION, "disabled:opacity-60")}>
+                    {it.configurator.approvedEdit.discardConfirm}
+                  </button>
+                ) : (
+                  <button type="button" disabled={copyBusy} onClick={() => void updateApproved()} className={cn(PRIMARY_ACTION, "disabled:opacity-60")}>
+                    {it.configurator.approvedEdit.updateConfirm}
+                  </button>
+                )}
+              </>
+            }
+          />
+        )}
+        {approvedCase && editable && (
+          <p className="flex shrink-0 items-center justify-center gap-2 border-b border-border bg-surface-raised px-4 py-2 font-label text-[13px] font-medium text-foreground">
+            <BadgeCheck aria-hidden="true" className="size-4 shrink-0 text-foreground-muted" />
+            {it.configurator.approvedEdit.banner}
+          </p>
+        )}
         {canApprove && (
           <>
-            <OverflowReport template={template} formats={measuredFormats} assets={assets} values={values} onReport={onOverflowReport} />
             <Dialog
               open={confirmApproval}
               onClose={() => {

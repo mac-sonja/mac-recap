@@ -2,6 +2,9 @@ import type { Actor } from "@/modules/access";
 import {
   approveInputSchema,
   createWorkingRevisionInputSchema,
+  discardHeadInputSchema,
+  forkHeadInputSchema,
+  type ForkedHead,
   revisionSubjectSchema,
   saveRevisionDocInputSchema,
   type Revision,
@@ -149,7 +152,12 @@ async function allowedAssetIds(deps: SaveRevisionDocDeps, caseId: string): Promi
   const owner = await deps.cases.findById(caseId);
   if (!owner.ok) return owner;
   if (owner.value === null) return err({ code: "NOT_FOUND", message: "No case study with this id.", details: { caseId } });
-  const [ofCase, ofClient] = await Promise.all([deps.caseAssetIds(caseId), deps.clients.listAssets(owner.value.client.id)]);
+  return assetsOfCase(deps, caseId, owner.value.client.id);
+}
+
+/** The case's live files and its client `clientId`'s files, lowercased. */
+async function assetsOfCase(deps: SaveRevisionDocDeps, caseId: string, clientId: string): Promise<Result<Set<string>>> {
+  const [ofCase, ofClient] = await Promise.all([deps.caseAssetIds(caseId), deps.clients.listAssets(clientId)]);
   if (!ofCase.ok) return ofCase;
   if (!ofClient.ok) return ofClient;
   return ok(new Set([...ofCase.value, ...ofClient.value.map((asset) => asset.id)].map((id) => id.toLowerCase())));
@@ -166,7 +174,8 @@ async function allowedAssetIds(deps: SaveRevisionDocDeps, caseId: string): Promi
  * once their file is deleted, so the document stays editable (an undo or Pagine di default
  * may bring a generated one back); approval reports them (`MATERIAL_MISSING`). The
  * asset lists are read only when something is added. The caller has authorized the actor
- * to `edit`; the database checks the case is `in_review`.
+ * to `edit`; the database checks the case is `in_review`, or approved with a working copy
+ * as its head (Story 4.9: the approved revision itself is never written).
  */
 export function makeSaveRevisionDoc(deps: SaveRevisionDocDeps) {
   return async function saveRevisionDoc(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
@@ -216,6 +225,10 @@ export function makeSaveRevisionDoc(deps: SaveRevisionDocDeps) {
  * `approved_revision_id` and the events (`STALE_REVISION`, `STALE_HEAD`,
  * `CASE_NOT_APPROVABLE`, `REVISION_NOT_WRITABLE` from the database). The caller has
  * authorized the actor to `approve`.
+ *
+ * Story 4.9: on an approved case the same checks run on its working copy (the head), which
+ * then becomes the approved revision while the previous one is superseded (**Aggiorna la
+ * versione approvata**); the case stays approved, with no path back to Da approvare.
  */
 export function makeApprove(deps: SaveRevisionDocDeps) {
   return async function approve(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
@@ -241,15 +254,55 @@ export function makeApprove(deps: SaveRevisionDocDeps) {
       return err({ code: "OVERFLOW_NOT_CLEARED", message: "A format overflows, or was not measured.", details: { revisionId, formats: notCleared } });
     }
 
-    const allowed = await allowedAssetIds(deps, caseId);
+    const owner = await deps.cases.findById(caseId);
+    if (!owner.ok) return owner;
+    if (owner.value === null) return err({ code: "NOT_FOUND", message: "No case study with this id.", details: { caseId } });
+    const allowed = await assetsOfCase(deps, caseId, owner.value.client.id);
     if (!allowed.ok) return allowed;
     const missing = [...referencedAssetIds(current.value.doc)].filter((id) => !allowed.value.has(id));
     if (missing.length > 0) {
       return err({ code: "MATERIAL_MISSING", message: "The revision references a file that is no longer there.", details: { revisionId, assetIds: missing.slice(0, 10) } });
     }
 
-    const approved = await deps.revisions.approve({ caseId, revisionId, expectedRevisionVersion, expectedHeadVersion, actorId: actor.id });
+    // Approvato is terminal: an approved case's copy replaces its approved version (Story 4.9), the case stays approved.
+    const approval = { caseId, revisionId, expectedRevisionVersion, expectedHeadVersion, actorId: actor.id };
+    const approved = owner.value.status === "approved" ? await deps.revisions.updateApproved(approval) : await deps.revisions.approve(approval);
     if (!approved.ok) return approved;
     return upgraded(approved.value);
+  };
+}
+
+/**
+ * Forks the head of an approved case (Story 4.9): the first edit's working copy of the
+ * approved revision, made the head by compare-and-set on `headVersion`; or the copy that
+ * already exists, with nothing written (idempotent). Live reads keep returning the approved
+ * revision. Returns the copy's id and `version` and the case's `headVersion` after the call.
+ * The caller has authorized the actor to `edit`. Errors: `INVALID_INPUT`, then the
+ * repository's (`NOT_FOUND`, `CASE_NOT_EDITABLE`, `REVISION_NOT_WRITABLE`, `STALE_HEAD`).
+ */
+export function makeForkHead(deps: { revisions: RevisionRepository }) {
+  return async function forkHead(actor: Actor, input: unknown): Promise<Result<ForkedHead>> {
+    const parsed = parseInput(forkHeadInputSchema, input);
+    if (!parsed.ok) return parsed;
+    const forked = await deps.revisions.forkHead({ ...parsed.value, actorId: actor.id });
+    if (!forked.ok) return forked;
+    return ok({ revisionId: forked.value.revision.id, version: forked.value.revision.version, headVersion: forked.value.headVersion });
+  };
+}
+
+/**
+ * Discards an approved case's working copy (Story 4.9): the copy `superseded` and the head
+ * back on the approved revision, by compare-and-set on `headVersion`. The case stays
+ * approved. Returns the approved revision. The caller has authorized the actor to
+ * `discard`. Errors: `INVALID_INPUT`, then the repository's (`NOT_FOUND`, `STALE_HEAD`,
+ * `CASE_NOT_EDITABLE`, `REVISION_NOT_WRITABLE`).
+ */
+export function makeDiscardHead(deps: { revisions: RevisionRepository }) {
+  return async function discardHead(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+    const parsed = parseInput(discardHeadInputSchema, input);
+    if (!parsed.ok) return parsed;
+    const discarded = await deps.revisions.discardHead({ ...parsed.value, actorId: actor.id });
+    if (!discarded.ok) return discarded;
+    return upgraded(discarded.value);
   };
 }

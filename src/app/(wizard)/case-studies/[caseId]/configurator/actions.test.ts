@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { err, ok } from "@/shared/result";
 
-const { getActor, saveRevisionDocUseCase, approveUseCase, updateCaseFieldsUseCase, listCases, liveAssetIds, listAssets, getRendition, getCase, saveResultsUseCase, saveTestimonialUseCase, listClientMaterial, getClientRendition } = vi.hoisted(() => ({
+const { getActor, saveRevisionDocUseCase, approveUseCase, forkHeadUseCase, discardHeadUseCase, updateCaseFieldsUseCase, listCases, liveAssetIds, listAssets, getRendition, getCase, saveResultsUseCase, saveTestimonialUseCase, listClientMaterial, getClientRendition } = vi.hoisted(() => ({
   listClientMaterial: vi.fn(),
   getClientRendition: vi.fn(),
   getActor: vi.fn(),
@@ -12,6 +12,8 @@ const { getActor, saveRevisionDocUseCase, approveUseCase, updateCaseFieldsUseCas
   updateCaseFieldsUseCase: vi.fn(),
   saveRevisionDocUseCase: vi.fn(),
   approveUseCase: vi.fn(),
+  forkHeadUseCase: vi.fn(),
+  discardHeadUseCase: vi.fn(),
   listCases: vi.fn(),
   liveAssetIds: vi.fn(),
   listAssets: vi.fn(),
@@ -23,10 +25,11 @@ vi.mock("@/modules/access", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/modules/access")>()),
   getActor,
 }));
-vi.mock("@/modules/case-study", () => ({ saveRevisionDoc: saveRevisionDocUseCase, approve: approveUseCase, list: listCases, updateCaseFields: updateCaseFieldsUseCase, get: getCase, listClientMaterial }));
+vi.mock("@/modules/case-study", () => ({ saveRevisionDoc: saveRevisionDocUseCase, approve: approveUseCase, forkHead: forkHeadUseCase, discardHead: discardHeadUseCase, list: listCases, updateCaseFields: updateCaseFieldsUseCase, get: getCase, listClientMaterial }));
 vi.mock("@/modules/material", () => ({ liveAssetIds, listAssets, getRendition, getClientRendition, saveCaseResults: saveResultsUseCase, saveCaseTestimonial: saveTestimonialUseCase }));
 
-const { approveCase, getRenderAssets, saveCaseResults, saveCaseTestimonial, saveRevisionDoc, updateCaseFields } = await import("./actions");
+const { approveCase, discardCaseChanges, forkCaseHead, getRenderAssets, saveCaseResults, saveCaseTestimonial, saveRevisionDoc, updateApprovedVersion, updateCaseFields } =
+  await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({ id: "00000000-0000-4000-8000-000000000002", email: "a@b.it", displayName: "A", role });
 const input = { caseId: "aaaaaaaa-0000-4000-8000-000000000001", revisionId: "bbbbbbbb-0000-4000-8000-000000000001", doc: {}, expectedVersion: 2 };
@@ -149,6 +152,16 @@ describe("getRenderAssets", () => {
 describe("approveCase (Story 4.8)", () => {
   const approval = { caseId: input.caseId, revisionId: input.revisionId, expectedRevisionVersion: 3, expectedHeadVersion: 2, overflow: { presentazione_16_9: false } };
 
+  beforeEach(() => {
+    getCase.mockResolvedValue(ok({ id: input.caseId, status: "in_review" }));
+  });
+
+  it("never approves an approved case again (its copy is updated through updateApprovedVersion, Story 4.9)", async () => {
+    getCase.mockResolvedValue(ok({ id: input.caseId, status: "approved" }));
+    expect(await approveCase(approval)).toMatchObject({ ok: false, status: 409, error: { code: "CASE_NOT_APPROVABLE" } });
+    expect(approveUseCase).not.toHaveBeenCalled();
+  });
+
   it("approves with the actor and the case's live files, and says whether other cases wait", async () => {
     approveUseCase.mockResolvedValue(ok({ id: input.revisionId, status: "approved" }));
     listCases.mockResolvedValue(ok([{ id: "x" }]));
@@ -175,6 +188,67 @@ describe("approveCase (Story 4.8)", () => {
     approveUseCase.mockResolvedValue(err({ code: "STALE_HEAD", message: "m" }));
     expect(await approveCase(approval)).toMatchObject({ ok: false, status: 409, error: { code: "STALE_HEAD" } });
     expect(listCases).not.toHaveBeenCalled();
+  });
+});
+
+describe("editing an approved case (Story 4.9)", () => {
+  const caseId = input.caseId;
+  const approval = { caseId, revisionId: input.revisionId, expectedRevisionVersion: 3, expectedHeadVersion: 2, overflow: { presentazione_16_9: false } };
+
+  beforeEach(() => {
+    getCase.mockResolvedValue(ok({ id: caseId, status: "approved" }));
+  });
+
+  it("forkCaseHead forks with the actor and returns the copy's id, version and head version", async () => {
+    forkHeadUseCase.mockResolvedValue(ok({ revisionId: input.revisionId, version: 0, headVersion: 3 }));
+    expect(await forkCaseHead({ caseId, expectedHeadVersion: 2 })).toEqual({ ok: true, value: { revisionId: input.revisionId, version: 0, headVersion: 3 } });
+    expect(forkHeadUseCase).toHaveBeenCalledWith(actor("owner_designer"), { caseId, expectedHeadVersion: 2 });
+    forkHeadUseCase.mockResolvedValue(err({ code: "STALE_HEAD", message: "m" }));
+    expect(await forkCaseHead({ caseId, expectedHeadVersion: 2 })).toMatchObject({ ok: false, status: 409, error: { code: "STALE_HEAD" } });
+  });
+
+  it("updateApprovedVersion runs approve's checks on the copy, with the actor and the case's live files", async () => {
+    approveUseCase.mockResolvedValue(ok({ id: input.revisionId, status: "approved" }));
+    expect(await updateApprovedVersion(approval)).toEqual({ ok: true, value: undefined });
+    expect(approveUseCase).toHaveBeenCalledWith(actor("owner_designer"), approval, liveAssetIds);
+    expect(listCases).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["OVERFLOW_NOT_CLEARED", 400],
+    ["MATERIAL_MISSING", 400],
+    ["STALE_REVISION", 409],
+    ["STALE_HEAD", 409],
+  ] as const)("updateApprovedVersion maps %s to %i", async (code, status) => {
+    approveUseCase.mockResolvedValue(err({ code, message: "m", details: { assetIds: ["a"] } }));
+    expect(await updateApprovedVersion(approval)).toMatchObject({ ok: false, status, error: { code } });
+  });
+
+  it("updateApprovedVersion refuses a case that isn't approved (Da approvare is approved through Approva)", async () => {
+    getCase.mockResolvedValue(ok({ id: caseId, status: "in_review" }));
+    expect(await updateApprovedVersion(approval)).toMatchObject({ ok: false, status: 409, error: { code: "CASE_NOT_APPROVABLE" } });
+    getCase.mockResolvedValue(err({ code: "NOT_FOUND", message: "m" }));
+    expect(await updateApprovedVersion(approval)).toMatchObject({ ok: false, status: 404 });
+    expect(approveUseCase).not.toHaveBeenCalled();
+  });
+
+  it("discardCaseChanges discards with the actor and returns nothing else", async () => {
+    discardHeadUseCase.mockResolvedValue(ok({ id: "x", status: "approved" }));
+    const discard = { caseId, revisionId: input.revisionId, expectedHeadVersion: 3 };
+    expect(await discardCaseChanges(discard)).toEqual({ ok: true, value: undefined });
+    expect(discardHeadUseCase).toHaveBeenCalledWith(actor("owner_designer"), discard);
+    discardHeadUseCase.mockResolvedValue(err({ code: "STALE_HEAD", message: "m" }));
+    expect(await discardCaseChanges(discard)).toMatchObject({ ok: false, status: 409, error: { code: "STALE_HEAD" } });
+  });
+
+  it("refuses account/sales/social with 403 before anything", async () => {
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
+    expect(await forkCaseHead({ caseId, expectedHeadVersion: 2 })).toMatchObject({ ok: false, status: 403 });
+    expect(await updateApprovedVersion(approval)).toMatchObject({ ok: false, status: 403 });
+    expect(await discardCaseChanges({ caseId })).toMatchObject({ ok: false, status: 403 });
+    expect(forkHeadUseCase).not.toHaveBeenCalled();
+    expect(approveUseCase).not.toHaveBeenCalled();
+    expect(discardHeadUseCase).not.toHaveBeenCalled();
   });
 });
 
