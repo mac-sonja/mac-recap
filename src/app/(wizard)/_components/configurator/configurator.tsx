@@ -370,7 +370,8 @@ export function Configurator({
   }, [leftOpen, rightOpen]);
 
   /** The Animazione dialog (Story 4.5c): a new animation for a block, or an existing one to change. */
-  const [animationDialog, setAnimationDialog] = useState<{ pageKey: string; blockId: string; elementId?: string } | null>(null);
+  /** `before`: a dropped Animazione goes before that element (Story 4.3e); else at the block's end. */
+  const [animationDialog, setAnimationDialog] = useState<{ pageKey: string; blockId: string; elementId?: string; before?: string } | null>(null);
 
   /** A double-click (or Enter) on an element: a text with its own words opens for typing; any other text says it can't yet; an animation opens its dialog. */
   const requestEdit = useCallback(
@@ -606,7 +607,7 @@ export function Configurator({
       if (!editable || target === null) return;
       const current = formats[formatId];
       if (target.elementId === undefined) {
-        applyPageEdit(insertAnimation(current, target.pageKey, target.blockId, choice, newId));
+        applyPageEdit(insertAnimation(current, target.pageKey, target.blockId, choice, newId, target.before));
         return;
       }
       const next = withAnimation(current, target.pageKey, target.elementId, { animation: choice.animation, assetIds: choice.assetIds });
@@ -659,7 +660,11 @@ export function Configurator({
           else if (into.elements.length >= MAX_ELEMENTS_PER_BLOCK) say(it.configurator.edit.blockFull);
           else {
             setSelection({ pageKey: target.pageKey, blockId: into.blockId });
-            setAnimationDialog({ pageKey: target.pageKey, blockId: into.blockId });
+            setAnimationDialog({
+              pageKey: target.pageKey,
+              blockId: into.blockId,
+              ...(target.beforeElementId === undefined ? {} : { before: target.beforeElementId }),
+            });
           }
         }
         return;

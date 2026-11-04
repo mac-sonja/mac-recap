@@ -183,14 +183,25 @@ export interface AnimationChoice {
   assetIds: readonly string[];
 }
 
-/** A new animation (C35) at the end of block `blockId` of page `pageKey`: Adatta, 100 %; selected. */
-export function insertAnimation(pages: readonly Page[], pageKey: string, blockId: string, choice: AnimationChoice, newId: () => string): PageEdit {
+/**
+ * A new animation (C35) in block `blockId` of page `pageKey`: Adatta, 100 %; selected. It goes
+ * before the top-level element holding `beforeElementId` (a drop, Story 4.3e), else at the end.
+ */
+export function insertAnimation(
+  pages: readonly Page[],
+  pageKey: string,
+  blockId: string,
+  choice: AnimationChoice,
+  newId: () => string,
+  beforeElementId?: string,
+): PageEdit {
   const index = pages.findIndex((p) => p.pageKey === pageKey);
   const block = index < 0 ? undefined : pages[index]!.blocks.find((b) => b.blockId === blockId);
   if (block === undefined) return refused("noBlock");
   if (block.elements.length >= MAX_ELEMENTS_PER_BLOCK) return refused("blockFull");
   const element: AnimationElement = { elementId: newId(), type: "animation", animation: choice.animation, assetIds: [...choice.assetIds], fit: "fit" };
-  const next = withPage(pages, index, (page) => page.blocks.find((b) => b.blockId === blockId)!.elements.push(element));
+  const pos = dropIndex(block.elements, beforeElementId);
+  const next = withPage(pages, index, (page) => page.blocks.find((b) => b.blockId === blockId)!.elements.splice(pos, 0, element));
   return { ok: true, pages: next, selection: { pageKey, blockId, elementId: element.elementId } };
 }
 

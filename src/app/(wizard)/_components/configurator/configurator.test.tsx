@@ -3856,6 +3856,134 @@ describe("Configurator drag-and-drop on the canvas (Story 4.3e)", () => {
     }
   });
 
+  it("Animazione dropped on another block opens its dialog there; Inserisci puts it at the dropped place, one undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    fireEvent.click(blockNode(B1));
+    dragTo(elementButton(dict.configurator.elements.animation), elementNode(T3));
+    const dialog = () => document.querySelector<HTMLElement>("dialog");
+    expect(dialog()).not.toBeNull();
+    fireEvent.click(dialog()!.querySelector<HTMLElement>(`[data-pick="${IMAGE}"]`)!);
+    fireEvent.click(button(dict.configurator.animationDialog.insert, dialog()!));
+    await settle();
+    const pages = savedPages(onSave);
+    expect(pages[0]!.blocks[1]!.elements.map((e) => e.type)).toEqual(["text_group", "animation", "text"]);
+    expect(elementIds(pages, 0, 0)).toEqual([T1, T2]);
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    undo();
+    await settle();
+    expect(savedPages(onSave)).toEqual(fixture().presentazione_16_9);
+  });
+
+  it("Animazione dropped on a block selects that block, though another was selected", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    fireEvent.click(blockNode(B1));
+    dragTo(elementButton(dict.configurator.elements.animation), elementNode(T3));
+    fireEvent.click(button(dict.configurator.animationDialog.cancel, document.querySelector<HTMLElement>("dialog")!));
+    // The selected block is the one dropped on: Backspace removes it.
+    fireEvent.keyDown(document.body, { key: "Backspace" });
+    await settle();
+    expect(savedPages(onSave)[0]!.blocks.map((b) => b.blockId)).toEqual([B1]);
+  });
+
+  it("Animazione off a block or into a full block says why, opens no dialog and leaves no undo step", async () => {
+    const pages = fixture();
+    pages.presentazione_16_9[1]!.blocks[0]!.elements = Array.from({ length: 30 }, (_, i) => text(`cccccccc-0000-4000-8000-4${String(i).padStart(11, "0")}`));
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    dragTo(elementButton(dict.configurator.elements.animation), pageNode(P1));
+    expect(status().textContent).toBe(dict.configurator.edit.dropOffBlock);
+    dragTo(elementButton(dict.configurator.elements.animation), blockNode(B3));
+    expect(status().textContent).toBe(dict.configurator.edit.blockFull);
+    expect(document.querySelector("dialog")).toBeNull();
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("elements still drag after the page redraws for new assets or bound values", () => {
+    const props = (values: BoundValues, assets: ConfiguratorProps["assets"]): ConfiguratorProps => ({
+      caseId: CASE_ID,
+      revision: { id: REVISION_ID, version: 4, editable: true, kind: "case_history" },
+      onSave: vi.fn(savedOk),
+      header: { name: "Rebrand Lumen", code: "LUM-2026-01", status: "in_review" },
+      back: { href: "/case-studies", label: dict.configurator.back },
+      template: "mac-case@1",
+      formats: fixture(),
+      assets,
+      values,
+      generatedTexts: {},
+      images: [],
+      trial: false,
+      theme: "system",
+      media: MEDIA,
+      mediaRules: MEDIA_RULES,
+    });
+    const first = props(VALUES, {});
+    const { rerender } = render(<Configurator {...first} />);
+    expect(elementNode(T1).getAttribute("draggable")).toBe("true");
+    // As if the renderer had drawn the node afresh, without the attribute.
+    elementNode(T1).removeAttribute("draggable");
+    rerender(<Configurator {...first} assets={{ [IMAGE]: { url: "https://cdn.test/a.webp", kind: "image" } }} />);
+    expect(elementNode(T1).getAttribute("draggable")).toBe("true");
+    elementNode(T1).removeAttribute("draggable");
+    rerender(<Configurator {...first} assets={{ [IMAGE]: { url: "https://cdn.test/a.webp", kind: "image" } }} values={{ ...VALUES, case: { ...VALUES.case, year: 2025 } }} />);
+    expect(elementNode(T1).getAttribute("draggable")).toBe("true");
+  });
+
+  it("a Pagine thumbnail's drag over the canvas changes nothing", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    const data = transfer();
+    data.setData("application/x-mac-page", P2);
+    fireEvent.dragOver(elementNode(T2), { dataTransfer: data });
+    expect(canvas().querySelector('[data-frame="drop"], [data-frame="drop-line"], [data-drop-over]')).toBeNull();
+    fireEvent.drop(elementNode(T2), { dataTransfer: data });
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("a drag from another format changes nothing and leaves no undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    for (const [type, value] of [
+      ["application/x-mac-element", { formatId: "carosello_1_1", pageKey: P1, elementId: T1 }],
+      ["application/x-mac-block", { formatId: "carosello_1_1", pageKey: P1, blockId: B1 }],
+    ] as const) {
+      const data = transfer();
+      data.setData(type, JSON.stringify(value));
+      fireEvent.dragOver(blockNode(B3), { dataTransfer: data });
+      fireEvent.drop(blockNode(B3), { dataTransfer: data });
+    }
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("selects the result: an element moved to another page, a text out of a Testi group, a dropped Blocco", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    const removeSelected = () => fireEvent.keyDown(document.body, { key: "Backspace" });
+    dragTo(elementNode(T1), blockNode(B3));
+    expect(pageNode(P2).querySelector('[data-frame="element"]')).not.toBeNull();
+    expect(pageNode(P1).querySelector('[data-frame="element"]')).toBeNull();
+    removeSelected();
+    await settle();
+    expect(elementIds(savedPages(onSave), 1, 0)).toEqual([ONLY]);
+    dragTo(elementNode(G1), elementNode(T2));
+    removeSelected();
+    await settle();
+    expect(elementIds(savedPages(onSave), 0, 0)).toEqual([T2]);
+    expect(savedPages(onSave)[0]!.blocks[1]!.elements[0]).toMatchObject({ items: [{ elementId: G2 }] });
+    dragTo(elementButton(dict.configurator.elements.block), pageNode(P2));
+    await settle();
+    expect(savedPages(onSave)[1]!.blocks).toHaveLength(2);
+    removeSelected();
+    await settle();
+    expect(savedPages(onSave)[1]!.blocks.map((b) => b.blockId)).toEqual([B3]);
+  });
+
   it("a Media tile still drops as before, ignoring the canvas drag types", async () => {
     const onSave = vi.fn(savedOk);
     setup(false, fixture(), { onSave });

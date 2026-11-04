@@ -625,6 +625,13 @@ describe("insertAnimation and withAnimation (Story 4.5c)", () => {
     expect(() => pageSchema.parse(edit.pages[0])).not.toThrow();
   });
 
+  it("inserts a dropped animation before the element it was dropped on (Story 4.3e)", () => {
+    const edit = insertAnimation(pages(), P, B, { animation: "carousel_01", assetIds: [A1] }, ids(), "dddddddd-0000-4000-8000-000000000023");
+    if (!edit.ok) throw new Error("insert");
+    expect(edit.pages[0]!.blocks[0]!.elements.map((e) => e.type)).toEqual(["animation", "text"]);
+    expect(edit.selection.elementId).toBe(edit.pages[0]!.blocks[0]!.elements[0]!.elementId);
+  });
+
   it("MAX_ANIMATION_MEDIA is the schema's limit", () => {
     const ok = insertAnimation(pages(), P, B, { animation: "wheel_02", assetIds: Array.from({ length: MAX_ANIMATION_MEDIA }, () => A1) }, ids());
     if (!ok.ok) throw new Error("insert");
@@ -903,6 +910,11 @@ describe("drag-and-drop edits (Story 4.3e)", () => {
     expect(edit.selection).toEqual({ pageKey: P2, blockId: B1 });
     expectValid(edit.pages);
     expect(moveBlockToPage(before, { pageKey: P1, blockId: B1 }, P1, F, TEMPLATE)).toEqual({ ok: false, reason: "nothing" });
+    // Off a one-block page: that page is left empty, and the document stays valid.
+    const emptied = ok(moveBlockToPage(before, { pageKey: P2, blockId: B3 }, P1, F, TEMPLATE));
+    expect(emptied.pages[1]!.blocks).toEqual([]);
+    expect(emptied.pages[0]!.blocks.map((b) => b.blockId)).toEqual([B1, B2, B3]);
+    expectValid(emptied.pages);
     const full = pages();
     full[1] = { ...emptyPage(MAX_BLOCKS_PER_PAGE, F), pageKey: P2 };
     expect(moveBlockToPage(full, { pageKey: P1, blockId: B1 }, P2, F, TEMPLATE)).toEqual({ ok: false, reason: "pageFull" });

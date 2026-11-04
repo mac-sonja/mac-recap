@@ -330,7 +330,8 @@ function CanvasPage({
   const boxOf = (node: Element | null | undefined) => (host.current === null || node === null || node === undefined ? null : boxIn(host.current, node));
   const sameBox = (prev: Box | null, box: Box | null) => (prev === null || box === null ? box : sameBoxes([prev], [box]) ? prev : box);
 
-  // Every element of the page drags, but not the text being typed in, nor what holds it.
+  // Every element of the page drags, but not the text being typed in, nor what holds it. Rerun on
+  // everything the renderer draws from: a new rendition or bound value can redraw the element nodes.
   useLayoutEffect(() => {
     const el = host.current;
     if (el === null) return;
@@ -342,7 +343,7 @@ function CanvasPage({
       const typing = editing !== null && (node.dataset.elementId === editing || node.querySelector(`[data-element-id="${editing}"]`) !== null);
       node.setAttribute("draggable", typing ? "false" : "true");
     }
-  }, [drags, editing, page, shown, renderKey, formatId]);
+  }, [drags, editing, page, shown, renderKey, formatId, template, number, assets, values, animateTexts]);
 
   /** A drag starting on an element: the element, or its block when it is the block's only element (mockup `renderItem`). */
   function onDragStart(event: DragEvent<HTMLDivElement>) {

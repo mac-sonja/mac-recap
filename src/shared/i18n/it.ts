@@ -894,7 +894,7 @@ export const it = {
       /** On the selected block. */
       move: "⠿ Sposta",
       /** The grip's hint (Story 4.3e). */
-      moveHint: "Trascina su un altro blocco per scambiarli",
+      moveHint: "Trascina su un altro blocco per scambiarli, o su un’altra pagina per spostarlo",
     },
     /** Section labels, keyed by `PageSection`. */
     sections: {

@@ -96,6 +96,25 @@ Drop index when moving inside the same block: remove first, then insert at the t
 
 ## Review Triage Log
 
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|-------|---------|---------|----------|-------|
+| 1 | gap, blind, edge | Animazione dropped on a block opens its dialog but inserts at the block's end, though the drop line shows a place; no test | medium | `canvasDrop` drops `target.beforeElementId`; `insertAnimation` only appends; the matrix's Elementi row puts a new element before the one under the pointer | patch |
+| 2 | blind | A drop while a text is being typed can move the node under the live editor | false | Starting any drag needs a press elsewhere, which blurs the typed text and ends the edit before the drop | rejected |
+| 3 | blind | A block moved off a one-block page leaves an empty page; untested | low | Valid: `blocks` has no minimum (`document.ts:330`); the page can be deleted or filled; a test is a direct addition | patch (test) |
+| 4 | blind | The grip hint names only the swap | low | The grip also moves a block to another page's end; one-string fix | patch |
+| 5 | blind | Pagine thumbnail over the canvas untested | gap | The page now takes drops whenever drags are on; AC 2 names Pagine | patch (test) |
+| 6 | blind | Cross-format guard untested | gap | `canvasDrop` returns early on another `formatId`; no test drives it | patch (test) |
+| 7 | blind | `canvas-drag.ts` has no unit tests | low | `readDrag`'s malformed and fallback branches only run through the happy path | patch (test) |
+| 8 | blind | Some matrix rows don't assert the selection | low | Cross-page move, group exit and Blocco don't check what's selected afterwards | patch (test) |
+| 9 | blind, edge | Blocco/stale-drag preview and own-page marks depend on `dragging` state | low | Needs a drag the app didn't start (another tab) or a missed dragstart; cosmetic | rejected |
+| 10 | blind | A target that will refuse looks like one that accepts during the drag | low | The spec allows the message after the drop; adding live checks adds branches | rejected |
+| 11 | blind | Element ids in CSS selectors aren't escaped | false | Ids are UUIDs, enforced by the document schema | rejected |
+| 12 | blind | Spec sections empty while in review | false | The workflow fills them at review and finalize | rejected |
+| 13 | blind | No-ops return `refused("nothing")`, not the same array as the Code Map says | low | Behaviour matches the matrix (no change, no undo step); fix would edit this spec | rejected |
+| 14 | gap | `applyPageEdit` maps `offBlock` to the Media message | low | Latent: every canvas path returning `offBlock` goes through `applyDrop` | rejected |
+| 15 | edge | The draggable effect misses `assets` and `values`, so nodes the renderer re-creates lose `draggable` | medium | `canvas.tsx` effect deps are `[drags, editing, page, shown, renderKey, formatId]`; a rendition arriving or a 4.3d field save re-renders the page | patch |
+| 16 | edge | `onDragStart` with no resolvable block | low | Every rendered element sits in a `data-block-id` block | rejected |
+
 ## Verification
 
 **Commands:**
