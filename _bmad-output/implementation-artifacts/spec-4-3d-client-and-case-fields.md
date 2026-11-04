@@ -2,7 +2,7 @@
 title: 'Story 4.3d: client and case fields on the page'
 type: 'feature'
 created: '2026-11-03'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '3afc6f03a4799c16fd83436e0748e4d48c143402'
 route: 'dispatch'
 review_loop_iteration: 0
