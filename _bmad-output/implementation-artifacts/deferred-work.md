@@ -316,3 +316,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-1-library.md`
   summary: Library covers make about five reads per card (live revision, client info, details form, assets, renditions) for up to 24 cards; batch them or cache a cover per approved revision if the library gets slow.
   evidence: Review of 5.1 (blind): accepted at demo scale.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-8-draft-ready-toast.md`
+  summary: Keyboard access to the draft-ready toast before it closes itself (e.g. a shortcut to the notification stack, or no timeout while the stack holds an action), for WCAG 2.2.1.
+  evidence: Review of 3.8 (blind): the toast never takes focus by design and the case stays in the table; adding a shortcut changes the intent.

@@ -2,7 +2,7 @@
 title: 'Story 3.8: tell me when the draft is ready'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'c8bf867976f6746e8622eb9dfd15952d11ef4f02'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -86,6 +86,25 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|-------|---------|---------|----------|-------|
+| 1 | blind, edge | The poll reads every user's `generation_succeeded` since `since` with no limit; `since` is client-supplied and never advances | medium | Grows with tab age; PostgREST `max_rows` can truncate; an old `since` scans the table | patch |
+| 2 | blind | A success before my latest `generate` (a regeneration) still qualifies; so does a case no longer in review | medium | `selectReadyDrafts` doesn't compare the success with the latest `generate` or check status | patch |
+| 3 | blind | A second generation of the same case in one session is silent | low | The frozen intent says one toast per case per session | rejected |
+| 4 | blind, edge, gap | Microsecond DB filter vs millisecond JS filter drops a draft for good | low | Both `.gt("at")` and `Date.parse` compare; direct correction | patch |
+| 5 | blind, edge | Remount across layouts restarts the 10 s timer and re-announces | medium | `remaining` and `announced` live in component state | patch |
+| 6 | blind | Per-toast live regions filled by `setTimeout(0)`; empty "Notifiche" landmark always present | medium | Announcement is a requirement; fresh live regions aren't reliably announced | patch |
+| 7 | blind | No keyboard way to reach a toast before it closes | low | The case stays in the table; changing it changes the intent (no focus taken) | defer |
+| 8 | blind | A toast for the case already on screen | low | Generating screen or its configurator; a pathname check | patch |
+| 9 | blind | Polling continues after 401/403 | low | Every 15 s for the tab's life | patch |
+| 10 | blind | Tool layout test hard-codes "Notifiche" | low | The wizard test uses the dictionary | patch |
+| 11 | blind, edge | Apri closes the toast on a modifier or middle click | low | The page stays; direct correction | patch |
+| 12 | blind | Spec metadata and missing rows | false | The workflow fills them | rejected |
+| 13 | blind | Use-case tests go through a fake calling the domain function | low | The adapter is covered by the DB suite in CI | rejected |
+| 14 | edge | Navigating more often than 15 s restarts the interval, delaying polls | medium | Each mount starts a fresh 15 s wait | patch |
+| 15 | edge | More than 3 new drafts: the extra ones are marked seen but never shown | low | A small change: mark only what's shown | patch |
+| 16 | gap | No test: a poll settling after unmount leaves the draft for the next notifier | gap | Pre-verified | patch (test) |
 
 ## Verification
 
