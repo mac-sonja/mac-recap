@@ -18,8 +18,8 @@ describe("caseDownload (Story 5.3)", () => {
   it("asks the server for the case and format; a pending job is polled by its id", async () => {
     requestCaseExport.mockResolvedValue({ ok: true, value: { status: "pending", jobId: "job-1" } });
     const { onDownload, onPoll } = caseDownload(CASE_ID);
-    expect(await onDownload("carosello_1_1")).toEqual({ kind: "pending", ticket: "job-1" });
-    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, format: "carosello_1_1" });
+    expect(await onDownload(["carosello_1_1"])).toEqual({ kind: "pending", ticket: "job-1" });
+    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, formats: ["carosello_1_1"] });
 
     getCaseExportStatus.mockResolvedValueOnce({ ok: true, value: { status: "pending", jobId: "job-1" } });
     expect(await onPoll("job-1")).toEqual({ kind: "pending" });
@@ -34,7 +34,13 @@ describe("caseDownload (Story 5.3)", () => {
 
   it("hands a reused file over at once", async () => {
     requestCaseExport.mockResolvedValue({ ok: true, value: { status: "ready", exportId: "e", url: "u", fileName: "f.pdf" } });
-    expect(await caseDownload(CASE_ID).onDownload("presentazione_16_9")).toEqual({ kind: "ready", url: "u", fileName: "f.pdf" });
+    expect(await caseDownload(CASE_ID).onDownload(["presentazione_16_9"])).toEqual({ kind: "ready", url: "u", fileName: "f.pdf" });
+  });
+
+  it("asks for several formats in one request (Story 5.4): one ZIP, polled like one file", async () => {
+    requestCaseExport.mockResolvedValue({ ok: true, value: { status: "pending", jobId: "job-2" } });
+    expect(await caseDownload(CASE_ID).onDownload(["presentazione_16_9", "carosello_1_1"])).toEqual({ kind: "pending", ticket: "job-2" });
+    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, formats: ["presentazione_16_9", "carosello_1_1"] });
   });
 
   it.each([
@@ -43,6 +49,6 @@ describe("caseDownload (Story 5.3)", () => {
     ["FORBIDDEN", dict.download.failed],
   ])("turns %s into the dialog's line", async (code, message) => {
     requestCaseExport.mockResolvedValue(refused(code));
-    expect(await caseDownload(CASE_ID).onDownload("presentazione_16_9")).toEqual({ kind: "refused", message });
+    expect(await caseDownload(CASE_ID).onDownload(["presentazione_16_9"])).toEqual({ kind: "refused", message });
   });
 });

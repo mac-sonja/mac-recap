@@ -6,7 +6,9 @@ import * as rendering from "@/modules/rendering/server";
 import type { ExportTicket } from "@/modules/rendering/server";
 
 /**
- * **Scarica** on an approved case (Story 5.3): input `{ caseId, format }`. Reads the
+ * **Scarica** on an approved case (Story 5.3): input `{ caseId, format }`, or
+ * `{ caseId, formats }` (Story 5.4: one format the same, two or more one ZIP of them,
+ * every format checked before anything is enqueued). Reads the
  * case's live approved revision; when the same content was exported before, returns
  * `{ status: "ready", url, fileName }` at once (a signed GET valid 10 minutes, and an
  * `export` case event); otherwise enqueues an `export` job for the worker and returns

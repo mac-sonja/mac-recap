@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { contentHashInput, type ExportFormatId, type ExportPartContent } from "@/modules/rendering/domain/export";
+import { bundleHashInput, contentHashInput, type ExportFormatId, type ExportPartContent } from "@/modules/rendering/domain/export";
+
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
 /**
  * An export's content hash (Story 5.3): the sha256 (64 hex characters) of
@@ -8,5 +10,14 @@ import { contentHashInput, type ExportFormatId, type ExportPartContent } from "@
  * gives a new one, so the next export renders again.
  */
 export function contentHash(parts: readonly ExportPartContent[], format: ExportFormatId): string {
-  return createHash("sha256").update(contentHashInput(parts, format)).digest("hex");
+  return sha256(contentHashInput(parts, format));
+}
+
+/**
+ * A bundle's content hash (Story 5.4): the sha256 of `bundleHashInput`, its formats
+ * (sorted) with their own content hashes, `EXPORT_RENDER_VERSION` and the names of the
+ * files inside (they carry the case's code and name).
+ */
+export function bundleHash(formats: readonly { format: ExportFormatId; contentHash: string }[], entryNames: readonly string[]): string {
+  return sha256(bundleHashInput(formats, entryNames));
 }

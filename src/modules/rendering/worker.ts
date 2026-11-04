@@ -10,7 +10,7 @@ import { createPlaywrightExportBrowser } from "@/modules/rendering/adapters/play
 import { rasteriseSvgLogo } from "@/modules/rendering/adapters/sharp/svg-logo";
 import { createSupabaseExportRepository } from "@/modules/rendering/adapters/supabase/export-repository";
 import { createSupabaseExportStorage } from "@/modules/rendering/adapters/supabase/export-storage";
-import { storeZip } from "@/modules/rendering/adapters/zip/store-zip";
+import { readStoredZip, storeZip } from "@/modules/rendering/adapters/zip/store-zip";
 import { makeExportHandler, type ExportHandlerDeps } from "@/modules/rendering/application/export-handler";
 
 /**
@@ -36,6 +36,7 @@ export function exportHandler(overrides: Partial<ExportHandlerDeps> = {}): JobHa
     fontCss: interFontCss,
     browser: createPlaywrightExportBrowser(),
     zip: storeZip,
+    unzip: readStoredZip,
     ...overrides,
   });
 }

@@ -1,14 +1,16 @@
 import { z } from "zod";
 import type { Actor } from "@/modules/access";
 import { CASE_EXPORTED } from "@/modules/case-study";
-import { notApproved, readExportSource, type ExportSourceDeps } from "@/modules/rendering/application/export-source";
+import { bundleHashOf, notApproved, readExportSources, type ExportSourceDeps } from "@/modules/rendering/application/export-source";
 import {
+  EXPORT_BUNDLE,
   EXPORT_STALE,
-  exportFileName,
   exportStatusInputSchema,
   isExportFormatId,
   notExportable,
+  recordFileName,
   requestExportInputSchema,
+  type ExportFormatId,
   type ExportPayload,
   type ExportRecord,
 } from "@/modules/rendering/domain/export";
@@ -77,7 +79,7 @@ async function deliver(
   caseStudy: { id: string; code: string; name: string },
   record: ExportRecord,
 ): Promise<Result<ExportTicket>> {
-  const fileName = exportFileName(caseStudy.code, caseStudy.name, record.format);
+  const fileName = recordFileName(caseStudy.code, caseStudy.name, record.format);
   const url = await deps.storage.presignDownload(record.path, EXPORT_URL_TTL_SECONDS, fileName);
   if (!url.ok) return url;
   const recorded = await deps.recordEvent(actor, {
@@ -99,8 +101,29 @@ export function makeEnsureExport(deps: Pick<RequestExportDeps, "exports">) {
 }
 
 /**
+ * The formats asked for, in the order given: `format` (Story 5.3) or `formats` (5.4).
+ * Errors: `FORMAT_NOT_EXPORTABLE` (Video), `INVALID_INPUT` naming the field for an id
+ * outside the registry or a repeated one.
+ */
+function formatsOf(input: { format: string } | { formats: string[] }): Result<ExportFormatId[]> {
+  const field = "format" in input ? "format" : "formats";
+  const given = "format" in input ? [input.format] : input.formats;
+  for (const format of given) {
+    const refused = notExportable(format);
+    if (refused !== null) return err(refused);
+  }
+  if (!given.every((f) => isFormatId(f) && isExportFormatId(f)) || new Set(given).size !== given.length) return invalid([field]);
+  return ok(given as ExportFormatId[]);
+}
+
+/**
  * Asks for one format of a case's live approved revision as a file (Story 5.3): input
- * `{ caseId, format }`. Reads the live revision (never a working head), refuses without
+ * `{ caseId, format }`, or `{ caseId, formats }` (Story 5.4) where one format is the
+ * same, and two or more ask for one ZIP of them (a bundle, reused by its own hash: its
+ * formats, sorted, each with its own content hash, `EXPORT_RENDER_VERSION` and the names
+ * of the files inside, which carry the case's code and name; else one `export` job
+ * renders the missing formats and zips them). Every format is checked before anything is
+ * enqueued. Reads the live revision (never a working head), refuses without
  * enqueueing when there is none (`NOT_APPROVED`) or the format has no pages in it
  * (`FORMAT_NOT_IN_REVISION`), reuses a stored export with the same content hash (`ready`,
  * with an `export` case event), and otherwise enqueues one `export` job (`pending`; a
@@ -110,27 +133,28 @@ export function makeEnsureExport(deps: Pick<RequestExportDeps, "exports">) {
  */
 export function makeRequestExport(deps: RequestExportDeps) {
   return async function requestExport(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
-    const parsed = requestExportInputSchema.safeParse(input);
+    const parsed = requestExportInputSchema(input).safeParse(input);
     if (!parsed.success) return invalid(fieldsOf(parsed.error.issues));
-    const { caseId, format } = parsed.data;
-    const refused = notExportable(format);
-    if (refused !== null) return err(refused);
-    if (!isFormatId(format) || !isExportFormatId(format)) return invalid(["format"]);
+    const { caseId } = parsed.data;
+    const formats = formatsOf(parsed.data);
+    if (!formats.ok) return formats;
 
-    const source = await readExportSource(deps, caseId, format);
-    if (!source.ok) return source;
-    const { caseStudy, content, contentHash } = source.value;
+    // Every format's approval and pages are checked before anything is enqueued.
+    const sources = await readExportSources(deps, caseId, formats.value);
+    if (!sources.ok) return sources;
+    const [{ caseStudy, content }] = sources.value;
+    const bundled = sources.value.length > 1 ? sources.value.map((s) => s.format).sort() : [];
+    const hash = bundled.length > 0 ? bundleHashOf(sources.value) : sources.value[0].contentHash;
 
-    const existing = await makeEnsureExport(deps)(contentHash);
+    const existing = await makeEnsureExport(deps)(hash);
     if (!existing.ok) return existing;
     if (existing.value !== null) return deliver(deps, actor, caseStudy, existing.value);
 
-    const job = await deps.enqueue({
-      kind: "export",
-      subjectId: caseStudy.id,
-      inputHash: contentHash,
-      payload: { parts: [content.part], format, requestedBy: actor.id },
-    });
+    const payload: ExportPayload =
+      bundled.length > 0
+        ? { parts: [content.part], format: EXPORT_BUNDLE, formats: bundled, requestedBy: actor.id }
+        : { parts: [content.part], format: sources.value[0].format, requestedBy: actor.id };
+    const job = await deps.enqueue({ kind: "export", subjectId: caseStudy.id, inputHash: hash, payload });
     if (!job.ok) return job;
     return ok({ status: "pending", jobId: job.value.id });
   };

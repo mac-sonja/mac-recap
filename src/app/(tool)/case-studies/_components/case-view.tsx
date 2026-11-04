@@ -151,6 +151,7 @@ export function CaseView({
             title={fill(it.download.caseTitle, { name: header.name })}
             description={it.download.caseDescription}
             failedMessage={fill(it.download.failedCase, { name: header.name })}
+            currentFormat={formatId}
             {...(exportCaseId ? caseDownload(exportCaseId) : {})}
           />
           {editHref !== null && (

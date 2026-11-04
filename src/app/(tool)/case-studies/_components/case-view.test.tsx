@@ -124,8 +124,23 @@ describe("CaseView", () => {
     await act(async () => {
       fireEvent.click(confirm);
     });
-    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, format: "presentazione_16_9" });
+    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, formats: ["presentazione_16_9"] });
     expect(within(dialog).getByRole("alert", { hidden: true }).textContent).toBe(dict.download.notApproved);
+  });
+
+  it("ticks the format in view in Scarica's picker; ticking another asks for both as one ZIP (Story 5.4)", async () => {
+    requestCaseExport.mockResolvedValue({ ok: true, value: { status: "pending", jobId: "aaaaaaaa-0000-4000-8000-0000000000aa" } });
+    setup();
+    fireEvent.click(format("Carosello"));
+    fireEvent.click(button(fill(dict.download.caseLabel, { name: "Rebrand Lumen" })));
+    const dialog = document.querySelector("dialog")!;
+    const box = (name: string) => within(dialog).getByRole("checkbox", { name: new RegExp(name), hidden: true }) as HTMLInputElement;
+    expect([box(dict.download.format.presentazione_16_9.name).checked, box(dict.download.format.carosello_1_1.name).checked]).toEqual([false, true]);
+    fireEvent.click(box(dict.download.format.presentazione_16_9.name));
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: dict.download.action, hidden: true }));
+    });
+    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: CASE_ID, formats: ["presentazione_16_9", "carosello_1_1"] });
   });
 
   it("leaves Scarica inactive without an approved version to export", () => {
@@ -286,13 +301,13 @@ describe("CaseView", () => {
     expect(slideCaption()).toContain(`1 di ${formats.presentazione_16_9.length}`);
   });
 
-  it("leaves ← → inside the open Scarica dialog to its radios: the slide stays", () => {
+  it("keeps ← → inside the open Scarica dialog: the slide stays", () => {
     setup();
     fireEvent.click(format("Carosello"));
     fireEvent.click(button(fill(dict.download.caseLabel, { name: "Rebrand Lumen" })));
     const dialog = screen.getByRole("dialog", { name: fill(dict.download.caseTitle, { name: "Rebrand Lumen" }), hidden: true });
-    const radio = within(dialog).getAllByRole("radio", { hidden: true })[0]!;
-    expect(fireEvent.keyDown(radio, { key: "ArrowRight" })).toBe(true);
+    const checkbox = within(dialog).getAllByRole("checkbox", { hidden: true })[0]!;
+    expect(fireEvent.keyDown(checkbox, { key: "ArrowRight" })).toBe(true);
     expect(slideCaption()).toContain(`1 di ${formats.carosello_1_1.length}`);
   });
 

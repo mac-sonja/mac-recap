@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CaseStudyRevision } from "@/modules/case-study";
 import type { Job } from "@/modules/jobs";
-import { storeZip } from "@/modules/rendering/adapters/zip/store-zip";
+import { readStoredZip, storeZip } from "@/modules/rendering/adapters/zip/store-zip";
 import { makeExportHandler, type ExportHandlerDeps } from "@/modules/rendering/application/export-handler";
-import { readExportSource } from "@/modules/rendering/application/export-source";
+import { bundleHashOf, readExportSource, readExportSources } from "@/modules/rendering/application/export-source";
 import {
   ACTOR,
   CASE_ID,
@@ -13,7 +13,7 @@ import {
   REVISION_ID,
   sourceDeps,
 } from "@/modules/rendering/application/export.fixtures";
-import { EXPORT_MAX_BYTES, type ExportFormatId, type ExportRecord, type NewExport } from "@/modules/rendering/domain/export";
+import { EXPORT_MAX_BYTES, type ExportFormatId, type ExportRecord, type ExportRecordFormat, type NewExport } from "@/modules/rendering/domain/export";
 import type { ExportBrowser } from "@/modules/rendering/ports/export-browser";
 import { err, ok } from "@/shared/result";
 
@@ -47,6 +47,8 @@ function fakeBrowser() {
 function deps(over: Partial<ExportHandlerDeps> = {}) {
   const { browser, seen } = fakeBrowser();
   const inserted: NewExport[] = [];
+  /** The `rendering` bucket: what was uploaded, by path. */
+  const files = new Map<string, Uint8Array>();
   const all = {
     ...sourceDeps(),
     exports: {
@@ -57,9 +59,15 @@ function deps(over: Partial<ExportHandlerDeps> = {}) {
       }),
     },
     storage: {
-      upload: vi.fn(async ({ contentHash, format }: { contentHash: string; format: ExportFormatId }) =>
-        ok({ path: `exports/${contentHash}/${format}.${format === "presentazione_16_9" ? "pdf" : "zip"}` }),
-      ),
+      upload: vi.fn(async ({ contentHash, format }: { contentHash: string; format: ExportRecordFormat }, bytes: Uint8Array) => {
+        const path = `exports/${contentHash}/${format}.${format === "presentazione_16_9" ? "pdf" : "zip"}`;
+        files.set(path, bytes);
+        return ok({ path });
+      }),
+      read: vi.fn(async (path: string) => {
+        const bytes = files.get(path);
+        return bytes === undefined ? err({ code: "STORAGE_FAILED", message: "Missing." }) : ok(bytes);
+      }),
     },
     listCaseMedia: vi.fn(async () => ok([{ id: CASE_IMAGE, kind: "image" }, { id: OTHER_VIDEO, kind: "video" }])),
     listClientMedia: vi.fn(async () => ok([{ id: CLIENT_IMAGE, kind: "image" }])),
@@ -71,9 +79,10 @@ function deps(over: Partial<ExportHandlerDeps> = {}) {
     fontCss: vi.fn(async () => FONT_CSS),
     browser,
     zip: vi.fn(storeZip),
+    unzip: vi.fn(readStoredZip),
     ...over,
   };
-  return { all, seen, inserted };
+  return { all, seen, inserted, files };
 }
 
 async function jobFor(d: ExportHandlerDeps, format: ExportFormatId, over: Partial<Job> = {}): Promise<Job> {
@@ -353,5 +362,226 @@ describe("acceptance (Story 5.3)", () => {
     expect(seen[0].html).toContain("Lumen Srl");
     expect(seen[1].html).toContain("Lumen Rinnovata Spa");
     expect(seen[1].html).not.toContain("Lumen Srl");
+  });
+});
+
+/** An in-memory `export` table: rows by hash, as the repository keeps them. */
+function memoryExports(rows: ExportRecord[] = []) {
+  return {
+    rows,
+    findByHash: vi.fn(async (hash: string) => ok(rows.find((r) => r.contentHash === hash) ?? null)),
+    findById: vi.fn(async (id: string) => ok(rows.find((r) => r.id === id) ?? null)),
+    insert: vi.fn(async (r: NewExport) => {
+      const record = { ...r, id: `88888888-0000-4000-8000-${String(rows.length + 1).padStart(12, "0")}`, createdAt: "2026-11-04T10:00:00Z" } as ExportRecord;
+      rows.push(record);
+      return ok(record);
+    }),
+  };
+}
+
+const BOTH = ["carosello_1_1", "presentazione_16_9"] as const;
+
+/** A bundle job of both formats, hashed as `requestExport` hashes it. */
+async function bundleJobFor(d: ExportHandlerDeps, over: Partial<Job> = {}): Promise<Job> {
+  const sources = await readExportSources(d, CASE_ID, ["presentazione_16_9", "carosello_1_1"]);
+  if (!sources.ok) throw new Error(sources.error.code);
+  const base = await jobFor(d, "presentazione_16_9");
+  return {
+    ...base,
+    inputHash: bundleHashOf(sources.value),
+    payload: { parts: [{ subject: { kind: "case", id: CASE_ID }, revisionId: REVISION_ID }], format: "bundle", formats: [...BOTH], requestedBy: ACTOR.id },
+    ...over,
+  };
+}
+
+describe("export handler, bundles (Story 5.4)", () => {
+  it("renders both formats, then zips them: the PDF at the root under its 5.3 name, the PNGs in Carosello/", async () => {
+    const exports = memoryExports();
+    const { all, files } = deps({ exports });
+    const job = await bundleJobFor(all);
+    expect(await makeExportHandler(all).run(job, signal())).toEqual(ok(undefined));
+
+    expect(all.browser.pdf).toHaveBeenCalledOnce();
+    expect(all.browser.pngs).toHaveBeenCalledOnce();
+    expect(exports.rows.map((r) => r.format)).toEqual(["presentazione_16_9", "carosello_1_1", "bundle"]);
+    const bundle = exports.rows[2];
+    expect(bundle).toMatchObject({
+      contentHash: job.inputHash,
+      path: `exports/${job.inputHash}/bundle.zip`,
+      contentType: "application/zip",
+      parts: [{ subject: { kind: "case", id: CASE_ID }, revisionId: REVISION_ID }],
+      createdBy: ACTOR.id,
+    });
+    const zip = files.get(bundle.path);
+    expect(zip?.byteLength).toBe(bundle.sizeBytes);
+    const entries = readStoredZip(zip!);
+    expect(entries.map((e) => e.name)).toEqual([
+      "LUM-2026-01 Rebrand Lumen – Presentazione.pdf",
+      "Carosello/01.png",
+      "Carosello/02.png",
+      "Carosello/03.png",
+    ]);
+    // Exactly the stored files: the PDF as stored, the Carosello's PNGs unpacked from its stored ZIP.
+    expect(entries[0].bytes).toEqual(files.get(exports.rows[0].path));
+    expect(entries.slice(1).map((e) => [...e.bytes])).toEqual(readStoredZip(files.get(exports.rows[1].path)!).map((e) => [...e.bytes]));
+  });
+
+  it("renders only the missing format: a stored PDF goes in as is, never drawn again", async () => {
+    const exports = memoryExports();
+    const { all, files } = deps({ exports });
+    const handler = makeExportHandler(all);
+    expect(await handler.run(await jobFor(all, "presentazione_16_9"), signal())).toEqual(ok(undefined));
+    vi.mocked(all.browser.pdf).mockClear();
+    const storedPdf = files.get(exports.rows[0].path);
+
+    expect(await handler.run(await bundleJobFor(all), signal())).toEqual(ok(undefined));
+    expect(all.browser.pdf).not.toHaveBeenCalled();
+    expect(all.browser.pngs).toHaveBeenCalledOnce();
+    expect(exports.rows.map((r) => r.format)).toEqual(["presentazione_16_9", "carosello_1_1", "bundle"]);
+    expect(readStoredZip(files.get(exports.rows[2].path)!)[0].bytes).toEqual(storedPdf);
+  });
+
+  it("reuses a stored bundle: nothing drawn, nothing written", async () => {
+    const exports = memoryExports();
+    const { all } = deps({ exports });
+    const handler = makeExportHandler(all);
+    const job = await bundleJobFor(all);
+    await handler.run(job, signal());
+    vi.mocked(all.browser.pdf).mockClear();
+    vi.mocked(all.browser.pngs).mockClear();
+    exports.insert.mockClear();
+    expect(await handler.run(job, signal())).toEqual(ok(undefined));
+    expect(all.browser.pdf).not.toHaveBeenCalled();
+    expect(all.browser.pngs).not.toHaveBeenCalled();
+    expect(exports.insert).not.toHaveBeenCalled();
+  });
+
+  it("stores no ZIP when a format fails; the format already made stays stored", async () => {
+    const exports = memoryExports();
+    const { all } = deps({ exports });
+    vi.mocked(all.browser.pngs).mockResolvedValueOnce([new Uint8Array([1])]);
+    const outcome = await makeExportHandler(all).run(await bundleJobFor(all), signal());
+    expect(outcome).toMatchObject({ ok: false, error: { code: "EXPORT_RENDER_FAILED", retryable: false } });
+    expect(exports.rows.map((r) => r.format)).toEqual(["presentazione_16_9"]);
+    expect(all.storage.upload).not.toHaveBeenCalledWith(expect.objectContaining({ format: "bundle" }), expect.anything());
+  });
+
+  it("fails as the format would: a retryable failure stays retryable", async () => {
+    const { all } = deps({ exports: memoryExports() });
+    vi.mocked(all.browser.pngs).mockRejectedValueOnce(new Error("chromium crashed"));
+    expect(await makeExportHandler(all).run(await bundleJobFor(all), signal())).toMatchObject({
+      ok: false,
+      error: { code: "EXPORT_RENDER_FAILED", retryable: true },
+    });
+  });
+
+  it("fails for good a stored file that doesn't match its pages, and a ZIP over the bucket's limit", async () => {
+    const exports = memoryExports();
+    const { all, files } = deps({ exports });
+    const handler = makeExportHandler(all);
+    await handler.run(await jobFor(all, "presentazione_16_9"), signal());
+    files.set(exports.rows[0].path, fakePdf(2));
+    expect(await handler.run(await bundleJobFor(all), signal())).toMatchObject({ ok: false, error: { code: "EXPORT_RENDER_FAILED", retryable: false } });
+    expect(exports.rows.some((r) => r.format === "bundle")).toBe(false);
+
+    const big = deps({ exports: memoryExports() });
+    const zip = vi.fn((entries: readonly { name: string; bytes: Uint8Array }[]) =>
+      entries.some((e) => e.name.includes("/")) ? new Uint8Array(EXPORT_MAX_BYTES + 1) : storeZip(entries),
+    );
+    const tooLarge = makeExportHandler({ ...big.all, zip });
+    expect(await tooLarge.run(await bundleJobFor(big.all), signal())).toMatchObject({ ok: false, error: { code: "EXPORT_TOO_LARGE", retryable: false } });
+    expect(big.all.storage.upload).not.toHaveBeenCalledWith(expect.objectContaining({ format: "bundle" }), expect.anything());
+  });
+
+  it("re-checks approval and the bundle's hash before drawing anything", async () => {
+    const { all } = deps({ exports: memoryExports() });
+    const job = await bundleJobFor(all);
+    vi.mocked(all.getClientInfoForCase).mockResolvedValue(ok(clientInfo({ name: "Lumen Spa" })));
+    expect(await makeExportHandler(all).run(job, signal())).toMatchObject({ ok: false, error: { code: "EXPORT_STALE", retryable: false } });
+    vi.mocked(all.getLiveRevision).mockResolvedValue(ok<CaseStudyRevision | null>(null));
+    expect(await makeExportHandler(all).run(job, signal())).toMatchObject({ ok: false, error: { code: "NOT_APPROVED", retryable: false } });
+    expect(all.browser.pdf).not.toHaveBeenCalled();
+    expect(all.browser.pngs).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["isn't a ZIP", () => new Uint8Array([1, 2, 3])],
+    ["has fewer PNGs than pages", () => storeZip([{ name: "01.png", bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) }])],
+  ])("fails for good a stored Carosello that %s: no bundle", async (_, damaged) => {
+    const exports = memoryExports();
+    const { all, files } = deps({ exports });
+    const handler = makeExportHandler(all);
+    await handler.run(await jobFor(all, "carosello_1_1"), signal());
+    files.set(exports.rows[0].path, damaged());
+    expect(await handler.run(await bundleJobFor(all), signal())).toMatchObject({ ok: false, error: { code: "EXPORT_RENDER_FAILED", retryable: false } });
+    expect(exports.rows.some((r) => r.format === "bundle")).toBe(false);
+  });
+
+  it("fails retryably when a stored file can't be read back: no bundle", async () => {
+    const exports = memoryExports();
+    const { all } = deps({ exports });
+    vi.mocked(all.storage.read).mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "Down." }));
+    expect(await makeExportHandler(all).run(await bundleJobFor(all), signal())).toMatchObject({
+      ok: false,
+      error: { code: "STORAGE_FAILED", retryable: true },
+    });
+    expect(exports.rows.some((r) => r.format === "bundle")).toBe(false);
+  });
+
+  it.each([
+    { formats: ["carosello_1_1"] },
+    { formats: ["presentazione_16_9", "carosello_1_1"] },
+    { formats: ["carosello_1_1", "carosello_1_1"] },
+    { formats: ["carosello_1_1", "video_9_16"] },
+  ])("refuses a bundle payload with %j for good", async ({ formats }) => {
+    const { all } = deps();
+    const job = await bundleJobFor(all);
+    expect(await makeExportHandler(all).run({ ...job, payload: { ...(job.payload as object), formats } }, signal())).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_PAYLOAD" },
+    });
+  });
+});
+
+describe("acceptance (Story 5.4)", () => {
+  it("both formats exported once, then again with nothing changed: no job is enqueued and the same file downloads", async () => {
+    const { makeRequestExport } = await import("@/modules/rendering/application/request-export");
+    const exports = memoryExports();
+    const { all } = deps({ exports });
+    const jobs: Job[] = [];
+    const request = makeRequestExport({
+      ...all,
+      exports,
+      storage: { presignDownload: vi.fn(async (path: string) => ok(`https://storage.test/signed/${path}`)) },
+      enqueue: vi.fn(async (input) => {
+        const job = { ...(await jobFor(all, "presentazione_16_9")), id: `99999999-0000-4000-8000-00000000000${jobs.length + 1}`, inputHash: input.inputHash, payload: input.payload };
+        jobs.push(job);
+        return ok({ id: job.id });
+      }),
+      getJobsFor: vi.fn(async () => ok([])),
+      recordEvent: vi.fn(async () => ok(null)),
+    });
+    const handler = makeExportHandler({ ...all, exports });
+    const ask = { caseId: CASE_ID, formats: ["presentazione_16_9", "carosello_1_1"] };
+
+    expect(await request(ACTOR, ask)).toMatchObject({ ok: true, value: { status: "pending" } });
+    expect(jobs).toHaveLength(1);
+    expect(await handler.run(jobs[0], signal())).toEqual(ok(undefined));
+
+    const first = await request(ACTOR, ask);
+    const again = await request(ACTOR, { caseId: CASE_ID, formats: ["carosello_1_1", "presentazione_16_9"] });
+    expect(jobs).toHaveLength(1);
+    const bundle = exports.rows.find((r) => r.format === "bundle");
+    expect(first).toEqual({
+      ok: true,
+      value: { status: "ready", exportId: bundle?.id, url: `https://storage.test/signed/${bundle?.path}`, fileName: "LUM-2026-01 Rebrand Lumen.zip" },
+    });
+    expect(again).toEqual(first);
+
+    // After an edit, both formats and the ZIP are made again.
+    vi.mocked(all.getClientInfoForCase).mockResolvedValue(ok(clientInfo({ name: "Lumen Rinnovata Spa" })));
+    expect(await request(ACTOR, ask)).toMatchObject({ ok: true, value: { status: "pending" } });
+    expect(await handler.run(jobs[1], signal())).toEqual(ok(undefined));
+    expect(exports.rows.map((r) => r.format)).toEqual(["presentazione_16_9", "carosello_1_1", "bundle", "presentazione_16_9", "carosello_1_1", "bundle"]);
   });
 });

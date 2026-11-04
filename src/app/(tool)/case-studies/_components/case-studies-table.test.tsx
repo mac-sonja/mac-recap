@@ -407,22 +407,22 @@ describe("CaseStudiesTable", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("offers Scarica on approved rows only; the picker lists Presentazione (chosen), then Carosello 1080×1080, with Video under In arrivo", async () => {
+  it("offers Scarica on approved rows only; the picker lists Presentazione (ticked), then Carosello 1080×1080, with Video under In arrivo", async () => {
     const user = userEvent.setup();
     render(<CaseStudiesTable rows={rows} canCreate />);
     const buttons = screen.getAllByRole("button", { name: /^Scarica / });
     expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([fill(dict.download.caseLabel, { name: "Zeta" })]);
     await user.click(buttons[0]!);
     const dialog = screen.getByRole("dialog", { hidden: true });
-    const radios = within(dialog).getAllByRole("radio", { hidden: true }) as HTMLInputElement[];
-    const enabled = radios.filter((r) => !r.disabled);
+    const boxes = within(dialog).getAllByRole("checkbox", { hidden: true }) as HTMLInputElement[];
+    const enabled = boxes.filter((r) => !r.disabled);
     expect(enabled.map((r) => r.closest("label")?.querySelector("span > span")?.textContent)).toEqual([
       dict.download.format.presentazione_16_9.name,
       dict.download.format.carosello_1_1.name,
     ]);
     expect(dict.download.format.carosello_1_1.name).toBe("Carosello 1080×1080");
     expect(enabled.map((r) => r.checked)).toEqual([true, false]);
-    const upcoming = radios.filter((r) => r.disabled).map((r) => r.parentElement?.textContent ?? "");
+    const upcoming = boxes.filter((r) => r.disabled).map((r) => r.parentElement?.textContent ?? "");
     expect(upcoming.some((text) => text.includes(dict.download.upcoming.video) && text.includes(dict.download.soon))).toBe(true);
     expect(dialog.textContent).not.toContain("Post 1080×1080");
   });
@@ -433,10 +433,29 @@ describe("CaseStudiesTable", () => {
     render(<CaseStudiesTable rows={rows} canCreate />);
     await user.click(screen.getByRole("button", { name: fill(dict.download.caseLabel, { name: "Zeta" }) }));
     const dialog = screen.getByRole("dialog", { hidden: true });
-    await user.click(within(dialog).getByRole("radio", { name: new RegExp(dict.download.format.carosello_1_1.name), hidden: true }));
+    await user.click(within(dialog).getByRole("checkbox", { name: new RegExp(dict.download.format.presentazione_16_9.name), hidden: true }));
+    await user.click(within(dialog).getByRole("checkbox", { name: new RegExp(dict.download.format.carosello_1_1.name), hidden: true }));
     await user.click(within(dialog).getByRole("button", { name: dict.download.action, hidden: true }));
-    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: "aaaaaaaa-0000-4000-8000-000000000001", format: "carosello_1_1" });
+    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: "aaaaaaaa-0000-4000-8000-000000000001", formats: ["carosello_1_1"] });
     expect(within(dialog).getByRole("alert", { hidden: true }).textContent).toBe(dict.download.formatMissing);
+  });
+
+  it("asks for both formats as one ZIP when both are ticked; with none ticked Scarica is inactive (Story 5.4)", async () => {
+    requestCaseExport.mockResolvedValue({ ok: false, status: 409, error: { code: "NOT_APPROVED", message: "x" } });
+    const user = userEvent.setup();
+    render(<CaseStudiesTable rows={rows} canCreate />);
+    await user.click(screen.getByRole("button", { name: fill(dict.download.caseLabel, { name: "Zeta" }) }));
+    const dialog = screen.getByRole("dialog", { hidden: true });
+    const presentazione = within(dialog).getByRole("checkbox", { name: new RegExp(dict.download.format.presentazione_16_9.name), hidden: true });
+    const scarica = within(dialog).getByRole("button", { name: dict.download.action, hidden: true });
+    await user.click(presentazione);
+    expect(scarica.getAttribute("aria-disabled")).toBe("true");
+    await user.click(scarica);
+    expect(requestCaseExport).not.toHaveBeenCalled();
+    await user.click(presentazione);
+    await user.click(within(dialog).getByRole("checkbox", { name: new RegExp(dict.download.format.carosello_1_1.name), hidden: true }));
+    await user.click(scarica);
+    expect(requestCaseExport).toHaveBeenCalledExactlyOnceWith({ caseId: "aaaaaaaa-0000-4000-8000-000000000001", formats: ["presentazione_16_9", "carosello_1_1"] });
   });
 
   it("offers no Elimina in the list: a draft is deleted from inside it (owner, 2026-10-22)", () => {

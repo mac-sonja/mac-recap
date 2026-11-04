@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { FormatId } from "@/modules/rendering";
 import { fill, it as dict } from "@/shared/i18n/it";
 import { DOWNLOAD_GIVE_UP_MS, DOWNLOAD_POLL_MS, DownloadButton, type DownloadPoll, type DownloadStart } from "./download-button";
 
@@ -26,7 +27,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function setup(onDownload?: (format: string) => Promise<DownloadStart>, onPoll?: (ticket: string) => Promise<DownloadPoll>) {
+function setup(
+  onDownload?: (formats: string[]) => Promise<DownloadStart>,
+  onPoll?: (ticket: string) => Promise<DownloadPoll>,
+  currentFormat?: FormatId,
+) {
   return render(
     <DownloadButton
       label={LABEL}
@@ -35,6 +40,7 @@ function setup(onDownload?: (format: string) => Promise<DownloadStart>, onPoll?:
       onDownload={onDownload}
       onPoll={onPoll}
       failedMessage={FAILED}
+      currentFormat={currentFormat}
     />,
   );
 }
@@ -44,21 +50,75 @@ const dialog = () => document.querySelector("dialog")!;
 /** The dialog's Scarica (the trigger is labelled with the case name). */
 const confirm = () => screen.getAllByRole("button", { name: dict.download.action, hidden: true }).find((b) => b.closest("dialog") !== null)!;
 
-async function choose(format?: string) {
+const PRESENTAZIONE = dict.download.format.presentazione_16_9.name;
+const CAROSELLO = dict.download.format.carosello_1_1.name;
+
+const box = (name: string) => screen.getByRole("checkbox", { name: new RegExp(name), hidden: true }) as HTMLInputElement;
+
+/** Opens the picker, toggles the boxes named (Presentazione starts ticked), then presses Scarica. */
+async function choose(...toggle: string[]) {
   fireEvent.click(trigger());
-  if (format !== undefined) fireEvent.click(screen.getByRole("radio", { name: new RegExp(format), hidden: true }));
+  for (const name of toggle) fireEvent.click(box(name));
   await act(async () => {
     fireEvent.click(confirm());
   });
 }
 
+/** Only Carosello: untick Presentazione, tick Carosello. */
+const ONLY_CAROSELLO = [PRESENTAZIONE, CAROSELLO];
+
+describe("DownloadButton (Story 5.4: several formats)", () => {
+  it("ticks the format in view when it opens; a format that doesn't export yet falls back to Presentazione", () => {
+    const { unmount } = setup(undefined, undefined, "carosello_1_1");
+    fireEvent.click(trigger());
+    expect([box(PRESENTAZIONE).checked, box(CAROSELLO).checked]).toEqual([false, true]);
+    unmount();
+    setup(undefined, undefined, "video_9_16");
+    fireEvent.click(trigger());
+    expect([box(PRESENTAZIONE).checked, box(CAROSELLO).checked]).toEqual([true, false]);
+  });
+
+  it("follows the view: reopening ticks the format now in view", () => {
+    const { rerender } = setup(undefined, undefined, "presentazione_16_9");
+    fireEvent.click(trigger());
+    fireEvent.click(box(CAROSELLO));
+    fireEvent.click(screen.getByRole("button", { name: dict.download.cancel, hidden: true }));
+    rerender(<DownloadButton label={LABEL} title={TITLE} description={dict.download.caseDescription} currentFormat="carosello_1_1" />);
+    fireEvent.click(trigger());
+    expect([box(PRESENTAZIONE).checked, box(CAROSELLO).checked]).toEqual([false, true]);
+  });
+
+  it("asks for every ticked format, in the picker's order, in one request", async () => {
+    const onDownload = vi.fn(async (): Promise<DownloadStart> => ({ kind: "ready", ...FILE }));
+    setup(onDownload, undefined, "carosello_1_1");
+    await choose(PRESENTAZIONE);
+    expect(onDownload).toHaveBeenCalledExactlyOnceWith(["presentazione_16_9", "carosello_1_1"]);
+    expect(clicked).toEqual([{ href: FILE.url, download: FILE.fileName }]);
+  });
+
+  it("keeps Scarica inactive with nothing ticked, and asks for nothing", async () => {
+    const onDownload = vi.fn(async (): Promise<DownloadStart> => ({ kind: "ready", ...FILE }));
+    setup(onDownload);
+    fireEvent.click(trigger());
+    fireEvent.click(box(PRESENTAZIONE));
+    expect(confirm().getAttribute("aria-disabled")).toBe("true");
+    await act(async () => {
+      fireEvent.click(confirm());
+    });
+    expect(onDownload).not.toHaveBeenCalled();
+    expect(dialog().open).toBe(true);
+    fireEvent.click(box(CAROSELLO));
+    expect(confirm().getAttribute("aria-disabled")).toBeNull();
+  });
+});
+
 describe("DownloadButton (Story 5.3)", () => {
-  it("keeps the picker's look: Presentazione chosen, then Carosello, Video under In arrivo; Scarica is inactive without a handler", () => {
+  it("keeps the picker's look: Presentazione ticked, then Carosello, Video under In arrivo; Scarica is inactive without a handler", () => {
     setup();
     fireEvent.click(trigger());
-    const radios = screen.getAllByRole("radio", { hidden: true }) as HTMLInputElement[];
-    expect(radios.filter((r) => !r.disabled).map((r) => r.value)).toEqual(["presentazione_16_9", "carosello_1_1"]);
-    expect(radios[0].checked).toBe(true);
+    const boxes = screen.getAllByRole("checkbox", { hidden: true }) as HTMLInputElement[];
+    expect(boxes.filter((r) => !r.disabled).map((r) => r.value)).toEqual(["presentazione_16_9", "carosello_1_1"]);
+    expect(boxes.map((r) => r.checked)).toEqual([true, false, false, false, false]);
     expect(dialog().textContent).toContain(dict.download.upcoming.video);
     expect(confirm().getAttribute("aria-disabled")).toBe("true");
   });
@@ -68,9 +128,9 @@ describe("DownloadButton (Story 5.3)", () => {
     const answers: DownloadPoll[] = [{ kind: "pending" }, { kind: "ready", ...FILE }];
     const onPoll = vi.fn(async () => answers.shift()!);
     setup(onDownload, onPoll);
-    await choose(dict.download.format.carosello_1_1.name);
+    await choose(...ONLY_CAROSELLO);
 
-    expect(onDownload).toHaveBeenCalledExactlyOnceWith("carosello_1_1");
+    expect(onDownload).toHaveBeenCalledExactlyOnceWith(["carosello_1_1"]);
     expect(dialog().open).toBe(false);
     expect(trigger().textContent).toContain(dict.download.working);
     expect(trigger().getAttribute("aria-busy")).toBe("true");
@@ -113,8 +173,8 @@ describe("DownloadButton (Story 5.3)", () => {
     expect(dialog().open).toBe(true);
     expect(screen.getByRole("alert", { hidden: true }).textContent).toBe(dict.download.notApproved);
     expect(trigger().getAttribute("aria-busy")).toBeNull();
-    // Choosing another format clears it.
-    fireEvent.click(screen.getByRole("radio", { name: new RegExp(dict.download.format.carosello_1_1.name), hidden: true }));
+    // Ticking another format clears it.
+    fireEvent.click(box(CAROSELLO));
     expect(screen.queryByRole("alert", { hidden: true })).toBeNull();
     expect(onPoll).not.toHaveBeenCalled();
     expect(clicked).toEqual([]);
@@ -123,7 +183,7 @@ describe("DownloadButton (Story 5.3)", () => {
   it("shows the failure toast with Riprova when the export didn't finish; Riprova asks again for the same format", async () => {
     const onDownload = vi.fn(async (): Promise<DownloadStart> => ({ kind: "pending", ticket: "job-1" }));
     setup(onDownload, async () => ({ kind: "failed" }));
-    await choose(dict.download.format.carosello_1_1.name);
+    await choose(...ONLY_CAROSELLO);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(DOWNLOAD_POLL_MS);
     });
@@ -136,7 +196,7 @@ describe("DownloadButton (Story 5.3)", () => {
       fireEvent.click(screen.getByRole("button", { name: dict.download.retry, hidden: true }));
     });
     expect(onDownload).toHaveBeenCalledTimes(2);
-    expect(onDownload).toHaveBeenLastCalledWith("carosello_1_1");
+    expect(onDownload).toHaveBeenLastCalledWith(["carosello_1_1"]);
     expect(screen.queryByText(FAILED)).toBeNull();
     expect(trigger().textContent).toContain(dict.download.working);
   });

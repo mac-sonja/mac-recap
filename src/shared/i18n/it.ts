@@ -637,9 +637,10 @@ export const it = {
     packDescription: "Intro e {n} case approvate in un solo file.",
     packDescriptionOne: "Intro e una case approvata in un solo file.",
     caseTitle: "Scarica {name}",
-    caseDescription: "Scegli il formato.",
+    /** Story 5.4: one format is its own file, two or more come as one ZIP. */
+    caseDescription: "Scegli uno o più formati.",
     /** Read by screen readers: names the list of formats. */
-    formats: "Formato",
+    formats: "Formati",
     soon: "In arrivo",
     /** The formats the picker offers today, keyed by `FormatId` (Video is still upcoming). */
     format: {
