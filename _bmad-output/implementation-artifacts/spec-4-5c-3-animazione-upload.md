@@ -2,7 +2,8 @@
 title: 'Story 4.5c-3: upload in the Animazione dialog'
 type: 'feature'
 created: '2026-11-04'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: '43ffb2c63274e89d081d68e459a3ad444a97241f'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -18,6 +19,8 @@ context:
 **Problem:** The Animazione dialog only picks files already in the case's Media. To animate a new image or video, a person has to close the dialog, upload it in the Media tab, and open the dialog again.
 
 **Approach:** Under the picker, the dialog gets the mockup's drop zone (`#anDrop`): **Trascina qui immagini e video**, "Finiscono nei Media di questa case. Oppure **scegli dai file**." Dropped or chosen files upload to the case's Media with exactly the Media tab's rules and messages, through one upload hook taken out of the Media tab, and each file that uploads is added to the animation's picks in the order dropped. The new files show in the Media tab too.
+
+**Decision (owner, 2026-11-04):** when a drop would pass an animation's 30 media, the files are added up to 30 and the rest still upload to Media, with a line saying they weren't added.
 
 ## Boundaries & Constraints
 
@@ -46,10 +49,6 @@ context:
 | Cancel | upload, then Annulla | files in Media; animation unchanged | N/A |
 
 </frozen-after-approval>
-
-## Open Questions
-
-- When the drop would pass the 30-media limit of an animation — options: **add up to 30, upload the rest to Media and say so** (as in the matrix; nothing lost) / **refuse the extra files before upload** (they don't reach Media; the person drops again elsewhere).
 
 ## Code Map
 
