@@ -64,13 +64,20 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `use-media-upload.ts` + `media-tab.tsx` -- extract the hook, keep the ids; the Media tab uses it with no visible change (its tests pass unchanged).
-- [ ] `configurator.tsx` -- one owner of the case list, relist and polling for both the tab and the dialog.
-- [ ] `animation-dialog.tsx` + `it.ts` -- drop zone, picks appended in order, the limit line, `noMedia` reworded.
-- [ ] `configurator.test.tsx` -- every matrix row through the dialog, and a dialog upload showing in the Media tab.
+- [x] `use-media-upload.ts` + `media-tab.tsx` -- extract the hook, keep the ids; the Media tab uses it with no visible change (its tests pass unchanged).
+- [x] `configurator.tsx` -- one owner of the case list, relist and polling for both the tab and the dialog.
+- [x] `animation-dialog.tsx` + `it.ts` -- drop zone, picks appended in order, the limit line, `noMedia` reworded.
+- [x] `configurator.test.tsx` -- every matrix row through the dialog, and a dialog upload showing in the Media tab.
 
 **Acceptance Criteria:**
 - Given the dialog open on a case with images, when a person drops a video and presses **Inserisci**, then the animation holds the earlier picks followed by the video, and the video is in the Media tab.
+
+## Implementation Notes
+
+- `use-media-upload.ts`: `useCaseMedia` (the one list: relist, thumbnail polling, the favourite star) and `useMediaUpload` (validation, presign → PUT → confirm, one retry, late confirm, storage off; `upload(files, note?) → ids` in drop order; `note` lets the dialog add its limit line to the one message). Both are called once in `configurator.tsx`, which passes the list and the upload to the Media tab (via `RightPanel`) and to the dialog; `listed` (names + `readMissing`) is the list's `onListed`.
+- `media-tab.tsx`: no state of its own any more; its drop zone is the exported `MediaDropZone`, reused by the dialog with its own copy.
+- The status line moves inside the dialog while it is open (a modal makes the page inert), so it stays one `role="status"`.
+- Tests: a new suite "Configurator Animazione upload (Story 4.5c-3)" covers every matrix row, keyboard/click, the uploading state, and a Media-tab upload reaching the picker.
 
 ## Spec Change Log
 

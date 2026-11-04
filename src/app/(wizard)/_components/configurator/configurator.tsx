@@ -318,6 +318,7 @@ export function Configurator({
   useEffect(() => {
     assetsNow.current = assets;
   });
+
   /** Reads the render assets of `of` not drawn yet (nor being read); one still without a rendition is asked for again next time. */
   const readMissing = useCallback(
     (of: readonly ListedAsset[]) => {
@@ -357,6 +358,7 @@ export function Configurator({
 
   /** Every file that can go on a page: the case's images and videos as last listed, then the client's (Story 4.5c-2). */
   const pickable = useMemo(() => [...files, ...clientMedia], [files, clientMedia]);
+
   const mediaTab = useRef<HTMLButtonElement>(null);
   /** **Sostituisci dai Media** pressed: focus the Media tab once it shows. */
   const focusMedia = useRef(false);
