@@ -3596,3 +3596,274 @@ describe("Configurator client and case fields", () => {
     expect(status().textContent).toBe(dict.configurator.editSoon);
   });
 });
+
+describe("Configurator drag-and-drop on the canvas (Story 4.3e)", () => {
+  const P1 = formats.presentazione_16_9[0]!.pageKey;
+  const P2 = formats.presentazione_16_9[1]!.pageKey;
+  const B1 = "cccccccc-0000-4000-8000-000000000001";
+  const B2 = "cccccccc-0000-4000-8000-000000000002";
+  const B3 = "cccccccc-0000-4000-8000-000000000003";
+  const T1 = "cccccccc-0000-4000-8000-000000000011";
+  const T2 = "cccccccc-0000-4000-8000-000000000012";
+  const T3 = "cccccccc-0000-4000-8000-000000000013";
+  const GROUP = "cccccccc-0000-4000-8000-000000000021";
+  const G1 = "cccccccc-0000-4000-8000-000000000022";
+  const G2 = "cccccccc-0000-4000-8000-000000000023";
+  const ONLY = "cccccccc-0000-4000-8000-000000000031";
+  const text = (id: string, words = "Ciao"): TextElement => ({ elementId: id, type: "text", style: "text", text: words, provenance: "human_added" });
+  const grey = { kind: "colour", value: NEW_BLOCK_COLOUR } as const;
+
+  /** Presentazione's first page: a block of two texts and a block with a split group and a text. Its second: one block of one text. */
+  function fixture(): Record<FormatId, Page[]> {
+    const pages = structuredClone(starterFormats());
+    const [one, two] = pages.presentazione_16_9;
+    one!.blocks = [
+      { blockId: B1, name: "Uno", background: grey, elements: [text(T1, "Primo"), text(T2, "Secondo")] },
+      {
+        blockId: B2,
+        name: "Due",
+        background: { kind: "colour", value: BACKGROUND_SWATCHES[0] },
+        elements: [{ elementId: GROUP, type: "text_group", align: "split", splitAt: 2, items: [text(G1), text(G2)] }, text(T3)],
+      },
+    ];
+    two!.blocks = [{ blockId: B3, name: "Tre", background: grey, elements: [text(ONLY, "Solo")] }];
+    restartGrid(one!, "presentazione_16_9", "mac-case@1");
+    restartGrid(two!, "presentazione_16_9", "mac-case@1");
+    return pages;
+  }
+  const lastDoc = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => onSave.mock.calls.at(-1)![0].doc;
+  const savedPages = (onSave: ReturnType<typeof vi.fn<SaveFn>>) => lastDoc(onSave).formats.presentazione_16_9.pages as Page[];
+  const elementIds = (pages: Page[], p: number, b: number) => pages[p]!.blocks[b]!.elements.map((e) => e.elementId);
+  const blockNode = (blockId: string) => canvas().querySelector<HTMLElement>(`[data-block-id="${blockId}"]`)!;
+  const elementNode = (elementId: string) => canvas().querySelector<HTMLElement>(`[data-element-id="${elementId}"]`)!;
+  const elementsSection = () => within(leftPanel()).getByRole("region", { name: dict.configurator.tools.elements, hidden: true });
+  const elementButton = (name: string) => button(name, elementsSection());
+  const grip = () => canvas().querySelector<HTMLElement>('[data-frame="block"] [draggable="true"]');
+
+  /** A drag's data, shared by its start, moves and drop like the browser's. */
+  function transfer() {
+    const store = new Map<string, string>();
+    return {
+      get types() {
+        return [...store.keys()];
+      },
+      setData: (type: string, value: string) => void store.set(type, value),
+      getData: (type: string) => store.get(type) ?? "",
+      setDragImage: () => {},
+      dropEffect: "none",
+      effectAllowed: "all",
+    };
+  }
+  /** Drags `from` and drops it on `to`. */
+  function dragTo(from: HTMLElement, to: HTMLElement) {
+    const data = transfer();
+    fireEvent.dragStart(from, { dataTransfer: data });
+    fireEvent.dragOver(to, { dataTransfer: data });
+    fireEvent.drop(to, { dataTransfer: data });
+    fireEvent.dragEnd(from, { dataTransfer: data });
+  }
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+  const undo = () => fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  });
+
+  it("Testo dragged over a block's 2nd element goes before it, selected, one undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    const data = transfer();
+    fireEvent.dragStart(elementButton(dict.configurator.elements.text), { dataTransfer: data });
+    fireEvent.dragOver(elementNode(T2), { dataTransfer: data });
+    expect(pageNode(P1).querySelector('[data-frame="drop"]')).not.toBeNull();
+    expect(pageNode(P1).querySelector('[data-frame="drop-line"]')).not.toBeNull();
+    fireEvent.drop(elementNode(T2), { dataTransfer: data });
+    expect(pageNode(P1).querySelector('[data-frame="drop"]')).toBeNull();
+    await settle();
+    const pages = savedPages(onSave);
+    const added = pages[0]!.blocks[0]!.elements[1]!;
+    expect(added).toMatchObject({ type: "text", text: dict.configurator.newTexts.text });
+    expect(elementIds(pages, 0, 0)).toEqual([T1, added.elementId, T2]);
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    expect(pageNode(P1).querySelector('[data-frame="element"]')).not.toBeNull();
+    undo();
+    await settle();
+    expect(elementIds(savedPages(onSave), 0, 0)).toEqual([T1, T2]);
+  });
+
+  it("Elementi dropped outside every block changes nothing and says to drop it in a block", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    dragTo(elementButton(dict.configurator.elements.title), pageNode(P1));
+    expect(status().textContent).toBe(dict.configurator.edit.dropOffBlock);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("Elementi into a full block is refused with the full message and no undo step", async () => {
+    const pages = fixture();
+    pages.presentazione_16_9[0]!.blocks[0]!.elements = Array.from({ length: 30 }, (_, i) => text(`cccccccc-0000-4000-8000-1${String(i).padStart(11, "0")}`));
+    const onSave = vi.fn(savedOk);
+    setup(false, pages, { onSave });
+    dragTo(elementButton(dict.configurator.elements.text), blockNode(B1));
+    expect(status().textContent).toBe(dict.configurator.edit.blockFull);
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("Blocco dropped on a page adds a block at its end; on a full page it says so", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    dragTo(elementButton(dict.configurator.elements.block), pageNode(P2));
+    await settle();
+    expect(savedPages(onSave)[1]!.blocks.map((b) => b.blockId).slice(0, 1)).toEqual([B3]);
+    expect(savedPages(onSave)[1]!.blocks).toHaveLength(2);
+    cleanup();
+    const full = fixture();
+    full.presentazione_16_9[1]!.blocks = Array.from({ length: 6 }, (_, i) => ({ blockId: `cccccccc-0000-4000-8000-2${String(i).padStart(11, "0")}`, name: "B", background: grey, elements: [] }));
+    restartGrid(full.presentazione_16_9[1]!, "presentazione_16_9", "mac-case@1");
+    setup(false, full);
+    dragTo(elementButton(dict.configurator.elements.block), pageNode(P2));
+    expect(status().textContent).toBe(dict.configurator.edit.pageFull);
+  });
+
+  it("an element dragged to another page's block moves there, selected; ⌘Z puts both pages back and that document saves", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    dragTo(elementNode(T1), blockNode(B3));
+    await settle();
+    let pages = savedPages(onSave);
+    expect(elementIds(pages, 0, 0)).toEqual([T2]);
+    expect(elementIds(pages, 1, 0)).toEqual([ONLY, T1]);
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    const saves = onSave.mock.calls.length;
+    undo();
+    await settle();
+    expect(onSave.mock.calls.length).toBe(saves + 1);
+    pages = savedPages(onSave);
+    expect(elementIds(pages, 0, 0)).toEqual([T1, T2]);
+    expect(elementIds(pages, 1, 0)).toEqual([ONLY]);
+    expect(pages).toEqual(fixture().presentazione_16_9);
+  });
+
+  it("a text dragged out of a Testi group leaves it, the group's splitAt kept within its texts", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    dragTo(elementNode(G2), elementNode(T1));
+    await settle();
+    const pages = savedPages(onSave);
+    expect(elementIds(pages, 0, 0)).toEqual([G2, T1, T2]);
+    expect(pages[0]!.blocks[1]!.elements[0]).toMatchObject({ elementId: GROUP, splitAt: 1, items: [{ elementId: G1 }] });
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+  });
+
+  it("an element dropped where it already is changes nothing and leaves no undo step", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    dragTo(elementNode(T1), elementNode(T2));
+    dragTo(elementNode(T1), elementNode(T1));
+    await settle();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("⠿ Sposta dragged onto another block swaps them; a block's only element drags its block too", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    fireEvent.click(blockNode(B1));
+    expect(grip()).not.toBeNull();
+    dragTo(grip()!, elementNode(T3));
+    await settle();
+    let pages = savedPages(onSave);
+    expect(pages[0]!.blocks.map((b) => b.blockId)).toEqual([B2, B1]);
+    expect(pages[0]!.blocks[0]!.background).toEqual({ kind: "colour", value: BACKGROUND_SWATCHES[0] });
+    expect(pages[0]!.grid).toEqual(fixture().presentazione_16_9[0]!.grid);
+    // The only element of B3 drags B3: across pages, the two swap.
+    dragTo(elementNode(ONLY), blockNode(B2));
+    await settle();
+    pages = savedPages(onSave);
+    expect(pages[0]!.blocks.map((b) => b.blockId)).toEqual([B3, B1]);
+    expect(pages[1]!.blocks.map((b) => b.blockId)).toEqual([B2]);
+    expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
+    undo();
+    undo();
+    await settle();
+    expect(savedPages(onSave)).toEqual(fixture().presentazione_16_9);
+  });
+
+  it("⠿ Sposta dropped on another page outside its blocks moves the block to its end and restarts both grids; on a full page it's refused", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    fireEvent.click(blockNode(B1));
+    dragTo(grip()!, pageNode(P2));
+    await settle();
+    const pages = savedPages(onSave);
+    expect(pages[0]!.blocks.map((b) => b.blockId)).toEqual([B2]);
+    expect(pages[1]!.blocks.map((b) => b.blockId)).toEqual([B3, B1]);
+    for (const page of pages) {
+      const restarted = structuredClone(page);
+      restartGrid(restarted, "presentazione_16_9", "mac-case@1");
+      expect(page.grid).toEqual(restarted.grid);
+    }
+    cleanup();
+    const full = fixture();
+    full.presentazione_16_9[1]!.blocks = Array.from({ length: 6 }, (_, i) => ({ blockId: `cccccccc-0000-4000-8000-3${String(i).padStart(11, "0")}`, name: "B", background: grey, elements: [] }));
+    restartGrid(full.presentazione_16_9[1]!, "presentazione_16_9", "mac-case@1");
+    const refusedSave = vi.fn(savedOk);
+    setup(false, full, { onSave: refusedSave });
+    fireEvent.click(blockNode(B1));
+    dragTo(grip()!, pageNode(P2));
+    expect(status().textContent).toBe(dict.configurator.edit.pageFull);
+    await settle();
+    expect(refusedSave).not.toHaveBeenCalled();
+  });
+
+  it("the text being typed in doesn't drag; the others do", () => {
+    setup(false, fixture());
+    expect(elementNode(T1).getAttribute("draggable")).toBe("true");
+    expect(elementNode(GROUP).getAttribute("draggable")).toBe("true");
+    fireEvent.doubleClick(elementNode(G1));
+    expect(elementNode(G1).getAttribute("draggable")).toBe("false");
+    expect(elementNode(GROUP).getAttribute("draggable")).toBe("false");
+    expect(elementNode(T1).getAttribute("draggable")).toBe("true");
+  });
+
+  it("nothing drags and no drop target shows on an approved case or in Anteprima", async () => {
+    for (const mode of ["approved", "preview"] as const) {
+      const onSave = vi.fn(savedOk);
+      setup(false, fixture(), { onSave, editable: mode !== "approved" });
+      if (mode === "preview") fireEvent.click(button(dict.configurator.preview.enter));
+      expect(canvas().querySelector('[data-element-id][draggable="true"]')).toBeNull();
+      if (mode === "approved") {
+        expect(elementButton(dict.configurator.elements.text).getAttribute("draggable")).not.toBe("true");
+        fireEvent.click(blockNode(B1));
+        expect(grip()).toBeNull();
+      }
+      const data = transfer();
+      data.setData("application/x-mac-element", JSON.stringify({ formatId: "presentazione_16_9", pageKey: P1, elementId: T1 }));
+      fireEvent.dragOver(blockNode(B3), { dataTransfer: data });
+      expect(canvas().querySelector('[data-frame="drop"], [data-frame="drop-line"], [data-drop-over]')).toBeNull();
+      fireEvent.drop(blockNode(B3), { dataTransfer: data });
+      await settle();
+      expect(onSave).not.toHaveBeenCalled();
+      cleanup();
+    }
+  });
+
+  it("a Media tile still drops as before, ignoring the canvas drag types", async () => {
+    const onSave = vi.fn(savedOk);
+    setup(false, fixture(), { onSave });
+    const data = transfer();
+    data.setData(MEDIA_DRAG_TYPE, IMAGE);
+    fireEvent.dragOver(elementNode(T2), { dataTransfer: data });
+    fireEvent.drop(elementNode(T2), { dataTransfer: data });
+    await settle();
+    expect(savedPages(onSave)[0]!.blocks[0]!.elements.map((e) => e.type)).toEqual(["text", "image", "text"]);
+  });
+});

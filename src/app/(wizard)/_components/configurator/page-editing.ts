@@ -487,3 +487,119 @@ export function movePage(pages: readonly Page[], from: string, to: string): read
   next.splice(b, 0, moved!);
   return next;
 }
+
+/** Where a drag on the canvas lands (Story 4.3e): a page, a block of it, and the element under the pointer. */
+export interface DropTarget {
+  pageKey: string;
+  /** Undefined: the page outside every block. */
+  blockId?: string;
+  /** Any element under the pointer: the drop goes before the block's top-level element holding it. Undefined: at the block's end. */
+  beforeElementId?: string;
+}
+
+/** A block of a page, by keys. */
+export interface BlockRef {
+  pageKey: string;
+  blockId: string;
+}
+
+/** The index of the top-level element of `elements` holding `elementId` (itself or inside it); its length when none. */
+function dropIndex(elements: readonly DocumentElement[], elementId: string | undefined): number {
+  const at = elementId === undefined ? -1 : elements.findIndex((el) => findElement([el], elementId) !== undefined);
+  return at < 0 ? elements.length : at;
+}
+
+/** The page index and block of `target`, or why there is none. */
+function blockAt(pages: readonly Page[], pageKey: string, blockId: string | undefined): { index: number; block: Block } | { refusal: PageEdit } {
+  const index = pages.findIndex((p) => p.pageKey === pageKey);
+  if (index < 0) return { refusal: refused("nothing") };
+  if (blockId === undefined) return { refusal: refused("offBlock") };
+  const block = pages[index]!.blocks.find((b) => b.blockId === blockId);
+  return block === undefined ? { refusal: refused("offBlock") } : { index, block };
+}
+
+/**
+ * An Elementi button dropped on the canvas (Story 4.3e, mockup `addElement`): a new `kind`
+ * before the top-level element under the pointer, else at the block's end; selected. Off
+ * every block it is refused (`offBlock`), and in a full block (`blockFull`).
+ */
+export function insertNewElement(pages: readonly Page[], target: DropTarget, kind: NewElementKind, newId: () => string): PageEdit {
+  const at = blockAt(pages, target.pageKey, target.blockId);
+  if ("refusal" in at) return at.refusal;
+  const { index, block } = at;
+  if (block.elements.length >= MAX_ELEMENTS_PER_BLOCK) return refused("blockFull");
+  const element = newElement(kind, newId);
+  const pos = dropIndex(block.elements, target.beforeElementId);
+  const next = withPage(pages, index, (page) => page.blocks.find((b) => b.blockId === block.blockId)!.elements.splice(pos, 0, element));
+  return { ok: true, pages: next, selection: { pageKey: target.pageKey, blockId: block.blockId, elementId: element.elementId } };
+}
+
+/**
+ * Element `from.elementId` dragged to `target` (Story 4.3e, mockup `wireBlock`): taken out
+ * of where it was (a Testi group or a row too, which goes when left empty, a group's
+ * `splitAt` kept within its texts), then put before the top-level element under the
+ * pointer, else at the target block's end, as a top-level element; selected. Within one
+ * block, a target after the element shifts by one. Refused: off every block (`offBlock`), a
+ * full target block (`blockFull`), and the element dropped where it already is (`nothing`).
+ */
+export function moveElement(pages: readonly Page[], from: BlockRef & { elementId: string }, target: DropTarget): PageEdit {
+  const source = blockAt(pages, from.pageKey, from.blockId);
+  if ("refusal" in source) return refused("nothing");
+  if (findElement(source.block.elements, from.elementId) === undefined) return refused("nothing");
+  const dest = blockAt(pages, target.pageKey, target.blockId);
+  if ("refusal" in dest) return dest.refusal;
+  const sameBlock = source.index === dest.index && source.block.blockId === dest.block.blockId;
+  const srcTop = source.block.elements.findIndex((el) => el.elementId === from.elementId);
+  let pos = dropIndex(dest.block.elements, target.beforeElementId);
+  // A top-level element dropped on itself, or just before the next one, stays where it is.
+  if (sameBlock && srcTop >= 0 && (pos === srcTop || pos === srcTop + 1)) return refused("nothing");
+  const copy = pages.map((p, i) => (i === source.index || i === dest.index ? structuredClone(p) : p));
+  const srcElements = copy[source.index]!.blocks.find((b) => b.blockId === source.block.blockId)!.elements;
+  const destElements = copy[dest.index]!.blocks.find((b) => b.blockId === dest.block.blockId)!.elements;
+  const moved = structuredClone(findElement(srcElements, from.elementId)!);
+  // The top-level element holding it, which goes with it when it is the element itself or a container left empty.
+  const holder = dropIndex(srcElements, from.elementId);
+  const before = srcElements.length;
+  removeFrom(srcElements, from.elementId);
+  if (sameBlock && srcElements.length < before && holder < pos) pos--;
+  if (destElements.length >= MAX_ELEMENTS_PER_BLOCK) return refused("blockFull");
+  destElements.splice(pos, 0, moved);
+  return { ok: true, pages: copy, selection: { pageKey: target.pageKey, blockId: dest.block.blockId, elementId: from.elementId } };
+}
+
+/**
+ * "⠿ Sposta" (or a block's only element) dropped on another block (Story 4.3e): the two
+ * blocks change places, on one page or across two. Each takes the other's grid cell and
+ * keeps its own contents and background; the grids stay. The dragged block is selected.
+ */
+export function swapBlocks(pages: readonly Page[], a: BlockRef, b: BlockRef): PageEdit {
+  const pa = pages.findIndex((p) => p.pageKey === a.pageKey);
+  const pb = pages.findIndex((p) => p.pageKey === b.pageKey);
+  const ia = pa < 0 ? -1 : pages[pa]!.blocks.findIndex((x) => x.blockId === a.blockId);
+  const ib = pb < 0 ? -1 : pages[pb]!.blocks.findIndex((x) => x.blockId === b.blockId);
+  if (ia < 0 || ib < 0 || (pa === pb && ia === ib)) return refused("nothing");
+  const copy = pages.map((p, i) => (i === pa || i === pb ? structuredClone(p) : p));
+  const blockA = copy[pa]!.blocks[ia]!;
+  copy[pa]!.blocks[ia] = copy[pb]!.blocks[ib]!;
+  copy[pb]!.blocks[ib] = blockA;
+  return { ok: true, pages: copy, selection: { pageKey: b.pageKey, blockId: a.blockId } };
+}
+
+/**
+ * "⠿ Sposta" dropped on another page outside its blocks (Story 4.3e): block `from` moves to
+ * the end of page `toPageKey`, and both pages' grids restart, as when a block is added or
+ * removed; selected. Refused: a full page (`pageFull`), and its own page (`nothing`).
+ */
+export function moveBlockToPage(pages: readonly Page[], from: BlockRef, toPageKey: string, formatId: FormatId, template: string): PageEdit {
+  const src = pages.findIndex((p) => p.pageKey === from.pageKey);
+  const dest = pages.findIndex((p) => p.pageKey === toPageKey);
+  const at = src < 0 ? -1 : pages[src]!.blocks.findIndex((b) => b.blockId === from.blockId);
+  if (at < 0 || dest < 0 || src === dest) return refused("nothing");
+  if (pages[dest]!.blocks.length >= MAX_BLOCKS_PER_PAGE) return refused("pageFull");
+  const copy = pages.map((p, i) => (i === src || i === dest ? structuredClone(p) : p));
+  const [block] = copy[src]!.blocks.splice(at, 1);
+  copy[dest]!.blocks.push(block!);
+  restartGrid(copy[src]!, formatId, template);
+  restartGrid(copy[dest]!, formatId, template);
+  return { ok: true, pages: copy, selection: { pageKey: toPageKey, blockId: from.blockId } };
+}

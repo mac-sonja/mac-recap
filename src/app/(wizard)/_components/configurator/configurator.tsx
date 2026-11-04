@@ -42,6 +42,7 @@ import {
 } from "./bound-fields";
 import { OverflowReport, type FormatPages, type OverflowByFormat } from "./overflow-report";
 import { Canvas } from "./canvas";
+import type { CanvasDrag } from "./canvas-drag";
 import { applyDefaultPage, type GeneratedTexts } from "./default-pages";
 import type { InstagramView } from "./instagram-overlay";
 import { setTracks, type Axis } from "./grid-resize";
@@ -54,18 +55,23 @@ import {
   clearAssets,
   deletePage,
   insertAnimation,
+  insertNewElement,
   MAX_ELEMENTS_PER_BLOCK,
   MAX_PAGES_PER_FORMAT,
+  moveBlockToPage,
+  moveElement,
   movePage,
   pasteBlock,
   placeMedia,
   removeSelection,
   setBackground,
   shuffleLayout,
+  swapBlocks,
   withAnimation,
   withCrop,
   withFit,
   type AnimationChoice,
+  type DropTarget,
   type MediaTarget,
   type PageEdit,
 } from "./page-editing";
@@ -614,6 +620,61 @@ export function Configurator({
     [doc, editable, formatId, formats, selection],
   );
 
+  /** The canvas drag in progress (Story 4.3e): an element, a block or an Elementi button; null once it ends. */
+  const [dragging, setDragging] = useState<CanvasDrag | null>(null);
+
+  /** A drop's edit: off every block it says to drop the element inside one; any other refusal as usual. */
+  const applyDrop = useCallback(
+    (edit: PageEdit) => {
+      if (!edit.ok && edit.reason === "offBlock") say(it.configurator.edit.dropOffBlock);
+      else applyPageEdit(edit);
+    },
+    [applyPageEdit, say],
+  );
+
+  /**
+   * A drag dropped on the canvas (Story 4.3e), in the format in view, one undo step: an
+   * Elementi button adds its element before the one under the pointer (Blocco a block at
+   * the page's end, Animazione opens its dialog for the block); an element moves there; a
+   * block swaps with the block it's dropped on, or goes to the end of another page.
+   */
+  const canvasDrop = useCallback(
+    (drag: CanvasDrag, target: DropTarget) => {
+      setDragging(null);
+      if (!editable) return;
+      const current = formats[formatId];
+      if (drag.kind === "new") {
+        const key = drag.element;
+        if (key === "block") applyPageEdit(addBlock(current, target.pageKey, undefined, formatId, template, newId));
+        else if (key !== "animation") applyDrop(insertNewElement(current, target, key, newId));
+        else {
+          const into = current.find((p) => p.pageKey === target.pageKey)?.blocks.find((b) => b.blockId === target.blockId);
+          if (into === undefined) say(it.configurator.edit.dropOffBlock);
+          else if (into.elements.length >= MAX_ELEMENTS_PER_BLOCK) say(it.configurator.edit.blockFull);
+          else {
+            setSelection({ pageKey: target.pageKey, blockId: into.blockId });
+            setAnimationDialog({ pageKey: target.pageKey, blockId: into.blockId });
+          }
+        }
+        return;
+      }
+      // Never between formats: a drag started in another format's pages changes nothing.
+      if (drag.formatId !== formatId) return;
+      if (drag.kind === "element") {
+        const from = selectionOf(current, drag.pageKey, drag.elementId);
+        if (from?.blockId !== undefined) applyDrop(moveElement(current, { pageKey: drag.pageKey, blockId: from.blockId, elementId: drag.elementId }, target));
+        return;
+      }
+      const from = { pageKey: drag.pageKey, blockId: drag.blockId };
+      applyPageEdit(
+        target.blockId === undefined
+          ? moveBlockToPage(current, from, target.pageKey, formatId, template)
+          : swapBlocks(current, from, { pageKey: target.pageKey, blockId: target.blockId }),
+      );
+    },
+    [applyDrop, applyPageEdit, editable, formatId, formats, say, template],
+  );
+
   /** A Layout thumbnail (Story 4.4a): the tools' page takes it, then is selected. */
   const pickLayout = useCallback(
     (layout: Layout) => {
@@ -1109,6 +1170,7 @@ export function Configurator({
             onTextSettings={textSettings}
             onGroupAlign={groupAlign}
             onAddElement={addFromElementi}
+            onDragElement={editable ? setDragging : undefined}
             onRemove={removeSelected}
             onLayout={pickLayout}
             onShuffle={shuffle}
@@ -1171,6 +1233,9 @@ export function Configurator({
               onCropDone={mediaDone}
               onDeletePage={editable ? removePage : undefined}
               onAddPage={editable ? addNewPage : undefined}
+              dragging={dragging}
+              onDragSource={editable ? setDragging : undefined}
+              onCanvasDrop={editable ? canvasDrop : undefined}
             />
             <StatusMessage message={message} />
             <AnimationDialog

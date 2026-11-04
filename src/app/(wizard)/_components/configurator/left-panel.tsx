@@ -16,8 +16,9 @@ import type { TextSettings } from "./text-editing";
 import { GroupPanel, TextPanel } from "./text-panel";
 import { AnimationPanel } from "./animation-panel";
 import { MediaPanel } from "./media-panel";
+import { writeDrag, type CanvasDrag, type ElementKey } from "./canvas-drag";
 
-export type ElementKey = keyof typeof it.configurator.elements;
+export type { ElementKey } from "./canvas-drag";
 
 const ELEMENT_ICONS: Readonly<Record<ElementKey, LucideIcon>> = {
   block: LayoutGrid,
@@ -48,6 +49,8 @@ export interface LeftPanelProps {
   onGroupAlign: (align: TextGroupAlign) => void;
   /** An Elementi button pressed (Story 4.3c): Blocco adds a block, the others an element to the selected block. */
   onAddElement: (key: ElementKey) => void;
+  /** An Elementi button dragged onto the canvas (Story 4.3e) starts and ends; undefined: they don't drag. */
+  onDragElement?: (drag: CanvasDrag | null) => void;
   /** **Rimuovi elemento** / **Rimuovi blocco**: removes the selection. */
   onRemove: () => void;
   /** A Layout thumbnail pressed (Story 4.4a): the page takes that layout. */
@@ -346,6 +349,7 @@ export function LeftPanel({
   onTextSettings,
   onGroupAlign,
   onAddElement,
+  onDragElement,
   onRemove,
   onLayout,
   onShuffle,
@@ -516,6 +520,19 @@ export function LeftPanel({
                   type="button"
                   {...(active ? {} : inactive)}
                   onClick={active ? () => onAddElement(key) : soon(t.elements)}
+                  // Dragged onto a block (or Blocco onto a page) it goes where it is dropped (Story 4.3e).
+                  draggable={active && onDragElement !== undefined}
+                  onDragStart={
+                    active && onDragElement !== undefined
+                      ? (event) => {
+                          const drag: CanvasDrag = { kind: "new", element: key };
+                          writeDrag(event.dataTransfer, drag);
+                          event.dataTransfer.effectAllowed = "copy";
+                          onDragElement(drag);
+                        }
+                      : undefined
+                  }
+                  onDragEnd={onDragElement === undefined ? undefined : () => onDragElement(null)}
                   className={cn(
                     "flex h-9 items-center gap-2 rounded-md bg-surface-raised px-2.5 font-label text-[13px] font-medium text-foreground shadow-card",
                     active ? cn("hover:bg-surface-hover", PRESSABLE) : "cursor-default aria-disabled:opacity-60",

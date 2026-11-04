@@ -23,10 +23,13 @@ import {
   COLUMN_LAYOUT_ID,
   deletePage,
   insertAnimation,
+  insertNewElement,
   MAX_ANIMATION_MEDIA,
   MAX_BLOCKS_PER_PAGE,
   MAX_ELEMENTS_PER_BLOCK,
   MAX_PAGES_PER_FORMAT,
+  moveBlockToPage,
+  moveElement,
   movePage,
   NEW_BLOCK_COLOUR,
   NEW_ELEMENTS,
@@ -39,6 +42,7 @@ import {
   setBackground,
   shuffleChoices,
   shuffleLayout,
+  swapBlocks,
   swatchBackground,
   withAnimation,
   withCrop,
@@ -724,5 +728,183 @@ describe("addPage, deletePage and movePage (Story 4.13)", () => {
     const up = movePage(pages, keys[2]!, keys[0]!);
     expect(up.map((p) => p.pageKey).slice(0, 3)).toEqual([keys[2], keys[0], keys[1]]);
     expect(movePage(pages, keys[1]!, keys[1]!)).toBe(pages);
+  });
+});
+
+describe("drag-and-drop edits (Story 4.3e)", () => {
+  const F: FormatId = "presentazione_16_9";
+  const P1 = "p1";
+  const P2 = "p2";
+  const B1 = "ffffffff-0000-4000-8000-000000000001";
+  const B2 = "ffffffff-0000-4000-8000-000000000002";
+  const B3 = "ffffffff-0000-4000-8000-000000000003";
+  const T1 = "ffffffff-0000-4000-8000-000000000011";
+  const T2 = "ffffffff-0000-4000-8000-000000000012";
+  const T3 = "ffffffff-0000-4000-8000-000000000013";
+  const IMG = "ffffffff-0000-4000-8000-000000000014";
+  const GROUP = "ffffffff-0000-4000-8000-000000000021";
+  const G1 = "ffffffff-0000-4000-8000-000000000022";
+  const G2 = "ffffffff-0000-4000-8000-000000000023";
+  const ROW = "ffffffff-0000-4000-8000-000000000031";
+  const R1 = "ffffffff-0000-4000-8000-000000000032";
+  const text = (id: string): TextElement => ({ elementId: id, type: "text", style: "text", text: "x", provenance: "human_added" });
+  const block = (blockId: string, elements: DocumentElement[], colour = NEW_BLOCK_COLOUR): Block => ({ blockId, name: "B", background: { kind: "colour", value: colour }, elements });
+
+  /** Page 1: a block of three texts, a block with a split group, a row and an image. Page 2: one block of one text. */
+  function pages(): Page[] {
+    const base = starter(F)[0]!;
+    const one: Page = {
+      ...structuredClone(base),
+      pageKey: P1,
+      blocks: [
+        block(B1, [text(T1), text(T2), text(T3)]),
+        block(
+          B2,
+          [
+            { elementId: GROUP, type: "text_group", align: "split", splitAt: 2, items: [text(G1), text(G2)] },
+            { elementId: ROW, type: "row", align: "centre", items: [text(R1)] },
+            { elementId: IMG, type: "image", assetId: null, fit: "fill" },
+          ],
+          "#2977ff",
+        ),
+      ],
+    };
+    const two: Page = { ...structuredClone(base), pageKey: P2, blocks: [block(B3, [text("ffffffff-0000-4000-8000-000000000041")])] };
+    restartGrid(one, F, TEMPLATE);
+    restartGrid(two, F, TEMPLATE);
+    return [one, two];
+  }
+  const ids1 = (pages: readonly Page[], p: number, b: number) => pages[p]!.blocks[b]!.elements.map((e) => e.elementId);
+  /** Every element id of a format's pages, groups and rows included. */
+  const allIds = (pages: readonly Page[]) =>
+    pages.flatMap((p) => [
+      ...p.blocks.map((b) => b.blockId),
+      ...p.blocks.flatMap((b) => b.elements.flatMap((e) => (e.type === "text_group" || e.type === "row" ? [e.elementId, ...e.items.map((i) => i.elementId)] : [e.elementId]))),
+    ]);
+  const expectUnique = (pages: readonly Page[]) => expect(new Set(allIds(pages)).size).toBe(allIds(pages).length);
+
+  it("insertNewElement puts the new element before the top-level element under the pointer, else at the end, and selects it", () => {
+    const before = pages();
+    const edit = ok(insertNewElement(before, { pageKey: P1, blockId: B1, beforeElementId: T2 }, "text", ids()));
+    const added = edit.pages[0]!.blocks[0]!.elements[1]!;
+    expect(added).toMatchObject({ type: "text", text: dict.configurator.newTexts.text, provenance: "human_added" });
+    expect(ids1(edit.pages, 0, 0)).toEqual([T1, added.elementId, T2, T3]);
+    expect(edit.selection).toEqual({ pageKey: P1, blockId: B1, elementId: added.elementId });
+    expect(edit.pages[1]).toBe(before[1]);
+    // Inside a group: before the group.
+    const inGroup = ok(insertNewElement(before, { pageKey: P1, blockId: B2, beforeElementId: G2 }, "image", ids()));
+    expect(inGroup.pages[0]!.blocks[1]!.elements[0]!.type).toBe("image");
+    expect(inGroup.pages[0]!.blocks[1]!.elements[1]!.elementId).toBe(GROUP);
+    const atEnd = ok(insertNewElement(before, { pageKey: P1, blockId: B1 }, "group", ids()));
+    expect(atEnd.pages[0]!.blocks[0]!.elements.at(-1)!.type).toBe("text_group");
+    expectValid(atEnd.pages);
+    expectUnique(atEnd.pages);
+  });
+
+  it("insertNewElement refuses off every block and in a full block", () => {
+    const before = pages();
+    expect(insertNewElement(before, { pageKey: P1 }, "text", ids())).toEqual({ ok: false, reason: "offBlock" });
+    before[0]!.blocks[0]!.elements = Array.from({ length: MAX_ELEMENTS_PER_BLOCK }, (_, i) => text(`ffffffff-0000-4000-8000-1${String(i).padStart(11, "0")}`));
+    expect(insertNewElement(before, { pageKey: P1, blockId: B1, beforeElementId: before[0]!.blocks[0]!.elements[1]!.elementId }, "text", ids())).toEqual({
+      ok: false,
+      reason: "blockFull",
+    });
+  });
+
+  it("moveElement within a block: a target after the element shifts by one; in place is a no-op", () => {
+    const before = pages();
+    const from = { pageKey: P1, blockId: B1, elementId: T1 };
+    const down = ok(moveElement(before, from, { pageKey: P1, blockId: B1, beforeElementId: T3 }));
+    expect(ids1(down.pages, 0, 0)).toEqual([T2, T1, T3]);
+    expect(down.selection).toEqual({ pageKey: P1, blockId: B1, elementId: T1 });
+    const end = ok(moveElement(before, from, { pageKey: P1, blockId: B1 }));
+    expect(ids1(end.pages, 0, 0)).toEqual([T2, T3, T1]);
+    const up = ok(moveElement(before, { ...from, elementId: T3 }, { pageKey: P1, blockId: B1, beforeElementId: T1 }));
+    expect(ids1(up.pages, 0, 0)).toEqual([T3, T1, T2]);
+    for (const beforeElementId of [T1, T2]) expect(moveElement(before, from, { pageKey: P1, blockId: B1, beforeElementId })).toEqual({ ok: false, reason: "nothing" });
+    expect(moveElement(before, { ...from, elementId: T3 }, { pageKey: P1, blockId: B1 })).toEqual({ ok: false, reason: "nothing" });
+  });
+
+  it("moveElement to another block and another page, removing it where it was", () => {
+    const before = pages();
+    const edit = ok(moveElement(before, { pageKey: P1, blockId: B1, elementId: T2 }, { pageKey: P2, blockId: B3 }));
+    expect(ids1(edit.pages, 0, 0)).toEqual([T1, T3]);
+    expect(ids1(edit.pages, 1, 0).at(-1)).toBe(T2);
+    expect(edit.selection).toEqual({ pageKey: P2, blockId: B3, elementId: T2 });
+    expectValid(edit.pages);
+    expectUnique(edit.pages);
+    const other = ok(moveElement(before, { pageKey: P1, blockId: B1, elementId: T1 }, { pageKey: P1, blockId: B2, beforeElementId: IMG }));
+    expect(ids1(other.pages, 0, 1)).toEqual([GROUP, ROW, T1, IMG]);
+    expect(other.pages[1]).toBe(before[1]);
+  });
+
+  it("moveElement takes a text out of a group (splitAt kept within its texts) and out of a row (an empty row goes)", () => {
+    const before = pages();
+    const out = ok(moveElement(before, { pageKey: P1, blockId: B2, elementId: G2 }, { pageKey: P1, blockId: B1, beforeElementId: T1 }));
+    expect(ids1(out.pages, 0, 0)).toEqual([G2, T1, T2, T3]);
+    expect(out.pages[0]!.blocks[1]!.elements[0]).toMatchObject({ elementId: GROUP, splitAt: 1, items: [{ elementId: G1 }] });
+    expectValid(out.pages);
+    const row = ok(moveElement(before, { pageKey: P1, blockId: B2, elementId: R1 }, { pageKey: P1, blockId: B2 }));
+    expect(ids1(row.pages, 0, 1)).toEqual([GROUP, IMG, R1]);
+    expectValid(row.pages);
+    // Out of its group to just before the group, in the same block: it leaves the group.
+    const front = ok(moveElement(before, { pageKey: P1, blockId: B2, elementId: G1 }, { pageKey: P1, blockId: B2, beforeElementId: G2 }));
+    expect(ids1(front.pages, 0, 1)).toEqual([G1, GROUP, ROW, IMG]);
+    expect((front.pages[0]!.blocks[1]!.elements[1] as TextGroupElement).items.map((i) => i.elementId)).toEqual([G2]);
+    expectValid(front.pages);
+    // The row's only text dropped after the row: the row goes, the text takes its place.
+    const same = ok(moveElement(before, { pageKey: P1, blockId: B2, elementId: R1 }, { pageKey: P1, blockId: B2, beforeElementId: IMG }));
+    expect(ids1(same.pages, 0, 1)).toEqual([GROUP, R1, IMG]);
+    // A group dropped on its own text stays.
+    expect(moveElement(before, { pageKey: P1, blockId: B2, elementId: GROUP }, { pageKey: P1, blockId: B2, beforeElementId: G1 })).toEqual({ ok: false, reason: "nothing" });
+  });
+
+  it("moveElement refuses a full target block, off every block, and an unknown element", () => {
+    const before = pages();
+    before[1]!.blocks[0]!.elements = Array.from({ length: MAX_ELEMENTS_PER_BLOCK }, (_, i) => text(`ffffffff-0000-4000-8000-2${String(i).padStart(11, "0")}`));
+    const from = { pageKey: P1, blockId: B1, elementId: T1 };
+    expect(moveElement(before, from, { pageKey: P2, blockId: B3 })).toEqual({ ok: false, reason: "blockFull" });
+    expect(moveElement(before, from, { pageKey: P2 })).toEqual({ ok: false, reason: "offBlock" });
+    expect(moveElement(before, { ...from, elementId: "missing" }, { pageKey: P1, blockId: B2 })).toEqual({ ok: false, reason: "nothing" });
+    // Out of a group to the top level of a full block: refused.
+    const full = pages();
+    full[0]!.blocks[1]!.elements.push(...Array.from({ length: MAX_ELEMENTS_PER_BLOCK - 3 }, (_, i) => text(`ffffffff-0000-4000-8000-3${String(i).padStart(11, "0")}`)));
+    expect(moveElement(full, { pageKey: P1, blockId: B2, elementId: G1 }, { pageKey: P1, blockId: B2 })).toEqual({ ok: false, reason: "blockFull" });
+  });
+
+  it("swapBlocks swaps two blocks on one page or across pages, each keeping its contents and background, the grids kept", () => {
+    const before = pages();
+    const same = ok(swapBlocks(before, { pageKey: P1, blockId: B1 }, { pageKey: P1, blockId: B2 }));
+    expect(same.pages[0]!.blocks.map((b) => b.blockId)).toEqual([B2, B1]);
+    expect(same.pages[0]!.blocks[0]).toEqual(before[0]!.blocks[1]);
+    expect(same.pages[0]!.grid).toEqual(before[0]!.grid);
+    expect(same.selection).toEqual({ pageKey: P1, blockId: B1 });
+    const across = ok(swapBlocks(before, { pageKey: P1, blockId: B2 }, { pageKey: P2, blockId: B3 }));
+    expect(across.pages[0]!.blocks.map((b) => b.blockId)).toEqual([B1, B3]);
+    expect(across.pages[1]!.blocks[0]).toEqual(before[0]!.blocks[1]);
+    expect(across.pages.map((p) => p.grid)).toEqual(before.map((p) => p.grid));
+    expect(across.selection).toEqual({ pageKey: P2, blockId: B2 });
+    expectValid(across.pages);
+    expectUnique(across.pages);
+    expect(swapBlocks(before, { pageKey: P1, blockId: B1 }, { pageKey: P1, blockId: B1 })).toEqual({ ok: false, reason: "nothing" });
+    expect(swapBlocks(before, { pageKey: P1, blockId: "missing" }, { pageKey: P1, blockId: B1 })).toEqual({ ok: false, reason: "nothing" });
+  });
+
+  it("moveBlockToPage moves a block to another page's end and restarts both grids; refuses a full page and its own page", () => {
+    const before = pages();
+    const edit = ok(moveBlockToPage(before, { pageKey: P1, blockId: B1 }, P2, F, TEMPLATE));
+    expect(edit.pages[0]!.blocks.map((b) => b.blockId)).toEqual([B2]);
+    expect(edit.pages[1]!.blocks.map((b) => b.blockId)).toEqual([B3, B1]);
+    for (const page of edit.pages) {
+      const expected = structuredClone(page);
+      restartGrid(expected, F, TEMPLATE);
+      expect(page.grid).toEqual(expected.grid);
+    }
+    expect(edit.selection).toEqual({ pageKey: P2, blockId: B1 });
+    expectValid(edit.pages);
+    expect(moveBlockToPage(before, { pageKey: P1, blockId: B1 }, P1, F, TEMPLATE)).toEqual({ ok: false, reason: "nothing" });
+    const full = pages();
+    full[1] = { ...emptyPage(MAX_BLOCKS_PER_PAGE, F), pageKey: P2 };
+    expect(moveBlockToPage(full, { pageKey: P1, blockId: B1 }, P2, F, TEMPLATE)).toEqual({ ok: false, reason: "pageFull" });
   });
 });

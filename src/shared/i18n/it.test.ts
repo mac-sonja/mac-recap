@@ -339,6 +339,7 @@ describe("configurator copy", () => {
       "Rimuovi elemento",
       "Rimuovi blocco",
       "Trascina qui un elemento",
+      "Trascina l’elemento dentro un blocco.",
       "Blocco",
       "La pagina ha {k} blocchi in più di questo layout: toglili prima.",
       "La pagina ha 1 blocco in più di questo layout: toglilo prima.",
@@ -349,6 +350,7 @@ describe("configurator copy", () => {
     expect(t("configurator.trial.title")).toBe("Bozza di prova");
     expect(fill(t("configurator.canvas.pageLabel"), { n: 2, name: "La sfida" })).toBe("2 · La sfida");
     expect(t("configurator.canvas.move")).toBe("⠿ Sposta");
+    expect(t("configurator.canvas.moveHint")).toBe("Trascina su un altro blocco per scambiarli");
     expect(Object.values(it.configurator.sections)).toEqual(["Intro", "Output", "Risultati"]);
     expect([
       t("configurator.tools.layout"),
