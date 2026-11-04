@@ -24,6 +24,7 @@ context:
 - The sector is picked from the shared list, with "add a sector", as in the client panel. It isn't free text.
 - Texts are typed on the page like an own text (double-click or Enter; saved on blur or Enter; Esc cancels): the client name, each result row's number and label, and the testimonial quote and author.
 - The sector, the year, the services (business-line pills) and the logo ("Sostituisci logo") are set in the left panel when their element is selected. The year is only shown inside the meta line ("sector · year"), so double-clicking the meta line selects it and focuses the year field.
+- (owner, 2026-11-04, after review) The server refuses a result-row or testimonial save from the configurator unless the case is still Da approvare (`STALE_STATUS`, then the page reloads), so a configurator left open after approval elsewhere can't rewrite an approved case.
 
 ## Boundaries & Constraints
 
@@ -105,6 +106,33 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|-------|---------|---------|----------|-------|
+| 1 | blind, edge | Results/testimonial saves accept an approved case (stale tab) | medium | `saveCaseResults`/`saveCaseTestimonial` accept any status; only `editable` guards the page | owner decided: server check (intent amended), fixed as patch |
+| 2 | blind | `update_case_fields` ignores the head revision's state | low | An `in_review` case's head is `working` in every flow until 4.9; reachable only by a hand-made call; fix adds a guard | rejected |
+| 3 | blind | Overlapping saves blink back when the first refresh lands | low | Real but cosmetic and brief; fix adds state | rejected |
+| 4 | blind, edge, gap | A sector added with Aggiungi settore shows the old label until refresh | low | `shownValues` looks up `fieldOptions.sectors`, which lacks it; direct correction | patch |
+| 5 | blind, edge | Rename typed then refused when the client lacks sector or description | medium | `requestEdit` pre-checks only `logoId`; the typed name is lost at commit | patch |
+| 6 | blind, edge | Object URL revoked on panel unmount → broken logo until refresh | low | Needs a selection change inside the refresh window; fix moves ownership | rejected |
+| 7 | blind | Permission suite counts the configurator with `+ 1` | low | `saveRevisionDoc`, `approveCase`, `getRenderAssets` were outside the suite before this story | defer |
+| 8 | blind | Sprint status and migration records stale | low | Handled by the finalize step's sprint sync and the PR notes | rejected |
+| 9 | blind | Untested: thrown save → `errors.failed` | low | No test drives a throw; direct test addition | patch |
+| 10 | blind, edge | Year field reset/normalise/unmount edge cases ('02026', concurrent, unmount) | low | Rare; blur commits before unmount in normal use | rejected |
+| 11 | blind | `fromEditor` uses a straight apostrophe | low | Every other new string uses ’ | patch |
+| 12 | blind | `LogoField` fixed DOM id | low | Rest of the panel uses `useId()` | patch |
+| 13 | blind | One double-click in Anteprima shows the message up to three times | low | Slide calls the pick on click and double-click | patch |
+| 14 | blind | Approved cases' outputs change silently with client values | false | Intended: "Client values are live for every case of that client, approved ones included" | rejected |
+| 15 | edge | Logo uploaded and confirmed, then refused for missing sector/description → orphaned logo | medium | `LogoField` uploads before `planFieldSave` checks the client | patch |
+| 16 | edge | Empty `bindings` opens the meta editor | false | `textElementSchema` requires 2–3 bindings | rejected |
+| 17 | edge | A service toggled on is appended, not in `BUSINESS_LINES` order | low | Shown order changes after refresh; one-line correction | patch |
+| 18 | edge | A refresh while typing another bound text overwrites it | maybe-false | React only updates nodes whose value changed; the typed node's own value doesn't change from another field's save; would need a browser check | rejected (would be low) |
+| 19 | edge | AC says Anteprima shows `editSoon` | low | Owner's matrix row (2026-11-04) supersedes; fix would edit this spec | rejected |
+| 20 | gap | No test: `STALE_STATUS`/`NOT_FOUND` refresh | gap | Pre-verified by the layer | patch |
+| 21 | gap | No test: two queued field saves | gap | Pre-verified by the layer | patch |
+| 22 | gap | No test: refused year restores the field | gap | Pre-verified by the layer | patch |
+| 23 | gap | No test: Aggiungi settore in the configurator | gap | Pre-verified by the layer | patch |
+| 24 | gap | No test: Anteprima message on Carosello/Video | gap | Pre-verified by the layer | patch |
 
 ## Verification
 
