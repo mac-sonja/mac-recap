@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Actor } from "@/modules/access";
 import { CASE_EXPORTED } from "@/modules/case-study";
 import { notApproved, readExportSource, type ExportSourceDeps } from "@/modules/rendering/application/export-source";
@@ -11,7 +12,7 @@ import {
   type ExportPayload,
   type ExportRecord,
 } from "@/modules/rendering/domain/export";
-import { formatNotInRevision } from "@/modules/rendering/domain/formats";
+import { isFormatId } from "@/modules/rendering/domain/formats";
 import type { ExportRepository } from "@/modules/rendering/ports/export-repository";
 import type { ExportStorage } from "@/modules/rendering/ports/export-storage";
 import { err, ok, type Result } from "@/shared/result";
@@ -49,6 +50,21 @@ export interface RequestExportDeps extends ExportSourceDeps {
 }
 
 const invalid = (fields: string[]) => err({ code: "INVALID_INPUT", message: `Invalid or missing: ${fields.join(", ")}.`, details: { fields } });
+
+const isUuid = (value: unknown) => z.uuid().safeParse(value).success;
+
+/** The fields of a status input that are actually wrong: `caseId`, exactly one of `jobId` / `exportId`, nothing else. */
+function statusFields(input: unknown): string[] {
+  const given = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+  const bad: string[] = [];
+  if (!isUuid(given.caseId)) bad.push("caseId");
+  const ids = (["jobId", "exportId"] as const).filter((key) => Object.hasOwn(given, key));
+  if (ids.length === 0) bad.push("jobId");
+  else if (ids.length > 1) bad.push(...ids);
+  else if (!isUuid(given[ids[0]])) bad.push(ids[0]);
+  bad.push(...Object.keys(given).filter((key) => !["caseId", "jobId", "exportId"].includes(key)));
+  return bad.length > 0 ? bad : ["input"];
+}
 
 function fieldsOf(issues: readonly { path: readonly PropertyKey[] }[]): string[] {
   return [...new Set(issues.map((issue) => String(issue.path[0] ?? "input")))];
@@ -89,7 +105,8 @@ export function makeEnsureExport(deps: Pick<RequestExportDeps, "exports">) {
  * (`FORMAT_NOT_IN_REVISION`), reuses a stored export with the same content hash (`ready`,
  * with an `export` case event), and otherwise enqueues one `export` job (`pending`; a
  * second press while it runs returns the same job). Authorize `export` first.
- * Errors also: `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE` (Video), `NOT_FOUND`, the reads'.
+ * Errors also: `INVALID_INPUT` (naming `format` for an id outside the registry),
+ * `FORMAT_NOT_EXPORTABLE` (Video), `NOT_FOUND`, the reads'.
  */
 export function makeRequestExport(deps: RequestExportDeps) {
   return async function requestExport(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
@@ -98,7 +115,7 @@ export function makeRequestExport(deps: RequestExportDeps) {
     const { caseId, format } = parsed.data;
     const refused = notExportable(format);
     if (refused !== null) return err(refused);
-    if (!isExportFormatId(format)) return err(formatNotInRevision(format));
+    if (!isFormatId(format) || !isExportFormatId(format)) return invalid(["format"]);
 
     const source = await readExportSource(deps, caseId, format);
     if (!source.ok) return source;
@@ -132,7 +149,7 @@ export function makeRequestExport(deps: RequestExportDeps) {
 export function makeExportStatus(deps: RequestExportDeps) {
   return async function exportStatus(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
     const parsed = exportStatusInputSchema.safeParse(input);
-    if (!parsed.success) return invalid(["caseId", "jobId"]);
+    if (!parsed.success) return invalid(statusFields(input));
     const { caseId } = parsed.data;
     const notFound = () => err({ code: "NOT_FOUND", message: "No such export.", details: { caseId } });
 

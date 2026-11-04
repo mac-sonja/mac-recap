@@ -9,6 +9,19 @@ const READY = `Promise.all([document.fonts.ready, ...Array.from(document.images,
 
 const PAGE_SELECTOR = "section.mr-page";
 
+/** `promise`, or a rejection once `ms` pass first (the timer never outlives the race). */
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Playwright Chromium for exports (Story 5.3), worker only. One browser per file, closed
  * afterwards (and at once when `signal` aborts). The context is offline and every request
@@ -26,7 +39,7 @@ export function createPlaywrightExportBrowser(launch: () => Promise<Browser> = (
       const page = await context.newPage();
       await page.emulateMedia({ media: "screen", reducedMotion: "reduce" });
       await page.setContent(html, { waitUntil: "load", timeout: LOAD_TIMEOUT_MS });
-      await page.evaluate(READY);
+      await withTimeout(page.evaluate(READY), LOAD_TIMEOUT_MS, "fonts and images did not load in time");
       signal.throwIfAborted();
       const result = await work(page);
       signal.throwIfAborted();

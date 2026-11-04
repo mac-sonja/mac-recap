@@ -138,7 +138,7 @@ describe("requestExport (Story 5.3)", () => {
     });
     expect(await makeRequestExport(d)(ACTOR, { caseId: CASE_ID, format: "deck_16_9" })).toMatchObject({
       ok: false,
-      error: { code: "FORMAT_NOT_IN_REVISION" },
+      error: { code: "INVALID_INPUT", details: { fields: ["format"] } },
     });
     expect(d.getCase).not.toHaveBeenCalled();
     expect(d.enqueue).not.toHaveBeenCalled();
@@ -217,8 +217,24 @@ describe("exportStatus (Story 5.3)", () => {
     expect(d.storage.presignDownload).not.toHaveBeenCalled();
   });
 
-  it("refuses a malformed input", async () => {
-    expect(await makeExportStatus(deps())(ACTOR, { caseId: CASE_ID })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+  it.each([
+    [{ caseId: CASE_ID }, ["jobId"]],
+    [{ caseId: "nope", jobId: JOB_ID }, ["caseId"]],
+    [{ caseId: CASE_ID, jobId: "nope" }, ["jobId"]],
+    [{ caseId: CASE_ID, exportId: "nope" }, ["exportId"]],
+    [{ caseId: CASE_ID, jobId: JOB_ID, exportId: EXPORT_ID }, ["jobId", "exportId"]],
+    [{ caseId: CASE_ID, jobId: JOB_ID, extra: 1 }, ["extra"]],
+    [null, ["caseId", "jobId"]],
+  ])("refuses %j as INVALID_INPUT naming %j", async (input, fields) => {
+    expect(await makeExportStatus(deps())(ACTOR, input)).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", details: { fields } } });
+  });
+
+  it("is failed when the job succeeded but no export row matches its hash", async () => {
+    const d = deps({ getJobsFor: vi.fn(async () => ok([job("succeeded", "f".repeat(64))])) });
+    expect(await makeExportStatus(d)(ACTOR, { caseId: CASE_ID, jobId: JOB_ID })).toEqual(ok({ status: "failed" }));
+    expect(vi.mocked(d.exports.findByHash)).toHaveBeenCalledWith("f".repeat(64));
+    expect(d.storage.presignDownload).not.toHaveBeenCalled();
+    expect(d.recordEvent).not.toHaveBeenCalled();
   });
 
   it("names the file after the case", async () => {

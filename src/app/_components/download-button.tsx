@@ -22,6 +22,9 @@ const OPTION = "flex items-center gap-3 rounded-lg border px-4 py-3";
 /** How often a file being made is asked about (Story 5.3). */
 export const DOWNLOAD_POLL_MS = 2000;
 
+/** How long a file may stay pending before the wait counts as not finished (the toast with **Riprova**). */
+export const DOWNLOAD_GIVE_UP_MS = 5 * 60 * 1000;
+
 /** What **Scarica** in the dialog gets back at once: the file, a ticket to poll, or why not (shown in the dialog). */
 export type DownloadStart =
   | { kind: "ready"; url: string; fileName: string }
@@ -42,8 +45,10 @@ export interface DownloadButtonProps {
    * Without it **Scarica** in the dialog stays inactive.
    */
   onDownload?: (format: FormatId) => Promise<DownloadStart>;
-  /** Asks again about a `pending` ticket, every 2 s until it is ready or failed. */
+  /** Asks again about a `pending` ticket, every 2 s until it is ready or failed (at most 5 minutes). */
   onPoll?: (ticket: string) => Promise<DownloadPoll>;
+  /** The failure toast's line, naming what was downloaded (several toasts may show at once). */
+  failedMessage?: string;
 }
 
 type Phase =
@@ -75,7 +80,7 @@ function saveFile(url: string, fileName: string) {
  * browsing. When it is ready the browser downloads it; when it didn't finish a toast
  * offers **Riprova**. Leaving the page drops the wait: no download then.
  */
-export function DownloadButton({ label, title, description, onDownload, onPoll }: DownloadButtonProps) {
+export function DownloadButton({ label, title, description, onDownload, onPoll, failedMessage = it.download.failed }: DownloadButtonProps) {
   const [open, setOpen] = useState(false);
   const [format, setFormat] = useState<DownloadFormatId>(FORMAT_ORDER[0]);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -99,10 +104,13 @@ export function DownloadButton({ label, title, description, onDownload, onPoll }
   });
 
   const busy = phase.kind === "starting" || phase.kind === "working";
+  // A double click lands before the re-render that marks the button busy.
+  const inFlight = useRef(false);
 
   async function begin(chosen: DownloadFormatId) {
     const start = handlers.current.onDownload;
-    if (start === undefined || busy) return;
+    if (start === undefined || busy || inFlight.current) return;
+    inFlight.current = true;
     setPhase({ kind: "starting" });
     setRefusal(null);
     setAnnouncement("");
@@ -111,6 +119,8 @@ export function DownloadButton({ label, title, description, onDownload, onPoll }
       started = await start(chosen);
     } catch {
       started = { kind: "refused", message: it.download.failed };
+    } finally {
+      inFlight.current = false;
     }
     if (!mounted.current) return;
     if (started.kind === "refused") {
@@ -133,6 +143,7 @@ export function DownloadButton({ label, title, description, onDownload, onPoll }
     if (phase.kind !== "working") return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const giveUpAt = Date.now() + DOWNLOAD_GIVE_UP_MS;
     const tick = async () => {
       const poll = handlers.current.onPoll;
       let next: DownloadPoll;
@@ -142,7 +153,7 @@ export function DownloadButton({ label, title, description, onDownload, onPoll }
         next = { kind: "failed" };
       }
       if (cancelled) return;
-      if (next.kind === "pending") {
+      if (next.kind === "pending" && Date.now() < giveUpAt) {
         timer = setTimeout(tick, DOWNLOAD_POLL_MS);
         return;
       }
@@ -175,7 +186,7 @@ export function DownloadButton({ label, title, description, onDownload, onPoll }
         }}
         className={cn(ROW_PILL, PRESSABLE, "aria-busy:text-foreground-muted")}
       >
-        {phase.kind === "working" ? (
+        {busy ? (
           <>
             <Loader2 aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" />
             {it.download.working}
@@ -188,9 +199,9 @@ export function DownloadButton({ label, title, description, onDownload, onPoll }
         )}
       </button>
       {/* Only while there is something to say: a table holds one picker per row. */}
-      {(phase.kind === "working" || announcement !== "") && (
+      {(busy || announcement !== "") && (
         <span role="status" className="sr-only">
-          {phase.kind === "working" ? it.download.working : announcement}
+          {busy ? it.download.working : announcement}
         </span>
       )}
       <Dialog
@@ -267,7 +278,7 @@ export function DownloadButton({ label, title, description, onDownload, onPoll }
           role="alert"
           className="fixed right-6 bottom-6 z-50 flex animate-enter items-center gap-3 rounded-xl bg-surface-raised py-3 pr-3 pl-4 shadow-popover"
         >
-          <p className="font-label text-sm text-foreground-strong">{it.download.failed}</p>
+          <p className="font-label text-sm text-foreground-strong">{failedMessage}</p>
           <button type="button" onClick={() => void begin(phase.format)} className={SECONDARY_ACTION}>
             {it.download.retry}
           </button>

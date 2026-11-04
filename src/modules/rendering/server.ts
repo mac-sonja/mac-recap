@@ -10,13 +10,11 @@ import { createSupabaseExportRepository } from "@/modules/rendering/adapters/sup
 import { createSupabaseExportStorage } from "@/modules/rendering/adapters/supabase/export-storage";
 import type { ExportSourceDeps } from "@/modules/rendering/application/export-source";
 import {
-  makeEnsureExport,
   makeExportStatus,
   makeRequestExport,
   type ExportTicket,
   type RequestExportDeps,
 } from "@/modules/rendering/application/request-export";
-import type { ExportRecord } from "@/modules/rendering/domain/export";
 import type { Result } from "@/shared/result";
 
 export { EXPORT_STALE, FORMAT_NOT_EXPORTABLE, NOT_APPROVED } from "@/modules/rendering/domain/export";
@@ -64,9 +62,4 @@ export function requestExport(actor: Actor, input: unknown): Promise<Result<Expo
  */
 export function exportStatus(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
   return makeExportStatus(deps())(actor, input);
-}
-
-/** The stored export with this content hash, or null: exports are reused only on a hash match. */
-export function ensureExport(contentHash: string): Promise<Result<ExportRecord | null>> {
-  return makeEnsureExport({ exports: createSupabaseExportRepository() })(contentHash);
 }

@@ -13,7 +13,7 @@ import {
   REVISION_ID,
   sourceDeps,
 } from "@/modules/rendering/application/export.fixtures";
-import type { ExportFormatId, ExportRecord, NewExport } from "@/modules/rendering/domain/export";
+import { EXPORT_MAX_BYTES, type ExportFormatId, type ExportRecord, type NewExport } from "@/modules/rendering/domain/export";
 import type { ExportBrowser } from "@/modules/rendering/ports/export-browser";
 import { err, ok } from "@/shared/result";
 
@@ -21,6 +21,10 @@ const OTHER_VIDEO = "aaaaaaaa-0000-4000-8000-000000000009";
 const SVG = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>');
 const PNG_LOGO = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 const FONT_CSS = "@font-face{font-family:Inter;src:url(data:font/woff2;base64,SU5URVI=) format(\"woff2\")}";
+
+/** A stand-in PDF with one `/Type /Page` object per page (and the `/Pages` tree, which isn't one). */
+const fakePdf = (pages: number) =>
+  new TextEncoder().encode(`%PDF-fake << /Type /Pages >> ${"<< /Type /Page >> ".repeat(pages)}`);
 
 const sections = (html: string) => html.match(/<section class="mr-page"/g)?.length ?? 0;
 
@@ -30,7 +34,7 @@ function fakeBrowser() {
   const browser = {
     pdf: vi.fn(async (html: string, size: { width: number; height: number }) => {
       seen.push({ html, size });
-      return new TextEncoder().encode(`%PDF-fake ${sections(html)} pages`);
+      return fakePdf(sections(html));
     }),
     pngs: vi.fn(async (html: string, size: { width: number; height: number }) => {
       seen.push({ html, size });
@@ -124,7 +128,7 @@ describe("export handler (Story 5.3)", () => {
     expect(sections(seen[0].html)).toBe(3);
     const [[target, bytes]] = vi.mocked(all.storage.upload).mock.calls as unknown as [[{ contentHash: string; format: string }, Uint8Array]];
     expect(target).toEqual({ contentHash: job.inputHash, format: "presentazione_16_9" });
-    expect(new TextDecoder().decode(bytes)).toBe("%PDF-fake 3 pages");
+    expect(bytes).toEqual(fakePdf(3));
     expect(inserted).toEqual([
       {
         contentHash: job.inputHash,
@@ -176,8 +180,42 @@ describe("export handler (Story 5.3)", () => {
     const { all } = deps();
     vi.mocked(all.browser.pngs).mockResolvedValueOnce([new Uint8Array([1])]);
     const outcome = await makeExportHandler(all).run(await jobFor(all, "carosello_1_1"), signal());
-    expect(outcome).toMatchObject({ ok: false, error: { code: "EXPORT_RENDER_FAILED" } });
+    expect(outcome).toMatchObject({ ok: false, error: { code: "EXPORT_RENDER_FAILED", retryable: false } });
     expect(all.storage.upload).not.toHaveBeenCalled();
+  });
+
+  it("fails for good a PDF whose page count isn't the revision's", async () => {
+    const { all } = deps();
+    vi.mocked(all.browser.pdf).mockResolvedValueOnce(fakePdf(4));
+    const outcome = await makeExportHandler(all).run(await jobFor(all, "presentazione_16_9"), signal());
+    expect(outcome).toMatchObject({ ok: false, error: { code: "EXPORT_RENDER_FAILED", retryable: false } });
+    expect(all.storage.upload).not.toHaveBeenCalled();
+  });
+
+  it("fails for good a file larger than the bucket accepts", async () => {
+    const { all } = deps({ zip: vi.fn(() => new Uint8Array(EXPORT_MAX_BYTES + 1)) });
+    const outcome = await makeExportHandler(all).run(await jobFor(all, "carosello_1_1"), signal());
+    expect(outcome).toMatchObject({ ok: false, error: { code: "EXPORT_TOO_LARGE", retryable: false } });
+    expect(all.storage.upload).not.toHaveBeenCalled();
+  });
+
+  it.each(["LOGO_UNSAFE", "LOGO_RASTERISE_FAILED"])("draws the pages without the logo on %s, logging only ids", async (code) => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const { all, seen } = deps({ rasteriseSvg: vi.fn(async () => err({ code: code as Uppercase<string>, message: "x" })) });
+      expect(await makeExportHandler(all).run(await jobFor(all, "presentazione_16_9"), signal())).toEqual(ok(undefined));
+      expect(seen[0].html).not.toContain('class="mr-clogo"');
+      const line = write.mock.calls.map(([chunk]) => String(chunk)).find((c) => c.includes(code));
+      expect(JSON.parse(line ?? "{}")).toEqual({
+        level: "warn",
+        msg: `export drawn without the logo: ${code}`,
+        time: expect.any(String),
+        caseId: CASE_ID,
+        clientId: clientInfo().clientId,
+      });
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it("reuses a file already stored for the hash: no browser, no write", async () => {
@@ -209,10 +247,13 @@ describe("export handler (Story 5.3)", () => {
     expect(all.browser.pdf).not.toHaveBeenCalled();
   });
 
-  it("leaves out a rendition that isn't ready, as the preview does", async () => {
-    const { all, seen } = deps({ getClientRendition: vi.fn(async () => err({ code: "RENDITION_NOT_READY", message: "Not yet." })) });
-    expect(await makeExportHandler(all).run(await jobFor(all, "presentazione_16_9"), signal())).toEqual(ok(undefined));
-    expect(seen[0].html).not.toContain(b64(`bytes of https://storage.test/client/${CLIENT_IMAGE}.webp`));
+  it.each(["RENDITION_NOT_READY", "NOT_FOUND"])("waits and retries when a referenced file's rendition is missing (%s): never stores a file without an image", async (code) => {
+    const { all } = deps({ getClientRendition: vi.fn(async () => err({ code: code as Uppercase<string>, message: "Not yet." })) });
+    const outcome = await makeExportHandler(all).run(await jobFor(all, "presentazione_16_9"), signal());
+    expect(outcome).toMatchObject({ ok: false, error: { code: "RENDITION_NOT_READY", retryable: true } });
+    expect(all.browser.pdf).not.toHaveBeenCalled();
+    expect(all.storage.upload).not.toHaveBeenCalled();
+    expect(all.exports.insert).not.toHaveBeenCalled();
   });
 
   it("retries when a rendition can't be read or the browser fails, and stores nothing", async () => {
@@ -305,6 +346,9 @@ describe("acceptance (Story 5.3)", () => {
 
     expect(rows).toHaveLength(2);
     expect(rows[1].contentHash).not.toBe(rows[0].contentHash);
+    // The second row is keyed by the source as it reads now: the renamed client's hash.
+    const now = await readExportSource(all, CASE_ID, "presentazione_16_9");
+    expect(now.ok && now.value.contentHash).toBe(rows[1].contentHash);
     expect(seen).toHaveLength(2);
     expect(seen[0].html).toContain("Lumen Srl");
     expect(seen[1].html).toContain("Lumen Rinnovata Spa");

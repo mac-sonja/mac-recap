@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { contentHash } from "@/modules/rendering/application/content-hash";
-import type { ExportPartContent } from "@/modules/rendering/domain/export";
+import { contentHashInput, EXPORT_RENDER_VERSION, type ExportPartContent } from "@/modules/rendering/domain/export";
 
 const CASE_A = "cccccccc-0000-4000-8000-000000000001";
 const CASE_B = "cccccccc-0000-4000-8000-000000000002";
@@ -9,6 +9,7 @@ const REV_B = "eeeeeeee-0000-4000-8000-000000000002";
 
 const part = (over: { caseId?: string; revisionId?: string } = {}): ExportPartContent => ({
   part: { subject: { kind: "case", id: over.caseId ?? CASE_A }, revisionId: over.revisionId ?? REV_A },
+  template: "mac-case@1",
   client: {
     name: "Lumen Srl",
     sector: "Lusso",
@@ -35,13 +36,14 @@ describe("contentHash (Story 5.3)", () => {
 
   it("ignores the case of ids and the key order of the input", () => {
     const upper = part({ caseId: CASE_A.toUpperCase(), revisionId: REV_A.toUpperCase() });
-    const reordered: ExportPartContent = { case: upper.case, client: upper.client, part: upper.part };
+    const reordered: ExportPartContent = { case: upper.case, client: upper.client, template: upper.template, part: upper.part };
     expect(contentHash([reordered], "presentazione_16_9")).toBe(base);
   });
 
   const changes: [string, (p: ExportPartContent) => ExportPartContent][] = [
     ["the case", (p) => ({ ...p, part: { ...p.part, subject: { kind: "case", id: CASE_B } } })],
     ["the revision", (p) => ({ ...p, part: { ...p.part, revisionId: REV_B } })],
+    ["the template", (p) => ({ ...p, template: "mac-case@2" })],
     ["the client's name", (p) => ({ ...p, client: { ...p.client, name: "Lumen Spa" } })],
     ["the client's sector", (p) => ({ ...p, client: { ...p.client, sector: "Moda" } })],
     ["the client's description", (p) => ({ ...p, client: { ...p.client, description: "Altro." } })],
@@ -59,6 +61,11 @@ describe("contentHash (Story 5.3)", () => {
 
   it.each(changes)("changes with %s", (_, change) => {
     expect(contentHash([change(part())], "presentazione_16_9")).not.toBe(base);
+  });
+
+  it("covers EXPORT_RENDER_VERSION, so a bump draws every export again", () => {
+    expect(JSON.parse(contentHashInput([part()], "presentazione_16_9"))[1]).toBe(EXPORT_RENDER_VERSION);
+    expect(contentHashInput([part()], "presentazione_16_9")).toContain('"mac-case@1"');
   });
 
   it("changes with the format", () => {

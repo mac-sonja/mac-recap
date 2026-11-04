@@ -13,6 +13,19 @@ export const NOT_APPROVED = "NOT_APPROVED" as const;
 export const FORMAT_NOT_EXPORTABLE = "FORMAT_NOT_EXPORTABLE" as const;
 /** The content changed between the request and the render: ask again. */
 export const EXPORT_STALE = "EXPORT_STALE" as const;
+/** The rendered file is larger than the `rendering` bucket accepts: asking again draws the same file. */
+export const EXPORT_TOO_LARGE = "EXPORT_TOO_LARGE" as const;
+
+/** The `rendering` bucket's per-object limit (`20261105140000_rendering_export.sql`): 50 MB. */
+export const EXPORT_MAX_BYTES = 50 * 1024 * 1024;
+
+/**
+ * The version of how an export is drawn: the export HTML, the inline fonts and media, the
+ * print and screenshot settings. It is part of every content hash, so **bump it whenever
+ * export rendering changes** (anything that would make the same content give another
+ * file): stored exports are then drawn again instead of being reused.
+ */
+export const EXPORT_RENDER_VERSION = 1;
 
 /** The formats that export today, in the picker's order. */
 export const EXPORT_FORMAT_IDS = ["presentazione_16_9", "carosello_1_1"] as const satisfies readonly FormatId[];
@@ -90,6 +103,8 @@ interface Testimonial {
  */
 export interface ExportPartContent {
   part: ExportPart;
+  /** The revision document's template ref (`mac-case@1`): another template draws another file. */
+  template: string;
   client: {
     name: string;
     sector: string;
@@ -114,17 +129,20 @@ const quote = (t: Testimonial | null) => (t === null ? null : [t.quote, t.author
  * The canonical text the content hash is taken of: the ordered parts (subject and
  * revision id), each part's client info (name, sector, description, logo id, and the
  * client's results and testimonial, which pages also draw), the case's bound fields
- * (year, services, results, testimonial) and the format. Arrays, never objects, so key
- * order can't change it. `v1` versions the shape.
+ * (year, services, results, testimonial), each part's template, the format and
+ * `EXPORT_RENDER_VERSION`. Arrays, never objects, so key order can't change it. `v1`
+ * versions the shape.
  */
 export function contentHashInput(parts: readonly ExportPartContent[], format: ExportFormatId): string {
   return JSON.stringify([
     "export.v1",
+    EXPORT_RENDER_VERSION,
     format,
-    parts.map(({ part, client, case: c }) => [
+    parts.map(({ part, template, client, case: c }) => [
       part.subject.kind,
       part.subject.id.toLowerCase(),
       part.revisionId.toLowerCase(),
+      template,
       [client.name, client.sector, client.description, client.logoId?.toLowerCase() ?? null, rows(client.results), quote(client.testimonial)],
       [c.year, [...c.services], rows(c.results), quote(c.testimonial)],
     ]),

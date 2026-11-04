@@ -415,6 +415,7 @@ export function CaseStudiesTable({
                             label={fill(it.download.caseLabel, { name: row.name })}
                             title={fill(it.download.caseTitle, { name: row.name })}
                             description={it.download.caseDescription}
+                            failedMessage={fill(it.download.failedCase, { name: row.name })}
                             {...caseDownload(row.id)}
                           />
                           {canEdit && (

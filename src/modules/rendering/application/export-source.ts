@@ -53,6 +53,7 @@ export async function readExportSource(deps: ExportSourceDeps, caseId: string, f
   const { brief } = info.value;
   const content: ExportPartContent = {
     part: { subject: { kind: "case", id: caseStudy.id }, revisionId: revision.id },
+    template: revision.doc.template,
     client: {
       name: info.value.name,
       sector: info.value.industry?.label ?? "",

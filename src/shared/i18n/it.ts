@@ -658,6 +658,8 @@ export const it = {
     ready: "Il file è pronto e sta scaricando.",
     /** The toast when the export job failed for good; **Riprova** asks again. */
     failed: "L’esportazione non è finita.",
+    /** The same toast on a case's Scarica: names the case, as several toasts may show at once. */
+    failedCase: "L’esportazione di {name} non è finita.",
     retry: "Riprova",
     /** In the dialog: the case has no approved version (`NOT_APPROVED`). */
     notApproved: "Questa case non ha ancora una versione approvata. Approvala e poi scaricala.",

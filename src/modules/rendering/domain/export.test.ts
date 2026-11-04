@@ -68,6 +68,7 @@ describe("payloads and inputs", () => {
       [
         {
           part: { subject: { kind: "case", id: CASE }, revisionId: REV },
+          template: "mac-case@1",
           client: { name: "L", sector: "", description: "", logoId: null, results: [], testimonial: null },
           case: { year: 2026, services: [], results: [], testimonial: null },
         },

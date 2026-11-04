@@ -2,11 +2,13 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fill, it as dict } from "@/shared/i18n/it";
-import { DOWNLOAD_POLL_MS, DownloadButton, type DownloadPoll, type DownloadStart } from "./download-button";
+import { DOWNLOAD_GIVE_UP_MS, DOWNLOAD_POLL_MS, DownloadButton, type DownloadPoll, type DownloadStart } from "./download-button";
 
 const LABEL = fill(dict.download.caseLabel, { name: "Rebrand Lumen" });
 const TITLE = fill(dict.download.caseTitle, { name: "Rebrand Lumen" });
 const FILE = { url: "https://storage.test/signed?download=x", fileName: "LUM-2026-01 Rebrand Lumen – Presentazione.pdf" };
+
+const FAILED = fill(dict.download.failedCase, { name: "Rebrand Lumen" });
 
 let clicked: { href: string; download: string }[] = [];
 
@@ -25,7 +27,16 @@ afterEach(() => {
 });
 
 function setup(onDownload?: (format: string) => Promise<DownloadStart>, onPoll?: (ticket: string) => Promise<DownloadPoll>) {
-  return render(<DownloadButton label={LABEL} title={TITLE} description={dict.download.caseDescription} onDownload={onDownload} onPoll={onPoll} />);
+  return render(
+    <DownloadButton
+      label={LABEL}
+      title={TITLE}
+      description={dict.download.caseDescription}
+      onDownload={onDownload}
+      onPoll={onPoll}
+      failedMessage={FAILED}
+    />,
+  );
 }
 
 const trigger = () => screen.getByRole("button", { name: LABEL, hidden: true });
@@ -117,7 +128,8 @@ describe("DownloadButton (Story 5.3)", () => {
       await vi.advanceTimersByTimeAsync(DOWNLOAD_POLL_MS);
     });
     const toast = screen.getByRole("alert", { hidden: true });
-    expect(toast.textContent).toContain(dict.download.failed);
+    expect(toast.textContent).toContain(FAILED);
+    expect(FAILED).toContain("Rebrand Lumen");
     expect(trigger().textContent).toContain(dict.download.action);
 
     await act(async () => {
@@ -125,7 +137,7 @@ describe("DownloadButton (Story 5.3)", () => {
     });
     expect(onDownload).toHaveBeenCalledTimes(2);
     expect(onDownload).toHaveBeenLastCalledWith("carosello_1_1");
-    expect(screen.queryByText(dict.download.failed)).toBeNull();
+    expect(screen.queryByText(FAILED)).toBeNull();
     expect(trigger().textContent).toContain(dict.download.working);
   });
 
@@ -142,6 +154,42 @@ describe("DownloadButton (Story 5.3)", () => {
     fireEvent.click(toast.querySelector<HTMLButtonElement>(`button[aria-label="${dict.download.close}"]`)!);
     expect(screen.queryByRole("alert", { hidden: true })).toBeNull();
     expect(onDownload).toHaveBeenCalledOnce();
+  });
+
+  it("shows the spinner while the request starts, and sends one request for a double click", async () => {
+    let answer: (start: DownloadStart) => void = () => undefined;
+    const onDownload = vi.fn(() => new Promise<DownloadStart>((resolve) => (answer = resolve)));
+    setup(onDownload, async () => ({ kind: "pending" }));
+    fireEvent.click(trigger());
+    const scarica = confirm();
+    fireEvent.click(scarica);
+    fireEvent.click(scarica);
+    expect(onDownload).toHaveBeenCalledOnce();
+    expect(trigger().textContent).toContain(dict.download.working);
+    expect(trigger().getAttribute("aria-busy")).toBe("true");
+    await act(async () => answer({ kind: "pending", ticket: "job-1" }));
+    expect(trigger().textContent).toContain(dict.download.working);
+  });
+
+  it("gives up after 5 minutes of pending: the failure toast with Riprova", async () => {
+    const onPoll = vi.fn(async (): Promise<DownloadPoll> => ({ kind: "pending" }));
+    setup(async () => ({ kind: "pending", ticket: "job-1" }), onPoll);
+    await choose();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_GIVE_UP_MS - DOWNLOAD_POLL_MS);
+    });
+    expect(screen.queryByRole("alert", { hidden: true })).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_POLL_MS * 2);
+    });
+    expect(screen.getByRole("alert", { hidden: true }).textContent).toContain(FAILED);
+    expect(screen.getByRole("button", { name: dict.download.retry, hidden: true })).toBeTruthy();
+    const polls = onPoll.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_POLL_MS * 5);
+    });
+    expect(onPoll.mock.calls.length).toBe(polls);
+    expect(clicked).toEqual([]);
   });
 
   it("ignores the trigger while the file is being made", async () => {

@@ -2,7 +2,7 @@
 title: 'Story 5.3: export a format as a file'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'd3bf032d8beafad7c957ec1e88e9eb439c6892af'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -89,6 +89,7 @@ context:
 - **Events.** The `export` case event (`CASE_EXPORTED`, `data { exportId, format }`, the revision drawn) is written when a ready link is handed out. A failed export writes only the job loop's `job_failed`; the handler has no `onPermanentFailure`, so status never changes.
 - **Files.** Fonts, renditions (case `rendition`, client `client_rendition`; image display copy, video poster) and the logo are inlined as `data:` URLs by the worker; Chromium runs offline with every request aborted. An SVG logo is scanned again and rasterised with sharp (librsvg from a buffer, no base URL). The ZIP is a deterministic stored ZIP (`adapters/zip/store-zip.ts`, no new dependency). Bucket: private `rendering`, PDF and ZIP only, 50 MB.
 - **Build.** `@fontsource-variable/inter@5.3.0` added; `build:dist` leaves `playwright` external; the Dockerfile copies `playwright`, `playwright-core` and the font package; `scripts/smoke-image.sh` checks Chromium prints a PDF in the image; CI installs Playwright's Chromium for `test/export-chromium.test.ts` (skipped locally without it).
+- **Review fixes.** The hash also covers each part's template and `EXPORT_RENDER_VERSION` (bump it when export rendering changes). A referenced file whose rendition isn't ready fails the job as retryable `RENDITION_NOT_READY`: no file is stored with a missing image. An SVG logo that fails the scan or can't be drawn is left out (logged with ids). A PDF whose page count differs from the revision's, and a file over 50 MB (`EXPORT_TOO_LARGE`), fail for good. An unknown format id is `INVALID_INPUT`. The picker gives up after 5 minutes pending (failure toast naming the case), ignores a double click and shows the spinner from the first press.
 - **Not run here.** `npm run test:db` (no Docker daemon in this environment): `test/db/export.db.test.ts` and the hand-written `export` entry in `db.types.ts` are unverified against the generator's drift check.
 
 ## Spec Change Log

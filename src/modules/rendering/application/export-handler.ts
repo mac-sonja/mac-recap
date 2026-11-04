@@ -2,7 +2,15 @@ import { referencedAssetIds } from "@/modules/case-study";
 import { JOB_ABORTED, type Job, type JobHandler, type JobOutcome } from "@/modules/jobs";
 import { exportHtml } from "@/modules/rendering/application/export-html";
 import { readExportSource, type ExportSource, type ExportSourceDeps } from "@/modules/rendering/application/export-source";
-import { EXPORT_FILES, EXPORT_STALE, exportPayloadSchema, type ExportFormatId, type ExportPayload } from "@/modules/rendering/domain/export";
+import {
+  EXPORT_FILES,
+  EXPORT_MAX_BYTES,
+  EXPORT_STALE,
+  EXPORT_TOO_LARGE,
+  exportPayloadSchema,
+  type ExportFormatId,
+  type ExportPayload,
+} from "@/modules/rendering/domain/export";
 import { getFormat } from "@/modules/rendering/domain/formats";
 import type { ExportBrowser } from "@/modules/rendering/ports/export-browser";
 import type { ExportRepository } from "@/modules/rendering/ports/export-repository";
@@ -50,16 +58,28 @@ const fail = (code: Uppercase<string>, message: string, retryable = true): JobOu
 const aborted = (): JobOutcome => err({ code: JOB_ABORTED, message: "The export was stopped." });
 
 /** Codes that asking again cannot fix: the job fails at once. */
-const PERMANENT = new Set(["NOT_APPROVED", "FORMAT_NOT_IN_REVISION", "NOT_FOUND", EXPORT_STALE]);
+const PERMANENT = new Set(["NOT_APPROVED", "FORMAT_NOT_IN_REVISION", "NOT_FOUND", EXPORT_STALE, EXPORT_TOO_LARGE]);
 
-const asFailure = (error: { code: string; message: string }): JobOutcome =>
-  fail(error.code as Uppercase<string>, error.message, !PERMANENT.has(error.code));
+/** A failure as the job loop takes it: retried unless it says otherwise or its code is permanent. */
+const asFailure = (error: { code: string; message: string; retryable?: boolean }): JobOutcome =>
+  fail(error.code as Uppercase<string>, error.message, error.retryable ?? !PERMANENT.has(error.code));
 
 /** The rendition a still export draws: an image's display copy, a video's poster frame. */
 const STILL_SPEC: Readonly<Record<string, string>> = { image: "image.display", video: "video.poster" };
 
-/** Renditions that may be missing without failing the export, as in the preview: not made yet, or the file just went. */
-const SKIPPABLE = new Set(["RENDITION_NOT_READY", "NOT_FOUND"]);
+/**
+ * A referenced file whose rendition is not made yet (or whose file just went): the export
+ * waits and retries, so a stored file (reused for its hash forever) never misses an image.
+ */
+const NOT_READY = new Set(["RENDITION_NOT_READY", "NOT_FOUND"]);
+
+/** Logo failures that asking again cannot fix: the pages are drawn without the logo. */
+const LOGO_SKIPPED = new Set(["LOGO_UNSAFE", "LOGO_RASTERISE_FAILED"]);
+
+/** How many pages a PDF has: its `/Type /Page` objects (Chromium writes no object streams). */
+export function pdfPageCount(bytes: Uint8Array): number {
+  return Buffer.from(bytes).toString("latin1").match(/\/Type\s*\/Page(?![a-zA-Z])/g)?.length ?? 0;
+}
 
 const dataUrl = (contentType: string, bytes: Uint8Array) => `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
 
@@ -79,7 +99,7 @@ function caseIdOf(job: Job): string | null {
  * the immutable `export` row. It never touches the case's status.
  */
 export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
-  async function mediaAssets(source: ExportSource, signal: AbortSignal): Promise<Result<Record<string, RenderAsset>>> {
+  async function mediaAssets(source: ExportSource, signal: AbortSignal): Promise<Result<Record<string, RenderAsset>, Failure>> {
     const wanted = referencedAssetIds({ pages: source.pages });
     if (wanted.size === 0) return ok({});
     const [caseFiles, clientFiles] = await Promise.all([deps.listCaseMedia(source.caseStudy.id), deps.listClientMedia(source.info.clientId)]);
@@ -95,7 +115,9 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
       signal.throwIfAborted();
       const link = await getRendition(file.id, STILL_SPEC[file.kind]);
       if (!link.ok) {
-        if (SKIPPABLE.has(link.error.code)) continue;
+        if (NOT_READY.has(link.error.code)) {
+          return err({ code: "RENDITION_NOT_READY", message: "A display copy is not ready yet.", retryable: true });
+        }
         return link;
       }
       const url = dataUrl(link.value.contentType, await deps.fetchBytes(link.value.url, signal));
@@ -111,7 +133,10 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
     if (logo.value === null || logo.value.bytes.length === 0) return ok(null);
     if (logo.value.contentType === "image/svg+xml") {
       const png = await deps.rasteriseSvg(logo.value.bytes);
-      return png.ok ? ok(dataUrl("image/png", png.value)) : png;
+      if (png.ok) return ok(dataUrl("image/png", png.value));
+      if (!LOGO_SKIPPED.has(png.error.code)) return png;
+      log.warn(`export drawn without the logo: ${png.error.code}`, { caseId: source.caseStudy.id, clientId: source.info.clientId });
+      return ok(null);
     }
     return ok(dataUrl(logo.value.contentType, logo.value.bytes));
   }
@@ -150,13 +175,25 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
     } catch {
       return err({ code: "EXPORT_RENDER_FAILED", message: "The pages could not be drawn.", retryable: false });
     }
-    if (format === "presentazione_16_9") return ok(await deps.browser.pdf(html, size, signal));
-    const pngs = await deps.browser.pngs(html, size, signal);
-    if (pngs.length !== source.pages.length) {
-      return err({ code: "EXPORT_RENDER_FAILED", message: `Drew ${pngs.length} of ${source.pages.length} slides.` });
+    let file: Uint8Array;
+    if (format === "presentazione_16_9") {
+      file = await deps.browser.pdf(html, size, signal);
+      const pages = pdfPageCount(file);
+      if (pages !== source.pages.length) {
+        return err({ code: "EXPORT_RENDER_FAILED", message: `Printed ${pages} pages for ${source.pages.length}.`, retryable: false });
+      }
+    } else {
+      const pngs = await deps.browser.pngs(html, size, signal);
+      if (pngs.length !== source.pages.length) {
+        return err({ code: "EXPORT_RENDER_FAILED", message: `Drew ${pngs.length} of ${source.pages.length} slides.`, retryable: false });
+      }
+      const width = Math.max(2, String(pngs.length).length);
+      file = deps.zip(pngs.map((bytes, i) => ({ name: `${String(i + 1).padStart(width, "0")}.png`, bytes })));
     }
-    const width = Math.max(2, String(pngs.length).length);
-    return ok(deps.zip(pngs.map((bytes, i) => ({ name: `${String(i + 1).padStart(width, "0")}.png`, bytes }))));
+    if (file.byteLength > EXPORT_MAX_BYTES) {
+      return err({ code: EXPORT_TOO_LARGE, message: "The file is larger than storage accepts.", retryable: false });
+    }
+    return ok(file);
   }
 
   async function run(job: Job, signal: AbortSignal): Promise<JobOutcome> {
