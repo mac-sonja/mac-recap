@@ -15,7 +15,8 @@ export function contentHash(parts: readonly ExportPartContent[], format: ExportF
 
 /**
  * A bundle's content hash (Story 5.4): the sha256 of `bundleHashInput`, its formats
- * (sorted) with their own content hashes and the names of the files inside.
+ * (sorted) with their own content hashes, `EXPORT_RENDER_VERSION` and the names of the
+ * files inside (they carry the case's code and name).
  */
 export function bundleHash(formats: readonly { format: ExportFormatId; contentHash: string }[], entryNames: readonly string[]): string {
   return sha256(bundleHashInput(formats, entryNames));

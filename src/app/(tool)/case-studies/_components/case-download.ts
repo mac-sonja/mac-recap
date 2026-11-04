@@ -12,7 +12,8 @@ function refusalFor(code: string): string {
 /**
  * **Scarica** for one approved case (Story 5.3): the picker's handlers, through the
  * export server actions. The ticked formats go as `formats` (Story 5.4): one asks for
- * that format's file, two or more for one ZIP of them. A ready file comes with its signed link and name; a pending one
+ * that format's file, two or more for one ZIP of them. A ready file comes with its
+ * signed link and name; a pending one
  * is polled by its job; a poll that fails or answers an error counts as not finished.
  */
 export function caseDownload(caseId: string): Required<Pick<DownloadButtonProps, "onDownload" | "onPoll">> {

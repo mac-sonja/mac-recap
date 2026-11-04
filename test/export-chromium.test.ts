@@ -17,7 +17,7 @@ import { ACTOR, CASE_ID, CASE_IMAGE, CLIENT_IMAGE, REVISION_ID, sourceDeps } fro
 import type { ExportRecord, NewExport } from "@/modules/rendering/domain/export";
 import type { BoundValues, FormatId } from "@/modules/rendering";
 import type { Job } from "@/modules/jobs";
-import { ok } from "@/shared/result";
+import { err, ok } from "@/shared/result";
 
 const hasChromium = (() => {
   try {
@@ -115,7 +115,10 @@ describe.skipIf(!hasChromium)("export with real Chromium (Story 5.3)", () => {
           files.set(path, bytes);
           return ok({ path });
         },
-        read: async (path) => ok(files.get(path) ?? new Uint8Array()),
+        read: async (path) => {
+          const bytes = files.get(path);
+          return bytes === undefined ? err({ code: "STORAGE_FAILED", message: "Missing." }) : ok(bytes);
+        },
       },
       listCaseMedia: async () => ok([{ id: CASE_IMAGE, kind: "image" }]),
       listClientMedia: async () => ok([{ id: CLIENT_IMAGE, kind: "image" }]),

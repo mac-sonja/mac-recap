@@ -120,8 +120,10 @@ function formatsOf(input: { format: string } | { formats: string[] }): Result<Ex
  * Asks for one format of a case's live approved revision as a file (Story 5.3): input
  * `{ caseId, format }`, or `{ caseId, formats }` (Story 5.4) where one format is the
  * same, and two or more ask for one ZIP of them (a bundle, reused by its own hash: its
- * formats and each one's content hash; else one `export` job renders the missing formats
- * and zips them). Every format is checked before anything is enqueued. Reads the live revision (never a working head), refuses without
+ * formats, sorted, each with its own content hash, `EXPORT_RENDER_VERSION` and the names
+ * of the files inside, which carry the case's code and name; else one `export` job
+ * renders the missing formats and zips them). Every format is checked before anything is
+ * enqueued. Reads the live revision (never a working head), refuses without
  * enqueueing when there is none (`NOT_APPROVED`) or the format has no pages in it
  * (`FORMAT_NOT_IN_REVISION`), reuses a stored export with the same content hash (`ready`,
  * with an `export` case event), and otherwise enqueues one `export` job (`pending`; a

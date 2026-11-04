@@ -301,7 +301,7 @@ describe("CaseView", () => {
     expect(slideCaption()).toContain(`1 di ${formats.presentazione_16_9.length}`);
   });
 
-  it("leaves ← → inside the open Scarica dialog to its checkboxes: the slide stays", () => {
+  it("keeps ← → inside the open Scarica dialog: the slide stays", () => {
     setup();
     fireEvent.click(format("Carosello"));
     fireEvent.click(button(fill(dict.download.caseLabel, { name: "Rebrand Lumen" })));

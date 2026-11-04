@@ -505,6 +505,30 @@ describe("export handler, bundles (Story 5.4)", () => {
   });
 
   it.each([
+    ["isn't a ZIP", () => new Uint8Array([1, 2, 3])],
+    ["has fewer PNGs than pages", () => storeZip([{ name: "01.png", bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) }])],
+  ])("fails for good a stored Carosello that %s: no bundle", async (_, damaged) => {
+    const exports = memoryExports();
+    const { all, files } = deps({ exports });
+    const handler = makeExportHandler(all);
+    await handler.run(await jobFor(all, "carosello_1_1"), signal());
+    files.set(exports.rows[0].path, damaged());
+    expect(await handler.run(await bundleJobFor(all), signal())).toMatchObject({ ok: false, error: { code: "EXPORT_RENDER_FAILED", retryable: false } });
+    expect(exports.rows.some((r) => r.format === "bundle")).toBe(false);
+  });
+
+  it("fails retryably when a stored file can't be read back: no bundle", async () => {
+    const exports = memoryExports();
+    const { all } = deps({ exports });
+    vi.mocked(all.storage.read).mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "Down." }));
+    expect(await makeExportHandler(all).run(await bundleJobFor(all), signal())).toMatchObject({
+      ok: false,
+      error: { code: "STORAGE_FAILED", retryable: true },
+    });
+    expect(exports.rows.some((r) => r.format === "bundle")).toBe(false);
+  });
+
+  it.each([
     { formats: ["carosello_1_1"] },
     { formats: ["presentazione_16_9", "carosello_1_1"] },
     { formats: ["carosello_1_1", "carosello_1_1"] },

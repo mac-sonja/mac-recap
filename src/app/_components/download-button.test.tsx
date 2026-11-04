@@ -183,7 +183,7 @@ describe("DownloadButton (Story 5.3)", () => {
   it("shows the failure toast with Riprova when the export didn't finish; Riprova asks again for the same format", async () => {
     const onDownload = vi.fn(async (): Promise<DownloadStart> => ({ kind: "pending", ticket: "job-1" }));
     setup(onDownload, async () => ({ kind: "failed" }));
-    await choose(CAROSELLO);
+    await choose(...ONLY_CAROSELLO);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(DOWNLOAD_POLL_MS);
     });
@@ -196,7 +196,7 @@ describe("DownloadButton (Story 5.3)", () => {
       fireEvent.click(screen.getByRole("button", { name: dict.download.retry, hidden: true }));
     });
     expect(onDownload).toHaveBeenCalledTimes(2);
-    expect(onDownload).toHaveBeenLastCalledWith(["presentazione_16_9", "carosello_1_1"]);
+    expect(onDownload).toHaveBeenLastCalledWith(["carosello_1_1"]);
     expect(screen.queryByText(FAILED)).toBeNull();
     expect(trigger().textContent).toContain(dict.download.working);
   });

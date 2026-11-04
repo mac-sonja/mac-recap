@@ -2,7 +2,7 @@
 title: 'Story 5.4: several formats as one ZIP'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-review'
+status: 'done'
 baseline_commit: '8b0091c109e03c27ab33afc8a619eb5eb566e8a3'
 route: 'dispatch'
 review_loop_iteration: 0

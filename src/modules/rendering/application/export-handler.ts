@@ -101,7 +101,8 @@ function caseIdOf(job: Job): string | null {
  * file. A bundle (Story 5.4) makes each of its formats the same way, only those with no
  * stored export yet, then zips exactly those stored files into one more `export` row
  * (`bundle.zip`: a PDF at the root under its 5.3 name, a Carosello's PNGs in
- * `Carosello/`). If any format fails, no ZIP is stored; a format already made stays. It re-checks approval and the content hash (an edit since the request is
+ * `Carosello/`). If any format fails, no ZIP is stored; a format already made stays.
+ * It re-checks approval and the content hash (an edit since the request is
  * `EXPORT_STALE`: the person asks again), reuses a file already stored for the hash,
  * else draws the pages with the preview's renderer (case and client renditions and the
  * logo inline, Inter inline), prints them in Chromium (`page.setContent`; a PDF of

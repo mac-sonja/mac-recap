@@ -3,8 +3,9 @@
 -- A bundle is one more `export` row: format `bundle`, a ZIP of the ticked formats' own
 -- stored exports (the Presentazione PDF at the root, the Carosello's PNGs in
 -- `Carosello/`), at `exports/{content_hash}/bundle.zip`. Its `content_hash` covers the
--- ticked formats (sorted) and each one's own content hash (`rendering/domain/export.ts`,
--- `bundleHashInput`). Immutable like every export row: the trigger and grants of
+-- ticked formats (sorted), each one's own content hash, EXPORT_RENDER_VERSION and the
+-- names of the files inside, which carry the case's code and name
+-- (`rendering/domain/export.ts`, `bundleHashInput`). Immutable like every export row: the trigger and grants of
 -- 20261105140000_rendering_export.sql are unchanged.
 
 alter table public.export drop constraint export_format_check;

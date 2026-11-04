@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { EXPORT_MAX_BYTES } from "@/modules/rendering/domain/export";
 import { createSupabaseExportStorage, exportKey, MAX_DOWNLOAD_TTL_SECONDS } from "./export-storage";
 
 const HASH = "a".repeat(64);
@@ -47,6 +48,19 @@ describe("export storage (Supabase)", () => {
       expect(await storage.read(path)).toMatchObject({ ok: false, error: { code: "STORAGE_FAILED" } });
     }
     expect(bucket.download).not.toHaveBeenCalled();
+  });
+
+  it("refuses a stored file over the bucket's limit without reading it", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const { bucket, storage } = fakeBucket();
+      const arrayBuffer = vi.fn();
+      bucket.download.mockResolvedValueOnce({ data: { size: EXPORT_MAX_BYTES + 1, arrayBuffer } as unknown as Blob, error: null });
+      expect(await storage.read(`exports/${HASH}/carosello_1_1.zip`)).toMatchObject({ ok: false, error: { code: "STORAGE_FAILED" } });
+      expect(arrayBuffer).not.toHaveBeenCalled();
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it("answers STORAGE_FAILED when the download fails, logging no key", async () => {
