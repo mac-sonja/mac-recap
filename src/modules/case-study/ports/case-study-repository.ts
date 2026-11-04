@@ -66,11 +66,12 @@ export interface CaseStudyRepository {
    */
   softDelete(caseId: string, status: DeletableStatus, actorId: string): Promise<Result<void>>;
   /**
-   * Story 3.8: the non-deleted cases with a `generation_succeeded` transition strictly
-   * after `since` whose latest `generate` transition was made by `actorId` (the worker
-   * writes `generation_succeeded` as the system actor, so "mine" comes from `generate`).
-   * One entry per case, `readyAt` its newest such transition, oldest first. `err` only
-   * when a read fails.
+   * Story 3.8: the cases Da approvare, not deleted, with a `generation_succeeded`
+   * transition strictly after `since` that follows their latest `generate`, made by
+   * `actorId` (the worker writes `generation_succeeded` as the system actor, so "mine"
+   * comes from `generate`). Reads only the actor's latest presses (bounded by time and
+   * count). One entry per case, `readyAt` its newest such transition, oldest first. `err`
+   * only when a read fails.
    */
   listReadyDrafts(actorId: string, since: string): Promise<Result<ReadyDraft[]>>;
 }

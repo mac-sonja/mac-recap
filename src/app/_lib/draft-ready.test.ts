@@ -29,6 +29,20 @@ describe("takeNewDrafts", () => {
     expect(takeNewDrafts(session, [draft(2, 9), draft(1, 3), draft(2, 9)])).toEqual([draft(1, 3), draft(2, 9)]);
   });
 
+  it("takes at most 3 at a time, leaving the rest unseen for the next poll", () => {
+    const session = startDraftReadySession("2026-11-04T10:00:00.000Z");
+    const polled = [draft(1), draft(2), draft(3), draft(4), draft(5)];
+    expect(takeNewDrafts(session, polled).map((d) => d.name)).toEqual(["Case 1", "Case 2", "Case 3"]);
+    expect(takeNewDrafts(session, polled).map((d) => d.name)).toEqual(["Case 4", "Case 5"]);
+  });
+
+  it("marks a draft whose case is already open as seen without showing it", () => {
+    const session = startDraftReadySession("2026-11-04T10:00:00.000Z");
+    const open = (id: string) => id === draft(1).id;
+    expect(takeNewDrafts(session, [draft(1), draft(2)], 3, open)).toEqual([draft(2)]);
+    expect(takeNewDrafts(session, [draft(1)])).toEqual([]);
+  });
+
   it("keeps sessions apart: a new page load is a new session", () => {
     const first = startDraftReadySession("2026-11-04T10:00:00.000Z");
     takeNewDrafts(first, [draft(1)]);

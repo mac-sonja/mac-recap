@@ -34,13 +34,25 @@ export function startDraftReadySession(startedAt: string): DraftReadySession {
 }
 
 /**
- * The drafts of `polled` not announced yet in `session`, oldest first, each once; marks
- * them seen, so a later poll returning them again announces nothing.
+ * The drafts of `polled` to show now: not announced yet in `session`, oldest first, each
+ * once, at most `max`. Only those are marked seen; any beyond `max` stay unseen and come
+ * back on the next poll. A draft for which `isOpen` is true (its case is the page already
+ * open) is marked seen without being shown.
  */
-export function takeNewDrafts(session: DraftReadySession, polled: readonly ReadyDraftNotice[]): ReadyDraftNotice[] {
+export function takeNewDrafts(
+  session: DraftReadySession,
+  polled: readonly ReadyDraftNotice[],
+  max = DRAFT_READY_MAX_TOASTS,
+  isOpen: (id: string) => boolean = () => false,
+): ReadyDraftNotice[] {
   const fresh: ReadyDraftNotice[] = [];
   for (const draft of [...polled].sort((a, b) => Date.parse(a.readyAt) - Date.parse(b.readyAt))) {
     if (session.seen.has(draft.id)) continue;
+    if (isOpen(draft.id)) {
+      session.seen.add(draft.id);
+      continue;
+    }
+    if (fresh.length >= max) continue;
     session.seen.add(draft.id);
     fresh.push(draft);
   }

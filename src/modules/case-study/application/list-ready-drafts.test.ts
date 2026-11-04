@@ -15,22 +15,31 @@ const BEFORE = "2026-11-04T09:59:00.000000+00:00";
 const AFTER = (s: number) => `2026-11-04T10:00:${String(s).padStart(2, "0")}.000000+00:00`;
 
 const caseId = (n: number) => `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const live = (n: number, name = `Case ${n}`): ReadyDraftCase => ({ id: caseId(n), name, deletedAt: null });
+const live = (n: number, name = `Case ${n}`): ReadyDraftCase => ({ id: caseId(n), name, status: "in_review", deletedAt: null });
 const generate = (n: number, actorId: string, at: string): TransitionRecord => ({ caseId: caseId(n), actorId, event: "generate", at });
 const succeeded = (n: number, at: string): TransitionRecord => ({ caseId: caseId(n), actorId: SYSTEM, event: "generation_succeeded", at });
 const failed = (n: number, at: string): TransitionRecord => ({ caseId: caseId(n), actorId: SYSTEM, event: "generation_failed", at });
 
-/** A repository holding `transitions` and `cases`, reading them as the Supabase adapter does. */
+/** A repository holding `transitions` and `cases`, reading them as the Supabase adapter does (successes after `since`). */
 function fakeRepository(transitions: TransitionRecord[], cases: ReadyDraftCase[]) {
   return {
     listReadyDrafts: vi.fn<CaseStudyRepository["listReadyDrafts"]>(async (actorId, since) =>
-      ok(selectReadyDrafts(transitions, cases, actorId, since)),
+      ok(
+        selectReadyDrafts(
+          transitions.filter((t) => t.event !== "generation_succeeded" || Date.parse(t.at) > Date.parse(since)),
+          cases,
+          actorId,
+        ),
+      ),
     ),
   } as unknown as CaseStudyRepository & { listReadyDrafts: ReturnType<typeof vi.fn> };
 }
 
+/** The clock the use case clamps `since` against: a minute after the session start. */
+const NOW = () => new Date("2026-11-04T10:01:00.000Z");
+
 async function readyFor(actor: Actor, transitions: TransitionRecord[], cases: ReadyDraftCase[], since = SINCE) {
-  const result = await makeListReadyDrafts(fakeRepository(transitions, cases))(actor, { since });
+  const result = await makeListReadyDrafts(fakeRepository(transitions, cases), NOW)(actor, { since });
   if (!result.ok) throw new Error(result.error.code);
   return result.value;
 }
@@ -86,6 +95,30 @@ describe("listReadyDrafts (Story 3.8)", () => {
     expect((await readyFor(ME, transitions, [live(1), live(2)])).map((d) => d.id)).toEqual([caseId(2), caseId(1)]);
   });
 
+  it("leaves out a success older than the latest generate (a regeneration still running)", async () => {
+    const transitions = [generate(1, ME.id, AFTER(1)), succeeded(1, AFTER(5)), generate(1, ME.id, AFTER(9))];
+    expect(await readyFor(ME, transitions, [{ ...live(1), status: "generating" }])).toEqual([]);
+    // Even if the status read says Da approvare, the success must follow the latest press.
+    expect(await readyFor(ME, transitions, [live(1)])).toEqual([]);
+  });
+
+  it("leaves out a case no longer Da approvare", async () => {
+    const transitions = [generate(1, ME.id, BEFORE), succeeded(1, AFTER(5))];
+    expect(await readyFor(ME, transitions, [{ ...live(1), status: "approved" }])).toEqual([]);
+  });
+
+  it("trusts the query's after-since filter: a success in the same millisecond as since still counts", () => {
+    // The adapter reads `at > since` in Postgres (microseconds); no millisecond filter here.
+    const drafts = selectReadyDrafts([generate(1, ME.id, BEFORE), succeeded(1, "2026-11-04T10:00:00.000400+00:00")], [live(1)], ME.id);
+    expect(drafts.map((d) => d.id)).toEqual([caseId(1)]);
+  });
+
+  it("clamps since to no earlier than 24 hours before now", async () => {
+    const repo = fakeRepository([], []);
+    await makeListReadyDrafts(repo, NOW)(ME, { since: "2026-10-01T00:00:00.000Z" });
+    expect(repo.listReadyDrafts).toHaveBeenCalledWith(ME.id, "2026-11-03T10:01:00.000Z");
+  });
+
   it("refuses a malformed since with INVALID_INPUT, querying nothing", async () => {
     const repo = fakeRepository([], []);
     for (const input of [{}, { since: "yesterday" }, { since: SINCE, extra: 1 }, null]) {
@@ -97,7 +130,7 @@ describe("listReadyDrafts (Story 3.8)", () => {
 
   it("asks the repository for the actor's drafts since the given time", async () => {
     const repo = fakeRepository([], []);
-    await makeListReadyDrafts(repo)(ME, { since: SINCE });
+    await makeListReadyDrafts(repo, NOW)(ME, { since: SINCE });
     expect(repo.listReadyDrafts).toHaveBeenCalledWith(ME.id, SINCE);
   });
 });

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { DraftReadyNotifier } from "@/app/_components/draft-ready-notifier";
 import { NoActor } from "@/app/_components/no-actor";
 import { resolveShellActor } from "@/app/_lib/surface";
@@ -16,7 +17,12 @@ export default async function WizardLayout({ children }: Readonly<{ children: Re
   return (
     <>
       {children}
-      {can(shell.actor, "generate") && <DraftReadyNotifier startedAt={new Date().toISOString()} />}
+      {can(shell.actor, "generate") && (
+        // The notifier reads the search params (the case page open); Suspense keeps that from opting the page out of server rendering.
+        <Suspense fallback={null}>
+          <DraftReadyNotifier startedAt={new Date().toISOString()} />
+        </Suspense>
+      )}
     </>
   );
 }

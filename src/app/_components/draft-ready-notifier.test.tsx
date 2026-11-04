@@ -4,8 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DRAFT_READY_POLL_MS, DRAFT_READY_TOAST_MS } from "@/app/_lib/draft-ready";
 import { fill, it as dict } from "@/shared/i18n/it";
 
-const { listReadyDrafts } = vi.hoisted(() => ({ listReadyDrafts: vi.fn() }));
+const { listReadyDrafts, location } = vi.hoisted(() => ({
+  listReadyDrafts: vi.fn(),
+  location: { pathname: "/clients", search: "" },
+}));
 vi.mock("@/app/_lib/draft-ready-actions", () => ({ listReadyDrafts }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => location.pathname,
+  useSearchParams: () => new URLSearchParams(location.search),
+}));
 
 const STARTED_AT = "2026-11-04T10:00:00.000Z";
 const draft = (n: number) => ({
@@ -18,18 +25,22 @@ const title = (n: number) => fill(dict.draftReady.title, { name: `Case ${n}` });
 /** A fresh module, so every test is a new page load (a new session). */
 async function renderNotifier() {
   vi.resetModules();
+  return renderAgain();
+}
+
+/** Another layout's notifier in the same page load (same module, same session). */
+async function renderAgain() {
   const { DraftReadyNotifier } = await import("./draft-ready-notifier");
   return render(<DraftReadyNotifier startedAt={STARTED_AT} />);
 }
 
+const liveRegion = () => document.querySelector("[data-draft-ready-live]") as HTMLElement;
+
 /** Runs the timers by `ms` and lets the poll's promise settle. */
 const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
 
-/** One poll interval, then the moment after, when a new toast's message has filled in. */
-const poll = async () => {
-  await advance(DRAFT_READY_POLL_MS);
-  await advance(0);
-};
+/** One poll interval. */
+const poll = () => advance(DRAFT_READY_POLL_MS);
 
 const toasts = () => screen.queryAllByTestId("draft-ready-toast");
 
@@ -39,6 +50,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   listReadyDrafts.mockReset().mockResolvedValue({ ok: true, value: [] });
   visibility = "visible";
+  location.pathname = "/clients";
+  location.search = "";
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
 });
 afterEach(() => {
@@ -59,17 +72,24 @@ describe("DraftReadyNotifier (Story 3.8)", () => {
     expect(listReadyDrafts).toHaveBeenCalledTimes(2);
   });
 
-  it("shows a polite toast with Apri to the configurator, without taking focus", async () => {
+  it("announces each new toast in one persistent polite live region, without taking focus", async () => {
     render(<input aria-label="Titolo" />);
     const field = screen.getByLabelText("Titolo");
     field.focus();
     listReadyDrafts.mockResolvedValue({ ok: true, value: [draft(1)] });
     await renderNotifier();
-    await poll();
+    const region = liveRegion();
+    expect(region.getAttribute("role")).toBe("status");
+    expect(region.getAttribute("aria-live")).toBe("polite");
+    expect(region.className).toContain("sr-only");
+    expect(region.textContent).toBe("");
+    expect(screen.queryByRole("region", { name: dict.draftReady.region })).toBeNull();
 
-    const status = screen.getByRole("status");
-    expect(status.textContent).toBe(title(1));
-    expect(status.getAttribute("aria-live")).toBe("polite");
+    await poll();
+    expect(liveRegion()).toBe(region);
+    expect(region.textContent).toBe(title(1));
+    expect(screen.getByRole("region", { name: dict.draftReady.region })).toBeTruthy();
+    expect(toasts()[0].textContent).toContain(title(1));
     const open = screen.getByRole("link", { name: dict.draftReady.open });
     expect(open.getAttribute("href")).toBe("/case-studies/aaaaaaaa-0000-4000-8000-000000000001/configurator");
     expect(document.activeElement).toBe(field);
@@ -81,6 +101,21 @@ describe("DraftReadyNotifier (Story 3.8)", () => {
     await poll();
     fireEvent.click(screen.getByRole("link", { name: dict.draftReady.open }));
     expect(toasts()).toHaveLength(0);
+  });
+
+  it.each([
+    ["with a modifier key", { button: 0, metaKey: true }],
+    ["with ctrl", { button: 0, ctrlKey: true }],
+    ["with a non-primary button", { button: 1 }],
+  ])("keeps the toast when Apri is clicked %s", async (_label, init) => {
+    listReadyDrafts.mockResolvedValue({ ok: true, value: [draft(1)] });
+    await renderNotifier();
+    await poll();
+    const open = screen.getByRole("link", { name: dict.draftReady.open });
+    // The link opens elsewhere (a new tab); keep the browser from navigating the test page.
+    open.addEventListener("click", (event) => event.preventDefault());
+    fireEvent.click(open, init);
+    expect(toasts()).toHaveLength(1);
   });
 
   it("closes the toast on its close button", async () => {
@@ -148,11 +183,16 @@ describe("DraftReadyNotifier (Story 3.8)", () => {
     ]);
   });
 
-  it("shows at most 3, the oldest making room", async () => {
-    listReadyDrafts.mockResolvedValueOnce({ ok: true, value: [draft(1), draft(2), draft(3), draft(4)] });
+  it("shows at most 3 at once and the rest at the next poll", async () => {
+    listReadyDrafts.mockResolvedValue({ ok: true, value: [draft(1), draft(2), draft(3), draft(4)] });
     await renderNotifier();
     await poll();
-    expect(toasts().map((t) => t.querySelector("[role=status]")?.textContent)).toEqual([title(2), title(3), title(4)]);
+    expect(toasts().map((t) => t.querySelector("p")?.textContent)).toEqual([title(1), title(2), title(3)]);
+    await poll();
+    expect(toasts().map((t) => t.querySelector("p")?.textContent)).toEqual([title(4)]);
+    await poll();
+    // Case 4 timed out at 40 s; nobody comes back.
+    expect(toasts()).toHaveLength(0);
   });
 
   it("shows nothing when a poll fails, logs once, and tries again at the next interval", async () => {
@@ -204,7 +244,7 @@ describe("DraftReadyNotifier (Story 3.8)", () => {
     const { unmount } = await renderNotifier();
     await poll();
     unmount();
-    // The next layout mounts its own notifier in the same page load (same module).
+    // The next layout mounts its own notifier in the same page load (same module), rendered later.
     const { DraftReadyNotifier } = await import("./draft-ready-notifier");
     render(<DraftReadyNotifier startedAt="2026-11-04T10:30:00.000Z" />);
     expect(toasts()).toHaveLength(1);
@@ -212,6 +252,83 @@ describe("DraftReadyNotifier (Story 3.8)", () => {
     await poll();
     expect(listReadyDrafts).toHaveBeenLastCalledWith({ since: STARTED_AT });
     expect(toasts()).toHaveLength(1);
+  });
+
+  it("keeps a toast's time left across a remount and does not announce it again", async () => {
+    listReadyDrafts.mockResolvedValueOnce({ ok: true, value: [draft(1)] });
+    const { unmount } = await renderNotifier();
+    await poll();
+    await advance(4_000);
+    unmount();
+    await renderAgain();
+    expect(toasts()).toHaveLength(1);
+    expect(liveRegion().textContent).toBe("");
+    await advance(DRAFT_READY_TOAST_MS - 4_000 - 100);
+    expect(toasts()).toHaveLength(1);
+    await advance(100);
+    expect(toasts()).toHaveLength(0);
+  });
+
+  it("keeps the 15-second rhythm across a remount: waits the rest, or asks at once when it is due", async () => {
+    const { unmount } = await renderNotifier();
+    await advance(10_000);
+    unmount();
+    const second = await renderAgain();
+    await advance(DRAFT_READY_POLL_MS - 10_000 - 1);
+    expect(listReadyDrafts).not.toHaveBeenCalled();
+    await advance(1);
+    expect(listReadyDrafts).toHaveBeenCalledTimes(1);
+    second.unmount();
+    await advance(DRAFT_READY_POLL_MS + 5_000);
+    await renderAgain();
+    await advance(0);
+    expect(listReadyDrafts).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves a draft unseen when its poll settles after unmount, so the next notifier shows it", async () => {
+    let settle: (value: unknown) => void = () => undefined;
+    listReadyDrafts.mockReturnValueOnce(new Promise((resolve) => (settle = resolve)));
+    listReadyDrafts.mockResolvedValue({ ok: true, value: [draft(1)] });
+    const { unmount } = await renderNotifier();
+    await poll();
+    unmount();
+    await act(async () => settle({ ok: true, value: [draft(1)] }));
+    await renderAgain();
+    expect(toasts()).toHaveLength(0);
+    await poll();
+    expect(toasts()).toHaveLength(1);
+    expect(liveRegion().textContent).toBe(title(1));
+  });
+
+  it.each([
+    ["its configurator", "/case-studies/aaaaaaaa-0000-4000-8000-000000000001/configurator", ""],
+    ["its generating screen", "/case-studies/new", "?caseId=aaaaaaaa-0000-4000-8000-000000000001&step=3"],
+  ])("gives no toast for the case whose page is open (%s), then or later", async (_label, pathname, search) => {
+    location.pathname = pathname;
+    location.search = search;
+    listReadyDrafts.mockResolvedValue({ ok: true, value: [draft(1)] });
+    await renderNotifier();
+    await poll();
+    expect(toasts()).toHaveLength(0);
+    location.pathname = "/clients";
+    location.search = "";
+    await renderAgain();
+    await poll();
+    expect(toasts()).toHaveLength(0);
+  });
+
+  it.each([401, 403])("stops polling after a %i", async (status) => {
+    listReadyDrafts.mockResolvedValue({ ok: false, status, error: { code: "FORBIDDEN", message: "m" } });
+    const { unmount } = await renderNotifier();
+    await poll();
+    await poll();
+    expect(listReadyDrafts).toHaveBeenCalledTimes(1);
+    visibility = "visible";
+    act(() => void document.dispatchEvent(new Event("visibilitychange")));
+    unmount();
+    await renderAgain();
+    await advance(DRAFT_READY_POLL_MS * 2);
+    expect(listReadyDrafts).toHaveBeenCalledTimes(1);
   });
 
   it("stops polling when it goes away", async () => {

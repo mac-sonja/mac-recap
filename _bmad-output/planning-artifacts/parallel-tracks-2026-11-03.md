@@ -16,7 +16,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | A2 | 4.3e drag-and-drop | ✅ #147 | A1 ✅ | A3, B7 | configurator |
 | A3 | 4.5c-2 client media in the case configurator, client renditions, client-file soft delete (dialog upload split to 4.5c-3) | ✅ #148 (migration on dev) | — | A2 | configurator, material |
 | A4 | 4.8 Approva | ✅ #143 (migration on dev) | — | — | configurator, case-study |
-| A5 | 3.8 tell me when the draft is ready | ⬜ | — | — | jobs, notifications |
+| A5 | 3.8 tell me when the draft is ready | 🔄 PR open | — | — | jobs, notifications |
 | A6 | 3.11 client intro and outro with test text | ⬜ | **client cover/outro template design (owner)** | B3 (both add a job kind) | rendering/templates, jobs, migration |
 | A7 | 4.11 client intro in the configurator | ⬜ | A6 | B6, B7 | configurator (client mode) |
 | A8 | 4.12 client overview configurator, incl. the C38 shared-page confirmation | ⬜ | A7 | B6, B7 | configurator (client file) |

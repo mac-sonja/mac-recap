@@ -2,7 +2,7 @@
 title: 'Story 3.8: tell me when the draft is ready'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'c8bf867976f6746e8622eb9dfd15952d11ef4f02'
 route: 'dispatch'
 review_loop_iteration: 0

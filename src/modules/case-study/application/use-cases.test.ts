@@ -202,8 +202,9 @@ function fakeRepository() {
       const transitions = events
         .filter((e) => e.type === TRANSITION)
         .map((e) => ({ caseId: e.caseId, actorId: e.actorId, event: String((e.data as { event?: unknown }).event), at: e.at }));
-      const rows = [...cases.values()].map((c) => ({ id: c.id, name: c.name, deletedAt: c.deletedAt }));
-      return ok(selectReadyDrafts(transitions, rows, actorId, since));
+      const rows = [...cases.values()].map((c) => ({ id: c.id, name: c.name, status: c.status, deletedAt: c.deletedAt }));
+      const after = transitions.filter((t) => t.event !== "generation_succeeded" || Date.parse(t.at) > Date.parse(since));
+      return ok(selectReadyDrafts(after, rows, actorId));
     }),
   } satisfies CaseStudyRepository;
 

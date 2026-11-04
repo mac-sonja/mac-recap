@@ -8,6 +8,8 @@ const getActor = vi.fn<() => Promise<Result<Actor>>>();
 
 vi.mock("next/server", () => ({ connection: vi.fn(async () => undefined) }));
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/case-studies/new",
+  useSearchParams: () => new URLSearchParams(),
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT ${path}`);
   }),
@@ -45,7 +47,10 @@ describe("WizardLayout", () => {
   it("mounts the draft-ready toast for the roles that may generate, and no other (Story 3.8)", async () => {
     for (const role of ["owner_designer", "admin"] as const) {
       getActor.mockResolvedValue(ok(actor(role)));
-      expect(await renderLayout()).toContain(`aria-label="${dict.draftReady.region}"`);
+      const html = await renderLayout();
+      // Its live region is always there; the toast stack (`draftReady.region`) only while toasts show.
+      expect(html).toContain("data-draft-ready-live");
+      expect(html).not.toContain(`aria-label="${dict.draftReady.region}"`);
     }
     getActor.mockResolvedValue(ok(actor("account_sales_social")));
     expect(await renderLayout()).toBe("<p>content</p>");

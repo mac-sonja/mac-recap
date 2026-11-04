@@ -246,10 +246,11 @@ export function list(scope: ListScope): Promise<Result<ListedCaseStudy[]>> {
 
 /**
  * The drafts that became ready for `actor` (Story 3.8): input `{ since }`, an ISO
- * timestamp with an offset (the start of the person's page session). Returns
- * `{ id, name, readyAt }` for each non-deleted case with a `generation_succeeded`
- * transition after `since` whose latest `generate` transition was made by `actor`
- * (a failed generation never counts), oldest first, one per case. Call only after
+ * timestamp with an offset (the start of the person's page session), clamped to no
+ * earlier than 24 hours ago. Returns `{ id, name, readyAt }` for each non-deleted case
+ * now Da approvare with a `generation_succeeded` transition after `since` that follows its
+ * latest `generate`, made by `actor` (a failed generation never counts), oldest first,
+ * one per case. Call only after
  * `authorize(actor, 'generate')`. `INVALID_INPUT`, `CASE_STUDY_LOOKUP_FAILED`.
  */
 export function listReadyDrafts(actor: Actor, input: unknown): Promise<Result<ReadyDraft[]>> {

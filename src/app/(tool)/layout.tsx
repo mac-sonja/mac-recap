@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { DraftReadyNotifier } from "@/app/_components/draft-ready-notifier";
 import { NoActor } from "@/app/_components/no-actor";
@@ -54,7 +55,12 @@ export default async function ToolLayout({ children }: Readonly<{ children: Reac
       <main className="min-w-0 flex-1 px-8 py-10 xl:px-12">
         <div className="mx-auto w-full max-w-6xl">{children}</div>
       </main>
-      {can(actor, "generate") && <DraftReadyNotifier startedAt={new Date().toISOString()} />}
+      {can(actor, "generate") && (
+        // The notifier reads the search params (the case page open); Suspense keeps that from opting the page out of server rendering.
+        <Suspense fallback={null}>
+          <DraftReadyNotifier startedAt={new Date().toISOString()} />
+        </Suspense>
+      )}
     </div>
   );
 }
