@@ -13,7 +13,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | # | Story | Status | Waits for | Overlaps with (same files) | Main code |
 |---|---|---|---|---|---|
 | A1 | 4.3d client and case fields on the page | ✅ #145 (migration on dev) | — | — | configurator, case-study |
-| A2 | 4.3e drag-and-drop | 🔄 in review (Track A session) | A1 ✅ | A3, B7 | configurator |
+| A2 | 4.3e drag-and-drop | 🔄 PR open (Track A session) | A1 ✅ | A3, B7 | configurator |
 | A3 | 4.5c-2 upload in the dialog, client media, client-file soft delete | ⬜ | — | A2 | configurator, material |
 | A4 | 4.8 Approva | ✅ #143 (migration on dev) | — | — | configurator, case-study |
 | A5 | 3.8 tell me when the draft is ready | ⬜ | — | — | jobs, notifications |

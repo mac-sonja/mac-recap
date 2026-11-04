@@ -2,7 +2,7 @@
 title: 'Story 4.3e: drag-and-drop on the canvas'
 type: 'feature'
 created: '2026-11-04'
-status: 'in-review'
+status: 'done'
 baseline_commit: '4663e1891762527112efe9a99dc95d88b04bed38'
 route: 'dispatch'
 review_loop_iteration: 0
