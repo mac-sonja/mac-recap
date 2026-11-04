@@ -10,8 +10,12 @@ import { assetKey } from "@/modules/material/adapters/asset-key";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
 import { createSupabaseObjectStorage } from "@/modules/material/adapters/supabase/object-storage";
-import { createSupabaseRenditionRepository } from "@/modules/material/adapters/supabase/rendition-repository";
+import {
+  createSupabaseClientRenditionRepository,
+  createSupabaseRenditionRepository,
+} from "@/modules/material/adapters/supabase/rendition-repository";
 import { makeBuildManifest, type MaterialManifest } from "@/modules/material/application/build-manifest";
+import { makeEnqueueClientRenditions, makeGetClientRendition, type ClientFiles } from "@/modules/material/application/client-renditions";
 import { makeConfirmUpload } from "@/modules/material/application/confirm-upload";
 import type { MaterialDeps } from "@/modules/material/application/deps";
 import { makeGetDetailsForm } from "@/modules/material/application/get-details-form";
@@ -40,6 +44,7 @@ import type {
   DetailsForm,
   ResolvedRef,
 } from "@/modules/material/domain/details-form";
+import type { AssetKind } from "@/modules/material/domain/files";
 import type { RenditionLink } from "@/modules/material/domain/rendition";
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
 import type { Result } from "@/shared/result";
@@ -272,4 +277,32 @@ export function resolveRefs(caseId: unknown, refs: unknown): Promise<Result<Reso
  */
 export function getRendition(assetId: unknown, specName: unknown): Promise<Result<RenditionLink>> {
   return makeGetRendition(deps())(assetId, specName);
+}
+
+/** The client files the client renditions read, through the case-study module (Story 4.5c-2). */
+const clientFiles = (): ClientFiles => ({ get: caseStudy.getClientAsset });
+
+/**
+ * Enqueues the `rendition` job of a just-confirmed client file (Story 4.5c-2), as
+ * `confirmUpload` does for a case file: images and videos only (other kinds: nothing).
+ * Call right after `case-study.confirmClientMaterialUpload` succeeded, with its file and
+ * the actor. Never fails: a failed enqueue is logged and the backfill catches up.
+ */
+export function enqueueClientRenditions(file: { id: string; clientId: string; kind: AssetKind }, actorId: string): Promise<void> {
+  return makeEnqueueClientRenditions({ jobs: { enqueue: jobs.enqueue } })(file, actorId);
+}
+
+/**
+ * A signed GET (valid 15 minutes) for one display rendition of a client image or video
+ * (Story 4.5c-2): `{ url, width, height, contentType }`, as `getRendition` for case files.
+ * The only way other modules read client renditions; call only after authorizing access
+ * (e.g. `edit` on a case of that client). Errors: `INVALID_INPUT`, `NOT_FOUND` (unknown or
+ * removed file, a deleted client's, or a spec of another kind), `RENDITION_NOT_READY`,
+ * `STORAGE_NOT_CONFIGURED`, `CLIENT_LOOKUP_FAILED`, `RENDITION_LOOKUP_FAILED`, `STORAGE_FAILED`.
+ */
+export function getClientRendition(assetId: unknown, specName: unknown): Promise<Result<RenditionLink>> {
+  return makeGetClientRendition({ files: clientFiles(), renditions: createSupabaseClientRenditionRepository(), storage: configuredStorage() })(
+    assetId,
+    specName,
+  );
 }

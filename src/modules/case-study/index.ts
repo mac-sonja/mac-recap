@@ -18,7 +18,7 @@ import { createSupabaseClientMaterialStorage } from "@/modules/case-study/adapte
 import { createSupabaseLogoStorage } from "@/modules/case-study/adapters/supabase/logo-storage";
 import type { ClientMaterialDeps } from "@/modules/case-study/application/client-material-deps";
 import { makeConfirmClientMaterialUpload } from "@/modules/case-study/application/confirm-client-material-upload";
-import { makeListClientMaterial } from "@/modules/case-study/application/list-client-material";
+import { makeGetClientAsset, makeListClientMaterial } from "@/modules/case-study/application/list-client-material";
 import { makeRemoveClientMaterial } from "@/modules/case-study/application/remove-client-material";
 import {
   makeRequestClientMaterialUpload,
@@ -75,7 +75,7 @@ import type {
   ListedCaseStudy,
   ListScope,
 } from "@/modules/case-study/domain/case-study";
-import type { ListedClientAsset } from "@/modules/case-study/domain/client-material";
+import type { ClientAsset, ListedClientAsset, StoredClientAsset } from "@/modules/case-study/domain/client-material";
 import type { ClientMaterialStorage } from "@/modules/case-study/ports/client-material-storage";
 import type { LogoStorage } from "@/modules/case-study/ports/logo-storage";
 import type { Result } from "@/shared/result";
@@ -144,6 +144,7 @@ export type {
   ClientAssetKind,
   ClientMaterialContentType,
   ListedClientAsset,
+  StoredClientAsset,
 } from "@/modules/case-study/domain/client-material";
 export type { PresignedClientMaterial } from "@/modules/case-study/application/request-client-material-upload";
 export type { PresignedClientLogoUpload } from "@/modules/case-study/application/request-client-logo-upload";
@@ -463,13 +464,34 @@ export function listClientMaterial(input: unknown): Promise<Result<ListedClientA
 }
 
 /**
- * Removes one client file at once, with no undo: input `{ clientId, assetId }`. Its
- * row and object are deleted; a failed object delete is logged and never fails the
- * removal. Call only after `authorize(actor, 'manage clients')`. Errors:
- * `INVALID_INPUT`, `NOT_FOUND` (unknown file, or another client's), `CLIENT_NOT_FOUND`, `CLIENT_WRITE_FAILED`.
+ * Removes one client file at once, with no undo: input `{ clientId, assetId }`. A soft
+ * delete (Story 4.5c-2): the file leaves every list and frees its slot, its object and
+ * renditions stay, and a revision still referencing it reports `MATERIAL_MISSING` at
+ * approval. Call only after `authorize(actor, 'manage clients')`. Errors:
+ * `INVALID_INPUT`, `NOT_FOUND` (unknown or removed file, or another client's),
+ * `CLIENT_NOT_FOUND`, `CLIENT_WRITE_FAILED`.
  */
 export function removeClientMaterial(actor: Actor, input: unknown): Promise<Result<void>> {
   return makeRemoveClientMaterial(clientMaterialDeps())(actor, input);
+}
+
+/**
+ * One client file by id, removed or not (`deletedAt` set when it or its client is
+ * deleted), or null (Story 4.5c-2). Module-only: the material module's rendition worker
+ * and `getClientRendition` read it; no authorization of its own, so call only after the
+ * caller's own. Errors: `INVALID_INPUT`, `CLIENT_LOOKUP_FAILED`, `CLIENT_INVALID`.
+ */
+export function getClientAsset(assetId: unknown): Promise<Result<StoredClientAsset | null>> {
+  return makeGetClientAsset(createSupabaseClientRepository())(assetId);
+}
+
+/**
+ * One page of the non-deleted images and videos of non-deleted clients, by id (at most
+ * `limit`, after `afterId`). Dev tooling only: the renditions backfill (Story 4.5c-2).
+ * Errors: `CLIENT_LOOKUP_FAILED`, `CLIENT_INVALID`.
+ */
+export function listLiveClientMediaPage(afterId: string | null, limit: number): Promise<Result<ClientAsset[]>> {
+  return createSupabaseClientRepository().listLiveMediaPage(afterId, limit);
 }
 
 /**

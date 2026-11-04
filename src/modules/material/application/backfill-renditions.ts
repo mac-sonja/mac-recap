@@ -1,8 +1,9 @@
 import { RENDITION_SPECS, SPECS_BY_KIND, hasRenditions } from "@/modules/material/domain/rendition";
-import type { AssetRepository } from "@/modules/material/ports/asset-repository";
+import type { Asset } from "@/modules/material/domain/asset";
+import type { AssetKind } from "@/modules/material/domain/files";
 import type { RenditionRepository } from "@/modules/material/ports/rendition-repository";
 import { err, ok, type Result } from "@/shared/result";
-import type { Jobs } from "./deps";
+import type { Jobs, RenditionJobPayload } from "./deps";
 import { renditionInputHash, specHash } from "./spec-hash";
 
 export interface BackfillSummary {
@@ -19,27 +20,38 @@ export const BACKFILL_PAGE = 100;
 
 const ALL_HASHES = Object.values(RENDITION_SPECS).map(specHash);
 
+/** What the backfill looks at: a case asset, or a client file (Story 4.5c-2). */
+export interface BackfillSource {
+  id: string;
+  kind: AssetKind;
+}
+
 /**
  * Dev tooling (`npm run dev:renditions-backfill`): enqueues a `rendition` job
  * for every live image or video of a live case that lacks a row for one of
  * its kind's current spec hashes (files from before Story 3.2, failed jobs,
  * failed enqueues, a bumped spec version). Idempotent: a job already queued or
  * running is reused. Writes no rendition itself. Errors: the read errors.
+ *
+ * Story 4.5c-2: the same for client files, given their page read, their rendition
+ * repository and `payloadOf` (`{ owner: "client", clientId }`).
  */
-export function makeBackfillRenditions({
+export function makeBackfillRenditions<S extends BackfillSource = Asset>({
   assets,
   renditions,
   jobs,
+  payloadOf = (source) => ({ caseId: (source as unknown as Asset).caseId }),
 }: {
-  assets: Pick<AssetRepository, "listLiveMediaPage">;
+  assets: { listLiveMediaPage(afterId: string | null, limit: number): Promise<Result<S[]>> };
   renditions: Pick<RenditionRepository, "listFor">;
   jobs: Pick<Jobs, "enqueue">;
+  payloadOf?: (source: S) => RenditionJobPayload;
 }) {
   return async function backfillRenditions(): Promise<Result<BackfillSummary>> {
     const summary: BackfillSummary = { checked: 0, enqueued: 0, failed: 0 };
     let after: string | null = null;
     for (;;) {
-      const page = await assets.listLiveMediaPage(after, BACKFILL_PAGE);
+      const page: Result<S[]> = await assets.listLiveMediaPage(after, BACKFILL_PAGE);
       if (!page.ok) return page;
       if (page.value.length === 0) return ok(summary);
       const made = await renditions.listFor(
@@ -58,7 +70,7 @@ export function makeBackfillRenditions({
             kind: "rendition",
             subjectId: asset.id,
             inputHash: renditionInputHash(asset.id, asset.kind),
-            payload: { caseId: asset.caseId },
+            payload: payloadOf(asset),
           });
           if (queued.ok) summary.enqueued += 1;
           else summary.failed += 1;

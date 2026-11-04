@@ -16,10 +16,16 @@ export interface CaseStudies {
   ): Promise<Result<unknown>>;
 }
 
+/**
+ * A `rendition` job's payload: a case asset's case, or a client file's client (Story
+ * 4.5c-2, `owner: "client"`; one job kind for both, routed by `routeRenditionJobs`).
+ */
+export type RenditionJobPayload = { caseId: string } | { owner: "client"; clientId: string };
+
 /** The jobs call material needs (wired to `@/modules/jobs` in index.ts). */
 export interface Jobs {
   /** Idempotent enqueue of `{ kind, subjectId, inputHash, payload }`. */
-  enqueue(input: { kind: "rendition"; subjectId: string; inputHash: string; payload: { caseId: string } }): Promise<Result<unknown>>;
+  enqueue(input: { kind: "rendition"; subjectId: string; inputHash: string; payload: RenditionJobPayload }): Promise<Result<unknown>>;
   /** Which of the assets have a `rendition` job queued or running (one read). */
   liveSubjects(input: { kind: "rendition"; subjectIds: string[] }): Promise<Result<string[]>>;
 }

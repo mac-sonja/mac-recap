@@ -21,7 +21,7 @@ export type ClientMaterialImage = LogoImage;
 /**
  * Client files in the private `material` bucket, under `clients/{clientId}/material/`.
  * Implemented by `adapters/supabase/client-material-storage.ts`. A removed file's
- * object is deleted.
+ * object stays (Story 4.5c-2: removal is a soft delete).
  */
 export interface ClientMaterialStorage {
   /** A signed upload URL that never overwrites an existing object. `err` only on failure. */

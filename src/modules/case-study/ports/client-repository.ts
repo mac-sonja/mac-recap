@@ -9,7 +9,7 @@ import type {
   StoredClientSummary,
   LogoContentType,
 } from "@/modules/case-study/domain/case-study";
-import type { ClientAsset, ClientMaterialContentType } from "@/modules/case-study/domain/client-material";
+import type { ClientAsset, ClientMaterialContentType, StoredClientAsset } from "@/modules/case-study/domain/client-material";
 import type { Result } from "@/shared/result";
 
 /** A `client_logo` row as the module sees it. A replaced or removed logo's row is deleted. */
@@ -120,8 +120,24 @@ export interface ClientRepository {
   deleteLogo(id: string): Promise<Result<boolean>>;
   /** Inserts one `client_logo` row (the path is built by the adapter). `err` when the write fails. */
   insertLogo(logo: NewClientLogo): Promise<Result<ClientLogo>>;
-  /** The client's files, in position order; `err` only when the read fails or a row fails validation. */
+  /**
+   * The client's files, in position order, without removed ones (Story 4.5c-2: a removed
+   * file is soft-deleted and counts as gone everywhere, the media guardrail and approval
+   * included); `err` only when the read fails or a row fails validation.
+   */
   listAssets(clientId: string): Promise<Result<ClientAsset[]>>;
+  /**
+   * One client file by id, removed or not (`deletedAt` set when it or its client is
+   * deleted); `ok(null)` when no row has this id. For the rendition worker. `err` only
+   * when the read fails or the row fails validation.
+   */
+  findAsset(id: string): Promise<Result<StoredClientAsset | null>>;
+  /**
+   * One page of the non-deleted images and videos of non-deleted clients, by id: at most
+   * `limit` files with an id after `afterId` (from the start when null). Dev tooling only
+   * (the renditions backfill). `err CLIENT_LOOKUP_FAILED`.
+   */
+  listLiveMediaPage(afterId: string | null, limit: number): Promise<Result<ClientAsset[]>>;
   /**
    * Records one client file through `insert_client_asset`, which takes the lowest
    * free position (1–3). `err CLIENT_MATERIAL_LIMIT` (3 files already) /
@@ -130,8 +146,9 @@ export interface ClientRepository {
    */
   insertAsset(asset: NewClientAsset): Promise<Result<ClientAsset>>;
   /**
-   * Deletes one `client_asset` row (of `clientId`, for the log) through `delete_client_asset`;
-   * `ok(false)` when no row has this id, `err CLIENT_NOT_FOUND` when its client is deleted.
+   * Soft-deletes one `client_asset` row (of `clientId`, for the log) through
+   * `delete_client_asset`, freeing its position; the object stays. `ok(false)` when no
+   * non-deleted row has this id, `err CLIENT_NOT_FOUND` when its client is deleted.
    */
   deleteAsset(id: string, clientId: string): Promise<Result<boolean>>;
   /**

@@ -42,13 +42,37 @@ function mapRows(rows: RenditionRow[]): Result<Rendition[]> {
 
 const lookupFailed = () => err({ code: "RENDITION_LOOKUP_FAILED", message: "Could not read the file's display copies." });
 
+/** Where a repository reads and writes: the case files' table, or the client files' mirror (Story 4.5c-2). Same columns. */
+interface RenditionTables {
+  table: "rendition" | "client_rendition";
+  upsert: "upsert_rendition" | "upsert_client_rendition";
+}
+
+const CASE_TABLES: RenditionTables = { table: "rendition", upsert: "upsert_rendition" };
+const CLIENT_TABLES: RenditionTables = { table: "client_rendition", upsert: "upsert_client_rendition" };
+
 /** Supabase adapter for `rendition` (service role; writes only through `upsert_rendition`). */
 export function createSupabaseRenditionRepository(
   client: () => ReturnType<typeof createSupabaseAdminClient> = createSupabaseAdminClient,
 ): RenditionRepository {
+  return renditionRepository(client, CASE_TABLES);
+}
+
+/**
+ * Supabase adapter for `client_rendition` (Story 4.5c-2): the renditions of client images
+ * and videos, keyed by the client file's id (service role; writes only through
+ * `upsert_client_rendition`).
+ */
+export function createSupabaseClientRenditionRepository(
+  client: () => ReturnType<typeof createSupabaseAdminClient> = createSupabaseAdminClient,
+): RenditionRepository {
+  return renditionRepository(client, CLIENT_TABLES);
+}
+
+function renditionRepository(client: () => ReturnType<typeof createSupabaseAdminClient>, { table, upsert }: RenditionTables): RenditionRepository {
   return {
     async listForAsset(assetId) {
-      const { data, error } = await client().from("rendition").select(RENDITION_COLUMNS).eq("asset_id", assetId);
+      const { data, error } = await client().from(table).select(RENDITION_COLUMNS).eq("asset_id", assetId);
       if (error) {
         log.error(`rendition list failed: ${error.code ?? "no-code"}`);
         return lookupFailed();
@@ -59,7 +83,7 @@ export function createSupabaseRenditionRepository(
     async listFor(assetIds, specHashes) {
       if (assetIds.length === 0 || specHashes.length === 0) return ok([]);
       const { data, error } = await client()
-        .from("rendition")
+        .from(table)
         .select(RENDITION_COLUMNS)
         .in("asset_id", [...assetIds])
         .in("spec_hash", [...specHashes]);
@@ -72,7 +96,7 @@ export function createSupabaseRenditionRepository(
 
     async get(assetId, specHash) {
       const { data, error } = await client()
-        .from("rendition")
+        .from(table)
         .select(RENDITION_COLUMNS)
         .eq("asset_id", assetId)
         .eq("spec_hash", specHash)
@@ -86,7 +110,7 @@ export function createSupabaseRenditionRepository(
     },
 
     async upsert(rendition) {
-      const { data, error } = await client().rpc("upsert_rendition", {
+      const { data, error } = await client().rpc(upsert, {
         p_asset_id: rendition.assetId,
         p_spec_hash: rendition.specHash,
         p_path: rendition.path,

@@ -447,6 +447,7 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
   const logos = new Map<string, ClientLogo>();
   /** client_asset rows by id. */
   const assets = new Map<string, ClientAsset>();
+  const removed = new Map<string, ClientAsset>();
   /** caseId → clientId for the non-deleted cases `findClientInfoByCaseId` knows. */
   const cases = new Map<string, string>();
   const nameKey = (name: string) =>
@@ -568,7 +569,28 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
       assets.set(id, asset);
       return ok(asset);
     }),
-    deleteAsset: vi.fn<ClientRepository["deleteAsset"]>(async (id) => ok(assets.delete(id))),
+    // Mirrors delete_client_asset (Story 4.5c-2): a soft delete; the row leaves the list and frees its position.
+    deleteAsset: vi.fn<ClientRepository["deleteAsset"]>(async (id) => {
+      const found = assets.get(id);
+      if (found === undefined) return ok(false);
+      assets.delete(id);
+      removed.set(id, found);
+      return ok(true);
+    }),
+    findAsset: vi.fn<ClientRepository["findAsset"]>(async (id) => {
+      const live = assets.get(id);
+      if (live !== undefined) return ok({ ...live, deletedAt: null });
+      const gone = removed.get(id);
+      return ok(gone === undefined ? null : { ...gone, deletedAt: "2026-11-04T10:00:00+00:00" });
+    }),
+    listLiveMediaPage: vi.fn<ClientRepository["listLiveMediaPage"]>(async (after, limit) =>
+      ok(
+        [...assets.values()]
+          .filter((a) => (a.kind === "image" || a.kind === "video") && (after === null || a.id > after))
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .slice(0, limit),
+      ),
+    ),
     findClientInfoByCaseId: vi.fn<ClientRepository["findClientInfoByCaseId"]>(async (caseId) => {
       const client = clients.get(cases.get(caseId) ?? "");
       if (!client) return ok(null);
@@ -577,7 +599,7 @@ function fakeClientRepository(rows: ClientSeed[] = []) {
       return ok({ clientId: id, name, industry: industry === null ? null : { key: industry, label: industry }, description, logoId, brief: { ...brief } });
     }),
   } satisfies ClientRepository;
-  return { repo, clients, logos, cases, assets };
+  return { repo, clients, logos, cases, assets, removed };
 }
 
 const LOGO_ID = "eeeeeeee-0000-4000-8000-000000000001";
@@ -1919,46 +1941,43 @@ describe("removeClientMaterial", () => {
   const deps = () => {
     const clients = fakeClientRepository([LUMEN]);
     const storage = fakeMaterialStorage();
-    return { ...clients, ...storage, run: makeRemoveClientMaterial({ clients: clients.repo, storage: storage.storage }) };
+    return { ...clients, ...storage, run: makeRemoveClientMaterial({ clients: clients.repo }) };
   };
 
-  it("deletes the row and the object at once", async () => {
-    const { run, assets, put, objects, storage } = deps();
+  it("soft-deletes the row and leaves the object (Story 4.5c-2)", async () => {
+    const { run, repo, assets, removed, put, objects, storage } = deps();
     const asset = seedAsset(assets, 1);
     put(LUMEN.id, asset.id);
     expect(await run(actor, { clientId: LUMEN.id, assetId: asset.id })).toEqual(ok(undefined));
+    expect(repo.deleteAsset).toHaveBeenCalledExactlyOnceWith(asset.id, LUMEN.id);
     expect(assets.size).toBe(0);
-    expect(objects.size).toBe(0);
-    expect(storage.remove).toHaveBeenCalledWith({ clientId: LUMEN.id, assetId: asset.id, contentType: "image/jpeg" });
-  });
-
-  it("still succeeds when the object delete fails, and logs it with the client id only", async () => {
-    const { run, assets, storage } = deps();
-    const asset = seedAsset(assets, 1);
-    storage.remove.mockResolvedValueOnce(err({ code: "STORAGE_FAILED", message: "down" }));
-    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-    try {
-      expect(await run(actor, { clientId: LUMEN.id, assetId: asset.id })).toEqual(ok(undefined));
-      expect(assets.size).toBe(0);
-      const entry = JSON.parse(String(write.mock.calls[0][0]));
-      expect(entry).toMatchObject({ clientId: LUMEN.id });
-      expect(JSON.stringify(entry)).not.toContain(asset.id);
-    } finally {
-      write.mockRestore();
-    }
+    expect(removed.has(asset.id)).toBe(true);
+    expect(objects.size).toBe(1);
+    expect(storage.remove).not.toHaveBeenCalled();
+    // Gone from the list, and its slot takes a new file.
+    expect(await repo.listAssets(LUMEN.id)).toEqual(ok([]));
   });
 
   it.each([
     ["an unknown file", () => ASSET_ID],
     ["another client's file", (assets: Map<string, ClientAsset>) => seedAsset(assets, 1, { clientId: UNKNOWN_CLIENT_ID }).id],
   ])("returns NOT_FOUND for %s and deletes nothing", async (_label, pick) => {
-    const { run, assets, storage } = deps();
+    const { run, repo, assets } = deps();
     const assetId = pick(assets);
     const before = assets.size;
     const result = await run(actor, { clientId: LUMEN.id, assetId });
     expect(result.ok || result.error.code).toBe("NOT_FOUND");
     expect(assets.size).toBe(before);
-    expect(storage.remove).not.toHaveBeenCalled();
+    expect(repo.deleteAsset).not.toHaveBeenCalled();
+  });
+
+  it("returns NOT_FOUND for a file already removed", async () => {
+    const { run, repo, assets } = deps();
+    const asset = seedAsset(assets, 1);
+    expect(await run(actor, { clientId: LUMEN.id, assetId: asset.id })).toEqual(ok(undefined));
+    const again = await run(actor, { clientId: LUMEN.id, assetId: asset.id });
+    expect(again.ok || again.error.code).toBe("NOT_FOUND");
+    expect(repo.deleteAsset).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -2013,7 +2032,7 @@ describe("deleteClient", () => {
   it("makes every later client write and read answer CLIENT_NOT_FOUND", async () => {
     const { repo } = fakeClientRepository([LUMEN_SRL]);
     await makeDeleteClient(repo)(actor, { clientId: LUMEN.id, confirmName: "Lumen S.r.l." });
-    const removed = await makeRemoveClientMaterial({ clients: repo, storage: fakeMaterialStorage().storage })(actor, {
+    const removed = await makeRemoveClientMaterial({ clients: repo })(actor, {
       clientId: LUMEN.id,
       assetId: ASSET_ID,
     });

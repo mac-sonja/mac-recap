@@ -74,6 +74,12 @@ export interface ClientAsset {
   createdAt: string;
 }
 
+/**
+ * A client file as the rendition worker and its backfill read it (Story 4.5c-2), removed
+ * or not: `deletedAt` is the file's removal, or its client's deletion, or null while both live.
+ */
+export type StoredClientAsset = ClientAsset & { deletedAt: string | null };
+
 /** A client file as the wizard lists it: images carry a signed GET (≤15 minutes), or null. */
 export type ListedClientAsset = ClientAsset & { thumbnailUrl: string | null };
 

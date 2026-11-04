@@ -560,12 +560,49 @@ describe("createSupabaseClientRepository() client files", () => {
   };
   const newAsset = { id: ASSET_ID, clientId: client().id, fileName: "Foto cliente.jpg", contentType: "image/jpeg" as const, sizeBytes: 2048, width: 2400, height: 1600, createdBy: ACTOR_ID };
 
-  it("lists a client's files by position", async () => {
-    const { factory, from, eq, order } = stubClient({ data: [assetRow()], error: null });
+  it("lists a client's non-removed files by position", async () => {
+    const { factory, from, eq, is, order } = stubClient({ data: [assetRow()], error: null });
     expect(await createSupabaseClientRepository(factory).listAssets(client().id)).toEqual({ ok: true, value: [asset] });
     expect(from).toHaveBeenCalledWith("client_asset");
     expect(eq).toHaveBeenCalledWith("client_id", client().id);
+    expect(is).toHaveBeenCalledExactlyOnceWith("deleted_at", null);
     expect(order).toHaveBeenCalledWith("position", { ascending: true });
+  });
+
+  it("finds one file by id, removed or not, its client's deletion counting as removal (Story 4.5c-2)", async () => {
+    const live = stubClient({ data: { ...assetRow(), deleted_at: null, client: { deleted_at: null } }, error: null });
+    expect(await createSupabaseClientRepository(live.factory).findAsset(ASSET_ID)).toEqual({ ok: true, value: { ...asset, deletedAt: null } });
+    expect(live.eq).toHaveBeenCalledExactlyOnceWith("id", ASSET_ID);
+    expect(live.is).not.toHaveBeenCalled();
+    const removed = stubClient({ data: { ...assetRow(), deleted_at: "2026-11-04T10:00:00+00:00", client: { deleted_at: null } }, error: null });
+    expect(await createSupabaseClientRepository(removed.factory).findAsset(ASSET_ID)).toMatchObject({ ok: true, value: { deletedAt: "2026-11-04T10:00:00+00:00" } });
+    const clientGone = stubClient({ data: { ...assetRow(), deleted_at: null, client: { deleted_at: "2026-11-03T10:00:00+00:00" } }, error: null });
+    expect(await createSupabaseClientRepository(clientGone.factory).findAsset(ASSET_ID)).toMatchObject({ ok: true, value: { deletedAt: "2026-11-03T10:00:00+00:00" } });
+    const none = stubClient({ data: null, error: null });
+    expect(await createSupabaseClientRepository(none.factory).findAsset(ASSET_ID)).toEqual({ ok: true, value: null });
+    const down = stubClient({ data: null, error: { code: "PGRST000", message: "down" } });
+    const { result } = await quietly(() => createSupabaseClientRepository(down.factory).findAsset(ASSET_ID));
+    expect(result.ok || result.error.code).toBe("CLIENT_LOOKUP_FAILED");
+  });
+
+  it("pages the live images and videos of live clients by id, for the renditions backfill", async () => {
+    const { factory, from, is, order } = stubClient({ data: [{ ...assetRow(), client: { deleted_at: null } }], error: null });
+    const builder = from() as unknown as Record<string, unknown>;
+    const inFilter = vi.fn(() => builder);
+    const gt = vi.fn(() => builder);
+    const limit = vi.fn(() => builder);
+    Object.assign(builder, { in: inFilter, gt, limit });
+    from.mockClear();
+    expect(await createSupabaseClientRepository(factory).listLiveMediaPage(ASSET_ID, 50)).toEqual({ ok: true, value: [asset] });
+    expect(from).toHaveBeenCalledWith("client_asset");
+    expect(inFilter).toHaveBeenCalledWith("mime_type", ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime"]);
+    expect(is.mock.calls).toEqual([
+      ["deleted_at", null],
+      ["client.deleted_at", null],
+    ]);
+    expect(gt).toHaveBeenCalledWith("id", ASSET_ID);
+    expect(order).toHaveBeenCalledWith("id", { ascending: true });
+    expect(limit).toHaveBeenCalledWith(50);
   });
 
   it("refuses a row with an unknown type or position as CLIENT_INVALID, and a failed read as CLIENT_LOOKUP_FAILED", async () => {
@@ -617,7 +654,7 @@ describe("createSupabaseClientRepository() client files", () => {
     expect(result.ok || result.error.code).toBe("CLIENT_WRITE_FAILED");
   });
 
-  it("deletes a row through delete_client_asset", async () => {
+  it("removes a row (a soft delete) through delete_client_asset", async () => {
     const { factory, rpc } = stubClient({ data: null, error: null }, { data: true, error: null });
     expect(await createSupabaseClientRepository(factory).deleteAsset(ASSET_ID, client().id)).toEqual({ ok: true, value: true });
     expect(rpc).toHaveBeenCalledExactlyOnceWith("delete_client_asset", { p_asset_id: ASSET_ID });
