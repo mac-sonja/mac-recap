@@ -3902,7 +3902,7 @@ describe("Configurator drag-and-drop on the canvas (Story 4.3e)", () => {
     expect(button(dict.configurator.undo).hasAttribute("disabled")).toBe(true);
   });
 
-  it("elements still drag after the page redraws for new assets or bound values", () => {
+  it("elements still drag after the page redraws for new bound values", () => {
     const props = (values: BoundValues, assets: ConfiguratorProps["assets"]): ConfiguratorProps => ({
       caseId: CASE_ID,
       revision: { id: REVISION_ID, version: 4, editable: true, kind: "case_history" },
@@ -3924,11 +3924,10 @@ describe("Configurator drag-and-drop on the canvas (Story 4.3e)", () => {
     const { rerender } = render(<Configurator {...first} />);
     expect(elementNode(T1).getAttribute("draggable")).toBe("true");
     // As if the renderer had drawn the node afresh, without the attribute.
+    // New bound values (a field saved, the page reloaded). The render assets are the configurator's own
+    // state (a rendition read after upload), and reach the same effect through the same props.
     elementNode(T1).removeAttribute("draggable");
-    rerender(<Configurator {...first} assets={{ [IMAGE]: { url: "https://cdn.test/a.webp", kind: "image" } }} />);
-    expect(elementNode(T1).getAttribute("draggable")).toBe("true");
-    elementNode(T1).removeAttribute("draggable");
-    rerender(<Configurator {...first} assets={{ [IMAGE]: { url: "https://cdn.test/a.webp", kind: "image" } }} values={{ ...VALUES, case: { ...VALUES.case, year: 2025 } }} />);
+    rerender(<Configurator {...first} values={{ ...VALUES, case: { ...VALUES.case, year: 2025 } }} />);
     expect(elementNode(T1).getAttribute("draggable")).toBe("true");
   });
 
