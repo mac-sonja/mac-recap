@@ -90,6 +90,30 @@ describe("backfillRenditions", () => {
   });
 });
 
+describe("backfillRenditions: client files (Story 4.5c-2)", () => {
+  it("enqueues a client file's job with its client in the payload", async () => {
+    const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
+    const files = [
+      { id: id(1), clientId: CLIENT_ID, kind: "image" as const },
+      { id: id(2), clientId: CLIENT_ID, kind: "video" as const },
+    ];
+    const jobs = { enqueue: vi.fn<Jobs["enqueue"]>(async (input) => ok(input)) };
+    const backfill = makeBackfillRenditions({
+      assets: { listLiveMediaPage: vi.fn(async (after: string | null) => ok(after === null ? files : [])) },
+      renditions: { listFor: vi.fn(async () => ok([row(id(1), "image.thumb"), row(id(1), "image.display")])) },
+      jobs,
+      payloadOf: (file) => ({ owner: "client", clientId: file.clientId }),
+    });
+    expect(await backfill()).toEqual(ok({ checked: 2, enqueued: 1, failed: 0 }));
+    expect(jobs.enqueue).toHaveBeenCalledExactlyOnceWith({
+      kind: "rendition",
+      subjectId: id(2),
+      inputHash: renditionInputHash(id(2), "video"),
+      payload: { owner: "client", clientId: CLIENT_ID },
+    });
+  });
+});
+
 describe("checkDevProject", () => {
   it.each([
     ["https://qmptpiykbucbnsrqbgid.supabase.co", "PRODUCTION_REFUSED"],

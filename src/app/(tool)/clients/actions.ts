@@ -3,6 +3,7 @@
 import { failure, type ActionResult } from "@/app/_lib/action-result";
 import { authorize, getActor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
+import * as material from "@/modules/material";
 import type {
   Client,
   ClientBriefFieldSaved,
@@ -174,10 +175,11 @@ export async function requestClientMaterialUpload(input: unknown): Promise<Actio
 
 /**
  * Records an uploaded client file after the server re-checks it (type, size, and an
- * image's pixels): input `{ clientId, assetId, contentType }`. 403 `FORBIDDEN` unless
- * the role may `manage clients`; 400 `UPLOAD_REJECTED` / `FILE_TYPE_NOT_ALLOWED`;
- * 404 `CLIENT_NOT_FOUND` / `UPLOAD_NOT_FOUND`; 409 `CLIENT_MATERIAL_LIMIT`. No row is
- * written on any error.
+ * image's pixels): input `{ clientId, assetId, contentType }`. An image or video then
+ * gets its `rendition` job (Story 4.5c-2; a failed enqueue is only logged). 403
+ * `FORBIDDEN` unless the role may `manage clients`; 400 `UPLOAD_REJECTED` /
+ * `FILE_TYPE_NOT_ALLOWED`; 404 `CLIENT_NOT_FOUND` / `UPLOAD_NOT_FOUND`; 409
+ * `CLIENT_MATERIAL_LIMIT`. No row is written on any error.
  */
 export async function confirmClientMaterialUpload(input: unknown): Promise<ActionResult<ListedClientAsset>> {
   const actor = await getActor();
@@ -185,7 +187,9 @@ export async function confirmClientMaterialUpload(input: unknown): Promise<Actio
   const decision = authorize(actor.value, "manage clients");
   if (!decision.ok) return failure(decision.error);
   const confirmed = await caseStudy.confirmClientMaterialUpload(actor.value, input);
-  return confirmed.ok ? confirmed : failure(confirmed.error);
+  if (!confirmed.ok) return failure(confirmed.error);
+  await material.enqueueClientRenditions(confirmed.value, actor.value.id);
+  return confirmed;
 }
 
 /**
@@ -203,9 +207,10 @@ export async function listClientMaterial(input: unknown): Promise<ActionResult<L
 }
 
 /**
- * Removes one client file at once, row and object, with no undo: input
- * `{ clientId, assetId }`. 403 `FORBIDDEN` unless the role may `manage clients`; 404
- * `NOT_FOUND` (unknown file, or another client's). A failed object delete is only logged.
+ * Removes one client file at once, with no undo: input `{ clientId, assetId }`. A soft
+ * delete (Story 4.5c-2): it leaves the list and frees its slot; its object stays, and a
+ * case page that still shows it reports it missing at approval. 403 `FORBIDDEN` unless
+ * the role may `manage clients`; 404 `NOT_FOUND` (unknown or removed file, or another client's).
  */
 export async function removeClientMaterial(input: unknown): Promise<ActionResult<void>> {
   const actor = await getActor();

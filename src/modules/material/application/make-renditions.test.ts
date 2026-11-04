@@ -7,7 +7,8 @@ import type { ImageProcessor, VideoProcessor, VideoSession } from "@/modules/mat
 import type { ObjectStorage } from "@/modules/material/ports/object-storage";
 import type { NewRendition, RenditionRepository } from "@/modules/material/ports/rendition-repository";
 import { err, ok } from "@/shared/result";
-import { makeRenditionHandler, type RenditionWorkerDeps } from "./make-renditions";
+import type { ClientMediaFile } from "./client-renditions";
+import { isClientRenditionJob, makeRenditionHandler, routeRenditionJobs, type RenditionWorkerDeps } from "./make-renditions";
 import { specHashOf } from "./spec-hash";
 
 const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
@@ -272,5 +273,81 @@ describe("rendition handler: limits and clean-up", () => {
     } finally {
       write.mockRestore();
     }
+  });
+});
+
+describe("rendition handler: client files (Story 4.5c-2)", () => {
+  const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
+  const CLIENT_ORIGINAL = `clients/${CLIENT_ID}/material/${ASSET_ID}.mov`;
+  const file = (over: Partial<ClientMediaFile> = {}): ClientMediaFile => ({
+    id: ASSET_ID,
+    clientId: CLIENT_ID,
+    kind: "video",
+    contentType: "video/quicktime",
+    deletedAt: null,
+    ...over,
+  });
+
+  /** The case world's processors and rows, with a client file and the client keys. */
+  function clientWorld(start: ClientMediaFile | null = file()) {
+    const w = world();
+    w.objects.set(CLIENT_ORIGINAL, new Uint8Array([7]));
+    w.objects.set(`clients/${CLIENT_ID}/material/${ASSET_ID}.jpg`, new Uint8Array([7]));
+    const deps = {
+      ...w.deps,
+      assets: { getById: vi.fn(async () => ok(start)) },
+      keys: {
+        original: (f: ClientMediaFile) => `clients/${f.clientId}/material/${f.id}.${f.contentType === "video/quicktime" ? "mov" : "jpg"}`,
+        rendition: (f: ClientMediaFile, hash: string, ext: string) => `clients/${f.clientId}/material/${f.id}/renditions/${hash}.${ext}`,
+      },
+      logIds: (f: ClientMediaFile) => ({ clientId: f.clientId }),
+    } satisfies RenditionWorkerDeps<ClientMediaFile>;
+    return { ...w, deps };
+  }
+  const clientJob = () => job({ owner: "client", clientId: CLIENT_ID });
+
+  it("a client video: the same specs and processors, under the client's prefix", async () => {
+    const w = clientWorld();
+    expect(await makeRenditionHandler(w.deps).run(clientJob(), live())).toEqual(ok(undefined));
+    expect(w.deps.storage.download).toHaveBeenCalledExactlyOnceWith(CLIENT_ORIGINAL);
+    expect(vi.mocked(w.session.render).mock.calls.map(([spec]) => spec.name)).toEqual(["video.poster", "video.display"]);
+    const base = `clients/${CLIENT_ID}/material/${ASSET_ID}/renditions`;
+    expect(w.writes).toEqual([`object:${base}/${POSTER}.webp`, `row:${POSTER}`, `object:${base}/${VIDEO}.mp4`, `row:${VIDEO}`]);
+    expect(w.rows.get(VIDEO)).toMatchObject({ assetId: ASSET_ID, path: `${base}/${VIDEO}.mp4` });
+  });
+
+  it("a client image makes the thumb and the display copy", async () => {
+    const w = clientWorld(file({ kind: "image", contentType: "image/jpeg" }));
+    expect(await makeRenditionHandler(w.deps).run(clientJob(), live())).toEqual(ok(undefined));
+    expect(w.deps.image.render.mock.calls.map(([, spec]) => spec.name)).toEqual(["image.thumb", "image.display"]);
+  });
+
+  it("a removed client file is skipped, logging its client id; a PDF is not renderable", async () => {
+    const removed = clientWorld(file({ deletedAt: "2026-11-04T10:00:00Z" }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      expect(await makeRenditionHandler(removed.deps).run(clientJob(), live())).toEqual(ok(undefined));
+      expect(JSON.parse(String(write.mock.calls[0][0]))).toMatchObject({ clientId: CLIENT_ID });
+    } finally {
+      write.mockRestore();
+    }
+    expect(removed.writes).toEqual([]);
+    const pdf = clientWorld(file({ kind: "document", contentType: "application/pdf" }));
+    expect(await makeRenditionHandler(pdf.deps).run(clientJob(), live())).toEqual(err(expect.objectContaining({ code: "NOT_RENDERABLE", retryable: false })));
+  });
+
+  it("routes a client job to the client handler and any other to the case handler; a client job has no case", async () => {
+    const cases = { caseIdOf: vi.fn(() => CASE_ID), run: vi.fn(async () => ok(undefined)) };
+    const client = { run: vi.fn(async () => ok(undefined)) };
+    const routed = routeRenditionJobs(cases, client);
+    expect(isClientRenditionJob(clientJob())).toBe(true);
+    expect(isClientRenditionJob(job())).toBe(false);
+    await routed.run(clientJob(), live());
+    expect(client.run).toHaveBeenCalledOnce();
+    expect(cases.run).not.toHaveBeenCalled();
+    await routed.run(job(), live());
+    expect(cases.run).toHaveBeenCalledOnce();
+    expect(routed.caseIdOf?.(clientJob())).toBeNull();
+    expect(routed.caseIdOf?.(job())).toBe(CASE_ID);
   });
 });

@@ -17,6 +17,7 @@ const {
   removeMaterialUseCase,
   deleteClientUseCase,
   addSectorUseCase,
+  enqueueClientRenditions,
 } = vi.hoisted(() => ({
   getActor: vi.fn(),
   createClientUseCase: vi.fn(),
@@ -32,6 +33,7 @@ const {
   removeMaterialUseCase: vi.fn(),
   deleteClientUseCase: vi.fn(),
   addSectorUseCase: vi.fn(),
+  enqueueClientRenditions: vi.fn(async () => undefined),
 }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -54,6 +56,8 @@ vi.mock("@/modules/case-study", () => ({
   deleteClient: deleteClientUseCase,
   addClientSector: addSectorUseCase,
 }));
+
+vi.mock("@/modules/material", () => ({ enqueueClientRenditions }));
 
 const actions = await import("./actions");
 const {
@@ -130,6 +134,7 @@ beforeEach(() => {
     addSectorUseCase,
   ])
     fn.mockReset();
+  enqueueClientRenditions.mockClear();
 });
 
 describe("client actions", () => {
@@ -165,6 +170,18 @@ describe("client actions", () => {
     expect(await action(input)).toEqual({ ok: true, value: LUMEN });
     expect(useCase).toHaveBeenCalledExactlyOnceWith(actor("owner_designer"), input);
     expect(useCase.mock.calls[0][1]).toBe(input);
+  });
+
+  it("confirmClientMaterialUpload enqueues the file's renditions after a confirm, and never after a refusal (Story 4.5c-2)", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    const file = { id: ASSET_ID, clientId: LUMEN.id, kind: "image", position: 1 };
+    confirmMaterialUseCase.mockResolvedValueOnce(ok(file));
+    expect(await confirmClientMaterialUpload({ clientId: LUMEN.id, assetId: ASSET_ID, contentType: "image/jpeg" })).toEqual({ ok: true, value: file });
+    expect(enqueueClientRenditions).toHaveBeenCalledExactlyOnceWith(file, actor("owner_designer").id);
+    enqueueClientRenditions.mockClear();
+    confirmMaterialUseCase.mockResolvedValueOnce(err({ code: "CLIENT_MATERIAL_LIMIT", message: "3 files" }));
+    expect(await confirmClientMaterialUpload({ clientId: LUMEN.id, assetId: ASSET_ID, contentType: "image/jpeg" })).toMatchObject({ ok: false, status: 409 });
+    expect(enqueueClientRenditions).not.toHaveBeenCalled();
   });
 
   it.each(allCases.flatMap((c) => (["account_sales_social", "system"] as const).map((role) => [c[0], role, c[1], c[2], c[3]] as const)))(
