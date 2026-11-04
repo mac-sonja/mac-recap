@@ -114,7 +114,8 @@ describe("bundles (Story 5.4)", () => {
     }
     // A single format's payload names no formats; a bundle always does.
     expect(exportPayloadSchema.safeParse({ ...payload, format: "carosello_1_1" }).success).toBe(false);
-    const { formats: _, ...withoutFormats } = payload;
+    const withoutFormats: Partial<typeof payload> = { ...payload };
+    delete withoutFormats.formats;
     expect(exportPayloadSchema.safeParse(withoutFormats).success).toBe(false);
   });
 

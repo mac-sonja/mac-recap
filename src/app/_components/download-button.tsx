@@ -4,7 +4,7 @@ import { Download, Loader2, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { PRESSABLE, PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE, ROW_PILL, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { Dialog } from "@/app/_components/dialog";
-import type { FormatId } from "@/modules/rendering";
+import { EXPORT_FORMAT_IDS, isExportFormatId, type ExportFormatId, type FormatId } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
@@ -12,8 +12,13 @@ import { cn } from "@/shared/utils";
  * The formats the picker offers today, in its order (SCP 2026-10-28). Video is
  * Anteprima only for the demo, so it stays under *In arrivo* (answer 1).
  */
-const FORMAT_ORDER = ["presentazione_16_9", "carosello_1_1"] as const satisfies readonly FormatId[];
-type DownloadFormatId = (typeof FORMAT_ORDER)[number];
+const FORMAT_ORDER: readonly ExportFormatId[] = EXPORT_FORMAT_IDS;
+
+/** The boxes ticked when the dialog opens: the format in view, else Presentazione (Story 5.4). */
+const defaultTicked = (current: FormatId | undefined): ExportFormatId[] => [current !== undefined && isExportFormatId(current) ? current : FORMAT_ORDER[0]];
+
+/** The ticked formats in the picker's order. */
+const inOrder = (ticked: readonly ExportFormatId[]) => FORMAT_ORDER.filter((id) => ticked.includes(id));
 
 const UPCOMING = Object.values(it.download.upcoming);
 
@@ -41,21 +46,24 @@ export interface DownloadButtonProps {
   title: string;
   description: string;
   /**
-   * Asks for the chosen format's file (Story 5.3: one case; 5.9 wires the client pack).
-   * Without it **Scarica** in the dialog stays inactive.
+   * Asks for the ticked formats' file, in the picker's order (Story 5.3: one format, its
+   * own file; 5.4: two or more, one ZIP; 5.9 wires the client pack). Without it
+   * **Scarica** in the dialog stays inactive.
    */
-  onDownload?: (format: FormatId) => Promise<DownloadStart>;
+  onDownload?: (formats: ExportFormatId[]) => Promise<DownloadStart>;
   /** Asks again about a `pending` ticket, every 2 s until it is ready or failed (at most 5 minutes). */
   onPoll?: (ticket: string) => Promise<DownloadPoll>;
   /** The failure toast's line, naming what was downloaded (several toasts may show at once). */
   failedMessage?: string;
+  /** The format shown in the view, ticked when the dialog opens; without one (a table row), Presentazione is. */
+  currentFormat?: FormatId;
 }
 
 type Phase =
   | { kind: "idle" }
   | { kind: "starting" }
-  | { kind: "working"; ticket: string; format: DownloadFormatId }
-  | { kind: "failed"; format: DownloadFormatId };
+  | { kind: "working"; ticket: string; formats: ExportFormatId[] }
+  | { kind: "failed"; formats: ExportFormatId[] };
 
 /** Hands a signed link to the browser's downloads; the link itself says "attachment" and names the file. */
 function saveFile(url: string, fileName: string) {
@@ -71,8 +79,12 @@ function saveFile(url: string, fileName: string) {
 
 /**
  * **Scarica**: a small grey pill that opens the format picker. Today's formats are
- * radio choices (Presentazione first); the ones still to come are listed greyed out
- * with *In arrivo*. Shown only where there is something approved to download.
+ * checkboxes (Presentazione first), the format in view ticked when it opens; the ones
+ * still to come are listed greyed out with *In arrivo*. Shown only where there is
+ * something approved to download.
+ *
+ * Story 5.4: one ticked format downloads its own file, two or more one ZIP; with none
+ * ticked **Scarica** in the dialog is inactive.
  *
  * Story 5.3: **Scarica** in the dialog asks for the file. A refusal (no approved
  * version, a format the version lacks) shows in the dialog. Otherwise the dialog closes
@@ -80,13 +92,20 @@ function saveFile(url: string, fileName: string) {
  * browsing. When it is ready the browser downloads it; when it didn't finish a toast
  * offers **Riprova**. Leaving the page drops the wait: no download then.
  */
-export function DownloadButton({ label, title, description, onDownload, onPoll, failedMessage = it.download.failed }: DownloadButtonProps) {
+export function DownloadButton({
+  label,
+  title,
+  description,
+  onDownload,
+  onPoll,
+  failedMessage = it.download.failed,
+  currentFormat,
+}: DownloadButtonProps) {
   const [open, setOpen] = useState(false);
-  const [format, setFormat] = useState<DownloadFormatId>(FORMAT_ORDER[0]);
+  const [ticked, setTicked] = useState<ExportFormatId[]>(() => defaultTicked(currentFormat));
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [refusal, setRefusal] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
-  const name = useId();
   const refusalId = useId();
 
   const mounted = useRef(true);
@@ -107,16 +126,16 @@ export function DownloadButton({ label, title, description, onDownload, onPoll, 
   // A double click lands before the re-render that marks the button busy.
   const inFlight = useRef(false);
 
-  async function begin(chosen: DownloadFormatId) {
+  async function begin(chosen: readonly ExportFormatId[]) {
     const start = handlers.current.onDownload;
-    if (start === undefined || busy || inFlight.current) return;
+    if (start === undefined || chosen.length === 0 || busy || inFlight.current) return;
     inFlight.current = true;
     setPhase({ kind: "starting" });
     setRefusal(null);
     setAnnouncement("");
     let started: DownloadStart;
     try {
-      started = await start(chosen);
+      started = await start(inOrder(chosen));
     } catch {
       started = { kind: "refused", message: it.download.failed };
     } finally {
@@ -135,7 +154,7 @@ export function DownloadButton({ label, title, description, onDownload, onPoll, 
       setPhase({ kind: "idle" });
       setAnnouncement(it.download.ready);
     } else {
-      setPhase({ kind: "working", ticket: started.ticket, format: chosen });
+      setPhase({ kind: "working", ticket: started.ticket, formats: inOrder(chosen) });
     }
   }
 
@@ -162,7 +181,7 @@ export function DownloadButton({ label, title, description, onDownload, onPoll, 
         setPhase({ kind: "idle" });
         setAnnouncement(it.download.ready);
       } else {
-        setPhase({ kind: "failed", format: phase.format });
+        setPhase({ kind: "failed", formats: phase.formats });
       }
     };
     timer = setTimeout(tick, DOWNLOAD_POLL_MS);
@@ -182,6 +201,7 @@ export function DownloadButton({ label, title, description, onDownload, onPoll, 
         onClick={() => {
           if (busy) return;
           setRefusal(null);
+          setTicked(defaultTicked(currentFormat));
           setOpen(true);
         }}
         className={cn(ROW_PILL, PRESSABLE, "aria-busy:text-foreground-muted")}
@@ -221,8 +241,8 @@ export function DownloadButton({ label, title, description, onDownload, onPoll, 
             </button>
             <button
               type="button"
-              onClick={() => void begin(format)}
-              aria-disabled={onDownload === undefined || busy ? "true" : undefined}
+              onClick={() => void begin(ticked)}
+              aria-disabled={onDownload === undefined || ticked.length === 0 || busy ? "true" : undefined}
               aria-busy={phase.kind === "starting" ? "true" : undefined}
               className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE)}
             >
@@ -243,12 +263,12 @@ export function DownloadButton({ label, title, description, onDownload, onPoll, 
               )}
             >
               <input
-                type="radio"
-                name={name}
+                type="checkbox"
                 value={id}
-                checked={format === id}
-                onChange={() => {
-                  setFormat(id);
+                checked={ticked.includes(id)}
+                onChange={(event) => {
+                  const on = event.currentTarget.checked;
+                  setTicked((current) => (on ? inOrder([...current, id]) : current.filter((f) => f !== id)));
                   setRefusal(null);
                 }}
                 className="size-4 shrink-0 accent-foreground-strong"
@@ -261,7 +281,7 @@ export function DownloadButton({ label, title, description, onDownload, onPoll, 
           ))}
           {UPCOMING.map((label) => (
             <div key={label} aria-disabled="true" className={cn(OPTION, "border-border/60 text-foreground-muted opacity-70")}>
-              <input type="radio" disabled name={name} className="size-4 shrink-0" />
+              <input type="checkbox" disabled className="size-4 shrink-0" />
               <span className="font-label text-sm">{label}</span>
               <span className="ml-auto rounded-md bg-surface-control px-2 py-0.5 font-label text-badge font-medium">{it.download.soon}</span>
             </div>
@@ -279,7 +299,7 @@ export function DownloadButton({ label, title, description, onDownload, onPoll, 
           className="fixed right-6 bottom-6 z-50 flex animate-enter items-center gap-3 rounded-xl bg-surface-raised py-3 pr-3 pl-4 shadow-popover"
         >
           <p className="font-label text-sm text-foreground-strong">{failedMessage}</p>
-          <button type="button" onClick={() => void begin(phase.format)} className={SECONDARY_ACTION}>
+          <button type="button" onClick={() => void begin(phase.formats)} className={SECONDARY_ACTION}>
             {it.download.retry}
           </button>
           <button

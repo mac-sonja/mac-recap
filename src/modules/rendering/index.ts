@@ -28,6 +28,9 @@ export {
   templates,
   textStyles,
 } from "@/modules/rendering/templates";
+// The formats that export today (Story 5.3/5.4), pure: the picker offers exactly these.
+export { EXPORT_FORMAT_IDS, isExportFormatId } from "@/modules/rendering/domain/export";
+export type { ExportFormatId } from "@/modules/rendering/domain/export";
 export { composeParts, renderComposed } from "@/modules/rendering/compose";
 export type { CasePart, ClientIntroPart, ComposedFile, ComposedSegment, ComposePart } from "@/modules/rendering/compose";
 export { measureOverflow } from "@/modules/rendering/overflow";
