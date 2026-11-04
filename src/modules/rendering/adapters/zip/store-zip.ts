@@ -1,6 +1,6 @@
 import { crc32 } from "node:zlib";
 
-/** One file of a ZIP: a plain name (no folders) and its bytes. */
+/** One file of a ZIP: its name (`01.png`, or in a folder: `Carosello/01.png`) and its bytes. */
 export interface ZipEntry {
   name: string;
   bytes: Uint8Array;
@@ -64,4 +64,44 @@ export function storeZip(entries: readonly ZipEntry[]): Uint8Array {
   end.writeUInt32LE(directory.length, 12);
   end.writeUInt32LE(offset, 16);
   return new Uint8Array(Buffer.concat([...locals, directory, end]));
+}
+
+/**
+ * The entries of a ZIP that `storeZip` wrote (Story 5.4: a bundle unpacks the stored
+ * Carosello), in order. Only stored (not deflated) entries; each one's CRC is checked.
+ * Throws on anything else: a stored export is ours, so a mismatch is a bug or damage.
+ */
+export function readStoredZip(bytes: Uint8Array): ZipEntry[] {
+  const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let end = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 0xffff); i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) {
+      end = i;
+      break;
+    }
+  }
+  if (end < 0) throw new Error("not a zip");
+  const count = buf.readUInt16LE(end + 10);
+  let at = buf.readUInt32LE(end + 16);
+  const entries: ZipEntry[] = [];
+  for (let n = 0; n < count; n++) {
+    if (at + 46 > end || buf.readUInt32LE(at) !== 0x02014b50) throw new Error("bad zip directory");
+    const method = buf.readUInt16LE(at + 10);
+    const crc = buf.readUInt32LE(at + 16);
+    const size = buf.readUInt32LE(at + 20);
+    const nameLength = buf.readUInt16LE(at + 28);
+    const extraLength = buf.readUInt16LE(at + 30);
+    const commentLength = buf.readUInt16LE(at + 32);
+    const offset = buf.readUInt32LE(at + 42);
+    const name = buf.subarray(at + 46, at + 46 + nameLength).toString("utf8");
+    if (method !== 0 || buf.readUInt32LE(at + 24) !== size) throw new Error("zip entry not stored");
+    if (offset + 30 > buf.length || buf.readUInt32LE(offset) !== 0x04034b50) throw new Error("bad zip entry");
+    const start = offset + 30 + buf.readUInt16LE(offset + 26) + buf.readUInt16LE(offset + 28);
+    if (start + size > buf.length) throw new Error("zip entry out of bounds");
+    const data = buf.subarray(start, start + size);
+    if (crc32(data) !== crc) throw new Error("zip entry damaged");
+    entries.push({ name, bytes: new Uint8Array(data) });
+    at += 46 + nameLength + extraLength + commentLength;
+  }
+  return entries;
 }

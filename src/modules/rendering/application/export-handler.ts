@@ -1,15 +1,20 @@
 import { referencedAssetIds } from "@/modules/case-study";
-import { JOB_ABORTED, type Job, type JobHandler, type JobOutcome } from "@/modules/jobs";
+import { JOB_ABORTED, type Job, type JobFailure, type JobHandler, type JobOutcome } from "@/modules/jobs";
 import { exportHtml } from "@/modules/rendering/application/export-html";
-import { readExportSource, type ExportSource, type ExportSourceDeps } from "@/modules/rendering/application/export-source";
+import { bundleHashOf, readExportSources, type ExportSource, type ExportSourceDeps } from "@/modules/rendering/application/export-source";
 import {
+  bundleEntryName,
+  EXPORT_BUNDLE,
   EXPORT_FILES,
+  EXPORT_FORMAT_IDS,
   EXPORT_MAX_BYTES,
   EXPORT_STALE,
   EXPORT_TOO_LARGE,
   exportPayloadSchema,
   type ExportFormatId,
+  type ExportPart,
   type ExportPayload,
+  type ExportRecord,
 } from "@/modules/rendering/domain/export";
 import { getFormat } from "@/modules/rendering/domain/formats";
 import type { ExportBrowser } from "@/modules/rendering/ports/export-browser";
@@ -17,7 +22,7 @@ import type { ExportRepository } from "@/modules/rendering/ports/export-reposito
 import type { ExportStorage } from "@/modules/rendering/ports/export-storage";
 import type { BoundValues, RenderAsset } from "@/modules/rendering/templates/types";
 import { it } from "@/shared/i18n/it";
-import { log } from "@/shared/log";
+import { log, type LogContext } from "@/shared/log";
 import { err, ok, type Result } from "@/shared/result";
 
 /** A case or client image or video, as its listing gives it. */
@@ -32,7 +37,7 @@ type GetRendition = (assetId: string, specName: string) => Promise<Result<{ url:
 /** What the export handler needs, injected so unit tests use a fake browser and no database (wired in `worker.ts`). */
 export interface ExportHandlerDeps extends ExportSourceDeps {
   exports: Pick<ExportRepository, "findByHash" | "insert">;
-  storage: Pick<ExportStorage, "upload">;
+  storage: Pick<ExportStorage, "upload" | "read">;
   /** `material.listAssets`: the case's live files. */
   listCaseMedia(caseId: string): Promise<Result<readonly MediaFile[]>>;
   /** `case-study.listClientMaterial`: the client's live files. */
@@ -50,18 +55,20 @@ export interface ExportHandlerDeps extends ExportSourceDeps {
   fontCss(): Promise<string>;
   browser: ExportBrowser;
   zip(entries: readonly { name: string; bytes: Uint8Array }[]): Uint8Array;
+  /** Reads back a ZIP that `zip` wrote (a bundle unpacks the stored Carosello). Throws on a damaged one. */
+  unzip(bytes: Uint8Array): { name: string; bytes: Uint8Array }[];
 }
 
 type Failure = { code: Uppercase<string>; message: string; retryable?: boolean };
 
-const fail = (code: Uppercase<string>, message: string, retryable = true): JobOutcome => err({ code, message, retryable });
-const aborted = (): JobOutcome => err({ code: JOB_ABORTED, message: "The export was stopped." });
+const fail = (code: Uppercase<string>, message: string, retryable = true): Result<never, JobFailure> => err({ code, message, retryable });
+const aborted = (): Result<never, JobFailure> => err({ code: JOB_ABORTED, message: "The export was stopped." });
 
 /** Codes that asking again cannot fix: the job fails at once. */
 const PERMANENT = new Set(["NOT_APPROVED", "FORMAT_NOT_IN_REVISION", "NOT_FOUND", EXPORT_STALE, EXPORT_TOO_LARGE]);
 
 /** A failure as the job loop takes it: retried unless it says otherwise or its code is permanent. */
-const asFailure = (error: { code: string; message: string; retryable?: boolean }): JobOutcome =>
+const asFailure = (error: { code: string; message: string; retryable?: boolean }): Result<never, JobFailure> =>
   fail(error.code as Uppercase<string>, error.message, error.retryable ?? !PERMANENT.has(error.code));
 
 /** The rendition a still export draws: an image's display copy, a video's poster frame. */
@@ -91,7 +98,10 @@ function caseIdOf(job: Job): string | null {
 
 /**
  * The `export` job handler (Story 5.3): one format of one case's approved revision as a
- * file. It re-checks approval and the content hash (an edit since the request is
+ * file. A bundle (Story 5.4) makes each of its formats the same way, only those with no
+ * stored export yet, then zips exactly those stored files into one more `export` row
+ * (`bundle.zip`: a PDF at the root under its 5.3 name, a Carosello's PNGs in
+ * `Carosello/`). If any format fails, no ZIP is stored; a format already made stays. It re-checks approval and the content hash (an edit since the request is
  * `EXPORT_STALE`: the person asks again), reuses a file already stored for the hash,
  * else draws the pages with the preview's renderer (case and client renditions and the
  * logo inline, Inter inline), prints them in Chromium (`page.setContent`; a PDF of
@@ -196,52 +206,133 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
     return ok(file);
   }
 
+  /**
+   * The stored export of one format (Story 5.3's render and store): the row with its hash
+   * when there is one (never drawn again), else drawn, stored and recorded now.
+   */
+  async function ensureFormat(
+    source: ExportSource,
+    parts: ExportPart[],
+    requestedBy: string,
+    signal: AbortSignal,
+    ids: LogContext,
+  ): Promise<Result<ExportRecord, JobFailure>> {
+    const existing = await deps.exports.findByHash(source.contentHash);
+    if (signal.aborted) return aborted();
+    if (!existing.ok) return asFailure(existing.error);
+    if (existing.value !== null) return ok(existing.value);
+
+    let bytes: Result<Uint8Array, Failure>;
+    try {
+      bytes = await draw(source, source.format, signal);
+    } catch (error) {
+      if (signal.aborted) return aborted();
+      log.error(`export render threw (${source.format}): ${(error as Error | null)?.name ?? "unknown"}`, ids);
+      return fail("EXPORT_RENDER_FAILED", "The file could not be made.");
+    }
+    if (signal.aborted) return aborted();
+    if (!bytes.ok) return asFailure(bytes.error);
+    return store(source.contentHash, source.format, parts, requestedBy, bytes.value, signal, ids);
+  }
+
+  async function store(
+    hash: string,
+    format: ExportFormatId | typeof EXPORT_BUNDLE,
+    parts: ExportPart[],
+    requestedBy: string,
+    bytes: Uint8Array,
+    signal: AbortSignal,
+    ids: LogContext,
+  ): Promise<Result<ExportRecord, JobFailure>> {
+    const stored = await deps.storage.upload({ contentHash: hash, format }, bytes);
+    if (signal.aborted) return aborted();
+    if (!stored.ok) return asFailure(stored.error);
+    const written = await deps.exports.insert({
+      contentHash: hash,
+      format,
+      parts,
+      path: stored.value.path,
+      contentType: EXPORT_FILES[format].contentType,
+      sizeBytes: bytes.byteLength,
+      createdBy: requestedBy,
+    });
+    if (!written.ok) return asFailure(written.error);
+    log.info(`export stored: ${format}`, ids);
+    return ok(written.value);
+  }
+
+  /** The entries a format's stored file adds to a bundle, checked against its pages as 5.3 checks a fresh file. */
+  async function bundleEntries(source: ExportSource, record: ExportRecord): Promise<Result<{ name: string; bytes: Uint8Array }[], JobFailure>> {
+    const read = await deps.storage.read(record.path);
+    if (!read.ok) return asFailure(read.error);
+    const name = bundleEntryName(source.caseStudy.code, source.caseStudy.name, source.format);
+    const damaged = (detail: string) => fail("EXPORT_RENDER_FAILED", `The stored ${source.format} file ${detail}.`, false);
+    if (EXPORT_FILES[source.format].extension === "pdf") {
+      const pages = pdfPageCount(read.value);
+      if (pages !== source.pages.length) return damaged(`has ${pages} pages for ${source.pages.length}`);
+      return ok([{ name, bytes: read.value }]);
+    }
+    let inner: { name: string; bytes: Uint8Array }[];
+    try {
+      inner = deps.unzip(read.value);
+    } catch {
+      return damaged("can't be read");
+    }
+    if (inner.length !== source.pages.length) return damaged(`has ${inner.length} slides for ${source.pages.length}`);
+    return ok(inner.map((entry) => ({ name: `${name}${entry.name}`, bytes: entry.bytes })));
+  }
+
   async function run(job: Job, signal: AbortSignal): Promise<JobOutcome> {
     const parsed = exportPayloadSchema.safeParse(job.payload);
     if (!parsed.success) return fail("INVALID_PAYLOAD", "The export job's payload is not valid.", false);
     const payload: ExportPayload = parsed.data;
     const [part] = payload.parts;
     const ids = { jobId: job.id, caseId: part.subject.id };
+    // A bundle's formats in the picker's order: the order of the files in its ZIP.
+    const formats: ExportFormatId[] =
+      payload.format === EXPORT_BUNDLE ? EXPORT_FORMAT_IDS.filter((f) => payload.formats.includes(f)) : [payload.format];
 
     // Approved only, checked again before anything is drawn (NFR1).
-    const source = await readExportSource(deps, part.subject.id, payload.format);
+    const read = await readExportSources(deps, part.subject.id, formats);
     if (signal.aborted) return aborted();
-    if (!source.ok) return asFailure(source.error);
-    if (source.value.revision.id.toLowerCase() !== part.revisionId.toLowerCase() || source.value.contentHash !== job.inputHash) {
+    if (!read.ok) return asFailure(read.error);
+    const sources = read.value;
+    const hash = payload.format === EXPORT_BUNDLE ? bundleHashOf(sources) : sources[0].contentHash;
+    if (sources[0].revision.id.toLowerCase() !== part.revisionId.toLowerCase() || hash !== job.inputHash) {
       return fail(EXPORT_STALE, "The case changed since the export was asked for.", false);
     }
 
-    const existing = await deps.exports.findByHash(source.value.contentHash);
+    if (payload.format !== EXPORT_BUNDLE) {
+      const made = await ensureFormat(sources[0], payload.parts, payload.requestedBy, signal, ids);
+      return made.ok ? ok(undefined) : made;
+    }
+
+    const existing = await deps.exports.findByHash(hash);
     if (signal.aborted) return aborted();
     if (!existing.ok) return asFailure(existing.error);
     if (existing.value !== null) return ok(undefined);
 
-    let bytes: Result<Uint8Array, Failure>;
-    try {
-      bytes = await draw(source.value, payload.format, signal);
-    } catch (error) {
-      if (signal.aborted) return aborted();
-      log.error(`export render threw: ${(error as Error | null)?.name ?? "unknown"}`, ids);
-      return fail("EXPORT_RENDER_FAILED", "The file could not be made.");
+    // Each format first (only the missing ones are drawn); any failure stores no ZIP.
+    const records: ExportRecord[] = [];
+    for (const source of sources) {
+      const made = await ensureFormat(source, payload.parts, payload.requestedBy, signal, ids);
+      if (!made.ok) return made;
+      records.push(made.value);
     }
-    if (signal.aborted) return aborted();
-    if (!bytes.ok) return asFailure(bytes.error);
 
-    const stored = await deps.storage.upload({ contentHash: source.value.contentHash, format: payload.format }, bytes.value);
-    if (signal.aborted) return aborted();
-    if (!stored.ok) return asFailure(stored.error);
-    const written = await deps.exports.insert({
-      contentHash: source.value.contentHash,
-      format: payload.format,
-      parts: payload.parts,
-      path: stored.value.path,
-      contentType: EXPORT_FILES[payload.format].contentType,
-      sizeBytes: bytes.value.byteLength,
-      createdBy: payload.requestedBy,
-    });
-    if (!written.ok) return asFailure(written.error);
-    log.info("export stored", ids);
-    return ok(undefined);
+    const entries: { name: string; bytes: Uint8Array }[] = [];
+    for (const [i, source] of sources.entries()) {
+      const added = await bundleEntries(source, records[i]);
+      if (signal.aborted) return aborted();
+      if (!added.ok) return added;
+      entries.push(...added.value);
+    }
+    const zip = deps.zip(entries);
+    if (zip.byteLength > EXPORT_MAX_BYTES) {
+      return fail(EXPORT_TOO_LARGE, "The file is larger than storage accepts.", false);
+    }
+    const stored = await store(hash, EXPORT_BUNDLE, payload.parts, payload.requestedBy, zip, signal, ids);
+    return stored.ok ? ok(undefined) : stored;
   }
 
   return { run, caseIdOf };

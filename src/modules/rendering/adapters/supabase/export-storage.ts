@@ -1,5 +1,5 @@
 import { StorageApiError } from "@supabase/supabase-js";
-import { EXPORT_FILES, type ExportFormatId } from "@/modules/rendering/domain/export";
+import { EXPORT_FILES, EXPORT_MAX_BYTES, type ExportRecordFormat } from "@/modules/rendering/domain/export";
 import type { ExportStorage } from "@/modules/rendering/ports/export-storage";
 import { log } from "@/shared/log";
 import { err, ok } from "@/shared/result";
@@ -14,15 +14,16 @@ export const MAX_DOWNLOAD_TTL_SECONDS = 15 * 60;
 const HASH = /^[0-9a-f]{64}$/;
 
 /**
- * The only place an export's key is built: `exports/{contentHash}/{format}.{pdf|zip}`.
+ * The only place an export's key is built: `exports/{contentHash}/{format}.{pdf|zip}`, a
+ * bundle's `exports/{contentHash}/bundle.zip` (Story 5.4).
  * Throws for a malformed hash (a bug: hashes come from `contentHash`).
  */
-export function exportKey(contentHash: string, format: ExportFormatId): string {
+export function exportKey(contentHash: string, format: ExportRecordFormat): string {
   if (!HASH.test(contentHash)) throw new Error("export content hash must be 64 hex characters");
   return `exports/${contentHash}/${format}.${EXPORT_FILES[format].extension}`;
 }
 
-const EXPORT_KEY = /^exports\/[0-9a-f]{64}\/(presentazione_16_9\.pdf|carosello_1_1\.zip)$/;
+const EXPORT_KEY = /^exports\/[0-9a-f]{64}\/(presentazione_16_9\.pdf|carosello_1_1\.zip|bundle\.zip)$/;
 
 function errorLabel(error: unknown): string {
   if (error instanceof StorageApiError) return String(error.status);
@@ -50,6 +51,19 @@ export function createSupabaseExportStorage(client: () => ReturnType<typeof crea
       } catch (error) {
         log.error(`export upload failed: ${errorLabel(error)}`);
         return err({ code: "STORAGE_FAILED", message: "Could not store the file." });
+      }
+    },
+
+    async read(path) {
+      if (!EXPORT_KEY.test(path)) return err({ code: "STORAGE_FAILED", message: "Not an export file." });
+      try {
+        const { data, error } = await bucket().download(path);
+        if (error) throw error;
+        if (data.size > EXPORT_MAX_BYTES) throw new Error("export file too large");
+        return ok(new Uint8Array(await data.arrayBuffer()));
+      } catch (error) {
+        log.error(`export read failed: ${errorLabel(error)}`);
+        return err({ code: "STORAGE_FAILED", message: "Could not read the file." });
       }
     },
 

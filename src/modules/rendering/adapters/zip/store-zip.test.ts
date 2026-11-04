@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32 } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { storeZip } from "@/modules/rendering/adapters/zip/store-zip";
+import { readStoredZip, storeZip } from "@/modules/rendering/adapters/zip/store-zip";
 
 const entries = [
   { name: "01.png", bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]) },
@@ -60,5 +60,36 @@ describe("storeZip (Story 5.3)", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("readStoredZip (Story 5.4)", () => {
+  it("reads back what storeZip wrote, folders included", () => {
+    const nested = [...entries, { name: "Carosello/01.png", bytes: new Uint8Array([9, 8, 7]) }, { name: "Città – Presentazione.pdf", bytes: new Uint8Array([1]) }];
+    const read = readStoredZip(storeZip(nested));
+    expect(read.map((e) => e.name)).toEqual(nested.map((e) => e.name));
+    read.forEach((entry, i) => expect([...entry.bytes]).toEqual([...nested[i].bytes]));
+  });
+
+  it("reads an empty zip", () => {
+    expect(readStoredZip(storeZip([]))).toEqual([]);
+  });
+
+  it("refuses bytes that are not a zip", () => {
+    expect(() => readStoredZip(new Uint8Array([1, 2, 3]))).toThrow("not a zip");
+    expect(() => readStoredZip(new Uint8Array(40))).toThrow("not a zip");
+  });
+
+  it("refuses a damaged entry", () => {
+    const zip = storeZip(entries);
+    zip[31 + "01.png".length] ^= 0xff; // a byte of the first entry's data
+    expect(() => readStoredZip(zip)).toThrow("damaged");
+  });
+
+  it("refuses a deflated entry", () => {
+    const zip = Buffer.from(storeZip(entries));
+    const dir = zip.length - 22 - (46 + 6) * 2;
+    zip.writeUInt16LE(8, dir + 10);
+    expect(() => readStoredZip(zip)).toThrow("not stored");
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { contentHash } from "@/modules/rendering/application/content-hash";
-import { contentHashInput, EXPORT_RENDER_VERSION, type ExportPartContent } from "@/modules/rendering/domain/export";
+import { bundleHash, contentHash } from "@/modules/rendering/application/content-hash";
+import { bundleHashInput, contentHashInput, EXPORT_RENDER_VERSION, type ExportPartContent } from "@/modules/rendering/domain/export";
 
 const CASE_A = "cccccccc-0000-4000-8000-000000000001";
 const CASE_B = "cccccccc-0000-4000-8000-000000000002";
@@ -83,5 +83,34 @@ describe("contentHash (Story 5.3)", () => {
     const moved = part();
     const swapped = { ...moved, client: { ...moved.client, name: moved.client.sector, sector: moved.client.name } };
     expect(contentHash([swapped], "presentazione_16_9")).not.toBe(base);
+  });
+});
+
+describe("bundleHash (Story 5.4)", () => {
+  const pdf = { format: "presentazione_16_9" as const, contentHash: contentHash([part()], "presentazione_16_9") };
+  const carosello = { format: "carosello_1_1" as const, contentHash: contentHash([part()], "carosello_1_1") };
+  const names = ["LUM-2026-01 Rebrand Lumen – Presentazione.pdf", "Carosello/"];
+  const bundle = bundleHash([pdf, carosello], names);
+
+  it("is a stable sha256", () => {
+    expect(bundle).toMatch(/^[0-9a-f]{64}$/);
+    expect(bundleHash([pdf, carosello], names)).toBe(bundle);
+  });
+
+  it("doesn't depend on the order the formats or names come in", () => {
+    expect(bundleHash([carosello, pdf], [...names].reverse())).toBe(bundle);
+    expect(bundleHashInput([carosello, pdf], names)).toBe(bundleHashInput([pdf, carosello], names));
+  });
+
+  it("changes when a format's own hash changes, when the formats change, or when the names inside change", () => {
+    const renamed = { ...carosello, contentHash: contentHash([{ ...part(), client: { ...part().client, name: "Lumen Spa" } }], "carosello_1_1") };
+    expect(bundleHash([pdf, renamed], names)).not.toBe(bundle);
+    expect(bundleHash([pdf], names)).not.toBe(bundle);
+    expect(bundleHash([pdf, carosello], ["LUM-2026-01 Altro nome – Presentazione.pdf", "Carosello/"])).not.toBe(bundle);
+  });
+
+  it("is never a single format's hash", () => {
+    expect(bundle).not.toBe(pdf.contentHash);
+    expect(bundle).not.toBe(carosello.contentHash);
   });
 });
