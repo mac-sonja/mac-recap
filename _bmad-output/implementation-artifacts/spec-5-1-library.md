@@ -92,6 +92,26 @@ context:
 
 ## Review Triage Log
 
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|-------|---------|---------|----------|-------|
+| 1 | blind, edge, gap | A pending search debounce replaces the URL after a chip click within 250 ms, dropping the chip | medium | The timer closes over the old `state`; `go()` doesn't cancel it | patch |
+| 2 | edge | The render-phase resync puts the old query back in the field during navigation | medium | `setSent` runs while `state.q` still holds the old value | patch |
+| 3 | blind | One failed client lookup blanks every cover of that client | low | `logoOf` caches a rejecting promise | patch |
+| 4 | blind, edge | The approve-event lookup runs on every list and sends every approved id in one `.in()` | medium | Table and Home pay an extra query; hundreds of ids risk the URL limit | patch |
+| 5 | blind | About 5 reads per card, up to 24 cards | low | Accepted at demo scale | defer |
+| 6 | blind | Out-of-range page and unknown facets stay in the URL | low | The page renders the clamped result correctly | rejected |
+| 7 | blind | No facet counts | false | The spec doesn't ask for counts | rejected |
+| 8 | blind | Search also matches business lines | false | The spec says "matches what the table matches"; the table matches Servizi | rejected |
+| 9 | blind | Search chip label built inline | low | Copy rule: strings from `it.ts` | patch |
+| 10 | blind, gap | Stale "until it ships" JSDoc in `it.ts` | low | Direct deletion | patch |
+| 11 | blind | Disabled pager arrow is a `role="link"` that can't be focused | low | Direct correction | patch |
+| 12 | gap | `LibraryFilters` has no interaction tests | gap | Pre-verified | patch (test) |
+| 13 | gap | `approvedAt` has no DB test | gap | Pre-verified | patch (test) |
+| 14 | blind | An approved case with no approve event sorts by `updatedAt`, so an edit moves it up | low | One-line change: such cases sort last | patch |
+| 15 | blind | The toggle shows to admin too | false | Admin has every owner permission (owner, 2026-10-28) | rejected |
+| 16 | blind | The skeleton lacks the toggle and shows chips when nothing is approved | low | Cosmetic layout shift | rejected |
+| 17 | blind | Spec sections empty | false | The workflow fills them | rejected |
+
 ## Verification
 
 **Commands:**

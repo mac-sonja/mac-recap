@@ -19,6 +19,9 @@ const CASE_STUDY_COLUMNS =
   "id, code, number, name, year, locale, business_lines, status, project_order_ref, head_revision_id, approved_revision_id, head_version, created_by, created_at, updated_at, deleted_at, client(id, name, code)";
 const CASE_EVENT_COLUMNS = "id, case_id, revision_id, actor_id, type, at, data";
 
+/** Case ids per `case_event` lookup when listing: keeps each `.in()` filter (a URL query) short. */
+export const EVENT_ID_CHUNK = 100;
+
 /** Postgres foreign_key_violation, and the constraint naming an unknown case. */
 const FOREIGN_KEY_VIOLATION = "23503";
 const CASE_FK = "case_event_case_id_fkey";
@@ -128,24 +131,26 @@ export function createSupabaseCaseStudyRepository(
 
   /**
    * When each of `caseIds` last took the transition `event`: the newest such transition
-   * event per case. No query when there are none.
+   * event per case. Reads the ids in chunks of `EVENT_ID_CHUNK`, merged into one map;
+   * no query when there are none.
    */
   async function enteredAt(caseIds: string[], event: "generation_succeeded" | "approve"): Promise<Result<Map<string, string>>> {
     const since = new Map<string, string>();
-    if (caseIds.length === 0) return { ok: true, value: since };
-    const { data, error } = await client()
-      .from("case_event")
-      .select("case_id, at")
-      .eq("type", TRANSITION)
-      .eq("data->>event", event)
-      .in("case_id", caseIds)
-      .order("at", { ascending: false });
-    if (error) {
-      log.error(`case_event ${event} time lookup failed: ${error.code}`);
-      return err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "Could not list the case studies." });
+    for (let start = 0; start < caseIds.length; start += EVENT_ID_CHUNK) {
+      const { data, error } = await client()
+        .from("case_event")
+        .select("case_id, at")
+        .eq("type", TRANSITION)
+        .eq("data->>event", event)
+        .in("case_id", caseIds.slice(start, start + EVENT_ID_CHUNK))
+        .order("at", { ascending: false });
+      if (error) {
+        log.error(`case_event ${event} time lookup failed: ${error.code}`);
+        return err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "Could not list the case studies." });
+      }
+      // Newest first, so the first event seen per case is its latest (a case is in one chunk only).
+      for (const row of data) if (!since.has(row.case_id)) since.set(row.case_id, row.at);
     }
-    // Newest first, so the first event seen per case is its latest.
-    for (const row of data) if (!since.has(row.case_id)) since.set(row.case_id, row.at);
     return { ok: true, value: since };
   }
 
@@ -259,7 +264,9 @@ export function createSupabaseCaseStudyRepository(
       // When each Da approvare case entered it (Story 4.1), and each Approvato case (Story 5.1).
       const since = await enteredAt(idsIn("in_review"), "generation_succeeded");
       if (!since.ok) return since;
-      const approved = await enteredAt(idsIn("approved"), "approve");
+      // Only a scope that can hold approved cases reads approve events.
+      const approvedScope = scope.status === undefined || scope.status === "approved";
+      const approved = await enteredAt(approvedScope ? idsIn("approved") : [], "approve");
       if (!approved.ok) return approved;
       return {
         ok: true,

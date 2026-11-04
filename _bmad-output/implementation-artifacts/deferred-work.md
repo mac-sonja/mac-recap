@@ -313,3 +313,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-5c-2-client-media.md`
   summary: Signed rendition URLs (case and client files) expire after `RENDITION_URL_TTL_SECONDS` (15 minutes) and the configurator never re-signs them on a timer, so images break in a long session until the next Media listing or a reload.
   evidence: Review of 4.5c-2 (blind): pre-existing for case files; 4.5c-2 matched the case-file refresh, which has no timed re-sign.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-library.md`
+  summary: Library covers make about five reads per card (live revision, client info, details form, assets, renditions) for up to 24 cards; batch them or cache a cover per approved revision if the library gets slow.
+  evidence: Review of 5.1 (blind): accepted at demo scale.

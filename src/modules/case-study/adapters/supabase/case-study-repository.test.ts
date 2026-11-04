@@ -384,6 +384,28 @@ describe("createSupabaseCaseStudyRepository().list: when a case entered Da appro
     ]);
   });
 
+  it("reads approve events in chunks of 100 ids, merged into one map", async () => {
+    const ids = Array.from({ length: 250 }, (_, i) => `bbbbbbbb-0000-4000-8000-${String(i).padStart(12, "0")}`);
+    const { factory, calls } = listClient(
+      { data: ids.map((id) => row({ id, status: "approved" })), error: null },
+      { data: [{ case_id: ids[0], at: "2026-10-22T09:00:00+00:00" }, { case_id: ids[249], at: "2026-10-23T09:00:00+00:00" }], error: null },
+    );
+    const result = await createSupabaseCaseStudyRepository(factory).list({ status: "approved" });
+    const chunks = calls.case_event.filter(([method]) => method === "in").map(([, , chunk]) => chunk as string[]);
+    expect(chunks.map((chunk) => chunk.length)).toEqual([100, 100, 50]);
+    expect(chunks.flat()).toEqual(ids);
+    expect(result.ok && result.value[0].approvedAt).toBe("2026-10-22T09:00:00+00:00");
+    expect(result.ok && result.value[249].approvedAt).toBe("2026-10-23T09:00:00+00:00");
+    expect(result.ok && result.value[1].approvedAt).toBeNull();
+  });
+
+  it("reads no approve events for a scope that can't hold approved cases", async () => {
+    const { factory, calls } = listClient({ data: [row({ status: "approved" })], error: null });
+    const result = await createSupabaseCaseStudyRepository(factory).list({ status: "draft" });
+    expect(result.ok && result.value[0].approvedAt).toBeNull();
+    expect(calls.case_event).toEqual([]);
+  });
+
   it("reads no events when nothing is in Da approvare", async () => {
     const { factory, from } = listClient({ data: [row({ status: "draft" })], error: null });
     const result = await createSupabaseCaseStudyRepository(factory).list({});
