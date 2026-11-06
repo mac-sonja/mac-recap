@@ -2,7 +2,7 @@
 title: 'Story 3.11: client intro and outro with test text'
 type: 'feature'
 created: '2026-11-06'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '44f6fb10c71646ba4dd9dccb4f8a99162b6c371a'
 route: 'dispatch'
 review_loop_iteration: 0
