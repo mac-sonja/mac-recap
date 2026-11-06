@@ -18,6 +18,7 @@ const listCases = vi.fn<(scope: unknown) => Promise<Result<ListedCaseStudy[]>>>(
 const listAssets = vi.fn<(input: unknown) => Promise<Result<ListedAsset[]>>>();
 const getRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Result<RenditionLink>>>();
 const getClientRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Result<RenditionLink>>>();
+const listClientSectors = vi.fn<() => Promise<Result<{ key: string; label: string }[]>>>();
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((path: string) => {
@@ -49,7 +50,7 @@ vi.mock("@/modules/case-study", async () => ({
   ...(await vi.importActual<typeof import("@/modules/case-study/domain/case-study")>("@/modules/case-study/domain/case-study")),
   ...(await vi.importActual<typeof import("@/modules/case-study/domain/client-material")>("@/modules/case-study/domain/client-material")),
   referencedAssetIds: (await vi.importActual<typeof import("@/modules/case-study")>("@/modules/case-study")).referencedAssetIds,
-  listClientSectors: async () => ok([{ key: "illuminazione", label: "Illuminazione" }]),
+  listClientSectors: () => listClientSectors(),
   getClient: (id: unknown) => getClient(id),
   getClientIntro: (id: unknown) => getClientIntro(id),
   getEditableRevision: (subject: unknown) => getEditableRevision(subject),
@@ -162,7 +163,8 @@ const render = async () => renderToStaticMarkup(await ClientConfiguratorPage({ p
 const lastProps = () => configuratorProps.mock.calls.at(-1)![0];
 
 beforeEach(() => {
-  for (const fn of [requireSurface, getClient, getClientIntro, getEditableRevision, listClientMaterial, listCases, listAssets, getRendition, getClientRendition]) fn.mockReset();
+  for (const fn of [requireSurface, getClient, getClientIntro, getEditableRevision, listClientMaterial, listCases, listAssets, getRendition, getClientRendition, listClientSectors]) fn.mockReset();
+  listClientSectors.mockResolvedValue(ok([{ key: "illuminazione", label: "Illuminazione" }]));
   configuratorProps.mockClear();
   requireSurface.mockResolvedValue(shell);
   getClient.mockResolvedValue(ok(client));
@@ -226,6 +228,33 @@ describe("ClientConfiguratorPage (Story 4.11a)", () => {
     expect(texts.outroHead?.text).toContain("Cosa abbiamo costruito insieme");
     expect(props.images).toEqual([IMAGE_1, IMAGE_2]);
     expect(props.values).toMatchObject({ client: { name: "Lumen Srl", sector: "Illuminazione", results: [{ label: "Vendite", value: "+30%" }] } });
+  });
+
+  it("leaves out a case whose files can't be read, keeping the others' (the page still opens)", async () => {
+    const BROKEN = "aaaaaaaa-0000-4000-8000-000000000002";
+    listCases.mockResolvedValue(ok([{ id: BROKEN } as ListedCaseStudy, { id: CASE_ID } as ListedCaseStudy]));
+    listAssets.mockImplementation(async (input) =>
+      (input as { caseId: string }).caseId === BROKEN ? err({ code: "MATERIAL_LOOKUP_FAILED", message: "down" }) : ok([caseFile]),
+    );
+    await render();
+    expect((lastProps().clientMedia as ListedAsset[]).map((f) => f.id)).toEqual([CASE_IMAGE]);
+  });
+
+  it("marks a client file with no rendition yet as pending, so the Media tab keeps asking for it", async () => {
+    getClientRendition.mockImplementation(async (assetId) =>
+      assetId === IMAGE_2 ? err({ code: "RENDITION_NOT_READY", message: "m" }) : ok({ url: "https://cdn.test/client", width: 1, height: 1, contentType: "image/webp" }),
+    );
+    await render();
+    expect((lastProps().media as ListedAsset[]).map((f) => [f.id, f.thumbnailPending])).toEqual([
+      [IMAGE_1, false],
+      [IMAGE_2, true],
+    ]);
+  });
+
+  it("shows the client's sector key when the shared sector list can't be read", async () => {
+    listClientSectors.mockResolvedValue(err({ code: "CLIENT_SECTOR_LOOKUP_FAILED", message: "m" }));
+    await render();
+    expect(lastProps().values).toMatchObject({ client: { sector: "illuminazione" } });
   });
 
   it("opens an Approvato intro read-only", async () => {

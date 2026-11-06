@@ -1,4 +1,4 @@
-import type { CaseStudyDocument, ClaimAspect, DocumentElement, DocumentMaterialRef, Page, TextElement } from "@/modules/generation";
+import { MAX_RESULT_ROWS, type CaseStudyDocument, type ClaimAspect, type DocumentElement, type DocumentMaterialRef, type Page, type TextElement } from "@/modules/generation";
 import {
   CLIENT_TEMPLATE_TEXT_KEYS,
   FORMAT_IDS,
@@ -56,8 +56,15 @@ function textsIn(elements: readonly DocumentElement[]): TextElement[] {
   });
 }
 
-/** The result rows and testimonial the marker builds try, the plainest first. */
-const MARKER_SHAPES = [0, 1, 2, 3].flatMap((resultRows) => [false, true].map((hasTestimonial) => ({ resultRows, hasTestimonial })));
+/** A case's marker build: no result rows, no testimonial (its text keys sit on no Risultati page). */
+const PLAIN_SHAPE = [{ resultRows: 0, hasTestimonial: false }];
+/**
+ * A client intro's marker builds (Story 4.11a): each row count and testimonial, the plainest
+ * first, since its outro texts sit on the Risultati e testimonial page, built only with one.
+ */
+const CLIENT_SHAPES = Array.from({ length: MAX_RESULT_ROWS + 1 }, (_, resultRows) => resultRows).flatMap((resultRows) =>
+  [false, true].map((hasTestimonial) => ({ resultRows, hasTestimonial })),
+);
 
 /** Ids for marker builds only: never stored. */
 const throwawayIds = () => {
@@ -76,8 +83,7 @@ export function generatedTextsOf(doc: CaseStudyDocument | null): GeneratedTexts 
     FORMAT_IDS.map((formatId) => {
       const found: Partial<Record<TextKey, GeneratedText>> = {};
       const generated = doc.formats[formatId]?.pages ?? [];
-      // Each row count and testimonial: a Risultati page (where a client template puts its outro texts) is built only with one.
-      const marked = MARKER_SHAPES.flatMap(({ resultRows, hasTestimonial }) =>
+      const marked = (doc.kind === "client_intro" ? CLIENT_SHAPES : PLAIN_SHAPE).flatMap(({ resultRows, hasTestimonial }) =>
         starterPages(doc.template, doc.kind, formatId, { newId: throwawayIds(), texts: MARKERS, images: [], resultRows, hasTestimonial }),
       );
       for (const page of marked) {

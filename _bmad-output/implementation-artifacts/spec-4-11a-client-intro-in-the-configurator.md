@@ -2,7 +2,7 @@
 title: 'Story 4.11a: client intro and outro in the configurator (open, edit, approve)'
 type: 'feature'
 created: '2026-11-06'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'abe5489a0948c3c33fd1197dfaf1eb25d9c2ad20'
 route: 'dispatch'
 review_loop_iteration: 0

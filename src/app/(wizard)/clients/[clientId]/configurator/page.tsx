@@ -83,9 +83,9 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
     caseMediaRenderAssets(caseMedia.value),
   ]);
 
-  // Without the shared list the panel still shows the client's own sector key.
+  // Without the shared list the page shows the client's own sector key in place of its label.
   const sectors = sectorList.ok ? sectorList.value : [];
-  const sector = sectors.find((s) => s.key === client.industry)?.label ?? "";
+  const sector = sectors.find((s) => s.key === client.industry)?.label ?? client.industry ?? "";
   const editable = current.status === "in_review" && head.status === "working";
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
 
@@ -106,7 +106,8 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
       values={clientBoundValuesOf(client, sector)}
       trial={false}
       theme={theme}
-      media={clientMediaOf(clientListed, clientAssets)}
+      // A file not drawn yet is pending, so the Media tab keeps asking for its rendition (as after a listing).
+      media={clientMediaOf(clientListed, clientAssets).map((file) => ({ ...file, thumbnailPending: !(file.id in clientAssets) }))}
       clientMedia={caseMedia.value}
       mediaRules={MEDIA_RULES}
       onRenderAssets={getIntroRenderAssets}

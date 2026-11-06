@@ -331,6 +331,48 @@ describe("client mode (Story 4.11a)", () => {
     expect(planFieldSave(CLIENT_FIELDS, { field: "description", text: "x".repeat(401) }, CASE_ID, limits)).toMatchObject({ ok: false, reason: "tooLong", max: 400 });
   });
 
+  it("a new sector or logo saves through updateClient with the client's other fields, and shows at once", () => {
+    const values: BoundValues = {
+      client: { name: "Lumen Srl", sector: "Illuminazione", description: "Lampade.", logoUrl: "https://cdn.test/old.png", results: [], testimonial: null },
+      case: { year: null, services: [], results: [], testimonial: null },
+    };
+    const ctx = { sectors: [{ key: "moda", label: "Moda" }], serviceLabel: (line: string) => line };
+    const sector: FieldChange = { field: "sector", key: "moda" };
+    const sectorPlan = planFieldSave(CLIENT_FIELDS, sector, CASE_ID, limits);
+    expect(sectorPlan).toMatchObject({
+      ok: true,
+      save: { action: "updateClient", input: { clientId: CLIENT_ID, name: "Lumen Srl", industry: "moda", description: "Lampade.", logoId: LOGO } },
+    });
+    if (!sectorPlan.ok) throw new Error("setup");
+    expect(shownValues(values, sectorPlan.next, sector, ctx).client.sector).toBe("Moda");
+
+    const logo: FieldChange = { field: "logo", logoId: NEW_LOGO, previewUrl: "blob:new" };
+    const logoPlan = planFieldSave(CLIENT_FIELDS, logo, CASE_ID, limits);
+    expect(logoPlan).toMatchObject({
+      ok: true,
+      save: { action: "updateClient", input: { clientId: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Lampade.", logoId: NEW_LOGO } },
+    });
+    if (!logoPlan.ok) throw new Error("setup");
+    expect(shownValues(values, logoPlan.next, logo, ctx).client.logoUrl).toBe("blob:new");
+  });
+
+  it("opens no sector editor for an element with an empty bindings list", () => {
+    expect(boundEditorOf({ elementId: EL, type: "text", style: "text", bindings: [] } as unknown as DocumentElement, "client")).toBeNull();
+  });
+
+  it("counts the client name in characters, as the server does", () => {
+    // 120 emoji: 240 UTF-16 units, 120 characters.
+    expect(planFieldSave(CLIENT_FIELDS, { field: "name", text: "😀".repeat(120) }, CASE_ID, limits)).toMatchObject({ ok: true });
+    expect(planFieldSave(CLIENT_FIELDS, { field: "name", text: "😀".repeat(121) }, CASE_ID, limits)).toMatchObject({ ok: false, reason: "tooLong", max: 120 });
+  });
+
+  it("names the intro in client mode's error and missing-row words", () => {
+    expect(saveErrorMessage("STALE_STATUS", "client")).toBe(dict.configurator.clientMode.errors.STALE_STATUS);
+    expect(saveErrorMessage("CLIENT_NAME_TAKEN", "client")).toBe(dict.configurator.fields.errors.CLIENT_NAME_TAKEN);
+    expect(saveErrorMessage("STALE_STATUS")).toBe(dict.configurator.fields.errors.STALE_STATUS);
+    expect(refusalMessage({ reason: "noRow" }, "client")).toBe(dict.configurator.clientMode.noRow);
+  });
+
   it("saves nothing for a case field", () => {
     expect(planFieldSave(CLIENT_FIELDS, { field: "year", text: "2025" }, CASE_ID, limits)).toEqual({ ok: false, reason: "unchanged" });
     expect(planFieldSave(CLIENT_FIELDS, { field: "service", line: "branding" }, CASE_ID, limits)).toEqual({ ok: false, reason: "unchanged" });

@@ -483,14 +483,14 @@ export function Configurator({
         return;
       }
       if ((editor.kind === "resultLabel" || editor.kind === "resultValue") && recordOf(fieldsNow).results[editor.index] === undefined) {
-        say(it.configurator.fields.noRow);
+        say(clientMode ? it.configurator.clientMode.noRow : it.configurator.fields.noRow);
         return;
       }
       session.current += 1;
       select();
       setEditing({ pageKey, elementId, bound: typedValueOf(editor, fieldsNow), editor });
     },
-    [editable, fieldMode, fieldsNow, fieldsOn, formatId, formats, say],
+    [clientMode, editable, fieldMode, fieldsNow, fieldsOn, formatId, formats, say],
   );
 
   /** The latest shown fields and values, for a save queued behind another. */
@@ -515,7 +515,7 @@ export function Configurator({
         const plan = planFieldSave(now.fieldsNow, change, subject.id, fieldOptions);
         if (!plan.ok) {
           if (plan.reason === "unchanged") return true;
-          say(refusalMessage(plan));
+          say(refusalMessage(plan, fieldMode));
           return false;
         }
         const before = now.fieldShown;
@@ -546,7 +546,7 @@ export function Configurator({
           fieldShown: before,
         };
         const code = result === undefined ? undefined : result.error.code;
-        say(saveErrorMessage(code));
+        say(saveErrorMessage(code, fieldMode));
         // The case moved on (approved, deleted): the page shows where it is now.
         if (code === "STALE_STATUS" || code === "NOT_FOUND") router.refresh();
         return false;
@@ -555,7 +555,7 @@ export function Configurator({
       fieldQueue.current = next;
       return next;
     },
-    [fieldActions, fieldOptions, fieldsOn, router, say, subject.id],
+    [fieldActions, fieldMode, fieldOptions, fieldsOn, router, say, subject.id],
   );
 
   /**
@@ -1049,7 +1049,7 @@ export function Configurator({
         code === "REVISION_WRITE_FAILED" ||
         code === "NOT_FOUND"
       ) {
-        say(a.stale);
+        say(clientMode ? it.configurator.clientMode.stale : a.stale);
         router.refresh();
       } else say(a.failed);
       setConfirmApproval(false);
@@ -1102,7 +1102,7 @@ export function Configurator({
       if (code === "MATERIAL_MISSING" && ids.length > 0) setServerMissingFor({ formats, files, clientFiles, ids });
       else if (code === "OVERFLOW_NOT_CLEARED") say(it.configurator.approval.overflowServer);
       else if (STALE_COPY_CODES.has(code)) {
-        say(it.configurator.approval.stale);
+        say(clientMode ? it.configurator.clientMode.stale : it.configurator.approval.stale);
         router.refresh();
       } else say(u.updateFailed);
     } catch {
@@ -1111,7 +1111,7 @@ export function Configurator({
     } finally {
       setCopyBusy(false);
     }
-  }, [clientFiles, doc, files, formats, onUpdateApproved, overflowReport, router, say, subject.id]);
+  }, [clientFiles, clientMode, doc, files, formats, onUpdateApproved, overflowReport, router, say, subject.id]);
 
   /** **Scarta le modifiche**, confirmed (Story 4.9): the copy is dropped and the page shows the approved version again. */
   const discardCopy = useCallback(async () => {
@@ -1344,7 +1344,7 @@ export function Configurator({
                 if (!approving) setConfirmApproval(false);
               }}
               title={fill(it.configurator.approval.title, { name: header.name })}
-              description={it.configurator.approval.description}
+              description={clientMode ? it.configurator.clientMode.approvalDescription : it.configurator.approval.description}
               actions={
                 <>
                   <button type="button" data-autofocus disabled={approving} onClick={() => setConfirmApproval(false)} className={cn(SECONDARY_ACTION, "h-9 px-4")}>

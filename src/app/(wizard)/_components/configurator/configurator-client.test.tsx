@@ -120,12 +120,14 @@ function setup({
   editable = true,
   onSave = vi.fn(savedOk),
   onApprove,
+  onRenderAssets,
   actions = fieldActions(),
 }: {
   status?: ConfiguratorProps["header"]["status"];
   editable?: boolean;
   onSave?: SaveFn;
   onApprove?: ConfiguratorProps["onApprove"];
+  onRenderAssets?: ConfiguratorProps["onRenderAssets"];
   actions?: ReturnType<typeof fieldActions>;
 } = {}) {
   render(
@@ -147,6 +149,7 @@ function setup({
       clientMedia={CASE_MEDIA}
       mediaRules={RULES}
       onApprove={onApprove}
+      onRenderAssets={onRenderAssets}
       headVersion={3}
       clientFiles={CASE_MEDIA.map((f) => ({ id: f.id, name: f.originalFileName }))}
       fields={FIELDS}
@@ -261,6 +264,40 @@ describe("Configurator in client mode (Story 4.11a)", () => {
     expect(push).toHaveBeenCalledExactlyOnceWith(BACK);
   });
 
+  it("a refused approval names the intro, not a case", async () => {
+    const onApprove = vi.fn<NonNullable<ConfiguratorProps["onApprove"]>>(async () => ({ ok: false, status: 409, error: { code: "STALE_REVISION", message: "m" } }));
+    setup({ onApprove });
+    await flush();
+    fireEvent.click(button(dict.configurator.approve, document.querySelector<HTMLElement>("header")!));
+    expect(document.querySelector("dialog")!.textContent).toContain(dict.configurator.clientMode.approvalDescription);
+    fireEvent.click(button(dict.configurator.approval.confirm, document.querySelector<HTMLElement>("dialog")!));
+    await flush();
+    expect(status().textContent).toBe(dict.configurator.clientMode.stale);
+    expect(refresh).toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("Pagine di default on the Chiusura page keeps the client's result rows and testimonial (from the client's values)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const onSave = vi.fn(savedOk);
+    setup({ onSave });
+    fireEvent.click(rightPanel().querySelector<HTMLElement>('[data-thumb="results"]')!);
+    const section = within(document.querySelector<HTMLElement>(`aside[aria-label="${dict.configurator.panels.left}"]`)!).getByRole("region", {
+      name: dict.configurator.tools.defaultPages,
+      hidden: true,
+    });
+    fireEvent.click(button("Risultati e testimonial", section));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const results = onSave.mock.calls[0]![0].doc.formats.presentazione_16_9.pages.find((p: Page) => p.pageKey === "results") as Page;
+    const bindings = JSON.stringify(results);
+    // With the case's (empty) values the template would build no rows and no testimonial.
+    expect(bindings).toContain('"field":"resultValue","index":0');
+    expect(bindings).toContain('"field":"testimonialQuote"');
+  });
+
   it("an Approvato intro opens read-only: no Approva, nothing typed", () => {
     const onSave = vi.fn(savedOk);
     setup({ status: "approved", editable: false, onSave });
@@ -300,16 +337,36 @@ describe("Configurator in client mode (Story 4.11a)", () => {
           { id: ADDED, clientId: CLIENT_ID, kind: "image", fileName: "nuova.png", contentType: "image/png", sizeBytes: 1, createdAt: "x", thumbnailUrl: null },
         ],
       });
-      setup();
+      // Every file asked for is drawn, so only a new one is asked for after the upload.
+      const onRenderAssets = vi.fn<NonNullable<ConfiguratorProps["onRenderAssets"]>>(async ({ assetIds }) => ({
+        ok: true,
+        value: Object.fromEntries(assetIds.map((id) => [id, { url: `https://cdn.test/${id}.webp`, kind: "image" as const }])),
+      }));
+      setup({ onRenderAssets });
       openMedia();
+      await flush();
       drop([new File(["x"], "nuova.png", { type: "image/png" })]);
       await flush();
+      expect(onRenderAssets).toHaveBeenLastCalledWith({ clientIntroId: INTRO_ID, assetIds: [ADDED] });
       expect(clientActions.requestClientMaterialUpload).toHaveBeenCalledWith({ clientId: CLIENT_ID, contentType: "image/png", sizeBytes: 1 });
       expect(clientActions.confirmClientMaterialUpload).toHaveBeenCalledWith({ clientId: CLIENT_ID, assetId: ADDED, contentType: "image/png", fileName: "nuova.png" });
       expect(clientActions.listClientMaterial).toHaveBeenCalledWith({ clientId: CLIENT_ID });
       expect(caseActions.presignAssetUpload).not.toHaveBeenCalled();
       const first = rightPanel().querySelector("ul")!;
       expect([...first.querySelectorAll("[data-media]")].map((t) => (t as HTMLElement).dataset.media)).toEqual([IMAGE, ADDED]);
+    });
+
+    it("an image the server refuses for its size gets the client panel's pixel message", async () => {
+      clientActions.requestClientMaterialUpload.mockResolvedValue({ ok: true, value: { assetId: "bbbbbbbb-0000-4000-8000-000000000009", url: "https://storage.test/u", method: "PUT", headers: {} } });
+      clientActions.confirmClientMaterialUpload.mockResolvedValue({ ok: false, status: 400, error: { code: "CLIENT_IMAGE_SIZE_INVALID", message: "m" } });
+      setup();
+      openMedia();
+      drop([new File(["x"], "piccola.jpg", { type: "image/jpeg" })]);
+      await flush();
+      expect(clientActions.confirmClientMaterialUpload).toHaveBeenCalledTimes(1);
+      expect(status().textContent).toBe(
+        fill(dict.wizard.material.announce.error, { name: "piccola.jpg", message: fill(dict.clientPanel.images.errors.pixels, { min: 1600, max: 8000 }) }),
+      );
     });
 
     it("over the client's file limit, says so with the client limit's message", async () => {

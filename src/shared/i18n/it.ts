@@ -193,10 +193,6 @@ export const it = {
     eyebrow: "Nuova case history",
     /** Accessible name of the top bar's back arrow. */
     back: "Torna alle case history",
-    /** Client mode (Story 4.11a): the back arrow goes to the client page. */
-    clientBack: "Torna al cliente",
-    /** Client mode (Story 4.11a): the top bar's title; `{name}` is the client's. */
-    clientTitle: "{name} · Pagine cliente",
     /** Read by screen readers before the case history code in the top bar. */
     caseId: "ID",
     stepper: {
@@ -999,6 +995,20 @@ export const it = {
       output: "Output",
       risultati: "Risultati",
     },
+    /** Client mode (Story 4.11a): the messages that name the intro, not a case. */
+    clientMode: {
+      /** Approva's dialog. */
+      approvalDescription: "Una volta approvata, l’introduzione si può usare nei materiali del cliente.",
+      /** Someone changed the intro meanwhile (save or approval): the page reloads. */
+      stale: "L’introduzione è cambiata nel frattempo: la ricarichiamo.",
+      /** A result row the page shows but the client doesn't have. */
+      noRow: "Questa riga non c’è tra i risultati del cliente.",
+      /** Field saves refused by the server, by code, where the case wording would be wrong. */
+      errors: {
+        STALE_STATUS: "L’introduzione non è più da approvare: la ricarichiamo.",
+        NOT_FOUND: "Non troviamo più questa introduzione. Ricarica la pagina.",
+      },
+    },
     /** Client mode (Story 4.11a): a client's pages grouped by role. `body` arrives with the client file (4.12). */
     clientSections: {
       intro: "Introduzione",
@@ -1318,10 +1328,6 @@ export const it = {
   caseView: {
     /** Accessible name of the top bar's back arrow. */
     back: "Torna alle case history",
-    /** Client mode (Story 4.11a): the back arrow goes to the client page. */
-    clientBack: "Torna al cliente",
-    /** Client mode (Story 4.11a): the top bar's title; `{name}` is the client's. */
-    clientTitle: "{name} · Pagine cliente",
     /** Opens the configurator. */
     edit: "Modifica",
     /** The collections the case appears in (filled by Story 5.10; empty until then). */

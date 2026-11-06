@@ -119,7 +119,7 @@ function clientEditorOf(el: DocumentElement): BoundEditor | null {
   if (el.type === "logos") return { kind: "logos" };
   if (el.type !== "text") return null;
   const isSector = (b: { record: string; field: string }) => b.record === "client" && b.field === "sector";
-  if (el.bindings !== undefined) return el.bindings.every(isSector) ? { kind: "meta" } : null;
+  if (el.bindings !== undefined) return el.bindings.length > 0 && el.bindings.every(isSector) ? { kind: "meta" } : null;
   const b = el.binding;
   if (b === undefined || b.record !== "client") return null;
   switch (b.field) {
@@ -368,7 +368,7 @@ function planClientFieldSave(fields: ClientEditableFields, change: FieldChange, 
       const name = fieldText(change.text);
       if (name === client.name) return refuse({ reason: "unchanged" });
       if (name === "") return refuse({ reason: "required" });
-      if (name.length > limits.nameMax) return refuse({ reason: "tooLong", max: limits.nameMax });
+      if (chars(name) > limits.nameMax) return refuse({ reason: "tooLong", max: limits.nameMax });
       return saveClient({ name });
     }
     case "description": {
@@ -419,9 +419,12 @@ function planClientFieldSave(fields: ClientEditableFields, change: FieldChange, 
 }
 
 /** The words for a refused change (never called for `unchanged`). */
-export function refusalMessage(refusal: Exclude<FieldRefusal, { reason: "unchanged" }>): string {
+export function refusalMessage(refusal: Exclude<FieldRefusal, { reason: "unchanged" }>, mode: "case" | "client" = "case"): string {
   const t = it.configurator.fields;
   switch (refusal.reason) {
+    case "noRow":
+      // Client mode (Story 4.11a): the row is the client's, not a case's.
+      return mode === "client" ? it.configurator.clientMode.noRow : t.noRow;
     case "tooLong":
       return fill(t.tooLong, { max: refusal.max });
     case "yearRange":
@@ -431,9 +434,9 @@ export function refusalMessage(refusal: Exclude<FieldRefusal, { reason: "unchang
   }
 }
 
-/** The words for a save the server refused, by its code. */
-export function saveErrorMessage(code: string | undefined): string {
-  const errors: Readonly<Record<string, string>> = it.configurator.fields.errors;
+/** The words for a save the server refused, by its code; client mode (Story 4.11a) names the intro, not a case. */
+export function saveErrorMessage(code: string | undefined, mode: "case" | "client" = "case"): string {
+  const errors: Readonly<Record<string, string>> = mode === "client" ? { ...it.configurator.fields.errors, ...it.configurator.clientMode.errors } : it.configurator.fields.errors;
   return (code !== undefined && Object.hasOwn(errors, code) ? errors[code] : undefined) ?? errors.failed!;
 }
 
