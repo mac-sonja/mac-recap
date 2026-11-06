@@ -194,7 +194,7 @@ describe("ClientPage", () => {
     ] as const)("shows Introduzione: and the %s badge", async (status, label) => {
       getClientIntro.mockResolvedValue(ok(intro(status)));
       const html = await renderPage();
-      expect(html).toMatch(new RegExp(`<p data-intro-status="${status}"[^>]*><span>${dict.clients.detail.intro}</span><span data-status="${status}"[^>]*>${label}</span></p>`));
+      expect(html).toMatch(new RegExp(`<p role="status" aria-live="polite" data-intro-status="${status}"[^>]*><span>${dict.clients.detail.intro}</span><span data-status="${status}"[^>]*>${label}</span></p>`));
     });
 
     it("throws into the error boundary when the intro can't be read", async () => {

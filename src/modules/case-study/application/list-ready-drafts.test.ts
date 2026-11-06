@@ -3,7 +3,7 @@ import type { Actor } from "@/modules/access";
 import { selectReadyDrafts, type ReadyDraftCase, type TransitionRecord } from "@/modules/case-study/domain/ready-draft";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import type { ClientIntroRepository } from "@/modules/case-study/ports/client-intro-repository";
-import { ok } from "@/shared/result";
+import { err, ok } from "@/shared/result";
 import { makeListReadyDrafts } from "./list-ready-drafts";
 
 const ME: Actor = { id: "00000000-0000-4000-8000-000000000002", email: "me@mac.it", displayName: "Me", role: "owner_designer" };
@@ -158,5 +158,22 @@ describe("listReadyDrafts (Story 3.8)", () => {
   it("selects intros with the cases' rules, tagged client_intro", () => {
     const drafts = selectReadyDrafts([generate(1, ME.id, BEFORE), succeeded(1, AFTER(5))], [live(1, "Acme")], ME.id, "client_intro");
     expect(drafts).toEqual([{ kind: "client_intro", id: caseId(1), name: "Acme", readyAt: AFTER(5) }]);
+  });
+
+  it("returns the ready cases alone when the intros can't be read; a failed case read still fails", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const failing = { listReadyIntros: vi.fn<ClientIntroRepository["listReadyIntros"]>(async () => err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "down" })) };
+      const repo = fakeRepository([generate(1, ME.id, BEFORE), succeeded(1, AFTER(5))], [live(1)]);
+      expect(await makeListReadyDrafts(repo, failing, NOW)(ME, { since: SINCE })).toEqual({
+        ok: true,
+        value: [{ kind: "case", id: caseId(1), name: "Case 1", readyAt: AFTER(5) }],
+      });
+      expect(write).toHaveBeenCalledWith(expect.stringContaining("ready intros not read"));
+      const broken = { listReadyDrafts: vi.fn<CaseStudyRepository["listReadyDrafts"]>(async () => err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "down" })) };
+      expect(await makeListReadyDrafts(broken, noIntros, NOW)(ME, { since: SINCE })).toMatchObject({ ok: false, error: { code: "CASE_STUDY_LOOKUP_FAILED" } });
+    } finally {
+      write.mockRestore();
+    }
   });
 });

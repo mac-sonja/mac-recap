@@ -120,6 +120,7 @@ export {
   generateInputHash,
   generatePayloadSchema,
   JOB_OK,
+  MIN_CLIENT_IMAGES,
 } from "@/modules/generation/application/generate-case";
 export type {
   ClientIntroGenerateJob,

@@ -695,8 +695,8 @@ export function ClientPanel({
 
   /**
    * Saves everything, in order: create (a new client), the logo and the info, the
-   * texts, then the images waiting in the browser; then starts the intro's draft without
-   * waiting for it (Story 3.11) and opens the client's page.
+   * texts, then the images waiting in the browser; then starts the intro's draft (Story
+   * 3.11; its outcome never stops the save) and opens the client's page.
    * Stays with the errors shown when a step fails.
    */
   async function save() {
@@ -807,9 +807,11 @@ export function ClientPanel({
       if (!(await images.uploadAll(current.id))) return;
       if (unmounted.current) return;
 
-      // 5. The intro-and-outro draft (Story 3.11), in the background: the page opens at
-      // once whatever it answers (fewer than 2 images, an intro already drafted, a failure).
-      startClientIntro({ clientId: current.id }).catch(() => undefined);
+      // 5. The intro-and-outro draft (Story 3.11): the job runs in the background, but the
+      // start is awaited so the page reads the intro already moved. The page opens whatever it
+      // answers (fewer than 2 images, an intro already drafted, a failure).
+      await startClientIntro({ clientId: current.id }).catch(() => undefined);
+      if (unmounted.current) return;
 
       leavingPage = true;
       leaving.current = true;

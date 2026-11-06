@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { MATERIAL_REF_KINDS as MATERIAL_MODULE_REF_KINDS, type MaterialRef } from "@/modules/material";
+import { CLIENT_MATERIAL_MIN_IMAGES } from "@/modules/case-study";
 import { FORMAT_IDS, starterPages, type TemplateContext } from "@/modules/rendering";
 import { upgrade as upgradeWith, type DefaultPages, type Page } from "@/modules/generation/domain/document";
 import {
@@ -14,6 +15,7 @@ import {
   ELEMENT_TYPES,
   LEGACY_FORMAT_IDS,
   MATERIAL_REF_KINDS,
+  MIN_CLIENT_IMAGES,
   RESULT_ROW_FIELDS,
   UPGRADE_ID_PREFIX,
   upgrade,
@@ -57,6 +59,12 @@ describe("the text refs match material's MaterialRef", () => {
   it("has the same type, widened by client_field", () => {
     expectTypeOf<MaterialRef>().toExtend<DocumentMaterialRef>();
     expectTypeOf<Omit<DocumentMaterialRef, "kind">>().toEqualTypeOf<Omit<MaterialRef, "kind">>();
+  });
+});
+
+describe("the client intro's image gate matches case-study's (Story 3.11)", () => {
+  it("re-checks the same minimum the start rule checks", () => {
+    expect(MIN_CLIENT_IMAGES).toBe(CLIENT_MATERIAL_MIN_IMAGES);
   });
 });
 

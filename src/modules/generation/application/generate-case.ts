@@ -130,8 +130,8 @@ export interface ClientIntroGenerateDeps {
   ): Promise<Result<{ id: string }>>;
 }
 
-/** The intro needs this many client images (`CLIENT_MATERIAL_MIN_IMAGES` of case-study). */
-const MIN_CLIENT_IMAGES = 2;
+/** The intro needs this many client images: case-study's `CLIENT_MATERIAL_MIN_IMAGES` (kept equal by `generation/index.test.ts`). */
+export const MIN_CLIENT_IMAGES = 2;
 /** The client template shows the first three. */
 const CLIENT_INTRO_IMAGES = 3;
 
@@ -334,7 +334,7 @@ export function makeGenerateHandler(deps: GenerateDeps) {
     if (!assets.ok) return fail("CLIENT_LOOKUP_FAILED", assets.error.message, true);
     const images = assets.value.filter((a) => a.kind === "image").map((a) => a.id);
     // Gate, again: the server checked it at the save; a file may have gone since.
-    if (images.length < MIN_CLIENT_IMAGES) return fail("NO_CLIENT_IMAGES", "The client has fewer than 2 images.");
+    if (images.length < MIN_CLIENT_IMAGES) return fail("NO_CLIENT_IMAGES", `The client has fewer than ${MIN_CLIENT_IMAGES} images.`);
 
     const { brief } = client.value;
     const doc = buildClientIntroTestDraft({

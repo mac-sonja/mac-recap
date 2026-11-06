@@ -304,7 +304,17 @@ describe("start rule and the generate job (Story 3.11)", () => {
     expect(row).toMatchObject({ status: "draft", head_revision_id: null });
     expect((await eventsOf(row!.id)).at(-1)).toMatchObject({ type: "transition", data: { event: "generation_failed", from: "generating", to: "draft" } });
 
-    // Salva on a Bozza intro tries again.
-    expect(await start(client.id)).toMatchObject({ ok: true, value: { outcome: "started" } });
+    // The runner marks the job failed for good (as postgres: the job table's own functions need a lease).
+    await pool.query(
+      "update public.job set status = 'failed', attempts = max_attempts, locked_until = null, finished_at = now(), error = '{\"code\":\"REVISION_WRITE_FAILED\",\"message\":\"down\"}' where id = $1",
+      [started.value.jobId],
+    );
+
+    // Salva on a Bozza intro tries again, with a new job.
+    const again = await start(client.id);
+    if (!again.ok || again.value.outcome !== "started") throw new Error("retry did not start");
+    expect(again.value.jobId).not.toBe(started.value.jobId);
+    expect((await jobOf(again.value.jobId)).status).toBe("queued");
+    expect((await introRow(client.id))?.status).toBe("generating");
   });
 });

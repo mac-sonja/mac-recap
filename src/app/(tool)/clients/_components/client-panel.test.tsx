@@ -283,10 +283,10 @@ describe("ClientPanel, a new client", () => {
     expect(saveClientTestimonial).toHaveBeenCalledWith({ clientId: CLIENT_ID, quote: "Ci hanno capiti.", author: "" });
   });
 
-  it("starts the intro's draft after the images are uploaded, and opens the client page without waiting for it (Story 3.11)", async () => {
+  it("starts the intro's draft after the images are uploaded, and opens the client page once the start has answered (Story 3.11)", async () => {
     const user = setup();
-    // A start that never answers: the page opens all the same.
-    startClientIntro.mockImplementation(() => new Promise(() => undefined));
+    let answer: (value: ActionResult<ClientIntroStart>) => void = () => undefined;
+    startClientIntro.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
     confirmClientMaterialUpload.mockImplementation(async (input) => {
       expect(startClientIntro).not.toHaveBeenCalled();
       const { assetId, fileName } = input as { assetId: string; fileName: string };
@@ -295,9 +295,12 @@ describe("ClientPanel, a new client", () => {
     renderPanel();
     await fillAll(user);
     await user.click(primary("Aggiungi"));
+    await waitFor(() => expect(startClientIntro).toHaveBeenCalledWith({ clientId: CLIENT_ID }));
+    // The intro has not moved yet: the page waits.
+    expect(replace).not.toHaveBeenCalled();
+    await act(async () => answer({ ok: true, value: { outcome: "started", introId: "dddddddd-0000-4000-8000-000000000001", jobId: "dddddddd-0000-4000-8000-000000000002" } }));
     await waitFor(() => expect(replace).toHaveBeenCalledWith(`/clients/${CLIENT_ID}`, undefined));
     expect(startClientIntro).toHaveBeenCalledTimes(1);
-    expect(startClientIntro).toHaveBeenCalledWith({ clientId: CLIENT_ID });
   });
 
   it.each([
