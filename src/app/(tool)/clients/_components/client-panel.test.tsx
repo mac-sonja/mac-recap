@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionResult } from "@/app/_lib/action-result";
 import type {
   Client,
+  ClientIntroStart,
   ClientBriefFieldSaved,
   ClientDetail,
   ClientResultsSaved,
@@ -33,6 +34,7 @@ const confirmClientMaterialUpload = vi.fn<(input: unknown) => Promise<ActionResu
 const listClientMaterial = vi.fn<(input: unknown) => Promise<ActionResult<ListedClientAsset[]>>>();
 const removeClientMaterial = vi.fn<(input: unknown) => Promise<ActionResult<void>>>();
 const addClientSector = vi.fn<(input: unknown) => Promise<ActionResult<ClientSector>>>();
+const startClientIntro = vi.fn<(input: unknown) => Promise<ActionResult<ClientIntroStart>>>();
 const uploadFile = vi.fn<(target: unknown, file: Blob) => Promise<void>>();
 
 /** Records the call order across actions. */
@@ -58,6 +60,8 @@ vi.mock("@/app/(tool)/clients/actions", () => ({
   removeClientMaterial: traced("removeClientMaterial", (input: unknown) => removeClientMaterial(input)),
   deleteClient: vi.fn(),
   addClientSector: traced("addClientSector", (input: unknown) => addClientSector(input)),
+  // Not traced: it runs in the background after the save's steps (Story 3.11).
+  startClientIntro: (input: unknown) => startClientIntro(input),
 }));
 vi.mock("@/app/(wizard)/_lib/upload", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/app/(wizard)/_lib/upload")>()),
@@ -179,6 +183,7 @@ beforeEach(() => {
     removeClientMaterial,
     uploadFile,
     addClientSector,
+    startClientIntro,
   ]) {
     fn.mockReset();
   }
@@ -215,6 +220,7 @@ beforeEach(() => {
   listClientMaterial.mockResolvedValue({ ok: true, value: [] });
   removeClientMaterial.mockResolvedValue({ ok: true, value: undefined });
   uploadFile.mockResolvedValue(undefined);
+  startClientIntro.mockResolvedValue({ ok: true, value: { outcome: "started", introId: "dddddddd-0000-4000-8000-000000000001", jobId: "dddddddd-0000-4000-8000-000000000002" } });
 });
 afterEach(() => {
   clearPanelOpenedInApp();
@@ -275,6 +281,36 @@ describe("ClientPanel, a new client", () => {
     expect(window.history.replaceState).toHaveBeenCalledWith(null, "", `/clients/${CLIENT_ID}?modifica=1`);
     expect(saveClientResults).toHaveBeenCalledWith({ clientId: CLIENT_ID, results: [{ label: "Visite", value: "2,4M" }] });
     expect(saveClientTestimonial).toHaveBeenCalledWith({ clientId: CLIENT_ID, quote: "Ci hanno capiti.", author: "" });
+  });
+
+  it("starts the intro's draft after the images are uploaded, and opens the client page without waiting for it (Story 3.11)", async () => {
+    const user = setup();
+    // A start that never answers: the page opens all the same.
+    startClientIntro.mockImplementation(() => new Promise(() => undefined));
+    confirmClientMaterialUpload.mockImplementation(async (input) => {
+      expect(startClientIntro).not.toHaveBeenCalled();
+      const { assetId, fileName } = input as { assetId: string; fileName: string };
+      return { ok: true, value: asset(1, { id: assetId, fileName }) };
+    });
+    renderPanel();
+    await fillAll(user);
+    await user.click(primary("Aggiungi"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(`/clients/${CLIENT_ID}`, undefined));
+    expect(startClientIntro).toHaveBeenCalledTimes(1);
+    expect(startClientIntro).toHaveBeenCalledWith({ clientId: CLIENT_ID });
+  });
+
+  it.each([
+    ["a refusal", () => Promise.resolve({ ok: false as const, status: 409, error: { code: "NO_CLIENT_IMAGES", message: "x" } })],
+    ["a network failure", () => Promise.reject(new Error("network"))],
+  ])("opens the client page after %s of the intro's start, showing nothing", async (_name, answer) => {
+    const user = setup();
+    startClientIntro.mockImplementation(answer);
+    renderPanel();
+    await fillAll(user);
+    await user.click(primary("Aggiungi"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(`/clients/${CLIENT_ID}`, undefined));
+    expect(screen.queryByText(dict.clients.errors.generic)).toBeNull();
   });
 
   it("adds a client with no results and no testimonial without saving them", async () => {
@@ -398,6 +434,14 @@ describe("ClientPanel, an existing client", () => {
     const remove = screen.getByRole("button", { name: "Elimina cliente" });
     const body = sheet.querySelector("[data-sheet-body]")!;
     expect(body.lastElementChild?.contains(remove)).toBe(true);
+  });
+
+  it("on Salva starts the intro's draft too, with the same rule as Aggiungi (Story 3.11)", async () => {
+    const user = setup();
+    renderPanel(EXISTING, [asset(1), asset(2)], 2);
+    await user.click(primary("Salva"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(`/clients/${CLIENT_ID}`, { scroll: false }));
+    expect(startClientIntro).toHaveBeenCalledWith({ clientId: CLIENT_ID });
   });
 
   it("uploads a picked image and a picked logo at once, removes a file at once, and links the logo on Salva", async () => {

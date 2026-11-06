@@ -50,11 +50,13 @@ const META_PATH = `${elementPath(...ROW)}.items.0.items.0`;
 
 describe("the text refs match material's MaterialRef", () => {
   it("has the same kinds", () => {
-    expect([...MATERIAL_REF_KINDS]).toEqual([...MATERIAL_MODULE_REF_KINDS]);
+    // The case material's kinds, then `client_field` (Story 3.11), which only a document cites.
+    expect([...MATERIAL_REF_KINDS]).toEqual([...MATERIAL_MODULE_REF_KINDS, "client_field"]);
   });
 
-  it("has the same type", () => {
-    expectTypeOf<DocumentMaterialRef>().toEqualTypeOf<MaterialRef>();
+  it("has the same type, widened by client_field", () => {
+    expectTypeOf<MaterialRef>().toExtend<DocumentMaterialRef>();
+    expectTypeOf<Omit<DocumentMaterialRef, "kind">>().toEqualTypeOf<Omit<MaterialRef, "kind">>();
   });
 });
 
@@ -316,7 +318,7 @@ describe("validateNewDocument (the I/O matrix)", () => {
       ["an unknown aspect", (d: CaseStudyDocument) => (elementAt(d, 2, 0, 0).aspect = "client"), "formats.presentazione_16_9.pages.2.blocks.0.elements.0.aspect"],
       [
         "an unknown ref kind",
-        (d: CaseStudyDocument) => (elementAt(d, 2, 0, 0).sourceRefs = [{ kind: "client_field", id: "name" }]),
+        (d: CaseStudyDocument) => (elementAt(d, 2, 0, 0).sourceRefs = [{ kind: "case_field", id: "name" }]),
         "formats.presentazione_16_9.pages.2.blocks.0.elements.0.sourceRefs.0.kind",
       ],
       ["splitAt on a top group", (d: CaseStudyDocument) => (elementAt(d, 0, 2, 0).splitAt = 1), "formats.presentazione_16_9.pages.0.blocks.2.elements.0.splitAt"],

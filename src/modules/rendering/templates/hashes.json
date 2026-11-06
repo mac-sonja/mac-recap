@@ -11,5 +11,7 @@
   "mac-case/v1/render/page.tsx": "3947d34c55b567e91c6e6e3cfef4bc89c57bdd1399649f0fe334c27ace1b4ba0",
   "mac-case/v1/render/presentazione.tsx": "b16cfa51d74ec298b7bede28feaf927d1d5df3e4d9d379255464dc4e3bdab055",
   "mac-case/v1/render/video.tsx": "eb6b108416066f03fa1f8dd8e25aecfc3099d3eb583eb91e3ed2f2d6aefa3900",
-  "mac-case/v1/styles.ts": "daf6eb1731076a2927f37d50de75b16627a8dd7619d52b94fae6c1153cd6cbe9"
+  "mac-case/v1/styles.ts": "daf6eb1731076a2927f37d50de75b16627a8dd7619d52b94fae6c1153cd6cbe9",
+  "mac-client/v1/index.ts": "1de5057b03a434ab709b8e8731898fccc9c390284094fd5c8b8fe5ab725bd77e",
+  "mac-client/v1/pages.ts": "c4a2a86aa865aeb210f3c65558db438c545e920e419709210b318e1198a3d846"
 }

@@ -17,6 +17,8 @@ const {
   removeMaterialUseCase,
   deleteClientUseCase,
   addSectorUseCase,
+  startIntroUseCase,
+  enqueueJob,
   enqueueClientRenditions,
 } = vi.hoisted(() => ({
   getActor: vi.fn(),
@@ -33,6 +35,8 @@ const {
   removeMaterialUseCase: vi.fn(),
   deleteClientUseCase: vi.fn(),
   addSectorUseCase: vi.fn(),
+  startIntroUseCase: vi.fn(),
+  enqueueJob: vi.fn(),
   enqueueClientRenditions: vi.fn(async () => undefined),
 }));
 
@@ -55,9 +59,11 @@ vi.mock("@/modules/case-study", () => ({
   removeClientMaterial: removeMaterialUseCase,
   deleteClient: deleteClientUseCase,
   addClientSector: addSectorUseCase,
+  startClientIntro: startIntroUseCase,
 }));
 
 vi.mock("@/modules/material", () => ({ enqueueClientRenditions }));
+vi.mock("@/modules/jobs", () => ({ enqueue: enqueueJob }));
 
 const actions = await import("./actions");
 const {
@@ -74,6 +80,7 @@ const {
   removeClientMaterial,
   deleteClient,
   addClientSector,
+  startClientIntro,
 } = actions;
 
 const actor = (role: Actor["role"]): Actor => ({
@@ -114,7 +121,11 @@ const cases = [
 ] as const;
 
 /** Every action, the read-only listing included (its use case takes no actor). */
-const allCases = [...cases, ["listClientMaterial", listClientMaterial, listMaterialUseCase, { clientId: LUMEN.id }] as const];
+const allCases = [
+  ...cases,
+  ["listClientMaterial", listClientMaterial, listMaterialUseCase, { clientId: LUMEN.id }] as const,
+  ["startClientIntro", startClientIntro, startIntroUseCase, { clientId: LUMEN.id }] as const,
+];
 
 beforeEach(() => {
   for (const fn of [
@@ -132,13 +143,14 @@ beforeEach(() => {
     removeMaterialUseCase,
     deleteClientUseCase,
     addSectorUseCase,
+    startIntroUseCase,
   ])
     fn.mockReset();
   enqueueClientRenditions.mockClear();
 });
 
 describe("client actions", () => {
-  it("exports only add, edit, delete, add sector, the brief, results and testimonial saves, the two logo steps and the client material actions", () => {
+  it("exports only add, edit, delete, add sector, the brief, results and testimonial saves, the two logo steps, the client material actions and the intro's start", () => {
     expect(Object.keys(actions).sort()).toEqual([
       "addClientSector",
       "confirmClientLogoUpload",
@@ -152,8 +164,24 @@ describe("client actions", () => {
       "saveClientBriefField",
       "saveClientResults",
       "saveClientTestimonial",
+      "startClientIntro",
       "updateClient",
     ]);
+  });
+
+  it("startClientIntro passes the actor, its input and jobs.enqueue for an owner/designer (Story 3.11)", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    const started = { outcome: "started", introId: ASSET_ID, jobId: LOGO_ID };
+    startIntroUseCase.mockResolvedValue(ok(started));
+    const input = { clientId: LUMEN.id };
+    expect(await startClientIntro(input)).toEqual({ ok: true, value: started });
+    expect(startIntroUseCase).toHaveBeenCalledExactlyOnceWith(actor("owner_designer"), input, enqueueJob);
+  });
+
+  it("startClientIntro maps NO_CLIENT_IMAGES to 409", async () => {
+    getActor.mockResolvedValue(ok(actor("owner_designer")));
+    startIntroUseCase.mockResolvedValue(err({ code: "NO_CLIENT_IMAGES", message: "m", details: { clientId: LUMEN.id } }));
+    expect(await startClientIntro({ clientId: LUMEN.id })).toEqual({ ok: false, status: 409, error: { code: "NO_CLIENT_IMAGES", message: "m" } });
   });
 
   it("listClientMaterial passes its input unchanged for an owner/designer", async () => {

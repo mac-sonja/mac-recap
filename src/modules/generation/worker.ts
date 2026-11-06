@@ -55,6 +55,14 @@ export function generateHandler(overrides: Partial<GenerateDeps> = {}): JobHandl
     recordEvent: caseStudy.recordEvent,
     newId: randomUUID,
     textSource: lazyWorkerTextSource(),
+    // Story 3.11: a client intro is always test text, whatever ANTHROPIC_API_KEY says.
+    intro: {
+      getIntro: caseStudy.getClientIntroById,
+      getClient: caseStudy.getClient,
+      listClientAssets: caseStudy.listClientAssets,
+      transitionIntro: caseStudy.transitionIntro,
+      createIntroWorkingRevision: caseStudy.createIntroWorkingRevision,
+    },
     ...overrides,
   });
 }

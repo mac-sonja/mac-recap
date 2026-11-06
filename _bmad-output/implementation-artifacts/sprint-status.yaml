@@ -70,7 +70,7 @@ development_status:
   3-8-tell-me-when-the-draft-is-ready: review  # built (spec-3-8-draft-ready-toast, 2026-11-04; no migration)
   3-9-client-intro-template-and-draft: backlog  # MVP, before the demo (SCP 2026-10-16 client intro and collections, owner amendment); Sprint 2: after 3.8, last in Epic 3; starts from 2.16's Crea introduzione, inputs gain industries, brief and client material (SCP 2026-10-19); outro + Modifica layout per SCP 2026-10-21; trigger is Aggiungi, background; migration and layout moved to 3.11 per SCP 2026-10-26
   3-10-test-draft-without-ai: done  # merged to main (bdb638e); dev only, no LLM (SCP 2026-10-20); after 3.5, before 4.1; per SCP 2026-10-28: fills each format's default pages from the case and the client with test text
-  3-11-client-intro-and-outro-with-test-text: in-progress  # per SCP 2026-10-26: Aggiungi starts the client draft in the background with test text; client_intro migration moved here from 3.9; after 3.10, before 4.1; started 2026-11-06 with a placeholder client template mac-client@1 (owner)
+  3-11-client-intro-and-outro-with-test-text: review  # built (spec-3-11-client-intro-and-outro-with-test-text, 2026-11-06; migration 20261106120000); per SCP 2026-10-26: Aggiungi starts the client draft in the background with test text; client_intro migration moved here from 3.9; after 3.10, before 4.1; started 2026-11-06 with a placeholder client template mac-client@1 (owner)
   epic-3-retrospective: optional
 
   epic-4: in-progress

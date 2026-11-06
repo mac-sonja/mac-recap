@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Actor } from "@/modules/access";
+import { buildClientIntroTestDraft } from "@/modules/generation/application/client-intro-draft";
 import { buildCaseDocument, type FormatDraftTexts, type TestDraftForm } from "@/modules/generation/application/test-draft";
 import { testDraftTextSource, type SourceAsset, type TextSource, type TextSourceMeta } from "@/modules/generation/application/text-source";
 import { CLAIM_ASPECTS, type CaseStudyDocument, type ClaimAspect } from "@/modules/generation/domain/document";
@@ -18,12 +19,52 @@ export const generateManifestSchema = z.object({
 });
 export type GenerateManifest = z.infer<typeof generateManifestSchema>;
 
-/** A generate job's payload: the head version the action read and the manifest. */
+/** What a generate job drafts (Story 3.11): a case, or a client's intro and outro. */
+export const GENERATE_SUBJECTS = ["case", "client_intro"] as const;
+export type GenerateSubject = (typeof GENERATE_SUBJECTS)[number];
+
+/**
+ * A case's generate job payload: the head version the action read and the manifest.
+ * `subject` defaults to `case`, so jobs queued before Story 3.11 still read.
+ */
 export const generatePayloadSchema = z.object({
+  subject: z.literal("case").default("case"),
   baseHeadVersion: z.number().int().nonnegative(),
   manifest: generateManifestSchema,
 });
 export type GeneratePayload = z.infer<typeof generatePayloadSchema>;
+
+/** A client intro's generate job payload (Story 3.11): the intro's head version when the save started it. */
+export const clientIntroPayloadSchema = z.object({
+  subject: z.literal("client_intro"),
+  baseHeadVersion: z.number().int().nonnegative(),
+});
+export type ClientIntroPayload = z.infer<typeof clientIntroPayloadSchema>;
+
+/** Either payload, by `subject` (absent: a case). */
+function parsePayload(payload: Record<string, unknown>): GeneratePayload | ClientIntroPayload | null {
+  const parsed = payload.subject === "client_intro" ? clientIntroPayloadSchema.safeParse(payload) : generatePayloadSchema.safeParse(payload);
+  return parsed.success ? parsed.data : null;
+}
+
+/** What `jobs.enqueue` takes for a client intro's draft. */
+export interface ClientIntroGenerateJob {
+  kind: "generate";
+  subjectId: string;
+  inputHash: string;
+  payload: ClientIntroPayload;
+}
+
+/**
+ * The generate job of a client's intro (Story 3.11): subject the intro, input hash sha256
+ * of the subject kind, the intro id and its head version, so saving twice while the job is
+ * live gets that job (idempotent enqueue).
+ */
+export function clientIntroGenerateJob(introId: string, baseHeadVersion: number): ClientIntroGenerateJob {
+  const id = introId.toLowerCase();
+  const inputHash = createHash("sha256").update(JSON.stringify(["client_intro", id, baseHeadVersion])).digest("hex");
+  return { kind: "generate", subjectId: id, inputHash, payload: { subject: "client_intro", baseHeadVersion } };
+}
 
 /**
  * The job's input hash: sha256 of the case id, the head version and the manifest, so a
@@ -64,7 +105,35 @@ export interface GenerateDeps {
   ): Promise<Result<unknown>>;
   textSource?: TextSource;
   newId: () => string;
+  /** The client intro side (Story 3.11); without it a `client_intro` job fails for good. */
+  intro?: ClientIntroGenerateDeps;
 }
+
+/** What the generate handler needs for a client intro (Story 3.11), wired in `worker.ts`. */
+export interface ClientIntroGenerateDeps {
+  getIntro(introId: string): Promise<Result<{ clientId: string; status: CaseStatus; headVersion: number }>>;
+  getClient(clientId: string): Promise<
+    Result<{ description: string | null; brief: { context: string; results: readonly unknown[]; testimonialQuote: string } }>
+  >;
+  /** The client's live files in `position` order. */
+  listClientAssets(clientId: string): Promise<Result<readonly { id: string; kind: string }[]>>;
+  transitionIntro(introId: string, event: "generation_succeeded" | "generation_failed", actor: Actor): Promise<Result<unknown>>;
+  createIntroWorkingRevision(
+    actor: Actor,
+    input: {
+      clientIntroId: string;
+      doc: CaseStudyDocument;
+      manifest: { testDraft: true; assetIds: string[] };
+      meta: TextSourceMeta;
+      expectedHeadVersion: number;
+    },
+  ): Promise<Result<{ id: string }>>;
+}
+
+/** The intro needs this many client images (`CLIENT_MATERIAL_MIN_IMAGES` of case-study). */
+const MIN_CLIENT_IMAGES = 2;
+/** The client template shows the first three. */
+const CLIENT_INTRO_IMAGES = 3;
 
 interface JobLike {
   id: string;
@@ -122,12 +191,16 @@ export function makeGenerateHandler(deps: GenerateDeps) {
   }
 
   async function run(job: JobLike, signal: AbortSignal): Promise<Outcome> {
+    const payload = parsePayload(job.payload);
+    if (payload === null) return fail("INVALID_PAYLOAD", "The job payload is not a generate payload.");
+    if (payload.subject === "client_intro") return runIntro(job, payload, signal);
+    return runCase(job, payload, signal);
+  }
+
+  async function runCase(job: JobLike, payload: GeneratePayload, signal: AbortSignal): Promise<Outcome> {
     const caseId = job.subjectId;
     const aborted = () => (signal.aborted ? fail("ABORTED", "The job was aborted.") : null);
-
-    const payload = generatePayloadSchema.safeParse(job.payload);
-    if (!payload.success) return fail("INVALID_PAYLOAD", "The job payload is not a generate payload.");
-    const { baseHeadVersion, manifest } = payload.data;
+    const { baseHeadVersion, manifest } = payload;
 
     const actor = await attempt("SYSTEM_ACTOR_LOOKUP_THREW", () => deps.getSystemActor());
     if (!actor.ok) return fail("SYSTEM_ACTOR_LOOKUP_FAILED", actor.error.message, true);
@@ -219,14 +292,106 @@ export function makeGenerateHandler(deps: GenerateDeps) {
     return ok(undefined);
   }
 
+  /** `generation_failed` when the intro is still `generating`; an intro in any other status is left alone. */
+  async function introBackToDraft(intro: ClientIntroGenerateDeps, introId: string, actor: Actor): Promise<void> {
+    const found = await attempt("CLIENT_INTRO_LOOKUP_FAILED", () => intro.getIntro(introId));
+    if (!found.ok) {
+      log.error(`generate rollback: intro not read (${found.error.code})`, { clientIntroId: introId });
+      return;
+    }
+    if (found.value.status !== "generating") return;
+    const back = await attempt("TRANSITION_FAILED", () => intro.transitionIntro(introId, "generation_failed", actor));
+    if (!back.ok) log.error(`generate rollback failed: ${back.error.code}; the intro is stuck in generating`, { clientIntroId: introId });
+  }
+
+  /**
+   * A client intro's draft (Story 3.11): always the marked test text, whatever the text
+   * source (no LLM, even with `ANTHROPIC_API_KEY` set). Re-checks the gate (2 client
+   * images), builds the document from the client template with the client's first three
+   * images in `position` order, writes a working revision (head compare-and-set on
+   * `baseHeadVersion`) and moves the intro to `in_review`. A moved head returns it to
+   * `draft`; `onPermanentFailure` does the same after a failure for good.
+   */
+  async function runIntro(job: JobLike, payload: ClientIntroPayload, signal: AbortSignal): Promise<Outcome> {
+    const intro = deps.intro;
+    if (intro === undefined) return fail("SUBJECT_NOT_SUPPORTED", "This worker drafts no client intros.");
+    const introId = job.subjectId;
+    const { baseHeadVersion } = payload;
+
+    const actor = await attempt("SYSTEM_ACTOR_LOOKUP_THREW", () => deps.getSystemActor());
+    if (!actor.ok) return fail("SYSTEM_ACTOR_LOOKUP_FAILED", actor.error.message, true);
+
+    const found = await attempt("CLIENT_INTRO_LOOKUP_FAILED", () => intro.getIntro(introId));
+    if (!found.ok) return fail(found.error.code === "NOT_FOUND" ? "NOT_FOUND" : "CLIENT_INTRO_LOOKUP_FAILED", found.error.message, found.error.code !== "NOT_FOUND");
+    // The save moves the intro to `generating` right after enqueueing: a draft may just be early.
+    if (found.value.status === "draft") return fail("NOT_GENERATING", "The client intro is not generating yet.", true);
+    if (found.value.status !== "generating") return fail("NOT_GENERATING", "The client intro is not generating.");
+    const { clientId } = found.value;
+
+    const client = await attempt("CLIENT_LOOKUP_FAILED", () => intro.getClient(clientId));
+    if (!client.ok) return fail(client.error.code === "CLIENT_NOT_FOUND" ? "CLIENT_NOT_FOUND" : "CLIENT_LOOKUP_FAILED", client.error.message, client.error.code !== "CLIENT_NOT_FOUND");
+    const assets = await attempt("CLIENT_LOOKUP_FAILED", () => intro.listClientAssets(clientId));
+    if (!assets.ok) return fail("CLIENT_LOOKUP_FAILED", assets.error.message, true);
+    const images = assets.value.filter((a) => a.kind === "image").map((a) => a.id);
+    // Gate, again: the server checked it at the save; a file may have gone since.
+    if (images.length < MIN_CLIENT_IMAGES) return fail("NO_CLIENT_IMAGES", "The client has fewer than 2 images.");
+
+    const { brief } = client.value;
+    const doc = buildClientIntroTestDraft({
+      client: { description: client.value.description, context: brief.context },
+      images,
+      resultRows: brief.results.length,
+      hasTestimonial: brief.testimonialQuote.trim() !== "",
+      newId: deps.newId,
+    });
+
+    if (signal.aborted) return fail("ABORTED", "The job was aborted.");
+
+    const created = await attempt("REVISION_WRITE_FAILED", () =>
+      intro.createIntroWorkingRevision(actor.value, {
+        clientIntroId: introId,
+        doc,
+        manifest: { testDraft: true, assetIds: images.slice(0, CLIENT_INTRO_IMAGES) },
+        meta: { model: null, fellBack: false, promptVersion: null },
+        expectedHeadVersion: baseHeadVersion,
+      }),
+    );
+    if (!created.ok) {
+      if (created.error.code === "STALE_HEAD") {
+        await introBackToDraft(intro, introId, actor.value);
+        return fail("STALE_HEAD", "The client intro changed while it was drafted.");
+      }
+      // An unclear write may have committed: a moved head means it landed.
+      const reread = await attempt("CLIENT_INTRO_LOOKUP_FAILED", () => intro.getIntro(introId));
+      if (!reread.ok || reread.value.headVersion === baseHeadVersion) return fail("REVISION_WRITE_FAILED", created.error.message, true);
+      log.warn(`intro revision write reported ${created.error.code} but the head moved: the revision landed`, { clientIntroId: introId });
+    }
+
+    const done = await attempt("TRANSITION_FAILED", () => intro.transitionIntro(introId, "generation_succeeded", actor.value));
+    if (!done.ok) {
+      const reread = await attempt("CLIENT_INTRO_LOOKUP_FAILED", () => intro.getIntro(introId));
+      if (!(reread.ok && reread.value.status === "in_review")) return fail("TRANSITION_FAILED", done.error.message);
+    }
+    log.info("drafted a client intro", { jobId: job.id, clientIntroId: introId });
+    return ok(undefined);
+  }
+
   async function onPermanentFailure(job: JobLike): Promise<void> {
     const actor = await attempt("SYSTEM_ACTOR_LOOKUP_THREW", () => deps.getSystemActor());
     if (!actor.ok) {
       log.error(`generate rollback: no system actor (${actor.error.code})`, { jobId: job.id });
       return;
     }
+    const payload = parsePayload(job.payload);
+    if (payload?.subject === "client_intro") {
+      if (deps.intro !== undefined) await introBackToDraft(deps.intro, job.subjectId, actor.value);
+      return;
+    }
     await backToDraft(job.subjectId, actor.value);
   }
 
-  return { run, onPermanentFailure, caseIdOf: (job: JobLike) => job.subjectId };
+  /** A case job's `job_failed` goes on its case; a client intro has no case. */
+  const caseIdOf = (job: JobLike) => (job.payload.subject === "client_intro" ? null : job.subjectId);
+
+  return { run, onPermanentFailure, caseIdOf };
 }

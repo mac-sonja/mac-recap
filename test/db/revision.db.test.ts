@@ -200,7 +200,7 @@ describe("migration", () => {
     ]);
   });
 
-  it("adds the revision FKs from case_study and case_event", async () => {
+  it("adds the revision FKs from case_study and case_event (and, Story 3.11, client_intro and client_event)", async () => {
     const { rows } = await pool.query<{ conname: string; def: string }>(
       `select conname, pg_catalog.pg_get_constraintdef(oid) as def from pg_catalog.pg_constraint
         where contype = 'f' and confrelid = 'public.revision'::regclass order by conname`,
@@ -209,6 +209,9 @@ describe("migration", () => {
       { conname: "case_event_revision_id_fkey", def: "FOREIGN KEY (revision_id) REFERENCES revision(id)" },
       { conname: "case_study_approved_revision_id_fkey", def: "FOREIGN KEY (approved_revision_id) REFERENCES revision(id)" },
       { conname: "case_study_head_revision_id_fkey", def: "FOREIGN KEY (head_revision_id) REFERENCES revision(id)" },
+      { conname: "client_event_revision_id_fkey", def: "FOREIGN KEY (revision_id) REFERENCES revision(id)" },
+      { conname: "client_intro_approved_revision_id_fkey", def: "FOREIGN KEY (approved_revision_id) REFERENCES revision(id)" },
+      { conname: "client_intro_head_revision_id_fkey", def: "FOREIGN KEY (head_revision_id) REFERENCES revision(id)" },
     ]);
   });
 
@@ -225,6 +228,12 @@ describe("migration", () => {
   });
 });
 
+/** A fresh client's intro (Story 3.11), committed: intros are never deleted. */
+async function introId() {
+  const client = await createTestClient(pool, TEST_ACTOR_ID);
+  return (await pool.query("select id from public.create_client_intro($1, $2)", [client.id, TEST_ACTOR_ID])).rows[0].id as string;
+}
+
 describe("table guards", () => {
   const insert = `insert into public.revision (case_id, client_intro_id, generated_doc, doc, schema_version, created_by)
                   values ($1, $2, $3, $3, 2, '${TEST_ACTOR_ID}')`;
@@ -234,8 +243,9 @@ describe("table guards", () => {
     const doc = JSON.stringify(v2());
     await expect(inRolledBackTx(insert, [null, null, doc])).rejects.toMatchObject({ code: "23514", constraint: "revision_subject_check" });
     await expect(inRolledBackTx(insert, [created.id, UNKNOWN_ID, doc])).rejects.toMatchObject({ code: "23514", constraint: "revision_subject_check" });
-    // A client intro subject has no FK until Story 3.9.
-    await expect(inRolledBackTx(insert, [null, UNKNOWN_ID, doc])).resolves.toMatchObject({ rowCount: 1 });
+    // Story 3.11: a client intro subject must exist (the FK).
+    await expect(inRolledBackTx(insert, [null, UNKNOWN_ID, doc])).rejects.toMatchObject({ code: "23503", constraint: "revision_client_intro_id_fkey" });
+    await expect(inRolledBackTx(insert, [null, await introId(), doc])).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it("checks the document shape and its schema version", async () => {
@@ -281,12 +291,13 @@ describe("table guards", () => {
   });
 
   it("allows at most one working revision per client intro", async () => {
+    const intro = await introId();
     const client = await pool.connect();
     try {
       await client.query("begin");
       const doc = JSON.stringify(v2());
-      await client.query(insert, [null, UNKNOWN_ID, doc]);
-      await expect(client.query(insert, [null, UNKNOWN_ID, doc])).rejects.toMatchObject({
+      await client.query(insert, [null, intro, doc]);
+      await expect(client.query(insert, [null, intro, doc])).rejects.toMatchObject({
         code: "23505",
         constraint: "revision_one_working_per_client_intro_idx",
       });
@@ -633,10 +644,10 @@ describe("the case-study revision use cases (real adapter)", () => {
     expect(await getLiveRevision({ kind: "case", id: created.id })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
   });
 
-  it("a client_intro subject is SUBJECT_NOT_SUPPORTED", async () => {
+  it("an unknown client_intro subject is NOT_FOUND (Story 3.11 serves intros; see client-intro.db.test.ts)", async () => {
     const { getEditableRevision, getLiveRevision } = await loadCaseStudy();
-    expect(await getLiveRevision({ kind: "client_intro", id: UNKNOWN_ID })).toMatchObject({ ok: false, error: { code: "SUBJECT_NOT_SUPPORTED" } });
-    expect(await getEditableRevision({ kind: "client_intro", id: UNKNOWN_ID })).toMatchObject({ ok: false, error: { code: "SUBJECT_NOT_SUPPORTED" } });
+    expect(await getLiveRevision({ kind: "client_intro", id: UNKNOWN_ID })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect(await getEditableRevision({ kind: "client_intro", id: UNKNOWN_ID })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
   });
 });
 

@@ -23,8 +23,8 @@ export const APPROVED_VERSION_UPDATED = "approved_version_updated";
 export const REVISION_DISCARDED = "revision_discarded";
 
 /**
- * Whose revision it is: a case study, or a client intro (Story 3.9; until then
- * every read for it is `SUBJECT_NOT_SUPPORTED`).
+ * Whose revision it is: a case study, or a client intro (Story 3.11; `id` is the intro's
+ * own id).
  */
 // Ids are lowercased, as Postgres prints them, so pointer checks compare equal strings.
 const subjectIdSchema = z.uuid().transform((id) => id.toLowerCase());

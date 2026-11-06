@@ -15,7 +15,7 @@ const { listReadyDrafts } = await import("./draft-ready-actions");
 
 const actor = (role: Actor["role"]): Actor => ({ id: "00000000-0000-4000-8000-000000000002", email: "a@b.it", displayName: "A", role });
 const input = { since: "2026-11-04T10:00:00.000Z" };
-const draft = { id: "aaaaaaaa-0000-4000-8000-000000000001", name: "Rebrand", readyAt: "2026-11-04T10:00:05.000000+00:00" };
+const draft = { kind: "case", id: "aaaaaaaa-0000-4000-8000-000000000001", name: "Rebrand", readyAt: "2026-11-04T10:00:05.000000+00:00" };
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -3,9 +3,11 @@
 import { failure, type ActionResult } from "@/app/_lib/action-result";
 import { authorize, getActor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
+import * as jobs from "@/modules/jobs";
 import * as material from "@/modules/material";
 import type {
   Client,
+  ClientIntroStart,
   ClientBriefFieldSaved,
   ClientDeleted,
   ClientResultsSaved,
@@ -219,4 +221,23 @@ export async function removeClientMaterial(input: unknown): Promise<ActionResult
   if (!decision.ok) return failure(decision.error);
   const removed = await caseStudy.removeClientMaterial(actor.value, input);
   return removed.ok ? removed : failure(removed.error);
+}
+
+/**
+ * Starts the client's intro-and-outro draft after a save (Story 3.11): input `{ clientId }`,
+ * called by the side panel after **Aggiungi** and **Salva** once the images are uploaded,
+ * without waiting for it. A client with no intro, or whose intro is in Bozza (a failed
+ * draft included), gets one `generate` job (a double click gets the same live job) and its
+ * intro moves to In elaborazione; the worker writes the test-text draft and moves it to Da
+ * approvare. Any other intro is left alone (`{ outcome: "unchanged" }`). 403 `FORBIDDEN`
+ * unless the role may `manage clients`; 400 `INVALID_INPUT`; 404 `CLIENT_NOT_FOUND`; 409
+ * `NO_CLIENT_IMAGES` (fewer than 2 images: no intro, no job).
+ */
+export async function startClientIntro(input: unknown): Promise<ActionResult<ClientIntroStart>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage clients");
+  if (!decision.ok) return failure(decision.error);
+  const started = await caseStudy.startClientIntro(actor.value, input, jobs.enqueue);
+  return started.ok ? started : failure(started.error);
 }

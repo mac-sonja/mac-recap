@@ -14,6 +14,7 @@ import type { CaseStudyRow } from "../../case-studies/_components/filter-sort";
 import { cn } from "@/shared/utils";
 import { ClientPanel } from "../_components/client-panel";
 import { IndustryPills } from "../_components/industry-pills";
+import { IntroStatus } from "../_components/intro-status";
 import { EditClientButton } from "../_components/edit-client-button";
 import { LogoTile } from "../_components/logo-tile";
 import { clientLimits, clientMaterialLimits } from "../_lib/client-limits";
@@ -35,7 +36,9 @@ export interface ClientPageProps {
  * throws into the error boundary. The uuid is only in the URL; the code is shown.
  * With `?modifica=1` and `manage clients`, the edit panel opens over the page with
  * the client's data, files and brief, and **Elimina cliente** (which needs the
- * case history count); a failed read throws into the error boundary.
+ * case history count); a failed read throws into the error boundary. Story 3.11: once the
+ * client has an intro-and-outro draft, "Introduzione:" and its status badge (refreshed while
+ * In elaborazione).
  */
 export default async function ClientPage({ params, searchParams }: ClientPageProps) {
   const shell = await requireSurface("list clients");
@@ -50,6 +53,10 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
     throw new Error(`Client could not be loaded: ${found.error.code}`);
   }
   const client = found.value;
+
+  // Story 3.11: the intro-and-outro draft's status, once the client has one.
+  const intro = await caseStudy.getClientIntro(client.id);
+  if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
 
   // The sector labels (the pill here and the panel's Settore) come from the shared list.
   const sectors = await caseStudy.listClientSectors();
@@ -113,6 +120,7 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
               <span className="sr-only">{it.clients.detail.code} </span>
               {client.code}
             </p>
+            {intro.value === null ? null : <IntroStatus status={intro.value.status} />}
             {client.industry === null ? null : (
               <IndustryPills options={sectors.value} selected={client.industry} label={it.clients.detail.industries} />
             )}

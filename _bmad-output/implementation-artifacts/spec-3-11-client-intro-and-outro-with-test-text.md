@@ -94,22 +94,29 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/20261106120000_case_study_client_intro.sql` -- tables, FK, RLS, `create_client_intro`, `transition_client_intro`, `create_working_revision_for_client_intro`; then `npm run db:types`.
-- [ ] `src/modules/case-study/**` -- intro repository, `transitionIntro`, intro working revision, subject reads for intros, `startClientIntro(actor, clientId)` (image gate, get-or-create, start rule, enqueue via jobs index as case generation does). Unit and db tests, updating the two pinned `SUBJECT_NOT_SUPPORTED` tests.
-- [ ] `src/modules/generation/domain/document.ts` -- `client_field` material ref.
-- [ ] `src/modules/rendering/templates/mac-client/v1/*`, `index.ts`, `types.ts`, `hashes.json`, `templates.test.ts` -- the placeholder template, `CLIENT_TEMPLATE`, `starterPages` for `client_intro`, client text keys.
-- [ ] `src/modules/generation/application/client-intro-draft.ts` (+ test) -- `buildClientIntroTestDraft`; the result passes `validateNewDocument`.
-- [ ] `src/modules/generation/application/generate-case.ts`, `worker.ts` (+ tests) -- `subject` in the payload, the client branch, always test text.
-- [ ] `src/app/(tool)/clients/actions.ts`, `client-panel.tsx` (+ tests) -- `startClientIntro` action after the images upload on Aggiungi and after Salva, without blocking navigation.
-- [ ] `src/app/(tool)/clients/[clientId]/page.tsx` (+ test), `src/shared/i18n/it.ts` -- the intro status badge (reuse the case status badge's hues).
-- [ ] `case-study` `listReadyDrafts` / `domain/ready-draft.ts`, `src/app/_lib/draft-ready-actions.ts`, `src/app/_components/draft-ready-notifier.tsx` (+ tests) -- ready intros from `client_event`, toast opens the client page.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.11 to review.
+- [x] `supabase/migrations/20261106120000_case_study_client_intro.sql` -- tables, FK, RLS, `create_client_intro`, `transition_client_intro`, `create_working_revision_for_client_intro`; then `npm run db:types`.
+- [x] `src/modules/case-study/**` -- intro repository, `transitionIntro`, intro working revision, subject reads for intros, `startClientIntro(actor, clientId)` (image gate, get-or-create, start rule, enqueue via jobs index as case generation does). Unit and db tests, updating the two pinned `SUBJECT_NOT_SUPPORTED` tests.
+- [x] `src/modules/generation/domain/document.ts` -- `client_field` material ref.
+- [x] `src/modules/rendering/templates/mac-client/v1/*`, `index.ts`, `types.ts`, `hashes.json`, `templates.test.ts` -- the placeholder template, `CLIENT_TEMPLATE`, `starterPages` for `client_intro`, client text keys.
+- [x] `src/modules/generation/application/client-intro-draft.ts` (+ test) -- `buildClientIntroTestDraft`; the result passes `validateNewDocument`.
+- [x] `src/modules/generation/application/generate-case.ts`, `worker.ts` (+ tests) -- `subject` in the payload, the client branch, always test text.
+- [x] `src/app/(tool)/clients/actions.ts`, `client-panel.tsx` (+ tests) -- `startClientIntro` action after the images upload on Aggiungi and after Salva, without blocking navigation.
+- [x] `src/app/(tool)/clients/[clientId]/page.tsx` (+ test), `src/shared/i18n/it.ts` -- the intro status badge (reuse the case status badge's hues).
+- [x] `case-study` `listReadyDrafts` / `domain/ready-draft.ts`, `src/app/_lib/draft-ready-actions.ts`, `src/app/_components/draft-ready-notifier.tsx` (+ tests) -- ready intros from `client_event`, toast opens the client page.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.11 to review.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:db` and `build`, when they run, then they pass.
 - Given the built web bundle, when it is searched for `@anthropic-ai/sdk`, then there is no match.
 
 ## Implementation Notes
+
+- **Subject ids.** `{ kind: "client_intro", id }` takes the intro's own id (`client_intro.id`); `getClientIntro(clientId)` reads it by client. The generate job's subject is the intro id, and `caseIdOf` is `null` for it (its `job_failed` has no case; the intro's own rollback is `generation_failed`).
+- **No import cycle.** `jobs` imports `case-study`, so `startClientIntro(actor, input, enqueue)` takes `jobs.enqueue` from the action; the job itself (`clientIntroGenerateJob`: payload `{ subject: "client_intro", baseHeadVersion }`, hash of the intro id and head version) comes from `generation`.
+- **Start rule order.** An intro not in Bozza returns `unchanged` before the image gate, so saving a drafted client never fails; otherwise the gate runs before any intro row or job.
+- **Placeholder layout** (`mac-client@1`, on mac-case@1's layouts): Presentazione Intro on `content_3` (Cliente block, then 3 images); Carosello Copertina (`one`) plus Immagini (`three_a`); Video Intro (`intro`: Cliente block, carousel_04 of the 3 images). The outro texts open Risultati e testimonial in Presentazione and Video, and sit on the Carosello Chiusura under "Al prossimo progetto" (so Carosello always shows them).
+- **Ready toast.** `ReadyDraft` gains `kind` (`case` | `client_intro`); an intro's `id` and `name` are its client's, and **Apri** opens the client page.
+- **Client badge.** `IntroStatus` refreshes the client page every `GENERATING_REFRESH_MS` while the intro is In elaborazione.
 
 ## Spec Change Log
 

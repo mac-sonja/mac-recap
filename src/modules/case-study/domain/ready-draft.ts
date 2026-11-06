@@ -1,11 +1,17 @@
 import { z } from "zod";
 
+/** What became ready: a case's draft, or a client's intro (Story 3.11). */
+export const READY_DRAFT_KINDS = ["case", "client_intro"] as const;
+
 /**
  * Story 3.8: a case whose draft became ready to review (its `generation_succeeded`
- * transition) for the person who pressed Generate. `readyAt` is when that transition
- * was recorded.
+ * transition) for the person who pressed Generate; Story 3.11: a client's intro, for the
+ * person whose save started it. `id` is the case's id, or the client's for an intro (its
+ * page is what the toast opens); `name` the case's or the client's. `readyAt` is when that
+ * transition was recorded.
  */
 export const readyDraftSchema = z.object({
+  kind: z.enum(READY_DRAFT_KINDS),
   id: z.uuid(),
   name: z.string(),
   readyAt: z.string(),
@@ -56,12 +62,14 @@ export function clampReadySince(since: string, now: Date): string {
  * a `generation_succeeded` after that `generate` (an older success, from before a
  * regeneration, does not count). The worker records `generation_succeeded` as the system
  * actor, so whose draft it is comes from `generate`. One entry per case, `readyAt` its
- * newest `generation_succeeded`, oldest first.
+ * newest `generation_succeeded`, oldest first, each of `kind` (client intros pass their
+ * intro ids as `caseId` and `id`; the adapter maps them to their client's).
  */
 export function selectReadyDrafts(
   transitions: readonly TransitionRecord[],
   cases: readonly ReadyDraftCase[],
   actorId: string,
+  kind: ReadyDraft["kind"] = "case",
 ): ReadyDraft[] {
   const readyAt = new Map<string, { at: string; ms: number }>();
   const latestGenerate = new Map<string, { actorId: string; ms: number }>();
@@ -76,7 +84,7 @@ export function selectReadyDrafts(
     }
   }
   const waiting = new Map(cases.filter((c) => c.deletedAt === null && c.status === "in_review").map((c) => [c.id, c.name]));
-  const drafts: (ReadyDraft & { ms: number })[] = [];
+  const drafts: (Omit<ReadyDraft, "kind"> & { ms: number })[] = [];
   for (const [caseId, ready] of readyAt) {
     const name = waiting.get(caseId);
     const generate = latestGenerate.get(caseId);
@@ -85,5 +93,5 @@ export function selectReadyDrafts(
     if (ready.ms < generate.ms) continue;
     drafts.push({ id: caseId, name, readyAt: ready.at, ms: ready.ms });
   }
-  return drafts.sort((a, b) => a.ms - b.ms).map(({ id, name, readyAt: at }) => ({ id, name, readyAt: at }));
+  return drafts.sort((a, b) => a.ms - b.ms).map(({ id, name, readyAt: at }) => ({ kind, id, name, readyAt: at }));
 }

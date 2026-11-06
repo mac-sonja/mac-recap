@@ -10,8 +10,12 @@ export const DRAFT_READY_TOAST_MS = 10_000;
 /** The most toasts on screen at once; an older one makes room for a newer one. */
 export const DRAFT_READY_MAX_TOASTS = 3;
 
-/** A ready draft as the server action returns it. */
+/**
+ * A ready draft as the server action returns it: a case's (its id and name), or (Story
+ * 3.11) a client's intro (the client's id and name). No `kind` reads as a case.
+ */
 export interface ReadyDraftNotice {
+  kind?: "case" | "client_intro";
   id: string;
   name: string;
   readyAt: string;
@@ -36,19 +40,19 @@ export function startDraftReadySession(startedAt: string): DraftReadySession {
 /**
  * The drafts of `polled` to show now: not announced yet in `session`, oldest first, each
  * once, at most `max`. Only those are marked seen; any beyond `max` stay unseen and come
- * back on the next poll. A draft for which `isOpen` is true (its case is the page already
- * open) is marked seen without being shown.
+ * back on the next poll. A draft for which `isOpen` is true (its case, or its client for an
+ * intro, is the page already open) is marked seen without being shown.
  */
 export function takeNewDrafts(
   session: DraftReadySession,
   polled: readonly ReadyDraftNotice[],
   max = DRAFT_READY_MAX_TOASTS,
-  isOpen: (id: string) => boolean = () => false,
+  isOpen: (id: string, kind: NonNullable<ReadyDraftNotice["kind"]>) => boolean = () => false,
 ): ReadyDraftNotice[] {
   const fresh: ReadyDraftNotice[] = [];
   for (const draft of [...polled].sort((a, b) => Date.parse(a.readyAt) - Date.parse(b.readyAt))) {
     if (session.seen.has(draft.id)) continue;
-    if (isOpen(draft.id)) {
+    if (isOpen(draft.id, draft.kind ?? "case")) {
       session.seen.add(draft.id);
       continue;
     }

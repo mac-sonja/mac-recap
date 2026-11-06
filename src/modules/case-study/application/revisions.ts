@@ -12,6 +12,7 @@ import {
 } from "@/modules/case-study/domain/revision";
 import { parseInput } from "@/modules/case-study/domain/validation";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
+import type { ClientIntroRepository } from "@/modules/case-study/ports/client-intro-repository";
 import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
 import type { RevisionRepository } from "@/modules/case-study/ports/revision-repository";
 import { upgrade, validateNewDocument, type CaseStudyDocument } from "@/modules/generation";
@@ -27,7 +28,7 @@ export type CaseStudyRevision = Revision<CaseStudyDocument>;
  * upgrade keeps its code (`DOCUMENT_SCHEMA_UNSUPPORTED`, `DOCUMENT_INVALID`),
  * naming the revision.
  */
-function upgraded(revision: Revision): Result<CaseStudyRevision> {
+export function upgraded(revision: Revision): Result<CaseStudyRevision> {
   const doc = upgrade(revision.doc);
   if (!doc.ok) return err({ ...doc.error, details: { revisionId: revision.id, document: "doc", cause: doc.error.details } });
   const generatedDoc = upgrade(revision.generatedDoc);
@@ -68,34 +69,41 @@ export function makeCreateWorkingRevision(deps: { cases: CaseStudyRepository; re
 
 type Pointer = "approvedRevisionId" | "headRevisionId";
 
-function makeSubjectRead(pointer: Pointer, deps: { cases: CaseStudyRepository; revisions: RevisionRepository }) {
+/** What a subject read needs: the cases, the revisions and (Story 3.11) the client intros. */
+export interface SubjectReadDeps {
+  cases: Pick<CaseStudyRepository, "findById">;
+  revisions: Pick<RevisionRepository, "findById">;
+  intros: Pick<ClientIntroRepository, "findById">;
+}
+
+function makeSubjectRead(pointer: Pointer, deps: SubjectReadDeps) {
   return async function read(subject: unknown): Promise<Result<CaseStudyRevision | null>> {
     const parsed = parseInput(revisionSubjectSchema, subject);
     if (!parsed.ok) return parsed;
     const target: RevisionSubject = parsed.value;
-    if (target.kind !== "case") {
-      return err({ code: "SUBJECT_NOT_SUPPORTED", message: "Client intro revisions arrive with Story 3.9.", details: { kind: target.kind } });
-    }
 
-    const found = await deps.cases.findById(target.id);
-    if (!found.ok) return found;
-    // Soft-deleted cases are skipped, like every other read.
-    if (found.value === null) return notFound(target.id);
-    const revisionId = found.value[pointer];
+    // A case, or (Story 3.11) a client intro; soft-deleted cases and deleted clients' intros are skipped, like every other read.
+    const owner = target.kind === "case" ? await deps.cases.findById(target.id) : await deps.intros.findById(target.id);
+    if (!owner.ok) return owner;
+    if (owner.value === null) {
+      return target.kind === "case" ? notFound(target.id) : err({ code: "NOT_FOUND", message: "No client intro with this id.", details: { id: target.id } });
+    }
+    const revisionId = owner.value[pointer];
     if (revisionId === null) return ok(null);
 
     const revision = await deps.revisions.findById(revisionId);
     if (!revision.ok) return revision;
     const pointed = revision.value;
+    const ownId = target.kind === "case" ? pointed?.caseId : pointed?.clientIntroId;
     const valid =
       pointed !== null &&
-      pointed.caseId?.toLowerCase() === target.id &&
+      ownId?.toLowerCase() === target.id &&
       (pointer !== "approvedRevisionId" || pointed.status === "approved");
     if (!valid) {
-      log.error(`revision pointer invalid: ${pointer} -> ${revisionId}`, { caseId: target.id });
+      log.error(`revision pointer invalid: ${pointer} -> ${revisionId}`, target.kind === "case" ? { caseId: target.id } : { clientIntroId: target.id });
       return err({
         code: "REVISION_POINTER_INVALID",
-        message: "The case study points at a revision that is missing, not its own, or not approved.",
+        message: `The ${target.kind === "case" ? "case study" : "client intro"} points at a revision that is missing, not its own, or not approved.`,
         details: { id: target.id, revisionId },
       });
     }
@@ -104,12 +112,10 @@ function makeSubjectRead(pointer: Pointer, deps: { cases: CaseStudyRepository; r
 }
 
 /** The approved revision of a subject (what is live), or `null` when none is approved. */
-export const makeGetLiveRevision = (deps: { cases: CaseStudyRepository; revisions: RevisionRepository }) =>
-  makeSubjectRead("approvedRevisionId", deps);
+export const makeGetLiveRevision = (deps: SubjectReadDeps) => makeSubjectRead("approvedRevisionId", deps);
 
 /** The head revision of a subject (what is edited next), or `null` when it has none. */
-export const makeGetEditableRevision = (deps: { cases: CaseStudyRepository; revisions: RevisionRepository }) =>
-  makeSubjectRead("headRevisionId", deps);
+export const makeGetEditableRevision = (deps: SubjectReadDeps) => makeSubjectRead("headRevisionId", deps);
 
 /**
  * Every asset id a document references: media and backgrounds (`assetId`), animations

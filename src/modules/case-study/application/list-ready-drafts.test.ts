@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { selectReadyDrafts, type ReadyDraftCase, type TransitionRecord } from "@/modules/case-study/domain/ready-draft";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
+import type { ClientIntroRepository } from "@/modules/case-study/ports/client-intro-repository";
 import { ok } from "@/shared/result";
 import { makeListReadyDrafts } from "./list-ready-drafts";
 
@@ -35,11 +36,14 @@ function fakeRepository(transitions: TransitionRecord[], cases: ReadyDraftCase[]
   } as unknown as CaseStudyRepository & { listReadyDrafts: ReturnType<typeof vi.fn> };
 }
 
+/** No ready intros (the case tests). */
+const noIntros = { listReadyIntros: vi.fn<ClientIntroRepository["listReadyIntros"]>(async () => ok([])) };
+
 /** The clock the use case clamps `since` against: a minute after the session start. */
 const NOW = () => new Date("2026-11-04T10:01:00.000Z");
 
 async function readyFor(actor: Actor, transitions: TransitionRecord[], cases: ReadyDraftCase[], since = SINCE) {
-  const result = await makeListReadyDrafts(fakeRepository(transitions, cases), NOW)(actor, { since });
+  const result = await makeListReadyDrafts(fakeRepository(transitions, cases), noIntros, NOW)(actor, { since });
   if (!result.ok) throw new Error(result.error.code);
   return result.value;
 }
@@ -47,7 +51,7 @@ async function readyFor(actor: Actor, transitions: TransitionRecord[], cases: Re
 describe("listReadyDrafts (Story 3.8)", () => {
   it("returns my case once it reached Da approvare after the session started, with its name and time", async () => {
     const drafts = await readyFor(ME, [generate(1, ME.id, BEFORE), succeeded(1, AFTER(5))], [live(1, "Rebrand Lumen")]);
-    expect(drafts).toEqual([{ id: caseId(1), name: "Rebrand Lumen", readyAt: AFTER(5) }]);
+    expect(drafts).toEqual([{ kind: "case", id: caseId(1), name: "Rebrand Lumen", readyAt: AFTER(5) }]);
   });
 
   it("leaves out someone else's generation", async () => {
@@ -115,14 +119,14 @@ describe("listReadyDrafts (Story 3.8)", () => {
 
   it("clamps since to no earlier than 24 hours before now", async () => {
     const repo = fakeRepository([], []);
-    await makeListReadyDrafts(repo, NOW)(ME, { since: "2026-10-01T00:00:00.000Z" });
+    await makeListReadyDrafts(repo, noIntros, NOW)(ME, { since: "2026-10-01T00:00:00.000Z" });
     expect(repo.listReadyDrafts).toHaveBeenCalledWith(ME.id, "2026-11-03T10:01:00.000Z");
   });
 
   it("refuses a malformed since with INVALID_INPUT, querying nothing", async () => {
     const repo = fakeRepository([], []);
     for (const input of [{}, { since: "yesterday" }, { since: SINCE, extra: 1 }, null]) {
-      const result = await makeListReadyDrafts(repo)(ME, input);
+      const result = await makeListReadyDrafts(repo, noIntros)(ME, input);
       expect(result).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
     }
     expect(repo.listReadyDrafts).not.toHaveBeenCalled();
@@ -130,7 +134,29 @@ describe("listReadyDrafts (Story 3.8)", () => {
 
   it("asks the repository for the actor's drafts since the given time", async () => {
     const repo = fakeRepository([], []);
-    await makeListReadyDrafts(repo, NOW)(ME, { since: SINCE });
+    await makeListReadyDrafts(repo, noIntros, NOW)(ME, { since: SINCE });
     expect(repo.listReadyDrafts).toHaveBeenCalledWith(ME.id, SINCE);
+  });
+
+  it("merges ready client intros with ready cases, oldest first (Story 3.11)", async () => {
+    const clientId = "cccccccc-0000-4000-8000-000000000001";
+    const intros = {
+      listReadyIntros: vi.fn<ClientIntroRepository["listReadyIntros"]>(async () => ok([{ kind: "client_intro" as const, id: clientId, name: "Acme", readyAt: AFTER(3) }])),
+    };
+    const repo = fakeRepository([generate(1, ME.id, BEFORE), succeeded(1, AFTER(7))], [live(1)]);
+    const result = await makeListReadyDrafts(repo, intros, NOW)(ME, { since: SINCE });
+    expect(result).toEqual({
+      ok: true,
+      value: [
+        { kind: "client_intro", id: clientId, name: "Acme", readyAt: AFTER(3) },
+        { kind: "case", id: caseId(1), name: "Case 1", readyAt: AFTER(7) },
+      ],
+    });
+    expect(intros.listReadyIntros).toHaveBeenCalledWith(ME.id, SINCE);
+  });
+
+  it("selects intros with the cases' rules, tagged client_intro", () => {
+    const drafts = selectReadyDrafts([generate(1, ME.id, BEFORE), succeeded(1, AFTER(5))], [live(1, "Acme")], ME.id, "client_intro");
+    expect(drafts).toEqual([{ kind: "client_intro", id: caseId(1), name: "Acme", readyAt: AFTER(5) }]);
   });
 });

@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import type { ClientAsset } from "@/modules/case-study/domain/client-material";
+import type { ClientIntro } from "@/modules/case-study/domain/client-intro";
 import type { CaseStudy } from "@/modules/case-study/domain/case-study";
 import type { Revision } from "@/modules/case-study/domain/revision";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
+import type { ClientIntroRepository } from "@/modules/case-study/ports/client-intro-repository";
 import type { ClientRepository } from "@/modules/case-study/ports/client-repository";
 import type { RevisionRepository } from "@/modules/case-study/ports/revision-repository";
-import { caseHistoryV0, caseHistoryV1, caseHistoryV2, UPGRADE_ID_PREFIX } from "@/modules/generation";
+import { caseHistoryV0, caseHistoryV1, caseHistoryV2, clientIntroV2, UPGRADE_ID_PREFIX } from "@/modules/generation";
 import { FORMAT_IDS, starterPages } from "@/modules/rendering";
 import { err, ok } from "@/shared/result";
 import {
@@ -73,7 +75,7 @@ const stored = (id: string, doc: unknown, over: Partial<Revision> = {}): Revisio
   ...over,
 });
 
-function fakes(found: CaseStudy | null, rows: Revision[] = []) {
+function fakes(found: CaseStudy | null, rows: Revision[] = [], intro: ClientIntro | null = null) {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const cases = { findById: vi.fn<CaseStudyRepository["findById"]>(async () => ok(found)) } as unknown as CaseStudyRepository & {
     findById: ReturnType<typeof vi.fn>;
@@ -92,8 +94,23 @@ function fakes(found: CaseStudy | null, rows: Revision[] = []) {
     forkHead: vi.fn<RevisionRepository["forkHead"]>(async (input) => ok({ revision: stored(HEAD_ID, caseHistoryV2(FORMAT_IDS)), headVersion: input.expectedHeadVersion + 1 })),
     discardHead: vi.fn<RevisionRepository["discardHead"]>(async () => ok(stored(APPROVED_ID, caseHistoryV2(FORMAT_IDS), { status: "approved" }))),
   };
-  return { cases, revisions };
+  const intros = { findById: vi.fn<ClientIntroRepository["findById"]>(async () => ok(intro)) };
+  return { cases, revisions, intros };
 }
+
+const INTRO_ID = "44444444-0000-4000-8000-000000000001";
+const clientIntro = (over: Partial<ClientIntro> = {}): ClientIntro => ({
+  id: INTRO_ID,
+  clientId: "cccccccc-0000-4000-8000-000000000001",
+  status: "in_review",
+  headRevisionId: null,
+  approvedRevisionId: null,
+  headVersion: 1,
+  createdBy: actor.id,
+  createdAt: now,
+  updatedAt: now,
+  ...over,
+});
 
 describe("createWorkingRevision", () => {
   const input = () => ({ caseId: CASE_ID, doc: caseHistoryV2(FORMAT_IDS), expectedHeadVersion: 0 });
@@ -262,10 +279,36 @@ describe("getLiveRevision and getEditableRevision", () => {
     expect(deps.revisions.findById).not.toHaveBeenCalled();
   });
 
-  it.each([makeGetLiveRevision, makeGetEditableRevision])("a client_intro subject is SUBJECT_NOT_SUPPORTED", async (make) => {
-    const deps = fakes(caseStudy());
-    expect(await make(deps)({ kind: "client_intro", id: CASE_ID })).toMatchObject({ ok: false, error: { code: "SUBJECT_NOT_SUPPORTED" } });
-    expect(deps.cases.findById).not.toHaveBeenCalled();
+  describe("a client_intro subject (Story 3.11)", () => {
+    const introDoc = () => clientIntroV2(FORMAT_IDS);
+    const introRow = (id: string, over: Partial<Revision> = {}) => stored(id, introDoc(), { caseId: null, clientIntroId: INTRO_ID, ...over });
+
+    it("reads the intro's head, never the cases", async () => {
+      const deps = fakes(caseStudy(), [introRow(HEAD_ID)], clientIntro({ headRevisionId: HEAD_ID }));
+      expect(await makeGetEditableRevision(deps)({ kind: "client_intro", id: INTRO_ID })).toMatchObject({ ok: true, value: { id: HEAD_ID, doc: introDoc() } });
+      expect(deps.intros.findById).toHaveBeenCalledWith(INTRO_ID);
+      expect(deps.cases.findById).not.toHaveBeenCalled();
+    });
+
+    it("reads the approved one as live, or null when none is approved", async () => {
+      const approved = fakes(caseStudy(), [introRow(APPROVED_ID, { status: "approved" })], clientIntro({ approvedRevisionId: APPROVED_ID }));
+      expect(await makeGetLiveRevision(approved)({ kind: "client_intro", id: INTRO_ID })).toMatchObject({ ok: true, value: { id: APPROVED_ID } });
+      expect(await makeGetLiveRevision(fakes(caseStudy(), [], clientIntro()))({ kind: "client_intro", id: INTRO_ID })).toEqual({ ok: true, value: null });
+    });
+
+    it.each([makeGetLiveRevision, makeGetEditableRevision])("an unknown intro is NOT_FOUND", async (make) => {
+      expect(await make(fakes(caseStudy()))({ kind: "client_intro", id: INTRO_ID })).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    });
+
+    it("refuses a head that is a case's revision: REVISION_POINTER_INVALID", async () => {
+      const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      try {
+        const deps = fakes(caseStudy(), [stored(HEAD_ID, introDoc())], clientIntro({ headRevisionId: HEAD_ID }));
+        expect(await makeGetEditableRevision(deps)({ kind: "client_intro", id: INTRO_ID })).toMatchObject({ ok: false, error: { code: "REVISION_POINTER_INVALID" } });
+      } finally {
+        write.mockRestore();
+      }
+    });
   });
 
   it.each([{ kind: "case", id: "x" }, { kind: "client", id: CASE_ID }, CASE_ID, null])("a malformed subject %j is INVALID_INPUT", async (subject) => {
@@ -617,6 +660,7 @@ describe("editing an approved case (Story 4.9)", () => {
       revisions,
       caseAssetIds: vi.fn<CaseAssetIds>(async () => ok(refs)),
       clients: { listAssets: vi.fn<ClientRepository["listAssets"]>(async () => ok([])) },
+      intros: { findById: vi.fn<ClientIntroRepository["findById"]>(async () => ok(null)) },
     };
     return { deps, rows, now: () => current };
   }

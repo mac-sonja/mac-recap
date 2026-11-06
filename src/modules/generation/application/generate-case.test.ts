@@ -1,7 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
-import { makeGenerateHandler, generateInputHash, JOB_OK, missingAspect, type GenerateDeps, type GenerateManifest } from "@/modules/generation/application/generate-case";
+import {
+  clientIntroGenerateJob,
+  makeGenerateHandler,
+  generateInputHash,
+  JOB_OK,
+  missingAspect,
+  type ClientIntroGenerateDeps,
+  type GenerateDeps,
+  type GenerateManifest,
+} from "@/modules/generation/application/generate-case";
 import { sameInEveryFormat, TEST_DRAFT_MARKER, testDraftTexts, type DraftTexts } from "@/modules/generation/application/test-draft";
 import { testDraftTextSource, type SourceAsset, type TextSource } from "@/modules/generation/application/text-source";
 import { validateNewDocument } from "@/modules/generation";
@@ -240,5 +249,131 @@ describe("generateInputHash", () => {
     expect(generateInputHash(CASE_ID, 3, { ...manifest, formHash: "x" })).not.toBe(base);
     expect(generateInputHash(CASE_ID, 3, { ...manifest, assets: manifest.assets.slice(1) })).not.toBe(base);
     expect(generateInputHash("22222222-2222-4222-8222-222222222222", 3, manifest)).not.toBe(base);
+  });
+});
+
+describe("generate handler: a client intro (Story 3.11)", () => {
+  const INTRO_ID = "44444444-0000-4000-8000-000000000001";
+  const CLIENT_ID = "cccccccc-0000-4000-8000-0000000000c1";
+  const IMAGES = ["aaaaaaaa-0000-4000-8000-0000000000a1", "aaaaaaaa-0000-4000-8000-0000000000a2", "aaaaaaaa-0000-4000-8000-0000000000a3"];
+  const DESCRIPTION = "Lampade di design per hotel.";
+  const introJob = { id: "dddddddd-0000-4000-8000-0000000000f1", subjectId: INTRO_ID, payload: { subject: "client_intro", baseHeadVersion: 0 } as Record<string, unknown> };
+
+  function makeIntro(over: Partial<ClientIntroGenerateDeps> = {}, base: Partial<GenerateDeps> = {}) {
+    const intro = {
+      getIntro: vi.fn(async () => ok({ clientId: CLIENT_ID, status: "generating" as const, headVersion: 0 })),
+      getClient: vi.fn(async () => ok({ description: DESCRIPTION, brief: { context: "Il contesto.", results: [{ label: "a", value: "1" }], testimonialQuote: "" } })),
+      listClientAssets: vi.fn(async () =>
+        ok([
+          { id: IMAGES[0], kind: "image" },
+          { id: "bbbbbbbb-0000-4000-8000-0000000000b1", kind: "document" },
+          { id: IMAGES[1], kind: "image" },
+          { id: IMAGES[2], kind: "image" },
+        ]),
+      ),
+      transitionIntro: vi.fn(async () => ok({})),
+      createIntroWorkingRevision: vi.fn(async () => ok({ id: "rev-intro" })),
+      ...over,
+    } satisfies ClientIntroGenerateDeps;
+    const made = make({ intro, ...base });
+    return { ...made, intro };
+  }
+  const revisionInput = (intro: ReturnType<typeof makeIntro>["intro"]) =>
+    (vi.mocked(intro.createIntroWorkingRevision).mock.calls[0] as unknown as [Actor, { clientIntroId: string; doc: { kind: string }; manifest: unknown; meta: unknown; expectedHeadVersion: number }])[1];
+
+  it("writes a working client_intro revision with test text and the first three images, then moves the intro to in_review", async () => {
+    const { deps, handler, intro } = makeIntro();
+    expect(await handler.run(introJob, live)).toEqual(ok(undefined));
+    const input = revisionInput(intro);
+    expect(input).toMatchObject({
+      clientIntroId: INTRO_ID,
+      expectedHeadVersion: 0,
+      manifest: { testDraft: true, assetIds: IMAGES },
+      meta: { model: null, fellBack: false, promptVersion: null },
+    });
+    expect(validateNewDocument(input.doc).ok).toBe(true);
+    expect(input.doc).toMatchObject({ kind: "client_intro", template: "mac-client@1" });
+    expect(JSON.stringify(input.doc)).toContain(`${TEST_DRAFT_MARKER} Il cliente in breve: ${DESCRIPTION}`);
+    expect(intro.transitionIntro).toHaveBeenCalledExactlyOnceWith(INTRO_ID, "generation_succeeded", SYSTEM);
+    // Nothing of the case side runs: no case read, no case transition, no job_ok.
+    expect(deps.getCase).not.toHaveBeenCalled();
+    expect(deps.transition).not.toHaveBeenCalled();
+    expect(deps.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it("always writes test text: the text source (the AI when ANTHROPIC_API_KEY is set) is never asked", async () => {
+    const texts = vi.fn(async () => {
+      throw new Error("no LLM for intros");
+    });
+    const { handler, intro } = makeIntro({}, { textSource: { texts } });
+    expect(await handler.run(introJob, live)).toEqual(ok(undefined));
+    expect(texts).not.toHaveBeenCalled();
+    expect(JSON.stringify(revisionInput(intro).doc)).toContain(TEST_DRAFT_MARKER);
+  });
+
+  it("re-checks the gate: fewer than 2 client images is NO_CLIENT_IMAGES, final, nothing written", async () => {
+    const { handler, intro } = makeIntro({ listClientAssets: vi.fn(async () => ok([{ id: IMAGES[0], kind: "image" }, { id: IMAGES[1], kind: "video" }])) });
+    expect(await handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "NO_CLIENT_IMAGES", retryable: false } });
+    expect(intro.createIntroWorkingRevision).not.toHaveBeenCalled();
+  });
+
+  it("a revision write failure is retried with the intro left generating; the permanent failure returns it to Bozza", async () => {
+    const { handler, intro } = makeIntro({ createIntroWorkingRevision: vi.fn(async () => err({ code: "REVISION_WRITE_FAILED", message: "m" })) });
+    expect(await handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "REVISION_WRITE_FAILED", retryable: true } });
+    expect(intro.transitionIntro).not.toHaveBeenCalled();
+    await handler.onPermanentFailure(introJob);
+    expect(intro.transitionIntro).toHaveBeenCalledExactlyOnceWith(INTRO_ID, "generation_failed", SYSTEM);
+  });
+
+  it("head moved: STALE_HEAD discards the draft and returns the intro to Bozza", async () => {
+    const { handler, intro } = makeIntro({ createIntroWorkingRevision: vi.fn(async () => err({ code: "STALE_HEAD", message: "m" })) });
+    expect(await handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "STALE_HEAD", retryable: false } });
+    expect(intro.transitionIntro).toHaveBeenCalledExactlyOnceWith(INTRO_ID, "generation_failed", SYSTEM);
+  });
+
+  it("an intro still in Bozza is retried; any other status is final", async () => {
+    const draft = makeIntro({ getIntro: vi.fn(async () => ok({ clientId: CLIENT_ID, status: "draft" as const, headVersion: 0 })) });
+    expect(await draft.handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "NOT_GENERATING", retryable: true } });
+    const review = makeIntro({ getIntro: vi.fn(async () => ok({ clientId: CLIENT_ID, status: "in_review" as const, headVersion: 1 })) });
+    expect(await review.handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "NOT_GENERATING", retryable: false } });
+  });
+
+  it("onPermanentFailure leaves an intro that is not generating alone", async () => {
+    const { handler, intro } = makeIntro({ getIntro: vi.fn(async () => ok({ clientId: CLIENT_ID, status: "in_review" as const, headVersion: 1 })) });
+    await handler.onPermanentFailure(introJob);
+    expect(intro.transitionIntro).not.toHaveBeenCalled();
+  });
+
+  it("an aborted signal writes nothing", async () => {
+    const { handler, intro } = makeIntro();
+    const controller = new AbortController();
+    controller.abort();
+    expect(await handler.run(introJob, controller.signal)).toMatchObject({ ok: false, error: { code: "ABORTED" } });
+    expect(intro.createIntroWorkingRevision).not.toHaveBeenCalled();
+  });
+
+  it("maps no case to a client intro job (its job_failed has no case)", () => {
+    expect(makeIntro().handler.caseIdOf(introJob)).toBeNull();
+  });
+
+  it("a worker without the intro side fails a client intro job for good", async () => {
+    expect(await make().handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "SUBJECT_NOT_SUPPORTED", retryable: false } });
+  });
+
+  it("reads a case job queued before Story 3.11 (no subject) as a case", async () => {
+    const { deps, handler } = makeIntro();
+    expect(await handler.run(job, live)).toEqual(ok(undefined));
+    expect(deps.createWorkingRevision).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("clientIntroGenerateJob", () => {
+  it("is a generate job on the intro, its hash deterministic on the intro and its head version", () => {
+    const INTRO_ID = "44444444-0000-4000-8000-000000000001";
+    const queued = clientIntroGenerateJob(INTRO_ID.toUpperCase(), 2);
+    expect(queued).toMatchObject({ kind: "generate", subjectId: INTRO_ID, payload: { subject: "client_intro", baseHeadVersion: 2 } });
+    expect(clientIntroGenerateJob(INTRO_ID, 2).inputHash).toBe(queued.inputHash);
+    expect(clientIntroGenerateJob(INTRO_ID, 3).inputHash).not.toBe(queued.inputHash);
+    expect(queued.inputHash).not.toBe(generateInputHash(INTRO_ID, 2, manifest));
   });
 });
