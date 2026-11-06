@@ -51,6 +51,13 @@ context:
   - A double click enqueues one job, using the existing idempotent enqueue.
   - The client page opens at once, whatever the outcome.
 
+**Owner decisions (2026-11-06):**
+- **Seeing the intro's state:**
+  - The client page shows a status badge: "Introduzione: In elaborazione / Da approvare / Bozza".
+  - The 3.8 ready toast also covers intros and opens the client page.
+- **Existing clients:** **Salva** applies the same start rule as **Aggiungi**. A client with no intro, or whose intro is in Bozza, gets a draft. This also retries a failed draft.
+- **Size:** the spec is kept whole, at about 2,100 tokens, as one PR.
+
 **Never:** No LLM call, no edit to mac-case@1, no intro configurator (4.11), no client file (4.12), no approve for intros, no change to case generation.
 
 ## I/O & Edge-Case Matrix
@@ -65,15 +72,6 @@ context:
 | AI key set | `ANTHROPIC_API_KEY` present | Still test text, no SDK call | — |
 
 </frozen-after-approval>
-
-## Open Questions
-
-1. **Where the owner sees the intro's state.** Options:
-   - (a) A small status badge on the client page ("Introduzione: In elaborazione / Da approvare / Bozza"), and the 3.8 ready toast also covering intros and opening the client page. Recommended: this is what the epic's UX notes describe, and it adds about 3 files.
-   - (b) Nothing visible until 4.11. The draft exists but you can only confirm it in the database.
-2. **Clients that already exist.** Options:
-   - (a) Pressing **Salva** on an existing client starts its draft, through the same start rule. This also retries a failed draft. Recommended.
-   - (b) Only clients added from now on get an intro, and existing ones wait for 4.11.
 
 ## Code Map
 
@@ -101,7 +99,9 @@ context:
 - [ ] `src/modules/rendering/templates/mac-client/v1/*`, `index.ts`, `types.ts`, `hashes.json`, `templates.test.ts` -- the placeholder template, `CLIENT_TEMPLATE`, `starterPages` for `client_intro`, client text keys.
 - [ ] `src/modules/generation/application/client-intro-draft.ts` (+ test) -- `buildClientIntroTestDraft`; the result passes `validateNewDocument`.
 - [ ] `src/modules/generation/application/generate-case.ts`, `worker.ts` (+ tests) -- `subject` in the payload, the client branch, always test text.
-- [ ] `src/app/(tool)/clients/actions.ts`, `client-panel.tsx` (+ tests) -- `startClientIntro` action after the images upload on Aggiungi, without blocking navigation.
+- [ ] `src/app/(tool)/clients/actions.ts`, `client-panel.tsx` (+ tests) -- `startClientIntro` action after the images upload on Aggiungi and after Salva, without blocking navigation.
+- [ ] `src/app/(tool)/clients/[clientId]/page.tsx` (+ test), `src/shared/i18n/it.ts` -- the intro status badge (reuse the case status badge's hues).
+- [ ] `case-study` `listReadyDrafts` / `domain/ready-draft.ts`, `src/app/_lib/draft-ready-actions.ts`, `src/app/_components/draft-ready-notifier.tsx` (+ tests) -- ready intros from `client_event`, toast opens the client page.
 - [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 3.11 to review.
 
 **Acceptance Criteria:**
