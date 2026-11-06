@@ -18,7 +18,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | A4 | 4.8 Approva | ✅ #143 (migration on dev) | — | — | configurator, case-study |
 | A5 | 3.8 tell me when the draft is ready | ✅ #150 | — | — | jobs, notifications |
 | A6 | 3.11 client intro and outro with test text | ✅ #155 (migration on the mac-recap project 2026-11-06); started 2026-11-06 with a placeholder client template (owner); the cover/outro design replaces only the template later | — | B3 (both add a job kind) | rendering/templates, jobs, migration |
-| A7 | 4.11 client intro in the configurator | ⬜ | A6 | B6, B7 | configurator (client mode) |
+| A7 | 4.11 client intro in the configurator | 🔄 started 2026-11-06 | A6 | B6, B7 | configurator (client mode) |
 | A8 | 4.12 client overview configurator, incl. the C38 shared-page confirmation | ⬜ | A7 | B6, B7 | configurator (client file) |
 | A9 | 4.9 edit an approved case | ✅ #152 (migration on dev) | A4 ✅, B1 | B1 | approved-case page, case-study |
 | B1 | 5.2 the rest: narrow viewports | ✅ #146 | — | A9 | `(tool)/case-studies/[caseId]` |
@@ -41,7 +41,7 @@ When a session finishes a story, or when you open a new one:
 2. Skip it if another session is working on a story it **overlaps** with, and take the next one. Two sessions on overlapping stories means merge conflicts in the same files.
 3. Mark it 🔄 in this table, in the story's first commit.
 
-**As of 2026-11-06:** B4 is merged (#153). A6 is in progress with a placeholder client template (owner, 2026-11-06), so it no longer waits on the cover/outro design; that design will replace only the template. Every other story waits on A6, directly or through others; B9 comes last.
+**As of 2026-11-06:** A6 is merged (#155, placeholder client template mac-client@1; the cover/outro design will replace only the template). A7 is in progress. B8 (3.9) can start alongside; every other story waits on A7 or A8, and B9 comes last.
 
 To start a story in a new session, open Claude Code on `main` and say: "Start story <#> (<story>) from `_bmad-output/planning-artifacts/parallel-tracks-2026-11-03.md`; run `bmad-build`."
 
