@@ -17,7 +17,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | A3 | 4.5c-2 client media in the case configurator, client renditions, client-file soft delete (dialog upload split to 4.5c-3) | ✅ #148 (migration on dev) | — | A2 | configurator, material |
 | A4 | 4.8 Approva | ✅ #143 (migration on dev) | — | — | configurator, case-study |
 | A5 | 3.8 tell me when the draft is ready | ✅ #150 | — | — | jobs, notifications |
-| A6 | 3.11 client intro and outro with test text | 🔄 in review on `claude/brave-gates-8mouz1` (migration not on dev yet); started 2026-11-06 with a placeholder client template (owner); the cover/outro design replaces only the template later | — | B3 (both add a job kind) | rendering/templates, jobs, migration |
+| A6 | 3.11 client intro and outro with test text | ✅ #155 (migration on the mac-recap project 2026-11-06); started 2026-11-06 with a placeholder client template (owner); the cover/outro design replaces only the template later | — | B3 (both add a job kind) | rendering/templates, jobs, migration |
 | A7 | 4.11 client intro in the configurator | ⬜ | A6 | B6, B7 | configurator (client mode) |
 | A8 | 4.12 client overview configurator, incl. the C38 shared-page confirmation | ⬜ | A7 | B6, B7 | configurator (client file) |
 | A9 | 4.9 edit an approved case | ✅ #152 (migration on dev) | A4 ✅, B1 | B1 | approved-case page, case-study |
