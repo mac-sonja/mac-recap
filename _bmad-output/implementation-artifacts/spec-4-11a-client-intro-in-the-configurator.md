@@ -110,6 +110,31 @@ context:
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | One failing case listing takes down the configurator (blind, edge) | medium | `caseMediaOfClient` returns err for any case; `page.tsx` throws | patch |
+| 2 | Initial client media never polls for a missing rendition (edge) | low | `page.tsx` builds the list without `thumbnailPending`; `relistClient` sets it | patch |
+| 3 | Empty sector label when the sector list fails; wrong comment (blind) | low | `page.tsx` sets `sector: ""`; the comment says it falls back | patch |
+| 4 | Client mode shows case wording in errors (blind) | low | `it.ts:970` `STALE_STATUS` "La case non è più da approvare"; client mode reuses it | patch |
+| 5 | Empty `bindings` opens the sector editor (blind, edge) | low | `[].every()` is true in `clientEditorOf` | patch |
+| 6 | Client name length in UTF-16 units (blind) | low | `planClientFieldSave` uses `.length`; the server counts code points | patch |
+| 7 | 8 template builds per format for case documents too; rows hard-coded 0..3 (blind, edge) | low | `MARKER_SHAPES` in `default-pages.ts` runs for every kind | patch |
+| 8 | Duplicate unused i18n keys (blind, gap) | low | `clientBack`/`clientTitle` under `wizard` and `caseView` are unused | patch |
+| 9 | Client Chiusura default page source untested (gap) | medium | No test applies a default page in client mode | patch |
+| 10 | Upload preview fetch under `clientIntroId` untested (gap) | medium | The upload test passes no `onRenderAssets` | patch |
+| 11 | Client sector and logo saves untested (gap) | low | `bound-fields.test.ts` client mode has no sector/logo case | patch |
+| 12 | Client pixel-size message untested (gap) | low | Only `CLIENT_MATERIAL_LIMIT` is tested | patch |
+| 13 | Intro save lacks the format guard (blind) | false | `validateNewDocument` raises `FORMAT_NOT_IN_REVISION` (`generation/domain/document.ts:660`) for both kinds | reject |
+| 14 | Case-only callbacks get the intro id (blind) | low | Unreachable: the client page passes no update/discard props | reject |
+| 15 | Case media re-listed on each poll and autosave (blind) | low | A few small queries per call on a client with a handful of cases | reject |
+| 16 | No confirmation after approving an intro (blind) | low | The client page badge reads Approvato on return | reject |
+| 17 | An Approvato intro still accepts uploads (blind) | low | Uploads go to the client's material, which the client page allows anytime; the approved document is untouched and field edits are off (`fieldsOn` needs `editable`) | reject |
+| 18 | SQL and use-case test gaps (deleted client, other intro's revision on approve) (blind) | low | The functions mirror the tested case versions; the save path is tested for another intro's revision | reject |
+| 19 | Hard-coded `from` in the approve event (blind) | low | Correct by the check right before; cosmetic | reject |
+| 20 | Spec bookkeeping (blind) | false | A spec edit, not a code defect | reject |
+| 21 | Description typed then refused without logo or sector (edge) | false | Every client has a logo and a sector: the client panel requires both before Aggiungi | reject |
+| 22 | Meta focus request left pending in client mode (edge) | low | Harmless: the panel opens; no wrong field is focused | reject |
+
 ## Verification
 
 **Commands:**
