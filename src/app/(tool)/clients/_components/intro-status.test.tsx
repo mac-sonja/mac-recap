@@ -54,4 +54,19 @@ describe("IntroStatus (Story 3.11)", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("status").textContent).toContain(dict.status.in_review);
   });
+
+  it("offers Apri to its configurator only while Da approvare or Approvato (Story 4.11a), outside the status region", () => {
+    const href = "/clients/c1/configurator";
+    const { rerender } = render(<IntroStatus status="in_review" href={href} />);
+    const link = screen.getByRole("link");
+    expect(link.getAttribute("href")).toBe(href);
+    expect(link.textContent).toBe(dict.clients.detail.openIntro);
+    expect(screen.getByRole("status").contains(link)).toBe(false);
+    rerender(<IntroStatus status="approved" href={href} />);
+    expect(screen.getByRole("link").getAttribute("href")).toBe(href);
+    rerender(<IntroStatus status="generating" href={href} />);
+    expect(screen.queryByRole("link")).toBeNull();
+    rerender(<IntroStatus status="in_review" />);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
 });

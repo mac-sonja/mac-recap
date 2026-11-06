@@ -14,6 +14,7 @@ import { MEDIA_DRAG_TYPE } from "./media-files";
 import type { DropTarget, MediaTarget } from "./page-editing";
 import { ResizeHandles } from "./resize-handles";
 import { findElement, selectionAt, type Selection } from "./selection";
+import { groupLabelOf, type PageGroups } from "./page-groups";
 import { Slideshow } from "./slideshow";
 import { PAGE_WIDTH, PREVIEW_WIDTH, SEG, SEG_BUTTON } from "./styles";
 
@@ -21,6 +22,8 @@ export interface CanvasProps {
   formatId: FormatId;
   template: string;
   pages: readonly Page[];
+  /** How the pages are labelled in groups: by section (a case), by role (client mode, Story 4.11a). */
+  pageGroups?: PageGroups;
   assets: Readonly<Record<string, RenderAsset>>;
   values: BoundValues;
   selection: Selection;
@@ -680,6 +683,7 @@ export function Canvas({
   formatId,
   template,
   pages,
+  pageGroups = "section",
   assets,
   values,
   selection,
@@ -783,7 +787,7 @@ export function Canvas({
       {(slideshow ? [] : pages).map((page, i) => {
         // A section label before the first page of each run of pages in one section.
         const heading =
-          i === 0 || pages[i - 1]?.section !== page.section ? (
+          i === 0 || groupLabelOf(pages[i - 1]!, pageGroups) !== groupLabelOf(page, pageGroups) ? (
             <div
               key={`section-${i}`}
               className={cn(
@@ -791,7 +795,7 @@ export function Canvas({
                 width,
               )}
             >
-              {it.configurator.sections[page.section]}
+              {groupLabelOf(page, pageGroups)}
               <span aria-hidden="true" className="h-px flex-1 bg-border-strong" />
             </div>
           ) : null;

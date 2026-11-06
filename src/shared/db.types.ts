@@ -512,6 +512,30 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"approve_client_intro":
+{ Args: { "p_actor_id": string,"p_client_intro_id": string,"p_expected_head_version": number,"p_expected_revision_version": number,"p_revision_id": string }; Returns: {
+              "case_id": string | null,
+"client_intro_id": string | null,
+"created_at": string,
+"created_by": string,
+"doc": NonNullable<Json>,
+"fell_back": boolean,
+"generated_doc": NonNullable<Json>,
+"id": string,
+"manifest": NonNullable<Json>,
+"model": string | null,
+"prompt_version": string | null,
+"schema_version": number,
+"status": string,
+"updated_at": string,
+"version": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "revision"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "approve_revision":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_expected_head_version": number,"p_expected_revision_version": number,"p_revision_id": string }; Returns: {
               "case_id": string | null,
@@ -866,6 +890,30 @@ isOneToOne: false
 "save_context_field":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_field": string,"p_text": string }; Returns: string
                            },
+"save_intro_revision_doc":
+{ Args: { "p_actor_id": string,"p_doc": Json,"p_expected_version": number,"p_revision_id": string }; Returns: {
+              "case_id": string | null,
+"client_intro_id": string | null,
+"created_at": string,
+"created_by": string,
+"doc": NonNullable<Json>,
+"fell_back": boolean,
+"generated_doc": NonNullable<Json>,
+"id": string,
+"manifest": NonNullable<Json>,
+"model": string | null,
+"prompt_version": string | null,
+"schema_version": number,
+"status": string,
+"updated_at": string,
+"version": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "revision"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "save_revision_doc":
 { Args: { "p_actor_id": string,"p_doc": Json,"p_expected_version": number,"p_revision_id": string }; Returns: {
               "case_id": string | null,

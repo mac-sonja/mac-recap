@@ -3,14 +3,16 @@
 import { Film, ImageIcon, Star } from "lucide-react";
 import { useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { confirmAssetUpload, listAssets, presignAssetUpload, setAssetFavourite } from "@/app/(tool)/case-studies/actions";
+import { confirmClientMaterialUpload, listClientMaterial, requestClientMaterialUpload } from "@/app/(tool)/clients/actions";
 import type { ListedAsset } from "@/modules/material";
 import type { RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { acceptFor, normalizeContentType, uploadFile } from "../../_lib/upload";
 import { THUMBNAIL_POLL_MAX_MS, THUMBNAIL_POLL_MS } from "../material-step";
-import { formatLength, isMedia, MEDIA_DRAG_TYPE, type MediaUploadRules } from "./media-files";
+import { clientMediaOf, formatLength, isMedia, MEDIA_DRAG_TYPE, type MediaUploadRules } from "./media-files";
 import { EYEBROW } from "./styles";
+import type { Subject } from "./use-document";
 
 const copy = it.configurator.media;
 
@@ -22,6 +24,7 @@ const listClass = (view: "grid" | "list") => (view === "grid" ? "grid grid-cols-
 /** A video's display copy, whose metadata gives its length. */
 const videoUrlOf = (assets: Readonly<Record<string, RenderAsset>>, id: string) => (assets[id]?.kind === "video" ? assets[id]?.url : undefined);
 const materialCopy = it.wizard.material;
+const clientCopy = it.clientPanel.images;
 
 /** A video's length, read in the browser from its metadata; null until known (or without a URL). */
 function useVideoLength(url: string | undefined): number | null {
@@ -152,13 +155,18 @@ type Attempt =
 
 export interface MediaTabProps {
   hidden: boolean;
-  caseId: string;
-  /** The case's images and videos, oldest first, as the page listed them. */
+  /**
+   * Whose files the tab lists and uploads to: the case's (Story 4.5a), or in client mode
+   * (Story 4.11a) the intro's client's, under "Del cliente", with no star.
+   */
+  subject: Subject;
+  /** The case's images and videos, oldest first, as the page listed them; client mode: the client's, in position order. */
   initialFiles: readonly ListedAsset[];
   /**
    * The client's images and videos, in position order (Story 4.5c-2): the "Del cliente"
    * group below the case's files, hidden when there are none. Placed like the case's; no
-   * star, no removal, never uploaded to from here.
+   * star, no removal, never uploaded to from here. Client mode (Story 4.11a): the images and
+   * videos of the client's cases, under "Dalle sue case", placed the same way.
    */
   clientFiles?: readonly ListedAsset[];
   rules: MediaUploadRules;
@@ -189,8 +197,13 @@ export interface MediaTabProps {
  * client's images and videos (Story 4.5c-2): filtered and placed the same way, with no star;
  * the group is hidden when the client has none (or none matches **Cerca**). Kept mounted
  * while hidden, so uploads and stars survive a tab switch.
+ *
+ * Client mode (Story 4.11a): the client's own files come first, under "Del cliente", with no
+ * star; the drop zone uploads to the client's material within its file limit ("Finiscono nei
+ * Media di questo cliente."). Below them, under "Dalle sue case", its cases' images and videos:
+ * placed like the others, never uploaded to or starred.
  */
-export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES, rules, assets, onPage, query, view, say, onPick, onListed }: MediaTabProps) {
+export function MediaTab({ hidden, subject, initialFiles, clientFiles = NO_FILES, rules, assets, onPage, query, view, say, onPick, onListed }: MediaTabProps) {
   const [files, setFiles] = useState<readonly ListedAsset[]>(initialFiles);
   const [uploading, setUploading] = useState(0);
   const [storageOff, setStorageOff] = useState(false);
@@ -202,6 +215,14 @@ export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES,
   const unmounted = useRef(false);
   const hintId = useId();
   const clientHeadingId = useId();
+  const ownHeadingId = useId();
+  /** Story 4.11a: the files are the client's, the second group its cases'. */
+  const clientMode = subject.kind === "client_intro";
+  /** The latest render assets: a fresh client listing takes its tiles' pictures from them. */
+  const assetsNow = useRef(assets);
+  useEffect(() => {
+    assetsNow.current = assets;
+  });
 
   useEffect(() => {
     unmounted.current = false;
@@ -215,10 +236,22 @@ export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES,
   const shown = files.filter(matches);
   const clientShown = clientFiles.filter(matches);
 
-  /** Reads the case's files again; the list keeps what it had on a failure. */
+  /** The client's files, read again (client mode): shaped as the case's, never starred. */
+  async function relistClient(clientId: string): Promise<readonly ListedAsset[] | null> {
+    const fresh = await listClientMaterial({ clientId });
+    if (!fresh.ok || unmounted.current) return null;
+    // A file not drawn yet keeps the tab polling (as a case file waiting for its thumbnail), so its rendition is read once made.
+    const media = clientMediaOf(fresh.value, assetsNow.current).map((f) => ({ ...f, thumbnailPending: !(f.id in assetsNow.current) }));
+    setFiles(media);
+    onListed?.(media);
+    return media;
+  }
+
+  /** Reads the case's files (client mode: the client's) again; the list keeps what it had on a failure. */
   async function relist(): Promise<readonly ListedAsset[] | null> {
     try {
-      const fresh = await listAssets({ caseId });
+      if (subject.kind === "client_intro") return await relistClient(subject.clientId);
+      const fresh = await listAssets({ caseId: subject.id });
       if (!fresh.ok || unmounted.current) return null;
       const media = fresh.value.filter(isMedia);
       // A star still saving keeps the value it shows.
@@ -261,7 +294,7 @@ export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES,
     const set = (value: boolean) => setFiles((current) => current.map((f) => (f.id === file.id ? { ...f, isFavourite: value } : f)));
     set(next);
     try {
-      const saved = await setAssetFavourite({ caseId, assetId: file.id, isFavourite: next });
+      const saved = await setAssetFavourite({ caseId: subject.id, assetId: file.id, isFavourite: next });
       if (!saved.ok) throw new Error(saved.error.code);
     } catch {
       if (!unmounted.current) {
@@ -278,6 +311,9 @@ export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES,
     FILE_TOO_LARGE: fill(materialCopy.errors.tooLarge, { size: Math.round(rules.maxFileBytes / (1024 * 1024)) }),
     FILE_TYPE_NOT_ALLOWED: copy.errors.type,
     UPLOAD_REJECTED: materialCopy.errors.rejected,
+    // Client mode (Story 4.11a): the client panel's own messages.
+    CLIENT_MATERIAL_LIMIT: fill(clientCopy.errors.limit, { max: rules.maxFiles }),
+    ...(rules.imagePixels === undefined ? {} : { CLIENT_IMAGE_SIZE_INVALID: fill(clientCopy.errors.pixels, rules.imagePixels) }),
   };
 
   function classify(code: string): Attempt {
@@ -288,12 +324,18 @@ export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES,
   async function attempt(file: File, contentType: string): Promise<Attempt> {
     let confirming: string | undefined;
     try {
-      const presigned = await presignAssetUpload({ caseId, contentType, sizeBytes: file.size });
+      const presigned =
+        subject.kind === "client_intro"
+          ? await requestClientMaterialUpload({ clientId: subject.clientId, contentType, sizeBytes: file.size })
+          : await presignAssetUpload({ caseId: subject.id, contentType, sizeBytes: file.size });
       if (!presigned.ok) return classify(presigned.error.code);
       const { assetId, url, method, headers } = presigned.value;
       await uploadFile({ url, method, headers }, file, () => {});
       confirming = assetId;
-      const confirmed = await confirmAssetUpload({ caseId, assetId, contentType, fileName: file.name });
+      const confirmed =
+        subject.kind === "client_intro"
+          ? await confirmClientMaterialUpload({ clientId: subject.clientId, assetId, contentType, fileName: file.name })
+          : await confirmAssetUpload({ caseId: subject.id, assetId, contentType, fileName: file.name });
       if (!confirmed.ok) {
         const outcome = classify(confirmed.error.code);
         return outcome.kind === "retry" && confirmed.status >= 500 ? { kind: "retry", unconfirmed: assetId } : outcome;
@@ -390,19 +432,26 @@ export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES,
     <div hidden={hidden} onDragOver={onDragOver} onDrop={onDrop} className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3.5">
         {shown.length > 0 ? (
-          <ul aria-label={copy.label} className={listClass(view)}>
-            {shown.map((file) => (
-              <MediaTile
-                key={file.id}
-                file={file}
-                view={view}
-                onPage={onPage.has(file.id.toLowerCase())}
-                videoUrl={videoUrlOf(assets, file.id)}
-                onStar={(f) => void star(f)}
-                onPick={onPick}
-              />
-            ))}
-          </ul>
+          <>
+            {clientMode && (
+              <h3 id={ownHeadingId} className={EYEBROW}>
+                {copy.clientGroup}
+              </h3>
+            )}
+            <ul {...(clientMode ? { "aria-labelledby": ownHeadingId } : { "aria-label": copy.label })} className={listClass(view)}>
+              {shown.map((file) => (
+                <MediaTile
+                  key={file.id}
+                  file={file}
+                  view={view}
+                  onPage={onPage.has(file.id.toLowerCase())}
+                  videoUrl={videoUrlOf(assets, file.id)}
+                  onStar={clientMode ? undefined : (f) => void star(f)}
+                  onPick={onPick}
+                />
+              ))}
+            </ul>
+          </>
         ) : q !== "" && clientShown.length > 0 ? null : files.length === 0 && (q === "" || clientFiles.length === 0) ? (
           <p className="font-label text-[12.5px] text-foreground-muted">{copy.empty}</p>
         ) : (
@@ -411,7 +460,7 @@ export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES,
         {clientShown.length > 0 && (
           <div className={cn(shown.length > 0 || q === "" ? "mt-5" : undefined)}>
             <h3 id={clientHeadingId} className={EYEBROW}>
-              {copy.clientGroup}
+              {clientMode ? copy.casesGroup : copy.clientGroup}
             </h3>
             <ul aria-labelledby={clientHeadingId} className={listClass(view)}>
               {clientShown.map((file) => (
@@ -457,7 +506,7 @@ export function MediaTab({ hidden, caseId, initialFiles, clientFiles = NO_FILES,
         >
           <b className="block font-label text-[13.5px] font-semibold text-foreground">{copy.drop.lead}</b>
           <span id={hintId} aria-live="polite" className="font-label text-[12.5px] text-foreground-muted">
-            {uploading > 0 ? fill(copy.drop.uploading, { n: uploading }) : copy.drop.hint}
+            {uploading > 0 ? fill(copy.drop.uploading, { n: uploading }) : clientMode ? copy.drop.clientHint : copy.drop.hint}
           </span>
         </div>
         <input

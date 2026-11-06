@@ -193,6 +193,10 @@ export const it = {
     eyebrow: "Nuova case history",
     /** Accessible name of the top bar's back arrow. */
     back: "Torna alle case history",
+    /** Client mode (Story 4.11a): the back arrow goes to the client page. */
+    clientBack: "Torna al cliente",
+    /** Client mode (Story 4.11a): the top bar's title; `{name}` is the client's. */
+    clientTitle: "{name} · Pagine cliente",
     /** Read by screen readers before the case history code in the top bar. */
     caseId: "ID",
     stepper: {
@@ -472,6 +476,10 @@ export const it = {
       back: "Clienti",
       /** Before the intro's status badge (Story 3.11): "Introduzione: Da approvare". */
       intro: "Introduzione:",
+      /** After the intro's badge (Story 4.11a): opens the intro and outro in the configurator. */
+      openIntro: "Apri",
+      /** **Apri**'s accessible name; `{status}` is the intro's status. */
+      openIntroLabel: "Apri l'introduzione e la chiusura ({status}) nel configuratore",
     },
   },
   /**
@@ -841,6 +849,10 @@ export const it = {
   configurator: {
     /** Accessible name of the top bar's back arrow. */
     back: "Torna alle case history",
+    /** Client mode (Story 4.11a): the back arrow goes to the client page. */
+    clientBack: "Torna al cliente",
+    /** Client mode (Story 4.11a): the top bar's title; `{name}` is the client's. */
+    clientTitle: "{name} · Pagine cliente",
     /** Read by screen readers before the code in the top bar. */
     codeLabel: "ID",
     /** Below 1024 px, instead of the frame. */
@@ -986,6 +998,12 @@ export const it = {
       intro: "Intro",
       output: "Output",
       risultati: "Risultati",
+    },
+    /** Client mode (Story 4.11a): a client's pages grouped by role. `body` arrives with the client file (4.12). */
+    clientSections: {
+      intro: "Introduzione",
+      body: "Progetti del cliente",
+      outro: "Chiusura",
     },
     panels: {
       left: "Proprietà",
@@ -1179,6 +1197,8 @@ export const it = {
       label: "Media della case",
       /** The client's images and videos, below the case's (Story 4.5c-2): a heading and the list's name. */
       clientGroup: "Del cliente",
+      /** Client mode (Story 4.11a): the images and videos of the client's cases, below the client's own. */
+      casesGroup: "Dalle sue case",
       empty: "Ancora nessuna immagine o video. Trascinali qui sotto.",
       /** `{query}` is the search text. */
       noMatch: "Nessun file per “{query}”.",
@@ -1193,6 +1213,8 @@ export const it = {
       drop: {
         lead: "Trascina qui immagini e video",
         hint: "Finiscono nei Media di questa case.",
+        /** Client mode (Story 4.11a): uploads go to the client. */
+        clientHint: "Finiscono nei Media di questo cliente.",
         /** After `lead` in the drop zone's accessible name: as a button it opens the file picker. */
         choose: "oppure sceglili dai file",
         /** `{n}` files still uploading. */
@@ -1296,6 +1318,10 @@ export const it = {
   caseView: {
     /** Accessible name of the top bar's back arrow. */
     back: "Torna alle case history",
+    /** Client mode (Story 4.11a): the back arrow goes to the client page. */
+    clientBack: "Torna al cliente",
+    /** Client mode (Story 4.11a): the top bar's title; `{name}` is the client's. */
+    clientTitle: "{name} · Pagine cliente",
     /** Opens the configurator. */
     edit: "Modifica",
     /** The collections the case appears in (filled by Story 5.10; empty until then). */

@@ -18,7 +18,7 @@ function setup(over: Partial<UseDocumentOptions> = {}) {
   const save = vi.fn<Save>(okSave);
   const onStale = vi.fn();
   const options: UseDocumentOptions = {
-    caseId: "aaaaaaaa-0000-4000-8000-000000000001",
+    subject: { kind: "case", id: "aaaaaaaa-0000-4000-8000-000000000001" },
     revision: { id: "dddddddd-0000-4000-8000-000000000001", version: 4, editable: true },
     base: { schemaVersion: 2, kind: "case_history", template: "mac-case@1" },
     initial: START,
@@ -297,7 +297,7 @@ describe("useDocument on an approved case (Story 4.9)", () => {
   it("follows a new headVersion prop after a refresh", async () => {
     const fork = vi.fn<Fork>(fresh);
     const options = (headVersion: number): UseDocumentOptions => ({
-      caseId: CASE,
+      subject: { kind: "case", id: CASE },
       revision: { id: APPROVED, version: 2, editable: true, fork: true },
       base: { schemaVersion: 2, kind: "case_history", template: "mac-case@1" },
       initial: START,

@@ -133,7 +133,7 @@ function setup(
 ) {
   return render(
     <Configurator
-      caseId={CASE_ID}
+      subject={{ kind: "case", id: CASE_ID }}
       revision={trial ? null : { id: REVISION_ID, version: 4, editable, kind: "case_history", ...(fork === undefined ? {} : { fork }) }}
       onSave={onSave}
       header={{ name: "Rebrand Lumen", code: "LUM-2026-01", status }}
@@ -4245,7 +4245,7 @@ describe("Configurator drag-and-drop on the canvas (Story 4.3e)", () => {
 
   it("elements still drag after the page redraws for new bound values", () => {
     const props = (values: BoundValues, assets: ConfiguratorProps["assets"]): ConfiguratorProps => ({
-      caseId: CASE_ID,
+      subject: { kind: "case", id: CASE_ID },
       revision: { id: REVISION_ID, version: 4, editable: true, kind: "case_history" },
       onSave: vi.fn(savedOk),
       header: { name: "Rebrand Lumen", code: "LUM-2026-01", status: "in_review" },

@@ -197,6 +197,19 @@ describe("ClientPage", () => {
       expect(html).toMatch(new RegExp(`<p role="status" aria-live="polite" data-intro-status="${status}"[^>]*><span>${dict.clients.detail.intro}</span><span data-status="${status}"[^>]*>${label}</span></p>`));
     });
 
+    it.each(["in_review", "approved"] as const)("offers Apri to the intro's configurator once it is %s (Story 4.11a)", async (status) => {
+      getClientIntro.mockResolvedValue(ok(intro(status)));
+      const html = await renderPage();
+      const open = html.match(new RegExp(`<a [^>]*>${dict.clients.detail.openIntro}</a>`))?.[0] ?? "";
+      expect(open).toContain(`href="/clients/${LUMEN.id}/configurator"`);
+    });
+
+    it.each(["generating", "draft"] as const)("offers no Apri while the intro is %s", async (status) => {
+      getClientIntro.mockResolvedValue(ok(intro(status)));
+      const html = await renderPage();
+      expect(html).not.toContain(`/clients/${LUMEN.id}/configurator`);
+    });
+
     it("throws into the error boundary when the intro can't be read", async () => {
       getClientIntro.mockResolvedValue(err({ code: "CLIENT_INTRO_LOOKUP_FAILED", message: "down" }));
       await expect(renderPage()).rejects.toThrow(/CLIENT_INTRO_LOOKUP_FAILED/);

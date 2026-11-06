@@ -128,7 +128,7 @@ export default async function ConfiguratorPage({ params }: ConfiguratorPageProps
     <Configurator
       key={head === null ? "trial" : `${head.id}:${head.version}:${editable}`}
       revision={head === null ? null : { id: head.id, version: head.version, editable, kind: head.doc.kind, fork }}
-      caseId={id}
+      subject={{ kind: "case", id }}
       onSave={saveRevisionDoc}
       header={{ name: current.name, code: current.code, status: current.status }}
       back={{ href: "/case-studies", label: it.configurator.back }}

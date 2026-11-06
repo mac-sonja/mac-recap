@@ -13,11 +13,13 @@ import { FORMAT_IDS, starterPages } from "@/modules/rendering";
 import { err, ok } from "@/shared/result";
 import {
   makeApprove,
+  makeApproveIntro,
   makeCreateWorkingRevision,
   makeDiscardHead,
   makeForkHead,
   makeGetEditableRevision,
   makeGetLiveRevision,
+  makeSaveIntroRevisionDoc,
   makeSaveRevisionDoc,
   referencedAssetIds,
   type CaseAssetIds,
@@ -760,5 +762,143 @@ describe("editing an approved case (Story 4.9)", () => {
     expect((await makeApprove(deps)(actor, input)).ok).toBe(true);
     expect(deps.revisions.approve).toHaveBeenCalledTimes(1);
     expect(deps.revisions.updateApproved).not.toHaveBeenCalled();
+  });
+});
+
+describe("client intro save and approve (Story 4.11a)", () => {
+  const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
+  const CASE_A = "11111111-0000-4000-8000-0000000000a1";
+  const CASE_B = "11111111-0000-4000-8000-0000000000b1";
+  const CLIENT_FILE = "aaaaaaaa-0000-4000-8000-0000000000c1";
+  const CASE_FILE = "aaaaaaaa-0000-4000-8000-0000000000a9";
+  const doc = () => clientIntroV2(FORMAT_IDS);
+  const refs = () => [...referencedAssetIds(doc())];
+  const clear = () => Object.fromEntries(Object.keys(doc().formats).map((id) => [id, false]));
+  const head = (over: Partial<Revision> = {}) => stored(HEAD_ID, doc(), { caseId: null, clientIntroId: INTRO_ID, version: 3, ...over });
+
+  /** The intro, its revisions, the client's files and each case's live files. */
+  function introDeps(rows: Revision[] = [head()], clientFiles: string[] = [...refs(), CLIENT_FILE], live: Record<string, string[]> = { [CASE_A]: [CASE_FILE], [CASE_B]: [] }) {
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return {
+      revisions: { findById: vi.fn<RevisionRepository["findById"]>(async (id) => ok(byId.get(id) ?? null)) },
+      intros: {
+        findById: vi.fn<ClientIntroRepository["findById"]>(async () => ok(clientIntro({ clientId: CLIENT_ID, headRevisionId: HEAD_ID }))),
+        saveDoc: vi.fn<ClientIntroRepository["saveDoc"]>(async (input) => ok({ ...byId.get(input.revisionId)!, doc: input.doc, version: input.expectedVersion + 1 })),
+        approve: vi.fn<ClientIntroRepository["approve"]>(async (input) => ok({ ...byId.get(input.revisionId)!, status: "approved" })),
+      },
+      cases: { list: vi.fn<CaseStudyRepository["list"]>(async () => ok(Object.keys(live).map((id) => ({ id }) as never))) },
+      clients: { listAssets: vi.fn<ClientRepository["listAssets"]>(async () => ok(clientFiles.map((id) => ({ id }) as ClientAsset))) },
+      caseAssetIds: vi.fn<CaseAssetIds>(async (caseId) => ok(live[caseId] ?? [])),
+    };
+  }
+
+  describe("saveIntroRevisionDoc", () => {
+    const withMedia = (assetId: string) => {
+      const edited = doc();
+      edited.formats.presentazione_16_9!.pages[0]!.background = { kind: "image", assetId };
+      return edited;
+    };
+    const input = (over: Record<string, unknown> = {}) => ({ clientIntroId: INTRO_ID, revisionId: HEAD_ID, doc: doc(), expectedVersion: 3, ...over });
+
+    it("saves the intro's head through the intro repository, once, with the expected version", async () => {
+      const d = introDeps();
+      const result = await makeSaveIntroRevisionDoc(d)(actor, input());
+      expect(result).toMatchObject({ ok: true, value: { version: 4 } });
+      expect(d.intros.saveDoc).toHaveBeenCalledWith({ revisionId: HEAD_ID, doc: doc(), expectedVersion: 3, actorId: actor.id });
+    });
+
+    it.each([
+      ["a client file", CLIENT_FILE],
+      ["a live file of one of the client's cases", CASE_FILE],
+    ])("lets a page newly place %s", async (_name, assetId) => {
+      const d = introDeps();
+      expect((await makeSaveIntroRevisionDoc(d)(actor, input({ doc: withMedia(assetId) }))).ok).toBe(true);
+      expect(d.cases.list).toHaveBeenCalledWith({ clientId: CLIENT_ID });
+    });
+
+    it("refuses a file that is neither the client's nor its cases' with ASSET_NOT_ALLOWED", async () => {
+      const d = introDeps();
+      const foreign = "aaaaaaaa-0000-4000-8000-0000000000f1";
+      expect(await makeSaveIntroRevisionDoc(d)(actor, input({ doc: withMedia(foreign) }))).toMatchObject({
+        ok: false,
+        error: { code: "ASSET_NOT_ALLOWED", details: { assetIds: [foreign] } },
+      });
+      expect(d.intros.saveDoc).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["an unknown revision", [] as Revision[]],
+      ["a case's revision", [stored(HEAD_ID, doc(), { version: 3 })]],
+      ["another intro's revision", [head({ clientIntroId: "44444444-0000-4000-8000-000000000009" })]],
+    ])("refuses %s with NOT_FOUND", async (_name, rows) => {
+      const d = introDeps(rows);
+      expect(await makeSaveIntroRevisionDoc(d)(actor, input())).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+      expect(d.intros.saveDoc).not.toHaveBeenCalled();
+    });
+
+    it("refuses a case document with DOCUMENT_INVALID", async () => {
+      const d = introDeps();
+      expect(await makeSaveIntroRevisionDoc(d)(actor, input({ doc: caseHistoryV2(FORMAT_IDS) }))).toMatchObject({ ok: false, error: { code: "DOCUMENT_INVALID" } });
+      expect(d.intros.saveDoc).not.toHaveBeenCalled();
+    });
+
+    it("passes the database's refusal through", async () => {
+      const d = introDeps();
+      d.intros.saveDoc.mockResolvedValue(err({ code: "STALE_REVISION", message: "m" }));
+      expect(await makeSaveIntroRevisionDoc(d)(actor, input())).toMatchObject({ ok: false, error: { code: "STALE_REVISION" } });
+    });
+  });
+
+  describe("approveIntro", () => {
+    const input = (over: Record<string, unknown> = {}) => ({
+      clientIntroId: INTRO_ID,
+      revisionId: HEAD_ID,
+      expectedRevisionVersion: 3,
+      expectedHeadVersion: 2,
+      overflow: clear(),
+      ...over,
+    });
+
+    it("approves once through the intro repository when every format is clear and the material is there", async () => {
+      const d = introDeps();
+      expect(await makeApproveIntro(d)(actor, input())).toMatchObject({ ok: true, value: { status: "approved" } });
+      expect(d.intros.approve).toHaveBeenCalledWith({ clientIntroId: INTRO_ID, revisionId: HEAD_ID, expectedRevisionVersion: 3, expectedHeadVersion: 2, actorId: actor.id });
+    });
+
+    it("counts the live files of the client's cases as present", async () => {
+      const [first, ...rest] = refs();
+      const d = introDeps([head()], rest, { [CASE_A]: [first!] });
+      expect((await makeApproveIntro(d)(actor, input())).ok).toBe(true);
+    });
+
+    it("refuses a placed case image since deleted with MATERIAL_MISSING, writing nothing", async () => {
+      const [gone, ...rest] = refs();
+      const d = introDeps([head()], rest, { [CASE_A]: [] });
+      expect(await makeApproveIntro(d)(actor, input())).toMatchObject({ ok: false, error: { code: "MATERIAL_MISSING", details: { assetIds: [gone] } } });
+      expect(d.intros.approve).not.toHaveBeenCalled();
+    });
+
+    it("refuses an overflowing format with OVERFLOW_NOT_CLEARED, writing nothing", async () => {
+      const d = introDeps();
+      expect(await makeApproveIntro(d)(actor, input({ overflow: { ...clear(), carosello_1_1: true } }))).toMatchObject({ ok: false, error: { code: "OVERFLOW_NOT_CLEARED" } });
+      expect(d.intros.approve).not.toHaveBeenCalled();
+    });
+
+    it("refuses a revision newer than the one measured with STALE_REVISION", async () => {
+      const d = introDeps([head({ version: 4 })]);
+      expect(await makeApproveIntro(d)(actor, input())).toMatchObject({ ok: false, error: { code: "STALE_REVISION" } });
+      expect(d.intros.approve).not.toHaveBeenCalled();
+    });
+
+    it("refuses a case's revision with NOT_FOUND", async () => {
+      const d = introDeps([stored(HEAD_ID, doc(), { version: 3 })]);
+      expect(await makeApproveIntro(d)(actor, input())).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    });
+
+    it("passes the database's refusal through", async () => {
+      const d = introDeps();
+      d.intros.approve.mockResolvedValue(err({ code: "CASE_NOT_APPROVABLE", message: "m" }));
+      expect(await makeApproveIntro(d)(actor, input())).toMatchObject({ ok: false, error: { code: "CASE_NOT_APPROVABLE" } });
+    });
   });
 });

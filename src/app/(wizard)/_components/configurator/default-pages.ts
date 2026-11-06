@@ -1,5 +1,14 @@
 import type { CaseStudyDocument, ClaimAspect, DocumentElement, DocumentMaterialRef, Page, TextElement } from "@/modules/generation";
-import { FORMAT_IDS, starterPages, TEMPLATE_TEXT_KEYS, type DefaultPage, type FormatId, type TemplateTextKey } from "@/modules/rendering";
+import {
+  CLIENT_TEMPLATE_TEXT_KEYS,
+  FORMAT_IDS,
+  starterPages,
+  TEMPLATE_TEXT_KEYS,
+  type ClientTemplateTextKey,
+  type DefaultPage,
+  type FormatId,
+  type TemplateTextKey,
+} from "@/modules/rendering";
 import type { PageEdit } from "./page-editing";
 
 /**
@@ -11,6 +20,9 @@ import type { PageEdit } from "./page-editing";
  * builders (`buildCaseDocument` → `starterPages`). Building them again with a marker as
  * each key's text shows where every key's words sit, and the generated document holds
  * the AI's (or the test draft's) words in that place.
+ *
+ * Story 4.11a: a client's intro reads the client template's keys (`introHead`, `introBody`,
+ * `outroHead`, `outroBody`) the same way.
  */
 
 /** One generated text: its words and, as generated, the material it cites and the side of the work it covers. */
@@ -20,14 +32,19 @@ export interface GeneratedText {
   aspect?: ClaimAspect;
 }
 
+/** A template text key: a case template's, or (Story 4.11a) a client template's. */
+type TextKey = TemplateTextKey | ClientTemplateTextKey;
+/** Every key a template may fill, case and client. */
+const TEXT_KEYS: readonly TextKey[] = [...TEMPLATE_TEXT_KEYS, ...CLIENT_TEMPLATE_TEXT_KEYS];
+
 /** A format's generated texts by template key; a key it doesn't show is missing. */
-export type FormatTexts = Readonly<Partial<Record<TemplateTextKey, GeneratedText>>>;
+export type FormatTexts = Readonly<Partial<Record<TextKey, GeneratedText>>>;
 export type GeneratedTexts = Readonly<Partial<Record<FormatId, FormatTexts>>>;
 
 /** Never typed by a person or written by the AI: the brackets and the prefix keep it apart from any real text. */
-const marker = (key: TemplateTextKey) => `⟦mac-recap:${key}⟧`;
-const MARKERS: Readonly<Partial<Record<TemplateTextKey, string>>> = Object.fromEntries(TEMPLATE_TEXT_KEYS.map((key) => [key, marker(key)]));
-const KEY_OF: ReadonlyMap<string, TemplateTextKey> = new Map(TEMPLATE_TEXT_KEYS.map((key) => [marker(key), key]));
+const marker = (key: TextKey) => `⟦mac-recap:${key}⟧`;
+const MARKERS: Readonly<Partial<Record<TextKey, string>>> = Object.fromEntries(TEXT_KEYS.map((key) => [key, marker(key)]));
+const KEY_OF: ReadonlyMap<string, TextKey> = new Map(TEXT_KEYS.map((key) => [marker(key), key]));
 
 /** A block's text elements in reading order, inside Testi groups and rows too. */
 function textsIn(elements: readonly DocumentElement[]): TextElement[] {
@@ -38,6 +55,9 @@ function textsIn(elements: readonly DocumentElement[]): TextElement[] {
     return [];
   });
 }
+
+/** The result rows and testimonial the marker builds try, the plainest first. */
+const MARKER_SHAPES = [0, 1, 2, 3].flatMap((resultRows) => [false, true].map((hasTestimonial) => ({ resultRows, hasTestimonial })));
 
 /** Ids for marker builds only: never stored. */
 const throwawayIds = () => {
@@ -54,9 +74,12 @@ export function generatedTextsOf(doc: CaseStudyDocument | null): GeneratedTexts 
   if (doc === null) return {};
   return Object.fromEntries(
     FORMAT_IDS.map((formatId) => {
-      const found: Partial<Record<TemplateTextKey, GeneratedText>> = {};
+      const found: Partial<Record<TextKey, GeneratedText>> = {};
       const generated = doc.formats[formatId]?.pages ?? [];
-      const marked = starterPages(doc.template, doc.kind, formatId, { newId: throwawayIds(), texts: MARKERS, images: [], resultRows: 0, hasTestimonial: false });
+      // Each row count and testimonial: a Risultati page (where a client template puts its outro texts) is built only with one.
+      const marked = MARKER_SHAPES.flatMap(({ resultRows, hasTestimonial }) =>
+        starterPages(doc.template, doc.kind, formatId, { newId: throwawayIds(), texts: MARKERS, images: [], resultRows, hasTestimonial }),
+      );
       for (const page of marked) {
         const twin = generated.find((p) => p.pageKey === page.pageKey);
         if (twin === undefined || twin.blocks.length !== page.blocks.length) continue;

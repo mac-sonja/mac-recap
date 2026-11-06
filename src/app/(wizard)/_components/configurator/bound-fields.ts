@@ -28,6 +28,26 @@ export interface EditableFields {
   case: { year: number; businessLines: readonly BusinessLine[]; results: readonly FieldResult[]; testimonial: { quote: string; author: string } };
 }
 
+/**
+ * Story 4.11a, client mode (a client's intro and outro): the client's fields only. Its pages
+ * bind the client's own result rows and testimonial, saved through `saveClientResults` and
+ * `saveClientTestimonial`; no case binding is offered.
+ */
+export interface ClientEditableFields {
+  client: EditableFields["client"];
+  /** The client's own result rows and testimonial (its brief), which the outro binds to. */
+  record: { results: readonly FieldResult[]; testimonial: { quote: string; author: string } };
+}
+
+/** Either mode's stored fields: a case's (with its client's), or a client's own (client mode). */
+export type AnyEditableFields = EditableFields | ClientEditableFields;
+
+/** Whether the fields are client mode's (Story 4.11a). */
+export const isClientFields = (fields: AnyEditableFields): fields is ClientEditableFields => !("case" in fields);
+
+/** The result rows and the testimonial the pages bind to: the case's, or in client mode the client's own. */
+export const recordOf = (fields: AnyEditableFields): ClientEditableFields["record"] => (isClientFields(fields) ? fields.record : fields.case);
+
 /** What the panel and the checks need beside the values (from the server: the module's index is server-only). */
 export interface FieldOptions {
   /** The shared sector list (`listClientSectors`), in display order. */
@@ -43,6 +63,8 @@ export interface FieldOptions {
 /** Which editor a bound element opens: typed on the page, or set in the left panel. */
 export type BoundEditor =
   | { kind: "name" }
+  /** Client mode only (Story 4.11a): the client's description. */
+  | { kind: "description" }
   | { kind: "resultLabel"; index: number }
   | { kind: "resultValue"; index: number }
   | { kind: "testimonialQuote" }
@@ -51,7 +73,7 @@ export type BoundEditor =
   | { kind: "services" }
   | { kind: "logos" };
 
-export type TypedEditor = Extract<BoundEditor, { kind: "name" | "resultLabel" | "resultValue" | "testimonialQuote" | "testimonialAuthor" }>;
+export type TypedEditor = Extract<BoundEditor, { kind: "name" | "description" | "resultLabel" | "resultValue" | "testimonialQuote" | "testimonialAuthor" }>;
 export type PanelEditor = Extract<BoundEditor, { kind: "meta" | "services" | "logos" }>;
 
 export const isTypedEditor = (editor: BoundEditor | null): editor is TypedEditor =>
@@ -62,11 +84,16 @@ const isMetaBinding = (b: { record: string; field: string }) => (b.record === "c
 
 /**
  * The editor of a bound element, or null for anything else: an own text, the client's
- * description and the client's own results and testimonial (4.11), and every other element.
- * The meta line ("sector · year", or either alone) goes to the panel's year field.
+ * description and the client's own results and testimonial (client mode's), and every other
+ * element. The meta line ("sector · year", or either alone) goes to the panel's year field.
+ *
+ * Client mode (Story 4.11a, `mode` "client"): only the client's bindings: the name, the
+ * description and its own result rows and testimonial typed on the page, the sector in the
+ * panel (as a meta line with no year), the logos. No case binding, no services.
  */
-export function boundEditorOf(el: DocumentElement | undefined): BoundEditor | null {
+export function boundEditorOf(el: DocumentElement | undefined, mode: "case" | "client" = "case"): BoundEditor | null {
   if (el === undefined) return null;
+  if (mode === "client") return clientEditorOf(el);
   if (el.type === "services") return { kind: "services" };
   if (el.type === "logos") return { kind: "logos" };
   if (el.type !== "text") return null;
@@ -87,25 +114,56 @@ export function boundEditorOf(el: DocumentElement | undefined): BoundEditor | nu
   }
 }
 
+/** Client mode's editor of a bound element (Story 4.11a): the client's fields only. */
+function clientEditorOf(el: DocumentElement): BoundEditor | null {
+  if (el.type === "logos") return { kind: "logos" };
+  if (el.type !== "text") return null;
+  const isSector = (b: { record: string; field: string }) => b.record === "client" && b.field === "sector";
+  if (el.bindings !== undefined) return el.bindings.every(isSector) ? { kind: "meta" } : null;
+  const b = el.binding;
+  if (b === undefined || b.record !== "client") return null;
+  switch (b.field) {
+    case "name":
+      return { kind: "name" };
+    case "sector":
+      return { kind: "meta" };
+    case "description":
+      return { kind: "description" };
+    case "resultLabel":
+    case "resultValue":
+      return b.index === undefined ? null : { kind: b.field, index: b.index };
+    case "testimonialQuote":
+    case "testimonialAuthor":
+      return { kind: b.field };
+    default:
+      return null;
+  }
+}
+
 /** The stored words a typed editor starts from (the quote without the template's « »). */
-export function typedValueOf(editor: TypedEditor, fields: EditableFields): string {
+export function typedValueOf(editor: TypedEditor, fields: AnyEditableFields): string {
+  const record = recordOf(fields);
   switch (editor.kind) {
     case "name":
       return fields.client.name;
+    case "description":
+      return fields.client.description;
     case "resultLabel":
-      return fields.case.results[editor.index]?.label ?? "";
+      return record.results[editor.index]?.label ?? "";
     case "resultValue":
-      return fields.case.results[editor.index]?.value ?? "";
+      return record.results[editor.index]?.value ?? "";
     case "testimonialQuote":
-      return fields.case.testimonial.quote;
+      return record.testimonial.quote;
     case "testimonialAuthor":
-      return fields.case.testimonial.author;
+      return record.testimonial.author;
   }
 }
 
 /** One change to one field. */
 export type FieldChange =
   | { field: "name"; text: string }
+  /** Client mode only (Story 4.11a). */
+  | { field: "description"; text: string }
   | { field: "resultLabel" | "resultValue"; index: number; text: string }
   | { field: "testimonialQuote" | "testimonialAuthor"; text: string }
   /** `label`: the sector's name, for one just added (not in the loaded list yet). */
@@ -124,32 +182,47 @@ export type FieldSave =
   | { action: "updateClient"; input: { clientId: string; name: string; industry: string; description: string; logoId: string } }
   | { action: "updateCaseFields"; input: { caseId: string; year: number; businessLines: BusinessLine[] } }
   | { action: "saveCaseResults"; input: { caseId: string; results: FieldResult[] } }
-  | { action: "saveCaseTestimonial"; input: { caseId: string; quote: string; author: string } };
+  | { action: "saveCaseTestimonial"; input: { caseId: string; quote: string; author: string } }
+  /** Client mode (Story 4.11a): the client's own result rows and testimonial. */
+  | { action: "saveClientResults"; input: { clientId: string; results: FieldResult[] } }
+  | { action: "saveClientTestimonial"; input: { clientId: string; quote: string; author: string } };
 
 /**
  * The saves a field edit goes through (the page passes the server actions): the client's
  * `updateClient` and `addClientSector` (`manage clients`), the case's `updateCaseFields`,
- * `saveCaseResults` and `saveCaseTestimonial` (`fill details`).
+ * `saveCaseResults` and `saveCaseTestimonial` (`fill details`). Client mode (Story 4.11a)
+ * passes the client's `saveClientResults` and `saveClientTestimonial` instead of the case's.
  */
 export interface FieldActions {
   updateClient: (input: Extract<FieldSave, { action: "updateClient" }>["input"]) => Promise<ActionResult<unknown>>;
   addClientSector: (input: { label: string }) => Promise<ActionResult<ClientSector>>;
-  updateCaseFields: (input: Extract<FieldSave, { action: "updateCaseFields" }>["input"]) => Promise<ActionResult<unknown>>;
-  saveCaseResults: (input: Extract<FieldSave, { action: "saveCaseResults" }>["input"]) => Promise<ActionResult<unknown>>;
-  saveCaseTestimonial: (input: Extract<FieldSave, { action: "saveCaseTestimonial" }>["input"]) => Promise<ActionResult<unknown>>;
+  updateCaseFields?: (input: Extract<FieldSave, { action: "updateCaseFields" }>["input"]) => Promise<ActionResult<unknown>>;
+  saveCaseResults?: (input: Extract<FieldSave, { action: "saveCaseResults" }>["input"]) => Promise<ActionResult<unknown>>;
+  saveCaseTestimonial?: (input: Extract<FieldSave, { action: "saveCaseTestimonial" }>["input"]) => Promise<ActionResult<unknown>>;
+  saveClientResults?: (input: Extract<FieldSave, { action: "saveClientResults" }>["input"]) => Promise<ActionResult<unknown>>;
+  saveClientTestimonial?: (input: Extract<FieldSave, { action: "saveClientTestimonial" }>["input"]) => Promise<ActionResult<unknown>>;
 }
+
+/** A save whose action the page did not pass (never in practice: each mode passes its own). */
+const NO_ACTION: ActionResult<never> = { ok: false, status: 500, error: { code: "FIELD_ACTION_MISSING", message: "No action for this field." } };
 
 /** Runs `save` through its action. */
 export function runFieldSave(actions: FieldActions, save: FieldSave): Promise<ActionResult<unknown>> {
+  const run = <I>(action: ((input: I) => Promise<ActionResult<unknown>>) | undefined, input: I) =>
+    action === undefined ? Promise.resolve(NO_ACTION) : action(input);
   switch (save.action) {
     case "updateClient":
       return actions.updateClient(save.input);
     case "updateCaseFields":
-      return actions.updateCaseFields(save.input);
+      return run(actions.updateCaseFields, save.input);
     case "saveCaseResults":
-      return actions.saveCaseResults(save.input);
+      return run(actions.saveCaseResults, save.input);
     case "saveCaseTestimonial":
-      return actions.saveCaseTestimonial(save.input);
+      return run(actions.saveCaseTestimonial, save.input);
+    case "saveClientResults":
+      return run(actions.saveClientResults, save.input);
+    case "saveClientTestimonial":
+      return run(actions.saveClientTestimonial, save.input);
   }
 }
 
@@ -160,7 +233,7 @@ export type FieldRefusal =
   | { reason: "tooLong"; max: number }
   | { reason: "yearRange"; min: number; max: number };
 
-export type FieldPlan = ({ ok: true; save: FieldSave; next: EditableFields }) | ({ ok: false } & FieldRefusal);
+export type FieldPlan<F extends AnyEditableFields = EditableFields> = ({ ok: true; save: FieldSave; next: F }) | ({ ok: false } & FieldRefusal);
 
 /** Typed words as stored: one line (a field has no line breaks), trimmed. */
 export const fieldText = (text: string) => text.replace(/\s*\n\s*/g, " ").trim();
@@ -168,7 +241,7 @@ export const fieldText = (text: string) => text.replace(/\s*\n\s*/g, " ").trim()
 /** Length in characters (code points), as the server counts the case's texts. */
 const chars = (text: string) => [...text].length;
 
-const refuse = (refusal: FieldRefusal): FieldPlan => ({ ok: false, ...refusal });
+const refuse = (refusal: FieldRefusal): { ok: false } & FieldRefusal => ({ ok: false, ...refusal });
 
 /**
  * The save that `change` makes on top of the stored `fields`, with the fields as they are
@@ -176,8 +249,21 @@ const refuse = (refusal: FieldRefusal): FieldPlan => ({ ok: false, ...refusal })
  * of the testimonial, the year with the services and the services with the year, as stored.
  * Words are trimmed; the same value again saves nothing (`unchanged`). The checks are the
  * server's, so most refusals never reach it.
+ *
+ * Client mode (Story 4.11a, `ClientEditableFields`): the client's own fields only; the result
+ * rows and the testimonial save through `saveClientResults` and `saveClientTestimonial`, the
+ * description through `updateClient`; a case field (year, service) saves nothing.
  */
-export function planFieldSave(fields: EditableFields, change: FieldChange, caseId: string, options: Pick<FieldOptions, "limits" | "years" | "businessLines">): FieldPlan {
+export function planFieldSave<F extends AnyEditableFields>(
+  fields: F,
+  change: FieldChange,
+  caseId: string,
+  options: Pick<FieldOptions, "limits" | "years" | "businessLines">,
+): FieldPlan<F> {
+  return (isClientFields(fields) ? planClientFieldSave(fields, change, options) : planCaseFieldSave(fields, change, caseId, options)) as FieldPlan<F>;
+}
+
+function planCaseFieldSave(fields: EditableFields, change: FieldChange, caseId: string, options: Pick<FieldOptions, "limits" | "years" | "businessLines">): FieldPlan {
   const { limits, years } = options;
   const client = fields.client;
   const story = fields.case;
@@ -208,6 +294,9 @@ export function planFieldSave(fields: EditableFields, change: FieldChange, caseI
       if (name.length > limits.nameMax) return refuse({ reason: "tooLong", max: limits.nameMax });
       return saveClient({ name });
     }
+    // Typed only in client mode (Story 4.11a): a case page never binds the description to an editor.
+    case "description":
+      return refuse({ reason: "unchanged" });
     case "sector":
       return change.key === client.industry ? refuse({ reason: "unchanged" }) : saveClient({ industry: change.key });
     case "logo":
@@ -257,6 +346,78 @@ export function planFieldSave(fields: EditableFields, change: FieldChange, caseI
   }
 }
 
+/** The client-mode half of `planFieldSave` (Story 4.11a). */
+function planClientFieldSave(fields: ClientEditableFields, change: FieldChange, options: Pick<FieldOptions, "limits">): FieldPlan<ClientEditableFields> {
+  const { limits } = options;
+  const client = fields.client;
+  const record = fields.record;
+
+  const saveClient = (patch: Partial<ClientEditableFields["client"]>): FieldPlan<ClientEditableFields> => {
+    const next = { ...client, ...patch };
+    if (next.logoId === null) return refuse({ reason: "needLogo" });
+    if (next.industry === null || next.description.trim() === "") return refuse({ reason: "needClientInfo" });
+    return {
+      ok: true,
+      save: { action: "updateClient", input: { clientId: next.id, name: next.name, industry: next.industry, description: next.description, logoId: next.logoId } },
+      next: { ...fields, client: next },
+    };
+  };
+
+  switch (change.field) {
+    case "name": {
+      const name = fieldText(change.text);
+      if (name === client.name) return refuse({ reason: "unchanged" });
+      if (name === "") return refuse({ reason: "required" });
+      if (name.length > limits.nameMax) return refuse({ reason: "tooLong", max: limits.nameMax });
+      return saveClient({ name });
+    }
+    case "description": {
+      // A paragraph: its line breaks stay, only the ends are trimmed.
+      const description = change.text.trim();
+      if (description === client.description) return refuse({ reason: "unchanged" });
+      if (description === "") return refuse({ reason: "required" });
+      if (chars(description) > limits.descriptionMax) return refuse({ reason: "tooLong", max: limits.descriptionMax });
+      return saveClient({ description });
+    }
+    case "sector":
+      return change.key === client.industry ? refuse({ reason: "unchanged" }) : saveClient({ industry: change.key });
+    case "logo":
+      return change.logoId === client.logoId ? refuse({ reason: "unchanged" }) : saveClient({ logoId: change.logoId });
+    case "year":
+    case "service":
+      // No case binding in client mode.
+      return refuse({ reason: "unchanged" });
+    case "resultLabel":
+    case "resultValue": {
+      const row = record.results[change.index];
+      if (row === undefined) return refuse({ reason: "noRow" });
+      const text = fieldText(change.text);
+      const key = change.field === "resultLabel" ? "label" : "value";
+      if (text === row[key]) return refuse({ reason: "unchanged" });
+      if (text === "") return refuse({ reason: "required" });
+      const max = key === "label" ? limits.resultLabelMax : limits.resultValueMax;
+      if (chars(text) > max) return refuse({ reason: "tooLong", max });
+      const results = record.results.map((r, i) => (i === change.index ? { ...r, [key]: text } : { ...r }));
+      return { ok: true, save: { action: "saveClientResults", input: { clientId: client.id, results } }, next: { ...fields, record: { ...record, results } } };
+    }
+    case "testimonialQuote":
+    case "testimonialAuthor": {
+      const text = fieldText(change.text);
+      const key = change.field === "testimonialQuote" ? "quote" : "author";
+      if (text === record.testimonial[key]) return refuse({ reason: "unchanged" });
+      const max = key === "quote" ? limits.testimonialQuoteMax : limits.testimonialAuthorMax;
+      if (chars(text) > max) return refuse({ reason: "tooLong", max });
+      const testimonial = { ...record.testimonial, [key]: text };
+      if (testimonial.quote === "" && testimonial.author !== "") return refuse({ reason: "authorWithoutQuote" });
+      return {
+        ok: true,
+        save: { action: "saveClientTestimonial", input: { clientId: client.id, quote: testimonial.quote, author: testimonial.author } },
+        next: { ...fields, record: { ...record, testimonial } },
+      };
+    }
+  }
+}
+
 /** The words for a refused change (never called for `unchanged`). */
 export function refusalMessage(refusal: Exclude<FieldRefusal, { reason: "unchanged" }>): string {
   const t = it.configurator.fields;
@@ -288,10 +449,25 @@ export interface ShownContext {
  * the page reloads the bound values: only what the fields hold changes. A new logo shows its
  * picked file (`logoUrl`) until then.
  */
-export function shownValues(values: BoundValues, next: EditableFields, change: FieldChange, ctx: ShownContext): BoundValues {
-  const story = next.case;
+export function shownValues(values: BoundValues, next: AnyEditableFields, change: FieldChange, ctx: ShownContext): BoundValues {
   const sector =
     change.field === "sector" && change.label !== undefined ? change.label : ctx.sectors.find((s) => s.key === next.client.industry)?.label;
+  // Client mode (Story 4.11a): the client's own description, rows and testimonial; the case's values stay.
+  if (isClientFields(next)) {
+    return {
+      client: {
+        ...values.client,
+        name: next.client.name,
+        description: next.client.description,
+        ...(sector === undefined ? {} : { sector }),
+        ...(change.field === "logo" && change.previewUrl !== null ? { logoUrl: change.previewUrl } : {}),
+        results: next.record.results.map((r) => ({ ...r })),
+        testimonial: next.record.testimonial.quote === "" ? null : { ...next.record.testimonial },
+      },
+      case: values.case,
+    };
+  }
+  const story = next.case;
   return {
     client: {
       ...values.client,

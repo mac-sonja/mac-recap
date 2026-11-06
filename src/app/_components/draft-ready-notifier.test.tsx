@@ -343,17 +343,25 @@ describe("DraftReadyNotifier (Story 3.8)", () => {
     const intro = { kind: "client_intro" as const, id: CLIENT_ID, name: "Lumen Srl", readyAt: "2026-11-04T10:00:03.000000+00:00" };
     const introTitle = fill(dict.draftReady.introTitle, { name: "Lumen Srl" });
 
-    it("toasts that the intro is ready and Apri opens the client page", async () => {
+    it("toasts that the intro is ready and Apri opens its configurator (Story 4.11a)", async () => {
       listReadyDrafts.mockResolvedValue({ ok: true, value: [intro] });
       await renderNotifier();
       await poll();
       expect(toasts()[0].textContent).toContain(introTitle);
       expect(liveRegion().textContent).toBe(introTitle);
-      expect(screen.getByRole("link", { name: dict.draftReady.open }).getAttribute("href")).toBe(`/clients/${CLIENT_ID}`);
+      expect(screen.getByRole("link", { name: dict.draftReady.open }).getAttribute("href")).toBe(`/clients/${CLIENT_ID}/configurator`);
     });
 
     it("gives no toast while the client's page is open", async () => {
       location.pathname = `/clients/${CLIENT_ID}`;
+      listReadyDrafts.mockResolvedValue({ ok: true, value: [intro] });
+      await renderNotifier();
+      await poll();
+      expect(toasts()).toHaveLength(0);
+    });
+
+    it("gives no toast while the intro's configurator is open", async () => {
+      location.pathname = `/clients/${CLIENT_ID}/configurator`;
       listReadyDrafts.mockResolvedValue({ ok: true, value: [intro] });
       await renderNotifier();
       await poll();

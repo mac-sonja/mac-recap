@@ -3,25 +3,29 @@
 import { LayoutGrid, List, PanelRight, Search } from "lucide-react";
 import { memo, useId, useMemo, useState, type Ref } from "react";
 import { SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
-import type { Page, PageSection } from "@/modules/generation";
+import type { Page } from "@/modules/generation";
 import type { ListedAsset } from "@/modules/material";
 import { renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { pageAssetIds, type MediaUploadRules } from "./media-files";
 import { MediaTab } from "./media-tab";
+import { groupLabelOf, type PageGroups } from "./page-groups";
 import { ASPECT, EYEBROW, ICON_BUTTON, SEG, SEG_BUTTON } from "./styles";
+import type { Subject } from "./use-document";
 
 /**
- * The pages in order, cut into runs of one section each, as the canvas groups them: a page
+ * The pages in order, cut into runs of one group each, as the canvas groups them: a page
  * moved into another section's place (Story 4.13) keeps its own label, where it now is.
+ * Client mode (Story 4.11a) groups by role: Introduzione, Chiusura.
  */
-function runsOf<T extends { page: Page }>(items: readonly T[]): { section: PageSection; items: T[] }[] {
-  const runs: { section: PageSection; items: T[] }[] = [];
+function runsOf<T extends { page: Page }>(items: readonly T[], groups: PageGroups): { label: string; items: T[] }[] {
+  const runs: { label: string; items: T[] }[] = [];
   for (const item of items) {
+    const label = groupLabelOf(item.page, groups);
     const last = runs.at(-1);
-    if (last !== undefined && last.section === item.page.section) last.items.push(item);
-    else runs.push({ section: item.page.section, items: [item] });
+    if (last !== undefined && last.label === label) last.items.push(item);
+    else runs.push({ label, items: [item] });
   }
   return runs;
 }
@@ -45,11 +49,13 @@ export interface RightPanelProps {
   onSelectPage: (pageKey: string) => void;
   /** A thumbnail dropped on another (Story 4.13); undefined: thumbnails don't drag. */
   onMovePage?: (from: string, to: string) => void;
-  /** The case whose Media the tab lists and uploads to (Story 4.5a). */
-  caseId: string;
-  /** The case's images and videos, oldest first. */
+  /** Whose Media the tab lists and uploads to: the case (Story 4.5a), or in client mode the intro's client (Story 4.11a). */
+  subject: Subject;
+  /** How Pagine groups the pages: by section (a case), or by role (client mode, Story 4.11a). */
+  pageGroups?: PageGroups;
+  /** The case's images and videos, oldest first; client mode: the client's. */
   media: readonly ListedAsset[];
-  /** The client's images and videos, in position order: the Media tab's "Del cliente" group (Story 4.5c-2). */
+  /** The client's images and videos, in position order: the Media tab's "Del cliente" group (Story 4.5c-2); client mode: its cases' ("Dalle sue case"). */
   clientMedia?: readonly ListedAsset[];
   mediaRules: MediaUploadRules;
   /** A message at the top of the canvas. */
@@ -110,7 +116,8 @@ export function RightPanel({
   currentPageKey,
   onSelectPage,
   onMovePage,
-  caseId,
+  subject,
+  pageGroups = "section",
   media,
   clientMedia,
   mediaRules,
@@ -187,10 +194,10 @@ export function RightPanel({
 
       <div hidden={tab !== "pages"} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3.5">
         {shown.length === 0 && q !== "" && <p className="font-label text-[12.5px] text-foreground-muted">{fill(it.configurator.noMatch, { query: query.trim() })}</p>}
-        {runsOf(shown).map(({ section, items: inSection }, run) => {
+        {runsOf(shown, pageGroups).map(({ label, items: inSection }, run) => {
           return (
-            <div key={`${section}-${run}`} className="mb-4 last:mb-0">
-              <p className={EYEBROW}>{it.configurator.sections[section]}</p>
+            <div key={`${label}-${run}`} className="mb-4 last:mb-0">
+              <p className={EYEBROW}>{label}</p>
               <div className="flex flex-col gap-1.5">
                 {inSection.map(({ page, number }) => (
                   <button
@@ -253,7 +260,7 @@ export function RightPanel({
       </div>
       <MediaTab
         hidden={tab !== "media"}
-        caseId={caseId}
+        subject={subject}
         initialFiles={media}
         clientFiles={clientMedia}
         rules={mediaRules}

@@ -44,7 +44,7 @@ export function makeGetClientIntroById(deps: { intros: ClientIntroRepository }) 
 /**
  * The only way a client intro's status changes (AD-3): the case transition table and the
  * same events, compare-and-set, with a `transition` client event `{ event, from, to }`.
- * `approve` is refused (`INVALID_TRANSITION`): intro approval arrives with Story 4.11. The
+ * `approve` is refused (`INVALID_TRANSITION`): an intro is approved only through `approveIntro` (Story 4.11a). The
  * caller has authorized the actor. Errors: `NOT_FOUND`, `INVALID_TRANSITION`,
  * `STALE_STATUS`; nothing is written on any of them.
  */

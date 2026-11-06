@@ -1,4 +1,6 @@
+import type { ListedClientAsset } from "@/modules/case-study";
 import type { ListedAsset } from "@/modules/material";
+import type { RenderAsset } from "@/modules/rendering";
 
 // The Media tab's plain helpers (Story 4.5a): no "use client", so the server page can use them too.
 
@@ -14,6 +16,8 @@ export interface MediaUploadRules {
   maxFileBytes: number;
   /** Image and video content types only. */
   contentTypes: readonly string[];
+  /** Client mode (Story 4.11a): a client image's pixel bounds, for the refusal's words. */
+  imagePixels?: { min: number; max: number };
 }
 
 /**
@@ -41,4 +45,32 @@ export function pageAssetIds(pages: unknown): Set<string> {
 export function formatLength(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/**
+ * The client's images and videos as the configurator's Media lists them (Story 4.5c-2,
+ * "Del cliente"), in position order, shaped as a case file's listing: never a favourite,
+ * never pending, the file name as listed on the client page. The tile shows the image's
+ * display copy (else its signed original) and the video's poster (else no thumbnail).
+ * PDFs and text files are left out: they never go on a page.
+ */
+export function clientMediaOf(files: readonly ListedClientAsset[], assets: Readonly<Record<string, RenderAsset>>): ListedAsset[] {
+  return files.flatMap((file): ListedAsset[] => {
+    if (file.kind !== "image" && file.kind !== "video") return [];
+    const drawn = assets[file.id];
+    const thumbnailUrl = file.kind === "image" ? (drawn?.url ?? file.thumbnailUrl) : drawn?.kind === "video" ? (drawn.posterUrl ?? null) : null;
+    return [
+      {
+        id: file.id,
+        kind: file.kind,
+        originalFileName: file.fileName,
+        contentType: file.contentType,
+        sizeBytes: file.sizeBytes,
+        createdAt: file.createdAt,
+        isFavourite: false,
+        thumbnailUrl,
+        thumbnailPending: false,
+      },
+    ];
+  });
 }
