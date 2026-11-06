@@ -2,7 +2,8 @@
 title: 'Story 4.11a: client intro and outro in the configurator (open, edit, approve)'
 type: 'feature'
 created: '2026-11-06'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: 'abe5489a0948c3c33fd1197dfaf1eb25d9c2ad20'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -26,6 +27,7 @@ context:
 - **Pages shown:** only the client's own pages, under **Introduzione** (role `intro`) and **Chiusura** (role `outro`). A8 (4.12) adds the cases between them.
 - **Images:** keep upload order (`position`). There are no client favourites.
 - **Media:** include "Dalle sue case".
+- **Size:** kept whole at about 1,900 tokens (owner approved the spec as it stands).
 
 **Always:**
 - **Route:** `/clients/{clientId}/configurator`, owner/designer only, under the same surface as the case configurator.
