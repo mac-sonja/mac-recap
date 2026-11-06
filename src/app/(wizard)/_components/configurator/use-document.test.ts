@@ -329,3 +329,15 @@ describe("useDocument on an approved case (Story 4.9)", () => {
     expect(save).not.toHaveBeenCalled();
   });
 });
+
+describe("a client's intro (Story 4.11a)", () => {
+  it("saves named by clientIntroId, never caseId", async () => {
+    const { hook, save } = setup({ subject: { kind: "client_intro", id: "44444444-0000-4000-8000-000000000001", clientId: "cccccccc-0000-4000-8000-000000000001" } });
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(save).toHaveBeenCalledTimes(1);
+    const sent = save.mock.calls[0]![0];
+    expect(sent).toMatchObject({ clientIntroId: "44444444-0000-4000-8000-000000000001", revisionId: "dddddddd-0000-4000-8000-000000000001", expectedVersion: 4 });
+    expect("caseId" in sent).toBe(false);
+  });
+});

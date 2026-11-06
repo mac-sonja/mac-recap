@@ -74,6 +74,7 @@ const caseStudies = await import("@/app/(tool)/case-studies/actions");
 const clients = await import("@/app/(tool)/clients/actions");
 const organization = await import("@/app/(tool)/organization/actions");
 const configurator = await import("@/app/(wizard)/case-studies/[caseId]/configurator/actions");
+const clientConfigurator = await import("@/app/(wizard)/clients/[clientId]/configurator/actions");
 const exportActions = await import("@/app/(tool)/case-studies/export-actions");
 const jobsModule = await import("@/modules/jobs");
 const { default: LibraryPage } = await import("@/app/(tool)/library/page");
@@ -100,6 +101,10 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   "configurator.forkCaseHead": { call: configurator.forkCaseHead as Action, allowed: OWNERS },
   "configurator.updateApprovedVersion": { call: configurator.updateApprovedVersion as Action, allowed: OWNERS },
   "configurator.discardCaseChanges": { call: configurator.discardCaseChanges as Action, allowed: OWNERS },
+  // A client's intro and outro in the configurator (Story 4.11a): `edit`, `approve`.
+  "client-configurator.saveIntroRevisionDoc": { call: clientConfigurator.saveIntroRevisionDoc as Action, allowed: OWNERS },
+  "client-configurator.approveIntro": { call: clientConfigurator.approveIntro as Action, allowed: OWNERS },
+  "client-configurator.getIntroRenderAssets": { call: clientConfigurator.getIntroRenderAssets as Action, allowed: OWNERS },
   // The draft-ready poll (Story 3.8): `generate`, a read only.
   "draft-ready.listReadyDrafts": { call: draftReady.listReadyDrafts as Action, allowed: OWNERS },
   // Story 5.3: Scarica on an approved case.
@@ -118,12 +123,14 @@ beforeEach(() => {
   session.profileEmail = "persona@menatcode.it";
   session.role = "owner_designer";
   session.disabledAt = null;
+  // The intro save reads the saved revision's version (Story 4.11a).
+  vi.mocked(caseStudyModule.saveIntroRevisionDoc).mockResolvedValue(ok({ version: 1 } as never));
 });
 
 describe("permission suite through the real actor resolver (Story 6.4)", () => {
   it("covers every server action of the tool", () => {
     expect(Object.keys(EXPECTED).length).toBe(
-      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 6 + Object.keys(draftReady).length + Object.keys(exportActions).length,
+      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 6 + Object.keys(clientConfigurator).length + Object.keys(draftReady).length + Object.keys(exportActions).length,
     );
   });
 
