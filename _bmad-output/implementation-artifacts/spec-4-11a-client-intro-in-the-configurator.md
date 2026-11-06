@@ -83,20 +83,28 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/20261107120000_case_study_intro_edit_approve.sql` -- `save_intro_revision_doc`, `approve_client_intro`; then `npm run db:types`.
-- [ ] `src/modules/case-study/**` (+ unit and db tests) -- `saveIntroRevisionDoc`, `approveIntro` with the intro allowed set; the exports.
-- [ ] `src/app/(wizard)/clients/[clientId]/configurator/page.tsx`, `actions.ts` (+ tests) -- the client-mode page and actions: save, approve, render assets, case media list.
-- [ ] `src/app/(wizard)/_components/configurator/*` (+ tests) -- the subject in place of `caseId`; client mode for the header, back, Pagine groups, Media tab, field edits, default-page texts and approve redirect.
-- [ ] `src/app/_lib/routes.ts`, `draft-ready-notifier.tsx`, `clients/[clientId]/page.tsx`, `intro-status.tsx` (+ tests) -- the links.
-- [ ] `src/shared/i18n/it.ts` -- client-mode copy.
-- [ ] `test/permissions.test.ts` -- the new actions.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 4.11 stays `in-progress`, with a note that 4.11a is in review.
+- [x] `supabase/migrations/20261107120000_case_study_intro_edit_approve.sql` -- `save_intro_revision_doc`, `approve_client_intro`; then `npm run db:types`.
+- [x] `src/modules/case-study/**` (+ unit and db tests) -- `saveIntroRevisionDoc`, `approveIntro` with the intro allowed set; the exports.
+- [x] `src/app/(wizard)/clients/[clientId]/configurator/page.tsx`, `actions.ts` (+ tests) -- the client-mode page and actions: save, approve, render assets, case media list.
+- [x] `src/app/(wizard)/_components/configurator/*` (+ tests) -- the subject in place of `caseId`; client mode for the header, back, Pagine groups, Media tab, field edits, default-page texts and approve redirect.
+- [x] `src/app/_lib/routes.ts`, `draft-ready-notifier.tsx`, `clients/[clientId]/page.tsx`, `intro-status.tsx` (+ tests) -- the links.
+- [x] `src/shared/i18n/it.ts` -- client-mode copy.
+- [x] `test/permissions.test.ts` -- the new actions.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 4.11 stays `in-progress`, with a note that 4.11a is in review.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:db` and `build`, when they run, then they pass.
 - Given the case configurator's existing tests, when they run, then they pass with no expectation changed except the `caseId` → subject rename.
 
 ## Implementation Notes
+
+- **Server.** Migration `20261107120000_case_study_intro_edit_approve.sql`: `save_intro_revision_doc` (lock the intro, head, `in_review` only, `client_event` `revision_saved`) and `approve_client_intro` (Story 4.8's checks and order, the `mac_recap.intro_transition` flag, `transition` + `revision_approved` client events). `db.types.ts` written by hand, then checked byte-identical against `npm run db:types`. `ClientIntroRepository` gains `saveDoc` and `approve`; `revisions.ts` gains `makeSaveIntroRevisionDoc` and `makeApproveIntro`, whose allowed set is the client's files plus `material.liveAssetIds` of each case from `cases.list({ clientId })`. A save also refuses a document not of kind `client_intro`. `index.ts` exports `saveIntroRevisionDoc` and `approveIntro`; `transitionIntro` still refuses `approve`.
+- **Subject.** `use-document.ts` exports `Subject` (`{ kind: "case", id }` or `{ kind: "client_intro", id, clientId }`; the client id is for the Media tab) and `subjectKey`. Saves, Approva and render-asset reads send `caseId` for a case (unchanged) and `clientIntroId` for an intro; fork, Aggiorna and Scarta stay case-only. The configurator's `caseId` prop became `subject`; case tests changed only that prop.
+- **Client mode** (`subject.kind === "client_intro"`): pages grouped by role (`page-groups.ts`, `it.configurator.clientSections`) on the canvas and in Pagine; the Media tab's own list is the client's ("Del cliente", no star, uploads through the client material actions, `CLIENT_MATERIAL_LIMIT` and the pixel refusal in the client panel's words), the second group its cases' ("Dalle sue case"); after Approva the page goes to `back.href`. Field edits: `ClientEditableFields` (`client` + `record`), `boundEditorOf(el, "client")` offers only client bindings (name, description, sector, own rows and testimonial, logos); rows and testimonial save through `saveClientResults` / `saveClientTestimonial`, the rest through `updateClient`; the panel hides Dati della case.
+- **Pagine di default.** `default-pages.ts` reads `CLIENT_TEMPLATE_TEXT_KEYS` too, and builds the markers with each row count and testimonial, so the outro texts on the Risultati e testimonial page are found.
+- **Route.** `src/app/(wizard)/clients/[clientId]/configurator/` (`page.tsx`, `actions.ts`, `case-media.ts` for "Dalle sue case"). `clientMediaOf` moved to `media-files.ts` (re-exported from `configurator-data.ts`) so the tab can map a fresh client listing; a client file not drawn yet keeps the tab polling until its rendition is read.
+- **Links.** `clientConfiguratorHref`; the ready toast opens it (and stays quiet while it is open); `IntroStatus` shows **Apri** (outside the status region) for a role that may `edit`, while Da approvare or Approvato.
+- **Guards.** `test/permissions.test.ts` lists the three new actions; `test/approval-guardrail.test.ts` now expects `approve` and `approveIntro`, and pins `approveIntro`'s only caller and its check order.
 
 ## Spec Change Log
 
