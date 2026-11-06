@@ -329,3 +329,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-4-several-formats-one-zip.md`
   summary: A stored export whose file is damaged or missing from the bucket is reused by its hash forever (single downloads hand it out; since 5.4 every bundle of that content fails for good), with no way to redraw or retire it.
   evidence: Export rows are immutable and `ensureFormat`/`requestExport` reuse a row by content hash without checking the object; `bundleEntries` fails permanently on a page/slide mismatch or unreadable ZIP, and retries `STORAGE_FAILED` until attempts run out. Only reachable through storage damage or manual deletion; review 1 of 5.4 (findings 17).
+
+- source_spec: none
+  summary: Story 4.11 part 2 (4.11b): edit an approved client intro as in Story 4.9 (fork a working copy, Aggiorna versione approvata, Annulla modifiche), with intro versions of fork_head, update_approved_revision and discard_head.
+  evidence: Owner chose on 2026-11-06 to build A7 in two parts; part 1 (4.11a) opens, edits, saves and approves the intro.
