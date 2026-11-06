@@ -81,7 +81,7 @@ const HEAD_CHARS = 80;
 const BODY_CHARS = 600;
 
 /** The answer on one line, cut at a word boundary to at most `max` characters. */
-function excerpt(answer: string, max: number): string {
+export function excerpt(answer: string, max: number): string {
   const line = answer.replace(/\s+/g, " ").trim();
   // By code points, so a cut never splits a surrogate pair.
   const points = Array.from(line);
@@ -91,7 +91,8 @@ function excerpt(answer: string, max: number): string {
   return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
-const marked = (words: string) => `${TEST_DRAFT_MARKER} ${words}`;
+/** `words` marked as test text: "[bozza di prova] " first. */
+export const marked = (words: string) => `${TEST_DRAFT_MARKER} ${words}`;
 
 /** Fixed test sentences, one per key, used when there is no form answer to build from. */
 const FIXED: Readonly<Record<TemplateTextKey, string>> = Object.freeze({
@@ -160,7 +161,7 @@ function formatPages(formatId: FormatId, ctx: TemplateContext): Page[] {
 }
 
 /** Sets `sourceRefs` (and `aspect`) on every text whose words are one of the document's texts (fixed template copy is left as is). */
-function cite(elements: readonly DocumentElement[], byText: ReadonlyMap<string, DraftText>): DocumentElement[] {
+export function cite(elements: readonly DocumentElement[], byText: ReadonlyMap<string, DraftText>): DocumentElement[] {
   const citeText = (el: TextElement): TextElement => {
     const found = el.text === undefined ? undefined : byText.get(el.text);
     if (found === undefined) return el;

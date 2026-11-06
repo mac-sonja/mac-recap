@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import type { DocumentKind, Page } from "@/modules/generation";
 import { isFormatId, type FormatId } from "@/modules/rendering/domain/formats";
 import { macCaseV1 } from "@/modules/rendering/templates/mac-case/v1";
+import { macClientV1 } from "@/modules/rendering/templates/mac-client/v1";
 import type { DefaultPage, Layout, RenderInput, TemplateContext, TemplateVersion } from "@/modules/rendering/templates/types";
 
 /**
@@ -12,10 +13,14 @@ import type { DefaultPage, Layout, RenderInput, TemplateContext, TemplateVersion
  */
 export const templates: Readonly<Record<string, TemplateVersion>> = Object.freeze({
   [macCaseV1.ref]: macCaseV1,
+  [macClientV1.ref]: macClientV1,
 });
 
 /** The template a new case history is built from. */
 export const CASE_TEMPLATE = macCaseV1.ref;
+
+/** The template a new client intro is built from (Story 3.11: a placeholder until mac-client@2). */
+export const CLIENT_TEMPLATE = macClientV1.ref;
 
 const templateOf = (ref: string): TemplateVersion | undefined => (Object.hasOwn(templates, ref) ? templates[ref] : undefined);
 
@@ -37,12 +42,12 @@ export const textStyles = (formatId: FormatId, template: string = CASE_TEMPLATE)
 
 /**
  * The pages a new document of `kind` starts with in one format, built from `ctx`.
- * `[]` for a template or format this registry doesn't know, and for a client intro
- * (its template arrives with Stories 3.9 and 3.11).
+ * `[]` for a template or format this registry doesn't know, and for a template of the
+ * other kind (a case template for a client intro, or the client template for a case).
  */
 export function starterPages(template: string, kind: DocumentKind, formatId: string, ctx: TemplateContext): Page[] {
   const found = templateOf(template);
-  if (kind !== "case_history" || found === undefined || !isFormatId(formatId)) return [];
+  if (found === undefined || (found.kind ?? "case_history") !== kind || !isFormatId(formatId)) return [];
   return found.starterPages(formatId, ctx);
 }
 
@@ -58,8 +63,9 @@ export function renderFormat(template: string, formatId: FormatId, input: Render
   return found.render(formatId, input);
 }
 
-export { TEMPLATE_TEXT_KEYS } from "@/modules/rendering/templates/types";
+export { CLIENT_TEMPLATE_TEXT_KEYS, TEMPLATE_TEXT_KEYS } from "@/modules/rendering/templates/types";
 export type {
+  ClientTemplateTextKey,
   BoundResult,
   BoundTestimonial,
   BoundValues,

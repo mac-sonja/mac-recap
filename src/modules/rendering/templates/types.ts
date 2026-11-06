@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import type { Page, TextStyle } from "@/modules/generation";
+import type { DocumentKind, Page, TextStyle } from "@/modules/generation";
 import type { FormatId } from "@/modules/rendering/domain/formats";
 
 /**
@@ -35,16 +35,24 @@ export const TEMPLATE_TEXT_KEYS = [
 ] as const;
 export type TemplateTextKey = (typeof TEMPLATE_TEXT_KEYS)[number];
 
+/**
+ * The texts a client template's default pages are filled with (Story 3.11; the AI's from
+ * Story 3.9): the intro's and the outro's head and body. A missing one is `""`.
+ */
+export const CLIENT_TEMPLATE_TEXT_KEYS = ["introHead", "introBody", "outroHead", "outroBody"] as const;
+export type ClientTemplateTextKey = (typeof CLIENT_TEMPLATE_TEXT_KEYS)[number];
+
 /** What a default page is built from. Client and case values are never here: they are bindings. */
 export interface TemplateContext {
   /** A fresh uuid for each block and element. */
   newId: () => string;
-  texts: Partial<Record<TemplateTextKey, string>>;
-  /** The case's image asset ids, in order; a missing one leaves its image empty (`null`). */
+  /** A case template reads `TemplateTextKey`s, a client template `ClientTemplateTextKey`s. */
+  texts: Partial<Record<TemplateTextKey | ClientTemplateTextKey, string>>;
+  /** The case's (or client's) image asset ids, in order; a missing one leaves its image empty (`null`). */
   images: readonly string[];
-  /** How many typed result rows the case has (0–3; Story 2.21). */
+  /** How many typed result rows the case (or client) has (0–3; Story 2.21). */
   resultRows: number;
-  /** Whether the case has a testimonial. */
+  /** Whether the case (or client) has a testimonial. */
   hasTestimonial: boolean;
 }
 
@@ -73,6 +81,8 @@ export interface TextStyleSpec {
 export interface TemplateVersion {
   /** `{id}@{version}`, as documents store it. */
   ref: string;
+  /** The document kind it lays out (Story 3.11); a version without it is a case history template. */
+  kind?: DocumentKind;
   layouts: (formatId: FormatId) => readonly Layout[];
   defaultPages: (formatId: FormatId) => readonly DefaultPage[];
   /** The default pages a new document starts with, in order (the v1 → v2 seam, Story 3.10's test draft). */

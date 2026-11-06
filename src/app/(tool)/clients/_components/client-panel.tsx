@@ -32,6 +32,7 @@ import {
   saveClientBriefField,
   saveClientResults,
   saveClientTestimonial,
+  startClientIntro,
   updateClient,
 } from "@/app/(tool)/clients/actions";
 import { acceptFor } from "@/app/(wizard)/_lib/upload";
@@ -694,7 +695,8 @@ export function ClientPanel({
 
   /**
    * Saves everything, in order: create (a new client), the logo and the info, the
-   * texts, then the images waiting in the browser; then opens the client's page.
+   * texts, then the images waiting in the browser; then starts the intro's draft (Story
+   * 3.11; its outcome never stops the save) and opens the client's page.
    * Stays with the errors shown when a step fails.
    */
   async function save() {
@@ -803,6 +805,12 @@ export function ClientPanel({
 
       // 4. The images that waited in the browser (or failed before): each slot shows its own error.
       if (!(await images.uploadAll(current.id))) return;
+      if (unmounted.current) return;
+
+      // 5. The intro-and-outro draft (Story 3.11): the job runs in the background, but the
+      // start is awaited so the page reads the intro already moved. The page opens whatever it
+      // answers (fewer than 2 images, an intro already drafted, a failure).
+      await startClientIntro({ clientId: current.id }).catch(() => undefined);
       if (unmounted.current) return;
 
       leavingPage = true;

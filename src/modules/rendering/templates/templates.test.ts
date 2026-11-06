@@ -2,13 +2,17 @@ import { createHash, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { caseStudyDocumentSchema, pageSchema, validateNewDocument, type DocumentElement, type Page, type TextElement } from "@/modules/generation";
 import {
   CASE_TEMPLATE,
+  CLIENT_TEMPLATE,
+  CLIENT_TEMPLATE_TEXT_KEYS,
   defaultPages,
   FORMAT_IDS,
   layouts,
+  renderFormat,
   starterPages,
   TEMPLATE_TEXT_KEYS,
   templates,
@@ -320,9 +324,121 @@ describe("starter pages", () => {
     expect(starterPages(template, kind, formatId, ctxOf())).toEqual([]);
   });
 
-  it("registers mac-case@1 as the case template", () => {
-    expect(Object.keys(templates)).toEqual(["mac-case@1"]);
+  it("registers mac-case@1 as the case template and mac-client@1 as the client template", () => {
+    expect(Object.keys(templates)).toEqual(["mac-case@1", "mac-client@1"]);
     expect(CASE_TEMPLATE).toBe("mac-case@1");
+    expect(CLIENT_TEMPLATE).toBe("mac-client@1");
+  });
+
+  it("are empty for the client template asked for a case history", () => {
+    expect(starterPages(CLIENT_TEMPLATE, "case_history", "presentazione_16_9", ctxOf())).toEqual([]);
+  });
+});
+
+describe("mac-client@1, the placeholder client template (Story 3.11)", () => {
+  const CLIENT_TEXTS = Object.fromEntries(CLIENT_TEMPLATE_TEXT_KEYS.map((key) => [key, `[${key}]`]));
+  const clientCtx = (o: Partial<TemplateContext> = {}) => ctxOf({ texts: CLIENT_TEXTS, ...o });
+  const clientPages = (formatId: FormatId, ctx = clientCtx()) => starterPages(CLIENT_TEMPLATE, "client_intro", formatId, ctx);
+  const bindingsOf = (pages: readonly Page[]) =>
+    textsOf(pages).flatMap((t) => [...(t.binding ? [t.binding] : []), ...(t.bindings ?? [])]).map((b) => `${b.record}.${b.field}`);
+
+  it("reuses mac-case@1's renderer, layouts and text styles", () => {
+    const client = templates[CLIENT_TEMPLATE];
+    const caseTemplate = templates[CASE_TEMPLATE];
+    expect(client.kind).toBe("client_intro");
+    expect(client.render).toBe(caseTemplate.render);
+    expect(client.layouts).toBe(caseTemplate.layouts);
+    expect(client.textStyles).toBe(caseTemplate.textStyles);
+  });
+
+  it.each([
+    ["presentazione_16_9", ["intro", "results"]],
+    ["carosello_1_1", ["intro", "intro-images", "results", "closing"]],
+    ["video_9_16", ["intro", "results"]],
+  ] as const)("starts %s with its default pages, intro then outro", (formatId, keys) => {
+    const pages = clientPages(formatId);
+    expect(pages.map((p) => p.pageKey)).toEqual(keys);
+    expect(defaultPages(formatId, CLIENT_TEMPLATE).flatMap((d) => d.build(clientCtx())).map((p) => p.pageKey)).toEqual(keys);
+    for (const p of pages) {
+      expect([p.role, p.section], p.pageKey).toEqual(p.pageKey.startsWith("intro") ? ["intro", "intro"] : ["outro", "risultati"]);
+      expect(pageSchema.safeParse(p).success, p.pageKey).toBe(true);
+      const l = layouts(formatId, CLIENT_TEMPLATE).find((x) => x.layoutId === p.grid.layoutId)!;
+      expect(p.blocks.length, p.pageKey).toBe(l.areas.length);
+    }
+  });
+
+  it.each(FORMAT_IDS)("opens the %s intro with 01 Cliente, the client's name and sector bound, and the intro's texts", (formatId) => {
+    const [intro] = clientPages(formatId);
+    expect(intro.blocks[0].name).toBe("Cliente");
+    const texts = textsOf([{ ...intro, blocks: [intro.blocks[0]] }]);
+    expect(texts[0].text).toBe("01 Cliente");
+    expect(bindingsOf([intro])).toEqual(["client.name", "client.sector"]);
+    expect(texts.map((t) => t.text).filter((t) => t?.startsWith("["))).toEqual(["[introHead]", "[introBody]"]);
+    expect(elementsOf([intro]).some((el) => el.type === "logos")).toBe(true);
+  });
+
+  it.each(FORMAT_IDS)("shows the client's first three images in %s, in order", (formatId) => {
+    const intro = clientPages(formatId).filter((p) => p.role === "intro");
+    const shown = elementsOf(intro).flatMap((el) => (el.type === "image" ? [el.assetId] : el.type === "animation" ? el.assetIds : []));
+    expect(shown).toEqual(IMAGES.slice(0, 3));
+  });
+
+  it("leaves image blocks empty for a client with fewer images", () => {
+    const [intro] = clientPages("presentazione_16_9", clientCtx({ images: IMAGES.slice(0, 2) }));
+    expect(elementsOf([intro]).flatMap((el) => (el.type === "image" ? [el.assetId] : []))).toEqual([IMAGES[0], IMAGES[1], null]);
+  });
+
+  it.each(FORMAT_IDS)("binds Risultati e testimonial to the client's record in %s", (formatId) => {
+    const outro = clientPages(formatId).find((p) => p.pageKey === "results")!;
+    const bound = bindingsOf([outro]);
+    expect(bound).toEqual(expect.arrayContaining(["client.resultLabel", "client.resultValue", "client.testimonialQuote", "client.testimonialAuthor"]));
+    expect(bound.some((b) => b.startsWith("case."))).toBe(false);
+  });
+
+  it("puts the outro's texts on Risultati e testimonial in Presentazione and Video, and on the Chiusura in Carosello", () => {
+    const outroTexts = (formatId: FormatId, key: string) =>
+      textsOf(clientPages(formatId).filter((p) => p.pageKey === key)).map((t) => t.text).filter((t) => t?.startsWith("["));
+    expect(outroTexts("presentazione_16_9", "results")).toEqual(["[outroHead]", "[outroBody]"]);
+    expect(outroTexts("video_9_16", "results")).toEqual(["[outroHead]", "[outroBody]"]);
+    expect(outroTexts("carosello_1_1", "results")).toEqual([]);
+    const closing = clientPages("carosello_1_1").find((p) => p.pageKey === "closing")!;
+    expect(closing).toMatchObject({ name: "Chiusura", role: "outro", decoration: "star" });
+    expect(textsOf([closing]).map((t) => t.text)).toEqual(["Al prossimo progetto", "[outroHead]", "[outroBody]"]);
+  });
+
+  it.each(FORMAT_IDS)("has no Risultati e testimonial in %s without results and testimonial; Carosello still ends with Chiusura", (formatId) => {
+    const keys = clientPages(formatId, clientCtx({ resultRows: 0, hasTestimonial: false })).map((p) => p.pageKey);
+    expect(keys).not.toContain("results");
+    if (formatId === "carosello_1_1") expect(keys.at(-1)).toBe("closing");
+  });
+
+  it.each(FORMAT_IDS)("fits the layout with only results or only a testimonial in %s", (formatId) => {
+    for (const ctx of [clientCtx({ resultRows: 2, hasTestimonial: false }), clientCtx({ resultRows: 0, hasTestimonial: true })]) {
+      const outro = clientPages(formatId, ctx).find((p) => p.pageKey === "results")!;
+      const l = layouts(formatId).find((x) => x.layoutId === outro.grid.layoutId)!;
+      expect(outro.blocks.length).toBe(l.areas.length);
+    }
+  });
+
+  it.each(FORMAT_IDS)("draws %s with mac-case@1's renderer, reading the client's current values", (formatId) => {
+    const values = {
+      client: {
+        name: "Lumen Srl",
+        sector: "Energia",
+        description: "",
+        logoUrl: null,
+        results: [{ label: "Visite", value: "+180%" }],
+        testimonial: { quote: "Ci hanno capiti.", author: "Ada" },
+      },
+      case: { year: null, services: [], results: [], testimonial: null },
+    };
+    const html = renderToStaticMarkup(renderFormat(CLIENT_TEMPLATE, formatId, { pages: clientPages(formatId, clientCtx({ resultRows: 1 })), assets: {}, values }));
+    for (const shown of ["Lumen Srl", "Energia", "[introHead]", "+180%", "Ci hanno capiti."]) expect(html).toContain(shown);
+  });
+
+  it("makes a valid v2 client intro document", () => {
+    const doc = { ...docOf((id) => clientPages(id)), kind: "client_intro", template: CLIENT_TEMPLATE };
+    expect(validateNewDocument(doc).ok).toBe(true);
   });
 });
 

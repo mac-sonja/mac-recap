@@ -4,7 +4,7 @@
 
 ## Goal
 
-The owner/designer presses Generate on a case with material and can leave. A background worker produces a draft: a challenge / approach / result narrative built only from the case's material, form answers and the client's info, laid out in each format's own pages from MAC's templates (Presentazione, Carosello, Video). The case lands in review and a toast says so. The same pipeline drafts a client's intro and outro pages. Sprint 2, due 2026-10-21.
+The owner/designer presses Generate on a case with material and can leave. A background worker produces a draft: a challenge / approach / result narrative built only from the case's material, form answers and the client's info. Each format (Presentazione, Carosello, Video) gets its own pages, built from MAC's templates. The case lands in Da approvare and a toast says so. The same pipeline drafts each client's intro-and-outro document. Test text comes first (3.11), and the AI text replaces it later (3.9). Then the owner can lay out and approve client pages before the AI writes them.
 
 ## Stories
 
@@ -22,39 +22,110 @@ The owner/designer presses Generate on a case with material and can leave. A bac
 
 ## Requirements & Constraints
 
-- Generation is background work. The case shows "In elaborazione"; failure returns it to Bozza with material and details intact. No ETA or percentage; waiting is not counted against the hands-on time budget.
-- No material (no non-deleted file) means no generation, enforced in UI and worker (`NO_MATERIAL`). The form and client info alone never enable Generate. A client intro needs at least 2 client images (`NO_CLIENT_IMAGES`).
-- The AI never alters graphic assets, technical substance or template design. Media gets only deterministic processing (downscale, poster frame, transcode; no crop, recolour, filter, upscaling). Originals are never written.
-- Narrative: challenge, approach and result present; covers technical and graphic sides; draws only on uploaded material, form answers and client info; no "verified" labels; Italian or English (default Italian); prompt follows the copywriting guide. The AI writes one text per format, fitted to that format; edits to one format never reach another.
-- Demo scope: no claim check workflow (nothing sets or reads a `check`); AI output is text only. Deleting template blocks/pages is free (recoverable via default pages), so v2 does not require them.
-- The generated draft is kept unchanged beside the editable document. Every transition is an append-only event.
-- UI strings Italian via the single dictionary; WCAG 2.2 AA. An empty image block exports transparent. Client logos may be SVG: draw via `<img>`, rasterise at render time with external entity/network loading off.
-- Risultati e testimonial pages use the case's typed results (up to 3 label/value rows) and testimonial, no AI text; a case with neither has no such page.
+- Generation is background work. The subject shows "In elaborazione". A failure returns it to Bozza with its material and details intact. There is no ETA or percentage.
+- **Gates:**
+  - A case needs at least one non-deleted file (`NO_MATERIAL`).
+  - A client intro needs at least 2 image rows in `client_asset` (`NO_CLIENT_IMAGES`). The check runs on the server before any job, revision or LLM call.
+- The AI never alters graphic assets or template design. Media gets only deterministic processing, and originals are never written.
+- The AI writes one text per format. An edit in one format never reaches another.
+- **Demo scope:**
+  - Nothing sets or reads a per-block `check`.
+  - There is no "generated, not checked" marking.
+  - Template blocks and pages can be deleted freely and come back via default pages, so document v2 does not require them.
+- The generated draft is kept unchanged beside the editable copy. Every transition is an append-only event: `case_event` for cases, `client_event` for client intros.
+- **Client intro and outro** are one document per client, with the case lifecycle. One review and one approval cover both.
+  - Client info and client material are read live at render time, and AI or test text stays as written.
+  - Only an approved intro or outro appears in a client pack or collection.
+- **Test text (3.10 for cases, 3.11 for clients):**
+  - It is marked "[bozza di prova]" wherever the AI will later write, and it is built from the subject's own fields.
+  - No LLM is called.
+  - It goes through the normal transitions, so the subject reaches Da approvare.
+  - 3.10's dev command refuses the production project ref and has no UI entry point. 3.11 runs from the real **Aggiungi** flow.
+- UI strings are Italian, from the single dictionary, and meet WCAG 2.2 AA.
 
 ## Technical Decisions
 
-- Modular monolith: cross-module imports only via each module's `index.ts`; vendor SDKs only in adapters (lint-enforced). Modules: generation, rendering, material, jobs, case-study.
-- Jobs: Postgres `job` table (generate | export | rendition), idempotent enqueue via partial unique index on (kind, subject, input hash) for queued/running, `jobs_claim()` with `FOR UPDATE SKIP LOCKED`, 10-min lease renewed each minute, max 3 attempts, then failed plus `job_failed`. Worker acts as `system` actor, resolved through `access.index`. Web paths never import LLM, Chromium, sharp or ffmpeg adapters. UI reads outcomes only via `jobs.getJobsFor`.
-- Status changes only via `case-study.transition` (draft -> generating -> in_review; failure -> draft); client intros via `transitionIntro`. Revisions: working | approved | superseded, head/approved pointers, compare-and-set on `baseHeadVersion`; generate always creates a new revision and is discarded if the head moved. Read via `getLiveRevision` / `getEditableRevision` (subject = case or client_intro) through `upgrade(doc)`, never written back to non-working revisions.
-- `CaseStudyDocument` zod schema v2, jsonb, stored twice per revision (`generated_doc` immutable by trigger, `doc` editable): one page list per registry format; pages carry `pageKey`, role (intro | body | outro), section, background, grid, track sizes and blocks of elements (text, Testi group, image/video with Riempi/Adatta/Ritaglia, Animazione, services tags, logos, divider). Text keeps `provenance`, optional `aspect`, `sourceRefs`. The document stores no client or case values, only bindings to record fields; renderers read current values. `kind` = case_history | client_intro.
-- Format registry `rendering/domain/formats.ts` is the only format list: Presentazione 16:9 1920x1080 (PDF), Carosello 1:1 1080x1080 (ZIP of PNGs; templates drawn on 1000 px), Video 9:16 1080x1920 (motion; Anteprima only for the demo). Operations naming another format fail `FORMAT_NOT_IN_REVISION`.
-- Templates are versioned code in `rendering/templates/{templateId}/v{n}/`; a published version never changes (hash-list test), changes ship as `v{n+1}`. Per format: bento layouts (single source for generation and the configurator), default pages, seven text styles. Source design: Figma "MAC-TF-AI"; mockup `ux-designs/ux-MAC Recap-2026-10-08/mockups/configurator.html` is the value reference. Default pages: Presentazione Intro, Contenuti (1/3/5 images), Risultati e testimonial; Carosello Intro (Copertina, Sfida, Idea), content, Risultati e testimonial, Chiusura; Video Intro, Risultati e testimonial. Services are a case multiselect shown as Intro tags; sector label fits 40 characters.
-- One pure React renderer per format, sizes in units of the template frame width, used by configurator, case view, shared links and exports (preview equals export; server `renderToStaticMarkup` output identical to client). Exposes per-block/page overflow, `pageKey`/role/section, a starting page number. Video: texts animate in sequence, switchable, none with reduced motion, room for Instagram's bar, poster frame in static output. Template output uses template styles, not tool UI tokens.
-- Narrative: single `NarrativeGenerator` port, registered only in the worker; the adapter is the only `@anthropic-ai/sdk` importer. `client.beta.messages.parse` with zod output, model from one constant (`claude-opus-5-5`), adaptive thinking, effort high, server-side refusal fallbacks, no server tools, no Files API; respect limits (32 MB, 600 PDF pages, no DOCX/video). Versioned prompt files. Output has only text fields and claims (no layout/asset/about field); sourceRefs outside the manifest fail; `refusal` becomes `LLM_REFUSAL`; `MISSING_ASPECT` recorded, not blocking. Record `model`, `fellBack`, `promptVersion`, `schemaVersion`; never log prompts or material.
-- Material is referenced by `MaterialRef` (asset | form_field | client_field), resolved only via `material.resolveRefs`; the job stores a manifest (refs plus hashes). Favourites are in the manifest but ignored. Later-added material is not used. Client name, sector, description and brief are read live at job run time. Renditions live under `cases/{caseId}/assets/{assetId}/renditions/{specHash}.{ext}`, fetched only via `material.getRendition` (signed URL, 15 min max).
-- Client intro: one document per client (`client_intro`, `client_event` tables), same lifecycle and approval as a case, filled with 2-3 client images. `composeParts`: with 2+ cases, client intro first, each case's pages minus its own intro pages and Carosello Chiusura (Risultati e testimonial stays), then the client's closing; pages are referenced, never copied.
-- Conventions: snake_case singular tables, uuid ids, UTC `timestamptz` shown in Europe/Rome, zod defined once in `domain/`, `Result<T, AppError>` with SCREAMING_SNAKE codes, env only via `src/shared/env.ts`, forward-only migrations with RLS denying anon/authenticated.
+- **Modules:** this is a modular monolith. Cross-module imports go only through `index.ts`, and vendor SDKs live only in adapters. `case-study` owns `client`, `client_asset`, `client_intro`, `client_event` and `revision`.
+- **Jobs:**
+  - Jobs live in the Postgres `job` table, with idempotent enqueue on (kind, subject, input hash), a lease, and at most 3 attempts before failed.
+  - A `generate` job handles both subjects (`case` or `client_intro`).
+  - The worker acts as the `system` actor.
+  - The UI reads outcomes only through `jobs.getJobsFor`.
+- **Lifecycle (AD-3):**
+  - The states are draft → generating → in_review → approved, and a failure goes back to draft.
+  - Cases change state only through `case-study.transition`. Client intros change only through `case-study.transitionIntro`, with the same states, `head_revision_id` / `approved_revision_id` pointers, compare-and-set on `head_version`, and fork-on-edit rules.
+  - A revision belongs to exactly one subject: `case_id` or `client_intro_id`, with a check that exactly one is set.
+  - `getLiveRevision(subject)` and `getEditableRevision(subject)` take `{ kind: 'case' | 'client_intro', id }`.
+- **Story 3.11 migration (moved here from 3.9):** forward-only, with RLS denying anon and authenticated.
+  - `client_intro`: uuid `id`, `client_id` unique (one per client), `status` (the case lifecycle states), `head_revision_id`, `approved_revision_id`, `head_version`, timestamps.
+  - `client_event`: append-only, for intro transitions, saves and approvals.
+  - `revision.client_intro_id` gets its FK.
+- **Document v2:** `CaseStudyDocument` is jsonb, stored as `generated_doc` (immutable) and `doc` (editable). The zod schema is defined once in `domain/`.
+  - Its `kind` is `case_history` or `client_intro`. The challenge / approach / result rule applies to `case_history` only.
+  - There is one page list per registry format.
+  - A page carries `pageKey`, `role` (`intro` | `body` | `outro`), section, background and bento grid, and holds blocks of elements.
+  - The document stores no client or case values, only bindings to record fields (AD-22 as amended). Renderers read the current values, and an on-page edit writes back to the record.
+  - `relayout` and slot assignment are retired. Pages come from the template version's default pages.
+- **Formats:** the registry `rendering/domain/formats.ts` is the only list.
+  - Presentazione: 16:9, 1920×1080.
+  - Carosello: 1:1, 1080×1080 (Figma frame 1000).
+  - Video: 9:16, 1080×1920.
+- **Templates** are versioned code under `rendering/templates/{templateId}/v{n}/`. A published version never changes; a change ships as `v{n+1}`.
+  - Presentazione default pages: Intro, Contenuti (1, 3 or 5 images), Risultati e testimonial.
+  - Carosello default pages: Intro (Copertina, Sfida, Idea), a content page, Risultati e testimonial, Chiusura.
+  - Video default pages: Intro, Risultati e testimonial.
+- **Client pages (decided 2026-10-28):**
+  - The client's intro is the Intro template filled from the client. Its first block reads "01 Cliente", and its texts, images and services come from the client.
+  - The client's closing is the Risultati e testimonial template in Presentazione and Video. Carosello also gets the client's own Chiusura ("Al prossimo progetto").
+  - Pages use role `intro` or `outro`.
+  - Client images: the first 3 images in `client_asset` upload order, favourites first. The old 3-file client limit is gone.
+- **Client file (AD-25, `composeParts`):**
+  - With 2+ cases, the order is the client intro, then each case's pages, then the client closing.
+  - Each case leaves out its own intro pages and its Carosello Chiusura, but keeps its Risultati e testimonial.
+  - Case pages are referenced, never copied.
+  - Only approved client intros go into packs and collections.
+- **Narrative:**
+  - The `NarrativeGenerator` port is registered only in the worker, and the Anthropic adapter is the only SDK importer.
+  - 3.7 has a text-source seam: test text versus AI. The AI runs when `ANTHROPIC_API_KEY` is set on the worker. 3.11 must stay on test text whatever the key.
+  - For 3.9, the client LLM input is only the client's current name, sector, description and brief. The output is intro and outro text only: a headline and a short paragraph each, with `client_field` refs and no layout or asset fields.
+- **Conventions:**
+  - Tables are snake_case and singular, with uuid ids.
+  - Errors are `Result<T, AppError>` with SCREAMING_SNAKE codes.
+  - Env vars are read only through `src/shared/env.ts`.
 
 ## UX & Interaction Patterns
 
-- Wizard step 3 shows "{n} files, {m} of 3 details filled." Generate is disabled without material with the reason linked by `aria-describedby`. After pressing: leave-page copy plus **Back to case studies**; a double click enqueues one job. Failure banner "Generation didn't finish. Your material and details are saved." with **Try again**.
-- Table rows update live between generating, in_review and draft; a row in In elaborazione is not clickable and shows "Still generating".
-- Toast anywhere in the app: "{Name} is ready to review." with **Open** (table row highlighted for now; configurator after Story 4.2; client page for intros until 4.11). Screen-reader announced, no focus steal, not replayed later, no external notifications.
-- Client **Aggiungi** in the side panel opens the client page at once; the draft appears in Da approvare when ready.
+- **Client side panel, Aggiungi:**
+  - It saves the client and starts the intro-and-outro draft in the background.
+  - The client page opens at once, with no waiting screen and no **Crea introduzione** or **Genera introduzione** button.
+  - The intro appears in Da approvare when ready.
+  - The ready toast from 3.8 opens the client page until 4.11 lands, and the configurator after that.
+- **Case generation:**
+  - Generate is disabled without material, with the reason linked via `aria-describedby`.
+  - A double click enqueues only one job.
+  - On failure, a banner shows with **Riprova**.
+  - A row in In elaborazione is not clickable.
+- **Ready toast:** "{Name} is ready to review." with **Open**.
+  - It is announced to screen readers, never steals focus, and is not replayed.
 
 ## Cross-Story Dependencies
 
-- Order: 3.1 and 3.2 feed 3.3; 3.4 templates and 3.5 renderers build on 3.3; 3.6 then 3.7 and 3.8; 3.10 after 3.5 and 3.11 after 3.10, both before Epic 4; 3.9 follows 3.3-3.8 and replaces 3.11's test text (3.11 owns the client_intro migration).
-- Blocked: 3.6/3.7 on which material types the LLM reads and the quality checklist; 3.4/3.9/3.11 on templates from the design team; client material to the LLM on the same decision.
-- Needs Epic 2: cases, uploads, clients and client material, details form and Risultati/testimonial (2.21), access/policy seam.
-- Feeds Epic 4 (configurator edits the working revision and pages built here), Epic 5 (renderers back preview, export, share) and the guardrail suite.
+- **Status:**
+  - Done: 3.1–3.7 and 3.10.
+  - In review: 3.8.
+  - Backlog: 3.11, then 3.9.
+- **3.11** builds on:
+  - 3.3: the revision subject and `client_intro` kind.
+  - 3.4: the client default pages.
+  - 3.5: the renderers and `composeParts`.
+  - 3.7: the generate job and the test-text seam.
+  - 3.10: how test text is built.
+  - 3.8: the toast.
+- **3.9** replaces 3.11's test text with the AI's. 3.11 owns the migration, the **Aggiungi** trigger and the layout.
+- **Epic 2:** 3.11 needs the client side panel, `client_asset` client material with favourites, and the client fields and brief.
+- **Epic 4 and later:**
+  - 4.11 edits and approves the client intro.
+  - 4.12 is the client file.
+  - 4.8 and 4.9 cover intro approval.
+  - 5.9, 5.10 and 6.5 consume approved intros.
+- **Blocker:** the epics still list 3.9 and 3.11 as blocked on the design team's client template. The 2026-10-28 decisions (Intro template filled from the client, Risultati e testimonial as the closing) may be enough to proceed; confirm with the owner if in doubt.

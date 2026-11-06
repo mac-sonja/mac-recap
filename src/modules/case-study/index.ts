@@ -1,6 +1,6 @@
 // Public surface of the case-study module. Code outside this module imports only this file.
 // The module owns `case_study`, `client`, `client_sector`, `client_logo`, `client_brief`, `client_asset`,
-// `case_number_counter`, `case_event` and `revision`, and the `material` bucket's
+// `case_number_counter`, `case_event`, `client_intro`, `client_event` and `revision`, and the `material` bucket's
 // `clients/{clientId}/logos/**` and `clients/{clientId}/material/**` (AD-1, AD-22):
 // nobody else writes them.
 import { randomUUID } from "node:crypto";
@@ -49,6 +49,15 @@ import {
   type CaseStudyRevision,
 } from "@/modules/case-study/application/revisions";
 import { createSupabaseRevisionRepository } from "@/modules/case-study/adapters/supabase/revision-repository";
+import { createSupabaseClientIntroRepository } from "@/modules/case-study/adapters/supabase/client-intro-repository";
+import {
+  makeCreateIntroWorkingRevision,
+  makeGetClientIntro,
+  makeGetClientIntroById,
+  makeStartClientIntro,
+  makeTransitionIntro,
+  type EnqueueGenerate,
+} from "@/modules/case-study/application/client-intro";
 import {
   makeSaveClientBriefField,
   makeSaveClientResults,
@@ -81,6 +90,7 @@ import type {
 } from "@/modules/case-study/domain/case-study";
 import type { ClientAsset, ListedClientAsset, StoredClientAsset } from "@/modules/case-study/domain/client-material";
 import type { ReadyDraft } from "@/modules/case-study/domain/ready-draft";
+import type { ClientIntro, ClientIntroStart } from "@/modules/case-study/domain/client-intro";
 import type { ForkedHead } from "@/modules/case-study/domain/revision";
 import type { ClientMaterialStorage } from "@/modules/case-study/ports/client-material-storage";
 import type { LogoStorage } from "@/modules/case-study/ports/logo-storage";
@@ -185,7 +195,11 @@ export type { CaseAssetIds, CaseStudyRevision } from "@/modules/case-study/appli
 /** Every asset id a document references, as `saveRevisionDoc` checks it (pure; Story 4.4c's image pool). */
 export { referencedAssetIds } from "@/modules/case-study/application/revisions";
 export type { TransitionEvent } from "@/modules/case-study/domain/transition";
+export { READY_DRAFT_KINDS } from "@/modules/case-study/domain/ready-draft";
 export type { ListReadyDraftsInput, ReadyDraft } from "@/modules/case-study/domain/ready-draft";
+export { CLIENT_INTRO_CREATED } from "@/modules/case-study/domain/client-intro";
+export type { ClientIntro, ClientIntroStart, CreateIntroWorkingRevisionInput } from "@/modules/case-study/domain/client-intro";
+export type { EnqueueGenerate } from "@/modules/case-study/application/client-intro";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
 
 /**
@@ -265,11 +279,13 @@ export function list(scope: ListScope): Promise<Result<ListedCaseStudy[]>> {
  * earlier than 24 hours ago. Returns `{ id, name, readyAt }` for each non-deleted case
  * now Da approvare with a `generation_succeeded` transition after `since` that follows its
  * latest `generate`, made by `actor` (a failed generation never counts), oldest first,
- * one per case. Call only after
+ * one per case. Story 3.11: client intros the same way, from `client_event` (`kind:
+ * "client_intro"`, `id` and `name` the client's). Each entry has `kind` (`case` or
+ * `client_intro`); cases and intros together, oldest first. Call only after
  * `authorize(actor, 'generate')`. `INVALID_INPUT`, `CASE_STUDY_LOOKUP_FAILED`.
  */
 export function listReadyDrafts(actor: Actor, input: unknown): Promise<Result<ReadyDraft[]>> {
-  return makeListReadyDrafts(createSupabaseCaseStudyRepository())(actor, input);
+  return makeListReadyDrafts(createSupabaseCaseStudyRepository(), createSupabaseClientIntroRepository())(actor, input);
 }
 
 /**
@@ -567,7 +583,7 @@ export function transition(caseId: unknown, event: unknown, actor: Actor): Promi
 }
 
 function revisionDeps() {
-  return { cases: createSupabaseCaseStudyRepository(), revisions: createSupabaseRevisionRepository() };
+  return { cases: createSupabaseCaseStudyRepository(), revisions: createSupabaseRevisionRepository(), intros: createSupabaseClientIntroRepository() };
 }
 
 /**
@@ -643,13 +659,14 @@ export function approve(actor: Actor, input: unknown, caseAssetIds: CaseAssetIds
 }
 
 /**
- * The live revision of a subject (`{ kind: "case", id }`): the approved one, or
- * `null` when none is approved. Documents are upgraded to the current schema in
- * memory, never written back. Errors: `INVALID_INPUT` (malformed subject),
- * `SUBJECT_NOT_SUPPORTED` (`{ kind: "client_intro" }`, until Story 3.9), `NOT_FOUND`
- * (unknown or soft-deleted case), `REVISION_POINTER_INVALID` (the pointed revision is
- * missing, another case's, or not `approved`; logged), `CASE_STUDY_LOOKUP_FAILED`,
- * `CASE_STUDY_INVALID`, `REVISION_LOOKUP_FAILED`, `REVISION_INVALID` (the row),
+ * The live revision of a subject (`{ kind: "case", id }`, or `{ kind: "client_intro", id }`
+ * with the intro's id, Story 3.11): the approved one, or `null` when none is approved.
+ * Documents are upgraded to the current schema in memory, never written back. Errors:
+ * `INVALID_INPUT` (malformed subject), `NOT_FOUND` (unknown or soft-deleted case, or
+ * unknown intro or one of a deleted client), `REVISION_POINTER_INVALID` (the pointed
+ * revision is missing, another subject's, or not `approved`; logged), `CASE_STUDY_LOOKUP_FAILED`,
+ * `CASE_STUDY_INVALID`, `CLIENT_INTRO_LOOKUP_FAILED`, `CLIENT_INTRO_INVALID`,
+ * `REVISION_LOOKUP_FAILED`, `REVISION_INVALID` (the row),
  * `DOCUMENT_INVALID` and `DOCUMENT_SCHEMA_UNSUPPORTED` (a stored document that does
  * not upgrade).
  */
@@ -658,10 +675,10 @@ export function getLiveRevision(subject: unknown): Promise<Result<CaseStudyRevis
 }
 
 /**
- * The editable revision of a subject (`{ kind: "case", id }`): the head, or
- * `null` when it has none. Same upgrade and errors as `getLiveRevision`, except
- * that the head may have any status (`REVISION_POINTER_INVALID` only when it is
- * missing or another case's).
+ * The editable revision of a subject (`{ kind: "case", id }` or `{ kind: "client_intro",
+ * id }`): the head, or `null` when it has none. Same upgrade and errors as
+ * `getLiveRevision`, except that the head may have any status (`REVISION_POINTER_INVALID`
+ * only when it is missing or another subject's).
  */
 export function getEditableRevision(subject: unknown): Promise<Result<CaseStudyRevision | null>> {
   return makeGetEditableRevision(revisionDeps())(subject);
@@ -697,4 +714,83 @@ export function forkHead(actor: Actor, input: unknown): Promise<Result<ForkedHea
  */
 export function discardHead(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
   return makeDiscardHead(revisionDeps())(actor, input);
+}
+
+// ---------------------------------------------------------------------------
+// Client intros (Story 3.11)
+// ---------------------------------------------------------------------------
+
+function introDeps() {
+  return { intros: createSupabaseClientIntroRepository() };
+}
+
+/**
+ * The client's intro-and-outro document (`{ id, clientId, status, headRevisionId,
+ * approvedRevisionId, headVersion, ... }`), or `null` when it has none yet. Errors:
+ * `CLIENT_NOT_FOUND` (malformed id), `CLIENT_INTRO_LOOKUP_FAILED`, `CLIENT_INTRO_INVALID`.
+ * Call only after `authorize(actor, 'list clients')`.
+ */
+export function getClientIntro(clientId: unknown): Promise<Result<ClientIntro | null>> {
+  return makeGetClientIntro(introDeps())(clientId);
+}
+
+/**
+ * One intro by its own id (the worker reads it). Module-only: no authorization of its own,
+ * so call only after the caller's. Errors: `NOT_FOUND` (unknown, malformed, or its client
+ * deleted), `CLIENT_INTRO_LOOKUP_FAILED`, `CLIENT_INTRO_INVALID`.
+ */
+export function getClientIntroById(introId: unknown): Promise<Result<ClientIntro>> {
+  return makeGetClientIntroById(introDeps())(introId);
+}
+
+/**
+ * The only way a client intro's status changes (AD-3): the case transition table and
+ * events, compare-and-set, with one `transition` client event `{ event, from, to }` and the
+ * actor, in one transaction. `approve` is refused (intro approval arrives with Story 4.11).
+ * Call only with an already-authorized actor. Errors: `NOT_FOUND`, `INVALID_TRANSITION`,
+ * `STALE_STATUS`; nothing is written on any of them.
+ */
+export function transitionIntro(introId: unknown, event: unknown, actor: Actor): Promise<Result<ClientIntro>> {
+  return makeTransitionIntro(introDeps())(introId, event, actor);
+}
+
+/**
+ * Creates a `working` revision of a client intro (Story 3.11): input `{ clientIntroId, doc,
+ * manifest?, meta?, expectedHeadVersion }`, as `createWorkingRevision` takes for a case.
+ * `doc` must pass `generation.validateNewDocument` and be of kind `client_intro`. The
+ * revision becomes the intro's head by compare-and-set on its `headVersion`, a previous
+ * working head is superseded, and one `revision_created` client event is written, in one
+ * transaction. Call only with an already-authorized actor. Errors, with nothing written:
+ * `INVALID_INPUT`, `DOCUMENT_INVALID`, `DOCUMENT_SCHEMA_UNSUPPORTED`, `FORMAT_NOT_IN_REVISION`,
+ * `NOT_FOUND`, `STALE_HEAD`. `REVISION_WRITE_FAILED` may come after the write committed:
+ * re-read the intro.
+ */
+export function createIntroWorkingRevision(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+  return makeCreateIntroWorkingRevision(introDeps())(actor, input);
+}
+
+/**
+ * Starts a client's intro-and-outro draft after its save (Story 3.11, **Aggiungi** and
+ * **Salva**): input `{ clientId }`; `enqueue` is `jobs.enqueue` (passed in: jobs imports
+ * this module). A client with no intro, or whose intro is in Bozza, needs at least 2
+ * images (`NO_CLIENT_IMAGES`: no intro, no job); then its intro is created if needed, one
+ * `generate` job is enqueued (idempotent: a double click gets the same live job) and the
+ * intro moves to `generating`. Returns `{ outcome: "started", introId, jobId }`, or
+ * `{ outcome: "unchanged", introId, status }` for an intro in any other status (nothing
+ * written). Call only after `authorize(actor, 'manage clients')`. Errors: `INVALID_INPUT`,
+ * `CLIENT_NOT_FOUND`, `NO_CLIENT_IMAGES`, the lookups', the enqueue's and the transition's.
+ */
+export function startClientIntro(actor: Actor, input: unknown, enqueue: EnqueueGenerate): Promise<Result<ClientIntroStart>> {
+  return makeStartClientIntro({ ...introDeps(), clients: createSupabaseClientRepository(), enqueue })(actor, input);
+}
+
+/**
+ * A client's non-deleted files in position order, with no signed URLs. Module-only: the
+ * generate worker reads the intro's images; no authorization of its own, so call only
+ * after the caller's. Errors: `INVALID_INPUT`, `CLIENT_LOOKUP_FAILED`, `CLIENT_INVALID`.
+ */
+export async function listClientAssets(clientId: unknown): Promise<Result<ClientAsset[]>> {
+  const parsed = parseInput(z.uuid(), clientId);
+  if (!parsed.ok) return parsed;
+  return createSupabaseClientRepository().listAssets(parsed.value);
 }

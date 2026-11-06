@@ -470,6 +470,8 @@ export const it = {
       /** The client page's own call to action (the sidebar already says *Nuova case history*). */
       newCase: "Crea nuova case history",
       back: "Clienti",
+      /** Before the intro's status badge (Story 3.11): "Introduzione: Da approvare". */
+      intro: "Introduzione:",
     },
   },
   /**
@@ -1320,6 +1322,8 @@ export const it = {
   /** The toast anywhere in the app when a draft I started generating is ready (Story 3.8). */
   draftReady: {
     title: "{name} è pronta da rivedere.",
+    /** A client's intro and outro (Story 3.11); `{name}` is the client name. Apri opens the client page. */
+    introTitle: "L’introduzione di {name} è pronta da rivedere.",
     /** Opens the case in the configurator. */
     open: "Apri",
     /** The toast's close button (icon only; its accessible name). */

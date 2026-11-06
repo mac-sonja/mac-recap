@@ -20,6 +20,8 @@ export {
 export type { FileType, Format, FormatId, PageModel } from "@/modules/rendering/domain/formats";
 export {
   CASE_TEMPLATE,
+  CLIENT_TEMPLATE,
+  CLIENT_TEMPLATE_TEXT_KEYS,
   defaultPages,
   layouts,
   renderFormat,
@@ -39,6 +41,7 @@ export type {
   BoundResult,
   BoundTestimonial,
   BoundValues,
+  ClientTemplateTextKey,
   DefaultPage,
   GridArea,
   Layout,

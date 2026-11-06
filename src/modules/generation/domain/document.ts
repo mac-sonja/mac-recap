@@ -29,11 +29,13 @@ export const CLAIM_PROVENANCES = ["generated", "human_edited", "human_added"] as
 export type ClaimProvenance = (typeof CLAIM_PROVENANCES)[number];
 
 /**
- * The material a text can cite. Mirrors `MaterialRef` of `@/modules/material`
- * (domain code may not import another module; `src/modules/generation/index.test.ts`
- * keeps the two in sync). `client_field` refs arrive with Story 3.6.
+ * The material a text can cite. `asset` and `form_field` mirror `MaterialRef` of
+ * `@/modules/material` (domain code may not import another module;
+ * `src/modules/generation/index.test.ts` keeps the two in sync). `client_field` (Story
+ * 3.11) cites a field of the client's record (`id` the field: `name`, `description`,
+ * `context`, ...), as a client intro's texts do; the material module never resolves it.
  */
-export const MATERIAL_REF_KINDS = ["asset", "form_field"] as const;
+export const MATERIAL_REF_KINDS = ["asset", "form_field", "client_field"] as const;
 export const MAX_REF_ID_CHARS = 64;
 
 /** Size bounds of a document. */

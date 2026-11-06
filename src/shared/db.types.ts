@@ -229,6 +229,76 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"client_event": {
+                  Row: {
+                    "actor_id": string,"at": string,"client_intro_id": string,"data": NonNullable<Json>,"id": string,"revision_id": string | null,"type": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actor_id": string,"at"?: string,"client_intro_id": string,"data"?: NonNullable<Json>,"id"?: string,"revision_id"?: string | null,"type": string
+                  }
+                  Update: {
+                    "actor_id"?: string,"at"?: string,"client_intro_id"?: string,"data"?: NonNullable<Json>,"id"?: string,"revision_id"?: string | null,"type"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_event_actor_id_fkey"
+      columns: ["actor_id"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_event_client_intro_id_fkey"
+      columns: ["client_intro_id"]
+isOneToOne: false
+      referencedRelation: "client_intro"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_event_revision_id_fkey"
+      columns: ["revision_id"]
+isOneToOne: false
+      referencedRelation: "revision"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"client_intro": {
+                  Row: {
+                    "approved_revision_id": string | null,"client_id": string,"created_at": string,"created_by": string,"head_revision_id": string | null,"head_version": number,"id": string,"status": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "approved_revision_id"?: string | null,"client_id": string,"created_at"?: string,"created_by": string,"head_revision_id"?: string | null,"head_version"?: number,"id"?: string,"status"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "approved_revision_id"?: string | null,"client_id"?: string,"created_at"?: string,"created_by"?: string,"head_revision_id"?: string | null,"head_version"?: number,"id"?: string,"status"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_intro_approved_revision_id_fkey"
+      columns: ["approved_revision_id"]
+isOneToOne: false
+      referencedRelation: "revision"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_intro_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: true
+      referencedRelation: "client"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_intro_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_intro_head_revision_id_fkey"
+      columns: ["head_revision_id"]
+isOneToOne: false
+      referencedRelation: "revision"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"client_logo": {
                   Row: {
                     "client_id": string,"created_at": string,"created_by": string,"id": string,"mime_type": string,"path": string,"size_bytes": number
@@ -408,6 +478,12 @@ isOneToOne: false
       referencedRelation: "case_study"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "revision_client_intro_id_fkey"
+      columns: ["client_intro_id"]
+isOneToOne: false
+      referencedRelation: "client_intro"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "revision_created_by_fkey"
       columns: ["created_by"]
 isOneToOne: false
@@ -542,8 +618,50 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"create_client_intro":
+{ Args: { "p_actor_id": string,"p_client_id": string }; Returns: {
+              "approved_revision_id": string | null,
+"client_id": string,
+"created_at": string,
+"created_by": string,
+"head_revision_id": string | null,
+"head_version": number,
+"id": string,
+"status": string,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "client_intro"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "create_working_revision":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_doc": Json,"p_expected_head_version": number,"p_manifest": Json,"p_meta": Json }; Returns: {
+              "case_id": string | null,
+"client_intro_id": string | null,
+"created_at": string,
+"created_by": string,
+"doc": NonNullable<Json>,
+"fell_back": boolean,
+"generated_doc": NonNullable<Json>,
+"id": string,
+"manifest": NonNullable<Json>,
+"model": string | null,
+"prompt_version": string | null,
+"schema_version": number,
+"status": string,
+"updated_at": string,
+"version": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "revision"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"create_working_revision_for_client_intro":
+{ Args: { "p_actor_id": string,"p_client_intro_id": string,"p_doc": Json,"p_expected_head_version": number,"p_manifest": Json,"p_meta": Json }; Returns: {
               "case_id": string | null,
 "client_intro_id": string | null,
 "created_at": string,
@@ -795,6 +913,24 @@ isOneToOne: false
                           SetofOptions: {
         from: "*"
         to: "case_study"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"transition_client_intro":
+{ Args: { "p_actor_id": string,"p_client_intro_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {
+              "approved_revision_id": string | null,
+"client_id": string,
+"created_at": string,
+"created_by": string,
+"head_revision_id": string | null,
+"head_version": number,
+"id": string,
+"status": string,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "client_intro"
         isOneToOne: true
         isSetofReturn: false
       } },

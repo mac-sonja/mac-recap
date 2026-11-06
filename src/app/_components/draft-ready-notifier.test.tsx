@@ -337,4 +337,35 @@ describe("DraftReadyNotifier (Story 3.8)", () => {
     await advance(DRAFT_READY_POLL_MS * 2);
     expect(listReadyDrafts).not.toHaveBeenCalled();
   });
+
+  describe("a client's intro (Story 3.11)", () => {
+    const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
+    const intro = { kind: "client_intro" as const, id: CLIENT_ID, name: "Lumen Srl", readyAt: "2026-11-04T10:00:03.000000+00:00" };
+    const introTitle = fill(dict.draftReady.introTitle, { name: "Lumen Srl" });
+
+    it("toasts that the intro is ready and Apri opens the client page", async () => {
+      listReadyDrafts.mockResolvedValue({ ok: true, value: [intro] });
+      await renderNotifier();
+      await poll();
+      expect(toasts()[0].textContent).toContain(introTitle);
+      expect(liveRegion().textContent).toBe(introTitle);
+      expect(screen.getByRole("link", { name: dict.draftReady.open }).getAttribute("href")).toBe(`/clients/${CLIENT_ID}`);
+    });
+
+    it("gives no toast while the client's page is open", async () => {
+      location.pathname = `/clients/${CLIENT_ID}`;
+      listReadyDrafts.mockResolvedValue({ ok: true, value: [intro] });
+      await renderNotifier();
+      await poll();
+      expect(toasts()).toHaveLength(0);
+    });
+
+    it("toasts a case whose id is the open client page's (a case is open only in its configurator)", async () => {
+      location.pathname = `/clients/${draft(1).id}`;
+      listReadyDrafts.mockResolvedValue({ ok: true, value: [{ ...draft(1), kind: "case" }] });
+      await renderNotifier();
+      await poll();
+      expect(toasts()).toHaveLength(1);
+    });
+  });
 });

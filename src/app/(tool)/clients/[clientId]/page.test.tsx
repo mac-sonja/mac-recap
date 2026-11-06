@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
-import type { CaseStudy, ClientDetail, ClientSector, ListedClientAsset, ListScope } from "@/modules/case-study";
+import type { CaseStudy, ClientDetail, ClientIntro, ClientSector, ListedClientAsset, ListScope } from "@/modules/case-study";
 import { it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
@@ -11,6 +11,7 @@ const getClient = vi.fn<(id: unknown) => Promise<Result<ClientDetail>>>();
 const list = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
 const listClientMaterial = vi.fn<(input: unknown) => Promise<Result<ListedClientAsset[]>>>();
 const listClientSectors = vi.fn<() => Promise<Result<ClientSector[]>>>();
+const getClientIntro = vi.fn<(clientId: unknown) => Promise<Result<ClientIntro | null>>>();
 const SECTORS: ClientSector[] = [
   { key: "interior_design", label: "Interior design" },
   { key: "energia", label: "Energia" },
@@ -31,6 +32,7 @@ vi.mock("@/modules/case-study", () => ({
   list: (scope: ListScope) => list(scope),
   listClientMaterial: (input: unknown) => listClientMaterial(input),
   listClientSectors: () => listClientSectors(),
+  getClientIntro: (clientId: unknown) => getClientIntro(clientId),
 }));
 
 vi.mock("../_lib/client-limits", () => ({ clientLimits: () => ({}), clientMaterialLimits: () => ({}) }));
@@ -117,6 +119,20 @@ beforeEach(() => {
   list.mockResolvedValue(ok([caseStudy()]));
   listClientSectors.mockReset();
   listClientSectors.mockResolvedValue(ok(SECTORS));
+  getClientIntro.mockReset();
+  getClientIntro.mockResolvedValue(ok(null));
+});
+
+const intro = (status: ClientIntro["status"]): ClientIntro => ({
+  id: "dddddddd-0000-4000-8000-000000000001",
+  clientId: LUMEN.id,
+  status,
+  headRevisionId: null,
+  approvedRevisionId: null,
+  headVersion: 0,
+  createdBy: "00000000-0000-4000-8000-000000000002",
+  createdAt: "2026-11-06T10:00:00+00:00",
+  updatedAt: "2026-11-06T10:00:00+00:00",
 });
 
 const NEW_HREF = `/case-studies/new?clientId=${LUMEN.id}`;
@@ -161,6 +177,30 @@ describe("ClientPage", () => {
     expect(html).toContain(
       `<div data-panel="${LUMEN.id}" data-assets="f1,f2" data-case-count="2" data-sectors="interior_design,energia,risorse_umane,lusso,nautica"></div>`,
     );
+  });
+
+  describe("the intro's status (Story 3.11)", () => {
+    it("shows no badge while the client has no intro", async () => {
+      const html = await renderPage();
+      expect(getClientIntro).toHaveBeenCalledWith(LUMEN.id);
+      expect(html).not.toContain("data-intro-status");
+      expect(html).not.toContain(dict.clients.detail.intro);
+    });
+
+    it.each([
+      ["generating", "In elaborazione"],
+      ["in_review", "Da approvare"],
+      ["draft", "Bozza"],
+    ] as const)("shows Introduzione: and the %s badge", async (status, label) => {
+      getClientIntro.mockResolvedValue(ok(intro(status)));
+      const html = await renderPage();
+      expect(html).toMatch(new RegExp(`<p role="status" aria-live="polite" data-intro-status="${status}"[^>]*><span>${dict.clients.detail.intro}</span><span data-status="${status}"[^>]*>${label}</span></p>`));
+    });
+
+    it("throws into the error boundary when the intro can't be read", async () => {
+      getClientIntro.mockResolvedValue(err({ code: "CLIENT_INTRO_LOOKUP_FAILED", message: "down" }));
+      await expect(renderPage()).rejects.toThrow(/CLIENT_INTRO_LOOKUP_FAILED/);
+    });
   });
 
   it("throws into the error boundary when the sectors can't be read", async () => {

@@ -15,11 +15,18 @@ import {
   type DraftReadySession,
   type ReadyDraftNotice,
 } from "@/app/_lib/draft-ready";
-import { configuratorHref } from "@/app/_lib/routes";
+import { clientHref, configuratorHref } from "@/app/_lib/routes";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
 const copy = it.draftReady;
+
+/** Whether a ready draft is a client's intro (Story 3.11): its toast opens the client page. */
+const isIntro = (draft: ReadyDraftNotice) => draft.kind === "client_intro";
+/** What a toast says: the case's name, or the client's intro. */
+const titleOf = (draft: ReadyDraftNotice) => fill(isIntro(draft) ? copy.introTitle : copy.title, { name: draft.name });
+/** Where **Apri** goes: the case's configurator, or the client's page for an intro (until Story 4.11). */
+const hrefOf = (draft: ReadyDraftNotice) => (isIntro(draft) ? clientHref(draft.id) : configuratorHref(draft.id));
 
 /** The wizard's path; with `?caseId=` it is that case's page (its generating screen while it generates). */
 const WIZARD_PATH = "/case-studies/new";
@@ -53,7 +60,8 @@ const isPlainClick = (event: MouseEvent) =>
 
 /**
  * Tells the person, wherever they are in the app, when a case they started generating
- * reaches Da approvare (Story 3.8): every 15 seconds it asks the server for their drafts
+ * reaches Da approvare (Story 3.8), or a client's intro their save started (Story 3.11; its
+ * toast opens the client page): every 15 seconds it asks the server for their drafts
  * that became ready since this page session began, and shows one toast per case, newest at
  * the bottom, at most three. One persistent, visually hidden live region announces each new
  * toast politely; focus never moves. A draft whose case is the page already open (its
@@ -68,10 +76,11 @@ export function DraftReadyNotifier({ startedAt }: { startedAt: string }) {
   const startedAtRef = useRef(startedAt);
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const openCaseRef = useRef<(id: string) => boolean>(() => false);
+  const openCaseRef = useRef<(id: string, kind: "case" | "client_intro") => boolean>(() => false);
   useEffect(() => {
     const wizardCaseId = pathname === WIZARD_PATH ? searchParams?.get("caseId") : null;
-    openCaseRef.current = (id) => pathname === configuratorHref(id) || wizardCaseId === id;
+    openCaseRef.current = (id, kind) =>
+      kind === "client_intro" ? pathname === clientHref(id) : pathname === configuratorHref(id) || wizardCaseId === id;
   });
 
   useEffect(() => {
@@ -110,10 +119,10 @@ export function DraftReadyNotifier({ startedAt }: { startedAt: string }) {
           }
           return;
         }
-        const fresh = takeNewDrafts(current, result.value, undefined, (id) => openCaseRef.current(id));
+        const fresh = takeNewDrafts(current, result.value, undefined, (id, kind) => openCaseRef.current(id, kind));
         if (fresh.length > 0) {
           setToasts((shown) => stackToasts(shown, fresh));
-          setAnnouncement(fresh.map((draft) => fill(copy.title, { name: draft.name })).join(" "));
+          setAnnouncement(fresh.map(titleOf).join(" "));
         }
       } catch {
         if (!disposed) logPollFailure(current, "network");
@@ -172,7 +181,8 @@ export function DraftReadyNotifier({ startedAt }: { startedAt: string }) {
 /**
  * One toast, never taking focus. It closes by itself after 10 seconds, paused while the
  * pointer is over it or focus is inside it, the time left kept across remounts; **Apri**
- * opens the case's configurator and, on a plain click, closes it.
+ * opens the case's configurator (a client intro's: the client page) and, on a plain click,
+ * closes it.
  */
 function DraftReadyToast({ toast, onClose }: { toast: ReadyDraftNotice; onClose: () => void }) {
   const [hovered, setHovered] = useState(false);
@@ -210,10 +220,10 @@ function DraftReadyToast({ toast, onClose }: { toast: ReadyDraftNotice; onClose:
       className="pointer-events-auto flex items-center gap-3 rounded-lg bg-surface-inverse py-3 pr-2 pl-4 text-surface-inverse-foreground shadow-popover motion-safe:animate-enter motion-reduce:animate-none"
     >
       <p id={messageId} className="min-w-0 flex-1 font-body text-sm">
-        {fill(copy.title, { name: toast.name })}
+        {titleOf(toast)}
       </p>
       <Link
-        href={configuratorHref(toast.id)}
+        href={hrefOf(toast)}
         onClick={(event) => {
           if (isPlainClick(event)) onClose();
         }}

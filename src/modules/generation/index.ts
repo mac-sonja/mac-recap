@@ -113,8 +113,29 @@ export {
 export type { CaseDocumentInput, DraftText, TestDraftForm, TestDraftInput } from "@/modules/generation/application/test-draft";
 
 /** Story 3.7: the generate job's payload, input hash and the text-source seam Story 3.6 replaces (pure; the handler is in `worker.ts`). */
-export { generateInputHash, generatePayloadSchema, JOB_OK } from "@/modules/generation/application/generate-case";
-export type { GenerateManifest, GeneratePayload } from "@/modules/generation/application/generate-case";
+export {
+  clientIntroGenerateJob,
+  clientIntroPayloadSchema,
+  GENERATE_SUBJECTS,
+  generateInputHash,
+  generatePayloadSchema,
+  JOB_OK,
+  MIN_CLIENT_IMAGES,
+} from "@/modules/generation/application/generate-case";
+export type {
+  ClientIntroGenerateJob,
+  ClientIntroPayload,
+  GenerateManifest,
+  GeneratePayload,
+  GenerateSubject,
+} from "@/modules/generation/application/generate-case";
+/** Story 3.11: a client's intro-and-outro document with test text, and the builder Story 3.9 reuses with the AI's (pure). */
+export {
+  buildClientIntroDocument,
+  buildClientIntroTestDraft,
+  clientIntroTestTexts,
+} from "@/modules/generation/application/client-intro-draft";
+export type { ClientDraftTexts, ClientIntroDraftClient, ClientIntroDraftInput } from "@/modules/generation/application/client-intro-draft";
 export { testDraftTextSource } from "@/modules/generation/application/text-source";
 export type { TextSource, TextSourceInput } from "@/modules/generation/application/text-source";
 
