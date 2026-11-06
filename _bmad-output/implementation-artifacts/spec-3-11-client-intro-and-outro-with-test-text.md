@@ -122,6 +122,28 @@ context:
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Badge auto-refresh never run by a test (gap) | medium | `page.test.tsx` renders statically, so `useEffect` never runs; no `intro-status` test exists | patch |
+| 2 | Page renders before the fire-and-forget start moves the intro (edge) | medium | `client-panel.tsx` step 5 calls `router.replace` right after firing the action, so the RSC read can come first and the badge never polls | patch (await the start, then navigate whatever the outcome) |
+| 3 | Navigation not proven unblocked; start errors dropped (blind) | low | Same root as 2: awaiting the start makes the order explicit; errors stay silent by design (spec: page opens whatever the outcome) | patch (with 2) |
+| 4 | Intro read failure hides ready-case toasts (blind, edge) | medium | `list-ready-drafts.ts` returns `ofIntros` error for the whole poll | patch |
+| 5 | `MIN_CLIENT_IMAGES` duplicated, no sync test (blind) | low | `generate-case.ts` hard-codes 2; a one-line assertion like `MATERIAL_REF_KINDS`'s | patch |
+| 6 | DB retry test returns the old queued job (blind) | low | Job dedup is on live jobs (`job_live_input_key`); the old job is still `queued`, same hash | patch |
+| 7 | No live region for the status change (blind) | low | `<p>` has no `role="status"`; direct one-attribute fix, WCAG 2.2 AA | patch |
+| 8 | Endless refresh if stuck in generating (edge, blind) | low | Only after a failed rollback (already logged as an error); a cap adds a branch; case screens poll the same way | reject |
+| 9 | Orphan queued job when the transition fails for a non-race reason (edge, blind) | low | Needs a DB write failure or client deletion between enqueue and transition; the job then fails out harmlessly (`onPermanentFailure` leaves a non-generating intro alone); cancelling adds surface | reject |
+| 10 | STALE_HEAD rollback while another job holds generating (edge) | false | Only one live job per intro: enqueue happens only from Bozza and failed jobs end before the intro returns to Bozza | reject |
+| 11 | Unclear write success misattributed to another writer (edge) | false | No other intro writer exists in this story (no intro editing until 4.11) | reject |
+| 12 | `generate` events query without limit (edge) | low | Mirrors the case query in `case-study-repository.ts:377`; needs over 1000 starts on one intro | reject |
+| 13 | Page throws when the intro read fails (blind) | low | Every other read on the page throws the same way; consistent, a rare DB failure | reject |
+| 14 | Failed draft looks like Bozza; retry only via Salva (blind) | false | Owner decision 2026-11-06: badge states In elaborazione / Da approvare / Bozza, Salva retries | reject |
+| 15 | Toast opens a page with only a badge (blind) | false | Owner decision: the toast opens the client page until 4.11 | reject |
+| 16 | Intro text goes stale after client edits (blind) | low | Name, sector, results and images stay bindings or live reads; text excerpts are test text that 3.9 and 4.11 replace | reject |
+| 17 | No `job_failed` client event for intro jobs (blind) | low | The intro still gets its `generation_failed` transition; a new event kind adds surface | reject |
+| 18 | `client_field` refs accepted in case documents (blind) | low | Nothing resolves refs by kind yet; a per-kind check adds schema logic for an unreached path | reject |
+| 19 | Client page reads run one after another (blind) | low | One extra round trip; the page's existing reads are sequential the same way | reject |
+
 ## Design Notes
 
 The template id is new (`mac-client`), not `mac-case@2`, so a case keeps `CASE_TEMPLATE` and the design team's cover/outro becomes `mac-client@2`. Existing placeholder drafts stay readable on v1.
