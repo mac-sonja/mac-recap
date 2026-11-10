@@ -333,3 +333,7 @@
 - source_spec: none
   summary: Story 4.11 part 2 (4.11b): edit an approved client intro as in Story 4.9 (fork a working copy, Aggiorna versione approvata, Annulla modifiche), with intro versions of fork_head, update_approved_revision and discard_head.
   evidence: Owner chose on 2026-11-06 to build A7 in two parts; part 1 (4.11a) opens, edits, saves and approves the intro.
+
+- source_spec: none
+  summary: Story 4.12 part 2 (4.12b): reorder the client's cases by dragging their rows in Progetti del cliente, saved for the client (new storage) and followed by the client file and the client pack.
+  evidence: Owner chose on 2026-11-10 to build A8 in two parts; part 1 (4.12a) opens and edits the client's whole file.
