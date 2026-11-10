@@ -122,6 +122,24 @@ context:
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | `packStatus` hands out a stored file without comparing hashes: stale after a client or field edit, and a case's own export can pass as the pack (blind, edge) | high | `makePackStatus` checks `sameParts` only; a one-case pack without an approved intro has the same parts as the case's own export | patch |
+| 2 | Assets collected from pages the pack drops can fail the job (edge, blind) | medium | `mediaAssets` uses `pagesIn(part, format)` before composing | patch |
+| 3 | A case deleted or unapproved between listing and reading fails the whole pack (edge) | medium | `readPackParts` returns the `getLiveRevision` error | patch |
+| 4 | A failed event write fails a ready delivery (blind, edge) | low | `deliverPack` returns the `recordEvent` error | patch |
+| 5 | One failed intro read throws the Clienti page (blind) | low | `clients/page.tsx` throws on `getClientIntro` error | patch |
+| 6 | Incomplete refusal mapping; JSDoc contradicts the poll code (blind) | low | `packRefusalFor` covers two codes | patch |
+| 7 | Dialog note not announced (blind) | low | No `aria-describedby` on the note | patch |
+| 8 | Untyped business-line lookup (blind) | low | `line as BusinessLine` | patch |
+| 9 | Per-case values, Carosello closing, `CLIENT_NOT_FOUND`, page-level intro note untested; bad test default (gap, blind) | medium | Identical fixture cases; Chiusura fixture missing; no test for the permanent code; pages mock `ok(null)` | patch |
+| 10 | Duplicate export events on every delivery or poll (blind, edge) | low | Same pattern as the single-case `deliver` (5.3) | reject |
+| 11 | Size limit checked late; serial reads; unbounded media listing (blind, edge) | low | A client has a handful of cases, far from 200 | reject |
+| 12 | Missing-format refusal doesn't name the part (blind) | low | Rare; the dialog already says a part lacks the format | reject |
+| 13 | Failed pack reason not shown or logged per client (blind) | low | Pressing Scarica again rebuilds; job failures are logged | reject |
+| 14 | Approved intro with no intro/outro-role pages (edge) | low | The client template always has both roles | reject |
+| 15 | Media links fetched but unused (blind) | low | Same root as #2; fixed there | patch |
+
 ## Verification
 
 **Commands:**
