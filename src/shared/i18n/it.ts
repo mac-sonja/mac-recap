@@ -670,6 +670,10 @@ export const it = {
     collectionNotApproved: "Questa raccolta non ha una case approvata da esportare.",
     /** In the collection's dialog: a part has no pages in this format (`FORMAT_NOT_IN_REVISION`). */
     collectionFormatMissing: "Una parte della raccolta non ha pagine in questo formato. Scegline un altro.",
+    /** In the toast while exporting a collection: it changed since the request (`EXPORT_STALE`). */
+    collectionStale: "La raccolta è cambiata: esportala di nuovo.",
+    /** In the collection's dialog: more parts than one file holds (`EXPORT_TOO_LARGE`). */
+    collectionTooLarge: "La raccolta è troppo grande per un solo file. Togli qualche case e riprova.",
     /** The failure toast on a collection's Esporta: names the collection. */
     failedCollection: "L’esportazione della raccolta {name} non è finita.",
     caseTitle: "Scarica {name}",

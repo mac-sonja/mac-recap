@@ -64,7 +64,7 @@ const record = (hash: string, parts: ExportPart[], over: Partial<ExportRecord> =
 const presentazione = () => revision().doc.formats.presentazione_16_9.pages;
 
 describe("a collection's file (Story 5.10b)", () => {
-  it("mixed: A's intro, A1, A2 without their own intros, A's closing, then B1 whole; live revisions only", async () => {
+  it("mixed: the intro of A and B's client, A and B without their own intros, its closing, then X whole; live revisions only", async () => {
     const d = deps();
     const file = await collectionNow(d);
     expect(file.parts).toEqual([introPart, casePart("A"), casePart("B"), casePart("X")]);
@@ -82,18 +82,18 @@ describe("a collection's file (Story 5.10b)", () => {
     expect(drawing.parts.map((p) => p.clientId)).toEqual([CLIENT_ID, CLIENT_ID, CLIENT_ID, OTHER_CLIENT_ID]);
   });
 
-  it.each(["unapproved", "none"] as const)("intro not approved (%s): A1, A2 and B1 whole", async (intro) => {
+  it.each(["unapproved", "none"] as const)("intro not approved (%s): A, B and X whole", async (intro) => {
     const file = await collectionNow(deps({ intro }));
     expect(file.parts).toEqual([casePart("A"), casePart("B"), casePart("X")]);
     expect(file.drawings[0].pageCount).toBe(3 * presentazione().length);
   });
 
-  it("a client with one case keeps its own intro and closing, even with an approved intro", async () => {
+  it("a client with one case (A alone) keeps its own intro and closing, even with an approved intro", async () => {
     const file = await collectionNow(deps({ items: ["A", "X"] }));
     expect(file.parts).toEqual([casePart("A"), casePart("X")]);
   });
 
-  it("leaves out a case that lost its approval or was deleted, and counts it", async () => {
+  it("leaves out X when it lost its approval, A when deleted, and counts it", async () => {
     const file = await collectionNow(deps({ unavailable: ["X"] }));
     expect(file.parts).toEqual([introPart, casePart("A"), casePart("B")]);
     expect(file.unavailable).toBe(1);
@@ -106,7 +106,7 @@ describe("a collection's file (Story 5.10b)", () => {
     expect((await collectionNow(gone)).parts).toEqual([casePart("B"), casePart("X")]);
   });
 
-  it("drops each wrapped case's own Carosello Chiusura and keeps the client's closing once", async () => {
+  it("drops A's and B's own Carosello Chiusura and keeps their client's closing once; X keeps its own", async () => {
     const file = await collectionNow(deps(), ["carosello_1_1"]);
     const own = packCaseRevision("A").doc.formats.carosello_1_1.pages;
     const keep = own.filter((p) => p.role !== "intro" && p.pageKey !== "closing").length;
@@ -285,10 +285,59 @@ describe("collectionStatus (Story 5.10b)", () => {
     });
   });
 
-  it("refuses a collection with no available case before looking anything up (NOT_APPROVED)", async () => {
+  it("refuses a collection with no available case before looking a file up (NOT_APPROVED)", async () => {
     const d = deps({ unavailable: ["A", "B", "X"] });
+    expect(await makeCollectionStatus(d)(ACTOR, { collectionId: COLLECTION_ID, exportId: EXPORT_ID })).toMatchObject({ ok: false, error: { code: "NOT_APPROVED" } });
+    vi.mocked(d.getJobsFor).mockResolvedValue(ok([{ id: JOB_ID, kind: "export", status: "succeeded", inputHash: "a".repeat(64) }]));
     expect(await makeCollectionStatus(d)(ACTOR, { collectionId: COLLECTION_ID, jobId: JOB_ID })).toMatchObject({ ok: false, error: { code: "NOT_APPROVED" } });
-    expect(d.getJobsFor).not.toHaveBeenCalled();
+    expect(d.exports.findById).not.toHaveBeenCalled();
+    expect(d.exports.findByHash).not.toHaveBeenCalled();
+  });
+
+  it("answers a queued, running or failed job from its state alone, reading no collection", async () => {
+    const d = deps();
+    for (const status of ["queued", "running"] as const) {
+      vi.mocked(d.getJobsFor).mockResolvedValue(ok([{ id: JOB_ID, kind: "export", status, inputHash: "a".repeat(64) }]));
+      expect(await makeCollectionStatus(d)(ACTOR, { collectionId: COLLECTION_ID, jobId: JOB_ID })).toEqual(ok({ status: "pending", jobId: JOB_ID }));
+    }
+    vi.mocked(d.getJobsFor).mockResolvedValue(ok([{ id: JOB_ID, kind: "export", status: "failed", inputHash: "a".repeat(64) }]));
+    expect(await makeCollectionStatus(d)(ACTOR, { collectionId: COLLECTION_ID, jobId: JOB_ID })).toEqual(ok({ status: "failed" }));
+    expect(d.getCollection).not.toHaveBeenCalled();
+    expect(d.getLiveRevision).not.toHaveBeenCalled();
+  });
+
+  it("reads the collection once to hand out a ready bundle, even when a part lacks a format", async () => {
+    const d = deps();
+    const file = await collectionNow(d, ["presentazione_16_9", "carosello_1_1"]);
+    const hash = bundleHashOfDrawings(file.drawings);
+    vi.mocked(d.getCollection).mockClear();
+    vi.mocked(d.getJobsFor).mockResolvedValue(ok([{ id: JOB_ID, kind: "export", status: "succeeded", inputHash: hash }]));
+    vi.mocked(d.exports.findByHash).mockResolvedValue(ok(record(hash, [...file.parts], { format: "bundle" })));
+    expect(await makeCollectionStatus(d)(ACTOR, { collectionId: COLLECTION_ID, jobId: JOB_ID })).toMatchObject({ ok: true, value: { status: "ready", fileName: "Pitch moda.zip" } });
+    expect(d.getCollection).toHaveBeenCalledOnce();
+
+    // X has no Carosello now: the stored Presentazione is still handed out, the bundle is stale.
+    const live = vi.mocked(d.getLiveRevision).getMockImplementation()!;
+    vi.mocked(d.getLiveRevision).mockImplementation(async (subject) => {
+      const found = await live(subject);
+      if (subject.id !== collectionCaseId("X") || !found.ok || found.value === null) return found;
+      return ok({ ...found.value, doc: { ...found.value.doc, formats: { ...found.value.doc.formats, carosello_1_1: { pages: [] } } } } as typeof found.value);
+    });
+    expect(await makeCollectionStatus(d)(ACTOR, { collectionId: COLLECTION_ID, jobId: JOB_ID })).toMatchObject({ ok: false, error: { code: "EXPORT_STALE" } });
+    const single = file.drawings.find((dr) => dr.format === "presentazione_16_9")!.contentHash;
+    vi.mocked(d.getJobsFor).mockResolvedValue(ok([{ id: JOB_ID, kind: "export", status: "succeeded", inputHash: single }]));
+    vi.mocked(d.exports.findByHash).mockResolvedValue(ok(record(single, [...file.parts])));
+    expect(await makeCollectionStatus(d)(ACTOR, { collectionId: COLLECTION_ID, jobId: JOB_ID })).toMatchObject({ ok: true, value: { status: "ready" } });
+  });
+
+  it("names files Raccolta when nothing of the collection's name is safe", async () => {
+    const d = deps({ name: "/:/" });
+    const file = await collectionNow(d);
+    vi.mocked(d.exports.findByHash).mockResolvedValue(ok(record(file.drawings[0].contentHash, [...file.parts])));
+    expect(await makeRequestCollection(d)(ACTOR, { collectionId: COLLECTION_ID, formats: ["presentazione_16_9"] })).toMatchObject({
+      ok: true,
+      value: { fileName: "Raccolta – Presentazione.pdf" },
+    });
   });
 
   it("names the wrong fields", async () => {

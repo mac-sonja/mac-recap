@@ -5,7 +5,6 @@ import {
   bundleHashOf,
   bundleHashOfDrawings,
   notApproved,
-  readCollectionParts,
   readCollectionSources,
   readExportSources,
   readPackParts,
@@ -22,6 +21,7 @@ import {
   EXPORT_MAX_PARTS,
   EXPORT_STALE,
   EXPORT_TOO_LARGE,
+  collectionFileName,
   collectionStatusInputSchema,
   exportStatusInputSchema,
   requestCollectionInputSchema,
@@ -405,25 +405,16 @@ export interface RequestCollectionDeps extends RequestExportDeps, CollectionSour
 }
 
 /**
- * Every content hash the collection's file has now: each format it can export alone, and
- * each bundle of two or more of them. Errors: the reads' (a format a part lacks is left out).
+ * Every content hash the collection's file has now, from one read (`drawings`, a format a part
+ * lacks left out): each format alone, and each bundle of two or more of them.
  */
-async function currentCollectionHashes(deps: CollectionSourceDeps, collectionId: string): Promise<Result<Set<string>>> {
-  const drawings: ExportDrawing[] = [];
-  for (const format of EXPORT_FORMAT_IDS) {
-    const read = await readCollectionSources(deps, collectionId, [format]);
-    if (!read.ok) {
-      if (read.error.code === FORMAT_NOT_IN_REVISION) continue;
-      return read;
-    }
-    drawings.push(read.value.drawings[0]);
-  }
+function collectionHashesOf(drawings: readonly ExportDrawing[]): Set<string> {
   const hashes = new Set(drawings.map((d) => d.contentHash));
   for (let mask = 0; mask < 1 << drawings.length; mask++) {
     const chosen = drawings.filter((_, i) => (mask & (1 << i)) !== 0);
     if (chosen.length >= 2) hashes.add(bundleHashOfDrawings(chosen));
   }
-  return ok(hashes);
+  return hashes;
 }
 
 /**
@@ -437,7 +428,7 @@ async function deliverCollection(
   collection: ExportCollection,
   record: ExportRecord,
 ): Promise<Result<ExportTicket>> {
-  const fileName = recordFileName("", collection.name, record.format);
+  const fileName = recordFileName("", collectionFileName(collection.name), record.format);
   const url = await deps.storage.presignDownload(record.path, EXPORT_URL_TTL_SECONDS, fileName);
   if (!url.ok) return url;
   const recorded = await deps.recordCollectionEvent(actor, { collectionId: collection.id, exportId: record.id, format: record.format });
@@ -492,14 +483,16 @@ export function makeRequestCollection(deps: RequestCollectionDeps) {
 
 /**
  * Where a collection request stands (Story 5.10b): input `{ collectionId, jobId }` or
- * `{ collectionId, exportId }`. As `packStatus`: `pending`, `failed`, or `ready` (with a
- * `collection_exported` event). The collection must still have an available case
- * (`NOT_APPROVED`), and the file must be of the collection as it is now: the same parts with
- * the same approved revisions in the same order and one of its current content hashes
- * (`EXPORT_STALE` otherwise, after a reorder, a rename, an added or removed case, a newer
- * approved version or a client field edit: ask again). A case's own export or a client pack
- * never has a collection's hash. Authorize first. Errors also: `INVALID_INPUT`, `NOT_FOUND`
- * (an unknown job or export, or one of none of its cases), `COLLECTION_NOT_FOUND`, the reads'.
+ * `{ collectionId, exportId }`. `pending` or `failed` straight from the collection's job (the
+ * 2 s poll reads nothing else meanwhile). Before a file is handed out (`ready`, with a
+ * `collection_exported` event) the collection is read once, live revisions only: it must still
+ * have an available case (`NOT_APPROVED`), and the file must be of the collection as it is now,
+ * the same parts in the same order and one of its current content hashes, all taken from that
+ * one read (`EXPORT_STALE` otherwise, after a reorder, a rename, an added or removed case, a
+ * newer approved version or a client field edit: ask again). A case's own export or a client
+ * pack never has a collection's hash. Authorize first. Errors also: `INVALID_INPUT`,
+ * `NOT_FOUND` (an unknown job or export, or one of none of its cases), `COLLECTION_NOT_FOUND`,
+ * the reads'.
  */
 export function makeCollectionStatus(deps: RequestCollectionDeps) {
   return async function collectionStatus(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
@@ -508,31 +501,29 @@ export function makeCollectionStatus(deps: RequestCollectionDeps) {
     const collectionId = parsed.data.collectionId.toLowerCase();
     const notFound = () => err({ code: "NOT_FOUND", message: "No such export.", details: { collectionId } });
 
-    // Approved only (NFR1): nothing is looked up, let alone handed out, without an available case.
-    const read = await readCollectionParts(deps, collectionId);
-    if (!read.ok) return read;
-    const { collection, parts } = read.value;
-    const stale = () => err({ code: EXPORT_STALE, message: "The collection changed since: export it again.", details: { collectionId: collection.id } });
-
-    let record: ExportRecord | null;
+    // A job still working or failed is answered from its state alone.
+    let hash: string | null = null;
     if ("jobId" in parsed.data) {
-      const jobs = await deps.getJobsFor(collection.id);
+      const jobs = await deps.getJobsFor(collectionId);
       if (!jobs.ok) return jobs;
       const wanted = parsed.data.jobId.toLowerCase();
       const job = jobs.value.find((j) => j.id.toLowerCase() === wanted);
       if (job === undefined || job.kind !== "export") return notFound();
       if (job.status === "queued" || job.status === "running") return ok({ status: "pending", jobId: job.id });
       if (job.status === "failed") return ok({ status: "failed" });
-      const stored = await deps.exports.findByHash(job.inputHash);
-      if (!stored.ok) return stored;
-      if (stored.value === null) return ok({ status: "failed" });
-      record = stored.value;
-    } else {
-      const stored = await deps.exports.findById(parsed.data.exportId);
-      if (!stored.ok) return stored;
-      record = stored.value;
+      hash = job.inputHash;
     }
-    if (record === null) return notFound();
+
+    // Approved only (NFR1): nothing is handed out without an available case, read once now.
+    const read = await readCollectionSources(deps, collectionId, EXPORT_FORMAT_IDS, { skipMissingFormats: true });
+    if (!read.ok) return read;
+    const { collection, parts, drawings } = read.value;
+    const stale = () => err({ code: EXPORT_STALE, message: "The collection changed since: export it again.", details: { collectionId: collection.id } });
+
+    const stored = hash === null ? await deps.exports.findById((parsed.data as { exportId: string }).exportId) : await deps.exports.findByHash(hash);
+    if (!stored.ok) return stored;
+    const record = stored.value;
+    if (record === null) return hash === null ? notFound() : ok({ status: "failed" });
 
     // Handed out only while it is of the collection as it is now: the same parts and one of its
     // current content hashes (a rename or a client field edit gives another one; a case's own
@@ -542,9 +533,7 @@ export function makeCollectionStatus(deps: RequestCollectionDeps) {
       if (!record.parts.some((p) => ours.has(p.subject.id.toLowerCase()))) return notFound();
       return stale();
     }
-    const current = await currentCollectionHashes(deps, collection.id);
-    if (!current.ok) return current;
-    if (!current.value.has(record.contentHash.toLowerCase())) return stale();
+    if (!collectionHashesOf(drawings).has(record.contentHash.toLowerCase())) return stale();
     return deliverCollection(deps, actor, collection, record);
   };
 }

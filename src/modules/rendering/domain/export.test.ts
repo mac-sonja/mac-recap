@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bundleEntryName,
   bundleFileName,
+  collectionFileName,
   collectionHashInput,
   collectionStatusInputSchema,
   contentHashInput,
@@ -233,5 +234,16 @@ describe("collections (Story 5.10b)", () => {
   it("name the file after the collection, without a code", () => {
     expect(recordFileName("", "Pitch moda", "presentazione_16_9")).toBe("Pitch moda – Presentazione.pdf");
     expect(recordFileName("", "Pitch: moda/lusso", "bundle")).toBe("Pitch moda lusso.zip");
+    expect(bundleEntryName("", "Pitch moda", "presentazione_16_9")).toBe("Pitch moda – Presentazione.pdf");
+    expect(bundleEntryName("", "Pitch moda", "carosello_1_1")).toBe(`${getFormat("carosello_1_1").name}/`);
+  });
+
+  it("fall back to Raccolta when nothing of the name is safe in a file name", () => {
+    expect(collectionFileName("Pitch moda")).toBe("Pitch moda");
+    const name = collectionFileName("/:/");
+    expect(name).toBe("Raccolta");
+    expect(recordFileName("", name, "presentazione_16_9")).toBe("Raccolta – Presentazione.pdf");
+    expect(recordFileName("", name, "bundle")).toBe("Raccolta.zip");
+    expect(bundleEntryName("", name, "presentazione_16_9")).toBe("Raccolta – Presentazione.pdf");
   });
 });

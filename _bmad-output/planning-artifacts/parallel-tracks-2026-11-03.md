@@ -26,7 +26,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | B3 | 5.3 export a format as a file (Presentazione PDF, Carosello PNGs) | ✅ #151 (migration on dev) | — | A6 (job kind) | worker, rendering (read only), export dialog |
 | B4 | 5.4 several formats as one ZIP | ✅ #153 (migration on dev) | B3 | — | export dialog, worker |
 | B5 | 5.9 combined export and client pack | 🔄 5.9a ✅ #160 (no migration); 5.9b (read-only Clienti for account/sales/social) to do | B4, **A6, A8** (pack follows 4.12's case order) | — | export, client page |
-| B6 | 5.10 collections | 🔄 5.10a ✅ #161 (migration on the mac-recap project 2026-11-10); 5.10b (export) to do | B5, **A8** (collections open the configurator) | A7, A8 | collections, configurator (collection mode) |
+| B6 | 5.10 collections | 🔄 5.10a ✅ #161 (migration on the mac-recap project); 5.10b (export) in review on `claude/brave-gates-8mouz1`, migration not applied yet | B5, **A8** (collections open the configurator) | A7, A8 | collections, configurator (collection mode) |
 | B7 | 5.11 edit texts and remove pages in a collection | ⬜ | B6 | A2, A7, A8 | configurator (collection mode) |
 | B8 | 3.9 AI client intro draft | ⬜ | A6 | — | generation |
 | B9 | 5.8 guardrail suite, the rest of 6.4, 6.5 permission checks | ⬜ | every other story | — | `test/` |

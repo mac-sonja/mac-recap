@@ -29,6 +29,8 @@ describe("collectionDownload (Story 5.10b)", () => {
     getCollectionExportStatus.mockResolvedValueOnce({ ok: true, value: { status: "failed" } });
     expect(await onPoll("job-1")).toEqual({ kind: "failed" });
     getCollectionExportStatus.mockResolvedValueOnce(refused("EXPORT_STALE"));
+    expect(await onPoll("job-1")).toEqual({ kind: "failed", message: dict.download.collectionStale });
+    getCollectionExportStatus.mockResolvedValueOnce(refused("NOT_APPROVED"));
     expect(await onPoll("job-1")).toEqual({ kind: "failed" });
   });
 
@@ -40,6 +42,7 @@ describe("collectionDownload (Story 5.10b)", () => {
   it.each([
     ["NOT_APPROVED", dict.download.collectionNotApproved],
     ["FORMAT_NOT_IN_REVISION", dict.download.collectionFormatMissing],
+    ["EXPORT_TOO_LARGE", dict.download.collectionTooLarge],
     ["FORBIDDEN", fill(dict.download.failedCollection, { name: "Pitch moda" })],
     ["COLLECTION_NOT_FOUND", fill(dict.download.failedCollection, { name: "Pitch moda" })],
   ])("turns %s into the dialog's line", async (code, message) => {

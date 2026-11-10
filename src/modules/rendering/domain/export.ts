@@ -327,6 +327,18 @@ function fileHead(code: string, name: string): string {
   return [cleanName(code), shortName].filter(Boolean).join(" ");
 }
 
+/** What a collection's files are named when its name holds nothing a file name can keep (Story 5.10b). */
+export const COLLECTION_FILE_FALLBACK = "Raccolta";
+
+/**
+ * The name a collection's files are named after (Story 5.10b): its name, or
+ * `COLLECTION_FILE_FALLBACK` when cleaning leaves nothing (a name of only unsafe characters).
+ * Used with an empty code: `{name} – {Format}.{ext}`, `{name}.zip`.
+ */
+export function collectionFileName(name: string): string {
+  return fileHead("", name) === "" ? COLLECTION_FILE_FALLBACK : name;
+}
+
 /** A bundle's downloaded name (Story 5.4): `{code} {name}.zip`, cleaned as `exportFileName`. */
 export function bundleFileName(code: string, name: string): string {
   return `${fileHead(code, name)}.zip`;

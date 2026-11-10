@@ -37,7 +37,11 @@ export type DownloadStart =
   | { kind: "refused"; message: string };
 
 /** A poll's answer: the file, still working, or it didn't finish (the toast with **Riprova**). */
-export type DownloadPoll = { kind: "ready"; url: string; fileName: string } | { kind: "pending" } | { kind: "failed" };
+export type DownloadPoll =
+  | { kind: "ready"; url: string; fileName: string }
+  | { kind: "pending" }
+  /** `message` replaces the toast's line (Story 5.10b: a collection changed since). */
+  | { kind: "failed"; message?: string };
 
 export interface DownloadButtonProps {
   /** The trigger's accessible name, e.g. "Scarica il pack di Fornaci Brera". */
@@ -67,7 +71,7 @@ type Phase =
   | { kind: "idle" }
   | { kind: "starting" }
   | { kind: "working"; ticket: string; formats: ExportFormatId[] }
-  | { kind: "failed"; formats: ExportFormatId[] };
+  | { kind: "failed"; formats: ExportFormatId[]; message?: string };
 
 /** Hands a signed link to the browser's downloads; the link itself says "attachment" and names the file. */
 function saveFile(url: string, fileName: string) {
@@ -190,7 +194,7 @@ export function DownloadButton({
         setPhase({ kind: "idle" });
         setAnnouncement(it.download.ready);
       } else {
-        setPhase({ kind: "failed", formats: phase.formats });
+        setPhase({ kind: "failed", formats: phase.formats, ...(next.kind === "failed" && next.message !== undefined ? { message: next.message } : {}) });
       }
     };
     timer = setTimeout(tick, DOWNLOAD_POLL_MS);
@@ -312,7 +316,7 @@ export function DownloadButton({
           role="alert"
           className="fixed right-6 bottom-6 z-50 flex animate-enter items-center gap-3 rounded-xl bg-surface-raised py-3 pr-3 pl-4 shadow-popover"
         >
-          <p className="font-label text-sm text-foreground-strong">{failedMessage}</p>
+          <p className="font-label text-sm text-foreground-strong">{phase.message ?? failedMessage}</p>
           <button type="button" onClick={() => void begin(phase.formats)} className={SECONDARY_ACTION}>
             {it.download.retry}
           </button>

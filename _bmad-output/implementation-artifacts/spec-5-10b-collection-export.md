@@ -2,7 +2,7 @@
 title: 'Story 5.10b: export a collection'
 type: 'feature'
 created: '2026-11-10'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'dd92f7641adecd8d4563407fced5b52f8d754130'
 route: 'dispatch'
 review_loop_iteration: 0

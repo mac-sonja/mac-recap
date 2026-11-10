@@ -69,6 +69,10 @@ vi.mock("@/modules/case-study", () => stubbedUseCases(() => vi.importActual("@/m
 vi.mock("@/modules/material", () => stubbedUseCases(() => vi.importActual("@/modules/material")));
 // Exports (Story 5.3): the job queue is a spy, so the guardrail sees whether anything was enqueued.
 vi.mock("@/modules/jobs", () => stubbedUseCases(() => vi.importActual("@/modules/jobs")));
+// Exports' stored files (Story 5.10b): none stored yet, so an approved request enqueues a job.
+vi.mock("@/modules/rendering/adapters/supabase/export-repository", () => ({
+  createSupabaseExportRepository: () => ({ findByHash: async () => ok(null), findById: async () => ok(null), insert: async () => ok(null) }),
+}));
 // Collections (Story 5.10a): what runs after `authorize` doesn't matter here.
 vi.mock("@/modules/collection", () => stubbedUseCases(() => vi.importActual("@/modules/collection")));
 
@@ -405,4 +409,32 @@ describe("no role exports a collection with a revision that isn't approved (Stor
       expect(collectionModule.recordCollectionExported).not.toHaveBeenCalled();
     },
   );
+
+  it.each(["admin", "account_sales_social"] as const)("as %s: an approved collection is exported (a job for the collection)", async (role) => {
+    session.role = role;
+    const { caseHistoryV2 } = await import("@/modules/generation");
+    const { FORMAT_IDS } = await import("@/modules/rendering");
+    const doc = caseHistoryV2(FORMAT_IDS);
+    // Both cases approved; the client's intro isn't.
+    const getLiveRevision = arrange((subject) => (subject.kind === "case" ? { id: `eeeeeeee-0000-4000-8000-0000000000${subject.id.slice(-2)}`, caseId: subject.id, status: "approved", doc } : null));
+    vi.mocked(caseStudyModule.getClientInfoForCase).mockResolvedValue(
+      ok({ clientId: CLIENT_ID, name: "Lumen", industry: null, description: null, logoId: null, brief: { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" } }) as never,
+    );
+    const material = await import("@/modules/material");
+    vi.mocked(material.getDetailsForm).mockResolvedValue(ok({ context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" }) as never);
+    vi.mocked(jobsModule.enqueue).mockResolvedValue(ok({ id: "99999999-0000-4000-8000-000000000001" }) as never);
+    const result = await collectionPageActions.requestCollectionExport({ collectionId: COLLECTION_ID, formats: ["presentazione_16_9"] });
+    expect(result).toMatchObject({ ok: true, value: { status: "pending" } });
+    expect(jobsModule.enqueue).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ subjectId: COLLECTION_ID, payload: expect.objectContaining({ subject: { kind: "collection", id: COLLECTION_ID } }) }),
+    );
+    expect(getLiveRevision).toHaveBeenCalledWith({ kind: "case", id: CASE_ID });
+    expect(caseStudyModule.getEditableRevision).not.toHaveBeenCalled();
+    vi.mocked(caseStudyModule.getClientInfoForCase).mockReset();
+    vi.mocked(caseStudyModule.getClientInfoForCase).mockResolvedValue(ok(null) as never);
+    vi.mocked(material.getDetailsForm).mockReset();
+    vi.mocked(material.getDetailsForm).mockResolvedValue(ok(null) as never);
+    vi.mocked(jobsModule.enqueue).mockReset();
+    vi.mocked(jobsModule.enqueue).mockResolvedValue(ok(null) as never);
+  });
 });

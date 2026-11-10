@@ -5,6 +5,7 @@ import { composeParts, type ComposePart } from "@/modules/rendering/compose";
 import { bundleHash, collectionHash, contentHash, packHash } from "@/modules/rendering/application/content-hash";
 import {
   bundleEntryName,
+  collectionFileName,
   NOT_APPROVED,
   type ExportCollection,
   type ExportFormatId,
@@ -456,7 +457,7 @@ export async function readCollectionParts(deps: CollectionSourceDeps, collection
 
 /** What a collection draws in each format asked for (Story 5.10b). */
 export interface CollectionSource extends CollectionParts {
-  /** One per format, in the order given. */
+  /** One per format, in the order given (a skipped format left out). */
   drawings: ExportDrawing[];
 }
 
@@ -468,36 +469,45 @@ export interface CollectionSource extends CollectionParts {
  * each case with all its pages (`composeParts`, default mode). Page numbers run on. Each
  * format's content hash covers the collection's id and name and every part's subject,
  * approved revision and bound values. Errors: as `readCollectionParts`, and
- * `FORMAT_NOT_IN_REVISION` when any part has no pages in a format, the other reads'.
+ * `FORMAT_NOT_IN_REVISION` when any part has no pages in a format (with `skipMissingFormats`
+ * that format is left out of `drawings` instead), the other reads'.
  */
 export async function readCollectionSources(
   deps: CollectionSourceDeps,
   collectionId: string,
   formats: readonly ExportFormatId[],
+  options: { skipMissingFormats?: boolean } = {},
 ): Promise<Result<CollectionSource>> {
   const read = await readCollectionParts(deps, collectionId);
   if (!read.ok) return read;
   const parts = read.value;
 
+  // With `skipMissingFormats` (the status read), a format some part has no pages in is left out
+  // instead of failing the read: every format's hash comes from this one read.
+  const revisions = parts.groups.flatMap((group) => [...(group.intro === null ? [] : [group.intro.revision]), ...group.cases.map((c) => c.revision)]);
+  const hasPages = (revision: CaseStudyRevision, format: ExportFormatId) => {
+    const entry = requireFormat(revision, format);
+    return entry.ok && entry.value.pages.length > 0;
+  };
+  const drawn = options.skipMissingFormats === true ? formats.filter((format) => revisions.every((r) => hasPages(r, format))) : formats;
+
   const perGroup: ExportSource[][][] = [];
   for (const group of parts.groups) {
     const cases: ExportSource[][] = [];
     for (const { caseStudy, revision } of group.cases) {
-      const sources = await sourcesOf(deps, caseStudy, revision, formats);
+      const sources = await sourcesOf(deps, caseStudy, revision, drawn);
       if (!sources.ok) return sources;
       cases.push(sources.value);
     }
     if (group.intro !== null) {
-      for (const format of formats) {
-        const entry = requireFormat(group.intro.revision, format);
-        if (!entry.ok) return entry;
-        if (entry.value.pages.length === 0) return err(formatNotInRevision(format));
+      for (const format of drawn) {
+        if (!hasPages(group.intro.revision, format)) return err(formatNotInRevision(format));
       }
     }
     perGroup.push(cases);
   }
 
-  const drawings = formats.map((format, f): ExportDrawing => {
+  const drawings = drawn.map((format, f): ExportDrawing => {
     const drawParts = parts.groups.flatMap((group, g): DrawPart[] => {
       const cases = perGroup[g].map((sources): DrawPart => {
         const source = sources[f];
@@ -535,7 +545,7 @@ export async function readCollectionSources(
         format,
       ),
       code: "",
-      name: parts.collection.name,
+      name: collectionFileName(parts.collection.name),
       client: { id: first.clientId, logoId: first.content.client.logoId },
     };
   });

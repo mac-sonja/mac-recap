@@ -207,7 +207,9 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
       const png = await deps.rasteriseSvg(logo.value.bytes);
       if (png.ok) return ok(dataUrl("image/png", png.value));
       if (!LOGO_SKIPPED.has(png.error.code)) return png;
-      log.warn(`export drawn without the logo: ${png.error.code}`, { caseId: drawing.parts[0].caseId ?? undefined, clientId: client.id });
+      // A case of this client: a collection's parts belong to several.
+      const caseId = drawing.parts.find((p) => p.caseId !== null && p.clientId.toLowerCase() === client.id.toLowerCase())?.caseId ?? undefined;
+      log.warn(`export drawn without the logo: ${png.error.code}`, { caseId, clientId: client.id });
       return ok(null);
     }
     return ok(dataUrl(logo.value.contentType, logo.value.bytes));

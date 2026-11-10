@@ -3,7 +3,7 @@ import type { CaseStudyRevision } from "@/modules/case-study";
 import type { Job } from "@/modules/jobs";
 import { readStoredZip, storeZip } from "@/modules/rendering/adapters/zip/store-zip";
 import { makeExportHandler, type ExportHandlerDeps } from "@/modules/rendering/application/export-handler";
-import { bundleHashOf, readExportSource, readExportSources } from "@/modules/rendering/application/export-source";
+import { bundleHashOf, readCollectionSources, readExportSource, readExportSources } from "@/modules/rendering/application/export-source";
 import {
   ACTOR,
   CASE_ID,
@@ -20,6 +20,7 @@ import {
   CLIENT_IMAGE,
   clientInfo,
   REVISION_ID,
+  revision,
   sourceDeps,
 } from "@/modules/rendering/application/export.fixtures";
 import { EXPORT_MAX_BYTES, type ExportFormatId, type ExportRecord, type ExportRecordFormat, type NewExport } from "@/modules/rendering/domain/export";
@@ -801,5 +802,106 @@ describe("export handler, collections (Story 5.10b)", () => {
     await rig.request(ACTOR, { collectionId: COLLECTION_ID, formats: ["presentazione_16_9"] });
     vi.mocked(rig.all.getCollection).mockResolvedValue(err({ code: "COLLECTION_NOT_FOUND", message: "gone" }));
     expect(await rig.handler.run(rig.jobs[0], signal())).toMatchObject({ ok: false, error: { code: "COLLECTION_NOT_FOUND", retryable: false } });
+  });
+});
+
+describe("export handler, collections of several clients (Story 5.10b)", () => {
+  const OTHER_CLIENT_IMAGE = "aaaaaaaa-0000-4000-8000-0000000000bb";
+  const LOGOS: Record<string, Uint8Array> = {
+    [CLIENT_ID]: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0a, 0x0a]),
+    [OTHER_CLIENT_ID]: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0b, 0x0b]),
+  };
+  const logoUrl = (clientId: string) => `data:image/png;base64,${Buffer.from(LOGOS[clientId]).toString("base64")}`;
+  const clientImage = (assetId: string) => b64(`bytes of https://storage.test/client/${assetId}.webp`);
+
+  /** The collection A, B (client CLIENT_ID), X (OTHER_CLIENT_ID): each client with its own logo and image, X's pages drawing its own. */
+  function rig(options: { otherLogo?: boolean } = {}) {
+    const base = collectionDeps();
+    const live = vi.mocked(base.getLiveRevision).getMockImplementation()!;
+    const info = vi.mocked(base.getClientInfoForCase).getMockImplementation()!;
+    const { all, seen } = deps({
+      ...base,
+      getLiveRevision: vi.fn(async (subject: { kind: "case" | "client_intro"; id: string }) => {
+        const found = await live(subject);
+        if (subject.id !== OTHER_CASE_ID || !found.ok || found.value === null) return found;
+        // X's pages show its own client's image, not CLIENT_ID's.
+        const doc = JSON.parse(JSON.stringify(found.value.doc).replaceAll(CLIENT_IMAGE, OTHER_CLIENT_IMAGE));
+        return ok<CaseStudyRevision | null>({ ...found.value, doc, generatedDoc: doc });
+      }),
+      getClientInfoForCase: vi.fn(async (caseId: string) => {
+        const found = await info(caseId);
+        return caseId === OTHER_CASE_ID && options.otherLogo === false && found.ok ? ok({ ...found.value, logoId: null }) : found;
+      }),
+      listClientMedia: vi.fn(async (clientId: string) => ok([{ id: clientId === OTHER_CLIENT_ID ? OTHER_CLIENT_IMAGE : CLIENT_IMAGE, kind: "image" }])),
+      readClientLogo: vi.fn(async (clientId: string) => ok<{ bytes: Uint8Array; contentType: string } | null>({ bytes: LOGOS[clientId], contentType: "image/png" })),
+    });
+    return { all, seen };
+  }
+
+  async function run(r: ReturnType<typeof rig>) {
+    const read = await readCollectionSources(r.all, COLLECTION_ID, ["presentazione_16_9"]);
+    if (!read.ok) throw new Error(read.error.code);
+    const job: Job = {
+      ...(await jobFor(r.all, "presentazione_16_9")),
+      subjectId: COLLECTION_ID,
+      inputHash: read.value.drawings[0].contentHash,
+      payload: { subject: { kind: "collection", id: COLLECTION_ID }, parts: [...read.value.parts], format: "presentazione_16_9", requestedBy: ACTOR.id },
+    };
+    expect(await makeExportHandler(r.all).run(job, signal())).toEqual(ok(undefined));
+    // X is drawn whole, last: its pages are the file's last ones.
+    const pages = r.seen[0].html.split('<section class="mr-page"').slice(1);
+    const own = revision().doc.formats.presentazione_16_9.pages.length;
+    return { first: pages.slice(0, -own).join(""), other: pages.slice(-own).join("") };
+  }
+
+  it("draws each client's own logo and images in its own parts", async () => {
+    const r = rig();
+    const { first, other } = await run(r);
+    expect(first).toContain(logoUrl(CLIENT_ID));
+    expect(first).not.toContain(logoUrl(OTHER_CLIENT_ID));
+    expect(other).toContain(logoUrl(OTHER_CLIENT_ID));
+    expect(other).not.toContain(logoUrl(CLIENT_ID));
+    expect(other).toContain(clientImage(OTHER_CLIENT_IMAGE));
+    expect(other).not.toContain(clientImage(CLIENT_IMAGE));
+    expect(r.all.getClientRendition).toHaveBeenCalledWith(OTHER_CLIENT_IMAGE, "image.display");
+  });
+
+  it("draws a client with no logo without one, and the other client's logo in its parts only", async () => {
+    const r = rig({ otherLogo: false });
+    const { first, other } = await run(r);
+    expect(r.all.readClientLogo).toHaveBeenCalledExactlyOnceWith(CLIENT_ID);
+    expect(first).toContain(logoUrl(CLIENT_ID));
+    expect(other).not.toContain("data:image/png");
+    expect(other).toContain(clientImage(OTHER_CLIENT_IMAGE));
+  });
+});
+
+describe("export handler, collections with cases left out (Story 5.10b)", () => {
+  async function runFor(options: Parameters<typeof collectionDeps>[0]) {
+    const { all, seen, inserted } = deps(collectionDeps(options));
+    const read = await readCollectionSources(all, COLLECTION_ID, ["presentazione_16_9"]);
+    if (!read.ok) throw new Error(read.error.code);
+    const job: Job = {
+      ...(await jobFor(all, "presentazione_16_9")),
+      subjectId: COLLECTION_ID,
+      inputHash: read.value.drawings[0].contentHash,
+      payload: { subject: { kind: "collection", id: COLLECTION_ID }, parts: [...read.value.parts], format: "presentazione_16_9", requestedBy: ACTOR.id },
+    };
+    expect(await makeExportHandler(all).run(job, signal())).toEqual(ok(undefined));
+    return { html: seen[0].html, row: inserted[0] };
+  }
+  const own = () => revision().doc.formats.presentazione_16_9.pages;
+
+  it("leaves out an unavailable case: X gone, A and B still wrapped by their client's intro", async () => {
+    const { html, row } = await runFor({ unavailable: ["X"] });
+    expect(row.parts.map((p) => p.subject.id)).toEqual([INTRO_ID, PACK_CASES.A, PACK_CASES.B]);
+    expect(sections(html)).toBe(1 + 2 * own().filter((p) => p.role !== "intro").length + 1);
+    expect(html).not.toContain("Caso X");
+  });
+
+  it("draws every case whole when the intro isn't approved", async () => {
+    const { html, row } = await runFor({ intro: "unapproved" });
+    expect(row.parts.map((p) => p.subject.kind)).toEqual(["case", "case", "case"]);
+    expect(sections(html)).toBe(3 * own().length);
   });
 });
