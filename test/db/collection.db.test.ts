@@ -92,9 +92,12 @@ describe("collections (Story 5.10a)", () => {
     expect(retagged).toMatchObject({ ok: true, value: { version: 3 } });
     expect(await retagCollection(await actor(), { collectionId: made.collectionId, expectedVersion: 3, businessLines: ["video"], industries: ["no_such_sector_x"] })).toMatchObject({
       ok: false,
-      error: { code: "INVALID_INPUT" },
+      error: { code: "INVALID_INPUT", details: { fields: ["businessLines", "industries"] } },
     });
 
+    // The creation logs the initial tags with the name and cases.
+    const createdData = (await pool.query("select data from public.collection_event where collection_id = $1 and type = 'collection_created'", [made.collectionId])).rows[0]?.data;
+    expect(createdData).toEqual({ name: "Pitch moda", ...tags, caseIds: [a1, a2, b1] });
     const events = (await pool.query("select type, version from public.collection_event where collection_id = $1 order by version", [made.collectionId])).rows;
     expect(events).toEqual([
       { type: "collection_created", version: 1 },
@@ -167,6 +170,40 @@ describe("collections (Story 5.10a)", () => {
     // The next write leaves the deleted case out.
     expect(await moveCollectionItem(await actor(), { collectionId: made.collectionId, expectedVersion: 1, caseId: a2, to: 0 })).toMatchObject({ ok: true, value: { caseIds: [a2, a1] } });
     expect(await itemsOf(made.collectionId)).toEqual([a2, a1]);
+  });
+
+  it("refuses a stale version straight at the rename and tags writers, writing nothing", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const made = await created([await caseOf(a.id, "A1")]);
+    await expect(pool.query("select public.rename_collection($1, 2, 'X', $2)", [made.collectionId, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "STALE_COLLECTION" });
+    await expect(pool.query("select public.set_collection_tags($1, 2, $2, $3, $4)", [made.collectionId, tags.businessLines, tags.industries, TEST_ACTOR_ID])).rejects.toMatchObject({
+      message: "STALE_COLLECTION",
+    });
+    const row = (await pool.query("select name, version from public.collection where id = $1", [made.collectionId])).rows[0];
+    expect(row).toEqual({ name: "Pitch moda", version: 1 });
+  });
+
+  it("accepts exactly BUSINESS_LINES as business-line tags", async () => {
+    const { BUSINESS_LINES } = await import("@/modules/case-study");
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const made = await created([await caseOf(a.id, "A1")]);
+    const { retagCollection } = await collection();
+    expect(await retagCollection(await actor(), { collectionId: made.collectionId, expectedVersion: 1, businessLines: [...BUSINESS_LINES], industries: [TEST_INDUSTRY] })).toMatchObject({ ok: true, value: { version: 2 } });
+    // An unknown key, straight at the writer (the use case refuses it before).
+    await expect(pool.query("select public.set_collection_tags($1, 2, $2, $3, $4)", [made.collectionId, ["no_such_line"], tags.industries, TEST_ACTOR_ID])).rejects.toMatchObject({
+      message: "INVALID_INPUT",
+    });
+  });
+
+  it("reads each live client's sector key, leaving a deleted client out (listClientIndustries)", async () => {
+    const kept = await createTestClient(pool, TEST_ACTOR_ID);
+    const gone = await createTestClient(pool, TEST_ACTOR_ID);
+    await pool.query("update public.client set deleted_at = now() where id = $1", [gone.id]);
+    const { listClientIndustries } = await import("@/modules/case-study");
+    const read = await listClientIndustries();
+    if (!read.ok) throw new Error(read.error.code);
+    expect(read.value[kept.id]).toBe(TEST_INDUSTRY);
+    expect(gone.id in read.value).toBe(false);
   });
 
   it("denies anon and authenticated every table and writer", async () => {

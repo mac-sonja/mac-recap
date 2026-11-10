@@ -256,7 +256,12 @@ begin
   union all
   select new_id, 'industry', k from unnest(p_industries) as k;
   insert into public.collection_event (collection_id, actor_id, type, version, data)
-  values (new_id, p_actor_id, 'collection_created', 1, jsonb_build_object('name', p_name, 'caseIds', to_jsonb(p_case_ids)));
+  values (new_id, p_actor_id, 'collection_created', 1, jsonb_build_object(
+    'name', p_name,
+    'businessLines', to_jsonb(p_business_lines),
+    'industries', to_jsonb(p_industries),
+    'caseIds', to_jsonb(p_case_ids)
+  ));
 
   return jsonb_build_object('id', new_id, 'version', 1);
 end;

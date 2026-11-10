@@ -46,8 +46,8 @@ async function caseOf(item: CollectionItem, client: ClientDetail): Promise<{ par
   try {
     const [info, form, listed] = await Promise.all([caseStudy.getClientInfoForCase(caseId), material.getDetailsForm({ caseId }), material.listAssets({ caseId })]);
     const failed = !info.ok ? info.error : !form.ok ? form.error : !listed.ok ? listed.error : null;
-    if (failed !== null) {
-      log.warn(`collection case not read: ${failed.code}: ${failed.message}`, { caseId });
+    if (!info.ok || !form.ok || !listed.ok) {
+      log.warn(`collection case not read: ${failed?.code}: ${failed?.message}`, { caseId });
       return null;
     }
     const assets = await renderAssetsOf(listed.value, (assetId, spec) => material.getRendition(assetId, spec));

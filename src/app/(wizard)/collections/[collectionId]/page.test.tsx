@@ -32,7 +32,10 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: mocks.requireSurface }));
 vi.mock("./actions", () => ({ moveCollectionGroup: vi.fn(), moveCollectionItem: vi.fn(), addCollectionItems: vi.fn(), removeCollectionItems: vi.fn(), retagCollection: vi.fn() }));
-vi.mock("@/modules/collection", () => ({ getCollection: mocks.getCollection }));
+vi.mock("@/modules/collection", async () => {
+  const actual = await vi.importActual<typeof import("@/modules/collection")>("@/modules/collection");
+  return { groupsOf: actual.groupsOf, getCollection: mocks.getCollection };
+});
 vi.mock("@/modules/case-study", async () => {
   const actual = await vi.importActual<typeof import("@/modules/case-study")>("@/modules/case-study");
   return {
@@ -139,6 +142,20 @@ describe("CollectionPage (Story 5.10a)", () => {
     expect(mocks.list).toHaveBeenCalledWith({ status: "approved" });
     expect(view.candidates.map((c) => [c.id, c.industry])).toEqual([["x1", "food"]]);
     expect(view.version).toBe(4);
+  });
+
+  it("groups a client's cases together as the module does, even when they aren't next to each other", async () => {
+    mocks.getCollection.mockResolvedValue(
+      ok(
+        detail([
+          { case: listed("a1", CLIENT_A, "a1"), revision: revision() },
+          { case: listed("b1", CLIENT_B, "b1"), revision: revision() },
+          { case: listed("a2", CLIENT_A, "a2"), revision: revision() },
+        ]),
+      ),
+    );
+    const view = await props();
+    expect(view.groups.map((g) => g.cases.map((c) => c.caseId))).toEqual([["a1", "a2"], ["b1"]]);
   });
 
   it("shows a case it can't read as not available, rather than failing the page", async () => {

@@ -94,6 +94,22 @@ describe("the Raccolte list (Story 5.10a)", () => {
     expect(renameCollection).toHaveBeenCalledWith({ collectionId: "c1", expectedVersion: 3, name: "Nuovo" });
   });
 
+  it("on a stale rename says so, reads the list again and retries with the version read", async () => {
+    const user = userEvent.setup();
+    renameCollection.mockResolvedValueOnce({ ok: false, status: 409, error: { code: "STALE_COLLECTION", message: "m" } });
+    const { rerender } = render(<CollectionsTable rows={ROWS} businessLines={["branding", "video"]} sectors={SECTORS} />);
+    await user.click(screen.getByRole("button", { name: fill(copy.rename.label, { name: "Pitch moda" }) }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: copy.rename.save }));
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toBe(copy.stale));
+    expect(refresh).toHaveBeenCalled();
+    // The refresh brings the row's new version; the open dialog takes it.
+    rerender(<CollectionsTable rows={[{ ...ROWS[0]!, version: 5 }, ROWS[1]!]} businessLines={["branding", "video"]} sectors={SECTORS} />);
+    renameCollection.mockResolvedValueOnce({ ok: true, value: { collectionId: "c1", version: 6, name: "Pitch moda" } });
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: copy.rename.save }));
+    await waitFor(() => expect(renameCollection).toHaveBeenLastCalledWith({ collectionId: "c1", expectedVersion: 5, name: "Pitch moda" }));
+  });
+
   it("deletes after confirming", async () => {
     const user = userEvent.setup();
     deleteCollection.mockResolvedValue({ ok: true, value: undefined });

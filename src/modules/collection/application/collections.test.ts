@@ -137,6 +137,14 @@ describe("changing the cases (compare-and-set)", () => {
     expect(await useCases.addItems(actor, { collectionId: COLLECTION, expectedVersion: 3, caseIds: [DRAFT] })).toMatchObject({ ok: false, error: { code: "CASE_NOT_COLLECTABLE" } });
   });
 
+  it("refuses adding past 200 cases, writing nothing", async () => {
+    const many = Array.from({ length: 200 }, (_, i) => uuid(1000 + i));
+    const cases = [...many.map((id) => listed(id, CLIENT_A)), listed(B2, CLIENT_B)];
+    const { repo, useCases } = setup(stored(many), cases);
+    expect(await useCases.addItems(actor, { collectionId: COLLECTION, expectedVersion: 3, caseIds: [B2] })).toMatchObject({ ok: false, error: { code: "COLLECTION_FULL" } });
+    expect(repo.setItems).not.toHaveBeenCalled();
+  });
+
   it("removes a case, and refuses removing the last one", async () => {
     const { useCases } = setup();
     expect(await useCases.removeItems(actor, { collectionId: COLLECTION, expectedVersion: 3, caseIds: [A2] })).toMatchObject({ ok: true, value: { caseIds: [A1, B1] } });

@@ -66,12 +66,13 @@ const actions = {
   retag: vi.fn<CollectionActions["retag"]>(),
 };
 
-function renderView(groups: CollectionGroup[] = GROUPS) {
-  render(
+function view(groups: CollectionGroup[] = GROUPS, version = 7) {
+  return (
     <CollectionView
+      key={version}
       id="c1"
       name="Pitch moda"
-      version={7}
+      version={version}
       tags={{ businessLines: ["branding"], industries: ["moda"] }}
       groups={groups}
       assets={{}}
@@ -81,9 +82,11 @@ function renderView(groups: CollectionGroup[] = GROUPS) {
       ]}
       tagOptions={{ businessLines: ["branding", "video"], sectors: [{ key: "moda", label: "Moda" }, { key: "food", label: "Food" }] }}
       actions={actions}
-    />,
+    />
   );
 }
+const renderView = (groups: CollectionGroup[] = GROUPS) => render(view(groups));
+const groupOrder = () => [...pagine().querySelectorAll("[data-group]")].map((el) => el.getAttribute("data-group"));
 
 const pagine = () => screen.getByRole("complementary", { name: dict.collection.pages.label });
 const copy = dict.collection;
@@ -144,15 +147,70 @@ describe("a collection's page (Story 5.10a)", () => {
     await waitFor(() => expect(actions.moveItem).toHaveBeenLastCalledWith({ collectionId: "c1", expectedVersion: 8, caseId: "a2", to: 1 }));
   });
 
-  it("puts the order back on a stale save and says so", async () => {
+  it("puts the order back on a failed save and says so", async () => {
     const user = userEvent.setup();
-    actions.moveGroup.mockResolvedValue({ ok: false, status: 409, error: { code: "STALE_COLLECTION", message: "m" } });
+    actions.moveGroup.mockResolvedValue({ ok: false, status: 500, error: { code: "COLLECTION_WRITE_FAILED", message: "m" } });
     renderView();
     await user.click(within(pagine()).getByRole("button", { name: fill(copy.pages.menu, { name: "Beta" }) }));
     await user.click(screen.getByRole("menuitem", { name: copy.pages.moveUp }));
     await waitFor(() => expect(screen.getByRole("status", { hidden: false }).textContent).toBe(copy.orderFailed));
     const order = [...pagine().querySelectorAll("[data-group]")].map((el) => el.getAttribute("data-group"));
     expect(order).toEqual(["client-a", "client-b"]);
+  });
+
+  it("reads the page again on a stale move, and the retry names the version read", async () => {
+    const user = userEvent.setup();
+    actions.moveGroup.mockResolvedValueOnce({ ok: false, status: 409, error: { code: "STALE_COLLECTION", message: "m" } }).mockResolvedValueOnce(write(["b1", "a1", "a2"], 10));
+    const { rerender } = renderView();
+    await user.click(within(pagine()).getByRole("button", { name: fill(copy.pages.menu, { name: "Beta" }) }));
+    await user.click(screen.getByRole("menuitem", { name: copy.pages.moveUp }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(screen.getByRole("status").textContent).toBe(dict.collections.stale);
+    expect(groupOrder()).toEqual(["client-a", "client-b"]);
+    // The refresh hands the page the version the server holds now.
+    rerender(view(GROUPS, 9));
+    await user.click(within(pagine()).getByRole("button", { name: fill(copy.pages.menu, { name: "Beta" }) }));
+    await user.click(screen.getByRole("menuitem", { name: copy.pages.moveUp }));
+    await waitFor(() => expect(actions.moveGroup).toHaveBeenLastCalledWith({ collectionId: "c1", expectedVersion: 9, clientId: "client-b", to: 0 }));
+  });
+
+  it("drops the moves queued after a failed one, showing the confirmed order", async () => {
+    const user = userEvent.setup();
+    let fail: (value: Awaited<ReturnType<CollectionActions["moveGroup"]>>) => void = () => {};
+    actions.moveGroup.mockImplementationOnce(() => new Promise((resolve) => (fail = resolve)));
+    renderView();
+    await user.click(within(pagine()).getByRole("button", { name: fill(copy.pages.menu, { name: "Beta" }) }));
+    await user.click(screen.getByRole("menuitem", { name: copy.pages.moveUp }));
+    // A second move, queued behind the first.
+    await user.click(within(pagine()).getByRole("button", { name: fill(copy.pages.menu, { name: "Caso A1" }) }));
+    await user.click(screen.getByRole("menuitem", { name: copy.pages.moveDown }));
+    await act(async () => fail({ ok: false, status: 500, error: { code: "COLLECTION_WRITE_FAILED", message: "m" } }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(copy.orderFailed));
+    expect(actions.moveItem).not.toHaveBeenCalled();
+    expect(groupOrder()).toEqual(["client-a", "client-b"]);
+    const cases = [...pagine().querySelectorAll('[data-group="client-a"] [data-row^="case:"]')].map((el) => el.getAttribute("data-row"));
+    expect(cases).toEqual(["case:a1", "case:a2"]);
+  });
+
+  it("refuses a case dropped on another client's group, and says why", async () => {
+    renderView();
+    const source = pagine().querySelector<HTMLElement>('[data-row="case:a1"]')!;
+    const target = pagine().querySelector<HTMLElement>('[data-row="case:b1"]')!.closest("li")!;
+    const data = new DataTransfer();
+    await act(async () => {
+      source.dispatchEvent(Object.assign(new Event("dragstart", { bubbles: true }), { dataTransfer: data }));
+    });
+    const over = Object.assign(new Event("dragover", { bubbles: true, cancelable: true }), { dataTransfer: data });
+    await act(async () => {
+      target.dispatchEvent(over);
+    });
+    // Taken, so the drop fires and can say why it's refused.
+    expect(over.defaultPrevented).toBe(true);
+    await act(async () => {
+      target.dispatchEvent(Object.assign(new Event("drop", { bubbles: true, cancelable: true }), { dataTransfer: data }));
+    });
+    expect(screen.getByRole("status").textContent).toBe(copy.pages.otherGroup);
+    expect(actions.moveItem).not.toHaveBeenCalled();
   });
 
   it("moves with Alt+↓ from the keyboard", async () => {
@@ -177,6 +235,21 @@ describe("a collection's page (Story 5.10a)", () => {
     await user.click(within(dialog).getByRole("button", { name: copy.remove.confirm }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(actions.removeItems).toHaveBeenCalledWith({ collectionId: "c1", expectedVersion: 7, caseIds: ["a2"] });
+  });
+
+  it("keeps the remove dialog open on Annulla while the removal runs", async () => {
+    const user = userEvent.setup();
+    let done: (value: Awaited<ReturnType<CollectionActions["removeItems"]>>) => void = () => {};
+    actions.removeItems.mockImplementation(() => new Promise((resolve) => (done = resolve)));
+    renderView();
+    await user.click(within(pagine()).getByRole("button", { name: fill(copy.pages.menu, { name: "Caso A2" }) }));
+    await user.click(screen.getByRole("menuitem", { name: copy.pages.remove }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: copy.remove.confirm }));
+    await waitFor(() => expect(actions.removeItems).toHaveBeenCalled());
+    await user.click(within(dialog).getByRole("button", { name: copy.remove.cancel }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    await act(async () => done(write(["a1", "b1"])));
   });
 
   it("refuses removing the last case", async () => {
@@ -204,6 +277,32 @@ describe("a collection's page (Story 5.10a)", () => {
     await user.click(within(dialog).getByRole("button", { name: copy.add.confirm }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(actions.addItems).toHaveBeenCalledWith({ collectionId: "c1", expectedVersion: 7, caseIds: ["b2"] });
+  });
+
+  it("says when a collection is full", async () => {
+    const user = userEvent.setup();
+    actions.addItems.mockResolvedValue({ ok: false, status: 409, error: { code: "COLLECTION_FULL", message: "m" } });
+    renderView();
+    await user.click(within(pagine()).getByRole("button", { name: copy.add.button }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("checkbox", { name: fill(copy.add.pick, { name: "Caso B2" }) }));
+    expect(within(dialog).getByText(copy.add.pickedOne)).toBeTruthy();
+    await user.click(within(dialog).getByRole("button", { name: copy.add.confirm }));
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toBe(copy.add.full));
+  });
+
+  it("says the tags weren't saved when a refusal names no field, and reads the page again when stale", async () => {
+    const user = userEvent.setup();
+    actions.retag.mockResolvedValueOnce({ ok: false, status: 400, error: { code: "INVALID_INPUT", message: "m", fields: ["collectionId"] } });
+    renderView();
+    await user.click(screen.getByRole("button", { name: copy.tags.edit }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: copy.tags.save }));
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toBe(copy.tags.failed));
+    actions.retag.mockResolvedValueOnce({ ok: false, status: 409, error: { code: "STALE_COLLECTION", message: "m" } });
+    await user.click(within(dialog).getByRole("button", { name: copy.tags.save }));
+    await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toBe(dict.collections.stale));
+    expect(refresh).toHaveBeenCalled();
   });
 
   it("edits the tags with the version", async () => {
