@@ -155,16 +155,14 @@ describe("ClientPage", () => {
     expect(html).toContain("Rebrand");
   });
 
-  it("shows Modifica layout inactive, its reason linked, hidden below 1024 px; no panel without ?modifica=1", async () => {
+  it("links Modifica layout to the client's file in the configurator, hidden below 1024 px; no panel without ?modifica=1 (Story 4.12a)", async () => {
     const html = await renderPage();
-    const button = html.match(new RegExp(`<button [^>]*>${dict.clientPanel.layout}</button>`))?.[0] ?? "";
-    expect(button).toContain('aria-disabled="true"');
-    // The reason is read once, through aria-describedby only.
-    expect(button).not.toContain("title=");
-    const reasonId = button.match(/aria-describedby="([^"]+)"/)?.[1];
-    expect(html).toContain(`<span id="${reasonId}" class="sr-only">${dict.clientPanel.layoutReason}</span>`);
-    expect(button).toContain("hidden");
-    expect(button).toContain("lg:inline-flex");
+    const link = html.match(new RegExp(`<a [^>]*>${dict.clientPanel.layout}</a>`))?.[0] ?? "";
+    expect(link).toContain(`href="/clients/${LUMEN.id}/configurator"`);
+    expect(link).not.toMatch(/ aria-disabled="/);
+    expect(link).toContain("hidden");
+    expect(link).toContain("lg:inline-flex");
+    expect(html).not.toContain(`<button [^>]*>${dict.clientPanel.layout}</button>`);
     expect(html).not.toContain("data-panel");
     expect(listClientMaterial).not.toHaveBeenCalled();
   });
@@ -207,7 +205,9 @@ describe("ClientPage", () => {
     it.each(["generating", "draft"] as const)("offers no Apri while the intro is %s", async (status) => {
       getClientIntro.mockResolvedValue(ok(intro(status)));
       const html = await renderPage();
-      expect(html).not.toContain(`/clients/${LUMEN.id}/configurator`);
+      // Only Modifica layout opens the configurator (Story 4.12a); no Apri beside the badge.
+      expect(html.match(new RegExp(`href="/clients/${LUMEN.id}/configurator"`, "g"))).toHaveLength(1);
+      expect(html).toMatch(new RegExp(`<a [^>]*href="/clients/${LUMEN.id}/configurator"[^>]*>${dict.clientPanel.layout}</a>`));
     });
 
     it("throws into the error boundary when the intro can't be read", async () => {

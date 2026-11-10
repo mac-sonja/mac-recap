@@ -15,6 +15,10 @@ const {
   listAssets,
   getRendition,
   getClientRendition,
+  getClient,
+  listClientSectors,
+  casePartOf,
+  introPartOf,
 } = vi.hoisted(() => ({
     getActor: vi.fn(),
     saveIntroUseCase: vi.fn(),
@@ -28,6 +32,10 @@ const {
     listAssets: vi.fn(),
     getRendition: vi.fn(),
     getClientRendition: vi.fn(),
+    getClient: vi.fn(),
+    listClientSectors: vi.fn(),
+    casePartOf: vi.fn(),
+    introPartOf: vi.fn(),
   }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -43,10 +51,22 @@ vi.mock("@/modules/case-study", () => ({
   getClientIntroById,
   listClientMaterial,
   list: listCases,
+  getClient,
+  listClientSectors,
 }));
+vi.mock("./file-parts", () => ({ casePartOf, introPartOf }));
 vi.mock("@/modules/material", () => ({ liveAssetIds, listAssets, getRendition, getClientRendition }));
 
-const { approveIntro, discardIntroChanges, forkIntroHead, getIntroRenderAssets, saveIntroRevisionDoc, updateApprovedIntroVersion } = await import("./actions");
+const {
+  approveIntro,
+  discardIntroChanges,
+  forkIntroHead,
+  getClientFileRenderAssets,
+  getIntroRenderAssets,
+  reloadFilePart,
+  saveIntroRevisionDoc,
+  updateApprovedIntroVersion,
+} = await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({ id: "00000000-0000-4000-8000-000000000002", email: "a@b.it", displayName: "A", role });
 const INTRO_ID = "44444444-0000-4000-8000-000000000001";
@@ -211,5 +231,77 @@ describe("getIntroRenderAssets (Story 4.11a)", () => {
   it("refuses a role that may not edit", async () => {
     getActor.mockResolvedValue(ok(actor("account_sales_social")));
     expect(await getIntroRenderAssets({ clientIntroId: INTRO_ID, assetIds: [] })).toMatchObject({ ok: false, status: 403 });
+  });
+});
+
+describe("the client's file (Story 4.12a)", () => {
+  const CLIENT_IMAGE = "cccccccc-0000-4000-8000-0000000000c1";
+  const CASE_IMAGE = "cccccccc-0000-4000-8000-0000000000a1";
+  const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+  const client = { id: CLIENT_ID, name: "Lumen Srl", code: "LUM", industry: "illuminazione" };
+
+  beforeEach(() => {
+    getClient.mockResolvedValue(ok(client));
+    listClientSectors.mockResolvedValue(ok([{ key: "illuminazione", label: "Illuminazione" }]));
+    listClientMaterial.mockResolvedValue(ok([{ id: CLIENT_IMAGE, kind: "image", clientId: CLIENT_ID }]));
+    listCases.mockResolvedValue(ok([{ id: CASE_ID }]));
+    listAssets.mockResolvedValue(ok([{ id: CASE_IMAGE, kind: "image", originalFileName: "a.jpg" }]));
+    getClientRendition.mockResolvedValue(ok({ url: "https://client/display" }));
+    getRendition.mockResolvedValue(ok({ url: "https://case/display" }));
+  });
+
+  describe("getClientFileRenderAssets", () => {
+    it("reads the client's and its cases' files by the client's id (the file may have no intro yet)", async () => {
+      const result = await getClientFileRenderAssets({ clientId: CLIENT_ID, assetIds: [CLIENT_IMAGE, CASE_IMAGE, "x"] });
+      expect(result).toEqual({
+        ok: true,
+        value: { [CLIENT_IMAGE]: { url: "https://client/display", kind: "image" }, [CASE_IMAGE]: { url: "https://case/display", kind: "image" } },
+      });
+      expect(getClient).toHaveBeenCalledWith(CLIENT_ID);
+    });
+
+    it("refuses a malformed list, an unknown client and a role that may not edit", async () => {
+      expect(await getClientFileRenderAssets({ clientId: CLIENT_ID, assetIds: "x" })).toMatchObject({ ok: false, status: 400 });
+      getClient.mockResolvedValueOnce(err({ code: "CLIENT_NOT_FOUND", message: "m" }));
+      expect(await getClientFileRenderAssets({ clientId: CLIENT_ID, assetIds: [] })).toMatchObject({ ok: false, status: 404 });
+      getActor.mockResolvedValue(ok(actor("account_sales_social")));
+      expect(await getClientFileRenderAssets({ clientId: CLIENT_ID, assetIds: [] })).toMatchObject({ ok: false, status: 403 });
+    });
+  });
+
+  describe("reloadFilePart", () => {
+    it("reads one case part again, and only it", async () => {
+      const part = { key: `case:${CASE_ID}` };
+      casePartOf.mockResolvedValue(ok(part));
+      expect(await reloadFilePart({ clientId: CLIENT_ID, part: "case", caseId: CASE_ID })).toEqual({ ok: true, value: part });
+      expect(casePartOf).toHaveBeenCalledWith(client, CASE_ID);
+      expect(introPartOf).not.toHaveBeenCalled();
+    });
+
+    it("reads the intro again with the client's sector label; null once it isn't ready", async () => {
+      introPartOf.mockResolvedValue(ok(null));
+      expect(await reloadFilePart({ clientId: CLIENT_ID, part: "client_intro" })).toEqual({ ok: true, value: null });
+      expect(introPartOf).toHaveBeenCalledWith(client, "Illuminazione");
+    });
+
+    it("passes a case's read failure on", async () => {
+      casePartOf.mockResolvedValue(err({ code: "REVISION_LOOKUP_FAILED", message: "down" }));
+      expect(await reloadFilePart({ clientId: CLIENT_ID, part: "case", caseId: CASE_ID })).toMatchObject({ ok: false, error: { code: "REVISION_LOOKUP_FAILED" } });
+    });
+
+    it.each([
+      [{}],
+      [{ clientId: CLIENT_ID, part: "case" }],
+      [{ clientId: "nope", part: "client_intro" }],
+      [{ clientId: CLIENT_ID, part: "client_intro", extra: 1 }],
+    ])("refuses %j with 400, reading nothing", async (bad) => {
+      expect(await reloadFilePart(bad)).toMatchObject({ ok: false, status: 400, error: { code: "INVALID_INPUT" } });
+      expect(getClient).not.toHaveBeenCalled();
+    });
+
+    it("refuses a role that may not edit", async () => {
+      getActor.mockResolvedValue(ok(actor("account_sales_social")));
+      expect(await reloadFilePart({ clientId: CLIENT_ID, part: "client_intro" })).toMatchObject({ ok: false, status: 403 });
+    });
   });
 });

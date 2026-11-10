@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { failure, type ActionResult } from "@/app/_lib/action-result";
 import { authorize, getActor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
@@ -7,6 +8,8 @@ import * as material from "@/modules/material";
 import type { RenderAsset } from "@/modules/rendering";
 import { clientMediaFiles, clientRenderAssetsOf } from "../../../_lib/configurator-data";
 import { caseMediaOfClient, caseMediaRenderAssets } from "./case-media";
+import { casePartOf, introPartOf } from "./file-parts";
+import type { FilePartData } from "../../../_components/configurator/client-file";
 
 // Story 4.11a: a client's intro and outro in the configurator (client mode). Every action
 // resolves the actor and authorizes it before the use case runs; the intro is named by its own
@@ -135,14 +138,77 @@ export async function getIntroRenderAssets(input: unknown): Promise<ActionResult
   const decision = authorize(actor.value, "edit");
   if (!decision.ok) return failure(decision.error);
   const { clientIntroId, assetIds } = (input ?? {}) as { clientIntroId?: unknown; assetIds?: unknown };
-  if (!Array.isArray(assetIds) || assetIds.length > MAX_RENDER_ASSETS || !assetIds.every((id) => typeof id === "string")) {
-    return failure({ code: "INVALID_INPUT", message: "assetIds must be a list of ids.", details: { fields: ["assetIds"] } });
-  }
+  const wanted = assetIdsOf(assetIds);
+  if (wanted === null) return failure({ code: "INVALID_INPUT", message: "assetIds must be a list of ids.", details: { fields: ["assetIds"] } });
   const intro = await caseStudy.getClientIntroById(clientIntroId);
   if (!intro.ok) return failure(intro.error);
-  const wanted = new Set(assetIds.map((id) => id.toLowerCase()));
+  return { ok: true, value: await clientRenderAssets(intro.value.clientId, wanted) };
+}
 
-  const ofClient = await caseStudy.listClientMaterial({ clientId: intro.value.clientId });
+/**
+ * The render assets of files the Media tab listed after the page loaded, in the client's file
+ * (Story 4.12a, which may have no intro yet): input `{ clientId, assetIds }`; returns them as
+ * `getIntroRenderAssets` does, for the client's own files and its cases'. 403 `FORBIDDEN`
+ * unless the role may `edit`; 400 `INVALID_INPUT`; 404 `CLIENT_NOT_FOUND`.
+ */
+export async function getClientFileRenderAssets(input: unknown): Promise<ActionResult<Record<string, RenderAsset>>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "edit");
+  if (!decision.ok) return failure(decision.error);
+  const { clientId, assetIds } = (input ?? {}) as { clientId?: unknown; assetIds?: unknown };
+  const wanted = assetIdsOf(assetIds);
+  if (wanted === null) return failure({ code: "INVALID_INPUT", message: "assetIds must be a list of ids.", details: { fields: ["assetIds"] } });
+  const client = await caseStudy.getClient(clientId);
+  if (!client.ok) return failure(client.error);
+  return { ok: true, value: await clientRenderAssets(client.value.id, wanted) };
+}
+
+/**
+ * One part of the client's file read again (Story 4.12a), after its save went stale: input
+ * `{ clientId, part: "client_intro" }` or `{ clientId, part: "case", caseId }`. Returns the part
+ * as the page loads it (its pages, revision, `headVersion`, values and render assets), or null
+ * when it is no longer in the file (the intro isn't ready; the case is no longer an approved case
+ * of this client). Reads only. 403 `FORBIDDEN` unless the role may `edit`; 400 `INVALID_INPUT`;
+ * 404 `CLIENT_NOT_FOUND`.
+ */
+export async function reloadFilePart(input: unknown): Promise<ActionResult<FilePartData | null>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "edit");
+  if (!decision.ok) return failure(decision.error);
+  const parsed = filePartRefSchema.safeParse(input);
+  if (!parsed.success) {
+    return failure({ code: "INVALID_INPUT", message: "A part of a client's file is { clientId, part, caseId? }.", details: { fields: parsed.error.issues.map((i) => i.path.join(".")) } });
+  }
+  const ref = parsed.data;
+  const client = await caseStudy.getClient(ref.clientId);
+  if (!client.ok) return failure(client.error);
+  if (ref.part === "case") {
+    const part = await casePartOf(client.value, ref.caseId);
+    return part.ok ? { ok: true, value: part.value } : failure(part.error);
+  }
+  const sectors = await caseStudy.listClientSectors();
+  const sector = (sectors.ok ? sectors.value : []).find((s) => s.key === client.value.industry)?.label ?? client.value.industry ?? "";
+  const part = await introPartOf(client.value, sector);
+  return part.ok ? { ok: true, value: part.value } : failure(part.error);
+}
+
+/** What `reloadFilePart` takes. */
+const filePartRefSchema = z.discriminatedUnion("part", [
+  z.strictObject({ clientId: z.uuid(), part: z.literal("client_intro") }),
+  z.strictObject({ clientId: z.uuid(), part: z.literal("case"), caseId: z.uuid() }),
+]);
+
+/** The lowercased ids of a render-asset request, or null when it isn't a list of at most {@link MAX_RENDER_ASSETS} ids. */
+function assetIdsOf(assetIds: unknown): Set<string> | null {
+  if (!Array.isArray(assetIds) || assetIds.length > MAX_RENDER_ASSETS || !assetIds.every((id) => typeof id === "string")) return null;
+  return new Set(assetIds.map((id) => id.toLowerCase()));
+}
+
+/** The render assets of `wanted` among client `clientId`'s live images and videos, then its cases'. */
+async function clientRenderAssets(clientId: string, wanted: Set<string>): Promise<Record<string, RenderAsset>> {
+  const ofClient = await caseStudy.listClientMaterial({ clientId });
   const clientFiles = ofClient.ok ? clientMediaFiles(ofClient.value).filter((file) => wanted.has(file.id.toLowerCase())) : [];
   const fromClient = await clientRenderAssetsOf(clientFiles, (assetId, spec) => material.getClientRendition(assetId, spec));
   for (const file of clientFiles) wanted.delete(file.id.toLowerCase());
@@ -150,8 +216,8 @@ export async function getIntroRenderAssets(input: unknown): Promise<ActionResult
   // What's left may be one of the client's cases' files.
   let fromCases: Record<string, RenderAsset> = {};
   if (wanted.size > 0) {
-    const media = await caseMediaOfClient(intro.value.clientId);
+    const media = await caseMediaOfClient(clientId);
     if (media.ok) fromCases = await caseMediaRenderAssets(media.value.filter((file) => wanted.has(file.id.toLowerCase())));
   }
-  return { ok: true, value: { ...fromClient, ...fromCases } };
+  return { ...fromClient, ...fromCases };
 }

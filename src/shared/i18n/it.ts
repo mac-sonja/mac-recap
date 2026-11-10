@@ -603,9 +603,8 @@ export const it = {
         remove: "Non siamo riusciti a rimuovere l’immagine. Riprova.",
       },
     },
-    /** On the client page, inactive until the configurator exists. */
+    /** On the client page: opens the client's file in the configurator (Story 4.12a). */
     layout: "Modifica layout",
-    layoutReason: "Arriva con il configuratore",
     /** Elimina cliente at the bottom of the edit panel (owner, 2026-10-19). */
     delete: {
       button: "Elimina cliente",

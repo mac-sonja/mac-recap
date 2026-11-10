@@ -92,9 +92,10 @@ export interface DocumentState {
   canRedo: boolean;
   /**
    * Records an edit made in `formatId` and saves it after {@link DEBOUNCE_MS}. Changes
-   * with the same `group` (one text editing session) make one undo step.
+   * with the same `group` (one text editing session) make one undo step. Story 4.12a: the
+   * client's file returns false for an edit it refuses (a page moved into another part).
    */
-  change: (next: Formats, formatId: FormatId, group?: string) => void;
+  change: (next: Formats, formatId: FormatId, group?: string) => boolean | void;
   /** Saves the latest document now (e.g. when a text editing session ends). */
   flush: () => void;
   /**

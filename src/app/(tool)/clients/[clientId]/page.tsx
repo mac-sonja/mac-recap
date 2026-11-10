@@ -28,8 +28,8 @@ export interface ClientPageProps {
  * A client's page (Stories 2.13, 2.14), owner/designer only (`list clients`): the
  * logo (on a white tile), name, code, its sector as a pill and description (never
  * the brief), **Modifica** (`manage clients`, opens the edit panel, `?modifica=1`)
- * and an inactive **Modifica layout** (until the configurator; both hidden below
- * 1024 px, where the info is read-only), **Nuova
+ * and **Modifica layout** (Story 4.12a: a link to the client's file in the configurator,
+ * for a role that may `edit`; both hidden below 1024 px, where the info is read-only), **Nuova
  * case history** with the client preselected, and the Case history table limited
  * to this client. An empty field shows nothing; a logo that can't be signed is
  * left out. A malformed or unknown id goes back to `/clients`; any other failure
@@ -133,22 +133,13 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {canManage && (
-            <>
-              <button
-                type="button"
-                aria-disabled="true"
-                aria-describedby="client-layout-reason"
-                className={cn(SECONDARY_ACTION, "hidden cursor-not-allowed text-foreground-muted lg:inline-flex")}
-              >
-                {it.clientPanel.layout}
-              </button>
-              <span id="client-layout-reason" className="sr-only">
-                {it.clientPanel.layoutReason}
-              </span>
-              <EditClientButton clientId={client.id} />
-            </>
+          {can(actor, "edit") && (
+            // Story 4.12a: the client's whole file in the configurator (hidden below 1024 px, as the configurator is).
+            <Link href={clientConfiguratorHref(client.id)} className={cn(SECONDARY_ACTION, "hidden lg:inline-flex")}>
+              {it.clientPanel.layout}
+            </Link>
           )}
+          {canManage && <EditClientButton clientId={client.id} />}
           {canCreate && (
             <Link href={newHref} className={PRIMARY_ACTION}>
               {it.clients.detail.newCase}

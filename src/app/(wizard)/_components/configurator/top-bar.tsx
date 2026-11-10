@@ -18,7 +18,8 @@ import { ICON_BUTTON, SEG, SEG_BUTTON, SOON_ID } from "./styles";
 export interface ConfiguratorHeader {
   name: string;
   code: string;
-  status: CaseStatus;
+  /** No badge without one (Story 4.12a: a client's file whose intro isn't ready yet). */
+  status?: CaseStatus;
 }
 
 export interface TopBarProps {
@@ -51,6 +52,8 @@ export interface TopBarProps {
    * `blocker`, as Approva); without one, nothing does.
    */
   approvedCase?: boolean;
+  /** Story 4.12a: no Approva at all (a client's file whose intro isn't ready: there is nothing to approve). */
+  hideApproval?: boolean;
   update?: { blocker: string | null; pending: boolean; onUpdate: () => void; onDiscard: () => void };
 }
 
@@ -79,7 +82,7 @@ export function DocumentHeading({ header, back }: Pick<TopBarProps, "header" | "
         <span className="sr-only">{`${it.configurator.codeLabel} `}</span>
         {header.code}
       </span>
-      <StatusBadge status={header.status} className="shrink-0" />
+      {header.status !== undefined && <StatusBadge status={header.status} className="shrink-0" />}
     </div>
   );
 }
@@ -124,6 +127,7 @@ export function TopBar({
   onRedo,
   approval,
   approvedCase = false,
+  hideApproval = false,
   update,
 }: TopBarProps) {
   const approvalReasonId = useId();
@@ -224,7 +228,7 @@ export function TopBar({
         ) : (
           <span aria-hidden="true" className="mx-1 h-5 w-px bg-border-strong" />
         )}
-        {approvedCase ? null : approval === undefined ? (
+        {approvedCase || hideApproval ? null : approval === undefined ? (
           <button
             type="button"
             aria-disabled="true"

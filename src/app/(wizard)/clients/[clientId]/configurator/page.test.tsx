@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
-import type { CaseStudyRevision, ClientDetail, ClientIntro, ListedCaseStudy, ListedClientAsset } from "@/modules/case-study";
-import { buildClientIntroTestDraft } from "@/modules/generation";
-import type { ListedAsset, RenditionLink } from "@/modules/material";
+import type { CaseClientInfo, CaseStudy, CaseStudyRevision, ClientDetail, ClientIntro, ListedCaseStudy, ListedClientAsset } from "@/modules/case-study";
+import { buildClientIntroTestDraft, caseHistoryV2 } from "@/modules/generation";
+import type { DetailsForm, ListedAsset, RenditionLink } from "@/modules/material";
+import { FORMAT_IDS } from "@/modules/rendering";
+import type { ClientFile } from "../../../_components/configurator/client-file";
 import { it as dict, fill } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
@@ -19,6 +21,9 @@ const listAssets = vi.fn<(input: unknown) => Promise<Result<ListedAsset[]>>>();
 const getRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Result<RenditionLink>>>();
 const getClientRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Result<RenditionLink>>>();
 const listClientSectors = vi.fn<() => Promise<Result<{ key: string; label: string }[]>>>();
+const getCase = vi.fn<(id: unknown) => Promise<Result<CaseStudy>>>();
+const getClientInfoForCase = vi.fn<(id: unknown) => Promise<Result<CaseClientInfo>>>();
+const getDetailsForm = vi.fn<(input: unknown) => Promise<Result<DetailsForm>>>();
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((path: string) => {
@@ -30,10 +35,13 @@ vi.mock("./actions", () => ({
   saveIntroRevisionDoc: vi.fn(),
   approveIntro: vi.fn(),
   getIntroRenderAssets: vi.fn(),
+  getClientFileRenderAssets: vi.fn(),
+  reloadFilePart: vi.fn(),
   forkIntroHead: vi.fn(),
   updateApprovedIntroVersion: vi.fn(),
   discardIntroChanges: vi.fn(),
 }));
+vi.mock("../../../case-studies/[caseId]/configurator/actions", () => ({ saveRevisionDoc: vi.fn(), forkCaseHead: vi.fn() }));
 vi.mock("@/app/(tool)/clients/actions", () => ({
   updateClient: vi.fn(),
   addClientSector: vi.fn(),
@@ -63,12 +71,15 @@ vi.mock("@/modules/case-study", async () => ({
   getEditableRevision: (subject: unknown) => getEditableRevision(subject),
   listClientMaterial: (input: unknown) => listClientMaterial(input),
   list: (scope: unknown) => listCases(scope),
+  get: (id: unknown) => getCase(id),
+  getClientInfoForCase: (id: unknown) => getClientInfoForCase(id),
 }));
 vi.mock("@/modules/material", async () => ({
   ...(await vi.importActual<typeof import("@/modules/material/domain/files")>("@/modules/material/domain/files")),
   listAssets: (input: unknown) => listAssets(input),
   getRendition: (assetId: unknown, spec: unknown) => getRendition(assetId, spec),
   getClientRendition: (assetId: unknown, spec: unknown) => getClientRendition(assetId, spec),
+  getDetailsForm: (input: unknown) => getDetailsForm(input),
 }));
 const configuratorProps = vi.fn<(props: Record<string, unknown>) => void>();
 vi.mock("../../../_components/configurator/configurator", async () => {
@@ -83,6 +94,7 @@ vi.mock("../../../_components/configurator/configurator", async () => {
 
 const { default: ClientConfiguratorPage } = await import("./page");
 const actions = await import("./actions");
+const caseActions = await import("../../../case-studies/[caseId]/configurator/actions");
 const clientActions = await import("@/app/(tool)/clients/actions");
 
 const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
@@ -166,6 +178,51 @@ const caseFile: ListedAsset = {
   thumbnailPending: false,
 };
 
+const OLD_CASE = "aaaaaaaa-0000-4000-8000-000000000002";
+const approvedCase = (id: string, createdAt: string, name: string, code: string): ListedCaseStudy => ({
+  id,
+  code,
+  number: 1,
+  name,
+  client: { id: CLIENT_ID, name: "Lumen Srl", code: "LUM" },
+  year: 2026,
+  locale: "it",
+  businessLines: ["branding"],
+  status: "approved",
+  projectOrderRef: null,
+  headRevisionId: `${id.slice(0, 8)}-1111-4000-8000-000000000001`,
+  approvedRevisionId: `${id.slice(0, 8)}-1111-4000-8000-000000000001`,
+  headVersion: 5,
+  createdBy: shell.actor.id,
+  createdAt,
+  updatedAt: createdAt,
+  deletedAt: null,
+  inReviewSince: null,
+  approvedAt: createdAt,
+});
+const NEW_CASE = approvedCase(CASE_ID, "2026-11-02T10:00:00+00:00", "Rebrand", "LUM-2026-02");
+const OLDER_CASE = approvedCase(OLD_CASE, "2026-10-01T10:00:00+00:00", "Showroom", "LUM-2026-01");
+const caseRevision = (c: ListedCaseStudy, status: CaseStudyRevision["status"] = "approved", id = c.approvedRevisionId!): CaseStudyRevision => ({
+  ...head(status),
+  id,
+  caseId: c.id,
+  clientIntroId: null,
+  version: 4,
+  generatedDoc: caseHistoryV2(FORMAT_IDS),
+  doc: caseHistoryV2(FORMAT_IDS),
+});
+const info: CaseClientInfo = {
+  clientId: CLIENT_ID,
+  name: "Lumen Srl",
+  industry: { key: "illuminazione", label: "Illuminazione" },
+  description: "Lampade di design.",
+  logoId: null,
+  brief: { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" },
+};
+const form: DetailsForm = { context: "", solution: "", results: [{ label: "visite", value: "+10%" }], testimonialQuote: "", testimonialAuthor: "" };
+/** The approved cases `caseStudy.list` returns (oldest first, as a list may), and every case of the client for "Dalle sue case". */
+let approvedCases: ListedCaseStudy[] = [];
+
 const render = async () => renderToStaticMarkup(await ClientConfiguratorPage({ params: Promise.resolve({ clientId: CLIENT_ID }) }));
 const lastProps = () => configuratorProps.mock.calls.at(-1)![0];
 
@@ -176,36 +233,142 @@ beforeEach(() => {
   requireSurface.mockResolvedValue(shell);
   getClient.mockResolvedValue(ok(client));
   getClientIntro.mockResolvedValue(ok(intro("in_review")));
-  getEditableRevision.mockResolvedValue(ok(head()));
   listClientMaterial.mockResolvedValue(ok([clientFile(IMAGE_1), clientFile(IMAGE_2)]));
-  listCases.mockResolvedValue(ok([{ id: CASE_ID } as ListedCaseStudy]));
+  approvedCases = [OLDER_CASE, NEW_CASE];
+  listCases.mockImplementation(async (scope) =>
+    (scope as { status?: string }).status === "approved" ? ok(approvedCases) : ok([{ id: CASE_ID } as ListedCaseStudy]),
+  );
+  for (const fn of [getCase, getClientInfoForCase, getDetailsForm]) fn.mockReset();
+  getCase.mockImplementation(async (id) => {
+    const found = approvedCases.find((c) => c.id === id);
+    return found === undefined ? err({ code: "NOT_FOUND", message: "m" }) : ok(found);
+  });
+  getEditableRevision.mockImplementation(async (subject) => {
+    const { kind, id } = subject as { kind: string; id: string };
+    if (kind === "client_intro") return ok(head());
+    const found = approvedCases.find((c) => c.id === id);
+    return ok(found === undefined ? null : caseRevision(found));
+  });
+  getClientInfoForCase.mockResolvedValue(ok(info));
+  getDetailsForm.mockResolvedValue(ok(form));
   listAssets.mockResolvedValue(ok([caseFile]));
   getRendition.mockResolvedValue(ok({ url: "https://cdn.test/case", width: 1, height: 1, contentType: "image/webp" }));
   getClientRendition.mockResolvedValue(ok({ url: "https://cdn.test/client", width: 1, height: 1, contentType: "image/webp" }));
 });
 
-describe("ClientConfiguratorPage (Story 4.11a)", () => {
-  it("opens an intro Da approvare in client mode, editable, with its own actions, header and back", async () => {
+const fileOf = () => lastProps().file as ClientFile;
+/** The intro's head mocked as `revision`, the cases' as before. */
+const introHead = (revision: CaseStudyRevision | null) =>
+  getEditableRevision.mockImplementation(async (subject) => {
+    const { kind, id } = subject as { kind: string; id: string };
+    if (kind === "client_intro") return ok(revision);
+    const found = approvedCases.find((c) => c.id === id);
+    return ok(found === undefined ? null : caseRevision(found));
+  });
+
+describe("ClientConfiguratorPage: the client's whole file (Story 4.12a)", () => {
+  it("opens the file: Introduzione, the approved cases newest first, Chiusura", async () => {
     const html = await render();
     expect(requireSurface).toHaveBeenCalledWith("edit");
-    expect(getEditableRevision).toHaveBeenCalledWith({ kind: "client_intro", id: INTRO_ID });
+    expect(listCases).toHaveBeenCalledWith({ clientId: CLIENT_ID, status: "approved" });
     const props = lastProps();
-    expect(props.subject).toEqual({ kind: "client_intro", id: INTRO_ID, clientId: CLIENT_ID });
-    expect(props.revision).toEqual({ id: HEAD_ID, version: 2, editable: true, kind: "client_intro", fork: false });
+    expect(props.subject).toEqual({ kind: "client_file", id: CLIENT_ID, clientId: CLIENT_ID });
+    expect(props.revision).toBeNull();
     expect(props.header).toEqual({ name: fill(dict.configurator.clientTitle, { name: "Lumen Srl" }), code: "LUM", status: "in_review" });
     expect(props.back).toEqual({ href: `/clients/${CLIENT_ID}`, label: dict.configurator.clientBack });
-    expect(props.onSave).toBe(actions.saveIntroRevisionDoc);
+    const file = fileOf();
+    expect(file.cases.map((c) => c.key)).toEqual([`case:${CASE_ID}`, `case:${OLD_CASE}`]);
+    expect(file.intro).toMatchObject({ key: `client_intro:${INTRO_ID}`, subject: { kind: "client_intro", id: INTRO_ID, clientId: CLIENT_ID }, status: "in_review", headVersion: 3 });
+    expect(file.intro!.revision).toEqual({ id: HEAD_ID, version: 2, editable: true, kind: "client_intro", fork: false });
+    // The headings, in order.
+    const order = [
+      dict.configurator.clientSections.intro,
+      fill(dict.configurator.file.caseLabel, { code: "LUM-2026-02", name: "Rebrand" }),
+      fill(dict.configurator.file.caseLabel, { code: "LUM-2026-01", name: "Showroom" }),
+      dict.configurator.clientSections.outro,
+    ].map((label) => html.indexOf(`>${label}<`));
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect([...order].sort((x, y) => x - y)).toEqual(order);
+    expect(html).toContain(dict.configurator.file.projects);
+    expect(html).toContain("Lumen Srl · Pagine cliente");
+  });
+
+  it("saves each part to its own document: the intro through its actions, a case as an approved case (Story 4.9)", async () => {
+    await render();
+    const props = lastProps();
+    const file = fileOf();
+    expect(file.onSaveIntro).toBe(actions.saveIntroRevisionDoc);
+    expect(file.onForkIntro).toBe(actions.forkIntroHead);
+    expect(file.onSaveCase).toBe(caseActions.saveRevisionDoc);
+    expect(file.onForkCase).toBe(caseActions.forkCaseHead);
+    expect(file.onReload).toBe(actions.reloadFilePart);
+    // Approva, Aggiorna and Scarta act on the intro alone.
     expect(props.onApprove).toBe(actions.approveIntro);
-    expect(props.onRenderAssets).toBe(actions.getIntroRenderAssets);
-    expect(props.headVersion).toBe(3);
-    // Story 4.11b: the approved-intro handlers, keyed by the intro.
-    expect(props.onFork).toBe(actions.forkIntroHead);
     expect(props.onUpdateApproved).toBe(actions.updateApprovedIntroVersion);
     expect(props.onDiscard).toBe(actions.discardIntroChanges);
-    // Introduzione and Chiusura group the pages.
-    expect(html).toContain(dict.configurator.clientSections.intro);
-    expect(html).toContain(dict.configurator.clientSections.outro);
-    expect(html).toContain("Lumen Srl · Pagine cliente");
+    expect(props.headVersion).toBe(3);
+    expect(props.onRenderAssets).toBe(actions.getClientFileRenderAssets);
+    const [newest] = file.cases;
+    expect(newest).toMatchObject({
+      subject: { kind: "case", id: CASE_ID },
+      status: "approved",
+      name: "Rebrand",
+      code: "LUM-2026-02",
+      headVersion: 5,
+      href: `/case-studies/${CASE_ID}/configurator`,
+      ownAssetIds: [CASE_IMAGE],
+      values: { case: { year: 2026, results: [{ label: "visite", value: "+10%" }] } },
+    });
+    // Its approved revision is forked on the first save.
+    expect(newest!.revision).toEqual({ id: NEW_CASE.approvedRevisionId, version: 4, editable: true, kind: "case_history", fork: true });
+    expect(newest!.assets).toMatchObject({ [CASE_IMAGE]: { url: "https://cdn.test/case" } });
+  });
+
+  it("opens a case on its pending copy, editable, not forked again", async () => {
+    const COPY = "aaaaaaaa-2222-4000-8000-000000000001";
+    getEditableRevision.mockImplementation(async (subject) => {
+      const { kind, id } = subject as { kind: string; id: string };
+      if (kind === "client_intro") return ok(head());
+      const found = approvedCases.find((c) => c.id === id)!;
+      return ok(id === CASE_ID ? caseRevision(found, "working", COPY) : caseRevision(found));
+    });
+    await render();
+    expect(fileOf().cases[0]!.revision).toEqual({ id: COPY, version: 4, editable: true, kind: "case_history", fork: false });
+  });
+
+  it.each([
+    ["no intro", () => getClientIntro.mockResolvedValue(ok(null))],
+    ["an intro in Bozza", () => getClientIntro.mockResolvedValue(ok(intro("draft")))],
+    ["an intro In elaborazione", () => getClientIntro.mockResolvedValue(ok(intro("generating")))],
+    ["no intro head revision", () => introHead(null)],
+  ])("with %s, shows Introduzione and Chiusura as not ready yet, and the cases", async (_name, arrange) => {
+    arrange();
+    approvedCases = [NEW_CASE];
+    const html = await render();
+    expect(fileOf().intro).toBeNull();
+    expect(fileOf().cases.map((c) => c.key)).toEqual([`case:${CASE_ID}`]);
+    expect(lastProps().header).toEqual({ name: "Lumen Srl · Pagine cliente", code: "LUM" });
+    expect(html.split(dict.configurator.file.introNotReady).length - 1).toBeGreaterThanOrEqual(2);
+    expect(html).toContain(fill(dict.configurator.file.caseLabel, { code: "LUM-2026-02", name: "Rebrand" }));
+  });
+
+  it("goes back to the client page with no intro ready and no approved case", async () => {
+    getClientIntro.mockResolvedValue(ok(intro("generating")));
+    approvedCases = [];
+    await expect(render()).rejects.toThrow(`REDIRECT /clients/${CLIENT_ID}`);
+  });
+
+  it("shows only the intro's groups with no approved case", async () => {
+    approvedCases = [];
+    await render();
+    expect(fileOf().cases).toEqual([]);
+    expect(fileOf().intro).not.toBeNull();
+  });
+
+  it("leaves out a case whose part can't be read, keeping the others", async () => {
+    getClientInfoForCase.mockImplementation(async (id) => (id === OLD_CASE ? err({ code: "CLIENT_LOOKUP_FAILED", message: "down" }) : ok(info)));
+    await render();
+    expect(fileOf().cases.map((c) => c.key)).toEqual([`case:${CASE_ID}`]);
   });
 
   it("gives the Media tab the client's files (uploads to the client) and its cases' under Dalle sue case", async () => {
@@ -219,7 +382,7 @@ describe("ClientConfiguratorPage (Story 4.11a)", () => {
     expect(props.assets).toMatchObject({ [IMAGE_1]: { url: "https://cdn.test/client" }, [CASE_IMAGE]: { url: "https://cdn.test/case" } });
   });
 
-  it("edits the client's fields through the client's actions, and fills Pagine di default from the client template's texts", async () => {
+  it("edits the client's fields through the client's actions; Pagine di default fills the intro from the client template's texts", async () => {
     await render();
     const props = lastProps();
     expect(props.fields).toEqual({
@@ -232,17 +395,20 @@ describe("ClientConfiguratorPage (Story 4.11a)", () => {
       saveClientResults: clientActions.saveClientResults,
       saveClientTestimonial: clientActions.saveClientTestimonial,
     });
-    expect(props.generatedTexts).toEqual(generatedTextsOf(doc));
+    expect(fileOf().intro!.generatedTexts).toEqual(generatedTextsOf(doc));
     const texts = generatedTextsOf(doc).presentazione_16_9!;
     expect(texts.introHead?.text).toContain("Chi è il cliente");
     expect(texts.outroHead?.text).toContain("Cosa abbiamo costruito insieme");
     expect(props.images).toEqual([IMAGE_1, IMAGE_2]);
+    expect(fileOf().intro!.images).toEqual([IMAGE_1, IMAGE_2]);
     expect(props.values).toMatchObject({ client: { name: "Lumen Srl", sector: "Illuminazione", results: [{ label: "Vendite", value: "+30%" }] } });
   });
 
-  it("leaves out a case whose files can't be read, keeping the others' (the page still opens)", async () => {
-    const BROKEN = "aaaaaaaa-0000-4000-8000-000000000002";
-    listCases.mockResolvedValue(ok([{ id: BROKEN } as ListedCaseStudy, { id: CASE_ID } as ListedCaseStudy]));
+  it("leaves out a case whose files can't be read from Dalle sue case (the page still opens)", async () => {
+    const BROKEN = "aaaaaaaa-0000-4000-8000-000000000009";
+    listCases.mockImplementation(async (scope) =>
+      (scope as { status?: string }).status === "approved" ? ok(approvedCases) : ok([{ id: BROKEN } as ListedCaseStudy, { id: CASE_ID } as ListedCaseStudy]),
+    );
     listAssets.mockImplementation(async (input) =>
       (input as { caseId: string }).caseId === BROKEN ? err({ code: "MATERIAL_LOOKUP_FAILED", message: "down" }) : ok([caseFile]),
     );
@@ -269,38 +435,27 @@ describe("ClientConfiguratorPage (Story 4.11a)", () => {
 
   it("opens an Approvato intro editable on its approved revision, forked on the first save (Story 4.11b)", async () => {
     getClientIntro.mockResolvedValue(ok(intro("approved")));
-    getEditableRevision.mockResolvedValue(ok(head("approved")));
+    introHead(head("approved"));
     const html = await render();
-    expect(lastProps().revision).toEqual({ id: HEAD_ID, version: 2, editable: true, kind: "client_intro", fork: true });
+    expect(fileOf().intro!.revision).toEqual({ id: HEAD_ID, version: 2, editable: true, kind: "client_intro", fork: true });
     expect(lastProps().header).toMatchObject({ status: "approved" });
-    expect(lastProps().onFork).toBe(actions.forkIntroHead);
     expect(html).toContain(dict.configurator.approvedEdit.banner);
   });
 
   it("reopens an Approvato intro on its pending copy, with its edits (Story 4.11b)", async () => {
     const COPY_ID = "22222222-0000-4000-8000-0000000000c9";
     getClientIntro.mockResolvedValue(ok({ ...intro("approved"), headRevisionId: COPY_ID, headVersion: 4 }));
-    getEditableRevision.mockResolvedValue(ok({ ...head("working"), id: COPY_ID, version: 5 }));
+    introHead({ ...head("working"), id: COPY_ID, version: 5 });
     await render();
-    expect(lastProps().revision).toEqual({ id: COPY_ID, version: 5, editable: true, kind: "client_intro", fork: false });
-    expect(lastProps().headVersion).toBe(4);
+    expect(fileOf().intro!.revision).toEqual({ id: COPY_ID, version: 5, editable: true, kind: "client_intro", fork: false });
+    expect(fileOf().intro!.headVersion).toBe(4);
   });
 
   it("opens read-only an Approvato intro whose head is neither its approved revision nor a working copy", async () => {
     getClientIntro.mockResolvedValue(ok(intro("approved")));
-    getEditableRevision.mockResolvedValue(ok({ ...head("superseded"), id: "22222222-0000-4000-8000-0000000000d1" }));
+    introHead({ ...head("superseded"), id: "22222222-0000-4000-8000-0000000000d1" });
     await render();
-    expect(lastProps().revision).toMatchObject({ editable: false, fork: false });
-  });
-
-  it.each([
-    ["no intro", () => getClientIntro.mockResolvedValue(ok(null))],
-    ["an intro in Bozza", () => getClientIntro.mockResolvedValue(ok(intro("draft")))],
-    ["an intro In elaborazione", () => getClientIntro.mockResolvedValue(ok(intro("generating")))],
-    ["no head revision", () => getEditableRevision.mockResolvedValue(ok(null))],
-  ])("goes back to the client page with %s", async (_name, arrange) => {
-    arrange();
-    await expect(render()).rejects.toThrow(`REDIRECT /clients/${CLIENT_ID}`);
+    expect(fileOf().intro!.revision).toMatchObject({ editable: false, fork: false });
   });
 
   it("goes back to Clienti for an unknown client", async () => {
@@ -311,5 +466,12 @@ describe("ClientConfiguratorPage (Story 4.11a)", () => {
   it("throws into the error boundary when the intro can't be read", async () => {
     getClientIntro.mockResolvedValue(err({ code: "CLIENT_INTRO_LOOKUP_FAILED", message: "m" }));
     await expect(render()).rejects.toThrow(/CLIENT_INTRO_LOOKUP_FAILED/);
+  });
+
+  it("throws into the error boundary when the approved cases can't be listed", async () => {
+    listCases.mockImplementation(async (scope) =>
+      (scope as { status?: string }).status === "approved" ? err({ code: "CASE_LIST_FAILED", message: "m" }) : ok([]),
+    );
+    await expect(render()).rejects.toThrow(/CASE_LIST_FAILED/);
   });
 });

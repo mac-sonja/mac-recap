@@ -109,6 +109,9 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   "client-configurator.forkIntroHead": { call: clientConfigurator.forkIntroHead as Action, allowed: OWNERS },
   "client-configurator.updateApprovedIntroVersion": { call: clientConfigurator.updateApprovedIntroVersion as Action, allowed: OWNERS },
   "client-configurator.discardIntroChanges": { call: clientConfigurator.discardIntroChanges as Action, allowed: OWNERS },
+  // The client's whole file (Story 4.12a): `edit`, reads only.
+  "client-configurator.getClientFileRenderAssets": { call: clientConfigurator.getClientFileRenderAssets as Action, allowed: OWNERS },
+  "client-configurator.reloadFilePart": { call: clientConfigurator.reloadFilePart as Action, allowed: OWNERS },
   // The draft-ready poll (Story 3.8): `generate`, a read only.
   "draft-ready.listReadyDrafts": { call: draftReady.listReadyDrafts as Action, allowed: OWNERS },
   // Story 5.3: Scarica on an approved case.

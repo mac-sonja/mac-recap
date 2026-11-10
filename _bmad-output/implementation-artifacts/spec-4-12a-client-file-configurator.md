@@ -102,12 +102,12 @@ Paths under `src/app/(wizard)/_components/configurator/` unless stated.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/rendering/compose.tsx` (+ test) -- the always-include-intro option.
-- [ ] `src/app/(wizard)/_components/configurator/*` (+ tests) -- the multi-part layer, groups and project rows, per-part save, fork, stale reload and undo, the case-page delete confirmation, the other-case image refusal.
-- [ ] `src/app/(wizard)/clients/[clientId]/configurator/*` (+ tests) -- load the parts, the part-reload action, the redirect rules.
-- [ ] `src/app/(tool)/clients/[clientId]/page.tsx` (+ test) -- **Modifica layout** link.
-- [ ] `src/shared/i18n/it.ts`, `test/permissions.test.ts`.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 4.12 stays `in-progress`, with a note that 4.12a is in review.
+- [x] `src/modules/rendering/compose.tsx` (+ test) -- the always-include-intro option.
+- [x] `src/app/(wizard)/_components/configurator/*` (+ tests) -- the multi-part layer, groups and project rows, per-part save, fork, stale reload and undo, the case-page delete confirmation, the other-case image refusal.
+- [x] `src/app/(wizard)/clients/[clientId]/configurator/*` (+ tests) -- load the parts, the part-reload action, the redirect rules.
+- [x] `src/app/(tool)/clients/[clientId]/page.tsx` (+ test) -- **Modifica layout** link.
+- [x] `src/shared/i18n/it.ts`, `test/permissions.test.ts`.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 4.12 stays `in-progress`, with a note that 4.12a is in review.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:db` and `build`, when they run, then they pass.
@@ -115,6 +115,13 @@ Paths under `src/app/(wizard)/_components/configurator/` unless stated.
 - Given an export of a single case, when it renders, then its output is unchanged.
 
 ## Implementation Notes
+
+- **Compose.** `composeParts(parts, formatId, { clientFile: true })`: the intro is included with any number of cases (none: intro and closing only), and cases are trimmed as in a file even with no intro part. Without the option (exports) the output is unchanged.
+- **Parts.** `client-file.ts`: `FilePartData` (one per intro or approved case: its own formats, revision, `headVersion`, values, template, own asset ids, case href) and `ClientFile` (the parts and their actions). `fileSegments` builds each format's segments (`client_intro`, `case:{id}`, `client_closing`) from `composeParts` and prefixes page keys with the segment (`{segment}|{pageKey}`, cached so untouched pages keep their identity). `splitFile`/`mergePart`/`partsChanged` cut an edit back into each changed part's whole formats (hidden pages kept; a new page joins the segment before it, taking `intro`/`outro` in the intro's runs); a page moved across segments returns null (refused).
+- **Multi-part document.** `use-client-file.tsx`: one hidden `PartDocument` per part runs the unchanged `useDocument` (own compare-and-set, fork, autosave) and registers into state. The file's `DocumentState` routes `change` to the parts touched, keeps one undo stack of part-key steps (text sessions mapped to per-part groups), aggregates the save state, and reloads a stale part alone through `reloadFilePart` (remounted with a new generation; its undo steps dropped; NOT_FOUND / null drops the part).
+- **Configurator.** `file` prop and `subject.kind: "client_file"` (`subjectKey` → `{ clientId }`). The single `useDocument` stays idle in file mode. Approva/Aggiorna/Scarta, the overflow report and the missing-file blocker use the intro part's document and pages; Scarta and stale approvals reload the intro part only. Per-page template and values come from the page's part. `commit` refuses an edit that adds another case's file to a case's page ("Questa immagine è di un’altra case") or moves a page across parts; canvas drags across parts are refused. A case page's bin asks first. **+ Aggiungi pagina** counts the part's own pages against the 50-page limit. Client fields stay editable from any part. With no intro ready, Introduzione and Chiusura show the placeholder and Approva is hidden.
+- **Canvas / Pagine.** `Canvas` takes optional `groups` (`data-canvas-group`, note, empty text), numbering on across groups; case mode builds the same runs as before. `RightPanel` takes `file` (Introduzione thumbnails, **Progetti del cliente** rows, Chiusura thumbnails) and `onSelectGroup` (scrolls the canvas). `ConfiguratorHeader.status` is optional (no badge without an intro).
+- **Route.** `page.tsx` loads the intro part (`introPartOf`, null unless Da approvare/Approvato with a head) and the approved cases (`casePartsOf`: `list({ clientId, status: "approved" })`, newest created first, a failing case left out and logged); redirects to the client page with neither. Case parts save through the case route's `saveRevisionDoc`/`forkCaseHead`. New actions: `reloadFilePart`, `getClientFileRenderAssets` (both `edit`, reads only). **Modifica layout** is a link for roles that may `edit`; `clientPanel.layoutReason` removed.
 
 ## Spec Change Log
 

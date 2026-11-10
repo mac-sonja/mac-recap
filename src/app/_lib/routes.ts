@@ -26,8 +26,10 @@ export const editClientPanelHref = (id: string) => `${clientHref(id)}?modifica=1
 export const configuratorHref = (id: string) => `/case-studies/${encodeURIComponent(id)}/configurator`;
 
 /**
- * A client's intro and outro in the configurator (Story 4.11a): an intro Da approvare opens
- * editable, an Approvato one read-only; any other goes back to the client page.
+ * A client's whole file in the configurator (Story 4.12a; the intro and outro since 4.11a): its
+ * intro, its approved cases and its closing. With no intro ready and no approved case it goes
+ * back to the client page. Opened by **Modifica layout**, the intro badge's **Apri** and the
+ * intro's ready toast.
  */
 export const clientConfiguratorHref = (clientId: string) => `${clientHref(clientId)}/configurator`;
 

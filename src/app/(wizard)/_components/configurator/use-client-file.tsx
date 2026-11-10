@@ -38,10 +38,12 @@ export interface ClientFileState {
   segments: Readonly<Record<FormatId, readonly FileSegment[]>>;
   /** The part a file page key belongs to. */
   partOf: (pageKey: string) => FilePartData | undefined;
+  /** Part `key`'s whole pages now (those the file doesn't show included): what its own limits count. */
+  partFormats: (key: string) => Formats | undefined;
   /** Whether part `key` has a working copy not yet published (an approved case or intro edited, Story 4.9). */
   copyPending: (key: string) => boolean;
-  /** Part `key` read again alone; its unsaved edits go, the others' stay. */
-  reload: (key: string) => Promise<void>;
+  /** Part `key` read again alone; its unsaved edits go, the others' stay. `quiet`: no message (the caller said why). */
+  reload: (key: string, quiet?: boolean) => Promise<void>;
   /** The parts' own documents, to mount (each runs its own autosave). */
   element: ReactNode;
 }
@@ -105,44 +107,63 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
   const [mounted, setMounted] = useState<Mounted[]>(() =>
     file === undefined ? [] : [...(file.intro === null ? [] : [file.intro]), ...file.cases].map((part) => ({ part, generation: 0 })),
   );
-  const docs = useRef(new Map<string, { token: string; doc: DocumentState }>());
-  const [, rerender] = useState(0);
+  /** Each part's own document as last registered (its watched fields changed). */
+  const [entries, setEntries] = useState<ReadonlyMap<string, { token: string; doc: DocumentState }>>(() => new Map());
+  /** Each part's pages as last registered: changes only with a part's pages, so the segments do too. */
+  const [pagesByKey, setPagesByKey] = useState<ReadonlyMap<string, { token: string; formats: Formats }>>(() => new Map());
   const register = useCallback((key: string, token: string, doc: DocumentState | null) => {
-    const prev = docs.current.get(key);
-    if (doc === null) {
-      if (prev?.token === token) docs.current.delete(key);
-      return;
-    }
-    docs.current.set(key, { token, doc });
-    if (prev?.token !== token || !same(prev.doc, doc)) rerender((n) => n + 1);
+    setEntries((prev) => {
+      const was = prev.get(key);
+      if (doc === null) {
+        if (was?.token !== token) return prev;
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      }
+      if (was?.token === token && same(was.doc, doc)) return prev;
+      return new Map(prev).set(key, { token, doc });
+    });
+    setPagesByKey((prev) => {
+      const was = prev.get(key);
+      if (doc === null) {
+        if (was?.token !== token) return prev;
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      }
+      if (was?.token === token && was.formats === doc.formats) return prev;
+      return new Map(prev).set(key, { token, formats: doc.formats });
+    });
   }, []);
 
-  const introKey = file?.intro?.key;
-  const introPart = mounted.find((m) => m.part.subject.kind === "client_intro")?.part ?? null;
+  const introPart = useMemo(() => mounted.find((m) => m.part.subject.kind === "client_intro")?.part ?? null, [mounted]);
   const cases = useMemo(() => mounted.filter((m) => m.part.subject.kind === "case").map((m) => m.part), [mounted]);
   const parts = useMemo(() => mounted.map((m) => m.part), [mounted]);
-  const docOf = (key: string) => docs.current.get(key)?.doc;
-  const formatsOf = (part: FilePartData): Formats => docOf(part.key)?.formats ?? part.formats;
-
-  // The segments are worked out again only when a part's pages change.
-  const inputs = parts.map((p) => formatsOf(p));
-  const cache = useRef<{ inputs: readonly Formats[]; parts: readonly FilePartData[]; segments: Record<FormatId, FileSegment[]>; formats: Formats } | null>(null);
-  if (
-    cache.current === null ||
-    cache.current.parts !== parts ||
-    cache.current.inputs.length !== inputs.length ||
-    cache.current.inputs.some((f, i) => f !== inputs[i])
-  ) {
-    const formatsByKey = new Map(parts.map((p, i) => [p.key, inputs[i]!]));
-    const segments = fileSegmentsByFormat(introPart, cases, (p) => formatsByKey.get(p.key) ?? p.formats);
+  /** A mounted part's pages: its document's, else (not registered yet) as read. */
+  const formatsOf = useCallback(
+    (part: FilePartData): Formats => {
+      const mine = pagesByKey.get(part.key);
+      const generation = mounted.find((m) => m.part.key === part.key)?.generation ?? 0;
+      return mine !== undefined && mine.token === `${part.key}:${generation}` ? mine.formats : part.formats;
+    },
+    [mounted, pagesByKey],
+  );
+  const { segments, formats } = useMemo(() => {
+    const segments = fileSegmentsByFormat(introPart, cases, formatsOf);
     const formats = Object.fromEntries(FORMAT_IDS.map((id) => [id, filePages(segments[id])])) as unknown as Formats;
-    cache.current = { inputs, parts, segments, formats };
-  }
-  const { segments, formats } = cache.current;
+    return { segments, formats };
+  }, [cases, formatsOf, introPart]);
+  const docOf = (key: string) => {
+    const generation = mounted.find((m) => m.part.key === key)?.generation ?? 0;
+    const entry = entries.get(key);
+    return entry !== undefined && entry.token === `${key}:${generation}` ? entry.doc : undefined;
+  };
 
   /** The latest state, for callbacks that outlive a render. */
-  const latest = useRef({ parts, segments, formats, formatsOf });
-  latest.current = { parts, segments, formats, formatsOf };
+  const latest = useRef({ parts, segments, formats, formatsOf, docOf });
+  useLayoutEffect(() => {
+    latest.current = { parts, segments, formats, formatsOf, docOf };
+  });
 
   // One undo history across the file: each step, the parts it changed.
   const past = useRef<string[][]>([]);
@@ -174,7 +195,7 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
       if (top !== undefined) for (const k of keys) if (!top.includes(k)) top.push(k);
     }
     for (const k of keys) {
-      const doc = docOf(k);
+      const doc = now.docOf(k);
       const formatsNow = changed.get(k)!;
       // The format the part's own step names: the first one it changed.
       const formatId = FORMAT_IDS.find((id) => formatsNow[id] !== (doc?.formats ?? now.parts.find((p) => p.key === k)!.formats)[id]) ?? _formatId;
@@ -182,7 +203,7 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
     }
     syncHistory();
     return true;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- reads only refs
+  }, []);
 
   const step = useCallback((from: { current: string[][] }, to: { current: string[][] }, undo: boolean): FormatId | undefined => {
     group.current = { key: undefined, mapped: undefined };
@@ -190,32 +211,33 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
     if (target === undefined) return undefined;
     let formatId: FormatId | undefined;
     for (const k of target) {
-      const doc = docOf(k);
+      const doc = latest.current.docOf(k);
       const changed = undo ? doc?.undo() : doc?.redo();
       formatId ??= changed;
     }
     to.current.push(target);
     syncHistory();
     return formatId;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- reads only refs
+  }, []);
 
   const undo = useCallback(() => step(past, future, true), [step]);
   const redo = useCallback(() => step(future, past, false), [step]);
 
   const flush = useCallback(() => {
     group.current = { key: undefined, mapped: undefined };
-    for (const { doc } of docs.current.values()) doc.flush();
+    for (const part of latest.current.parts) latest.current.docOf(part.key)?.flush();
   }, []);
 
   const settle = useCallback(async () => {
     group.current = { key: undefined, mapped: undefined };
-    const all = await Promise.all([...docs.current.values()].map(({ doc }) => doc.settle()));
+    const now = latest.current;
+    const all = await Promise.all(now.parts.map((part) => now.docOf(part.key)?.settle() ?? Promise.resolve(true)));
     return all.every(Boolean);
   }, []);
 
   /** Part `key` read again alone: a fresh document for it; its steps leave the history. */
   const reload = useCallback(
-    async (key: string) => {
+    async (key: string, quiet = false) => {
       const part = latest.current.parts.find((p) => p.key === key);
       if (file === undefined || part === undefined) return;
       const drop = () => {
@@ -238,7 +260,7 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
         onAssets(fresh.assets);
         drop();
         setMounted((current) => current.map((m) => (m.part.key === key ? { part: fresh, generation: m.generation + 1 } : m)));
-        say(fill(t.partReloaded, { part: fresh.subject.kind === "case" ? fill(t.casePart, { code: fresh.code }) : t.introPart }));
+        if (!quiet) say(fill(t.partReloaded, { part: fresh.subject.kind === "case" ? fill(t.casePart, { code: fresh.code }) : t.introPart }));
         return;
       }
       if ((result?.ok === true && result.value === null) || (result?.ok === false && result.error.code === "NOT_FOUND")) {
@@ -246,7 +268,7 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
         drop();
         setMounted((current) => current.filter((m) => m.part.key !== key));
         if (part.subject.kind === "case") say(fill(t.caseGone, { code: part.code }));
-        else say(fill(t.partReloaded, { part: t.introPart }));
+        else if (!quiet) say(fill(t.partReloaded, { part: t.introPart }));
         return;
       }
       say(t.reloadFailed);
@@ -255,30 +277,32 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
     [file, onAssets, refresh, say],
   );
 
-  const all = [...docs.current.values()].map(({ doc }) => doc);
+  const all = parts.flatMap((part) => docOf(part.key) ?? []);
   const intro = introPart === null ? null : (docOf(introPart.key) ?? null);
   const refused = all.flatMap((d) => d.refused ?? []);
 
-  const copyPending = useCallback((key: string) => {
-    const part = latest.current.parts.find((p) => p.key === key);
+  const copyPending = (key: string) => {
+    const part = parts.find((p) => p.key === key);
     if (part === undefined || !part.revision.editable || part.status !== "approved") return false;
     const doc = docOf(key);
     return doc === undefined ? part.revision.fork !== true : !doc.forkPending;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- reads only refs
+  };
 
-  const partOf = useCallback(
-    (pageKey: string) => {
-      const now = latest.current;
-      for (const id of FORMAT_IDS) {
-        const segment = now.segments[id].find((s) => s.pages.some((p) => p.pageKey === pageKey));
-        if (segment !== undefined) return now.parts.find((p) => p.key === segment.partKey);
-      }
-      return undefined;
-    },
-    [],
-  );
+  const partOf = (pageKey: string) => {
+    for (const id of FORMAT_IDS) {
+      const segment = segments[id].find((s) => s.pages.some((p) => p.pageKey === pageKey));
+      if (segment !== undefined) return parts.find((p) => p.key === segment.partKey);
+    }
+    return undefined;
+  };
 
   const noop = useCallback(() => {}, []);
+  /** The latest `reload`, for the parts' stale saves (a stable callback keeps them from re-rendering). */
+  const reloadNow = useRef(reload);
+  useLayoutEffect(() => {
+    reloadNow.current = reload;
+  });
+  const onStale = useCallback((key: string) => void reloadNow.current(key), []);
   const doc: DocumentState = {
     formats,
     save: aggregateSave(all.map((d) => d.save)),
@@ -305,11 +329,15 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
       key={`${part.key}:${generation}`}
       part={part}
       token={`${part.key}:${generation}`}
-      save={part.key === introKey || part.subject.kind === "client_intro" ? file.onSaveIntro : file.onSaveCase}
+      save={part.subject.kind === "client_intro" ? file.onSaveIntro : file.onSaveCase}
       {...(part.subject.kind === "client_intro" ? (file.onForkIntro === undefined ? {} : { fork: file.onForkIntro }) : { fork: file.onForkCase })}
-      onStale={(key) => void reload(key)}
+      onStale={onStale}
       register={register}
     />
   ));
-  return { doc, intro, introPart, cases, segments, partOf, copyPending, reload, element };
+  const partFormats = (key: string) => {
+    const part = parts.find((p) => p.key === key);
+    return part === undefined ? undefined : formatsOf(part);
+  };
+  return { doc, intro, introPart, cases, segments, partOf, partFormats, copyPending, reload, element };
 }

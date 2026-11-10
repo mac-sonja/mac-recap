@@ -242,3 +242,19 @@ export function partsChanged(
   }
   return changed;
 }
+
+/**
+ * The file page key a page of `pages` (an edit's result) will have once shown: its own when it
+ * has a segment already, else (a page made here) the segment of the page before it, or the
+ * first segment's, as `splitFile` places it.
+ */
+export function fileKeyAfterEdit(pages: readonly Page[], pageKey: string, segments: readonly FileSegment[]): string {
+  if (splitFilePageKey(pageKey) !== null) return pageKey;
+  let segment = segments[0]?.key;
+  for (const page of pages) {
+    if (page.pageKey === pageKey) break;
+    const split = splitFilePageKey(page.pageKey);
+    if (split !== null && segments.some((s) => s.key === split.segment)) segment = split.segment;
+  }
+  return segment === undefined ? pageKey : filePageKey(segment, pageKey);
+}

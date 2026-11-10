@@ -8,12 +8,23 @@ import { clientLimits } from "@/app/(tool)/clients/_lib/client-limits";
 import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import { fill, it } from "@/shared/i18n/it";
-import { clientBoundValuesOf, clientEditableFieldsOf, clientMediaFiles, clientMediaOf, clientRenderAssetsOf, pagesOfDocument } from "../../../_lib/configurator-data";
+import { FORMAT_IDS, type FormatId } from "@/modules/rendering";
+import type { Page } from "@/modules/generation";
+import { forkCaseHead, saveRevisionDoc } from "../../../case-studies/[caseId]/configurator/actions";
+import { clientBoundValuesOf, clientEditableFieldsOf, clientMediaFiles, clientMediaOf, clientRenderAssetsOf } from "../../../_lib/configurator-data";
 import { Configurator, type FieldActions } from "../../../_components/configurator/configurator";
-import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import type { MediaUploadRules } from "../../../_components/configurator/media-files";
-import { approveIntro, discardIntroChanges, forkIntroHead, getIntroRenderAssets, saveIntroRevisionDoc, updateApprovedIntroVersion } from "./actions";
+import {
+  approveIntro,
+  discardIntroChanges,
+  forkIntroHead,
+  getClientFileRenderAssets,
+  reloadFilePart,
+  saveIntroRevisionDoc,
+  updateApprovedIntroVersion,
+} from "./actions";
 import { caseMediaOfClient, caseMediaRenderAssets } from "./case-media";
+import { casePartsOf, introPartOf } from "./file-parts";
 
 /** Client mode's field edits: the client's own actions only (no case binding is offered). */
 const FIELD_ACTIONS: FieldActions = { updateClient, addClientSector, saveClientResults, saveClientTestimonial };
@@ -30,24 +41,27 @@ export interface ClientConfiguratorPageProps {
   params: Promise<{ clientId: string }>;
 }
 
+/** No pages: the client's file draws its parts' own (the configurator's single document stays idle). */
+const NO_PAGES = Object.fromEntries(FORMAT_IDS.map((id) => [id, [] as readonly Page[]])) as Readonly<Record<FormatId, readonly Page[]>>;
+
 /**
- * A client's intro and outro in the configurator (Story 4.11a, client mode): full screen,
- * owner/designer only (`edit`). Only the client's own pages, grouped as Introduzione and
- * Chiusura. An intro Da approvare opens editable (saves go to its working revision).
- * Story 4.11b: an Approvato one opens editable too, under the banner, as an approved case
- * (Story 4.9): its head is either the approved revision (`fork`: the first save forks a working
- * copy through `forkIntroHead`) or a copy already pending (shown with its edits, with Aggiorna
- * and Scarta). Live reads keep the approved revision until Aggiorna; the client's fields stay
- * read-only. No intro, or one in Bozza or In elaborazione, goes back to the client page; an unknown,
- * malformed or deleted client to Clienti. Any other load failure throws into the wizard
- * group's error boundary.
+ * A client's whole file in the configurator (Story 4.12a; Story 4.11a's client mode): full
+ * screen, owner/designer only (`edit`). Per format: Introduzione (the intro's `intro` pages),
+ * one group per approved case, newest created first, labelled "{code} · {name}" (without its
+ * own intro pages and Carosello Chiusura), then Chiusura (the intro's `outro` pages). Every
+ * page saves to its own part's revision: the intro's as in Stories 4.11a and 4.11b, a case's as
+ * an approved case's in Story 4.9 (`saveRevisionDoc`, forked on its first save through
+ * `forkCaseHead`). A stale part is read again alone (`reloadFilePart`).
  *
- * The top bar reads "{Client} · Pagine cliente" with the client's code, and back goes to the
- * client page. The Media tab lists the client's images and videos ("Del cliente", uploads go
- * to the client within its file limit) and its cases' ("Dalle sue case"). The client's name,
- * sector, description, logo, results and testimonial are edited through the client's own
- * actions. Pagine di default fills the client template's texts and draws the client's images
- * in upload order.
+ * An intro missing, in Bozza or In elaborazione leaves Introduzione and Chiusura saying so; with
+ * no approved case either, the page goes back to the client page. An unknown, malformed or
+ * deleted client goes to Clienti. Any other load failure throws into the wizard group's error
+ * boundary; a case whose part can't be read is left out.
+ *
+ * The top bar reads "{Client} · Pagine cliente" with the client's code and the intro's badge;
+ * Approva, Aggiorna and Scarta act on the intro alone. The Media tab lists the client's images
+ * and videos ("Del cliente", uploads go to the client within its file limit) and its cases'
+ * ("Dalle sue case"). The client's fields are edited through the client's own actions.
  */
 export default async function ClientConfiguratorPage({ params }: ClientConfiguratorPageProps) {
   const shell = await requireSurface("edit");
@@ -62,16 +76,6 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
   const client = found.value;
   const back = clientHref(client.id);
 
-  const intro = await caseStudy.getClientIntro(client.id);
-  if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
-  const current = intro.value;
-  if (current === null || (current.status !== "in_review" && current.status !== "approved")) redirect(back);
-
-  const revision = await caseStudy.getEditableRevision({ kind: "client_intro", id: current.id });
-  if (!revision.ok) throw new Error(`Revision could not be loaded: ${revision.error.code}`);
-  const head = revision.value;
-  if (head === null) redirect(back);
-
   const [clientMaterial, sectorList, caseMedia] = await Promise.all([
     caseStudy.listClientMaterial({ clientId: client.id }),
     caseStudy.listClientSectors(),
@@ -79,34 +83,37 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
   ]);
   if (!clientMaterial.ok) throw new Error(`Client material could not be loaded: ${clientMaterial.error.code}`);
   if (!caseMedia.ok) throw new Error(`Case material could not be loaded: ${caseMedia.error.code}`);
-
-  const clientListed = clientMediaFiles(clientMaterial.value);
-  const [clientAssets, caseAssets] = await Promise.all([
-    clientRenderAssetsOf(clientListed, (assetId, spec) => material.getClientRendition(assetId, spec)),
-    caseMediaRenderAssets(caseMedia.value),
-  ]);
-
   // Without the shared list the page shows the client's own sector key in place of its label.
   const sectors = sectorList.ok ? sectorList.value : [];
   const sector = sectors.find((s) => s.key === client.industry)?.label ?? client.industry ?? "";
-  // Story 4.11b: an approved intro's head is its approved revision (forked on the first save) or its working copy.
-  const fork = current.status === "approved" && head.status === "approved" && head.id === current.approvedRevisionId;
-  const pendingCopy = current.status === "approved" && current.approvedRevisionId !== null && head.status === "working" && head.id !== current.approvedRevisionId;
-  const editable = (current.status === "in_review" && head.status === "working") || fork || pendingCopy;
+
+  const clientListed = clientMediaFiles(clientMaterial.value);
+  const [clientAssets, caseAssets, intro] = await Promise.all([
+    clientRenderAssetsOf(clientListed, (assetId, spec) => material.getClientRendition(assetId, spec)),
+    caseMediaRenderAssets(caseMedia.value),
+    introPartOf(client, sector),
+  ]);
+  if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
+  const cases = await casePartsOf(client, caseAssets);
+  if (!cases.ok) throw new Error(`Case studies could not be listed: ${cases.error.code}`);
+  // Nothing to show: no intro ready and no approved case.
+  if (intro.value === null && cases.value.length === 0) redirect(back);
+
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
+  const introPart = intro.value;
 
   return (
     <Configurator
-      key={`${head.id}:${head.version}:${editable}`}
-      revision={{ id: head.id, version: head.version, editable, kind: head.doc.kind, fork }}
-      subject={{ kind: "client_intro", id: current.id, clientId: client.id }}
+      key={`file:${client.id}`}
+      revision={null}
+      subject={{ kind: "client_file", id: client.id, clientId: client.id }}
       onSave={saveIntroRevisionDoc}
-      header={{ name: fill(it.configurator.clientTitle, { name: client.name }), code: client.code, status: current.status }}
+      header={{ name: fill(it.configurator.clientTitle, { name: client.name }), code: client.code, ...(introPart === null ? {} : { status: introPart.status }) }}
       back={{ href: back, label: it.configurator.clientBack }}
-      template={head.doc.template}
-      formats={pagesOfDocument(head.doc.formats)}
+      template={introPart?.template ?? cases.value[0]!.template}
+      formats={NO_PAGES}
       assets={{ ...caseAssets, ...clientAssets }}
-      generatedTexts={generatedTextsOf(head.generatedDoc)}
+      generatedTexts={introPart?.generatedTexts ?? {}}
       // The client's images in upload order: what Pagine di default draws first.
       images={clientListed.filter((file) => file.kind === "image").map((file) => file.id)}
       values={clientBoundValuesOf(client, sector)}
@@ -116,9 +123,9 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
       media={clientMediaOf(clientListed, clientAssets).map((file) => ({ ...file, thumbnailPending: !(file.id in clientAssets) }))}
       clientMedia={caseMedia.value}
       mediaRules={MEDIA_RULES}
-      onRenderAssets={getIntroRenderAssets}
+      onRenderAssets={getClientFileRenderAssets}
       onApprove={approveIntro}
-      headVersion={current.headVersion}
+      {...(introPart === null ? {} : { headVersion: introPart.headVersion })}
       onFork={forkIntroHead}
       onUpdateApproved={updateApprovedIntroVersion}
       onDiscard={discardIntroChanges}
@@ -131,6 +138,16 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
         businessLines: caseStudy.BUSINESS_LINES,
       }}
       fieldActions={FIELD_ACTIONS}
+      file={{
+        clientId: client.id,
+        intro: introPart,
+        cases: cases.value,
+        onSaveIntro: saveIntroRevisionDoc,
+        onForkIntro: forkIntroHead,
+        onSaveCase: saveRevisionDoc,
+        onForkCase: forkCaseHead,
+        onReload: reloadFilePart,
+      }}
     />
   );
 }
