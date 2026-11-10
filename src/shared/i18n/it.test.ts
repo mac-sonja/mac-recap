@@ -142,6 +142,7 @@ describe("client panel copy", () => {
     expect(fill(t("clientPanel.images.errors.limit"), { max: 3 })).toBe("Al massimo 3 file.");
     expect(fill(t("clientPanel.images.errors.pixels"), { min: 1600, max: 8000 })).toContain("1600 px sul lato corto");
     expect(t("clientPanel.layout")).toBe("Modifica layout");
+    expect(t("clientPanel.layoutReason")).toBe("Serve un’introduzione pronta o una case approvata.");
     expect(fill(t("clientPanel.details.nextReason"), { fields: "Settore, Logo" })).toBe("Per andare avanti manca: Settore, Logo.");
   });
 });

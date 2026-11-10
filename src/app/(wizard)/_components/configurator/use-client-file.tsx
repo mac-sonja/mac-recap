@@ -19,8 +19,8 @@ interface Mounted {
 export interface ClientFileOptions {
   /** A message at the top of the canvas. */
   say: (text: string) => void;
-  /** The whole page read again (a part couldn't be). */
-  refresh: () => void;
+  /** The whole page loaded afresh (a part couldn't be read again: its document stopped). */
+  reloadPage: () => void;
   /** A reloaded part's render assets, to draw it. */
   onAssets: (assets: Readonly<Record<string, RenderAsset>>) => void;
 }
@@ -38,6 +38,8 @@ export interface ClientFileState {
   segments: Readonly<Record<FormatId, readonly FileSegment[]>>;
   /** The part a file page key belongs to. */
   partOf: (pageKey: string) => FilePartData | undefined;
+  /** The files part `key`'s last save was refused for (`ASSET_NOT_ALLOWED`); null when none. */
+  refusedOf: (key: string) => readonly string[] | null;
   /** Part `key`'s whole pages now (those the file doesn't show included): what its own limits count. */
   partFormats: (key: string) => Formats | undefined;
   /** Whether part `key` has a working copy not yet published (an approved case or intro edited, Story 4.9). */
@@ -103,7 +105,7 @@ const same = (a: DocumentState | undefined, b: DocumentState) =>
  * each step names the parts it changed, and ⌘Z undoes it in each. A part whose save is stale
  * is read again alone (`file.onReload`): the others keep their state and unsaved edits.
  */
-export function useClientFile(file: ClientFile | undefined, { say, refresh, onAssets }: ClientFileOptions): ClientFileState | null {
+export function useClientFile(file: ClientFile | undefined, { say, reloadPage, onAssets }: ClientFileOptions): ClientFileState | null {
   const [mounted, setMounted] = useState<Mounted[]>(() =>
     file === undefined ? [] : [...(file.intro === null ? [] : [file.intro]), ...file.cases].map((part) => ({ part, generation: 0 })),
   );
@@ -175,13 +177,19 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
 
   const change = useCallback((next: Formats, _formatId: FormatId, key?: string): boolean => {
     const now = latest.current;
+    const t = it.configurator.file;
     const changed = partsChanged(next, now.formats, now.segments, now.parts, now.formatsOf);
-    if (changed === null) return false;
-    const keys = [...changed.keys()].filter((k) => {
-      const part = now.parts.find((p) => p.key === k);
-      return part !== undefined && part.revision.editable;
-    });
+    if (changed === "moved" || changed === "empty") {
+      say(changed === "moved" ? t.otherPart : t.nothingHere);
+      return false;
+    }
+    const keys = [...changed.keys()];
     if (keys.length === 0) return true;
+    // A part that can't be edited here (read-only, or its document not running) refuses the whole edit.
+    if (keys.some((k) => now.parts.find((p) => p.key === k)?.revision.editable !== true || now.docOf(k) === undefined)) {
+      say(t.locked);
+      return false;
+    }
     const newStep = key === undefined || key !== group.current.key;
     if (newStep) {
       groupCount.current += 1;
@@ -203,7 +211,7 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
     }
     syncHistory();
     return true;
-  }, []);
+  }, [say]);
 
   const step = useCallback((from: { current: string[][] }, to: { current: string[][] }, undo: boolean): FormatId | undefined => {
     group.current = { key: undefined, mapped: undefined };
@@ -235,11 +243,25 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
     return all.every(Boolean);
   }, []);
 
+  /** The parts being read again: one reload per part at a time, later calls ignored meanwhile. */
+  const reloading = useRef(new Set<string>());
+
   /** Part `key` read again alone: a fresh document for it; its steps leave the history. */
-  const reload = useCallback(
-    async (key: string, quiet = false) => {
-      const part = latest.current.parts.find((p) => p.key === key);
-      if (file === undefined || part === undefined) return;
+  const reload = async (key: string, quiet = false) => {
+    const part = latest.current.parts.find((p) => p.key === key);
+    if (file === undefined || part === undefined || reloading.current.has(key)) return;
+    reloading.current.add(key);
+    try {
+      await reloadPart(part, quiet);
+    } finally {
+      reloading.current.delete(key);
+    }
+  };
+
+  async function reloadPart(part: FilePartData, quiet: boolean) {
+    {
+      const key = part.key;
+      if (file === undefined) return;
       const drop = () => {
         past.current = past.current.map((s) => s.filter((k) => k !== key)).filter((s) => s.length > 0);
         future.current = future.current.map((s) => s.filter((k) => k !== key)).filter((s) => s.length > 0);
@@ -271,11 +293,11 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
         else if (!quiet) say(fill(t.partReloaded, { part: t.introPart }));
         return;
       }
+      // The part's document stopped on its stale save: only a full reload brings it back.
       say(t.reloadFailed);
-      refresh();
-    },
-    [file, onAssets, refresh, say],
-  );
+      reloadPage();
+    }
+  }
 
   const all = parts.flatMap((part) => docOf(part.key) ?? []);
   const intro = introPart === null ? null : (docOf(introPart.key) ?? null);
@@ -339,5 +361,6 @@ export function useClientFile(file: ClientFile | undefined, { say, refresh, onAs
     const part = parts.find((p) => p.key === key);
     return part === undefined ? undefined : formatsOf(part);
   };
-  return { doc, intro, introPart, cases, segments, partOf, partFormats, copyPending, reload, element };
+  const refusedOf = (key: string) => docOf(key)?.refused ?? null;
+  return { doc, intro, introPart, cases, segments, partOf, partFormats, refusedOf, copyPending, reload, element };
 }

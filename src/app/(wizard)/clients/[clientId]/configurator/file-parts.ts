@@ -5,7 +5,7 @@ import * as material from "@/modules/material";
 import type { RenderAsset } from "@/modules/rendering";
 import { log } from "@/shared/log";
 import { ok, type Result } from "@/shared/result";
-import { boundValuesOf, clientBoundValuesOf, clientMediaFiles, imagePoolOf, pagesOfDocument } from "../../../_lib/configurator-data";
+import { boundValuesOf, clientBoundValuesOf, clientMediaFiles, clientRenderAssetsOf, imagePoolOf, pagesOfDocument } from "../../../_lib/configurator-data";
 import type { FilePartData } from "../../../_components/configurator/client-file";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import { isMedia } from "../../../_components/configurator/media-files";
@@ -22,9 +22,10 @@ export const casePartKey = (caseId: string) => `case:${caseId}`;
  * The client's intro as a part of its file (Stories 4.11a, 4.11b): an intro Da approvare edited
  * on its working revision, an Approvato one on its approved revision (forked on the first save)
  * or on its pending copy. Null while it isn't ready: no intro, one in Bozza or In elaborazione,
- * or no head revision. `sector` is the client's sector label.
+ * or no head revision. `sector` is the client's sector label. `assets` are the client's files'
+ * render assets when already read; else they are read here (a reload draws files added since).
  */
-export async function introPartOf(client: ClientDetail, sector: string): Promise<Result<FilePartData | null>> {
+export async function introPartOf(client: ClientDetail, sector: string, assets?: Readonly<Record<string, RenderAsset>>): Promise<Result<FilePartData | null>> {
   const found = await caseStudy.getClientIntro(client.id);
   if (!found.ok) return found;
   const intro = found.value;
@@ -34,7 +35,9 @@ export async function introPartOf(client: ClientDetail, sector: string): Promise
   const head = revision.value;
   if (head === null) return ok(null);
   const listed = await caseStudy.listClientMaterial({ clientId: client.id });
-  const images = listed.ok ? clientMediaFiles(listed.value).filter((file) => file.kind === "image").map((file) => file.id) : [];
+  const media = listed.ok ? clientMediaFiles(listed.value) : [];
+  const images = media.filter((file) => file.kind === "image").map((file) => file.id);
+  const drawn = assets ?? (await clientRenderAssetsOf(media, (assetId, spec) => material.getClientRendition(assetId, spec)));
   const fork = intro.status === "approved" && head.status === "approved" && head.id === intro.approvedRevisionId;
   const pendingCopy = intro.status === "approved" && intro.approvedRevisionId !== null && head.status === "working" && head.id !== intro.approvedRevisionId;
   const editable = (intro.status === "in_review" && head.status === "working") || fork || pendingCopy;
@@ -51,7 +54,7 @@ export async function introPartOf(client: ClientDetail, sector: string): Promise
     values: clientBoundValuesOf(client, sector),
     revision: { id: head.id, version: head.version, editable, kind: head.doc.kind, fork },
     headVersion: intro.headVersion,
-    assets: {},
+    assets: drawn,
   });
 }
 
@@ -108,17 +111,19 @@ export async function casePartOf(client: ClientDetail, caseId: string, assets?: 
 /**
  * The approved cases of client `client` as parts of its file, newest created first (until the
  * client orders them, Story 4.12b). A case whose part can't be read is left out (logged with its
- * id) and never drops the others; only a failed list of the cases is an error.
+ * id; a read that throws too) and never drops the others; only a failed list of the cases is an error.
  */
 export async function casePartsOf(client: ClientDetail, assets: Readonly<Record<string, RenderAsset>>): Promise<Result<FilePartData[]>> {
   const cases = await caseStudy.list({ clientId: client.id, status: "approved" });
   if (!cases.ok) return cases;
   const newestFirst = [...cases.value].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  const parts = await Promise.all(newestFirst.map((c) => casePartOf(client, c.id, assets)));
+  const parts = await Promise.allSettled(newestFirst.map((c) => casePartOf(client, c.id, assets)));
   const out: FilePartData[] = [];
-  parts.forEach((part, i) => {
-    if (!part.ok) log.warn(`case part not read: ${part.error.code}`, { caseId: newestFirst[i]!.id, clientId: client.id });
-    else if (part.value !== null) out.push(part.value);
+  parts.forEach((settled, i) => {
+    const caseId = newestFirst[i]!.id;
+    if (settled.status === "rejected") log.warn("case part not read: threw", { caseId, clientId: client.id });
+    else if (!settled.value.ok) log.warn(`case part not read: ${settled.value.error.code}`, { caseId, clientId: client.id });
+    else if (settled.value.value !== null) out.push(settled.value.value);
   });
   return ok(out);
 }

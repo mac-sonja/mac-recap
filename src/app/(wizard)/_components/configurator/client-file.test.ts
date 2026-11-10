@@ -118,7 +118,7 @@ describe("the client's file (Story 4.12a)", () => {
     const segments = Object.fromEntries(FORMAT_IDS.map((id) => [id, fileSegments(intro, [a, b], id, own)])) as Record<FormatId, ReturnType<typeof fileSegments>>;
     const shownNow = Object.fromEntries(FORMAT_IDS.map((id) => [id, filePages(segments[id])])) as Record<FormatId, Page[]>;
     const next = { ...shownNow, [F]: shownNow[F].filter((p) => p.pageKey !== "case:a|content") };
-    const changed = partsChanged(next, shownNow, segments, [intro, a, b], own)!;
+    const changed = partsChanged(next, shownNow, segments, [intro, a, b], own) as Map<string, Formats>;
     expect([...changed.keys()]).toEqual(["case:a"]);
     expect(changed.get("case:a")![F].map((p) => p.pageKey)).toEqual(["intro", "results"]);
     expect(changed.get("case:a")!.video_9_16).toBe(a.formats.video_9_16);

@@ -605,6 +605,8 @@ export const it = {
     },
     /** On the client page: opens the client's file in the configurator (Story 4.12a). */
     layout: "Modifica layout",
+    /** Why Modifica layout is inactive: the file would be empty (Story 4.12a). */
+    layoutReason: "Serve un’introduzione pronta o una case approvata.",
     /** Elimina cliente at the bottom of the edit panel (owner, 2026-10-19). */
     delete: {
       button: "Elimina cliente",
@@ -1031,6 +1033,12 @@ export const it = {
       deleteCancel: "Annulla",
       /** Another case's file placed on a case's page: a case holds only its own and the client's files. */
       otherCase: "Questa immagine è di un’altra case",
+      /** An edit of a part that can't be edited here (read-only, or not loaded). */
+      locked: "Questa parte non si può modificare qui.",
+      /** An edit with no part of the file to hold it (no intro ready, no case left). */
+      nothingHere: "Qui non c’è ancora nessuna parte del file da modificare.",
+      /** + Aggiungi pagina with no part that can take a page. */
+      noPartForPage: "Non c’è una parte del file a cui aggiungere la pagina.",
       /** A page, block or element moved from one part of the file into another. */
       otherPart: "Si sposta solo dentro la stessa parte: ogni case e l’introduzione restano a sé.",
       /** One part changed elsewhere meanwhile: only it was read again. */

@@ -302,7 +302,7 @@ export function RightPanel({
       </div>
 
       <div hidden={tab !== "pages"} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3.5">
-        {shown.length === 0 && q !== "" && <p className="font-label text-[12.5px] text-foreground-muted">{fill(it.configurator.noMatch, { query: query.trim() })}</p>}
+        {shown.length === 0 && q !== "" && !(file?.projects.some((row) => matches(row.name) || matches(row.code)) ?? false) && <p className="font-label text-[12.5px] text-foreground-muted">{fill(it.configurator.noMatch, { query: query.trim() })}</p>}
         {file !== undefined && (
           <>
             {fileGroup(file.intro)}

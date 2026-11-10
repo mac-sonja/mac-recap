@@ -310,9 +310,10 @@ export function Configurator({
   });
   /** The render assets: the page's, then those of files uploaded since (Story 4.5b) and of parts read again (Story 4.12a). */
   const [assets, setAssets] = useState(initialAssets);
-  const refresh = useCallback(() => router.refresh(), [router]);
+  /** Story 4.12a: a part of the client's file that can't be read again: the whole page loads afresh. */
+  const reloadPage = useCallback(() => window.location.reload(), []);
   const addAssets = useCallback((more: Readonly<Record<string, RenderAsset>>) => setAssets((current) => ({ ...current, ...more })), []);
-  const filed = useClientFile(file, { say, refresh, onAssets: addAssets });
+  const filed = useClientFile(file, { say, reloadPage, onAssets: addAssets });
   const doc = filed?.doc ?? single;
   const formats = doc.formats;
   /**
@@ -410,8 +411,8 @@ export function Configurator({
   );
   /**
    * Records an edit of the document (one undo step, or part of `group`'s). Story 4.12a: the
-   * client's file refuses one that moves a page into another part, or puts another case's file
-   * on a case's page, and says so (false).
+   * client's file refuses one that moves a page into another part, touches a part that can't be
+   * edited, or puts another case's file on a case's page, and says so (false).
    */
   const commit = useCallback(
     (next: Formats, changedFormat: FormatId, group?: string): boolean => {
@@ -419,9 +420,8 @@ export function Configurator({
         say(it.configurator.file.otherCase);
         return false;
       }
-      if (doc.change(next, changedFormat, group) !== false) return true;
-      say(it.configurator.file.otherPart);
-      return false;
+      // The client's file says itself why it refused (Story 4.12a).
+      return doc.change(next, changedFormat, group) !== false;
     },
     [addsOtherCaseFile, doc, say],
   );
@@ -998,12 +998,27 @@ export function Configurator({
   /** **Togli dalla pagina** on the refused-file banner: those files' images and videos emptied, in every format (one undo step). */
   const removeRefused = useCallback(() => {
     if (doc.refused === null) return;
-    const next = Object.fromEntries(Object.entries(formats).map(([id, pages]) => [id, clearAssets(pages, doc.refused!)])) as Formats;
+    // Story 4.12a: in the client's file, only from the pages of the parts whose save was refused.
+    const clear = (pages: readonly Page[]): readonly Page[] => {
+      if (filed === null) return clearAssets(pages, doc.refused!);
+      let changed = false;
+      const next = pages.map((page) => {
+        const segment = splitFilePageKey(page.pageKey)?.segment;
+        // A case's segment is keyed by the case's part; Introduzione and Chiusura are the intro's.
+        const partKey = segment === INTRO_SEGMENT || segment === CLOSING_SEGMENT ? ownPart?.key : segment;
+        const refused = partKey === undefined ? null : filed.refusedOf(partKey);
+        const out = refused === null ? page : (clearAssets([page], refused)[0] ?? page);
+        if (out !== page) changed = true;
+        return out;
+      });
+      return changed ? next : pages;
+    };
+    const next = Object.fromEntries(Object.entries(formats).map(([id, pages]) => [id, clear(pages)])) as Formats;
     const changed = (Object.keys(next) as FormatId[]).filter((id) => next[id] !== formats[id]);
     if (changed.length === 0) return;
     if (!commit(next, changed.includes(formatId) ? formatId : changed[0]!)) return;
     say(it.configurator.media.missing.removed);
-  }, [commit, doc.refused, formatId, formats, say]);
+  }, [commit, doc.refused, filed, formatId, formats, ownPart, say]);
 
   /** **Adattamento**: the selected image or video takes `fit` (one undo step). */
   const fitMedia = useCallback(
@@ -1058,22 +1073,32 @@ export function Configurator({
     // last part; the page limit counts that part's own pages, not the whole file's.
     const segments = filed.segments[formatId];
     const all = formats[formatId];
-    const segment = segments.find((s) => s.pages.some((p) => p.pageKey === selection?.pageKey)) ?? segments.findLast((s) => s.pages.length > 0);
-    if (segment === undefined) return;
+    // With nothing selected: the last part with pages, else the first that can take one (the intro if ready, else the first case).
+    const segment =
+      segments.find((s) => s.pages.some((p) => p.pageKey === selection?.pageKey)) ??
+      segments.findLast((s) => s.pages.length > 0) ??
+      segments.find((s) => s.slot === "client_intro") ??
+      segments.find((s) => s.slot === "case");
+    if (segment === undefined) {
+      say(it.configurator.file.noPartForPage);
+      return;
+    }
     if ((filed.partFormats(segment.partKey)?.[formatId].length ?? 0) >= MAX_PAGES_PER_FORMAT) {
       say(fill(it.configurator.pages.formatFull, { n: MAX_PAGES_PER_FORMAT }));
       return;
     }
-    const after = segment.pages.some((p) => p.pageKey === selection?.pageKey) ? selection!.pageKey : segment.pages.at(-1)!.pageKey;
-    const edit = addPage(segment.pages, after, formatId, templateOf(after), newId);
+    const after = segment.pages.some((p) => p.pageKey === selection?.pageKey) ? selection!.pageKey : segment.pages.at(-1)?.pageKey;
+    const part = filed.partOf(after ?? "") ?? [...(ownPart === null ? [] : [ownPart]), ...filed.cases].find((p) => p.key === segment.partKey);
+    const edit = addPage(segment.pages, after, formatId, part?.template ?? template, newId);
     if (!edit.ok) {
       applyPageEdit(edit);
       return;
     }
-    const start = all.indexOf(segment.pages[0]!);
+    // Where the segment starts in the file: after every page of the segments before it.
+    const start = segments.slice(0, segments.indexOf(segment)).reduce((sum, s) => sum + s.pages.length, 0);
     const pages = [...all.slice(0, start), ...edit.pages, ...all.slice(start + segment.pages.length)];
     if (applyPageEdit({ ...edit, pages })) scrollTo.current = selectionAfter(pages, edit.selection).pageKey;
-  }, [applyPageEdit, editable, filed, formatId, formats, say, selection, selectionAfter, template, templateOf]);
+  }, [applyPageEdit, editable, filed, formatId, formats, ownPart, say, selection, selectionAfter, template]);
 
   useEffect(() => {
     const key = scrollTo.current;
@@ -1552,7 +1577,17 @@ export function Configurator({
                   onClick={() => {
                     const pageKey = confirmDelete?.pageKey;
                     setConfirmDelete(null);
-                    if (pageKey !== undefined) removePage(pageKey, true);
+                    if (pageKey === undefined) return;
+                    // As the bin does: focus goes to the next page's bin, else the previous one's, else Aggiungi pagina.
+                    const at = pages.findIndex((p) => p.pageKey === pageKey);
+                    const next = pages[at + 1]?.pageKey ?? pages[at - 1]?.pageKey;
+                    removePage(pageKey, true);
+                    requestAnimationFrame(() => {
+                      const root = canvasRef.current;
+                      const target =
+                        (next === undefined ? null : root?.querySelector<HTMLElement>(`[data-delete-page="${next}"]`)) ?? root?.querySelector<HTMLElement>("[data-add-page]");
+                      target?.focus();
+                    });
                   }}
                   className={DANGER_ACTION}
                 >

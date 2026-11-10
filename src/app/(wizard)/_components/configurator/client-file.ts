@@ -158,6 +158,12 @@ export const fileSegmentsByFormat = (
 ): Record<FormatId, FileSegment[]> =>
   Object.fromEntries(FORMAT_IDS.map((id) => [id, fileSegments(intro, cases, id, formatsOf)])) as Record<FormatId, FileSegment[]>;
 
+/** `page` with the role its segment shows: `intro` in Introduzione, `outro` in Chiusura, never `intro` in a case. */
+function withSegmentRole(page: Page, segment: string): Page {
+  const role = segment === INTRO_SEGMENT ? "intro" : segment === CLOSING_SEGMENT ? "outro" : page.role === "intro" ? "body" : page.role;
+  return role === page.role ? page : { ...page, role };
+}
+
 /** The file's pages in one format, in order. */
 export const filePages = (segments: readonly FileSegment[]): Page[] => segments.flatMap((s) => s.pages);
 
@@ -165,9 +171,11 @@ export const filePages = (segments: readonly FileSegment[]): Page[] => segments.
  * An edit of the file's pages in one format, cut back into each segment's own pages: a page
  * still shown keeps its part's own object; an edited one takes its own key back; a page made
  * here (a new page, a default page) joins the segment of the page before it (the first
- * segment when it comes first), taking the intro's `intro` or `outro` role there, so it stays
- * in that run. Null when the edit moved a page out of its segment (into another part, or
- * between Introduzione and Chiusura): a page can't change part.
+ * segment when it comes first). Every edited or new page takes its segment's role (`intro`
+ * in Introduzione, `outro` in Chiusura, never `intro` in a case), so an edit that changed a
+ * role (Pagine di default) never moves it out of its run. Null when the edit moved a page out
+ * of its segment (into another part, or between Introduzione and Chiusura), or there is no
+ * segment to put a page in.
  */
 export function splitFile(pages: readonly Page[], segments: readonly FileSegment[]): Map<string, Page[]> | null {
   const order = segments.map((s) => s.key);
@@ -183,12 +191,11 @@ export function splitFile(pages: readonly Page[], segments: readonly FileSegment
       own = known.page;
     } else if (split !== null && out.has(split.segment)) {
       segment = split.segment;
-      own = { ...page, pageKey: split.pageKey };
+      own = withSegmentRole({ ...page, pageKey: split.pageKey }, segment);
     } else {
       segment = order[at]!;
       if (segment === undefined) return null;
-      const role = segment === INTRO_SEGMENT ? "intro" : segment === CLOSING_SEGMENT ? "outro" : page.role === "intro" ? "body" : page.role;
-      own = role === page.role ? page : { ...page, role };
+      own = withSegmentRole(page, segment);
     }
     const index = order.indexOf(segment);
     if (index < at) return null;
@@ -215,8 +222,9 @@ export const ownPagesOf = (segments: readonly FileSegment[], partKey: string): P
   segments.filter((s) => s.partKey === partKey).flatMap((s) => s.pages.map((p) => origin.get(p)?.page ?? p));
 
 /**
- * An edit of the file (`next`, every format) as each changed part's new formats; null when a
- * page would change part. `segments` and `formatsOf` are the file as shown before the edit.
+ * An edit of the file (`next`, every format) as each changed part's new formats; `"moved"` when
+ * a page would change part, `"empty"` when a format has no segment to hold the edit's pages.
+ * `segments` and `formatsOf` are the file as shown before the edit.
  */
 export function partsChanged(
   next: Readonly<Record<FormatId, readonly Page[]>>,
@@ -224,12 +232,13 @@ export function partsChanged(
   segments: Readonly<Record<FormatId, readonly FileSegment[]>>,
   parts: readonly FilePartData[],
   formatsOf: (part: FilePartData) => Formats,
-): Map<string, Formats> | null {
+): Map<string, Formats> | "moved" | "empty" {
   const changed = new Map<string, Formats>();
   for (const formatId of FORMAT_IDS) {
     if (next[formatId] === shownNow[formatId]) continue;
+    if (segments[formatId].length === 0) return "empty";
     const cut = splitFile(next[formatId], segments[formatId]);
-    if (cut === null) return null;
+    if (cut === null) return "moved";
     for (const part of parts) {
       const own = segments[formatId].filter((s) => s.partKey === part.key);
       if (own.length === 0) continue;

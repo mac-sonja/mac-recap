@@ -88,11 +88,11 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
   const sector = sectors.find((s) => s.key === client.industry)?.label ?? client.industry ?? "";
 
   const clientListed = clientMediaFiles(clientMaterial.value);
-  const [clientAssets, caseAssets, intro] = await Promise.all([
+  const [clientAssets, caseAssets] = await Promise.all([
     clientRenderAssetsOf(clientListed, (assetId, spec) => material.getClientRendition(assetId, spec)),
     caseMediaRenderAssets(caseMedia.value),
-    introPartOf(client, sector),
   ]);
+  const intro = await introPartOf(client, sector, clientAssets);
   if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
   const cases = await casePartsOf(client, caseAssets);
   if (!cases.ok) throw new Error(`Case studies could not be listed: ${cases.error.code}`);
@@ -101,10 +101,15 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
 
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   const introPart = intro.value;
+  // A refresh that changes any part (Aggiorna, another tab's save) starts the file afresh on what
+  // the server holds; one that changes only bound values (a field save) keeps it mounted.
+  const fingerprint = [...(introPart === null ? [] : [introPart]), ...cases.value]
+    .map((p) => `${p.key}:${p.revision.id}:${p.revision.version}:${p.revision.editable}:${p.status}:${p.headVersion}`)
+    .join(",");
 
   return (
     <Configurator
-      key={`file:${client.id}`}
+      key={`file:${client.id}:${fingerprint}`}
       revision={null}
       subject={{ kind: "client_file", id: client.id, clientId: client.id }}
       onSave={saveIntroRevisionDoc}
