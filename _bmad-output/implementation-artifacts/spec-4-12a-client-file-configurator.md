@@ -2,7 +2,8 @@
 title: "Story 4.12a: the client's whole file in the configurator"
 type: 'feature'
 created: '2026-11-10'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: '61a3e0f68d86b32edf333e7c389b668b7bc5a5ab'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -26,6 +27,7 @@ context:
 - **Which cases:** only **approved** cases appear in the file. Cases in Bozza, In elaborazione or Da approvare are not shown.
 - **Publishing:** the top bar's Approva / Aggiorna / Scarta act on the client's intro only, as in 4.11. Cases are published from their own configurator.
 - **Intro and closing:** Introduzione and Chiusura always show, whatever the number of cases. Whether a one-case client pack includes the intro is decided with the pack (B5).
+- **Size and defaults:** kept whole at about 2,400 tokens; the case order (newest created first) and the other-case image refusal approved with the spec.
 
 **Always:**
 - **Route and entry points:** the route stays `/clients/{clientId}/configurator`.
