@@ -12,7 +12,7 @@ import { clientBoundValuesOf, clientEditableFieldsOf, clientMediaFiles, clientMe
 import { Configurator, type FieldActions } from "../../../_components/configurator/configurator";
 import { generatedTextsOf } from "../../../_components/configurator/default-pages";
 import type { MediaUploadRules } from "../../../_components/configurator/media-files";
-import { approveIntro, getIntroRenderAssets, saveIntroRevisionDoc } from "./actions";
+import { approveIntro, discardIntroChanges, forkIntroHead, getIntroRenderAssets, saveIntroRevisionDoc, updateApprovedIntroVersion } from "./actions";
 import { caseMediaOfClient, caseMediaRenderAssets } from "./case-media";
 
 /** Client mode's field edits: the client's own actions only (no case binding is offered). */
@@ -33,9 +33,12 @@ export interface ClientConfiguratorPageProps {
 /**
  * A client's intro and outro in the configurator (Story 4.11a, client mode): full screen,
  * owner/designer only (`edit`). Only the client's own pages, grouped as Introduzione and
- * Chiusura. An intro Da approvare opens editable (saves go to its working revision); an
- * Approvato one opens read-only, with no Approva and no save (editing it comes with 4.11b).
- * No intro, or one in Bozza or In elaborazione, goes back to the client page; an unknown,
+ * Chiusura. An intro Da approvare opens editable (saves go to its working revision).
+ * Story 4.11b: an Approvato one opens editable too, under the banner, as an approved case
+ * (Story 4.9): its head is either the approved revision (`fork`: the first save forks a working
+ * copy through `forkIntroHead`) or a copy already pending (shown with its edits, with Aggiorna
+ * and Scarta). Live reads keep the approved revision until Aggiorna; the client's fields stay
+ * read-only. No intro, or one in Bozza or In elaborazione, goes back to the client page; an unknown,
  * malformed or deleted client to Clienti. Any other load failure throws into the wizard
  * group's error boundary.
  *
@@ -86,13 +89,16 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
   // Without the shared list the page shows the client's own sector key in place of its label.
   const sectors = sectorList.ok ? sectorList.value : [];
   const sector = sectors.find((s) => s.key === client.industry)?.label ?? client.industry ?? "";
-  const editable = current.status === "in_review" && head.status === "working";
+  // Story 4.11b: an approved intro's head is its approved revision (forked on the first save) or its working copy.
+  const fork = current.status === "approved" && head.status === "approved" && head.id === current.approvedRevisionId;
+  const pendingCopy = current.status === "approved" && current.approvedRevisionId !== null && head.status === "working" && head.id !== current.approvedRevisionId;
+  const editable = (current.status === "in_review" && head.status === "working") || fork || pendingCopy;
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
 
   return (
     <Configurator
       key={`${head.id}:${head.version}:${editable}`}
-      revision={{ id: head.id, version: head.version, editable, kind: head.doc.kind }}
+      revision={{ id: head.id, version: head.version, editable, kind: head.doc.kind, fork }}
       subject={{ kind: "client_intro", id: current.id, clientId: client.id }}
       onSave={saveIntroRevisionDoc}
       header={{ name: fill(it.configurator.clientTitle, { name: client.name }), code: client.code, status: current.status }}
@@ -113,6 +119,9 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
       onRenderAssets={getIntroRenderAssets}
       onApprove={approveIntro}
       headVersion={current.headVersion}
+      onFork={forkIntroHead}
+      onUpdateApproved={updateApprovedIntroVersion}
+      onDiscard={discardIntroChanges}
       clientFiles={caseMedia.value.map((file) => ({ id: file.id, name: file.originalFileName }))}
       fields={clientEditableFieldsOf(client)}
       fieldOptions={{

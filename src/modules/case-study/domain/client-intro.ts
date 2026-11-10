@@ -81,3 +81,21 @@ export const approveIntroInputSchema = z.strictObject({
   overflow: z.record(z.string().max(64), z.boolean()),
 });
 export type ApproveIntroInput = z.infer<typeof approveIntroInputSchema>;
+
+/**
+ * `forkIntroHead` (Story 4.11b, Story 4.9's `forkHead` for an intro): the approved intro
+ * whose first edit needs a working copy, and the `headVersion` the configurator read.
+ */
+export const forkIntroHeadInputSchema = z.strictObject({
+  clientIntroId: z.uuid().transform((id) => id.toLowerCase()),
+  expectedHeadVersion: z.number().int().nonnegative().max(2_147_483_647),
+});
+export type ForkIntroHeadInput = z.infer<typeof forkIntroHeadInputSchema>;
+
+/** `discardIntroHead` (Story 4.11b): the intro's working copy to drop, and the `headVersion` it was read at. */
+export const discardIntroHeadInputSchema = z.strictObject({
+  clientIntroId: z.uuid().transform((id) => id.toLowerCase()),
+  revisionId: z.uuid().transform((id) => id.toLowerCase()),
+  expectedHeadVersion: z.number().int().nonnegative().max(2_147_483_647),
+});
+export type DiscardIntroHeadInput = z.infer<typeof discardIntroHeadInputSchema>;

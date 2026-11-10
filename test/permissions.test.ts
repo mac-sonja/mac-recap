@@ -105,6 +105,10 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   "client-configurator.saveIntroRevisionDoc": { call: clientConfigurator.saveIntroRevisionDoc as Action, allowed: OWNERS },
   "client-configurator.approveIntro": { call: clientConfigurator.approveIntro as Action, allowed: OWNERS },
   "client-configurator.getIntroRenderAssets": { call: clientConfigurator.getIntroRenderAssets as Action, allowed: OWNERS },
+  // Editing an approved intro (Story 4.11b): `edit`, `update approved version`, `discard`.
+  "client-configurator.forkIntroHead": { call: clientConfigurator.forkIntroHead as Action, allowed: OWNERS },
+  "client-configurator.updateApprovedIntroVersion": { call: clientConfigurator.updateApprovedIntroVersion as Action, allowed: OWNERS },
+  "client-configurator.discardIntroChanges": { call: clientConfigurator.discardIntroChanges as Action, allowed: OWNERS },
   // The draft-ready poll (Story 3.8): `generate`, a read only.
   "draft-ready.listReadyDrafts": { call: draftReady.listReadyDrafts as Action, allowed: OWNERS },
   // Story 5.3: Scarica on an approved case.
@@ -125,6 +129,8 @@ beforeEach(() => {
   session.disabledAt = null;
   // The intro save reads the saved revision's version (Story 4.11a).
   vi.mocked(caseStudyModule.saveIntroRevisionDoc).mockResolvedValue(ok({ version: 1 } as never));
+  // Approva and Aggiorna on an intro read its status first (Story 4.11b).
+  vi.mocked(caseStudyModule.getClientIntroById).mockResolvedValue(ok({ status: "in_review" } as never));
 });
 
 describe("permission suite through the real actor resolver (Story 6.4)", () => {

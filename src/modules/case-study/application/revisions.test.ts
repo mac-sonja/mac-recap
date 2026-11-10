@@ -16,7 +16,9 @@ import {
   makeApproveIntro,
   makeCreateWorkingRevision,
   makeDiscardHead,
+  makeDiscardIntroHead,
   makeForkHead,
+  makeForkIntroHead,
   makeGetEditableRevision,
   makeGetLiveRevision,
   makeSaveIntroRevisionDoc,
@@ -777,14 +779,20 @@ describe("client intro save and approve (Story 4.11a)", () => {
   const head = (over: Partial<Revision> = {}) => stored(HEAD_ID, doc(), { caseId: null, clientIntroId: INTRO_ID, version: 3, ...over });
 
   /** The intro, its revisions, the client's files and each case's live files. */
-  function introDeps(rows: Revision[] = [head()], clientFiles: string[] = [...refs(), CLIENT_FILE], live: Record<string, string[]> = { [CASE_A]: [CASE_FILE], [CASE_B]: [] }) {
+  function introDeps(
+    rows: Revision[] = [head()],
+    clientFiles: string[] = [...refs(), CLIENT_FILE],
+    live: Record<string, string[]> = { [CASE_A]: [CASE_FILE], [CASE_B]: [] },
+    intro: Partial<ClientIntro> = {},
+  ) {
     const byId = new Map(rows.map((r) => [r.id, r]));
     return {
       revisions: { findById: vi.fn<RevisionRepository["findById"]>(async (id) => ok(byId.get(id) ?? null)) },
       intros: {
-        findById: vi.fn<ClientIntroRepository["findById"]>(async () => ok(clientIntro({ clientId: CLIENT_ID, headRevisionId: HEAD_ID }))),
+        findById: vi.fn<ClientIntroRepository["findById"]>(async () => ok(clientIntro({ clientId: CLIENT_ID, headRevisionId: HEAD_ID, ...intro }))),
         saveDoc: vi.fn<ClientIntroRepository["saveDoc"]>(async (input) => ok({ ...byId.get(input.revisionId)!, doc: input.doc, version: input.expectedVersion + 1 })),
         approve: vi.fn<ClientIntroRepository["approve"]>(async (input) => ok({ ...byId.get(input.revisionId)!, status: "approved" })),
+        updateApproved: vi.fn<ClientIntroRepository["updateApproved"]>(async (input) => ok({ ...byId.get(input.revisionId)!, status: "approved" })),
       },
       cases: { list: vi.fn<CaseStudyRepository["list"]>(async () => ok(Object.keys(live).map((id) => ({ id }) as never))) },
       clients: { listAssets: vi.fn<ClientRepository["listAssets"]>(async () => ok(clientFiles.map((id) => ({ id }) as ClientAsset))) },
@@ -899,6 +907,96 @@ describe("client intro save and approve (Story 4.11a)", () => {
       const d = introDeps();
       d.intros.approve.mockResolvedValue(err({ code: "CASE_NOT_APPROVABLE", message: "m" }));
       expect(await makeApproveIntro(d)(actor, input())).toMatchObject({ ok: false, error: { code: "CASE_NOT_APPROVABLE" } });
+    });
+
+    it("on an in_review intro goes through approve, never updateApproved", async () => {
+      const d = introDeps([head()], undefined, undefined, { status: "in_review" });
+      expect((await makeApproveIntro(d)(actor, input())).ok).toBe(true);
+      expect(d.intros.approve).toHaveBeenCalledTimes(1);
+      expect(d.intros.updateApproved).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("update approved version (Story 4.11b)", () => {
+    const APPROVED_ID = "33333333-0000-4000-8000-0000000000a1";
+    const approvedIntro = { status: "approved" as const, approvedRevisionId: APPROVED_ID };
+    const input = (over: Record<string, unknown> = {}) => ({
+      clientIntroId: INTRO_ID,
+      revisionId: HEAD_ID,
+      expectedRevisionVersion: 3,
+      expectedHeadVersion: 2,
+      overflow: clear(),
+      ...over,
+    });
+
+    it("on an approved intro runs the same checks, then updates the approved version, never approve", async () => {
+      const d = introDeps([head()], undefined, undefined, approvedIntro);
+      expect(await makeApproveIntro(d)(actor, input())).toMatchObject({ ok: true, value: { status: "approved" } });
+      expect(d.intros.updateApproved).toHaveBeenCalledWith({ clientIntroId: INTRO_ID, revisionId: HEAD_ID, expectedRevisionVersion: 3, expectedHeadVersion: 2, actorId: actor.id });
+      expect(d.intros.approve).not.toHaveBeenCalled();
+    });
+
+    it("refuses an overflowing copy with OVERFLOW_NOT_CLEARED, writing nothing", async () => {
+      const d = introDeps([head()], undefined, undefined, approvedIntro);
+      expect(await makeApproveIntro(d)(actor, input({ overflow: { ...clear(), video_9_16: true } }))).toMatchObject({ ok: false, error: { code: "OVERFLOW_NOT_CLEARED" } });
+      expect(d.intros.updateApproved).not.toHaveBeenCalled();
+    });
+
+    it("refuses a copy whose material is gone with MATERIAL_MISSING, writing nothing", async () => {
+      const [gone, ...rest] = refs();
+      const d = introDeps([head()], rest, { [CASE_A]: [] }, approvedIntro);
+      expect(await makeApproveIntro(d)(actor, input())).toMatchObject({ ok: false, error: { code: "MATERIAL_MISSING", details: { assetIds: [gone] } } });
+      expect(d.intros.updateApproved).not.toHaveBeenCalled();
+    });
+
+    it("refuses a stale copy with STALE_REVISION, writing nothing", async () => {
+      const d = introDeps([head({ version: 5 })], undefined, undefined, approvedIntro);
+      expect(await makeApproveIntro(d)(actor, input())).toMatchObject({ ok: false, error: { code: "STALE_REVISION" } });
+      expect(d.intros.updateApproved).not.toHaveBeenCalled();
+    });
+
+    it("passes the database's STALE_HEAD through", async () => {
+      const d = introDeps([head()], undefined, undefined, approvedIntro);
+      d.intros.updateApproved.mockResolvedValue(err({ code: "STALE_HEAD", message: "m" }));
+      expect(await makeApproveIntro(d)(actor, input())).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
+    });
+  });
+
+  describe("forkIntroHead and discardIntroHead (Story 4.11b)", () => {
+    it("forkIntroHead returns the copy's id and version and the intro's head version", async () => {
+      const forkHead = vi.fn<ClientIntroRepository["forkHead"]>(async () => ok({ revision: head({ version: 0 }), headVersion: 3 }));
+      expect(await makeForkIntroHead({ intros: { forkHead } })(actor, { clientIntroId: INTRO_ID.toUpperCase(), expectedHeadVersion: 2 })).toEqual({
+        ok: true,
+        value: { revisionId: HEAD_ID, version: 0, headVersion: 3 },
+      });
+      expect(forkHead).toHaveBeenCalledWith({ clientIntroId: INTRO_ID, expectedHeadVersion: 2, actorId: actor.id });
+    });
+
+    it("forkIntroHead refuses bad input before the repository and passes refusals through", async () => {
+      const forkHead = vi.fn<ClientIntroRepository["forkHead"]>(async () => err({ code: "STALE_HEAD", message: "m" }));
+      expect(await makeForkIntroHead({ intros: { forkHead } })(actor, { caseId: INTRO_ID, expectedHeadVersion: 2 })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+      expect(forkHead).not.toHaveBeenCalled();
+      expect(await makeForkIntroHead({ intros: { forkHead } })(actor, { clientIntroId: INTRO_ID, expectedHeadVersion: 2 })).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
+    });
+
+    it("discardIntroHead returns the approved revision", async () => {
+      const APPROVED_ID = "33333333-0000-4000-8000-0000000000a1";
+      const discardHead = vi.fn<ClientIntroRepository["discardHead"]>(async () => ok(head({ id: APPROVED_ID, status: "approved" })));
+      expect(await makeDiscardIntroHead({ intros: { discardHead } })(actor, { clientIntroId: INTRO_ID, revisionId: HEAD_ID, expectedHeadVersion: 3 })).toMatchObject({
+        ok: true,
+        value: { id: APPROVED_ID, status: "approved" },
+      });
+      expect(discardHead).toHaveBeenCalledWith({ clientIntroId: INTRO_ID, revisionId: HEAD_ID, expectedHeadVersion: 3, actorId: actor.id });
+    });
+
+    it("discardIntroHead refuses bad input before the repository and passes refusals through", async () => {
+      const discardHead = vi.fn<ClientIntroRepository["discardHead"]>(async () => err({ code: "REVISION_NOT_WRITABLE", message: "m" }));
+      expect(await makeDiscardIntroHead({ intros: { discardHead } })(actor, { clientIntroId: INTRO_ID, expectedHeadVersion: 3 })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+      expect(discardHead).not.toHaveBeenCalled();
+      expect(await makeDiscardIntroHead({ intros: { discardHead } })(actor, { clientIntroId: INTRO_ID, revisionId: HEAD_ID, expectedHeadVersion: 3 })).toMatchObject({
+        ok: false,
+        error: { code: "REVISION_NOT_WRITABLE" },
+      });
     });
   });
 });

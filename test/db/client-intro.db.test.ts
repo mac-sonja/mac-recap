@@ -417,4 +417,156 @@ describe("intro save and approve (Story 4.11a)", () => {
     expect(approved).toMatchObject({ ok: true, value: { status: "approved" } });
     expect(await caseStudy.getLiveRevision({ kind: "client_intro", id: intro })).toMatchObject({ ok: true, value: { id: revision } });
   });
+
+  describe("editing an approved intro (Story 4.11b)", () => {
+    const forkSql = "select public.fork_intro_head($1, $2, $3) as forked";
+    const updateSql = "select * from public.update_approved_intro_revision($1, $2, $3, $4, $5)";
+    const discardSql = "select * from public.discard_intro_head($1, $2, $3, $4)";
+
+    /** A fresh approved intro: its head is its approved revision, at head version 1. */
+    async function approvedIntro() {
+      const made = await reviewIntro();
+      await pool.query(approveSql, [made.intro, made.revision, 0, made.headVersion, TEST_ACTOR_ID]);
+      return { ...made, approved: made.revision };
+    }
+    const pointers = async (intro: string) =>
+      (await pool.query("select status, head_revision_id, approved_revision_id, head_version from public.client_intro where id = $1", [intro])).rows[0] as {
+        status: string;
+        head_revision_id: string;
+        approved_revision_id: string;
+        head_version: number;
+      };
+    const statusOf = async (revision: string) => (await pool.query("select status from public.revision where id = $1", [revision])).rows[0].status as string;
+    const caseEventsOf = async (revisions: string[]) =>
+      (await pool.query("select count(*)::int as n from public.case_event where revision_id = any($1::uuid[])", [revisions])).rows[0].n as number;
+
+    it.each(["fork_intro_head", "update_approved_intro_revision", "discard_intro_head"])(
+      "%s is security definer with an empty search_path, executable by service_role only",
+      async (name) => {
+        const { rows } = await pool.query(
+          `select p.prosecdef, p.proconfig,
+                  has_function_privilege('service_role', p.oid, 'execute') as service,
+                  has_function_privilege('authenticated', p.oid, 'execute') as authed,
+                  has_function_privilege('anon', p.oid, 'execute') as anon
+             from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.proname = $1`,
+          [name],
+        );
+        expect(rows).toEqual([{ prosecdef: true, proconfig: ['search_path=""'], service: true, authed: false, anon: false }]);
+      },
+    );
+
+    it("fork_intro_head copies the approved revision once (idempotent), and only for an approved intro", async () => {
+      const { intro, approved, doc } = await approvedIntro();
+      await expect(pool.query(forkSql, [intro, 0, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "STALE_HEAD" });
+      const first = (await pool.query(forkSql, [intro, 1, TEST_ACTOR_ID])).rows[0].forked as { revision: { id: string; status: string; version: number; doc: unknown }; headVersion: number };
+      expect(first).toMatchObject({ revision: { status: "working", version: 0, doc }, headVersion: 2 });
+      expect(first.revision.id).not.toBe(approved);
+      // Again, whatever the expected head version: the same copy, nothing written.
+      const again = (await pool.query(forkSql, [intro, 0, TEST_ACTOR_ID])).rows[0].forked as { revision: { id: string }; headVersion: number };
+      expect(again).toMatchObject({ revision: { id: first.revision.id }, headVersion: 2 });
+      expect(await pointers(intro)).toEqual({ status: "approved", head_revision_id: first.revision.id, approved_revision_id: approved, head_version: 2 });
+      const forks = (await eventsOf(intro)).filter((e) => e.type === "revision_forked");
+      expect(forks).toEqual([{ type: "revision_forked", data: { fromRevisionId: approved, headVersion: 2 }, revision_id: first.revision.id }]);
+      expect(await caseEventsOf([first.revision.id, approved])).toBe(0);
+
+      const inReview = await reviewIntro();
+      await expect(pool.query(forkSql, [inReview.intro, inReview.headVersion, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "CASE_NOT_EDITABLE" });
+      await expect(pool.query(forkSql, [UNKNOWN_ID, 0, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "NOT_FOUND" });
+    });
+
+    it("save_intro_revision_doc refuses an approved intro whose head is still the approved revision (no fork) with CASE_NOT_EDITABLE", async () => {
+      const { approved, doc } = await approvedIntro();
+      await expect(pool.query(saveSql, [approved, JSON.stringify(doc), 0, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "CASE_NOT_EDITABLE" });
+    });
+
+    it("saves land on the copy, live reads keep the approved revision, and the update swaps them with one client event", async () => {
+      const caseStudy = await import("@/modules/case-study");
+      const { intro, approved, doc } = await approvedIntro();
+      const copy = ((await pool.query(forkSql, [intro, 1, TEST_ACTOR_ID])).rows[0].forked as { revision: { id: string } }).revision.id;
+      const edited = JSON.stringify({ ...doc, template: "mac-client@1" });
+      expect((await pool.query(saveSql, [copy, edited, 0, TEST_ACTOR_ID])).rows[0]).toMatchObject({ id: copy, version: 1 });
+      // The approved revision itself is never written.
+      await expect(pool.query(saveSql, [approved, edited, 0, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "STALE_HEAD" });
+      expect(await caseStudy.getLiveRevision({ kind: "client_intro", id: intro })).toMatchObject({ ok: true, value: { id: approved } });
+
+      await expect(pool.query(updateSql, [intro, copy, 1, 1, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "STALE_HEAD" });
+      await expect(pool.query(updateSql, [intro, copy, 0, 2, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "STALE_REVISION" });
+      await expect(pool.query(updateSql, [intro, approved, 0, 2, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "STALE_HEAD" });
+      expect((await pool.query(updateSql, [intro, copy, 1, 2, TEST_ACTOR_ID])).rows[0]).toMatchObject({ id: copy, status: "approved" });
+      expect(await pointers(intro)).toEqual({ status: "approved", head_revision_id: copy, approved_revision_id: copy, head_version: 2 });
+      expect(await statusOf(approved)).toBe("superseded");
+      expect((await eventsOf(intro)).filter((e) => e.type === "approved_version_updated")).toEqual([
+        { type: "approved_version_updated", data: { revisionId: copy, version: 1, supersededRevisionId: approved }, revision_id: copy },
+      ]);
+      // No transition: the intro never left Approvato.
+      expect((await eventsOf(intro)).filter((e) => e.type === "transition").map((e) => e.data.event)).toEqual(["generate", "generation_succeeded", "approve"]);
+      expect(await caseEventsOf([copy, approved])).toBe(0);
+      expect(await caseStudy.getLiveRevision({ kind: "client_intro", id: intro })).toMatchObject({ ok: true, value: { id: copy } });
+      // Nothing to update now: the head is the approved revision.
+      await expect(pool.query(updateSql, [intro, copy, 1, 2, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "REVISION_NOT_WRITABLE" });
+      const inReview = await reviewIntro();
+      await expect(pool.query(updateSql, [inReview.intro, inReview.revision, 0, inReview.headVersion, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "CASE_NOT_APPROVABLE" });
+    });
+
+    it("discard_intro_head supersedes the copy and points the head back at the approved revision", async () => {
+      const { intro, approved } = await approvedIntro();
+      const copy = ((await pool.query(forkSql, [intro, 1, TEST_ACTOR_ID])).rows[0].forked as { revision: { id: string } }).revision.id;
+      await expect(pool.query(discardSql, [intro, copy, 1, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "STALE_HEAD" });
+      await expect(pool.query(discardSql, [intro, UNKNOWN_ID, 2, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "NOT_FOUND" });
+      expect((await pool.query(discardSql, [intro, copy, 2, TEST_ACTOR_ID])).rows[0]).toMatchObject({ id: approved, status: "approved" });
+      expect(await pointers(intro)).toEqual({ status: "approved", head_revision_id: approved, approved_revision_id: approved, head_version: 3 });
+      expect(await statusOf(copy)).toBe("superseded");
+      expect((await eventsOf(intro)).filter((e) => e.type === "revision_discarded")).toEqual([
+        { type: "revision_discarded", data: { discardedRevisionId: copy, headVersion: 3 }, revision_id: copy },
+      ]);
+      expect(await caseEventsOf([copy, approved])).toBe(0);
+      // Nothing left to discard; the next edit forks again.
+      await expect(pool.query(discardSql, [intro, approved, 3, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "REVISION_NOT_WRITABLE" });
+      expect((await pool.query(forkSql, [intro, 3, TEST_ACTOR_ID])).rows[0].forked).toMatchObject({ headVersion: 4 });
+    });
+
+    it("the use cases fork, save, update and discard an approved intro end to end", async () => {
+      const [caseStudy, material] = await Promise.all([import("@/modules/case-study"), import("@/modules/material")]);
+      const who = await actor();
+      const { intro, approved, doc } = await approvedIntro();
+
+      // The adapter maps each refusal to its code, so a stale edit reloads instead of failing.
+      expect(await caseStudy.forkIntroHead(who, { clientIntroId: intro, expectedHeadVersion: 0 })).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
+      const forked = await caseStudy.forkIntroHead(who, { clientIntroId: intro, expectedHeadVersion: 1 });
+      expect(forked).toMatchObject({ ok: true, value: { version: 0, headVersion: 2 } });
+      if (!forked.ok) throw new Error(forked.error.code);
+      const copy = forked.value.revisionId;
+      expect(await caseStudy.forkIntroHead(who, { clientIntroId: intro, expectedHeadVersion: 1 })).toMatchObject({ ok: true, value: { revisionId: copy } });
+      expect(await caseStudy.saveIntroRevisionDoc(who, { clientIntroId: intro, revisionId: copy, doc, expectedVersion: 0 }, material.liveAssetIds)).toMatchObject({
+        ok: true,
+        value: { version: 1 },
+      });
+      expect(await caseStudy.getLiveRevision({ kind: "client_intro", id: intro })).toMatchObject({ ok: true, value: { id: approved } });
+
+      const update = { clientIntroId: intro, revisionId: copy, expectedRevisionVersion: 1, expectedHeadVersion: 2, overflow: clear() };
+      expect(await caseStudy.approveIntro(who, { ...update, expectedHeadVersion: 1 }, material.liveAssetIds)).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
+      expect(await caseStudy.approveIntro(who, { ...update, expectedRevisionVersion: 0 }, material.liveAssetIds)).toMatchObject({
+        ok: false,
+        error: { code: "STALE_REVISION" },
+      });
+      const updated = await caseStudy.approveIntro(who, update, material.liveAssetIds);
+      expect(updated).toMatchObject({ ok: true, value: { id: copy, status: "approved" } });
+      expect(await caseStudy.getLiveRevision({ kind: "client_intro", id: intro })).toMatchObject({ ok: true, value: { id: copy } });
+
+      const second = await caseStudy.forkIntroHead(who, { clientIntroId: intro, expectedHeadVersion: 2 });
+      expect(second).toMatchObject({ ok: true, value: { headVersion: 3 } });
+      if (!second.ok) throw new Error(second.error.code);
+      expect(await caseStudy.discardIntroHead(who, { clientIntroId: intro, revisionId: second.value.revisionId, expectedHeadVersion: 2 })).toMatchObject({
+        ok: false,
+        error: { code: "STALE_HEAD" },
+      });
+      expect(await caseStudy.discardIntroHead(who, { clientIntroId: intro, revisionId: second.value.revisionId, expectedHeadVersion: 3 })).toMatchObject({
+        ok: true,
+        value: { id: copy, status: "approved" },
+      });
+      expect(await caseStudy.getEditableRevision({ kind: "client_intro", id: intro })).toMatchObject({ ok: true, value: { id: copy } });
+      expect(await pointers(intro)).toMatchObject({ status: "approved" });
+    });
+  });
 });

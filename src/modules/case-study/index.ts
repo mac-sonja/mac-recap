@@ -42,7 +42,9 @@ import {
   makeApproveIntro,
   makeCreateWorkingRevision,
   makeDiscardHead,
+  makeDiscardIntroHead,
   makeForkHead,
+  makeForkIntroHead,
   makeGetEditableRevision,
   makeGetLiveRevision,
   makeSaveIntroRevisionDoc,
@@ -200,7 +202,13 @@ export type { TransitionEvent } from "@/modules/case-study/domain/transition";
 export { READY_DRAFT_KINDS } from "@/modules/case-study/domain/ready-draft";
 export type { ListReadyDraftsInput, ReadyDraft } from "@/modules/case-study/domain/ready-draft";
 export { CLIENT_INTRO_CREATED } from "@/modules/case-study/domain/client-intro";
-export type { ClientIntro, ClientIntroStart, CreateIntroWorkingRevisionInput } from "@/modules/case-study/domain/client-intro";
+export type {
+  ClientIntro,
+  ClientIntroStart,
+  CreateIntroWorkingRevisionInput,
+  DiscardIntroHeadInput,
+  ForkIntroHeadInput,
+} from "@/modules/case-study/domain/client-intro";
 export type { EnqueueGenerate } from "@/modules/case-study/application/client-intro";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
 
@@ -794,7 +802,8 @@ function introRevisionDeps(caseAssetIds: CaseAssetIds) {
  * Errors, with nothing written: `INVALID_INPUT`, `DOCUMENT_INVALID` (also a document not of
  * kind `client_intro`), `DOCUMENT_SCHEMA_UNSUPPORTED`, `FORMAT_NOT_IN_REVISION`, `NOT_FOUND`,
  * `ASSET_NOT_ALLOWED`, the asset lookup errors, `STALE_HEAD`, `CASE_NOT_EDITABLE` (the intro
- * is not `in_review`), `REVISION_NOT_WRITABLE`, `STALE_REVISION`. `REVISION_WRITE_FAILED` may
+ * is neither `in_review` nor approved with a working copy from `forkIntroHead`),
+ * `REVISION_NOT_WRITABLE`, `STALE_REVISION`. `REVISION_WRITE_FAILED` may
  * come after the write committed: re-read the head.
  */
 export function saveIntroRevisionDoc(actor: Actor, input: unknown, caseAssetIds: CaseAssetIds): Promise<Result<CaseStudyRevision>> {
@@ -809,13 +818,52 @@ export function saveIntroRevisionDoc(actor: Actor, input: unknown, caseAssetIds:
  * `revision_approved` client event are written, in one transaction. Authorize `approve`
  * first; pass `material.liveAssetIds` as `caseAssetIds`.
  *
+ * Story 4.11b (**Aggiorna la versione approvata**): on an approved intro, `revisionId` is its
+ * working copy (the head, from `forkIntroHead`); after the same checks it becomes the
+ * approved revision, the previous one `superseded`, with one `approved_version_updated`
+ * client event. The intro stays approved.
+ *
  * Errors, with nothing written: `INVALID_INPUT`, `NOT_FOUND`, `OVERFLOW_NOT_CLEARED`,
  * `MATERIAL_MISSING` (`details.assetIds`), the asset lookup errors, `STALE_HEAD`,
- * `CASE_NOT_APPROVABLE` (not `in_review`), `REVISION_NOT_WRITABLE`, `STALE_REVISION`.
- * `REVISION_WRITE_FAILED` may come after the write committed: re-read the intro.
+ * `CASE_NOT_APPROVABLE`, `REVISION_NOT_WRITABLE` (an approved intro with no copy),
+ * `STALE_REVISION`. `REVISION_WRITE_FAILED` may come after the write committed: re-read the
+ * intro.
  */
 export function approveIntro(actor: Actor, input: unknown, caseAssetIds: CaseAssetIds): Promise<Result<CaseStudyRevision>> {
   return makeApproveIntro(introRevisionDeps(caseAssetIds))(actor, input);
+}
+
+/**
+ * Forks an approved client intro's head (Story 4.11b), on its first edit: input
+ * `{ clientIntroId, expectedHeadVersion }`. Creates one `working` copy of the approved
+ * revision, makes it the head by compare-and-set on `headVersion` (then incremented) and
+ * writes one `revision_forked` client event, in one transaction; when the head already is a
+ * working copy, returns it and writes nothing (idempotent). Live reads (`getLiveRevision`)
+ * keep returning the approved revision until `approveIntro` updates it. Returns
+ * `{ revisionId, version, headVersion }`. Call only after `authorize(actor, 'edit')`.
+ *
+ * Errors, with nothing written: `INVALID_INPUT`, `NOT_FOUND`, `CASE_NOT_EDITABLE` (not
+ * approved), `REVISION_NOT_WRITABLE`, `STALE_HEAD`. `REVISION_WRITE_FAILED` may come after the
+ * write committed: call it again (it is idempotent).
+ */
+export function forkIntroHead(actor: Actor, input: unknown): Promise<Result<ForkedHead>> {
+  return makeForkIntroHead(introDeps())(actor, input);
+}
+
+/**
+ * **Scarta le modifiche** for a client intro (Story 4.11b): input `{ clientIntroId,
+ * revisionId, expectedHeadVersion }`, `revisionId` the approved intro's working copy (its
+ * head). The copy becomes `superseded` and the head points back at the approved revision
+ * (compare-and-set on `headVersion`, then incremented), with one `revision_discarded` client
+ * event, in one transaction. The intro stays approved. Returns the approved revision. Call
+ * only after `authorize(actor, 'discard')`.
+ *
+ * Errors, with nothing written: `INVALID_INPUT`, `NOT_FOUND`, `STALE_HEAD`,
+ * `CASE_NOT_EDITABLE` (not approved), `REVISION_NOT_WRITABLE` (no copy to discard).
+ * `REVISION_WRITE_FAILED` may come after the write committed: re-read the intro.
+ */
+export function discardIntroHead(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+  return makeDiscardIntroHead(introDeps())(actor, input);
 }
 
 /**

@@ -338,6 +338,8 @@ describe("configurator copy", () => {
       "Non siamo riusciti ad aggiornare. Riprova.",
       "Non siamo riusciti a scartare le modifiche. Riprova.",
     ]);
+    // Story 4.11b: Aggiorna on an approved intro names the client's materials, not the case page.
+    expect(t("configurator.clientMode.updateDescription")).toBe("Le modifiche vanno online: i materiali del cliente mostrano la nuova versione.");
     expect([t("configurator.fields.clientHeading"), t("configurator.fields.caseHeading"), t("configurator.fields.replaceLogo")]).toEqual([
       "Dati del cliente",
       "Dati della case",

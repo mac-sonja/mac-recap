@@ -29,6 +29,21 @@ export interface IntroApproval {
   actorId: string;
 }
 
+/** Story 4.11b: the approved intro whose head is forked, and the `head_version` it was read at. */
+export interface IntroHeadFork {
+  clientIntroId: string;
+  expectedHeadVersion: number;
+  actorId: string;
+}
+
+/** Story 4.11b: the approved intro's working copy to discard, and the `head_version` it was read at. */
+export interface IntroHeadDiscard {
+  clientIntroId: string;
+  revisionId: string;
+  expectedHeadVersion: number;
+  actorId: string;
+}
+
 export interface NewIntroWorkingRevision {
   clientIntroId: string;
   /** Already validated by `generation.validateNewDocument`, of kind `client_intro`. */
@@ -69,10 +84,11 @@ export interface ClientIntroRepository {
    */
   createWorkingRevision(input: NewIntroWorkingRevision): Promise<Result<Revision>>;
   /**
-   * Story 4.11a: writes `doc` to the `working` head revision of an `in_review` intro by
-   * compare-and-set on `version` (then incremented), with one `revision_saved` client event,
-   * atomically. `err NOT_FOUND`, `STALE_HEAD` (no longer the head), `CASE_NOT_EDITABLE` (the
-   * intro is not `in_review`), `REVISION_NOT_WRITABLE` (not `working`), `STALE_REVISION`
+   * Story 4.11a: writes `doc` to the `working` head revision of an `in_review` intro (or,
+   * Story 4.11b, of an approved intro's working copy) by compare-and-set on `version` (then
+   * incremented), with one `revision_saved` client event, atomically. `err NOT_FOUND`,
+   * `STALE_HEAD` (no longer the head), `CASE_NOT_EDITABLE` (the intro is neither `in_review`
+   * nor approved with a working copy), `REVISION_NOT_WRITABLE` (not `working`), `STALE_REVISION`
    * (`version` moved), otherwise `err` only when the write fails. Nothing is written on any `err`.
    */
   saveDoc(input: IntroDocSave): Promise<Result<Revision>>;
@@ -84,6 +100,30 @@ export interface ClientIntroRepository {
    * `STALE_REVISION`, otherwise `err` only when the write fails. Nothing is written on any `err`.
    */
   approve(input: IntroApproval): Promise<Result<Revision>>;
+  /**
+   * Story 4.11b (**Aggiorna la versione approvata**): makes the `working` copy, the head of an
+   * approved intro, its approved revision by compare-and-set on `version` and `head_version`;
+   * the previous approved revision becomes `superseded`, the intro stays `approved`, with one
+   * `approved_version_updated` client event, atomically. `err NOT_FOUND`, `STALE_HEAD`,
+   * `CASE_NOT_APPROVABLE`, `REVISION_NOT_WRITABLE`, `STALE_REVISION`, otherwise `err` only when
+   * the write fails. Nothing is written on any `err`.
+   */
+  updateApproved(input: IntroApproval): Promise<Result<Revision>>;
+  /**
+   * Story 4.11b: forks the head of an approved intro (a `working` copy of the approved
+   * revision, made the head by compare-and-set on `head_version`, with one `revision_forked`
+   * client event), or returns the copy that already exists with nothing written. `err
+   * NOT_FOUND`, `CASE_NOT_EDITABLE`, `REVISION_NOT_WRITABLE`, `STALE_HEAD`, otherwise `err`
+   * only when the write fails.
+   */
+  forkHead(input: IntroHeadFork): Promise<Result<{ revision: Revision; headVersion: number }>>;
+  /**
+   * Story 4.11b: supersedes an approved intro's working copy and points the head back at the
+   * approved revision by compare-and-set on `head_version`, with one `revision_discarded`
+   * client event, atomically; returns the approved revision. `err NOT_FOUND`, `STALE_HEAD`,
+   * `CASE_NOT_EDITABLE`, `REVISION_NOT_WRITABLE`, otherwise `err` only when the write fails.
+   */
+  discardHead(input: IntroHeadDiscard): Promise<Result<Revision>>;
   /**
    * Story 3.8 for intros: the intros Da approvare of non-deleted clients with a
    * `generation_succeeded` transition after `since` that follows their latest `generate`,

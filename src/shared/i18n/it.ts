@@ -900,7 +900,7 @@ export const it = {
      * **Aggiorna la versione approvata**, or are dropped with **Scarta le modifiche**.
      */
     approvedEdit: {
-      /** Under the top bar of an approved case. */
+      /** Under the top bar of an approved case or client intro (Story 4.11b). */
       banner: "Approvata. Le modifiche vanno online quando aggiorni la versione approvata.",
       update: "Aggiorna la versione approvata",
       discard: "Scarta le modifiche",
@@ -999,6 +999,8 @@ export const it = {
     clientMode: {
       /** Approva's dialog. */
       approvalDescription: "Una volta approvata, l’introduzione si può usare nei materiali del cliente.",
+      /** Story 4.11b: Aggiorna la versione approvata's dialog, on an approved intro. */
+      updateDescription: "Le modifiche vanno online: i materiali del cliente mostrano la nuova versione.",
       /** Someone changed the intro meanwhile (save or approval): the page reloads. */
       stale: "L’introduzione è cambiata nel frattempo: la ricarichiamo.",
       /** A result row the page shows but the client doesn't have. */

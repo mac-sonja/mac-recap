@@ -89,6 +89,9 @@ function fakes(existing: ClientIntro | null, assets: ClientAsset[] = [asset(1), 
     listReadyIntros: vi.fn<ClientIntroRepository["listReadyIntros"]>(async () => ok([])),
     saveDoc: vi.fn<ClientIntroRepository["saveDoc"]>(async () => err({ code: "NOT_FOUND", message: "m" })),
     approve: vi.fn<ClientIntroRepository["approve"]>(async () => err({ code: "NOT_FOUND", message: "m" })),
+    updateApproved: vi.fn<ClientIntroRepository["updateApproved"]>(async () => err({ code: "NOT_FOUND", message: "m" })),
+    forkHead: vi.fn<ClientIntroRepository["forkHead"]>(async () => err({ code: "NOT_FOUND", message: "m" })),
+    discardHead: vi.fn<ClientIntroRepository["discardHead"]>(async () => err({ code: "NOT_FOUND", message: "m" })),
   };
   const clients = {
     findById: vi.fn<ClientRepository["findById"]>(async () => ok(client)),

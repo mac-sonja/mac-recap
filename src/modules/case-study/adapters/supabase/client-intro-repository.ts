@@ -51,6 +51,40 @@ const APPROVE_REFUSALS: Refusals = {
   INVALID_INPUT: { code: "INVALID_INPUT", message: "The approval is malformed." },
 };
 
+/** `update_approved_intro_revision` raises these as P0001; nothing is written then. */
+const UPDATE_APPROVED_REFUSALS: Refusals = {
+  NOT_FOUND: { code: "NOT_FOUND", message: "No revision of this client intro with this id." },
+  STALE_HEAD: { code: "STALE_HEAD", message: "The client intro's head revision changed since it was read." },
+  CASE_NOT_APPROVABLE: { code: "CASE_NOT_APPROVABLE", message: "Only an approved client intro's approved version can be updated." },
+  REVISION_NOT_WRITABLE: { code: "REVISION_NOT_WRITABLE", message: "Only a working copy can become the approved version." },
+  STALE_REVISION: { code: "STALE_REVISION", message: "The revision changed since it was read." },
+  INVALID_INPUT: { code: "INVALID_INPUT", message: "The update is malformed." },
+};
+/** `fork_intro_head` raises these as P0001; nothing is written then. */
+const FORK_REFUSALS: Refusals = {
+  NOT_FOUND: { code: "NOT_FOUND", message: "No client intro with this id." },
+  CASE_NOT_EDITABLE: { code: "CASE_NOT_EDITABLE", message: "Only an approved client intro's head is forked." },
+  REVISION_NOT_WRITABLE: { code: "REVISION_NOT_WRITABLE", message: "The head is neither the approved revision nor a working copy." },
+  STALE_HEAD: { code: "STALE_HEAD", message: "The client intro's head revision changed since it was read." },
+  INVALID_INPUT: { code: "INVALID_INPUT", message: "The fork is malformed." },
+};
+/** `discard_intro_head` raises these as P0001; nothing is written then. */
+const DISCARD_REFUSALS: Refusals = {
+  NOT_FOUND: { code: "NOT_FOUND", message: "No revision of this client intro with this id." },
+  STALE_HEAD: { code: "STALE_HEAD", message: "The client intro's head revision changed since it was read." },
+  CASE_NOT_EDITABLE: { code: "CASE_NOT_EDITABLE", message: "Only an approved client intro's copy is discarded." },
+  REVISION_NOT_WRITABLE: { code: "REVISION_NOT_WRITABLE", message: "Only a working copy can be discarded." },
+  INVALID_INPUT: { code: "INVALID_INPUT", message: "The discard is malformed." },
+};
+
+/** `fork_intro_head`'s JSON result: the revision row and the intro's `head_version`. */
+function forkedOf(data: unknown): { row: Tables<"revision">; headVersion: number } | null {
+  if (typeof data !== "object" || data === null) return null;
+  const { revision, headVersion } = data as { revision?: unknown; headVersion?: unknown };
+  if (typeof revision !== "object" || revision === null || typeof headVersion !== "number") return null;
+  return { row: revision as Tables<"revision">, headVersion };
+}
+
 /** Maps a `client_intro` row to the domain shape, rejecting values outside the domain. */
 export function toClientIntro(row: ClientIntroRow): Result<ClientIntro> {
   const parsed = clientIntroSchema.safeParse({
@@ -196,6 +230,71 @@ export function createSupabaseClientIntroRepository(
       if (data === null) {
         log.error("intro approve failed: no row returned", { actorId: input.actorId });
         return err({ code: "REVISION_WRITE_FAILED", message: "Could not approve the revision.", details });
+      }
+      return toRevision(data);
+    },
+
+    async updateApproved(input) {
+      const { data, error } = await client().rpc("update_approved_intro_revision", {
+        p_client_intro_id: input.clientIntroId,
+        p_revision_id: input.revisionId,
+        p_expected_revision_version: input.expectedRevisionVersion,
+        p_expected_head_version: input.expectedHeadVersion,
+        p_actor_id: input.actorId,
+      });
+      const details = { clientIntroId: input.clientIntroId, revisionId: input.revisionId };
+      if (error) {
+        const refused = refusalOf(error, UPDATE_APPROVED_REFUSALS);
+        if (refused) return err({ ...refused, details });
+        log.error(`intro approved version update failed: ${error.code}`, { ...details, actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not update the approved version.", details });
+      }
+      if (data === null) {
+        log.error("intro approved version update failed: no row returned", { ...details, actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not update the approved version.", details });
+      }
+      return toRevision(data);
+    },
+
+    async forkHead(input) {
+      const { data, error } = await client().rpc("fork_intro_head", {
+        p_client_intro_id: input.clientIntroId,
+        p_expected_head_version: input.expectedHeadVersion,
+        p_actor_id: input.actorId,
+      });
+      const details = { clientIntroId: input.clientIntroId };
+      if (error) {
+        const refused = refusalOf(error, FORK_REFUSALS);
+        if (refused) return err({ ...refused, details: { ...details, expectedHeadVersion: input.expectedHeadVersion } });
+        log.error(`intro head fork failed: ${error.code}`, { ...details, actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not fork the head.", details });
+      }
+      const forked = forkedOf(data);
+      if (forked === null) {
+        log.error("intro head fork failed: no row returned", { ...details, actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not fork the head.", details });
+      }
+      const revision = toRevision(forked.row);
+      return revision.ok ? ok({ revision: revision.value, headVersion: forked.headVersion }) : revision;
+    },
+
+    async discardHead(input) {
+      const { data, error } = await client().rpc("discard_intro_head", {
+        p_client_intro_id: input.clientIntroId,
+        p_revision_id: input.revisionId,
+        p_expected_head_version: input.expectedHeadVersion,
+        p_actor_id: input.actorId,
+      });
+      const details = { clientIntroId: input.clientIntroId, revisionId: input.revisionId };
+      if (error) {
+        const refused = refusalOf(error, DISCARD_REFUSALS);
+        if (refused) return err({ ...refused, details });
+        log.error(`intro head discard failed: ${error.code}`, { ...details, actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not discard the changes.", details });
+      }
+      if (data === null) {
+        log.error("intro head discard failed: no row returned", { ...details, actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not discard the changes.", details });
       }
       return toRevision(data);
     },

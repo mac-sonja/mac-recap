@@ -121,7 +121,9 @@ export interface ConfiguratorProps {
    * client's intro and outro, `id` the intro's own id. Client mode groups the pages by role
    * (Introduzione, Chiusura), lists the client's files as the Media tab's own (uploads go to
    * the client) and the client's cases' under "Dalle sue case", edits only the client's
-   * fields, and after Approva goes back to `back`. It never forks.
+   * fields, and after Approva goes back to `back`. An Approvato intro is edited on a copy as
+   * an approved case is (Story 4.11b): `onFork`, `onUpdateApproved` and `onDiscard` take its
+   * `clientIntroId`.
    */
   subject: Subject;
   /** The head revision and its document kind; null with no revision (the trial pages). */
@@ -147,18 +149,17 @@ export interface ConfiguratorProps {
   }) => Promise<ActionResult<{ waiting: boolean }>>;
   /** The case's `head_version` as read: approval's (and Story 4.9's fork's) compare-and-set; undefined: no approval. */
   headVersion?: number;
-  /** Story 4.9: forks an Approvato case's approved revision before its first save (`revision.fork`). */
+  /** Story 4.9: forks an Approvato case's (Story 4.11b: or intro's) approved revision before its first save (`revision.fork`). */
   onFork?: (input: ForkInput) => Promise<ActionResult<ForkResult>>;
-  /** Story 4.9: **Aggiorna la versione approvata**, with Approva's input, on the copy. */
-  onUpdateApproved?: (input: {
-    caseId: string;
+  /** Story 4.9: **Aggiorna la versione approvata**, with Approva's input, on the copy (Story 4.11b: an intro's too, by `clientIntroId`). */
+  onUpdateApproved?: (input: SubjectKey & {
     revisionId: string;
     expectedRevisionVersion: number;
     expectedHeadVersion: number;
     overflow: Record<string, boolean>;
   }) => Promise<ActionResult<void>>;
-  /** Story 4.9: **Scarta le modifiche**, the copy dropped. */
-  onDiscard?: (input: { caseId: string; revisionId: string; expectedHeadVersion: number }) => Promise<ActionResult<void>>;
+  /** Story 4.9: **Scarta le modifiche**, the copy dropped (Story 4.11b: an intro's too, by `clientIntroId`). */
+  onDiscard?: (input: SubjectKey & { revisionId: string; expectedHeadVersion: number }) => Promise<ActionResult<void>>;
   /** The client's files (ids and names): a page may show them, so they count as present (Story 4.8). Client mode: the client's cases' files. */
   clientFiles?: readonly { id: string; name: string }[];
   /** The render assets of files listed after the page loaded (Story 4.5b): a new upload can be drawn once its rendition is ready. */
@@ -238,12 +239,14 @@ const NO_CLIENT_MEDIA: readonly ListedAsset[] = [];
  * block's only element, swaps its block with the one it's dropped on, or moves it to the
  * end of another page. Each drop is one undo step; a refused one says why and changes nothing.
  *
- * An Approvato case (Story 4.9) is edited under a banner: the first save forks a working copy
- * of the approved revision (`onFork`) and every edit stages there, while the case page, the
- * library and the exports keep the approved version. With a copy pending the top bar offers
+ * An Approvato case (Story 4.9), or an Approvato client intro (Story 4.11b), is edited under a
+ * banner: the first save forks a working copy of the approved revision (`onFork`) and every
+ * edit stages there, while the live reads (the case page, the library, the exports, the
+ * client's materials) keep the approved version. With a copy pending the top bar offers
  * **Scarta le modifiche** and **Aggiorna la versione approvata**, each after a dialog; Aggiorna
  * follows Approva's rules (no overflow, no missing file, else it names what's left). Client
- * and case fields stay read-only there: they live on the records and can't be staged.
+ * and case fields stay read-only there, for an intro too: they live on the records and can't
+ * be staged.
  */
 export function Configurator({
   header,
@@ -1083,7 +1086,7 @@ export function Configurator({
         return;
       }
       const result = await onUpdateApproved({
-        caseId: subject.id,
+        ...subjectKey(subject),
         revisionId: doc.revisionId() ?? copyId,
         expectedRevisionVersion: doc.version(),
         expectedHeadVersion: doc.headVersion() ?? head,
@@ -1111,7 +1114,7 @@ export function Configurator({
     } finally {
       setCopyBusy(false);
     }
-  }, [clientFiles, clientMode, doc, files, formats, onUpdateApproved, overflowReport, router, say, subject.id]);
+  }, [clientFiles, clientMode, doc, files, formats, onUpdateApproved, overflowReport, router, say, subject]);
 
   /** **Scarta le modifiche**, confirmed (Story 4.9): the copy is dropped and the page shows the approved version again. */
   const discardCopy = useCallback(async () => {
@@ -1132,12 +1135,12 @@ export function Configurator({
         say(u.discardFailed);
         return;
       }
-      const result = await onDiscard({ caseId: subject.id, revisionId: doc.revisionId() ?? copyId, expectedHeadVersion: doc.headVersion() ?? head });
+      const result = await onDiscard({ ...subjectKey(subject), revisionId: doc.revisionId() ?? copyId, expectedHeadVersion: doc.headVersion() ?? head });
       setConfirmCopy(null);
       // Dropped: edits made before the page shows the approved version must not reach the copy.
       if (result.ok) doc.stop();
       if (result.ok || STALE_COPY_CODES.has(result.error.code)) {
-        if (!result.ok) say(it.configurator.approval.stale);
+        if (!result.ok) say(clientMode ? it.configurator.clientMode.stale : it.configurator.approval.stale);
         // The page reads the head again: the approved version, in a fresh configurator.
         leaving = result.ok;
         router.refresh();
@@ -1150,7 +1153,7 @@ export function Configurator({
     } finally {
       if (!leaving) setCopyBusy(false);
     }
-  }, [doc, onDiscard, router, say, subject.id]);
+  }, [clientMode, doc, onDiscard, router, say, subject]);
 
   /** Removes the selected element or block; false when there is nothing to remove. */
   const removeSelected = useCallback(() => {
@@ -1311,7 +1314,13 @@ export function Configurator({
               if (!copyBusy) setConfirmCopy(null);
             }}
             title={confirmCopy === "discard" ? it.configurator.approvedEdit.discardTitle : it.configurator.approvedEdit.updateTitle}
-            description={confirmCopy === "discard" ? it.configurator.approvedEdit.discardDescription : it.configurator.approvedEdit.updateDescription}
+            description={
+              confirmCopy === "discard"
+                ? it.configurator.approvedEdit.discardDescription
+                : clientMode
+                  ? it.configurator.clientMode.updateDescription
+                  : it.configurator.approvedEdit.updateDescription
+            }
             actions={
               <>
                 <button type="button" data-autofocus disabled={copyBusy} onClick={() => setConfirmCopy(null)} className={cn(SECONDARY_ACTION, "h-9 px-4")}>
