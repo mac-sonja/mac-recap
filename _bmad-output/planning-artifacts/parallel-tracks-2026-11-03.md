@@ -19,7 +19,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | A5 | 3.8 tell me when the draft is ready | ✅ #150 | — | — | jobs, notifications |
 | A6 | 3.11 client intro and outro with test text | ✅ #155 (migration on the mac-recap project 2026-11-06); started 2026-11-06 with a placeholder client template (owner); the cover/outro design replaces only the template later | — | B3 (both add a job kind) | rendering/templates, jobs, migration |
 | A7 | 4.11 client intro in the configurator | ✅ #156 (4.11a), #157 (4.11b) (migrations on the mac-recap project 2026-11-10) | A6 | B6, B7 | configurator (client mode) |
-| A8 | 4.12 client overview configurator, incl. the C38 shared-page confirmation | 🔄 4.12a (the whole file, edit in place) in review on `claude/brave-gates-8mouz1`, no migration; 4.12b (reorder cases) to do | A7 | B6, B7 | configurator (client file) |
+| A8 | 4.12 client overview configurator, incl. the C38 shared-page confirmation | 🔄 4.12a ✅ #158 (no migration); 4.12b (reorder cases) in review on `claude/brave-gates-8mouz1`, migration not applied yet | A7 | B6, B7 | configurator (client file) |
 | A9 | 4.9 edit an approved case | ✅ #152 (migration on dev) | A4 ✅, B1 | B1 | approved-case page, case-study |
 | B1 | 5.2 the rest: narrow viewports | ✅ #146 | — | A9 | `(tool)/case-studies/[caseId]` |
 | B2 | 5.1 library of approved case studies | ✅ #149 | A4 ✅ | — | `(tool)/library` |
@@ -41,7 +41,7 @@ When a session finishes a story, or when you open a new one:
 2. Skip it if another session is working on a story it **overlaps** with, and take the next one. Two sessions on overlapping stories means merge conflicts in the same files.
 3. Mark it 🔄 in this table, in the story's first commit.
 
-**As of 2026-11-10:** A6 and A7 are merged; their migrations are on the mac-recap project (the only Supabase project). A8 (4.12) is next; B8 (3.9) can run alongside. B9 comes last.
+**As of 2026-11-10:** A6 and A7 are merged, and A8 part 1 (4.12a, the client's whole file) is merged (#158). A8 part 2 (4.12b, reorder cases) is next on the critical path; B8 (3.9) can run alongside. B9 comes last.
 
 To start a story in a new session, open Claude Code on `main` and say: "Start story <#> (<story>) from `_bmad-output/planning-artifacts/parallel-tracks-2026-11-03.md`; run `bmad-build`."
 

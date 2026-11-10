@@ -5,6 +5,7 @@ import { clientHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
 import { addClientSector, saveClientResults, saveClientTestimonial, updateClient } from "@/app/(tool)/clients/actions";
 import { clientLimits } from "@/app/(tool)/clients/_lib/client-limits";
+import { can } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import * as material from "@/modules/material";
 import { fill, it } from "@/shared/i18n/it";
@@ -20,11 +21,12 @@ import {
   forkIntroHead,
   getClientFileRenderAssets,
   reloadFilePart,
+  reorderClientCases,
   saveIntroRevisionDoc,
   updateApprovedIntroVersion,
 } from "./actions";
 import { caseMediaOfClient, caseMediaRenderAssets } from "./case-media";
-import { casePartsOf, introPartOf } from "./file-parts";
+import { casePartsOf, fileFingerprint, introPartOf } from "./file-parts";
 
 /** Client mode's field edits: the client's own actions only (no case binding is offered). */
 const FIELD_ACTIONS: FieldActions = { updateClient, addClientSector, saveClientResults, saveClientTestimonial };
@@ -47,7 +49,8 @@ const NO_PAGES = Object.fromEntries(FORMAT_IDS.map((id) => [id, [] as readonly P
 /**
  * A client's whole file in the configurator (Story 4.12a; Story 4.11a's client mode): full
  * screen, owner/designer only (`edit`). Per format: Introduzione (the intro's `intro` pages),
- * one group per approved case, newest created first, labelled "{code} · {name}" (without its
+ * one group per approved case, in the client's order (Story 4.12b: newest created first until
+ * the owner drags them), labelled "{code} · {name}" (without its
  * own intro pages and Carosello Chiusura), then Chiusura (the intro's `outro` pages). Every
  * page saves to its own part's revision: the intro's as in Stories 4.11a and 4.11b, a case's as
  * an approved case's in Story 4.9 (`saveRevisionDoc`, forked on its first save through
@@ -96,16 +99,18 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
   if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
   const cases = await casePartsOf(client, caseAssets);
   if (!cases.ok) throw new Error(`Case studies could not be listed: ${cases.error.code}`);
+  // Story 4.12b: the saved order as stored, so a reorder keeps the cases the file leaves out in place.
+  const savedOrder = await caseStudy.getClientCaseOrder(client.id);
   // Nothing to show: no intro ready and no approved case.
   if (intro.value === null && cases.value.length === 0) redirect(back);
 
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   const introPart = intro.value;
   // A refresh that changes any part (Aggiorna, another tab's save) starts the file afresh on what
-  // the server holds; one that changes only bound values (a field save) keeps it mounted.
-  const fingerprint = [...(introPart === null ? [] : [introPart]), ...cases.value]
-    .map((p) => `${p.key}:${p.revision.id}:${p.revision.version}:${p.revision.editable}:${p.status}:${p.headVersion}`)
-    .join(",");
+  // the server holds; one that changes only bound values (a field save) keeps it mounted. The
+  // parts are fingerprinted in key order: a case order saved from this file (Story 4.12b) is
+  // already shown, so it never remounts it.
+  const fingerprint = fileFingerprint([...(introPart === null ? [] : [introPart]), ...cases.value]);
 
   return (
     <Configurator
@@ -152,6 +157,9 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
         onSaveCase: saveRevisionDoc,
         onForkCase: forkCaseHead,
         onReload: reloadFilePart,
+        // Story 4.12b: the project rows drag (and move with Alt+↑/↓) only for a role that may save the
+        // order, and only once the saved order was read (a save keeps the cases left out of the file in it).
+        ...(can(shell.actor, "manage clients") && savedOrder.ok ? { onReorderCases: reorderClientCases, caseOrder: savedOrder.value } : {}),
       }}
     />
   );

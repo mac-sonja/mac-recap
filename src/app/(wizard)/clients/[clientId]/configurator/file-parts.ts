@@ -109,21 +109,33 @@ export async function casePartOf(client: ClientDetail, caseId: string, assets?: 
 }
 
 /**
- * The approved cases of client `client` as parts of its file, newest created first (until the
- * client orders them, Story 4.12b). A case whose part can't be read is left out (logged with its
- * id; a read that throws too) and never drops the others; only a failed list of the cases is an error.
+ * The approved cases of client `client` as parts of its file, in the client's order (Story
+ * 4.12b, `listClientCasesInOrder`: its saved order, then cases approved later; newest created
+ * first with none). A case whose part can't be read is left out (logged with its id; a read that
+ * throws too) and never drops the others; only a failed list of the cases is an error.
  */
 export async function casePartsOf(client: ClientDetail, assets: Readonly<Record<string, RenderAsset>>): Promise<Result<FilePartData[]>> {
-  const cases = await caseStudy.list({ clientId: client.id, status: "approved" });
+  const cases = await caseStudy.listClientCasesInOrder(client.id);
   if (!cases.ok) return cases;
-  const newestFirst = [...cases.value].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  const parts = await Promise.allSettled(newestFirst.map((c) => casePartOf(client, c.id, assets)));
+  const ordered = cases.value;
+  const parts = await Promise.allSettled(ordered.map((c) => casePartOf(client, c.id, assets)));
   const out: FilePartData[] = [];
   parts.forEach((settled, i) => {
-    const caseId = newestFirst[i]!.id;
+    const caseId = ordered[i]!.id;
     if (settled.status === "rejected") log.warn("case part not read: threw", { caseId, clientId: client.id });
     else if (!settled.value.ok) log.warn(`case part not read: ${settled.value.error.code}`, { caseId, clientId: client.id });
     else if (settled.value.value !== null) out.push(settled.value.value);
   });
   return ok(out);
 }
+
+/**
+ * The client configurator's remount key part (Story 4.12a): each part's revision, version,
+ * editability, status and head version. Listed in key order (Story 4.12b): a case order saved from
+ * the file is already shown, so a refresh after it never remounts the file; any revision change does.
+ */
+export const fileFingerprint = (parts: readonly FilePartData[]): string =>
+  parts
+    .map((p) => `${p.key}:${p.revision.id}:${p.revision.version}:${p.revision.editable}:${p.status}:${p.headVersion}`)
+    .sort()
+    .join(",");

@@ -23,6 +23,7 @@ const getClientRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Re
 const listClientSectors = vi.fn<() => Promise<Result<{ key: string; label: string }[]>>>();
 const getCase = vi.fn<(id: unknown) => Promise<Result<CaseStudy>>>();
 const getClientInfoForCase = vi.fn<(id: unknown) => Promise<Result<CaseClientInfo>>>();
+const getClientCaseOrder = vi.fn<() => Promise<Result<string[] | null>>>();
 const getDetailsForm = vi.fn<(input: unknown) => Promise<Result<DetailsForm>>>();
 
 vi.mock("next/navigation", () => ({
@@ -40,6 +41,7 @@ vi.mock("./actions", () => ({
   forkIntroHead: vi.fn(),
   updateApprovedIntroVersion: vi.fn(),
   discardIntroChanges: vi.fn(),
+  reorderClientCases: vi.fn(),
 }));
 vi.mock("../../../case-studies/[caseId]/configurator/actions", () => ({ saveRevisionDoc: vi.fn(), forkCaseHead: vi.fn() }));
 vi.mock("@/app/(tool)/clients/actions", () => ({
@@ -71,6 +73,13 @@ vi.mock("@/modules/case-study", async () => ({
   getEditableRevision: (subject: unknown) => getEditableRevision(subject),
   listClientMaterial: (input: unknown) => listClientMaterial(input),
   list: (scope: unknown) => listCases(scope),
+  getClientCaseOrder: async () => getClientCaseOrder(),
+  // Story 4.12b: the client's order over the approved cases `list` returns.
+  listClientCasesInOrder: async (clientId: unknown) => {
+    const { orderClientCases } = await vi.importActual<typeof import("@/modules/case-study/domain/client-case-order")>("@/modules/case-study/domain/client-case-order");
+    const listed = await listCases({ clientId, status: "approved" });
+    return listed.ok ? { ok: true, value: orderClientCases(listed.value, caseOrder) } : listed;
+  },
   get: (id: unknown) => getCase(id),
   getClientInfoForCase: (id: unknown) => getClientInfoForCase(id),
 }));
@@ -222,6 +231,8 @@ const info: CaseClientInfo = {
 const form: DetailsForm = { context: "", solution: "", results: [{ label: "visite", value: "+10%" }], testimonialQuote: "", testimonialAuthor: "" };
 /** The approved cases `caseStudy.list` returns (oldest first, as a list may), and every case of the client for "Dalle sue case". */
 let approvedCases: ListedCaseStudy[] = [];
+/** The client's saved case order (Story 4.12b); null: none. */
+let caseOrder: string[] | null = null;
 
 const render = async () => renderToStaticMarkup(await ClientConfiguratorPage({ params: Promise.resolve({ clientId: CLIENT_ID }) }));
 const lastProps = () => configuratorProps.mock.calls.at(-1)![0];
@@ -235,6 +246,8 @@ beforeEach(() => {
   getClientIntro.mockResolvedValue(ok(intro("in_review")));
   listClientMaterial.mockResolvedValue(ok([clientFile(IMAGE_1), clientFile(IMAGE_2)]));
   approvedCases = [OLDER_CASE, NEW_CASE];
+  caseOrder = null;
+  getClientCaseOrder.mockReset().mockImplementation(async () => ok(caseOrder));
   listCases.mockImplementation(async (scope) =>
     (scope as { status?: string }).status === "approved" ? ok(approvedCases) : ok([{ id: CASE_ID } as ListedCaseStudy]),
   );
@@ -291,6 +304,21 @@ describe("ClientConfiguratorPage: the client's whole file (Story 4.12a)", () => 
     expect([...order].sort((x, y) => x - y)).toEqual(order);
     expect(html).toContain(dict.configurator.file.projects);
     expect(html).toContain("Lumen Srl · Pagine cliente");
+  });
+
+  it("lists the cases in the client's saved order (Story 4.12b) and lets the rows reorder it", async () => {
+    caseOrder = [OLD_CASE, CASE_ID];
+    await render();
+    const file = fileOf();
+    expect(file.cases.map((c) => c.key)).toEqual([`case:${OLD_CASE}`, `case:${CASE_ID}`]);
+    expect(file.onReorderCases).toBe(actions.reorderClientCases);
+    expect(file.caseOrder).toEqual([OLD_CASE, CASE_ID]);
+  });
+
+  it("offers no reorder when the saved order can't be read (a save would drop the cases left out)", async () => {
+    getClientCaseOrder.mockResolvedValue(err({ code: "CLIENT_LOOKUP_FAILED", message: "m" }));
+    await render();
+    expect(fileOf().onReorderCases).toBeUndefined();
   });
 
   it("saves each part to its own document: the intro through its actions, a case as an approved case (Story 4.9)", async () => {

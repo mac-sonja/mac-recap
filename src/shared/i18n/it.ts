@@ -1051,6 +1051,14 @@ export const it = {
       reloadFailed: "Non riusciamo a ricaricare questa parte: ricarichiamo la pagina.",
       /** That case left the file (deleted meanwhile). */
       caseGone: "La case {code} non c’è più: l’abbiamo tolta dal file.",
+      /** Story 4.12b: a project row's move hint (its `title` and `aria-describedby`), for a role that may reorder. */
+      projectMove: "Trascina sopra un’altra case per spostarla, oppure Alt+↑ / Alt+↓.",
+      /** Story 4.12b: a case moved in the file's order (announced). */
+      projectMoved: "{code} spostata in posizione {n} di {total}",
+      /** Story 4.12b: the new order couldn't be saved; the previous one is back. */
+      reorderFailed: "Ordine non salvato. Riprova.",
+      /** Story 4.12b: the order was refused because a case (or the client) changed meanwhile: the page reloads. */
+      orderStale: "Le case del cliente sono cambiate nel frattempo: ricarichiamo la pagina.",
     },
     /** Client mode (Story 4.11a): a client's pages grouped by role. `body` arrives with the client file (4.12). */
     clientSections: {

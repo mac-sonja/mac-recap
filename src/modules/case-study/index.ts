@@ -1,6 +1,6 @@
 // Public surface of the case-study module. Code outside this module imports only this file.
 // The module owns `case_study`, `client`, `client_sector`, `client_logo`, `client_brief`, `client_asset`,
-// `case_number_counter`, `case_event`, `client_intro`, `client_event` and `revision`, and the `material` bucket's
+// `case_number_counter`, `case_event`, `client_intro`, `client_event`, `client_case_order` and `revision`, and the `material` bucket's
 // `clients/{clientId}/logos/**` and `clients/{clientId}/material/**` (AD-1, AD-22):
 // nobody else writes them.
 import { randomUUID } from "node:crypto";
@@ -37,6 +37,9 @@ import { makeListClients } from "@/modules/case-study/application/list-clients";
 import { makeListReadyDrafts } from "@/modules/case-study/application/list-ready-drafts";
 import { makeReadClientLogo, type ClientLogoFile } from "@/modules/case-study/application/read-client-logo";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
+import { makeGetClientCaseOrder, makeListClientCasesInOrder, makeSetClientCaseOrder } from "@/modules/case-study/application/client-case-order";
+import { createSupabaseClientCaseOrderRepository } from "@/modules/case-study/adapters/supabase/client-case-order-repository";
+import type { ClientCaseOrder } from "@/modules/case-study/domain/client-case-order";
 import {
   makeApprove,
   makeApproveIntro,
@@ -211,6 +214,8 @@ export type {
 } from "@/modules/case-study/domain/client-intro";
 export type { EnqueueGenerate } from "@/modules/case-study/application/client-intro";
 export type { FieldIssue } from "@/modules/case-study/domain/validation";
+export { CLIENT_CASE_ORDER_MAX, orderClientCases } from "@/modules/case-study/domain/client-case-order";
+export type { ClientCaseOrder } from "@/modules/case-study/domain/client-case-order";
 
 /**
  * Creates a case study (status `draft`, permanent DB-generated id, and the next
@@ -890,4 +895,37 @@ export async function listClientAssets(clientId: unknown): Promise<Result<Client
   const parsed = parseInput(z.uuid(), clientId);
   if (!parsed.ok) return parsed;
   return createSupabaseClientRepository().listAssets(parsed.value);
+}
+
+/**
+ * Saves the order of a client's cases (Story 4.12b): input `{ clientId, caseIds }`, the case
+ * ids in the order wanted, each once; any saved order is replaced. Every id must be one of the
+ * client's own non-deleted cases. The client's file and its pack (B5) then list its approved
+ * cases in that order (`listClientCasesInOrder`). Changes no case, intro or revision. Call only
+ * after `authorize(actor, 'manage clients')`. `INVALID_INPUT` (also a foreign, unknown, deleted
+ * or repeated id), `CLIENT_NOT_FOUND`; nothing is written on any error.
+ */
+export function setClientCaseOrder(actor: Actor, input: unknown): Promise<Result<ClientCaseOrder>> {
+  return makeSetClientCaseOrder(createSupabaseClientCaseOrderRepository())(actor, input);
+}
+
+/**
+ * A client's approved, non-deleted cases in the client's order (Story 4.12b, `orderClientCases`):
+ * its saved order, then any approved case not in it (approved later), newest created first;
+ * with no saved order, newest created first. Saved ids no longer approved or gone are skipped.
+ * For the client's file now and its pack (B5). A saved order that can't be read is logged and
+ * left out (newest created first). `INVALID_INPUT` for a malformed id; otherwise `err` only when
+ * the cases' read fails.
+ */
+export function listClientCasesInOrder(clientId: unknown): Promise<Result<ListedCaseStudy[]>> {
+  return makeListClientCasesInOrder(createSupabaseCaseStudyRepository(), createSupabaseClientCaseOrderRepository())(clientId);
+}
+
+/**
+ * The client's saved case order as stored (case ids, gone or no-longer-approved ones included),
+ * or null when it has none (Story 4.12b): what a reorder in the client's file keeps the cases it
+ * doesn't show in. `INVALID_INPUT` for a malformed id; otherwise `err` only when the read fails.
+ */
+export function getClientCaseOrder(clientId: unknown): Promise<Result<string[] | null>> {
+  return makeGetClientCaseOrder(createSupabaseClientCaseOrderRepository())(clientId);
 }

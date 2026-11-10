@@ -162,6 +162,8 @@ function setup({
   onUpdateApproved,
   onDiscard,
   fields,
+  onReorderCases,
+  caseOrder,
 }: {
   intro?: FilePartData | null;
   cases?: FilePartData[];
@@ -175,8 +177,23 @@ function setup({
   onDiscard?: ConfiguratorProps["onDiscard"];
   /** The client's fields and their saves. */
   fields?: { updateClient: ReturnType<typeof vi.fn> };
+  /** Story 4.12b: the cases' order save; undefined: the rows don't move. */
+  onReorderCases?: ClientFile["onReorderCases"];
+  /** Story 4.12b: the server's saved order (case ids). */
+  caseOrder?: string[];
 } = {}) {
-  const file: ClientFile = { clientId: CLIENT_ID, intro, cases, onSaveIntro, onSaveCase, onForkCase, onReload, ...(onForkIntro === undefined ? {} : { onForkIntro }) };
+  const file: ClientFile = {
+    clientId: CLIENT_ID,
+    intro,
+    cases,
+    onSaveIntro,
+    onSaveCase,
+    onForkCase,
+    onReload,
+    ...(onForkIntro === undefined ? {} : { onForkIntro }),
+    ...(onReorderCases === undefined ? {} : { onReorderCases }),
+    ...(caseOrder === undefined ? {} : { caseOrder }),
+  };
   render(
     <Configurator
       subject={{ kind: "client_file", id: CLIENT_ID, clientId: CLIENT_ID }}
@@ -661,5 +678,238 @@ describe("Configurator on a client's whole file (Story 4.12a)", () => {
     await flush();
     expect(clientActions.requestClientMaterialUpload).toHaveBeenCalledWith({ clientId: CLIENT_ID, contentType: "image/jpeg", sizeBytes: 1 });
     expect(clientActions.confirmClientMaterialUpload).toHaveBeenCalledWith({ clientId: CLIENT_ID, assetId: ADDED, contentType: "image/jpeg", fileName: "nuova.jpg" });
+  });
+});
+
+describe("Reordering the client's cases (Story 4.12b)", () => {
+  const CASE_C = "aaaaaaaa-0000-4000-8000-00000000000c";
+  const C_IMAGE = "bbbbbbbb-0000-4000-8000-0000000000c1";
+  const threeCases = () => [
+    casePart(CASE_A, "Rebrand", "LUM-2026-02", A_IMAGE),
+    casePart(CASE_B, "Showroom", "LUM-2026-01", B_IMAGE),
+    casePart(CASE_C, "Catalogo", "LUM-2025-01", C_IMAGE),
+  ];
+  type Reorder = NonNullable<ClientFile["onReorderCases"]>;
+  const reorderedOk: Reorder = async (input) => ({ ok: true, value: { caseIds: input.caseIds } });
+  const row = (id: string) => rightPanel().querySelector<HTMLElement>(`[data-project="case:${id}"]`)!;
+  const rows = () => [...rightPanel().querySelectorAll<HTMLElement>("[data-project]")].map((r) => r.dataset.project);
+  const caseGroups = () => groups().filter((g) => g?.startsWith("case:"));
+  /** A drag's data, shared by its events. */
+  const dragData = () => {
+    const data = new Map<string, string>();
+    return {
+      setData: (k: string, v: string) => data.set(k, v),
+      getData: (k: string) => data.get(k) ?? "",
+      get types() {
+        return [...data.keys()];
+      },
+      setDragImage: () => {},
+      effectAllowed: "",
+      dropEffect: "",
+    };
+  };
+  const drag = async (from: string, onto: string) => {
+    const dataTransfer = dragData();
+    fireEvent.dragStart(row(from), { dataTransfer });
+    fireEvent.dragOver(row(onto), { dataTransfer });
+    fireEvent.drop(row(onto), { dataTransfer });
+    fireEvent.dragEnd(row(from), { dataTransfer });
+    await flush();
+  };
+
+  it("a row dropped on another moves that case there, in the canvas and Pagine of every format, and saves the order at once", async () => {
+    const onReorderCases = vi.fn<Reorder>(reorderedOk);
+    const { onSaveCase, onSaveIntro } = setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    expect(row(CASE_C).getAttribute("draggable")).toBe("true");
+    await drag(CASE_C, CASE_A);
+    expect(caseGroups()).toEqual([`case:${CASE_C}`, `case:${CASE_A}`, `case:${CASE_B}`]);
+    expect(rows()).toEqual([`case:${CASE_C}`, `case:${CASE_A}`, `case:${CASE_B}`]);
+    expect(onReorderCases).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, caseIds: [CASE_C, CASE_A, CASE_B] });
+    expect(status().textContent).toBe(fill(dict.configurator.file.projectMoved, { code: "LUM-2025-01", n: 1, total: 3 }));
+    // Every format at once.
+    fireEvent.click(within(header()).getByRole("button", { name: new RegExp(dict.configurator.formats.carosello_1_1), hidden: true }));
+    await flush();
+    expect(caseGroups()).toEqual([`case:${CASE_C}`, `case:${CASE_A}`, `case:${CASE_B}`]);
+    // A client setting: no page is saved.
+    expect(onSaveCase).not.toHaveBeenCalled();
+    expect(onSaveIntro).not.toHaveBeenCalled();
+  });
+
+  it("a row dragged down lands after the row it's dropped on", async () => {
+    const onReorderCases = vi.fn<Reorder>(reorderedOk);
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    await drag(CASE_A, CASE_B);
+    expect(rows()).toEqual([`case:${CASE_B}`, `case:${CASE_A}`, `case:${CASE_C}`]);
+    expect(onReorderCases).toHaveBeenCalledWith({ clientId: CLIENT_ID, caseIds: [CASE_B, CASE_A, CASE_C] });
+  });
+
+  it("Alt+↑ / Alt+↓ on a focused row moves it one place, announced and saved; the row keeps the focus", async () => {
+    const onReorderCases = vi.fn<Reorder>(reorderedOk);
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    expect(row(CASE_B).getAttribute("aria-keyshortcuts")).toBe("Alt+ArrowUp Alt+ArrowDown");
+    row(CASE_B).focus();
+    fireEvent.keyDown(row(CASE_B), { key: "ArrowUp", altKey: true });
+    await flush();
+    expect(rows()).toEqual([`case:${CASE_B}`, `case:${CASE_A}`, `case:${CASE_C}`]);
+    expect(caseGroups()).toEqual([`case:${CASE_B}`, `case:${CASE_A}`, `case:${CASE_C}`]);
+    expect(status().textContent).toBe(fill(dict.configurator.file.projectMoved, { code: "LUM-2026-01", n: 1, total: 3 }));
+    expect(onReorderCases).toHaveBeenLastCalledWith({ clientId: CLIENT_ID, caseIds: [CASE_B, CASE_A, CASE_C] });
+    expect(document.activeElement).toBe(row(CASE_B));
+    // At the top it goes no further; Alt+↓ moves it back down.
+    fireEvent.keyDown(row(CASE_B), { key: "ArrowUp", altKey: true });
+    await flush();
+    expect(onReorderCases).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(row(CASE_B), { key: "ArrowDown", altKey: true });
+    await flush();
+    expect(rows()).toEqual([`case:${CASE_A}`, `case:${CASE_B}`, `case:${CASE_C}`]);
+    expect(onReorderCases).toHaveBeenLastCalledWith({ clientId: CLIENT_ID, caseIds: [CASE_A, CASE_B, CASE_C] });
+    // A plain arrow is not a move.
+    fireEvent.keyDown(row(CASE_B), { key: "ArrowDown" });
+    await flush();
+    expect(onReorderCases).toHaveBeenCalledTimes(2);
+  });
+
+  it("a failed save puts the previous order back and says so", async () => {
+    const onReorderCases = vi.fn<Reorder>(async () => ({ ok: false, status: 500, error: { code: "CLIENT_WRITE_FAILED", message: "m" } }));
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    await drag(CASE_C, CASE_A);
+    expect(onReorderCases).toHaveBeenCalledTimes(1);
+    expect(rows()).toEqual([`case:${CASE_A}`, `case:${CASE_B}`, `case:${CASE_C}`]);
+    expect(caseGroups()).toEqual([`case:${CASE_A}`, `case:${CASE_B}`, `case:${CASE_C}`]);
+    expect(status().textContent).toBe(dict.configurator.file.reorderFailed);
+  });
+
+  it("a save that throws puts back the order last saved, not the one before it", async () => {
+    let fail = false;
+    const onReorderCases = vi.fn<Reorder>(async (input) => {
+      if (fail) throw new Error("offline");
+      return reorderedOk(input);
+    });
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    await drag(CASE_C, CASE_A);
+    fail = true;
+    await drag(CASE_B, CASE_C);
+    expect(rows()).toEqual([`case:${CASE_C}`, `case:${CASE_A}`, `case:${CASE_B}`]);
+    expect(status().textContent).toBe(dict.configurator.file.reorderFailed);
+  });
+
+  it("⌘Z doesn't undo a reorder: it undoes the last page edit only", async () => {
+    const onReorderCases = vi.fn<Reorder>(reorderedOk);
+    const { file } = setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    const introText = ownText(file.intro!.formats.presentazione_16_9[0]!);
+    await type("client_intro|intro", introText.id, "Intro cambiata");
+    await drag(CASE_C, CASE_A);
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    await flush();
+    expect(shownText("client_intro|intro", introText.id)).toBe(introText.text);
+    expect(rows()).toEqual([`case:${CASE_C}`, `case:${CASE_A}`, `case:${CASE_B}`]);
+    fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+    await flush();
+    expect(rows()).toEqual([`case:${CASE_C}`, `case:${CASE_A}`, `case:${CASE_B}`]);
+  });
+
+  it("an edit after a reorder still saves to the case it was made in", async () => {
+    const onReorderCases = vi.fn<Reorder>(reorderedOk);
+    const { file, onSaveCase } = setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    await drag(CASE_C, CASE_A);
+    const text = ownText(file.cases[2]!.formats.presentazione_16_9.find((p) => p.pageKey === "content")!);
+    await type(`case:${CASE_C}|content`, text.id, "C cambiata");
+    expect(vi.mocked(onSaveCase).mock.calls.at(-1)![0]).toMatchObject({ caseId: CASE_C });
+  });
+
+  it("a save keeps the saved cases the file doesn't show (a read that failed) in their places", async () => {
+    const HIDDEN = "aaaaaaaa-0000-4000-8000-0000000000ff";
+    const onReorderCases = vi.fn<Reorder>(reorderedOk);
+    setup({ cases: threeCases(), onReorderCases, caseOrder: [CASE_A, HIDDEN, CASE_B, CASE_C] });
+    await flush();
+    await drag(CASE_C, CASE_A);
+    expect(onReorderCases).toHaveBeenLastCalledWith({ clientId: CLIENT_ID, caseIds: [CASE_C, HIDDEN, CASE_A, CASE_B] });
+    // The next save starts from what the last one kept.
+    await drag(CASE_B, CASE_C);
+    expect(onReorderCases).toHaveBeenLastCalledWith({ clientId: CLIENT_ID, caseIds: [CASE_B, HIDDEN, CASE_C, CASE_A] });
+  });
+
+  it("two fast moves save strictly one after the other, even when the first save answers late", async () => {
+    let release: () => void = () => {};
+    const calls: string[][] = [];
+    let open = 0;
+    let overlap = false;
+    const onReorderCases = vi.fn<Reorder>(async (input) => {
+      calls.push(input.caseIds);
+      open += 1;
+      if (open > 1) overlap = true;
+      if (calls.length === 1) await new Promise<void>((resolve) => (release = resolve));
+      open -= 1;
+      return reorderedOk(input);
+    });
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    await drag(CASE_C, CASE_A);
+    await drag(CASE_B, CASE_C);
+    expect(calls).toHaveLength(1);
+    await act(async () => release());
+    await flush();
+    expect(calls).toEqual([
+      [CASE_C, CASE_A, CASE_B],
+      [CASE_B, CASE_C, CASE_A],
+    ]);
+    expect(overlap).toBe(false);
+    expect(rows()).toEqual([`case:${CASE_B}`, `case:${CASE_C}`, `case:${CASE_A}`]);
+  });
+
+  it.each(["INVALID_INPUT", "CLIENT_NOT_FOUND"])("a save refused with %s (a case gone meanwhile) says so and loads the page afresh", async (code) => {
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, reload } as Location);
+    const onReorderCases = vi.fn<Reorder>(async () => ({ ok: false, status: 400, error: { code, message: "m" } }));
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    await drag(CASE_C, CASE_A);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(status().textContent).toBe(dict.configurator.file.orderStale);
+    vi.restoreAllMocks();
+  });
+
+  it("after a failed keyboard move, the row is back in place and keeps the focus", async () => {
+    const onReorderCases = vi.fn<Reorder>(async () => ({ ok: false, status: 500, error: { code: "CLIENT_WRITE_FAILED", message: "m" } }));
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    row(CASE_B).focus();
+    fireEvent.keyDown(row(CASE_B), { key: "ArrowUp", altKey: true });
+    await flush();
+    expect(rows()).toEqual([`case:${CASE_A}`, `case:${CASE_B}`, `case:${CASE_C}`]);
+    expect(status().textContent).toBe(dict.configurator.file.reorderFailed);
+    expect(document.activeElement).toBe(row(CASE_B));
+  });
+
+  it("while Cerca filters the rows, they neither drag nor move with Alt+↑/↓", async () => {
+    const onReorderCases = vi.fn<Reorder>(reorderedOk);
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    expect(row(CASE_B).getAttribute("aria-describedby")).toBeTruthy();
+    expect(document.getElementById(row(CASE_B).getAttribute("aria-describedby")!)!.textContent).toBe(dict.configurator.file.projectMove);
+    fireEvent.change(within(rightPanel()).getByRole("searchbox", { hidden: true }), { target: { value: "Showroom" } });
+    await flush();
+    expect(rows()).toEqual([`case:${CASE_B}`]);
+    expect(row(CASE_B).getAttribute("draggable")).toBeNull();
+    fireEvent.keyDown(row(CASE_B), { key: "ArrowUp", altKey: true });
+    await flush();
+    expect(onReorderCases).not.toHaveBeenCalled();
+  });
+
+  it("without the order's save (a role that can't reorder), rows don't drag and Alt+↑ does nothing", async () => {
+    setup({ cases: threeCases() });
+    await flush();
+    expect(row(CASE_B).getAttribute("draggable")).toBeNull();
+    expect(row(CASE_B).getAttribute("aria-keyshortcuts")).toBeNull();
+    fireEvent.keyDown(row(CASE_B), { key: "ArrowUp", altKey: true });
+    await drag(CASE_C, CASE_A);
+    expect(rows()).toEqual([`case:${CASE_A}`, `case:${CASE_B}`, `case:${CASE_C}`]);
   });
 });

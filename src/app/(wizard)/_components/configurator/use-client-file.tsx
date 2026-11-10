@@ -5,7 +5,7 @@ import { CURRENT_SCHEMA_VERSION } from "@/modules/generation";
 import { FORMAT_IDS, type FormatId, type RenderAsset } from "@/modules/rendering";
 import type { ActionResult } from "@/app/_lib/action-result";
 import { fill, it } from "@/shared/i18n/it";
-import { fileSegmentsByFormat, filePages, partsChanged, type ClientFile, type FilePartData, type FileSegment } from "./client-file";
+import { fileSegmentsByFormat, filePages, mergeCaseOrder, moveKey, partsChanged, withCaseOrder, type ClientFile, type FilePartData, type FileSegment } from "./client-file";
 import type { SaveState } from "./top-bar";
 import { HISTORY_LIMIT, useDocument, type DocumentState, type ForkInput, type ForkResult, type Formats, type SaveInput } from "./use-document";
 
@@ -46,9 +46,18 @@ export interface ClientFileState {
   copyPending: (key: string) => boolean;
   /** Part `key` read again alone; its unsaved edits go, the others' stay. `quiet`: no message (the caller said why). */
   reload: (key: string, quiet?: boolean) => Promise<void>;
+  /**
+   * Story 4.12b: case `key` moved to position `to` (from 0) in every format at once, announced,
+   * and the order saved for the client at once (cases not in the file kept in their saved places);
+   * a failed save puts the last saved order back, calls `onRollback` and says so; a case or the
+   * client gone meanwhile loads the page afresh. Not an edit: no undo step. Undefined when the
+   * cases can't be reordered.
+   */
+  moveCase?: (key: string, to: number, onRollback?: () => void) => void;
   /** The parts' own documents, to mount (each runs its own autosave). */
   element: ReactNode;
 }
+
 
 /** The autosave's state across the parts: any retrying, else any saving, else saved. */
 const aggregateSave = (states: readonly SaveState[]): SaveState =>
@@ -243,6 +252,15 @@ export function useClientFile(file: ClientFile | undefined, { say, reloadPage, o
     return all.every(Boolean);
   }, []);
 
+  /** Story 4.12b: the file's case keys in the order the server last confirmed (as loaded, each saved one, minus cases dropped). */
+  const confirmedOrder = useRef<readonly string[]>(cases.map((c) => c.key));
+  /** The server's saved order (case ids), cases not in the file included: what a save keeps them in. */
+  const savedIds = useRef<readonly string[]>(file?.caseOrder ?? []);
+  /** The order saves, one after the other, so the last one sent is the one kept. */
+  const orderSaves = useRef<Promise<void>>(Promise.resolve());
+  /** The latest move: only its failure puts the confirmed order back (a later save carries the whole order). */
+  const lastMove = useRef(0);
+
   /** The parts being read again: one reload per part at a time, later calls ignored meanwhile. */
   const reloading = useRef(new Set<string>());
 
@@ -289,6 +307,7 @@ export function useClientFile(file: ClientFile | undefined, { say, reloadPage, o
         // The case left the file, or the intro isn't ready any more: its group shows without it.
         drop();
         setMounted((current) => current.filter((m) => m.part.key !== key));
+        confirmedOrder.current = confirmedOrder.current.filter((k) => k !== key);
         if (part.subject.kind === "case") say(fill(t.caseGone, { code: part.code }));
         else if (!quiet) say(fill(t.partReloaded, { part: t.introPart }));
         return;
@@ -317,6 +336,51 @@ export function useClientFile(file: ClientFile | undefined, { say, reloadPage, o
     }
     return undefined;
   };
+
+  const onReorderCases = file?.onReorderCases;
+  const clientId = file?.clientId;
+  const moveCase = useCallback(
+    (key: string, to: number, onRollback?: () => void) => {
+      if (onReorderCases === undefined || clientId === undefined) return;
+      const now = latest.current.parts.filter((p) => p.subject.kind === "case");
+      const keys = now.map((p) => p.key);
+      const next = moveKey(keys, key, to);
+      if (next === keys) return;
+      const t = it.configurator.file;
+      setMounted((current) => withCaseOrder(current, next));
+      const moved = now.find((p) => p.key === key)!;
+      say(fill(t.projectMoved, { code: moved.code, n: next.indexOf(key) + 1, total: next.length }));
+      const shown = next.map((k) => now.find((p) => p.key === k)!.subject.id);
+      const move = ++lastMove.current;
+      orderSaves.current = orderSaves.current.then(async () => {
+        // Built when it's sent: after the saves before it, with what they kept.
+        const caseIds = mergeCaseOrder(savedIds.current, shown);
+        let saved: ActionResult<{ caseIds: string[] }> | null;
+        try {
+          saved = await onReorderCases({ clientId, caseIds });
+        } catch {
+          saved = null;
+        }
+        if (saved?.ok === true) {
+          confirmedOrder.current = next;
+          savedIds.current = saved.value.caseIds;
+          return;
+        }
+        if (saved?.ok === false && (saved.error.code === "INVALID_INPUT" || saved.error.code === "CLIENT_NOT_FOUND")) {
+          // A case (or the client) is gone meanwhile: retrying can't help, the page loads afresh.
+          say(t.orderStale);
+          reloadPage();
+          return;
+        }
+        if (move !== lastMove.current) return;
+        const shownNow = latest.current.parts.map((part) => ({ part }));
+        if (withCaseOrder(shownNow, confirmedOrder.current) !== shownNow) onRollback?.();
+        setMounted((current) => withCaseOrder(current, confirmedOrder.current));
+        say(t.reorderFailed);
+      });
+    },
+    [clientId, onReorderCases, reloadPage, say],
+  );
 
   const noop = useCallback(() => {}, []);
   /** The latest `reload`, for the parts' stale saves (a stable callback keeps them from re-rendering). */
@@ -362,5 +426,18 @@ export function useClientFile(file: ClientFile | undefined, { say, reloadPage, o
     return part === undefined ? undefined : formatsOf(part);
   };
   const refusedOf = (key: string) => docOf(key)?.refused ?? null;
-  return { doc, intro, introPart, cases, segments, partOf, partFormats, refusedOf, copyPending, reload, element };
+  return {
+    doc,
+    intro,
+    introPart,
+    cases,
+    segments,
+    partOf,
+    partFormats,
+    refusedOf,
+    copyPending,
+    reload,
+    ...(onReorderCases === undefined ? {} : { moveCase }),
+    element,
+  };
 }

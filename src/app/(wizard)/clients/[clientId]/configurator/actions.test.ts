@@ -19,6 +19,7 @@ const {
   listClientSectors,
   casePartOf,
   introPartOf,
+  setClientCaseOrder,
 } = vi.hoisted(() => ({
     getActor: vi.fn(),
     saveIntroUseCase: vi.fn(),
@@ -36,6 +37,7 @@ const {
     listClientSectors: vi.fn(),
     casePartOf: vi.fn(),
     introPartOf: vi.fn(),
+    setClientCaseOrder: vi.fn(),
   }));
 
 // The real policy (`authorize`, `httpStatusFor`); only actor resolution is stubbed.
@@ -53,6 +55,7 @@ vi.mock("@/modules/case-study", () => ({
   list: listCases,
   getClient,
   listClientSectors,
+  setClientCaseOrder,
 }));
 vi.mock("./file-parts", () => ({ casePartOf, introPartOf }));
 vi.mock("@/modules/material", () => ({ liveAssetIds, listAssets, getRendition, getClientRendition }));
@@ -64,6 +67,7 @@ const {
   getClientFileRenderAssets,
   getIntroRenderAssets,
   reloadFilePart,
+  reorderClientCases,
   saveIntroRevisionDoc,
   updateApprovedIntroVersion,
 } = await import("./actions");
@@ -303,5 +307,31 @@ describe("the client's file (Story 4.12a)", () => {
       getActor.mockResolvedValue(ok(actor("account_sales_social")));
       expect(await reloadFilePart({ clientId: CLIENT_ID, part: "client_intro" })).toMatchObject({ ok: false, status: 403 });
     });
+  });
+});
+
+describe("reorderClientCases (Story 4.12b)", () => {
+  const A = "aaaaaaaa-0000-4000-8000-000000000001";
+  const B = "aaaaaaaa-0000-4000-8000-000000000002";
+  const order = { clientId: CLIENT_ID, caseIds: [B, A] };
+
+  it("saves the order with the actor and returns it", async () => {
+    setClientCaseOrder.mockResolvedValue(ok({ clientId: CLIENT_ID, caseIds: [B, A] }));
+    expect(await reorderClientCases(order)).toEqual({ ok: true, value: { caseIds: [B, A] } });
+    expect(setClientCaseOrder).toHaveBeenCalledWith(actor("owner_designer"), order);
+  });
+
+  it.each([
+    ["INVALID_INPUT", 400],
+    ["CLIENT_NOT_FOUND", 404],
+  ] as const)("maps %s to %i (another client's case is INVALID_INPUT)", async (code, status) => {
+    setClientCaseOrder.mockResolvedValue(err({ code, message: "m" }));
+    expect(await reorderClientCases(order)).toEqual({ ok: false, status, error: { code, message: "m" } });
+  });
+
+  it("refuses a role that may not manage clients, saving nothing", async () => {
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
+    expect(await reorderClientCases(order)).toMatchObject({ ok: false, status: 403, error: { code: "FORBIDDEN" } });
+    expect(setClientCaseOrder).not.toHaveBeenCalled();
   });
 });

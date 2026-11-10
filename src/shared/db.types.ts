@@ -229,6 +229,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"client_case_order": {
+                  Row: {
+                    "case_ids": (string)[],"client_id": string,"updated_at": string,"updated_by": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "case_ids": (string)[],"client_id": string,"updated_at"?: string,"updated_by": string
+                  }
+                  Update: {
+                    "case_ids"?: (string)[],"client_id"?: string,"updated_at"?: string,"updated_by"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_case_order_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: true
+      referencedRelation: "client"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_case_order_updated_by_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"client_event": {
                   Row: {
                     "actor_id": string,"at": string,"client_intro_id": string,"data": NonNullable<Json>,"id": string,"revision_id": string | null,"type": string
@@ -965,6 +991,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"set_client_case_order":
+{ Args: { "p_actor_id": string,"p_case_ids": (string)[],"p_client_id": string }; Returns: (string)[]
+                           },
 "transition_case_study":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {
               "approved_revision_id": string | null,
