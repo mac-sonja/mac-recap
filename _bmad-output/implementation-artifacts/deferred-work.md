@@ -345,3 +345,7 @@
 - source_spec: none
   summary: Story 5.10 part 2 (5.10b): Esporta in a collection: the shared export dialog, each ticked format through the 5.9 pack pipeline with a collection subject, several formats as one ZIP; "Non disponibile" cases left out.
   evidence: Owner chose on 2026-11-10 to build B6 in two parts; part 1 (5.10a) creates, lists and arranges collections.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-10a-collections.md`
+  summary: Drag-and-drop tests for the collection Pagine rows (group and case drops).
+  evidence: Needs a DataTransfer shim in happy-dom; the shared move path is covered through the menu and Alt+arrow tests.

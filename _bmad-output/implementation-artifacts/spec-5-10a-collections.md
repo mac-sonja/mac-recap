@@ -138,7 +138,30 @@ context:
 
 ## Spec Change Log
 
+- 2026-11-10, owner: the collection page was built as its own read-only view from the configurator's canvas pieces, not inside the editing Configurator. Owner kept it; the base for editing is decided in B7 (5.11). KEEP: same preview, Pagine groups, moves, add/remove.
+
 ## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | A stale move, retag or rename can never succeed again until a reload (blind, edge, gap) | medium | `move()`, `TagsDialog.onSave`, `RenameDialog` keep the old version on `STALE_COLLECTION` | patch |
+| 2 | A move queued behind a failed one is untested (gap) | medium | Only single-move failure tested | patch |
+| 3 | The other-group drop refusal never shows (edge, gap) | low | `onDragOver` returns without `preventDefault` | patch |
+| 4 | Page and domain group cases differently (blind) | low | `groupItems` by adjacency vs `groupsOf`; the DB keeps groups contiguous, so it needs an unusual state | patch |
+| 5 | An unlisted stored industry is dropped on toggle (edge) | low | `collection-fields.tsx` keeps only listed keys | patch |
+| 6 | A retag refusal can fail silently (edge) | low | `refusedFields` → `[]` | patch |
+| 7 | Sector list failure makes creation impossible without a reason; >200 selection gives a vague error (edge, blind) | low | Empty picker; `caseIds` not mapped | patch |
+| 8 | Annulla during a pending remove; menu stays open on Tab (edge) | low | Direct fixes | patch |
+| 9 | Initial tags missing from `collection_created`; SQL business-line keys not tied to `BUSINESS_LINES` (blind) | medium | Event data `{ name, caseIds }`; keys hard-coded twice in SQL | patch |
+| 10 | Case read failures logged without the error (blind) | low | `caseOf` logs "threw" only | patch |
+| 11 | "1 selezionate / 1 scelte / 1 pagine" (blind) | low | No singular forms | patch |
+| 12 | `COLLECTION_FULL`, tag field mapping, `listClientIndustries`, stale rename/retag untested (gap, blind) | medium | No producing tests | patch |
+| 13 | Drag-and-drop reordering untested (gap) | low | Needs a `DataTransfer` shim; the shared move path is tested via menu and keyboard | defer |
+| 14 | Delete has no compare-and-set (edge) | false | The spec's compare-and-set covers items, order, name and tags; delete is soft and confirmed | reject |
+| 15 | No way to tell which case is not collectable on create (blind) | low | Rare: a case losing approval between selecting and saving | reject |
+| 16 | Unbounded reads: all cases per read, per-case fan-out (blind) | low | Demo scale is a handful of cases per collection | reject |
+| 17 | Helpers duplicated rather than lifted to a shared `_lib` (blind) | low | Owner chose 2026-11-10 to keep the separate read-only view and decide the base in B7; the duplication is noted for B7 | reject |
+| 18 | Stale message wiped by the remount (edge) | low | The refreshed page shows the current state; the move/retag paths keep their message | reject |
 
 ## Verification
 
