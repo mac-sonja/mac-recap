@@ -341,3 +341,7 @@
 - source_spec: none
   summary: Story 5.9 part 2 (5.9b): account/sales/social users get a read-only Clienti list (only clients with at least one approved case; no add, edit or overview) with Scarica per row and on a read-only client page; a new `download client pack` policy action.
   evidence: Owner chose on 2026-11-10 to build B5 in two parts; part 1 (5.9a) builds the client pack download for owner/designers.
+
+- source_spec: none
+  summary: Story 5.10 part 2 (5.10b): Esporta in a collection: the shared export dialog, each ticked format through the 5.9 pack pipeline with a collection subject, several formats as one ZIP; "Non disponibile" cases left out.
+  evidence: Owner chose on 2026-11-10 to build B6 in two parts; part 1 (5.10a) creates, lists and arranges collections.
