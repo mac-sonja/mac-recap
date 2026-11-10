@@ -349,8 +349,10 @@ export function RightPanel({
                         if (onMoveProject === undefined || !event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
                         if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
                         event.preventDefault();
+                        const to = projectIndex(row.key) + (event.key === "ArrowUp" ? -1 : 1);
+                        if (to < 0 || to >= file.projects.length) return;
                         refocus.current = row.key;
-                        onMoveProject(row.key, projectIndex(row.key) + (event.key === "ArrowUp" ? -1 : 1));
+                        onMoveProject(row.key, to);
                       }}
                       onDragStart={(event) => {
                         if (onMoveProject === undefined) return;
