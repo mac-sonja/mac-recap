@@ -217,7 +217,7 @@ export function MediaTab({ hidden, subject, initialFiles, clientFiles = NO_FILES
   const clientHeadingId = useId();
   const ownHeadingId = useId();
   /** Story 4.11a: the files are the client's, the second group its cases'. */
-  const clientMode = subject.kind === "client_intro";
+  const clientMode = subject.kind !== "case";
   /** The latest render assets: a fresh client listing takes its tiles' pictures from them. */
   const assetsNow = useRef(assets);
   useEffect(() => {
@@ -250,7 +250,7 @@ export function MediaTab({ hidden, subject, initialFiles, clientFiles = NO_FILES
   /** Reads the case's files (client mode: the client's) again; the list keeps what it had on a failure. */
   async function relist(): Promise<readonly ListedAsset[] | null> {
     try {
-      if (subject.kind === "client_intro") return await relistClient(subject.clientId);
+      if (subject.kind !== "case") return await relistClient(subject.clientId);
       const fresh = await listAssets({ caseId: subject.id });
       if (!fresh.ok || unmounted.current) return null;
       const media = fresh.value.filter(isMedia);
@@ -325,7 +325,7 @@ export function MediaTab({ hidden, subject, initialFiles, clientFiles = NO_FILES
     let confirming: string | undefined;
     try {
       const presigned =
-        subject.kind === "client_intro"
+        subject.kind !== "case"
           ? await requestClientMaterialUpload({ clientId: subject.clientId, contentType, sizeBytes: file.size })
           : await presignAssetUpload({ caseId: subject.id, contentType, sizeBytes: file.size });
       if (!presigned.ok) return classify(presigned.error.code);
@@ -333,7 +333,7 @@ export function MediaTab({ hidden, subject, initialFiles, clientFiles = NO_FILES
       await uploadFile({ url, method, headers }, file, () => {});
       confirming = assetId;
       const confirmed =
-        subject.kind === "client_intro"
+        subject.kind !== "case"
           ? await confirmClientMaterialUpload({ clientId: subject.clientId, assetId, contentType, fileName: file.name })
           : await confirmAssetUpload({ caseId: subject.id, assetId, contentType, fileName: file.name });
       if (!confirmed.ok) {

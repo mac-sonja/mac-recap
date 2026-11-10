@@ -33,6 +33,40 @@ function runsOf<T extends { page: Page }>(items: readonly T[], groups: PageGroup
 /** A Pagine thumbnail's drag data type (Story 4.13): its page key, in a type the canvas and the Media tab ignore. */
 const PAGE_DRAG_TYPE = "application/x-mac-page";
 
+/** A run of Pagine thumbnails in the client's file (Story 4.12a): Introduzione or Chiusura, drawn with the intro's template and values. */
+export interface PagineGroup {
+  key: string;
+  label: string;
+  template: string;
+  values: BoundValues;
+  pages: readonly Page[];
+  /** The number of its first page in the file. */
+  start: number;
+  /** Shown in place of the thumbnails when it has none (the intro isn't ready). */
+  empty?: string;
+}
+
+/** One case in **Progetti del cliente** (Story 4.12a): its first page's thumbnail, its name, code and page count. */
+export interface ProjectRow {
+  /** The case's group key on the canvas. */
+  key: string;
+  name: string;
+  code: string;
+  template: string;
+  values: BoundValues;
+  first: Page | undefined;
+  /** The number of its first page in the file. */
+  start: number;
+  count: number;
+}
+
+/** Pagine of the client's file: Introduzione thumbnails, a row per case, Chiusura thumbnails. */
+export interface FilePagine {
+  intro: PagineGroup;
+  projects: readonly ProjectRow[];
+  closing: PagineGroup;
+}
+
 /** The right panel's tabs. */
 export type RightTab = "pages" | "media";
 
@@ -53,6 +87,10 @@ export interface RightPanelProps {
   subject: Subject;
   /** How Pagine groups the pages: by section (a case), or by role (client mode, Story 4.11a). */
   pageGroups?: PageGroups;
+  /** Story 4.12a: the client's file; `pages` is then every page of the file, flattened. */
+  file?: FilePagine;
+  /** A **Progetti del cliente** row clicked: the canvas scrolls to that case. */
+  onSelectGroup?: (key: string) => void;
   /** The case's images and videos, oldest first; client mode: the client's. */
   media: readonly ListedAsset[];
   /** The client's images and videos, in position order: the Media tab's "Del cliente" group (Story 4.5c-2); client mode: its cases' ("Dalle sue case"). */
@@ -118,6 +156,8 @@ export function RightPanel({
   onMovePage,
   subject,
   pageGroups = "section",
+  file,
+  onSelectGroup,
   media,
   clientMedia,
   mediaRules,
@@ -142,64 +182,10 @@ export function RightPanel({
   /** The page being dragged. */
   const [dragging, setDragging] = useState<string | null>(null);
   const indexOf = (pageKey: string) => pages.findIndex((p) => p.pageKey === pageKey);
+  const matches = (name: string) => q === "" || name.toLocaleLowerCase("it").includes(q);
 
-  return (
-    <aside aria-label={it.configurator.panels.right} hidden={hidden} className="col-start-3 row-start-1 flex min-h-0 flex-col border-l border-border bg-surface-sidebar">
-      <div className="flex shrink-0 flex-col gap-2.5 border-b border-border p-3.5">
-        <div className="flex items-center gap-1.5">
-          <div role="group" aria-label={it.configurator.tabs.label} className={cn(SEG, "flex flex-1")}>
-            <button type="button" aria-pressed={tab === "pages"} onClick={() => setTab("pages")} className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
-              {it.configurator.tabs.pages}
-            </button>
-            <button ref={mediaTabRef} type="button" aria-pressed={tab === "media"} onClick={() => setTab("media")} className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
-              {it.configurator.tabs.media}
-            </button>
-          </div>
-          <button
-            ref={hideRef}
-            type="button"
-            onClick={onHide}
-            aria-label={it.configurator.panels.hideRight}
-            title={it.configurator.panels.hide}
-            className={ICON_BUTTON}
-          >
-            <PanelRight aria-hidden="true" className="size-4" />
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <div className="relative min-w-0 flex-1">
-            <label htmlFor={searchId} className="sr-only">
-              {tab === "media" ? it.configurator.search.mediaLabel : it.configurator.search.label}
-            </label>
-            <Search aria-hidden="true" className={SEARCH_ICON} />
-            <input
-              id={searchId}
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={it.configurator.search.placeholder}
-              className={SEARCH_FIELD}
-            />
-          </div>
-          <div role="group" aria-label={it.configurator.view.label} className={SEG}>
-            <button type="button" aria-pressed={view === "grid"} aria-label={it.configurator.view.grid} title={it.configurator.view.grid} onClick={() => setView("grid")} className={cn(SEG_BUTTON, "px-2")}>
-              <LayoutGrid aria-hidden="true" className="size-[15px]" />
-            </button>
-            <button type="button" aria-pressed={view === "list"} aria-label={it.configurator.view.list} title={it.configurator.view.list} onClick={() => setView("list")} className={cn(SEG_BUTTON, "px-2")}>
-              <List aria-hidden="true" className="size-[15px]" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div hidden={tab !== "pages"} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3.5">
-        {shown.length === 0 && q !== "" && <p className="font-label text-[12.5px] text-foreground-muted">{fill(it.configurator.noMatch, { query: query.trim() })}</p>}
-        {runsOf(shown, pageGroups).map(({ label, items: inSection }, run) => {
-          return (
-            <div key={`${label}-${run}`} className="mb-4 last:mb-0">
-              <p className={EYEBROW}>{label}</p>
-              <div className="flex flex-col gap-1.5">
-                {inSection.map(({ page, number }) => (
+  /** A page's thumbnail button: selects it; drags onto another to move it there (Story 4.13). */
+  const thumb = (page: Page, number: number, template: string, values: BoundValues) => (
                   <button
                     key={page.pageKey}
                     type="button"
@@ -252,7 +238,114 @@ export function RightPanel({
                       {fill(it.configurator.canvas.pageLabel, { n: number, name: page.name })}
                     </small>
                   </button>
-                ))}
+  );
+
+  /** Story 4.12a: Introduzione or Chiusura of the client's file, as thumbnails. */
+  const fileGroup = (group: PagineGroup) => {
+    const items = group.pages.map((page, i) => ({ page, number: group.start + i })).filter(({ page }) => matches(page.name));
+    return (
+      <div key={group.key} className="mb-4 last:mb-0">
+        <p className={EYEBROW}>{group.label}</p>
+        {group.pages.length === 0 && group.empty !== undefined && <p className="font-label text-[12.5px] text-foreground-muted">{group.empty}</p>}
+        <div className="flex flex-col gap-1.5">{items.map(({ page, number }) => thumb(page, number, group.template, group.values))}</div>
+      </div>
+    );
+  };
+
+  return (
+    <aside aria-label={it.configurator.panels.right} hidden={hidden} className="col-start-3 row-start-1 flex min-h-0 flex-col border-l border-border bg-surface-sidebar">
+      <div className="flex shrink-0 flex-col gap-2.5 border-b border-border p-3.5">
+        <div className="flex items-center gap-1.5">
+          <div role="group" aria-label={it.configurator.tabs.label} className={cn(SEG, "flex flex-1")}>
+            <button type="button" aria-pressed={tab === "pages"} onClick={() => setTab("pages")} className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
+              {it.configurator.tabs.pages}
+            </button>
+            <button ref={mediaTabRef} type="button" aria-pressed={tab === "media"} onClick={() => setTab("media")} className={cn(SEG_BUTTON, "flex-1 px-1.5")}>
+              {it.configurator.tabs.media}
+            </button>
+          </div>
+          <button
+            ref={hideRef}
+            type="button"
+            onClick={onHide}
+            aria-label={it.configurator.panels.hideRight}
+            title={it.configurator.panels.hide}
+            className={ICON_BUTTON}
+          >
+            <PanelRight aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1">
+            <label htmlFor={searchId} className="sr-only">
+              {tab === "media" ? it.configurator.search.mediaLabel : it.configurator.search.label}
+            </label>
+            <Search aria-hidden="true" className={SEARCH_ICON} />
+            <input
+              id={searchId}
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={it.configurator.search.placeholder}
+              className={SEARCH_FIELD}
+            />
+          </div>
+          <div role="group" aria-label={it.configurator.view.label} className={SEG}>
+            <button type="button" aria-pressed={view === "grid"} aria-label={it.configurator.view.grid} title={it.configurator.view.grid} onClick={() => setView("grid")} className={cn(SEG_BUTTON, "px-2")}>
+              <LayoutGrid aria-hidden="true" className="size-[15px]" />
+            </button>
+            <button type="button" aria-pressed={view === "list"} aria-label={it.configurator.view.list} title={it.configurator.view.list} onClick={() => setView("list")} className={cn(SEG_BUTTON, "px-2")}>
+              <List aria-hidden="true" className="size-[15px]" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div hidden={tab !== "pages"} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3.5">
+        {shown.length === 0 && q !== "" && <p className="font-label text-[12.5px] text-foreground-muted">{fill(it.configurator.noMatch, { query: query.trim() })}</p>}
+        {file !== undefined && (
+          <>
+            {fileGroup(file.intro)}
+            <div className="mb-4 last:mb-0">
+              <p className={EYEBROW}>{it.configurator.file.projects}</p>
+              <div className="flex flex-col gap-1.5">
+                {file.projects
+                  .filter((row) => matches(row.name) || matches(row.code))
+                  .map((row) => (
+                    <button
+                      key={row.key}
+                      type="button"
+                      data-project={row.key}
+                      onClick={() => onSelectGroup?.(row.key)}
+                      className={cn(
+                        "flex rounded-lg p-1.5 text-left transition-colors duration-150 hover:bg-surface-hover",
+                        view === "grid" ? "flex-col gap-1.5" : "flex-row items-center gap-2.5",
+                      )}
+                    >
+                      <span className={cn("block", view === "grid" ? "w-full" : "w-[52px] shrink-0")}>
+                        {row.first === undefined ? (
+                          <span aria-hidden="true" className={cn("block w-full rounded-md bg-surface-raised shadow-card", ASPECT[formatId])} />
+                        ) : (
+                          <Thumbnail formatId={formatId} template={row.template} page={row.first} number={row.start} assets={assets} values={row.values} />
+                        )}
+                      </span>
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate font-label text-[12.5px] font-medium text-foreground">{row.name}</span>
+                        <small className="truncate font-label text-[12px] text-foreground-muted">{fill(it.configurator.file.projectPages, { code: row.code, n: row.count })}</small>
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+            {fileGroup(file.closing)}
+          </>
+        )}
+        {(file === undefined ? runsOf(shown, pageGroups) : []).map(({ label, items: inSection }, run) => {
+          return (
+            <div key={`${label}-${run}`} className="mb-4 last:mb-0">
+              <p className={EYEBROW}>{label}</p>
+              <div className="flex flex-col gap-1.5">
+                {inSection.map(({ page, number }) => thumb(page, number, template, values))}
               </div>
             </div>
           );

@@ -34,7 +34,7 @@ export {
 export { EXPORT_FORMAT_IDS, isExportFormatId } from "@/modules/rendering/domain/export";
 export type { ExportFormatId } from "@/modules/rendering/domain/export";
 export { composeParts, renderComposed } from "@/modules/rendering/compose";
-export type { CasePart, ClientIntroPart, ComposedFile, ComposedSegment, ComposePart } from "@/modules/rendering/compose";
+export type { CasePart, ClientIntroPart, ComposedFile, ComposedSegment, ComposeOptions, ComposePart } from "@/modules/rendering/compose";
 export { measureOverflow } from "@/modules/rendering/overflow";
 export type { BlockOverflow, OverflowReport, PageOverflow } from "@/modules/rendering/overflow";
 export type {
