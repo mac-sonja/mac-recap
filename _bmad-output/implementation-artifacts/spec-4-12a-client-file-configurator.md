@@ -2,7 +2,7 @@
 title: "Story 4.12a: the client's whole file in the configurator"
 type: 'feature'
 created: '2026-11-10'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '61a3e0f68d86b32edf333e7c389b668b7bc5a5ab'
 route: 'dispatch'
 review_loop_iteration: 0
