@@ -96,6 +96,24 @@ context:
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Adapter refusal maps never tested through the adapter (gap, blind) | medium | db tests use raw SQL; use-case and action tests inject codes; the 4.9 case flow tests them (`revision.db.test.ts:1170`) | patch |
+| 2 | `CASE_NOT_EDITABLE` before the fork on an approved intro untested (blind) | low | The only approved save test runs after a fork | patch |
+| 3 | Re-fork after Aggiorna untested (blind) | medium | The page key may not change after update; nothing shows the next edit forks again | patch |
+| 4 | Fragile early returns in the end-to-end db test (blind) | low | `if (!x.ok) return;` can turn the test into a no-op | patch |
+| 5 | Missing ids in update and discard failure logs (blind) | low | `forkHead` logs ids, the other two only `actorId` | patch |
+| 6 | Action docs promise 400 for a malformed id; 404 is returned (gap) | low | The pre-check runs `getClientIntroById` first | patch |
+| 7 | Doc comments mention cases only (blind) | low | `use-document.ts`, `configurator.tsx`, `it.ts` comments | patch |
+| 8 | Contradictory sprint-status comment (blind) | low | It says 4.11b deferred and built | patch |
+| 9 | Two status reads can race between approve and update (blind) | low | The SQL still refuses (`STALE_HEAD` / `REVISION_NOT_WRITABLE`), as the edge-case trace confirmed; it needs two people approving the same intro within milliseconds | reject |
+| 10 | More SQL refusal paths untested (deleted client, other intro's revision, unknown id) (blind) | low | Line-for-line mirrors of the tested case functions | reject |
+| 11 | `discard_intro_head` returns the approved revision unchecked (blind) | false | `approved_revision_id` always points at an `approved` row: only the approve and update functions set it, in the same transaction that approves the row | reject |
+| 12 | "Si potrà modificare presto" on the client name of an approved intro (blind) | false | The spec keeps the existing message, as 4.9 does for approved cases (owner, 2026-11-04) | reject |
+| 13 | Client-mode refusal UI paths untested (`MATERIAL_MISSING`, `OVERFLOW_NOT_CLEARED`, failures) (blind) | low | The same configurator code is tested in case mode | reject |
+| 14 | Permission rows mock every intro as `in_review` (blind) | low | Role checks run before the status pre-check; the rows test what they claim | reject |
+| 15 | Edge-case trace (edge) | false | Every branch traced; no unhandled path | reject |
+
 ## Verification
 
 **Commands:**
