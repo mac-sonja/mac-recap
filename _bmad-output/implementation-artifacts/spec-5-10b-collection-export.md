@@ -104,6 +104,22 @@ context:
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Per-client logo and media in a mixed collection untested (gap) | medium | Fakes return the same logo and media for every client | patch |
+| 2 | Polls re-read the whole collection while the job runs, and once per format on ready; false stale possible (blind, edge) | medium | `makeCollectionStatus` reads before checking the job; `currentCollectionHashes` per format | patch |
+| 3 | A collection edited during export ends with the generic failure (blind) | low | `onPoll` maps `EXPORT_STALE` to failed; edits happen on this page | patch |
+| 4 | `EXPORT_TOO_LARGE` unmapped; a near-full collection with intros exceeds 200 parts (blind) | low | `collectionRefusalFor` lacks it | patch |
+| 5 | A name of only unsafe characters gives blank file names (edge) | low | `recordFileName("", name)` with no code fallback | patch |
+| 6 | Logo warning logs the wrong case (blind, edge) | low | `drawing.parts[0].caseId` | patch |
+| 7 | Handler runs with unavailable case / unapproved intro, account-role allow, test titles (blind) | low | Not covered; titles name cases the fixtures don't have | patch |
+| 8 | Another collection's identical export answers `EXPORT_STALE`, not `NOT_FOUND` (edge) | false | Every collection is visible to every role (owner decision); nothing is disclosed | reject |
+| 9 | Page counts may disagree with the server's (blind) | low | Both drop cases with no approved revision; differ only in a race with a deletion | reject |
+| 10 | Size checked after reading; unbounded or serial reads (blind) | low | Demo-scale collections | reject |
+| 11 | `CollectionEntry.clientId` unused; request schemas not strict (blind) | low | Harmless; the schemas match the existing case and pack request schemas | reject |
+| 12 | Server's unavailable count not returned with the ticket (blind) | low | The page count is read when the page opens | reject |
+| 13 | Migration must reach the hosted project before deliveries work (blind) | false | Applied at merge, as with every migration so far | reject |
+
 ## Verification
 
 **Commands:**
