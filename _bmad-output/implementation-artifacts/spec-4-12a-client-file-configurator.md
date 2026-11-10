@@ -127,6 +127,29 @@ Paths under `src/app/(wizard)/_components/configurator/` unless stated.
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | `router.refresh()` never remounts or re-seeds the parts (blind, edge) | high | `page.tsx:107` key is constant `file:{clientId}`; `use-client-file.tsx:107` seeds `mounted` once; after Aggiorna the intro keeps its old revision and head version | patch |
+| 2 | A failed part reload leaves the part stopped, and later edits drop silently (edge) | medium | `use-client-file.tsx:274-275` calls `refresh()`, which per #1 changes nothing | patch |
+| 3 | Edits to non-editable or unregistered parts vanish while reporting success; stray undo steps (blind, edge) | medium | `use-client-file.tsx:184` `if (keys.length === 0) return true`; `doc?.change` with a missing doc after the step was pushed | patch |
+| 4 | Concurrent reloads of one part (blind) | low | No in-flight guard in `reload`; out-of-order responses can mount an older read | patch |
+| 5 | A reloaded intro has no render assets (blind) | low | `introPartOf` returns `assets: {}` | patch |
+| 6 | A page's role changed by an edit makes it vanish or jump groups; misleading message with no segments (edge) | medium | `client-file.ts:182-189` keeps the edited role | patch |
+| 7 | Aggiungi pagina does nothing when every segment is empty (edge) | low | `configurator.tsx:1061` returns with no segment | patch |
+| 8 | "Remove missing" clears refused ids from every part (edge) | medium | `doc.refused` aggregates all parts; the clear runs over the whole file | patch |
+| 9 | "No match" shown above matching project rows (blind, edge) | low | `right-panel.tsx:305` counts pages only | patch |
+| 10 | Focus lost after confirming a case-page delete (blind) | medium | The dialog returns focus to the deleted bin | patch |
+| 11 | Modifica layout leads nowhere with no intro ready and no approved case (blind, edge) | low | The link shows; the page redirects back without a reason | patch |
+| 12 | A throwing `casePartOf` takes the page down (edge) | low | `Promise.all` in `casePartsOf` | patch |
+| 13 | `casePartOf` guards untested; a regression could hand back another client's case (gap) | medium | `actions.test.ts` mocks `file-parts` entirely | patch |
+| 14 | Reload, intro update/discard, file-mode fields and media, delete-save untested (gap, blind) | medium | No assertions on `caseGone`, `reloadFailed`, `onUpdateApproved`/`onDiscard` in file mode, `client_file` uploads | patch |
+| 15 | Assertion that can never fail (gap, blind) | low | `page.test.tsx:165` regex text in `toContain` | patch |
+| 16 | Client fields editable while the intro is Approvato, changing live content (gap, blind) | false | Intended: the approved spec says the client's fields write to the client record from any part; bound client values are live by design (AD-22) | reject |
+| 17 | New objects every render; per-keystroke other-case check; N+1 case reads (blind) | low | Correct output; cost grows with case count but stays small for a client's handful of cases | reject |
+| 18 | A case's file can be placed on the intro (blind) | false | The intro may hold "Dalle sue case" files by 4.11a's design and allowed set | reject |
+| 19 | Copy: "immagine" also covers videos; ⌘Z is Mac wording (blind) | low | The spec gives this copy; ⌘Z is the house convention | reject |
+| 20 | Stray indentation and blank lines (blind) | low | Lint passes; cosmetic | reject |
+
 ## Verification
 
 **Commands:**
