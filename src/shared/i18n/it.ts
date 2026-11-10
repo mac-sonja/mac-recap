@@ -900,7 +900,7 @@ export const it = {
      * **Aggiorna la versione approvata**, or are dropped with **Scarta le modifiche**.
      */
     approvedEdit: {
-      /** Under the top bar of an approved case. */
+      /** Under the top bar of an approved case or client intro (Story 4.11b). */
       banner: "Approvata. Le modifiche vanno online quando aggiorni la versione approvata.",
       update: "Aggiorna la versione approvata",
       discard: "Scarta le modifiche",

@@ -149,16 +149,16 @@ export interface ConfiguratorProps {
   }) => Promise<ActionResult<{ waiting: boolean }>>;
   /** The case's `head_version` as read: approval's (and Story 4.9's fork's) compare-and-set; undefined: no approval. */
   headVersion?: number;
-  /** Story 4.9: forks an Approvato case's approved revision before its first save (`revision.fork`). */
+  /** Story 4.9: forks an Approvato case's (Story 4.11b: or intro's) approved revision before its first save (`revision.fork`). */
   onFork?: (input: ForkInput) => Promise<ActionResult<ForkResult>>;
-  /** Story 4.9: **Aggiorna la versione approvata**, with Approva's input, on the copy. */
+  /** Story 4.9: **Aggiorna la versione approvata**, with Approva's input, on the copy (Story 4.11b: an intro's too, by `clientIntroId`). */
   onUpdateApproved?: (input: SubjectKey & {
     revisionId: string;
     expectedRevisionVersion: number;
     expectedHeadVersion: number;
     overflow: Record<string, boolean>;
   }) => Promise<ActionResult<void>>;
-  /** Story 4.9: **Scarta le modifiche**, the copy dropped. */
+  /** Story 4.9: **Scarta le modifiche**, the copy dropped (Story 4.11b: an intro's too, by `clientIntroId`). */
   onDiscard?: (input: SubjectKey & { revisionId: string; expectedHeadVersion: number }) => Promise<ActionResult<void>>;
   /** The client's files (ids and names): a page may show them, so they count as present (Story 4.8). Client mode: the client's cases' files. */
   clientFiles?: readonly { id: string; name: string }[];
@@ -239,12 +239,14 @@ const NO_CLIENT_MEDIA: readonly ListedAsset[] = [];
  * block's only element, swaps its block with the one it's dropped on, or moves it to the
  * end of another page. Each drop is one undo step; a refused one says why and changes nothing.
  *
- * An Approvato case (Story 4.9) is edited under a banner: the first save forks a working copy
- * of the approved revision (`onFork`) and every edit stages there, while the case page, the
- * library and the exports keep the approved version. With a copy pending the top bar offers
+ * An Approvato case (Story 4.9), or an Approvato client intro (Story 4.11b), is edited under a
+ * banner: the first save forks a working copy of the approved revision (`onFork`) and every
+ * edit stages there, while the live reads (the case page, the library, the exports, the
+ * client's materials) keep the approved version. With a copy pending the top bar offers
  * **Scarta le modifiche** and **Aggiorna la versione approvata**, each after a dialog; Aggiorna
  * follows Approva's rules (no overflow, no missing file, else it names what's left). Client
- * and case fields stay read-only there: they live on the records and can't be staged.
+ * and case fields stay read-only there, for an intro too: they live on the records and can't
+ * be staged.
  */
 export function Configurator({
   header,

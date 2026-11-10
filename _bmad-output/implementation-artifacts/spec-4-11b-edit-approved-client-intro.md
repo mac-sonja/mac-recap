@@ -2,7 +2,7 @@
 title: 'Story 4.11b: edit an approved client intro'
 type: 'feature'
 created: '2026-11-10'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'adaf0e433dd648936069dcf7e475853debbebcdd'
 route: 'dispatch'
 review_loop_iteration: 0

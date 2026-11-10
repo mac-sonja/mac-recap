@@ -475,6 +475,11 @@ describe("intro save and approve (Story 4.11a)", () => {
       await expect(pool.query(forkSql, [UNKNOWN_ID, 0, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "NOT_FOUND" });
     });
 
+    it("save_intro_revision_doc refuses an approved intro whose head is still the approved revision (no fork) with CASE_NOT_EDITABLE", async () => {
+      const { approved, doc } = await approvedIntro();
+      await expect(pool.query(saveSql, [approved, JSON.stringify(doc), 0, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "CASE_NOT_EDITABLE" });
+    });
+
     it("saves land on the copy, live reads keep the approved revision, and the update swaps them with one client event", async () => {
       const caseStudy = await import("@/modules/case-study");
       const { intro, approved, doc } = await approvedIntro();
@@ -526,9 +531,11 @@ describe("intro save and approve (Story 4.11a)", () => {
       const who = await actor();
       const { intro, approved, doc } = await approvedIntro();
 
+      // The adapter maps each refusal to its code, so a stale edit reloads instead of failing.
+      expect(await caseStudy.forkIntroHead(who, { clientIntroId: intro, expectedHeadVersion: 0 })).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
       const forked = await caseStudy.forkIntroHead(who, { clientIntroId: intro, expectedHeadVersion: 1 });
       expect(forked).toMatchObject({ ok: true, value: { version: 0, headVersion: 2 } });
-      if (!forked.ok) return;
+      if (!forked.ok) throw new Error(forked.error.code);
       const copy = forked.value.revisionId;
       expect(await caseStudy.forkIntroHead(who, { clientIntroId: intro, expectedHeadVersion: 1 })).toMatchObject({ ok: true, value: { revisionId: copy } });
       expect(await caseStudy.saveIntroRevisionDoc(who, { clientIntroId: intro, revisionId: copy, doc, expectedVersion: 0 }, material.liveAssetIds)).toMatchObject({
@@ -537,17 +544,23 @@ describe("intro save and approve (Story 4.11a)", () => {
       });
       expect(await caseStudy.getLiveRevision({ kind: "client_intro", id: intro })).toMatchObject({ ok: true, value: { id: approved } });
 
-      const updated = await caseStudy.approveIntro(
-        who,
-        { clientIntroId: intro, revisionId: copy, expectedRevisionVersion: 1, expectedHeadVersion: 2, overflow: clear() },
-        material.liveAssetIds,
-      );
+      const update = { clientIntroId: intro, revisionId: copy, expectedRevisionVersion: 1, expectedHeadVersion: 2, overflow: clear() };
+      expect(await caseStudy.approveIntro(who, { ...update, expectedHeadVersion: 1 }, material.liveAssetIds)).toMatchObject({ ok: false, error: { code: "STALE_HEAD" } });
+      expect(await caseStudy.approveIntro(who, { ...update, expectedRevisionVersion: 0 }, material.liveAssetIds)).toMatchObject({
+        ok: false,
+        error: { code: "STALE_REVISION" },
+      });
+      const updated = await caseStudy.approveIntro(who, update, material.liveAssetIds);
       expect(updated).toMatchObject({ ok: true, value: { id: copy, status: "approved" } });
       expect(await caseStudy.getLiveRevision({ kind: "client_intro", id: intro })).toMatchObject({ ok: true, value: { id: copy } });
 
       const second = await caseStudy.forkIntroHead(who, { clientIntroId: intro, expectedHeadVersion: 2 });
       expect(second).toMatchObject({ ok: true, value: { headVersion: 3 } });
-      if (!second.ok) return;
+      if (!second.ok) throw new Error(second.error.code);
+      expect(await caseStudy.discardIntroHead(who, { clientIntroId: intro, revisionId: second.value.revisionId, expectedHeadVersion: 2 })).toMatchObject({
+        ok: false,
+        error: { code: "STALE_HEAD" },
+      });
       expect(await caseStudy.discardIntroHead(who, { clientIntroId: intro, revisionId: second.value.revisionId, expectedHeadVersion: 3 })).toMatchObject({
         ok: true,
         value: { id: copy, status: "approved" },

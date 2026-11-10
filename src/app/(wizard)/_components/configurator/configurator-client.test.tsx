@@ -426,6 +426,26 @@ describe("Configurator in client mode (Story 4.11a)", () => {
       expect(push).not.toHaveBeenCalled();
     });
 
+    it("after a successful Aggiorna, with the same page key, the next edit forks the intro again", async () => {
+      const onFork = vi
+        .fn<ForkFn>()
+        .mockResolvedValueOnce({ ok: true, value: { revisionId: COPY_ID, version: 0, headVersion: 4 } })
+        .mockResolvedValueOnce({ ok: true, value: { revisionId: "dddddddd-0000-4000-8000-000000000003", version: 0, headVersion: 5 } });
+      const { onSave } = approved({ onFork });
+      addPage();
+      await tick();
+      fireEvent.click(updateButton()!);
+      fireEvent.click(button(u.updateConfirm, dialog()!));
+      await tick();
+      expect(updateButton()).toBeNull();
+      addPage();
+      await tick();
+      expect(onFork).toHaveBeenCalledTimes(2);
+      expect(onFork).toHaveBeenLastCalledWith({ clientIntroId: INTRO_ID, expectedHeadVersion: 4 });
+      expect(onSave.mock.calls.at(-1)![0]).toMatchObject({ clientIntroId: INTRO_ID, revisionId: "dddddddd-0000-4000-8000-000000000003", expectedVersion: 0 });
+      expect(updateButton()).not.toBeNull();
+    });
+
     it("a stale update names the intro and reloads, changing nothing", async () => {
       approved({ fork: false, onUpdateApproved: async () => ({ ok: false, status: 409, error: { code: "STALE_HEAD", message: "m" } }) });
       await tick();

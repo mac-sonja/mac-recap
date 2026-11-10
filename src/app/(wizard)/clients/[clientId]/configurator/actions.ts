@@ -44,7 +44,8 @@ export async function saveIntroRevisionDoc(input: unknown): Promise<ActionResult
  * expectedRevisionVersion, expectedHeadVersion, overflow }`. The intro and its revision become
  * Approvato. Returns `{ waiting: false }` (the configurator goes back to the client page). 403
  * `FORBIDDEN` unless the role may `approve`; 400 `INVALID_INPUT`, `OVERFLOW_NOT_CLEARED`,
- * `MATERIAL_MISSING` (with `assetIds`); 404 `NOT_FOUND`; 409 `STALE_REVISION`, `STALE_HEAD`,
+ * `MATERIAL_MISSING` (with `assetIds`); 404 `NOT_FOUND` (also a missing or malformed
+ * `clientIntroId`, from the status read before the use case); 409 `STALE_REVISION`, `STALE_HEAD`,
  * `CASE_NOT_APPROVABLE` (also an approved intro: its copy goes through
  * `updateApprovedIntroVersion`), `REVISION_NOT_WRITABLE`. Nothing is written on any error.
  */
@@ -86,7 +87,8 @@ export async function forkIntroHead(input: unknown): Promise<ActionResult<caseSt
  * allowed files: the client's and its cases' live ones), which then becomes the approved
  * revision (the previous one `superseded`); the intro stays approved. 403 `FORBIDDEN` unless the
  * role may `update approved version`; 400 `INVALID_INPUT`, `OVERFLOW_NOT_CLEARED`,
- * `MATERIAL_MISSING` (with `assetIds`); 404 `NOT_FOUND`; 409 `STALE_REVISION`, `STALE_HEAD`,
+ * `MATERIAL_MISSING` (with `assetIds`); 404 `NOT_FOUND` (also a missing or malformed
+ * `clientIntroId`, from the status read before the use case); 409 `STALE_REVISION`, `STALE_HEAD`,
  * `CASE_NOT_APPROVABLE` (not approved), `REVISION_NOT_WRITABLE`. Nothing is written on any error.
  */
 export async function updateApprovedIntroVersion(input: unknown): Promise<ActionResult<void>> {

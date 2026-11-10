@@ -246,11 +246,11 @@ export function createSupabaseClientIntroRepository(
       if (error) {
         const refused = refusalOf(error, UPDATE_APPROVED_REFUSALS);
         if (refused) return err({ ...refused, details });
-        log.error(`intro approved version update failed: ${error.code}`, { actorId: input.actorId });
+        log.error(`intro approved version update failed: ${error.code}`, { ...details, actorId: input.actorId });
         return err({ code: "REVISION_WRITE_FAILED", message: "Could not update the approved version.", details });
       }
       if (data === null) {
-        log.error("intro approved version update failed: no row returned", { actorId: input.actorId });
+        log.error("intro approved version update failed: no row returned", { ...details, actorId: input.actorId });
         return err({ code: "REVISION_WRITE_FAILED", message: "Could not update the approved version.", details });
       }
       return toRevision(data);
@@ -289,11 +289,11 @@ export function createSupabaseClientIntroRepository(
       if (error) {
         const refused = refusalOf(error, DISCARD_REFUSALS);
         if (refused) return err({ ...refused, details });
-        log.error(`intro head discard failed: ${error.code}`, { actorId: input.actorId });
+        log.error(`intro head discard failed: ${error.code}`, { ...details, actorId: input.actorId });
         return err({ code: "REVISION_WRITE_FAILED", message: "Could not discard the changes.", details });
       }
       if (data === null) {
-        log.error("intro head discard failed: no row returned", { actorId: input.actorId });
+        log.error("intro head discard failed: no row returned", { ...details, actorId: input.actorId });
         return err({ code: "REVISION_WRITE_FAILED", message: "Could not discard the changes.", details });
       }
       return toRevision(data);

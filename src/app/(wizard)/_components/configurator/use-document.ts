@@ -67,11 +67,11 @@ export interface UseDocumentOptions {
   base: { schemaVersion: number; kind: string; template: string };
   initial: Formats;
   save: (input: SaveInput) => Promise<ActionResult<{ version: number }>>;
-  /** Someone else saved first, or the case can no longer be edited: read it again (no retry). */
+  /** Someone else saved first, or the case or intro can no longer be edited: read it again (no retry). */
   onStale: () => void;
   /** Story 4.9: forks an Approvato case's (Story 4.11b: or intro's) head before its first save (`revision.fork`). */
   fork?: (input: ForkInput) => Promise<ActionResult<ForkResult>>;
-  /** The case's `head_version` as read (approval's and the fork's compare-and-set). */
+  /** The case's or intro's `head_version` as read (approval's and the fork's compare-and-set). */
   headVersion?: number;
 }
 
@@ -101,7 +101,7 @@ export interface DocumentState {
   version: () => number;
   /** The revision saves go to: the one read, or the working copy a fork made (Story 4.9). */
   revisionId: () => string | undefined;
-  /** The case's `head_version`: the one read, or the one the fork returned (Story 4.9). */
+  /** The case's or intro's `head_version`: the one read, or the one the fork returned (Stories 4.9, 4.11b). */
   headVersion: () => number | undefined;
   /**
    * Story 4.9: the next save forks first (the head is the approved revision). False once a
