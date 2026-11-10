@@ -31,6 +31,11 @@ describe("respondToAppError", () => {
     ["UNKNOWN_FIELD", 400],
     ["UNKNOWN_REF", 400],
     ["NOT_FAVOURITABLE", 400],
+    ["COLLECTION_NOT_FOUND", 404],
+    ["STALE_COLLECTION", 409],
+    ["CASE_NOT_COLLECTABLE", 409],
+    ["COLLECTION_FULL", 409],
+    ["COLLECTION_LAST_ITEM", 409],
     ["PROFILE_LOOKUP_FAILED", 500],
   ] as const)("maps %s to %i with { error: { code, message } } and no details", async (code, status) => {
     const error = { code, message: "m", details: { secret: "internal" } };

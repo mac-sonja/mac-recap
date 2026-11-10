@@ -80,6 +80,10 @@ describe("AD-11 permission matrix", () => {
     }
   });
 
+  it("lets every person's role manage collections, admin included (Story 5.10a)", () => {
+    expect(ROLES.filter((role) => can(role, "manage collections"))).toEqual(["owner_designer", "account_sales_social", "admin"]);
+  });
+
   it("denies unknown roles and actions", () => {
     expect(can("guest" as Role, "view", { status: "approved" })).toBe(false);
     expect(can("owner_designer", "toString" as Action)).toBe(false);

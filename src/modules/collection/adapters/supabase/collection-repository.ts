@@ -55,7 +55,7 @@ function toCollection(row: Row): StoredCollection {
   };
 }
 
-const writeFailed = (what: string, details: Record<string, unknown>): AppError => ({
+const writeFailed = (what: string, details: { collectionId?: string; actorId?: string }): AppError => ({
   code: "COLLECTION_WRITE_FAILED",
   message: `Could not ${what}.`,
   details,
@@ -65,7 +65,7 @@ export function createSupabaseCollectionRepository(
   client: () => ReturnType<typeof createSupabaseAdminClient> = createSupabaseAdminClient,
 ): CollectionRepository {
   /** A writer's call: its value, or its refusal, or a logged failure. */
-  async function write<T>(what: string, call: PromiseLike<{ data: unknown; error: { code: string; message: string; details?: string | null } | null }>, details: Record<string, unknown>, parse: (data: unknown) => T | null): Promise<Result<T>> {
+  async function write<T>(what: string, call: PromiseLike<{ data: unknown; error: { code: string; message: string; details?: string | null } | null }>, details: { collectionId?: string; actorId?: string }, parse: (data: unknown) => T | null): Promise<Result<T>> {
     const { data, error } = await call;
     if (error) {
       const refused = refusalOf(error);

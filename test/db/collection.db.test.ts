@@ -1,0 +1,185 @@
+// Story 5.10a: collections (`collection`, `collection_item`, `collection_tag`, `collection_event`
+// and their security-definer writers) and the module's use cases against the local Supabase
+// stack. Run with `npm run test:db`. Clients and cases are never deleted, so every test uses its
+// own clients.
+import { createClient } from "@supabase/supabase-js";
+import pg from "pg";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { TEST_ACTOR_ID } from "../helpers/db-actor";
+import { createTestClient, TEST_INDUSTRY } from "../helpers/db-clients";
+
+const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
+const missing = REQUIRED.filter((name) => !process.env[name]);
+if (missing.length > 0) {
+  throw new Error(`Missing ${missing.join(", ")}: run the DB suite with \`npm run test:db\` (start the stack with \`npm run db:start\`).`);
+}
+const env = Object.fromEntries(REQUIRED.map((name) => [name, process.env[name] as string])) as Record<(typeof REQUIRED)[number], string>;
+
+let pool: pg.Pool;
+
+beforeAll(async () => {
+  pool = new pg.Pool({ connectionString: env.SUPABASE_DB_URL, max: 2 });
+  await pool.query("update public.profile set role = 'owner_designer' where id = $1", [TEST_ACTOR_ID]);
+});
+
+afterAll(async () => {
+  await pool.end();
+});
+
+async function actor() {
+  const { getActor } = await import("@/modules/access");
+  const result = await getActor();
+  if (!result.ok) throw new Error(`signed-in test actor did not resolve: ${result.error.code}`);
+  return result.value;
+}
+
+const collection = () => import("@/modules/collection");
+
+/** A committed case of `clientId`; walked to Approvato through the repository's transitions when `approved`. */
+async function caseOf(clientId: string, name: string, approved = true) {
+  const { create } = await import("@/modules/case-study");
+  const created = await create(await actor(), { name, clientId, year: 2026, businessLines: ["branding"] });
+  if (!created.ok) throw new Error(`setup create failed: ${created.error.code}`);
+  if (approved) {
+    const { createSupabaseCaseStudyRepository } = await import("@/modules/case-study/adapters/supabase/case-study-repository");
+    const repo = createSupabaseCaseStudyRepository();
+    for (const [event, from, to] of [
+      ["generate", "draft", "generating"],
+      ["generation_succeeded", "generating", "in_review"],
+      ["approve", "in_review", "approved"],
+    ] as const) {
+      const moved = await repo.transition({ caseId: created.value.id, event, from, to, actorId: TEST_ACTOR_ID });
+      if (!moved.ok) throw new Error(`setup ${event} failed: ${moved.error.code}`);
+    }
+  }
+  return created.value.id;
+}
+
+const tags = { businessLines: ["branding"], industries: [TEST_INDUSTRY] };
+const itemsOf = async (id: string) =>
+  (await pool.query("select case_id from public.collection_item where collection_id = $1 order by position", [id])).rows.map((r) => r.case_id as string);
+
+async function created(caseIds: string[], name = "Pitch moda") {
+  const { createCollection } = await collection();
+  const result = await createCollection(await actor(), { name, ...tags, caseIds });
+  if (!result.ok) throw new Error(`create failed: ${result.error.code}`);
+  return result.value;
+}
+
+describe("collections (Story 5.10a)", () => {
+  it("creates grouped by client, lists, renames, retags and deletes, logging each change", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const b = await createTestClient(pool, TEST_ACTOR_ID);
+    const a1 = await caseOf(a.id, "A1");
+    const b1 = await caseOf(b.id, "B1");
+    const a2 = await caseOf(a.id, "A2");
+    const made = await created([a1, b1, a2]);
+    expect(made.caseIds).toEqual([a1, a2, b1]);
+    expect(await itemsOf(made.collectionId)).toEqual([a1, a2, b1]);
+
+    const { listCollections, renameCollection, retagCollection, deleteCollection, getCollection } = await collection();
+    const listed = await listCollections();
+    if (!listed.ok) throw new Error(listed.error.code);
+    const row = listed.value.find((c) => c.id === made.collectionId);
+    expect(row).toMatchObject({ name: "Pitch moda", caseCount: 3, tags, version: 1 });
+    expect(row?.createdBy.id).toBe(TEST_ACTOR_ID);
+
+    const renamed = await renameCollection(await actor(), { collectionId: made.collectionId, expectedVersion: 1, name: "Pitch lusso" });
+    expect(renamed).toMatchObject({ ok: true, value: { version: 2, name: "Pitch lusso" } });
+    // The same version again is stale.
+    expect(await renameCollection(await actor(), { collectionId: made.collectionId, expectedVersion: 1, name: "X" })).toMatchObject({ ok: false, error: { code: "STALE_COLLECTION" } });
+    const retagged = await retagCollection(await actor(), { collectionId: made.collectionId, expectedVersion: 2, businessLines: ["video"], industries: [TEST_INDUSTRY] });
+    expect(retagged).toMatchObject({ ok: true, value: { version: 3 } });
+    expect(await retagCollection(await actor(), { collectionId: made.collectionId, expectedVersion: 3, businessLines: ["video"], industries: ["no_such_sector_x"] })).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_INPUT" },
+    });
+
+    const events = (await pool.query("select type, version from public.collection_event where collection_id = $1 order by version", [made.collectionId])).rows;
+    expect(events).toEqual([
+      { type: "collection_created", version: 1 },
+      { type: "collection_renamed", version: 2 },
+      { type: "collection_retagged", version: 3 },
+    ]);
+
+    expect(await deleteCollection(await actor(), { collectionId: made.collectionId })).toEqual({ ok: true, value: undefined });
+    expect(await getCollection(made.collectionId)).toMatchObject({ ok: false, error: { code: "COLLECTION_NOT_FOUND" } });
+    const after = await listCollections();
+    expect(after.ok && after.value.some((c) => c.id === made.collectionId)).toBe(false);
+  });
+
+  it("adds, moves and removes with compare-and-set, keeping cases in their client's group", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const b = await createTestClient(pool, TEST_ACTOR_ID);
+    const a1 = await caseOf(a.id, "A1");
+    const a2 = await caseOf(a.id, "A2");
+    const b1 = await caseOf(b.id, "B1");
+    const b2 = await caseOf(b.id, "B2");
+    const draft = await caseOf(b.id, "Draft", false);
+    const made = await created([a1, a2, b1]);
+    const { addCollectionItems, moveCollectionGroup, moveCollectionItem, removeCollectionItems } = await collection();
+    const id = made.collectionId;
+
+    expect(await addCollectionItems(await actor(), { collectionId: id, expectedVersion: 1, caseIds: [b2] })).toMatchObject({ ok: true, value: { version: 2, caseIds: [a1, a2, b1, b2] } });
+    expect(await addCollectionItems(await actor(), { collectionId: id, expectedVersion: 2, caseIds: [draft] })).toMatchObject({ ok: false, error: { code: "CASE_NOT_COLLECTABLE" } });
+    expect(await moveCollectionGroup(await actor(), { collectionId: id, expectedVersion: 1, clientId: b.id, to: 0 })).toMatchObject({ ok: false, error: { code: "STALE_COLLECTION" } });
+    expect(await moveCollectionGroup(await actor(), { collectionId: id, expectedVersion: 2, clientId: b.id, to: 0 })).toMatchObject({ ok: true, value: { version: 3, caseIds: [b1, b2, a1, a2] } });
+    expect(await moveCollectionItem(await actor(), { collectionId: id, expectedVersion: 3, caseId: a1, to: 1 })).toMatchObject({ ok: true, value: { version: 4, caseIds: [b1, b2, a2, a1] } });
+    expect(await removeCollectionItems(await actor(), { collectionId: id, expectedVersion: 4, caseIds: [b1, b2, a2] })).toMatchObject({ ok: true, value: { caseIds: [a1] } });
+    expect(await removeCollectionItems(await actor(), { collectionId: id, expectedVersion: 5, caseIds: [a1] })).toMatchObject({ ok: false, error: { code: "COLLECTION_LAST_ITEM" } });
+    expect(await itemsOf(id)).toEqual([a1]);
+  });
+
+  it("refuses scattered groups, repeats and unapproved cases straight at the writer, writing nothing", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const b = await createTestClient(pool, TEST_ACTOR_ID);
+    const a1 = await caseOf(a.id, "A1");
+    const a2 = await caseOf(a.id, "A2");
+    const b1 = await caseOf(b.id, "B1");
+    const draft = await caseOf(b.id, "Draft", false);
+    const made = await created([a1, a2, b1]);
+    const call = (ids: string[]) =>
+      pool.query("select public.set_collection_items($1, 1, $2, $3, 'collection_item_moved', '{}'::jsonb)", [made.collectionId, ids, TEST_ACTOR_ID]);
+    await expect(call([a1, b1, a2])).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    await expect(call([a1, a1])).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    await expect(call([a1, a2, b1, draft])).rejects.toMatchObject({ message: "CASE_NOT_COLLECTABLE" });
+    await expect(call([])).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    await expect(pool.query("select public.create_collection('  ', $1, $2, $3, $4)", [tags.businessLines, tags.industries, [a1], TEST_ACTOR_ID])).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    await expect(pool.query("select public.create_collection('P', $1, '{}', $2, $3)", [tags.businessLines, [a1], TEST_ACTOR_ID])).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    expect(await itemsOf(made.collectionId)).toEqual([a1, a2, b1]);
+  });
+
+  it("keeps a case that lost its approval (Non disponibile), and drops a deleted one from reads", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const a1 = await caseOf(a.id, "A1");
+    const a2 = await caseOf(a.id, "A2");
+    const a3 = await caseOf(a.id, "A3");
+    const made = await created([a1, a2, a3]);
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [a3]);
+    const { getCollection, listCollections, moveCollectionItem } = await collection();
+    const detail = await getCollection(made.collectionId);
+    if (!detail.ok) throw new Error(detail.error.code);
+    expect(detail.value.items.map((i) => i.case.id)).toEqual([a1, a2]);
+    // No approved revision was ever written for these test cases: each is "Non disponibile".
+    expect(detail.value.items.every((i) => i.revision === null)).toBe(true);
+    const listed = await listCollections();
+    expect(listed.ok && listed.value.find((c) => c.id === made.collectionId)?.caseCount).toBe(2);
+    // The next write leaves the deleted case out.
+    expect(await moveCollectionItem(await actor(), { collectionId: made.collectionId, expectedVersion: 1, caseId: a2, to: 0 })).toMatchObject({ ok: true, value: { caseIds: [a2, a1] } });
+    expect(await itemsOf(made.collectionId)).toEqual([a2, a1]);
+  });
+
+  it("denies anon and authenticated every table and writer", async () => {
+    const anon = createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: false } });
+    for (const table of ["collection", "collection_item", "collection_tag", "collection_event"] as const) {
+      const { data, error } = await anon.from(table).select("*").limit(1);
+      expect(error !== null || (data ?? []).length === 0, table).toBe(true);
+    }
+    const { error } = await anon.rpc("delete_collection", { p_collection_id: "11111111-1111-4111-8111-111111111111", p_actor_id: TEST_ACTOR_ID });
+    expect(error).not.toBeNull();
+    const grants = await pool.query(
+      "select has_function_privilege('authenticated', 'public.set_collection_items(uuid, integer, uuid[], uuid, text, jsonb)', 'execute') as auth, has_table_privilege('service_role', 'public.collection', 'insert') as insert",
+    );
+    expect(grants.rows[0]).toEqual({ auth: false, insert: false });
+  });
+});

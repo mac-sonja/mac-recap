@@ -12,6 +12,7 @@ const render = (show: {
   showCaseStudies: boolean;
   showClients?: boolean;
   showLibrary?: boolean;
+  showCollections?: boolean;
   showOrganization?: boolean;
   toReviewCount?: number;
   theme?: "system" | "light" | "dark";
@@ -74,6 +75,25 @@ describe("Sidebar", () => {
   it("shows Libreria only when asked (account/sales/social)", () => {
     expect(render({ showNewCaseStudy: false, showCaseStudies: false, showLibrary: true })).toContain('href="/library"');
     expect(render({ showNewCaseStudy: true, showCaseStudies: true })).not.toContain('href="/library"');
+  });
+
+  it("shows Raccolte only when asked (every role, Story 5.10a), after Clienti and before Organizzazione", () => {
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, showClients: true, showCollections: true, showOrganization: true });
+    const hrefs = [...html.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1]);
+    expect(hrefs.slice(-3)).toEqual(["/clients", "/collections", "/organization"]);
+    expect(html).toContain("Raccolte");
+    expect(render({ showNewCaseStudy: false, showCaseStudies: false, showLibrary: true, showCollections: true }).indexOf('href="/collections"')).toBeGreaterThan(
+      render({ showNewCaseStudy: false, showCaseStudies: false, showLibrary: true, showCollections: true }).indexOf('href="/library"'),
+    );
+    expect(render({ showNewCaseStudy: true, showCaseStudies: true })).not.toContain('href="/collections"');
+  });
+
+  it.each(["/collections", "/collections/cccccccc-0000-4000-8000-000000000001"])("marks Raccolte active on %s", (path) => {
+    pathname.current = path;
+    const html = render({ showNewCaseStudy: true, showCaseStudies: true, showCollections: true });
+    const active = [...html.matchAll(/<a [^>]*aria-current="page"[^>]*>/g)].map((m) => m[0]);
+    expect(active).toHaveLength(1);
+    expect(active[0]).toContain('href="/collections"');
   });
 
   it("shows the cases to review after Case only when there are some", () => {

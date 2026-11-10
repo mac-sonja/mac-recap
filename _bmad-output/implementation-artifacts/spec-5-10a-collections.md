@@ -115,20 +115,26 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Migration, then `npm run db:types`.
-- [ ] `src/modules/collection/**` (+ unit and db tests): create, list (with filters), get, rename, delete, retag, add items, remove items, move group, move item, all with compare-and-set; reads that resolve each item to its case and live revision.
-- [ ] Policy (`manage collections`) and the industry read for collections.
-- [ ] Library selection and **Crea raccolta** (+ tests).
-- [ ] `/collections` list page and the sidebar item (+ tests).
-- [ ] The collection page: file view read-only, Pagine groups and rows, moves, Aggiungi casi, Rimuovi, Non disponibile, tags in the top bar (+ tests).
-- [ ] `src/shared/i18n/it.ts`, `test/permissions.test.ts`.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 5.10 stays `in-progress`, with a note that 5.10a is in review.
+- [x] Migration, then `npm run db:types`.
+- [x] `src/modules/collection/**` (+ unit and db tests): create, list (with filters), get, rename, delete, retag, add items, remove items, move group, move item, all with compare-and-set; reads that resolve each item to its case and live revision.
+- [x] Policy (`manage collections`) and the industry read for collections.
+- [x] Library selection and **Crea raccolta** (+ tests).
+- [x] `/collections` list page and the sidebar item (+ tests).
+- [x] The collection page: file view read-only, Pagine groups and rows, moves, Aggiungi casi, Rimuovi, Non disponibile, tags in the top bar (+ tests).
+- [x] `src/shared/i18n/it.ts`, `test/permissions.test.ts`.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 5.10 stays `in-progress`, with a note that 5.10a is in review.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:db` and `build`, when they run, then they pass.
 - Given the case configurator, the client file (4.12a/b) and client pack export tests, when they run, then they pass unchanged, apart from shared helpers that moved.
 
 ## Implementation Notes
+
+- **Data.** `20261110160000_collection.sql`: `collection` (name 1–120, `version`, `created_by`, timestamps, `deleted_at`), `collection_item` (PK collection+case, unique position), `collection_tag` (kind `business_line` | `industry`), append-only `collection_event` (with the version after each change). RLS on, revoked from anon/authenticated, service role read-only. Writers (service role only): `create_collection`, `set_collection_items` (whole ordered list, CAS), `rename_collection`, `set_collection_tags`, `delete_collection` (soft, no CAS). Helpers check 1–200 ids, no repeat, non-deleted cases, new ids approved (kept ones may have lost approval), and each client's cases contiguous (a cross-group move is refused in SQL too). `STALE_COLLECTION`, `COLLECTION_NOT_FOUND`, `CASE_NOT_COLLECTABLE` mapped to 409/404/409, plus `COLLECTION_FULL`, `COLLECTION_LAST_ITEM` (409).
+- **Module.** `src/modules/collection`: pure order rules in `domain/collection.ts` (create order, add, remove, move group, move item); use cases read cases only through `case-study`'s index (`list({})`, `getLiveRevision`). A soft-deleted case is dropped from reads and from the next items write; a case without a live approved revision reads with `revision: null` ("Non disponibile"). Deleting a collection is not a compare-and-set.
+- **Case-study.** New `listClientIndustries()` (client id → sector key) for the Aggiungi casi suggestions; `listClientSectors` documented as allowed after `manage collections`.
+- **Policy.** `manage collections` for owner/designer, admin and account/sales/social. The permissions suite stubs the collection module and exempts collection actions from the "account/sales/social writes nothing" check (collections hold ids only).
+- **UI.** Library cards get a checkbox (sibling of the link) and a "{n} selezionate" bar with **Crea raccolta** (name + tags dialog) for roles that may manage collections. `/collections` (tool shell, sidebar **Raccolte** after Clienti) lists, filters (business line, industry), renames and deletes. `/collections/{id}` (wizard group, full screen) is a dedicated read-only view built from the configurator's pieces (`Canvas`, `FormatSwitch`, `StatusMessage`, styles) rather than the editing `Configurator`: per format `composeParts` default mode over the groups; Pagine with group rows, locked intro/closing rows, case rows (drag within group, Alt+↑/↓, menu Sposta su/giù, Rimuovi), **Aggiungi casi**, and **Modifica tag** in the top bar. Moves are optimistic and queued; a failure restores the confirmed order. Add/remove save then `router.refresh()` (view remounts on the new version). A client's intro is read on the server only when 2+ of its cases can be drawn.
 
 ## Spec Change Log
 

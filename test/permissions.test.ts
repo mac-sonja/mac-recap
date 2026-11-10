@@ -69,6 +69,8 @@ vi.mock("@/modules/case-study", () => stubbedUseCases(() => vi.importActual("@/m
 vi.mock("@/modules/material", () => stubbedUseCases(() => vi.importActual("@/modules/material")));
 // Exports (Story 5.3): the job queue is a spy, so the guardrail sees whether anything was enqueued.
 vi.mock("@/modules/jobs", () => stubbedUseCases(() => vi.importActual("@/modules/jobs")));
+// Collections (Story 5.10a): what runs after `authorize` doesn't matter here.
+vi.mock("@/modules/collection", () => stubbedUseCases(() => vi.importActual("@/modules/collection")));
 
 const caseStudies = await import("@/app/(tool)/case-studies/actions");
 const clients = await import("@/app/(tool)/clients/actions");
@@ -78,6 +80,8 @@ const clientConfigurator = await import("@/app/(wizard)/clients/[clientId]/confi
 const exportActions = await import("@/app/(tool)/case-studies/export-actions");
 const clientExportActions = await import("@/app/(tool)/clients/export-actions");
 const jobsModule = await import("@/modules/jobs");
+const collectionActions = await import("@/app/(tool)/collections/actions");
+const collectionPageActions = await import("@/app/(wizard)/collections/[collectionId]/actions");
 const { default: LibraryPage } = await import("@/app/(tool)/library/page");
 const caseStudyModule = await import("@/modules/case-study");
 const draftReady = await import("@/app/_lib/draft-ready-actions");
@@ -86,6 +90,8 @@ const OWNERS: readonly Role[] = ["owner_designer", "admin"];
 /** `export` an approved case: every role that may see one (AD-11). */
 const SHARERS: readonly Role[] = ["owner_designer", "admin", "account_sales_social"];
 const ADMIN: readonly Role[] = ["admin"];
+/** `manage collections` (Story 5.10a, owner 2026-11-10): every role, admin included. */
+const EVERYONE: readonly Role[] = ["owner_designer", "admin", "account_sales_social"];
 
 type Action = (input: unknown) => Promise<{ ok: boolean; status?: number }>;
 
@@ -121,6 +127,9 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   ...Object.fromEntries(Object.entries(exportActions).map(([name, call]) => [`export.${name}`, { call: call as Action, allowed: SHARERS }])),
   // Story 5.9a: Scarica on a client (its pack), owner/designer only until 5.9b.
   ...Object.fromEntries(Object.entries(clientExportActions).map(([name, call]) => [`client-export.${name}`, { call: call as Action, allowed: OWNERS }])),
+  // Story 5.10a: collections, for every role.
+  ...Object.fromEntries(Object.entries(collectionActions).map(([name, call]) => [`collections.${name}`, { call: call as Action, allowed: EVERYONE }])),
+  ...Object.fromEntries(Object.entries(collectionPageActions).map(([name, call]) => [`collection.${name}`, { call: call as Action, allowed: EVERYONE }])),
 };
 
 /** The roles a person can hold. `system` is the worker's actor: it can't sign in, so it never gets this far (below). */
@@ -146,7 +155,7 @@ beforeEach(() => {
 describe("permission suite through the real actor resolver (Story 6.4)", () => {
   it("covers every server action of the tool", () => {
     expect(Object.keys(EXPECTED).length).toBe(
-      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 6 + Object.keys(clientConfigurator).length + Object.keys(draftReady).length + Object.keys(exportActions).length + Object.keys(clientExportActions).length,
+      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 6 + Object.keys(clientConfigurator).length + Object.keys(draftReady).length + Object.keys(exportActions).length + Object.keys(clientExportActions).length + Object.keys(collectionActions).length + Object.keys(collectionPageActions).length,
     );
   });
 
@@ -205,8 +214,10 @@ describe("no role, admin included, changes a guardrail or a permission (Story 6.
   });
 
   it("gives account/sales/social no write action: no create, edit, approve, delete or client change", () => {
-    // Exporting an approved case writes no content (only its file and an `export` event).
-    const writable = cells.filter((c) => c.role === "account_sales_social" && c.allowed && !c.name.startsWith("export."));
+    // Exporting an approved case writes no content (only its file and an `export` event). A
+    // collection (Story 5.10a, every role) holds case ids only: it never writes a case, a revision or a client.
+    const ownsNoContent = (name: string) => name.startsWith("export.") || name.startsWith("collections.") || name.startsWith("collection.");
+    const writable = cells.filter((c) => c.role === "account_sales_social" && c.allowed && !ownsNoContent(c.name));
     expect(writable).toEqual([]);
     expect(cells.filter((c) => c.name.startsWith("export.") && c.allowed).map((c) => c.role)).toEqual(
       expect.arrayContaining(["account_sales_social"]),

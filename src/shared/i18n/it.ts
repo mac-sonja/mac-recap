@@ -19,6 +19,8 @@ export const it = {
       library: "Libreria",
       /** Admin: the Organizzazione screen (Story 6.3), right after Clienti. */
       organization: "Organizzazione",
+      /** Every role: the collections (Story 5.10a), after the cases and the library. */
+      collections: "Raccolte",
       /** Above Nuova case history: searches the case list and opens it filtered. */
       search: {
         label: "Cerca progetto o cliente",
@@ -840,6 +842,168 @@ export const it = {
     },
     /** Read by screen readers while the library loads. */
     loading: "Un attimo…",
+    /** Story 5.10a: picking cards for a new collection. */
+    select: {
+      /** A card's checkbox, read by screen readers; `{name}` is the case. */
+      card: "Seleziona {name}",
+      /** The bar under the header; `{n}` is how many cards are picked. */
+      count: "{n} selezionate",
+      create: "Crea raccolta",
+      clear: "Annulla selezione",
+    },
+  },
+  /** Story 5.10a: collections, named sets of approved cases from any clients, for a pitch. */
+  collections: {
+    title: "Raccolte",
+    lead: "Le case history che hai messo insieme per un pitch, anche di clienti diversi.",
+    empty: "Ancora nessuna raccolta. Scegli le case nella Libreria e mettile insieme.",
+    emptyAction: "Vai alla Libreria",
+    table: {
+      caption: "Elenco delle raccolte",
+      columns: {
+        name: "Raccolta",
+        tags: "Tag",
+        cases: "Case",
+        updated: "Aggiornata",
+        createdBy: "Creata da",
+        actions: "Azioni",
+      },
+    },
+    /** `{n}` cases in the collection. */
+    caseCount: "{n} case",
+    /** Who created it, when the person is no longer known. */
+    unknownCreator: "—",
+    filters: {
+      label: "Filtra le raccolte",
+      businessLine: "Servizio",
+      industry: "Settore",
+      clear: "Azzera filtri",
+    },
+    noResults: "Nessuna raccolta con questi filtri.",
+    /** A row's actions; `{name}` is the collection. */
+    open: "Apri",
+    openLabel: "Apri {name}",
+    rename: {
+      button: "Rinomina",
+      label: "Rinomina {name}",
+      title: "Rinomina la raccolta",
+      field: "Nome",
+      save: "Salva nome",
+      cancel: "Annulla",
+      failed: "Non siamo riusciti a rinominarla. Riprova.",
+    },
+    delete: {
+      button: "Elimina",
+      label: "Elimina {name}",
+      title: "Eliminare {name}?",
+      description: "La raccolta sparisce dall’elenco. Le case history restano dove sono.",
+      confirm: "Elimina raccolta",
+      cancel: "Annulla",
+      failed: "Non siamo riusciti a eliminarla. Riprova.",
+    },
+    /** The name and tags dialog (create, rename, the collection's top bar). */
+    form: {
+      name: "Nome",
+      namePlaceholder: "Per esempio: Pitch moda",
+      businessLines: "Servizi",
+      industries: "Settori",
+      errors: {
+        name: "Dai un nome alla raccolta, fino a 120 caratteri.",
+        businessLines: "Scegli almeno un servizio.",
+        industries: "Scegli almeno un settore.",
+      },
+    },
+    create: {
+      title: "Nuova raccolta",
+      /** `{n}` is how many cases are picked. */
+      description: "{n} case, raggruppate per cliente.",
+      save: "Crea",
+      cancel: "Annulla",
+      notCollectable: "Una delle case non è più approvata. Ricarica la pagina e riprova.",
+      failed: "Non siamo riusciti a creare la raccolta. Riprova.",
+    },
+    /** Read by screen readers while the list loads. */
+    loading: "Un attimo…",
+    /** A collection changed elsewhere meanwhile: the page has to be read again. */
+    stale: "La raccolta è cambiata nel frattempo. Ricarica la pagina e riprova.",
+  },
+  /**
+   * Story 5.10a: one collection, in the configurator's file view, every page read-only for now
+   * (B7 makes texts editable). Pagine arranges its cases, grouped by client.
+   */
+  collection: {
+    back: "Torna alle raccolte",
+    /** Read before the cases' count in the top bar. */
+    count: "{n} case",
+    tags: {
+      label: "Tag della raccolta",
+      edit: "Modifica tag",
+      title: "Tag della raccolta",
+      save: "Salva tag",
+      cancel: "Annulla",
+      failed: "Non siamo riusciti a salvare i tag. Riprova.",
+    },
+    pages: {
+      label: "Pagine",
+      /** A client's intro and closing rows: they wrap its cases and don't move. */
+      intro: "Introduzione",
+      closing: "Chiusura",
+      locked: "Bloccata: segue le case del cliente",
+      /** `{code}` and `{n}` pages of a case. */
+      casePages: "{code} · {n} pagine",
+      /** An intro's or a closing's `{n}` pages. */
+      pageCount: "{n} pagine",
+      unavailable: "Non disponibile",
+      unavailableNote: "Questa case non ha più una versione approvata.",
+      /** Read with a client's group: its name. */
+      group: "Cliente {name}",
+      /** A row's or a group's menu; `{name}` is the case or the client. */
+      menu: "Azioni per {name}",
+      moveUp: "Sposta su",
+      moveDown: "Sposta giù",
+      remove: "Rimuovi dalla raccolta",
+      /** Read by screen readers after a move; `{name}`, its place `{n}` of `{total}`. */
+      moved: "{name} ora è al posto {n} di {total}.",
+      dragHint: "Trascina per spostare, oppure usa il menu.",
+      otherGroup: "Una case resta nel gruppo del suo cliente.",
+    },
+    /** The canvas headings; `{client}` is the client's name. */
+    canvas: {
+      intro: "Introduzione · {client}",
+      closing: "Chiusura · {client}",
+      /** `{code}` · `{name}` of a case. */
+      case: "{code} · {name}",
+    },
+    remove: {
+      title: "Rimuovere {name} dalla raccolta?",
+      description: "La case history resta nella Libreria: esce solo da questa raccolta.",
+      confirm: "Rimuovi",
+      cancel: "Annulla",
+      last: "Una raccolta ha almeno una case.",
+      failed: "Non siamo riusciti a rimuoverla. Riprova.",
+    },
+    orderFailed: "Ordine non salvato. Riprova.",
+    add: {
+      button: "Aggiungi casi",
+      title: "Aggiungi casi",
+      description: "Le case approvate che non sono ancora qui. In cima quelle che corrispondono ai tag.",
+      search: "Cerca progetto o cliente",
+      suggested: "Suggerite dai tag",
+      others: "Altre case",
+      none: "Tutte le case approvate sono già in questa raccolta.",
+      noMatch: "Nessuna case per “{query}”.",
+      /** A row's checkbox; `{name}` is the case. */
+      pick: "Scegli {name}",
+      /** `{n}` cases picked. */
+      picked: "{n} scelte",
+      confirm: "Aggiungi",
+      cancel: "Annulla",
+      full: "Una raccolta tiene al massimo 200 case.",
+      notCollectable: "Una delle case non è più approvata. Ricarica la pagina e riprova.",
+      failed: "Non siamo riusciti ad aggiungerle. Riprova.",
+    },
+    /** Below 1024 px, as the configurator. */
+    narrowScreen: "Questa pagina dà il meglio su uno schermo più grande.",
   },
   /**
    * The owner/designer's switch between the Case history table and the library (Story 5.1),

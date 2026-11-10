@@ -19,7 +19,7 @@ export {
 export type { CollectionTagKind, CollectionTags, CollectionWrite, ItemGroup } from "@/modules/collection/domain/collection";
 export type { CollectionDetail, CollectionItem, CollectionSummary } from "@/modules/collection/application/collections";
 
-const useCases = () =>
+const collectionUseCases = () =>
   makeCollectionUseCases({
     collections: createSupabaseCollectionRepository(),
     listCases: () => caseStudy.list({}),
@@ -37,7 +37,7 @@ const useCases = () =>
  * `CASE_NOT_COLLECTABLE`; nothing is written on any error.
  */
 export function createCollection(actor: Actor, input: unknown): Promise<Result<CollectionWrite>> {
-  return useCases().create(actor, input);
+  return collectionUseCases().create(actor, input);
 }
 
 /**
@@ -45,7 +45,7 @@ export function createCollection(actor: Actor, input: unknown): Promise<Result<C
  * who created it, and when it changed. Call only after `authorize(actor, 'manage collections')`.
  */
 export function listCollections(): Promise<Result<CollectionSummary[]>> {
-  return useCases().list();
+  return collectionUseCases().list();
 }
 
 /**
@@ -56,7 +56,7 @@ export function listCollections(): Promise<Result<CollectionSummary[]>> {
  * deleted id.
  */
 export function getCollection(collectionId: unknown): Promise<Result<CollectionDetail>> {
-  return useCases().get(collectionId);
+  return collectionUseCases().get(collectionId);
 }
 
 /**
@@ -65,7 +65,7 @@ export function getCollection(collectionId: unknown): Promise<Result<CollectionD
  * collections')`. `INVALID_INPUT`, `COLLECTION_NOT_FOUND`, `STALE_COLLECTION`.
  */
 export function renameCollection(actor: Actor, input: unknown): Promise<Result<{ collectionId: string; version: number; name: string }>> {
-  return useCases().rename(actor, input);
+  return collectionUseCases().rename(actor, input);
 }
 
 /**
@@ -74,7 +74,7 @@ export function renameCollection(actor: Actor, input: unknown): Promise<Result<{
  * `authorize(actor, 'manage collections')`. `INVALID_INPUT`, `COLLECTION_NOT_FOUND`, `STALE_COLLECTION`.
  */
 export function retagCollection(actor: Actor, input: unknown): Promise<Result<{ collectionId: string; version: number; tags: CollectionTags }>> {
-  return useCases().retag(actor, input);
+  return collectionUseCases().retag(actor, input);
 }
 
 /**
@@ -82,7 +82,7 @@ export function retagCollection(actor: Actor, input: unknown): Promise<Result<{ 
  * after `authorize(actor, 'manage collections')`. `INVALID_INPUT`, `COLLECTION_NOT_FOUND`.
  */
 export function deleteCollection(actor: Actor, input: unknown): Promise<Result<void>> {
-  return useCases().remove(actor, input);
+  return collectionUseCases().remove(actor, input);
 }
 
 /**
@@ -92,7 +92,7 @@ export function deleteCollection(actor: Actor, input: unknown): Promise<Result<v
  * `STALE_COLLECTION`, `CASE_NOT_COLLECTABLE`, `COLLECTION_FULL`.
  */
 export function addCollectionItems(actor: Actor, input: unknown): Promise<Result<CollectionWrite>> {
-  return useCases().addItems(actor, input);
+  return collectionUseCases().addItems(actor, input);
 }
 
 /**
@@ -101,7 +101,7 @@ export function addCollectionItems(actor: Actor, input: unknown): Promise<Result
  * `authorize(actor, 'manage collections')`. `INVALID_INPUT`, `COLLECTION_NOT_FOUND`, `STALE_COLLECTION`.
  */
 export function removeCollectionItems(actor: Actor, input: unknown): Promise<Result<CollectionWrite>> {
-  return useCases().removeItems(actor, input);
+  return collectionUseCases().removeItems(actor, input);
 }
 
 /**
@@ -110,7 +110,7 @@ export function removeCollectionItems(actor: Actor, input: unknown): Promise<Res
  * `INVALID_INPUT`, `COLLECTION_NOT_FOUND`, `STALE_COLLECTION`.
  */
 export function moveCollectionGroup(actor: Actor, input: unknown): Promise<Result<CollectionWrite>> {
-  return useCases().moveGroup(actor, input);
+  return collectionUseCases().moveGroup(actor, input);
 }
 
 /**
@@ -119,5 +119,5 @@ export function moveCollectionGroup(actor: Actor, input: unknown): Promise<Resul
  * `INVALID_INPUT`, `COLLECTION_NOT_FOUND`, `STALE_COLLECTION`.
  */
 export function moveCollectionItem(actor: Actor, input: unknown): Promise<Result<CollectionWrite>> {
-  return useCases().moveItem(actor, input);
+  return collectionUseCases().moveItem(actor, input);
 }
