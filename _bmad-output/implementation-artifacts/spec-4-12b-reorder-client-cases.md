@@ -95,6 +95,23 @@ context:
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Saving only mounted cases drops unread or later-approved cases from the saved order (blind, edge) | medium | `moveCase` builds `caseIds` from mounted parts; `set_client_case_order` replaces the whole row; `casePartsOf` skips unreadable cases | patch |
+| 2 | `confirmedOrder` goes stale when parts change without a remount (edge) | low | Set once from the first render and on successful saves only | patch |
+| 3 | A failed order read breaks the whole file (blind, edge) | medium | `listClientCasesInOrder` returns `err` on `orders.find` failure | patch |
+| 4 | "Riprova" can never fix a refused save (blind, edge) | low | `INVALID_INPUT` / `CLIENT_NOT_FOUND` repeat with the same ids | patch |
+| 5 | Focus lost when a keyboard move is rolled back (blind) | low | `refocus` is set only on the keyboard move | patch |
+| 6 | Alt+↑/↓ swaps with a hidden row while filtering (blind, edge) | low | `projectIndex` uses the unfiltered list | patch |
+| 7 | Move hint only in `title`; wrong comment (blind) | low | `right-panel.tsx` uses `title`; `it.ts` says `aria-description` | patch |
+| 8 | Fingerprint key, `withCaseOrder`, sequential saves untested (gap, blind) | medium | The key is invisible to the page test; no helper or queue tests | patch |
+| 9 | Contradictory sprint-status comment (blind) | low | Says deferred, started and in review | patch |
+| 10 | A reorder in another tab doesn't show and can be overwritten (blind, edge) | low | Needs two tabs on the same client's file reordering at once; one owner/designer works a file at a time | reject |
+| 11 | Order saves invisible to the top bar and can be lost on exit (blind) | low | A save is one quick call; leaving within that instant is unlikely, and the next load shows the order actually saved | reject |
+| 12 | Drop line may flicker while dragging (blind) | low | Cosmetic; same handler pattern as the page thumbnails | reject |
+| 13 | No page test for a role without `manage clients` (blind, gap) | false | Every role that can open the page may manage clients (`policy.ts:64`); the branch is unreachable today | reject |
+| 14 | `set_client_case_order` doesn't check the actor id (blind) | low | Only the server action calls it, with the authenticated actor | reject |
+
 ## Verification
 
 **Commands:**
