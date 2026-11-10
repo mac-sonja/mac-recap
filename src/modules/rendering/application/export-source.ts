@@ -326,7 +326,11 @@ export async function readPackSources(deps: PackSourceDeps, clientId: string, fo
             },
           ];
     const parts = [...intro, ...cases];
-    const composed = composeParts(parts.map(composePartOf), format, { pack: true });
+    const composed = composeParts(
+      parts.map((p) => composePartOf(p)),
+      format,
+      { pack: true },
+    );
     const contents = parts.map((p) => p.content);
     return {
       format,

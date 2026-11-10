@@ -6,7 +6,7 @@ import type { Actor } from "@/modules/access";
 import type { CaseClientInfo, CaseStudy, CaseStudyRevision } from "@/modules/case-study";
 import { caseHistoryV2 } from "@/modules/generation";
 import type { DetailsForm } from "@/modules/material";
-import type { ExportSourceDeps } from "@/modules/rendering/application/export-source";
+import type { PackSourceDeps } from "@/modules/rendering/application/export-source";
 import { FORMAT_IDS } from "@/modules/rendering/domain/formats";
 import { ok } from "@/shared/result";
 
@@ -87,13 +87,19 @@ export const detailsForm = (over: Partial<DetailsForm> = {}): DetailsForm => ({
   ...over,
 });
 
-/** The reads of an approved case, each a spy; `over` replaces single ones. */
-export function sourceDeps(over: Partial<ExportSourceDeps> = {}) {
+/**
+ * The reads of an approved case, each a spy; `over` replaces single ones. Its client's pack
+ * (Story 5.9a) holds that one case and no intro.
+ */
+export function sourceDeps(over: Partial<PackSourceDeps> = {}) {
   return {
     getCase: vi.fn(async () => ok(caseStudy())),
     getLiveRevision: vi.fn(async () => ok<CaseStudyRevision | null>(revision())),
     getClientInfoForCase: vi.fn(async () => ok(clientInfo())),
     getDetailsForm: vi.fn(async () => ok(detailsForm())),
+    getClient: vi.fn(async () => ok({ id: CLIENT_ID, code: "LUM", name: "Lumen Srl" })),
+    getClientIntro: vi.fn(async () => ok<{ id: string } | null>(null)),
+    listClientCasesInOrder: vi.fn(async () => ok<CaseStudy[]>([caseStudy()])),
     ...over,
-  } satisfies ExportSourceDeps;
+  } satisfies PackSourceDeps;
 }
