@@ -35,13 +35,10 @@ export type SubjectKey = { caseId: string } | { clientIntroId: string };
 /** The id field an action takes for `subject`. */
 export const subjectKey = (subject: Subject): SubjectKey => (subject.kind === "case" ? { caseId: subject.id } : { clientIntroId: subject.id });
 
-/** What a fork sends (Story 4.9): the case and the `headVersion` read. */
-export interface ForkInput {
-  caseId: string;
-  expectedHeadVersion: number;
-}
+/** What a fork sends (Story 4.9): the subject's id (`subjectKey`; Story 4.11b: an intro too) and the `headVersion` read. */
+export type ForkInput = SubjectKey & { expectedHeadVersion: number };
 
-/** What a fork returns: the working copy's id and `version`, and the case's `headVersion` after it. */
+/** What a fork returns: the working copy's id and `version`, and the subject's `headVersion` after it. */
 export interface ForkResult {
   revisionId: string;
   version: number;
@@ -63,7 +60,7 @@ const stored = (formats: Formats): SaveInput["doc"]["formats"] =>
   Object.fromEntries(Object.entries(formats).map(([id, pages]) => [id, { pages }])) as SaveInput["doc"]["formats"];
 
 export interface UseDocumentOptions {
-  /** Whose head revision is edited (Story 4.11a): a case, or a client's intro (never forked). */
+  /** Whose head revision is edited (Story 4.11a): a case, or a client's intro (forked as a case is, Story 4.11b). */
   subject: Subject;
   revision: EditedRevision | null;
   /** The document's fields other than its pages, sent back unchanged. */
@@ -72,7 +69,7 @@ export interface UseDocumentOptions {
   save: (input: SaveInput) => Promise<ActionResult<{ version: number }>>;
   /** Someone else saved first, or the case can no longer be edited: read it again (no retry). */
   onStale: () => void;
-  /** Story 4.9: forks an Approvato case's head before its first save (`revision.fork`). */
+  /** Story 4.9: forks an Approvato case's (Story 4.11b: or intro's) head before its first save (`revision.fork`). */
   fork?: (input: ForkInput) => Promise<ActionResult<ForkResult>>;
   /** The case's `head_version` as read (approval's and the fork's compare-and-set). */
   headVersion?: number;
@@ -229,7 +226,7 @@ export function useDocument({ subject, revision, base, initial, save, onStale, f
       let forked: ActionResult<ForkResult> | null;
       const expected = head.current;
       try {
-        forked = fork === undefined || expected === undefined || subject.kind !== "case" ? null : await fork({ caseId: subject.id, expectedHeadVersion: expected });
+        forked = fork === undefined || expected === undefined ? null : await fork({ ...subjectKey(subject), expectedHeadVersion: expected });
       } catch {
         forked = null;
       }
@@ -407,9 +404,9 @@ export function useDocument({ subject, revision, base, initial, save, onStale, f
           let target = { revisionId: revisionId.current ?? revision.id, version: version.current };
           // Story 4.9: still on the approved revision: fork first, then save to the copy.
           if (needsFork.current) {
-            if (fork === undefined || head.current === undefined || subject.kind !== "case") return;
+            if (fork === undefined || head.current === undefined) return;
             const expected = head.current;
-            const forked = await fork({ caseId: subject.id, expectedHeadVersion: expected });
+            const forked = await fork({ ...subjectKey(subject), expectedHeadVersion: expected });
             if (!forked.ok || !createdByThisFork(forked.value, expected)) return;
             target = { revisionId: forked.value.revisionId, version: forked.value.version };
           }

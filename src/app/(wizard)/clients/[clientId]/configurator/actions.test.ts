@@ -2,11 +2,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import { err, ok } from "@/shared/result";
 
-const { getActor, saveIntroUseCase, approveIntroUseCase, getClientIntroById, listClientMaterial, listCases, liveAssetIds, listAssets, getRendition, getClientRendition } =
-  vi.hoisted(() => ({
+const {
+  getActor,
+  saveIntroUseCase,
+  approveIntroUseCase,
+  forkIntroUseCase,
+  discardIntroUseCase,
+  getClientIntroById,
+  listClientMaterial,
+  listCases,
+  liveAssetIds,
+  listAssets,
+  getRendition,
+  getClientRendition,
+} = vi.hoisted(() => ({
     getActor: vi.fn(),
     saveIntroUseCase: vi.fn(),
     approveIntroUseCase: vi.fn(),
+    forkIntroUseCase: vi.fn(),
+    discardIntroUseCase: vi.fn(),
     getClientIntroById: vi.fn(),
     listClientMaterial: vi.fn(),
     listCases: vi.fn(),
@@ -24,13 +38,15 @@ vi.mock("@/modules/access", async (importOriginal) => ({
 vi.mock("@/modules/case-study", () => ({
   saveIntroRevisionDoc: saveIntroUseCase,
   approveIntro: approveIntroUseCase,
+  forkIntroHead: forkIntroUseCase,
+  discardIntroHead: discardIntroUseCase,
   getClientIntroById,
   listClientMaterial,
   list: listCases,
 }));
 vi.mock("@/modules/material", () => ({ liveAssetIds, listAssets, getRendition, getClientRendition }));
 
-const { approveIntro, getIntroRenderAssets, saveIntroRevisionDoc } = await import("./actions");
+const { approveIntro, discardIntroChanges, forkIntroHead, getIntroRenderAssets, saveIntroRevisionDoc, updateApprovedIntroVersion } = await import("./actions");
 
 const actor = (role: Actor["role"]): Actor => ({ id: "00000000-0000-4000-8000-000000000002", email: "a@b.it", displayName: "A", role });
 const INTRO_ID = "44444444-0000-4000-8000-000000000001";
@@ -40,6 +56,7 @@ const input = { clientIntroId: INTRO_ID, revisionId: "bbbbbbbb-0000-4000-8000-00
 beforeEach(() => {
   vi.clearAllMocks();
   getActor.mockResolvedValue(ok(actor("owner_designer")));
+  getClientIntroById.mockResolvedValue(ok({ id: INTRO_ID, clientId: CLIENT_ID, status: "in_review" }));
 });
 
 describe("saveIntroRevisionDoc (Story 4.11a)", () => {
@@ -84,6 +101,78 @@ describe("approveIntro (Story 4.11a)", () => {
   it("passes MATERIAL_MISSING's files on", async () => {
     approveIntroUseCase.mockResolvedValue(err({ code: "MATERIAL_MISSING", message: "m", details: { assetIds: ["x"] } }));
     expect(await approveIntro(approval)).toMatchObject({ ok: false, status: 400, error: { code: "MATERIAL_MISSING", assetIds: ["x"] } });
+  });
+
+  it("refuses an approved intro (its copy goes through Aggiorna), writing nothing", async () => {
+    getClientIntroById.mockResolvedValue(ok({ id: INTRO_ID, clientId: CLIENT_ID, status: "approved" }));
+    expect(await approveIntro(approval)).toMatchObject({ ok: false, status: 409, error: { code: "CASE_NOT_APPROVABLE" } });
+    expect(approveIntroUseCase).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unknown intro with 404", async () => {
+    getClientIntroById.mockResolvedValue(err({ code: "NOT_FOUND", message: "m" }));
+    expect(await approveIntro(approval)).toMatchObject({ ok: false, status: 404 });
+    expect(approveIntroUseCase).not.toHaveBeenCalled();
+  });
+});
+
+describe("editing an approved intro (Story 4.11b)", () => {
+  const COPY_ID = "bbbbbbbb-0000-4000-8000-000000000002";
+  const update = { clientIntroId: INTRO_ID, revisionId: COPY_ID, expectedRevisionVersion: 2, expectedHeadVersion: 2, overflow: {} };
+  const discard = { clientIntroId: INTRO_ID, revisionId: COPY_ID, expectedHeadVersion: 2 };
+
+  beforeEach(() => {
+    getClientIntroById.mockResolvedValue(ok({ id: INTRO_ID, clientId: CLIENT_ID, status: "approved" }));
+  });
+
+  it("forkIntroHead forks with the actor and returns the copy", async () => {
+    forkIntroUseCase.mockResolvedValue(ok({ revisionId: COPY_ID, version: 0, headVersion: 2 }));
+    const fork = { clientIntroId: INTRO_ID, expectedHeadVersion: 1 };
+    expect(await forkIntroHead(fork)).toEqual({ ok: true, value: { revisionId: COPY_ID, version: 0, headVersion: 2 } });
+    expect(forkIntroUseCase).toHaveBeenCalledWith(actor("owner_designer"), fork);
+  });
+
+  it("forkIntroHead maps STALE_HEAD to 409", async () => {
+    forkIntroUseCase.mockResolvedValue(err({ code: "STALE_HEAD", message: "m" }));
+    expect(await forkIntroHead({ clientIntroId: INTRO_ID, expectedHeadVersion: 1 })).toMatchObject({ ok: false, status: 409, error: { code: "STALE_HEAD" } });
+  });
+
+  it("updateApprovedIntroVersion runs the approval use case on the copy with the cases' live files", async () => {
+    approveIntroUseCase.mockResolvedValue(ok({ id: COPY_ID, status: "approved" }));
+    expect(await updateApprovedIntroVersion(update)).toEqual({ ok: true, value: undefined });
+    expect(approveIntroUseCase).toHaveBeenCalledWith(actor("owner_designer"), update, liveAssetIds);
+  });
+
+  it("updateApprovedIntroVersion refuses an intro Da approvare, writing nothing", async () => {
+    getClientIntroById.mockResolvedValue(ok({ id: INTRO_ID, clientId: CLIENT_ID, status: "in_review" }));
+    expect(await updateApprovedIntroVersion(update)).toMatchObject({ ok: false, status: 409, error: { code: "CASE_NOT_APPROVABLE" } });
+    expect(approveIntroUseCase).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["OVERFLOW_NOT_CLEARED", 400],
+    ["MATERIAL_MISSING", 400],
+    ["STALE_REVISION", 409],
+    ["STALE_HEAD", 409],
+  ] as const)("updateApprovedIntroVersion maps %s to %i", async (code, status) => {
+    approveIntroUseCase.mockResolvedValue(err({ code, message: "m" }));
+    expect(await updateApprovedIntroVersion(update)).toMatchObject({ ok: false, status, error: { code } });
+  });
+
+  it("discardIntroChanges discards with the actor", async () => {
+    discardIntroUseCase.mockResolvedValue(ok({ id: "bbbbbbbb-0000-4000-8000-000000000001", status: "approved" }));
+    expect(await discardIntroChanges(discard)).toEqual({ ok: true, value: undefined });
+    expect(discardIntroUseCase).toHaveBeenCalledWith(actor("owner_designer"), discard);
+  });
+
+  it.each([
+    ["forkIntroHead", () => forkIntroHead({ clientIntroId: INTRO_ID, expectedHeadVersion: 1 }), forkIntroUseCase],
+    ["updateApprovedIntroVersion", () => updateApprovedIntroVersion(update), approveIntroUseCase],
+    ["discardIntroChanges", () => discardIntroChanges(discard), discardIntroUseCase],
+  ] as const)("%s refuses account/sales/social with 403 before any write", async (_name, call, useCase) => {
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
+    expect(await call()).toMatchObject({ ok: false, status: 403, error: { code: "FORBIDDEN" } });
+    expect(useCase).not.toHaveBeenCalled();
   });
 });
 

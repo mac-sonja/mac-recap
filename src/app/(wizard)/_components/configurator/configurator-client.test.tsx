@@ -122,6 +122,10 @@ function setup({
   onApprove,
   onRenderAssets,
   actions = fieldActions(),
+  fork,
+  onFork,
+  onUpdateApproved,
+  onDiscard,
 }: {
   status?: ConfiguratorProps["header"]["status"];
   editable?: boolean;
@@ -129,11 +133,16 @@ function setup({
   onApprove?: ConfiguratorProps["onApprove"];
   onRenderAssets?: ConfiguratorProps["onRenderAssets"];
   actions?: ReturnType<typeof fieldActions>;
+  /** Story 4.11b: the head is the approved revision, forked on the first save. */
+  fork?: boolean;
+  onFork?: ConfiguratorProps["onFork"];
+  onUpdateApproved?: ConfiguratorProps["onUpdateApproved"];
+  onDiscard?: ConfiguratorProps["onDiscard"];
 } = {}) {
   render(
     <Configurator
       subject={{ kind: "client_intro", id: INTRO_ID, clientId: CLIENT_ID }}
-      revision={{ id: REVISION_ID, version: 4, editable, kind: "client_intro" }}
+      revision={{ id: REVISION_ID, version: 4, editable, kind: "client_intro", fork }}
       onSave={onSave}
       header={{ name: "Lumen Srl · Pagine cliente", code: "LUM", status }}
       back={{ href: BACK, label: dict.configurator.clientBack }}
@@ -151,6 +160,9 @@ function setup({
       onApprove={onApprove}
       onRenderAssets={onRenderAssets}
       headVersion={3}
+      onFork={onFork}
+      onUpdateApproved={onUpdateApproved}
+      onDiscard={onDiscard}
       clientFiles={CASE_MEDIA.map((f) => ({ id: f.id, name: f.originalFileName }))}
       fields={FIELDS}
       fieldOptions={OPTIONS}
@@ -298,7 +310,7 @@ describe("Configurator in client mode (Story 4.11a)", () => {
     expect(bindings).toContain('"field":"testimonialQuote"');
   });
 
-  it("an Approvato intro opens read-only: no Approva, nothing typed", () => {
+  it("an Approvato intro the page marks not editable opens read-only: no Approva, nothing typed", () => {
     const onSave = vi.fn(savedOk);
     setup({ status: "approved", editable: false, onSave });
     const header = document.querySelector<HTMLElement>("header")!;
@@ -307,6 +319,168 @@ describe("Configurator in client mode (Story 4.11a)", () => {
     fireEvent.doubleClick(node(head));
     expect(node(head).hasAttribute("contenteditable")).toBe(false);
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  /** Story 4.11b: an Approvato intro, edited on a working copy that goes online only through Aggiorna. */
+  describe("an approved intro (Story 4.11b)", () => {
+    const u = dict.configurator.approvedEdit;
+    const COPY_ID = "dddddddd-0000-4000-8000-000000000002";
+    type ForkFn = NonNullable<ConfiguratorProps["onFork"]>;
+    type UpdateFn = NonNullable<ConfiguratorProps["onUpdateApproved"]>;
+    type DiscardFn = NonNullable<ConfiguratorProps["onDiscard"]>;
+    const header = () => document.querySelector<HTMLElement>("header")!;
+    const updateButton = () => within(header()).queryByRole("button", { name: u.update, hidden: true });
+    const discardButton = () => within(header()).queryByRole("button", { name: u.discard, hidden: true });
+    const dialog = () => document.querySelector<HTMLElement>("dialog");
+    const tick = async (ms = 1_000) => {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+    };
+    const addPage = () => fireEvent.click(button(dict.configurator.pages.add, canvas()));
+
+    function approved(over: { fork?: boolean; onFork?: ForkFn; onUpdateApproved?: UpdateFn; onDiscard?: DiscardFn } = {}) {
+      const onSave = vi.fn(savedOk);
+      const onFork = vi.fn<ForkFn>(over.onFork ?? (async () => ({ ok: true, value: { revisionId: COPY_ID, version: 0, headVersion: 4 } })));
+      const onUpdateApproved = vi.fn<UpdateFn>(over.onUpdateApproved ?? (async () => ({ ok: true, value: undefined })));
+      const onDiscard = vi.fn<DiscardFn>(over.onDiscard ?? (async () => ({ ok: true, value: undefined })));
+      const onApprove = vi.fn<NonNullable<ConfiguratorProps["onApprove"]>>();
+      const actions = fieldActions();
+      setup({ status: "approved", fork: over.fork ?? true, onSave, onFork, onUpdateApproved, onDiscard, onApprove, actions });
+      return { onSave, onFork, onUpdateApproved, onDiscard, onApprove, actions };
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    });
+
+    it("opens editable under the banner, with no Approva, Aggiorna or Scarta, and never forks by opening", async () => {
+      const { onFork, onSave } = approved();
+      await tick();
+      expect(document.querySelector('[data-editable="true"]')).not.toBeNull();
+      expect(screen.getByText(u.banner)).toBeTruthy();
+      expect(updateButton()).toBeNull();
+      expect(discardButton()).toBeNull();
+      expect(within(header()).queryByRole("button", { name: dict.configurator.approve, hidden: true })).toBeNull();
+      expect(onFork).not.toHaveBeenCalled();
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it("the first edit forks once by clientIntroId, saves to the copy, and Aggiorna and Scarta appear; later edits reuse the copy", async () => {
+      const { onFork, onSave } = approved();
+      addPage();
+      await tick();
+      expect(onFork).toHaveBeenCalledExactlyOnceWith({ clientIntroId: INTRO_ID, expectedHeadVersion: 3 });
+      expect(onSave.mock.calls[0]![0]).toMatchObject({ clientIntroId: INTRO_ID, revisionId: COPY_ID, expectedVersion: 0 });
+      expect(updateButton()).not.toBeNull();
+      expect(discardButton()).not.toBeNull();
+      addPage();
+      await tick();
+      expect(onFork).toHaveBeenCalledTimes(1);
+      expect(onSave.mock.calls.map((call) => [call[0].revisionId, call[0].expectedVersion])).toEqual([
+        [COPY_ID, 0],
+        [COPY_ID, 1],
+      ]);
+    });
+
+    it("a stale fork reloads and saves nothing", async () => {
+      const { onSave } = approved({ onFork: async () => ({ ok: false, status: 409, error: { code: "STALE_HEAD", message: "m" } }) });
+      addPage();
+      await tick();
+      expect(refresh).toHaveBeenCalled();
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it("reopened with a copy pending: Aggiorna and Scarta show at once, and edits save to the copy without a fork", async () => {
+      const { onFork, onSave } = approved({ fork: false });
+      await tick();
+      expect(updateButton()).not.toBeNull();
+      expect(discardButton()).not.toBeNull();
+      addPage();
+      await tick();
+      expect(onFork).not.toHaveBeenCalled();
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ clientIntroId: INTRO_ID, revisionId: REVISION_ID, expectedVersion: 4 }));
+    });
+
+    it("Aggiorna asks in the intro's words, then updates the copy by clientIntroId and stays on the page", async () => {
+      const { onUpdateApproved, onApprove } = approved();
+      addPage();
+      await tick();
+      fireEvent.click(updateButton()!);
+      expect(dialog()!.textContent).toContain(u.updateTitle);
+      expect(dialog()!.textContent).toContain(dict.configurator.clientMode.updateDescription);
+      expect(dialog()!.textContent).not.toContain(u.updateDescription);
+      fireEvent.click(button(u.updateConfirm, dialog()!));
+      await tick();
+      expect(onUpdateApproved).toHaveBeenCalledExactlyOnceWith({
+        clientIntroId: INTRO_ID,
+        revisionId: COPY_ID,
+        expectedRevisionVersion: 1,
+        expectedHeadVersion: 4,
+        overflow: Object.fromEntries(FORMAT_IDS.map((id) => [id, false])),
+      });
+      expect(onApprove).not.toHaveBeenCalled();
+      expect(updateButton()).toBeNull();
+      expect(discardButton()).toBeNull();
+      expect(status().textContent).toBe(u.updated);
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it("a stale update names the intro and reloads, changing nothing", async () => {
+      approved({ fork: false, onUpdateApproved: async () => ({ ok: false, status: 409, error: { code: "STALE_HEAD", message: "m" } }) });
+      await tick();
+      fireEvent.click(updateButton()!);
+      fireEvent.click(button(u.updateConfirm, dialog()!));
+      await tick();
+      expect(status().textContent).toBe(dict.configurator.clientMode.stale);
+      expect(refresh).toHaveBeenCalled();
+      expect(updateButton()).not.toBeNull();
+    });
+
+    it("Scarta asks first, then drops the copy by clientIntroId and reads the intro again", async () => {
+      const { onDiscard } = approved();
+      addPage();
+      await tick();
+      fireEvent.click(discardButton()!);
+      expect(dialog()!.textContent).toContain(u.discardTitle);
+      expect(dialog()!.textContent).toContain(u.discardDescription);
+      fireEvent.click(button(u.discardConfirm, dialog()!));
+      await tick();
+      expect(onDiscard).toHaveBeenCalledExactlyOnceWith({ clientIntroId: INTRO_ID, revisionId: COPY_ID, expectedHeadVersion: 4 });
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it("Annulla in the Scarta dialog changes nothing", async () => {
+      const { onDiscard } = approved({ fork: false });
+      await tick();
+      fireEvent.click(discardButton()!);
+      fireEvent.click(button(u.cancel, dialog()!));
+      await tick();
+      expect(onDiscard).not.toHaveBeenCalled();
+      expect(refresh).not.toHaveBeenCalled();
+      expect(discardButton()).not.toBeNull();
+    });
+
+    it("a stale discard names the intro and reloads", async () => {
+      approved({ fork: false, onDiscard: async () => ({ ok: false, status: 409, error: { code: "STALE_HEAD", message: "m" } }) });
+      await tick();
+      fireEvent.click(discardButton()!);
+      fireEvent.click(button(u.discardConfirm, dialog()!));
+      await tick();
+      expect(status().textContent).toBe(dict.configurator.clientMode.stale);
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it("the client's name stays read-only: a double-click gives the existing message and saves nothing", async () => {
+      const { onFork, actions } = approved();
+      const name = find(bound("name"));
+      fireEvent.doubleClick(node(name));
+      expect(node(name).hasAttribute("contenteditable")).toBe(false);
+      expect(status().textContent).toBe(dict.configurator.editSoon);
+      await tick();
+      expect(actions.updateClient).not.toHaveBeenCalled();
+      expect(onFork).not.toHaveBeenCalled();
+    });
   });
 
   describe("the Media tab", () => {

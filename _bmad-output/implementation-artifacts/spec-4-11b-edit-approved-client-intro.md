@@ -2,7 +2,7 @@
 title: 'Story 4.11b: edit an approved client intro'
 type: 'feature'
 created: '2026-11-10'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'adaf0e433dd648936069dcf7e475853debbebcdd'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -74,18 +74,23 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `supabase/migrations/20261110120000_case_study_intro_edit_approved.sql` -- `fork_intro_head`, `update_approved_intro_revision`, `discard_intro_head`; `save_intro_revision_doc` replaced to accept an approved intro's working copy; then `npm run db:types`.
-- [ ] `src/modules/case-study/**` (+ unit and db tests) -- the intro use cases and exports.
-- [ ] `src/app/(wizard)/clients/[clientId]/configurator/page.tsx`, `actions.ts` (+ tests) -- the approved-intro path and handlers.
-- [ ] `src/app/(wizard)/_components/configurator/*` (+ tests) -- fork, update and discard keyed by subject; intro wording.
-- [ ] `src/shared/i18n/it.ts`, `test/permissions.test.ts`.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 4.11 to `review` (4.11a and 4.11b both built).
+- [x] `supabase/migrations/20261110120000_case_study_intro_edit_approved.sql` -- `fork_intro_head`, `update_approved_intro_revision`, `discard_intro_head`; `save_intro_revision_doc` replaced to accept an approved intro's working copy; then `npm run db:types`.
+- [x] `src/modules/case-study/**` (+ unit and db tests) -- the intro use cases and exports.
+- [x] `src/app/(wizard)/clients/[clientId]/configurator/page.tsx`, `actions.ts` (+ tests) -- the approved-intro path and handlers.
+- [x] `src/app/(wizard)/_components/configurator/*` (+ tests) -- fork, update and discard keyed by subject; intro wording.
+- [x] `src/shared/i18n/it.ts`, `test/permissions.test.ts`.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 4.11 to `review` (4.11a and 4.11b both built).
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:db` and `build`, when they run, then they pass.
 - Given the case configurator's existing tests, when they run, then they pass unchanged.
 
 ## Implementation Notes
+
+- **Server.** Migration `20261110120000_case_study_intro_edit_approved.sql`: `fork_intro_head`, `update_approved_intro_revision`, `discard_intro_head` (mirrors of 4.9's `fork_head`, `update_approved_revision`, `discard_head`, with the intro row locked through its live client and `client_event` in place of `case_event`), and `save_intro_revision_doc` replaced to accept an approved intro whose head is a working copy other than `approved_revision_id`. No function touches `client_intro.status` or the `intro_transition` flag. `db.types.ts` regenerated with `npm run db:types`.
+- **Module.** `ClientIntroRepository` gains `updateApproved`, `forkHead`, `discardHead`; `makeApproveIntro` picks `updateApproved` when the intro is approved, after the same overflow and material checks (so the module still exports one `approveIntro`); new `makeForkIntroHead` / `makeDiscardIntroHead`, exported as `forkIntroHead` / `discardIntroHead`.
+- **Actions.** `forkIntroHead` (`edit`), `updateApprovedIntroVersion` (`update approved version`, refuses an intro that isn't approved) and `discardIntroChanges` (`discard`); `approveIntro` now refuses an approved intro, so neither path crosses into the other.
+- **Configurator.** `ForkInput` is `SubjectKey & { expectedHeadVersion }`; the fork, Aggiorna and Scarta send `subjectKey(subject)`. In client mode the Aggiorna dialog reads `clientMode.updateDescription` and stale update/discard messages read `clientMode.stale`; the banner, buttons and other dialogs are 4.9's. The client page derives `fork` / `pendingCopy` / `editable` as the case page does.
 
 ## Spec Change Log
 

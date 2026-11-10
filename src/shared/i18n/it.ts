@@ -999,6 +999,8 @@ export const it = {
     clientMode: {
       /** Approva's dialog. */
       approvalDescription: "Una volta approvata, l’introduzione si può usare nei materiali del cliente.",
+      /** Story 4.11b: Aggiorna la versione approvata's dialog, on an approved intro. */
+      updateDescription: "Le modifiche vanno online: i materiali del cliente mostrano la nuova versione.",
       /** Someone changed the intro meanwhile (save or approval): the page reloads. */
       stale: "L’introduzione è cambiata nel frattempo: la ricarichiamo.",
       /** A result row the page shows but the client doesn't have. */

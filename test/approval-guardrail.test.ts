@@ -50,6 +50,8 @@ describe("approval happens only through a person's call to approve (Story 4.8)",
     expect(overflow).toBeGreaterThan(0);
     expect(material).toBeGreaterThan(overflow);
     expect(write).toBeGreaterThan(material);
+    // Story 4.11b: **Aggiorna la versione approvata** on an intro writes through the same checks.
+    expect(body.indexOf("deps.intros.updateApproved(")).toBeGreaterThan(material);
   });
 
   it("no source moves a case to approved through the generic transition", () => {
@@ -110,5 +112,31 @@ describe("no path from Approvato back to Da approvare or Bozza (Story 4.9)", () 
     const api = Object.keys(await import("@/modules/case-study"));
     expect(api.filter((name) => /reopen|unapprove|revert|backTo|toDraft|toReview/i.test(name))).toEqual([]);
     expect(api).toEqual(expect.arrayContaining(["forkHead", "discardHead", "approve"]));
+  });
+});
+
+// Story 4.11b: an approved intro is edited the same way. Its fork, update and discard never
+// move it out of Approvato.
+describe("no path from an approved intro back to Da approvare (Story 4.11b)", () => {
+  const migrations = () => files("supabase/migrations", /\.sql$/);
+
+  it("the intro edit-approved migration never changes an intro's status", () => {
+    const sql = read("supabase/migrations/20261110120000_case_study_intro_edit_approved.sql");
+    expect(sql).not.toMatch(/intro_transition/);
+    expect(sql).not.toMatch(/update\s+public\.client_intro\s+set[^;]*\bstatus\s*=/i);
+    expect(sql).not.toMatch(/case_event/);
+  });
+
+  it("only the intro transition and the intro approval write client_intro.status", () => {
+    const setters = migrations().filter((rel) => /set_config\('mac_recap\.intro_transition', 'on'/.test(read(rel)));
+    expect(setters.sort()).toEqual([
+      "supabase/migrations/20261106120000_case_study_client_intro.sql",
+      "supabase/migrations/20261107120000_case_study_intro_edit_approve.sql",
+    ]);
+  });
+
+  it("the module's API forks and discards an intro's copy, with nothing that goes back", async () => {
+    const api = Object.keys(await import("@/modules/case-study"));
+    expect(api).toEqual(expect.arrayContaining(["forkIntroHead", "discardIntroHead", "approveIntro"]));
   });
 });

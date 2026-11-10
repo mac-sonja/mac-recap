@@ -10,7 +10,12 @@ import {
   type Revision,
   type RevisionSubject,
 } from "@/modules/case-study/domain/revision";
-import { approveIntroInputSchema, saveIntroRevisionDocInputSchema } from "@/modules/case-study/domain/client-intro";
+import {
+  approveIntroInputSchema,
+  discardIntroHeadInputSchema,
+  forkIntroHeadInputSchema,
+  saveIntroRevisionDocInputSchema,
+} from "@/modules/case-study/domain/client-intro";
 import { parseInput } from "@/modules/case-study/domain/validation";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import type { ClientIntroRepository } from "@/modules/case-study/ports/client-intro-repository";
@@ -320,7 +325,7 @@ export function makeDiscardHead(deps: { revisions: RevisionRepository }) {
 
 export interface IntroRevisionDeps {
   revisions: Pick<RevisionRepository, "findById">;
-  intros: Pick<ClientIntroRepository, "findById" | "saveDoc" | "approve">;
+  intros: Pick<ClientIntroRepository, "findById" | "saveDoc" | "approve" | "updateApproved">;
   cases: Pick<CaseStudyRepository, "list">;
   clients: Pick<ClientRepository, "listAssets">;
   caseAssetIds: CaseAssetIds;
@@ -363,7 +368,8 @@ async function introRevisionOf(deps: IntroRevisionDeps, clientIntroId: string, r
  * client event. The media guardrail allows the client's files and the live files of the
  * client's non-deleted cases (`ASSET_NOT_ALLOWED` otherwise); references the revision already
  * has are kept. The caller has authorized the actor to `edit`; the database checks the intro
- * is `in_review`.
+ * is `in_review`, or approved with a working copy as its head (Story 4.11b: the approved
+ * revision itself is never written).
  */
 export function makeSaveIntroRevisionDoc(deps: IntroRevisionDeps) {
   return async function saveIntroRevisionDoc(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
@@ -408,9 +414,12 @@ export function makeSaveIntroRevisionDoc(deps: IntroRevisionDeps) {
  * `OVERFLOW_NOT_CLEARED`); every file it references must be a file of the client or a live
  * file of one of its non-deleted cases (else `MATERIAL_MISSING`, naming up to 10). Then, in
  * one transaction, the revision and the intro become `approved` with `approved_revision_id`,
- * a `transition` and a `revision_approved` client event. Only an `in_review` intro
- * (`CASE_NOT_APPROVABLE`); editing an approved intro comes with Story 4.11b. The caller has
- * authorized the actor to `approve`.
+ * a `transition` and a `revision_approved` client event. The caller has authorized the
+ * actor to `approve`.
+ *
+ * Story 4.11b: on an approved intro the same checks run on its working copy (the head),
+ * which then becomes the approved revision while the previous one is superseded (**Aggiorna
+ * la versione approvata**); the intro stays approved, with no path back to Da approvare.
  */
 export function makeApproveIntro(deps: IntroRevisionDeps) {
   return async function approveIntro(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
@@ -438,8 +447,46 @@ export function makeApproveIntro(deps: IntroRevisionDeps) {
       return err({ code: "MATERIAL_MISSING", message: "The revision references a file that is no longer there.", details: { revisionId, assetIds: missing.slice(0, 10) } });
     }
 
-    const approved = await deps.intros.approve({ clientIntroId, revisionId, expectedRevisionVersion, expectedHeadVersion, actorId: actor.id });
+    // Approvato is terminal: an approved intro's copy replaces its approved version (Story 4.11b), the intro stays approved.
+    const approval = { clientIntroId, revisionId, expectedRevisionVersion, expectedHeadVersion, actorId: actor.id };
+    const approved = found.value.intro.status === "approved" ? await deps.intros.updateApproved(approval) : await deps.intros.approve(approval);
     if (!approved.ok) return approved;
     return upgraded(approved.value);
+  };
+}
+
+/**
+ * Forks the head of an approved client intro (Story 4.11b, as `makeForkHead` for a case):
+ * the first edit's working copy of the approved revision, made the head by compare-and-set
+ * on `headVersion`; or the copy that already exists, with nothing written (idempotent). Live
+ * reads keep returning the approved revision. One `revision_forked` client event. The caller
+ * has authorized the actor to `edit`. Errors: `INVALID_INPUT`, then the repository's
+ * (`NOT_FOUND`, `CASE_NOT_EDITABLE`, `REVISION_NOT_WRITABLE`, `STALE_HEAD`).
+ */
+export function makeForkIntroHead(deps: { intros: Pick<ClientIntroRepository, "forkHead"> }) {
+  return async function forkIntroHead(actor: Actor, input: unknown): Promise<Result<ForkedHead>> {
+    const parsed = parseInput(forkIntroHeadInputSchema, input);
+    if (!parsed.ok) return parsed;
+    const forked = await deps.intros.forkHead({ ...parsed.value, actorId: actor.id });
+    if (!forked.ok) return forked;
+    return ok({ revisionId: forked.value.revision.id, version: forked.value.revision.version, headVersion: forked.value.headVersion });
+  };
+}
+
+/**
+ * Discards an approved client intro's working copy (Story 4.11b, as `makeDiscardHead` for a
+ * case): the copy `superseded` and the head back on the approved revision, by compare-and-set
+ * on `headVersion`, with one `revision_discarded` client event. The intro stays approved.
+ * Returns the approved revision. The caller has authorized the actor to `discard`. Errors:
+ * `INVALID_INPUT`, then the repository's (`NOT_FOUND`, `STALE_HEAD`, `CASE_NOT_EDITABLE`,
+ * `REVISION_NOT_WRITABLE`).
+ */
+export function makeDiscardIntroHead(deps: { intros: Pick<ClientIntroRepository, "discardHead"> }) {
+  return async function discardIntroHead(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+    const parsed = parseInput(discardIntroHeadInputSchema, input);
+    if (!parsed.ok) return parsed;
+    const discarded = await deps.intros.discardHead({ ...parsed.value, actorId: actor.id });
+    if (!discarded.ok) return discarded;
+    return upgraded(discarded.value);
   };
 }

@@ -244,6 +244,44 @@ describe("useDocument", () => {
   });
 });
 
+describe("useDocument on an approved client intro (Story 4.11b)", () => {
+  const INTRO = "44444444-0000-4000-8000-000000000001";
+  const APPROVED = "dddddddd-0000-4000-8000-000000000001";
+  const COPY = "dddddddd-0000-4000-8000-000000000002";
+  type Fork = NonNullable<UseDocumentOptions["fork"]>;
+  const fresh: Fork = async (input) => ({ ok: true, value: { revisionId: COPY, version: 0, headVersion: input.expectedHeadVersion + 1 } });
+  const approvedIntro = (fork: Fork) =>
+    setup({
+      subject: { kind: "client_intro", id: INTRO, clientId: "cccccccc-0000-4000-8000-000000000001" },
+      base: { schemaVersion: 2, kind: "client_intro", template: "mac-client@1" },
+      revision: { id: APPROVED, version: 2, editable: true, fork: true },
+      headVersion: 3,
+      fork,
+    });
+
+  it("the first save forks by clientIntroId, then saves to the copy", async () => {
+    const fork = vi.fn<Fork>(fresh);
+    const { hook, save } = approvedIntro(fork);
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(fork).toHaveBeenCalledExactlyOnceWith({ clientIntroId: INTRO, expectedHeadVersion: 3 });
+    expect(save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ clientIntroId: INTRO, revisionId: COPY, expectedVersion: 0 }));
+    expect(hook.result.current.forkPending).toBe(false);
+  });
+
+  it("an edit pending at unmount forks by clientIntroId, then saves to the copy", async () => {
+    const fork = vi.fn<Fork>(fresh);
+    const { hook, save } = approvedIntro(fork);
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    hook.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(fork).toHaveBeenCalledExactlyOnceWith({ clientIntroId: INTRO, expectedHeadVersion: 3 });
+    expect(save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ clientIntroId: INTRO, revisionId: COPY, expectedVersion: 0 }));
+  });
+});
+
 describe("useDocument on an approved case (Story 4.9)", () => {
   const CASE = "aaaaaaaa-0000-4000-8000-000000000001";
   const APPROVED = "dddddddd-0000-4000-8000-000000000001";

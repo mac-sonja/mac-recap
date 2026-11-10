@@ -26,7 +26,14 @@ vi.mock("next/navigation", () => ({
   }),
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
 }));
-vi.mock("./actions", () => ({ saveIntroRevisionDoc: vi.fn(), approveIntro: vi.fn(), getIntroRenderAssets: vi.fn() }));
+vi.mock("./actions", () => ({
+  saveIntroRevisionDoc: vi.fn(),
+  approveIntro: vi.fn(),
+  getIntroRenderAssets: vi.fn(),
+  forkIntroHead: vi.fn(),
+  updateApprovedIntroVersion: vi.fn(),
+  discardIntroChanges: vi.fn(),
+}));
 vi.mock("@/app/(tool)/clients/actions", () => ({
   updateClient: vi.fn(),
   addClientSector: vi.fn(),
@@ -184,14 +191,17 @@ describe("ClientConfiguratorPage (Story 4.11a)", () => {
     expect(getEditableRevision).toHaveBeenCalledWith({ kind: "client_intro", id: INTRO_ID });
     const props = lastProps();
     expect(props.subject).toEqual({ kind: "client_intro", id: INTRO_ID, clientId: CLIENT_ID });
-    expect(props.revision).toEqual({ id: HEAD_ID, version: 2, editable: true, kind: "client_intro" });
+    expect(props.revision).toEqual({ id: HEAD_ID, version: 2, editable: true, kind: "client_intro", fork: false });
     expect(props.header).toEqual({ name: fill(dict.configurator.clientTitle, { name: "Lumen Srl" }), code: "LUM", status: "in_review" });
     expect(props.back).toEqual({ href: `/clients/${CLIENT_ID}`, label: dict.configurator.clientBack });
     expect(props.onSave).toBe(actions.saveIntroRevisionDoc);
     expect(props.onApprove).toBe(actions.approveIntro);
     expect(props.onRenderAssets).toBe(actions.getIntroRenderAssets);
     expect(props.headVersion).toBe(3);
-    expect(props.onFork).toBeUndefined();
+    // Story 4.11b: the approved-intro handlers, keyed by the intro.
+    expect(props.onFork).toBe(actions.forkIntroHead);
+    expect(props.onUpdateApproved).toBe(actions.updateApprovedIntroVersion);
+    expect(props.onDiscard).toBe(actions.discardIntroChanges);
     // Introduzione and Chiusura group the pages.
     expect(html).toContain(dict.configurator.clientSections.intro);
     expect(html).toContain(dict.configurator.clientSections.outro);
@@ -257,12 +267,30 @@ describe("ClientConfiguratorPage (Story 4.11a)", () => {
     expect(lastProps().values).toMatchObject({ client: { sector: "illuminazione" } });
   });
 
-  it("opens an Approvato intro read-only", async () => {
+  it("opens an Approvato intro editable on its approved revision, forked on the first save (Story 4.11b)", async () => {
     getClientIntro.mockResolvedValue(ok(intro("approved")));
     getEditableRevision.mockResolvedValue(ok(head("approved")));
-    await render();
-    expect(lastProps().revision).toMatchObject({ editable: false });
+    const html = await render();
+    expect(lastProps().revision).toEqual({ id: HEAD_ID, version: 2, editable: true, kind: "client_intro", fork: true });
     expect(lastProps().header).toMatchObject({ status: "approved" });
+    expect(lastProps().onFork).toBe(actions.forkIntroHead);
+    expect(html).toContain(dict.configurator.approvedEdit.banner);
+  });
+
+  it("reopens an Approvato intro on its pending copy, with its edits (Story 4.11b)", async () => {
+    const COPY_ID = "22222222-0000-4000-8000-0000000000c9";
+    getClientIntro.mockResolvedValue(ok({ ...intro("approved"), headRevisionId: COPY_ID, headVersion: 4 }));
+    getEditableRevision.mockResolvedValue(ok({ ...head("working"), id: COPY_ID, version: 5 }));
+    await render();
+    expect(lastProps().revision).toEqual({ id: COPY_ID, version: 5, editable: true, kind: "client_intro", fork: false });
+    expect(lastProps().headVersion).toBe(4);
+  });
+
+  it("opens read-only an Approvato intro whose head is neither its approved revision nor a working copy", async () => {
+    getClientIntro.mockResolvedValue(ok(intro("approved")));
+    getEditableRevision.mockResolvedValue(ok({ ...head("superseded"), id: "22222222-0000-4000-8000-0000000000d1" }));
+    await render();
+    expect(lastProps().revision).toMatchObject({ editable: false, fork: false });
   });
 
   it.each([
