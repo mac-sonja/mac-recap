@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Profile, Role } from "@/modules/access";
 import { ok } from "@/shared/result";
 
@@ -76,6 +76,7 @@ const organization = await import("@/app/(tool)/organization/actions");
 const configurator = await import("@/app/(wizard)/case-studies/[caseId]/configurator/actions");
 const clientConfigurator = await import("@/app/(wizard)/clients/[clientId]/configurator/actions");
 const exportActions = await import("@/app/(tool)/case-studies/export-actions");
+const clientExportActions = await import("@/app/(tool)/clients/export-actions");
 const jobsModule = await import("@/modules/jobs");
 const { default: LibraryPage } = await import("@/app/(tool)/library/page");
 const caseStudyModule = await import("@/modules/case-study");
@@ -118,6 +119,8 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   "draft-ready.listReadyDrafts": { call: draftReady.listReadyDrafts as Action, allowed: OWNERS },
   // Story 5.3: Scarica on an approved case.
   ...Object.fromEntries(Object.entries(exportActions).map(([name, call]) => [`export.${name}`, { call: call as Action, allowed: SHARERS }])),
+  // Story 5.9a: Scarica on a client (its pack), owner/designer only until 5.9b.
+  ...Object.fromEntries(Object.entries(clientExportActions).map(([name, call]) => [`client-export.${name}`, { call: call as Action, allowed: OWNERS }])),
 };
 
 /** The roles a person can hold. `system` is the worker's actor: it can't sign in, so it never gets this far (below). */
@@ -143,7 +146,7 @@ beforeEach(() => {
 describe("permission suite through the real actor resolver (Story 6.4)", () => {
   it("covers every server action of the tool", () => {
     expect(Object.keys(EXPECTED).length).toBe(
-      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 6 + Object.keys(clientConfigurator).length + Object.keys(draftReady).length + Object.keys(exportActions).length,
+      Object.keys(caseStudies).length + Object.keys(clients).length + Object.keys(organization).length + 6 + Object.keys(clientConfigurator).length + Object.keys(draftReady).length + Object.keys(exportActions).length + Object.keys(clientExportActions).length,
     );
   });
 
@@ -274,5 +277,68 @@ describe("no role exports a case without an approved revision (Story 5.3, NFR1)"
     expect(getLiveRevision).toHaveBeenCalledWith({ kind: "case", id: CASE_ID });
     expect(getEditableRevision).not.toHaveBeenCalled();
     expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe("no role exports a client pack with a revision that isn't approved (Story 5.9a, NFR1)", () => {
+  const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
+  const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+  const INTRO_ID = "dddddddd-0000-4000-8000-000000000001";
+  const approvedCase = { id: CASE_ID, code: "LUM-2026-01", name: "Caso", client: { id: CLIENT_ID, name: "Lumen", code: "LUM" }, deletedAt: null };
+
+  function arrange(live: (subject: { kind: string; id: string }) => unknown) {
+    const getLiveRevision = vi.mocked(caseStudyModule.getLiveRevision);
+    vi.mocked(caseStudyModule.getClient).mockResolvedValue(ok({ id: CLIENT_ID, code: "LUM", name: "Lumen" }) as never);
+    vi.mocked(caseStudyModule.getClientIntro).mockResolvedValue(ok({ id: INTRO_ID }) as never);
+    getLiveRevision.mockReset();
+    getLiveRevision.mockImplementation(async (subject) => ok(live(subject as { kind: string; id: string })) as never);
+    vi.mocked(caseStudyModule.getEditableRevision).mockClear();
+    vi.mocked(jobsModule.enqueue).mockClear();
+    return getLiveRevision;
+  }
+
+  afterEach(() => {
+    vi.mocked(caseStudyModule.listClientCasesInOrder).mockReset();
+    vi.mocked(caseStudyModule.listClientCasesInOrder).mockResolvedValue(ok(null) as never);
+  });
+
+  it.each(["owner_designer", "admin"] as const)("as %s: a client with only cases not approved is NOT_APPROVED, nothing enqueued", async (role) => {
+    session.role = role;
+    // Bozza or Da approvare cases only: the client has no approved case to list.
+    vi.mocked(caseStudyModule.listClientCasesInOrder).mockResolvedValue(ok([]) as never);
+    arrange(() => null);
+    for (const format of ["presentazione_16_9", "carosello_1_1"]) {
+      const result = await clientExportActions.requestClientExport({ clientId: CLIENT_ID, formats: [format] });
+      expect(result).toMatchObject({ ok: false, status: 409, error: { code: "NOT_APPROVED" } });
+    }
+    expect(await clientExportActions.getClientExportStatus({ clientId: CLIENT_ID, exportId: CASE_ID })).toMatchObject({
+      ok: false,
+      error: { code: "NOT_APPROVED" },
+    });
+    expect(caseStudyModule.getEditableRevision).not.toHaveBeenCalled();
+    expect(jobsModule.enqueue).not.toHaveBeenCalled();
+  });
+
+  it.each(["owner_designer", "admin"] as const)("as %s: a listed case whose approved revision is gone is left out, never its working copy", async (role) => {
+    session.role = role;
+    vi.mocked(caseStudyModule.listClientCasesInOrder).mockResolvedValue(ok([approvedCase]) as never);
+    // The case has a working head but no live revision any more; the intro isn't approved either.
+    const getLiveRevision = arrange(() => null);
+    const result = await clientExportActions.requestClientExport({ clientId: CLIENT_ID, formats: ["presentazione_16_9"] });
+    expect(result).toMatchObject({ ok: false, status: 409, error: { code: "NOT_APPROVED" } });
+    expect(getLiveRevision).toHaveBeenCalledWith({ kind: "case", id: CASE_ID });
+    expect(caseStudyModule.getEditableRevision).not.toHaveBeenCalled();
+    expect(jobsModule.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("as account/sales/social: FORBIDDEN before anything is read (5.9b)", async () => {
+    session.role = "account_sales_social";
+    const list = vi.mocked(caseStudyModule.listClientCasesInOrder);
+    list.mockClear();
+    expect(await clientExportActions.requestClientExport({ clientId: CLIENT_ID, formats: ["presentazione_16_9"] })).toMatchObject({
+      ok: false,
+      status: 403,
+    });
+    expect(list).not.toHaveBeenCalled();
   });
 });

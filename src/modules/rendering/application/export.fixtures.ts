@@ -4,10 +4,11 @@
 import { vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import type { CaseClientInfo, CaseStudy, CaseStudyRevision } from "@/modules/case-study";
-import { caseHistoryV2 } from "@/modules/generation";
+import { caseHistoryV2, clientIntroV2, type CaseStudyDocument } from "@/modules/generation";
 import type { DetailsForm } from "@/modules/material";
 import type { PackSourceDeps } from "@/modules/rendering/application/export-source";
 import { FORMAT_IDS } from "@/modules/rendering/domain/formats";
+import { CLIENT_TEMPLATE } from "@/modules/rendering/templates";
 import { ok } from "@/shared/result";
 
 export const CASE_ID = "cccccccc-0000-4000-8000-000000000001";
@@ -102,4 +103,62 @@ export function sourceDeps(over: Partial<PackSourceDeps> = {}) {
     listClientCasesInOrder: vi.fn(async () => ok<CaseStudy[]>([caseStudy()])),
     ...over,
   } satisfies PackSourceDeps;
+}
+
+// ---------------------------------------------------------------------------
+// A client's pack (Story 5.9a): three approved cases A, B, C of the client above and its intro.
+// ---------------------------------------------------------------------------
+
+export const PACK_CASES = {
+  A: "cccccccc-0000-4000-8000-00000000000a",
+  B: "cccccccc-0000-4000-8000-00000000000b",
+  C: "cccccccc-0000-4000-8000-00000000000c",
+} as const;
+export type PackCase = keyof typeof PACK_CASES;
+/** Each case's approved revision. */
+export const PACK_REVISIONS: Readonly<Record<PackCase, string>> = {
+  A: "eeeeeeee-0000-4000-8000-00000000000a",
+  B: "eeeeeeee-0000-4000-8000-00000000000b",
+  C: "eeeeeeee-0000-4000-8000-00000000000c",
+};
+export const INTRO_ID = "bbbbbbbb-0000-4000-8000-000000000001";
+export const INTRO_REVISION_ID = "eeeeeeee-0000-4000-8000-0000000000f1";
+
+/** The client's intro document: one intro page and one closing page per format, in the client template. */
+export function introDoc(): CaseStudyDocument {
+  const doc = clientIntroV2(FORMAT_IDS);
+  const formats = Object.fromEntries(
+    Object.entries(doc.formats).map(([formatId, { pages }]) => [
+      formatId,
+      { pages: [...pages, { ...pages[0], pageKey: "closing", name: "Chiusura", role: "outro" as const, section: "risultati" }] },
+    ]),
+  );
+  return { ...doc, template: CLIENT_TEMPLATE, formats } as CaseStudyDocument;
+}
+
+export const introRevision = (over: Partial<CaseStudyRevision> = {}): CaseStudyRevision =>
+  revision({ id: INTRO_REVISION_ID, caseId: null, clientIntroId: INTRO_ID, doc: introDoc(), generatedDoc: introDoc(), ...over } as Partial<CaseStudyRevision>);
+
+/**
+ * The reads of client CLIENT_ID's pack: its approved cases in `order` (the client's order),
+ * each with its own approved revision, and its intro approved or not (`intro`: `approved`,
+ * `unapproved` (an intro with no approved revision) or `none`).
+ */
+export function packDeps(options: { order?: PackCase[]; intro?: "approved" | "unapproved" | "none" } = {}, over: Partial<PackSourceDeps> = {}) {
+  const order = options.order ?? ["C", "A", "B"];
+  const intro = options.intro ?? "approved";
+  const caseFor = (key: PackCase) =>
+    caseStudy({ id: PACK_CASES[key], code: `LUM-2026-0${key}`, name: `Caso ${key}`, approvedRevisionId: PACK_REVISIONS[key], headRevisionId: PACK_REVISIONS[key] });
+  const keyOf = (id: string) => (Object.keys(PACK_CASES) as PackCase[]).find((k) => PACK_CASES[k] === id.toLowerCase());
+  return sourceDeps({
+    getCase: vi.fn(async (id: string) => ok(caseFor(keyOf(id) ?? "A"))),
+    getLiveRevision: vi.fn(async (subject: { kind: string; id: string }) => {
+      if (subject.kind === "client_intro") return ok<CaseStudyRevision | null>(intro === "approved" ? introRevision() : null);
+      const key = keyOf(subject.id);
+      return ok<CaseStudyRevision | null>(key === undefined ? null : revision({ id: PACK_REVISIONS[key], caseId: PACK_CASES[key] }));
+    }),
+    getClientIntro: vi.fn(async () => ok<{ id: string } | null>(intro === "none" ? null : { id: INTRO_ID })),
+    listClientCasesInOrder: vi.fn(async () => ok<CaseStudy[]>(order.map(caseFor))),
+    ...over,
+  });
 }

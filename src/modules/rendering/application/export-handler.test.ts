@@ -7,6 +7,9 @@ import { bundleHashOf, readExportSource, readExportSources } from "@/modules/ren
 import {
   ACTOR,
   CASE_ID,
+  CLIENT_ID,
+  PACK_CASES,
+  packDeps,
   CASE_IMAGE,
   CLIENT_IMAGE,
   clientInfo,
@@ -583,5 +586,93 @@ describe("acceptance (Story 5.4)", () => {
     expect(await request(ACTOR, ask)).toMatchObject({ ok: true, value: { status: "pending" } });
     expect(await handler.run(jobs[1], signal())).toEqual(ok(undefined));
     expect(exports.rows.map((r) => r.format)).toEqual(["presentazione_16_9", "carosello_1_1", "bundle", "presentazione_16_9", "carosello_1_1", "bundle"]);
+  });
+});
+
+describe("export handler, client packs (Story 5.9a)", () => {
+  /** A request and the handler sharing one in-memory export table; the jobs it enqueued. */
+  async function packRig(options: Parameters<typeof packDeps>[0] = {}) {
+    const { makeRequestPack } = await import("@/modules/rendering/application/request-export");
+    const exports = memoryExports();
+    const { all, seen } = deps({ ...packDeps(options), exports });
+    const jobs: Job[] = [];
+    const recordEvent = vi.fn(async () => ok(null));
+    const request = makeRequestPack({
+      ...all,
+      exports,
+      storage: { presignDownload: vi.fn(async (path: string) => ok(`https://storage.test/signed/${path}`)) },
+      enqueue: vi.fn(async (input) => {
+        const job: Job = {
+          id: `99999999-0000-4000-8000-00000000000${jobs.length + 1}`,
+          kind: "export",
+          subjectId: input.subjectId,
+          inputHash: input.inputHash,
+          payload: input.payload,
+          status: "running",
+          attempts: 1,
+          maxAttempts: 3,
+          lockedUntil: null,
+          error: null,
+          createdAt: "2026-11-10T10:00:00Z",
+          updatedAt: "2026-11-10T10:00:00Z",
+          finishedAt: null,
+        };
+        jobs.push(job);
+        return ok({ id: job.id });
+      }),
+      getJobsFor: vi.fn(async () => ok([])),
+      recordEvent,
+    });
+    return { all, seen, exports, jobs, request, recordEvent, handler: makeExportHandler({ ...all, exports }) };
+  }
+
+  it("prints the whole pack in one PDF: intro, the cases in the client's order, the closing once, numbered on", async () => {
+    const rig = await packRig({ order: ["C", "A", "B"] });
+    expect(await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["presentazione_16_9"] })).toMatchObject({ ok: true, value: { status: "pending" } });
+    expect(await rig.handler.run(rig.jobs[0], signal())).toEqual(ok(undefined));
+    const html = rig.seen[0].html;
+    const numbers = [...html.matchAll(/data-page-number="(\d+)"/g)].map((m) => Number(m[1]));
+    expect(numbers.length).toBe(sections(html));
+    expect(numbers).toEqual(numbers.map((_, i) => i + 1));
+    const [row] = rig.exports.rows;
+    expect(row.format).toBe("presentazione_16_9");
+    expect(row.parts.map((p) => p.subject.kind)).toEqual(["client_intro", "case", "case", "case"]);
+    expect(row.parts.slice(1).map((p) => p.subject.id)).toEqual([PACK_CASES.C, PACK_CASES.A, PACK_CASES.B]);
+    // Media of every case in the pack and of the client.
+    for (const id of Object.values(PACK_CASES)) expect(rig.all.listCaseMedia).toHaveBeenCalledWith(id);
+    expect(rig.handler.caseIdOf?.(rig.jobs[0])).toBeNull();
+
+    // The same inputs: the stored pack, no new job, named after the client, an event per case.
+    const again = await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["presentazione_16_9"] });
+    expect(again).toMatchObject({ ok: true, value: { status: "ready", exportId: row.id, fileName: "LUM Lumen Srl – Presentazione.pdf" } });
+    expect(rig.jobs).toHaveLength(1);
+    expect(rig.recordEvent).toHaveBeenCalledTimes(3);
+  });
+
+  it("zips two formats of the pack into one file named after the client", async () => {
+    const rig = await packRig();
+    await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["presentazione_16_9", "carosello_1_1"] });
+    expect(await rig.handler.run(rig.jobs[0], signal())).toEqual(ok(undefined));
+    expect(rig.exports.rows.map((r) => r.format)).toEqual(["presentazione_16_9", "carosello_1_1", "bundle"]);
+    const again = await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["carosello_1_1", "presentazione_16_9"] });
+    expect(again).toMatchObject({ ok: true, value: { status: "ready", fileName: "LUM Lumen Srl.zip" } });
+  });
+
+  it("refuses with EXPORT_STALE when a case was updated between the request and the job", async () => {
+    const rig = await packRig();
+    await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["presentazione_16_9"] });
+    // The client reordered its cases since: the pack is not the one asked for.
+    const reordered = packDeps({ order: ["A", "B", "C"] });
+    vi.mocked(rig.all.listClientCasesInOrder).mockImplementation(reordered.listClientCasesInOrder);
+    expect(await rig.handler.run(rig.jobs[0], signal())).toMatchObject({ ok: false, error: { code: "EXPORT_STALE", retryable: false } });
+    expect(rig.exports.rows).toEqual([]);
+  });
+
+  it("draws an intro that isn't approved as no intro: each case whole", async () => {
+    const rig = await packRig({ order: ["A", "B"], intro: "unapproved" });
+    await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["presentazione_16_9"] });
+    expect(await rig.handler.run(rig.jobs[0], signal())).toEqual(ok(undefined));
+    expect(rig.exports.rows[0].parts.map((p) => p.subject.kind)).toEqual(["case", "case"]);
+    expect(sections(rig.seen[0].html)).toBe(6);
   });
 });
