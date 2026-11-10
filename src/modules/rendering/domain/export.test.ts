@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   bundleEntryName,
   bundleFileName,
+  collectionHashInput,
+  collectionStatusInputSchema,
   contentHashInput,
   EXPORT_FILES,
   EXPORT_FORMAT_IDS,
@@ -13,6 +15,7 @@ import {
   packHashInput,
   packStatusInputSchema,
   recordFileName,
+  requestCollectionInputSchema,
   requestPackInputSchema,
   type ExportPartContent,
   requestExportInputSchema,
@@ -179,5 +182,56 @@ describe("client packs (Story 5.9a)", () => {
     expect(packHashInput({ ...client, name: "Lumen SpA" }, parts, "presentazione_16_9")).not.toBe(base);
     expect(packHashInput(client, parts, "carosello_1_1")).not.toBe(base);
     expect(packHashInput(client, parts, "presentazione_16_9")).toBe(base);
+  });
+});
+
+describe("collections (Story 5.10b)", () => {
+  const COLLECTION = "c0c0c0c0-0000-4000-8000-000000000001";
+  const CLIENT = "dddddddd-0000-4000-8000-000000000001";
+  const OTHER = "cccccccc-0000-4000-8000-000000000002";
+  const casePart = { subject: { kind: "case" as const, id: CASE }, revisionId: REV };
+  const otherPart = { subject: { kind: "case" as const, id: OTHER }, revisionId: REV };
+  const content = (part: ExportPartContent["part"], clientName = "Lumen"): ExportPartContent => ({
+    part,
+    template: "mac-case@1",
+    client: { name: clientName, sector: "Lusso", description: "", logoId: null, results: [], testimonial: null },
+    case: { year: 2026, services: [], results: [], testimonial: null },
+  });
+  const collection = { id: COLLECTION, name: "Pitch moda" };
+
+  it("take a payload naming the collection, with all its parts in order", () => {
+    const payload = { subject: { kind: "collection", id: COLLECTION }, parts: [casePart, otherPart], format: "presentazione_16_9", requestedBy: CASE };
+    expect(exportPayloadSchema.safeParse(payload).success).toBe(true);
+    expect(exportPayloadSchema.safeParse({ ...payload, format: "bundle", formats: ["carosello_1_1", "presentazione_16_9"] }).success).toBe(true);
+    expect(exportPayloadSchema.safeParse({ ...payload, parts: [] }).success).toBe(false);
+    expect(exportPayloadSchema.safeParse({ ...payload, subject: { kind: "collection", id: "x" } }).success).toBe(false);
+  });
+
+  it("are asked for by collection and read by job or by export", () => {
+    const one = { collectionId: COLLECTION, format: "x" };
+    const many = { collectionId: COLLECTION, formats: ["x", "y"] };
+    expect(requestCollectionInputSchema(one).safeParse(one).success).toBe(true);
+    expect(requestCollectionInputSchema(many).safeParse(many).success).toBe(true);
+    expect(collectionStatusInputSchema.safeParse({ collectionId: COLLECTION, jobId: REV }).success).toBe(true);
+    expect(collectionStatusInputSchema.safeParse({ collectionId: COLLECTION, exportId: REV, jobId: REV }).success).toBe(false);
+  });
+
+  it("hash apart from a case's export and a pack, and change with the name, the order, a revision and a client's fields", () => {
+    const parts = [content(casePart), content(otherPart, "Oro")];
+    const base = collectionHashInput(collection, parts, "presentazione_16_9");
+    expect(JSON.parse(base)[0]).toBe("export.collection.v1");
+    expect(base).not.toBe(contentHashInput(parts, "presentazione_16_9"));
+    expect(base).not.toBe(packHashInput({ id: CLIENT, code: "", name: "Pitch moda" }, parts, "presentazione_16_9"));
+    expect(collectionHashInput({ ...collection, name: "Pitch lusso" }, parts, "presentazione_16_9")).not.toBe(base);
+    expect(collectionHashInput(collection, [parts[1], parts[0]], "presentazione_16_9")).not.toBe(base);
+    expect(collectionHashInput(collection, [content({ ...casePart, revisionId: OTHER }), parts[1]], "presentazione_16_9")).not.toBe(base);
+    expect(collectionHashInput(collection, [parts[0], content(otherPart, "Oro Srl")], "presentazione_16_9")).not.toBe(base);
+    expect(collectionHashInput(collection, parts, "carosello_1_1")).not.toBe(base);
+    expect(collectionHashInput(collection, parts, "presentazione_16_9")).toBe(base);
+  });
+
+  it("name the file after the collection, without a code", () => {
+    expect(recordFileName("", "Pitch moda", "presentazione_16_9")).toBe("Pitch moda – Presentazione.pdf");
+    expect(recordFileName("", "Pitch: moda/lusso", "bundle")).toBe("Pitch moda lusso.zip");
   });
 });

@@ -121,3 +121,13 @@ export function moveCollectionGroup(actor: Actor, input: unknown): Promise<Resul
 export function moveCollectionItem(actor: Actor, input: unknown): Promise<Result<CollectionWrite>> {
   return collectionUseCases().moveItem(actor, input);
 }
+
+/**
+ * Logs that a file of the collection was handed out (Story 5.10b): input `{ collectionId,
+ * exportId, format }`, one `collection_exported` event in `collection_event` (the version is not
+ * bumped). Called by the rendering module's collection delivery, after `authorize(actor, 'manage
+ * collections')`. `INVALID_INPUT`, `COLLECTION_NOT_FOUND`.
+ */
+export function recordCollectionExported(actor: Actor, input: unknown): Promise<Result<void>> {
+  return collectionUseCases().recordExported(actor, input);
+}

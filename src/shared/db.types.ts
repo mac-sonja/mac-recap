@@ -1029,6 +1029,9 @@ isOneToOne: false
 "jobs_renew":
 { Args: { "p_attempts": number,"p_id": string }; Returns: boolean
                            },
+"record_collection_exported":
+{ Args: { "p_actor_id": string,"p_collection_id": string,"p_export_id": string,"p_format": string }; Returns: undefined
+                           },
 "rename_collection":
 { Args: { "p_actor_id": string,"p_collection_id": string,"p_expected_version": number,"p_name": string }; Returns: number
                            },

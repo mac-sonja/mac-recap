@@ -34,4 +34,9 @@ export interface CollectionRepository {
   setTags(id: string, expectedVersion: number, tags: CollectionTags, actorId: string): Promise<Result<number>>;
   /** Soft-deletes it. `err COLLECTION_NOT_FOUND` when unknown or already deleted. */
   softDelete(id: string, actorId: string): Promise<Result<void>>;
+  /**
+   * Logs one `collection_exported` event (Story 5.10b) at its current version, which it doesn't
+   * bump. `err COLLECTION_NOT_FOUND` when unknown or deleted, `INVALID_INPUT`.
+   */
+  recordExported(id: string, actorId: string, exportId: string, format: string): Promise<Result<void>>;
 }

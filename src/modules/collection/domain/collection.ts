@@ -25,6 +25,8 @@ export const COLLECTION_EVENTS = {
   groupMoved: "collection_group_moved",
   itemMoved: "collection_item_moved",
   deleted: "collection_deleted",
+  /** Story 5.10b: a file of it was handed out (`data { exportId, format }`). */
+  exported: "collection_exported",
 } as const;
 
 /** A sector key, as `client_sector_key_check` allows it. */
@@ -101,6 +103,13 @@ export const moveItemInputSchema = z.strictObject({
   caseId: id(),
   /** The case's new place within its client's group, from 0 (clamped). */
   to: z.number().int().min(0).max(COLLECTION_ITEMS_MAX),
+});
+
+/** `recordCollectionExported`'s input (Story 5.10b): the export handed out and its format (a format id or `bundle`). */
+export const recordExportedInputSchema = z.strictObject({
+  collectionId: id(),
+  exportId: id(),
+  format: z.string().regex(/^[a-z0-9_]{1,64}$/),
 });
 
 /** A collection as stored: its case ids in order, soft-deleted cases included (reads drop them). */

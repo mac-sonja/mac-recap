@@ -80,17 +80,25 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/rendering/**` (+ unit tests): collection source, hash, payload, handler, request and status.
-- [ ] The event writer, plus a migration if needed; then `npm run db:types`.
-- [ ] Collection page **Esporta**, actions and download wiring (+ tests).
-- [ ] `src/shared/i18n/it.ts`, `test/permissions.test.ts`.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml`: 5.10 to `review` (5.10a and 5.10b both built).
+- [x] `src/modules/rendering/**` (+ unit tests): collection source, hash, payload, handler, request and status.
+- [x] The event writer, plus a migration if needed; then `npm run db:types`.
+- [x] Collection page **Esporta**, actions and download wiring (+ tests).
+- [x] `src/shared/i18n/it.ts`, `test/permissions.test.ts`.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml`: 5.10 to `review` (5.10a and 5.10b both built).
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:db` and `build`, when they run, then they pass.
 - Given single-case and client-pack exports, when requested, then their hashes and output are unchanged (existing tests pass as they are).
 
 ## Implementation Notes
+
+- **Domain.** `collectionSubjectSchema` (`{ kind: "collection", id }`); the pack payload variants now take a client or a collection `subject` (single format or bundle), so client-pack payloads parse as before. `collectionHashInput` (`export.collection.v1`) covers the collection's id and name, then every part as `contentHashInput` takes it (shared `partRows`), the format and `EXPORT_RENDER_VERSION`; case, bundle and pack hash inputs are unchanged. Files are named with `recordFileName("", name, format)`: `Pitch moda – Presentazione.pdf`, `Pitch moda.zip`.
+- **Source.** `readCollectionParts` reads `getCollection` (through `rendering/adapters/collection/read-collection.ts`, the collection module's index only), then per item `getCase` and `getLiveRevision`; a case with no live revision, deleted, or `NOT_FOUND` is left out and counted as `unavailable`; none left is `NOT_APPROVED`. Groups are per client in first-appearance order; a client's intro is read only for a group with 2+ available cases. `readCollectionSources` composes with `composeParts` default mode (not `pack`), so a one-case group keeps its own intro and closing.
+- **Handler.** A `collection` subject goes through `readCollectionSources`, with `EXPORT_STALE` when its parts or hash changed since the request (rename, reorder, items, revision, client fields). Logos and client media are now read per distinct client of the parts (a case or pack has one, so its calls and output are unchanged). `COLLECTION_NOT_FOUND` is permanent. `caseIdOf` is null.
+- **Request/status.** `makeRequestCollection` / `makeCollectionStatus` mirror the pack's: jobs are enqueued and looked up with the collection id as subject; status compares parts, then the current content hashes (`EXPORT_STALE`; `NOT_FOUND` for a file of none of its cases), so a case's own export or a client pack is never handed out as the collection.
+- **Events.** New migration `20261110180000_collection_exported_event.sql`: `record_collection_exported(collection, actor, export, format)`, security definer, service role only, appends `collection_exported` (`data { exportId, format }`) at the current version without bumping it; `COLLECTION_NOT_FOUND` for a deleted collection. Exposed as `collection.recordCollectionExported`; each delivery (stored file or ready poll) records one, as the pack's delivery does. `db:types` regenerated (matches the hand edit).
+- **Access.** `requestCollectionExport` / `getCollectionExportStatus` in the collection page's `actions.ts` authorize `manage collections` and `export` (approved), which every role holds, admin included.
+- **UI.** `CollectionExportButton` (top bar, after **Modifica tag**) wraps `DownloadButton` with `collectionDownload`; `DownloadButton` gets an optional `actionLabel` (default **Scarica**) so the pill and confirm read **Esporta**. The page passes `exportCounts` (`available`/`unavailable` from the collection's items); no **Esporta** with none available; the dialog note "{n} case non disponibili non saranno incluse." when some are left out. The format in view is ticked when the dialog opens.
 
 ## Spec Change Log
 

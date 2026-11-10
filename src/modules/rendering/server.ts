@@ -4,17 +4,22 @@
 // It never reaches Chromium: the worker renders (`worker.ts`, AD-10).
 import type { Actor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
+import * as collection from "@/modules/collection";
 import * as jobs from "@/modules/jobs";
 import * as material from "@/modules/material";
+import { readCollection } from "@/modules/rendering/adapters/collection/read-collection";
 import { createSupabaseExportRepository } from "@/modules/rendering/adapters/supabase/export-repository";
 import { createSupabaseExportStorage } from "@/modules/rendering/adapters/supabase/export-storage";
 import type { ExportSourceDeps, PackSourceDeps } from "@/modules/rendering/application/export-source";
 import {
+  makeCollectionStatus,
   makeExportStatus,
   makePackStatus,
+  makeRequestCollection,
   makeRequestExport,
   makeRequestPack,
   type ExportTicket,
+  type RequestCollectionDeps,
   type RequestPackDeps,
 } from "@/modules/rendering/application/request-export";
 import type { Result } from "@/shared/result";
@@ -39,9 +44,11 @@ export const packSourceDeps = (): PackSourceDeps => ({
   listClientCasesInOrder: caseStudy.listClientCasesInOrder,
 });
 
-function deps(): RequestPackDeps {
+function deps(): RequestPackDeps & RequestCollectionDeps {
   return {
     ...packSourceDeps(),
+    getCollection: readCollection,
+    recordCollectionEvent: (actor, input) => collection.recordCollectionExported(actor, input),
     exports: createSupabaseExportRepository(),
     storage: createSupabaseExportStorage(),
     enqueue: jobs.enqueue,
@@ -96,4 +103,28 @@ export function requestPack(actor: Actor, input: unknown): Promise<Result<Export
  */
 export function packStatus(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
   return makePackStatus(deps())(actor, input);
+}
+
+/**
+ * Asks for a collection as a file (Story 5.10b): input `{ collectionId, formats }` (or
+ * `{ collectionId, format }`). Per client group in the collection's order: with 2 or more
+ * available cases and an approved intro, the intro, the cases and the closing once; otherwise
+ * each case whole; a "Non disponibile" case left out. Live revisions only. `ready` when the
+ * same file was exported before (with a `collection_exported` event), else an `export` job and
+ * `pending`. Nothing is enqueued on any error. Call only after `authorize(actor, 'manage
+ * collections')`. Errors: `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE`, `FORMAT_NOT_IN_REVISION`,
+ * `COLLECTION_NOT_FOUND`, `NOT_APPROVED` (no available case), `EXPORT_TOO_LARGE`, the reads'.
+ */
+export function requestCollection(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
+  return makeRequestCollection(deps())(actor, input);
+}
+
+/**
+ * Where a collection request stands: input `{ collectionId, jobId }` or `{ collectionId,
+ * exportId }`; as `packStatus`. `EXPORT_STALE` when the collection changed since. Call only
+ * after authorizing as `requestCollection`. Errors: `INVALID_INPUT`, `NOT_FOUND`,
+ * `COLLECTION_NOT_FOUND`, `NOT_APPROVED`, `EXPORT_STALE`, the reads'.
+ */
+export function collectionStatus(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
+  return makeCollectionStatus(deps())(actor, input);
 }

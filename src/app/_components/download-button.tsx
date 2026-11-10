@@ -59,6 +59,8 @@ export interface DownloadButtonProps {
   currentFormat?: FormatId;
   /** A line under the formats (Story 5.9a: a client pack whose intro isn't approved). */
   note?: string;
+  /** The word on the pill and on the dialog's confirm button: **Scarica**, or **Esporta** on a collection (Story 5.10b). */
+  actionLabel?: string;
 }
 
 type Phase =
@@ -103,6 +105,7 @@ export function DownloadButton({
   failedMessage = it.download.failed,
   currentFormat,
   note,
+  actionLabel = it.download.action,
 }: DownloadButtonProps) {
   const [open, setOpen] = useState(false);
   const [ticked, setTicked] = useState<ExportFormatId[]>(() => defaultTicked(currentFormat));
@@ -220,7 +223,7 @@ export function DownloadButton({
         ) : (
           <>
             <Download aria-hidden="true" className="size-3.5" />
-            {it.download.action}
+            {actionLabel}
           </>
         )}
       </button>
@@ -253,7 +256,7 @@ export function DownloadButton({
               className={cn(PRIMARY_ACTION, PRIMARY_ACTION_INACTIVE)}
             >
               <Download aria-hidden="true" className="size-4" />
-              {it.download.action}
+              {actionLabel}
             </button>
           </>
         }

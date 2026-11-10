@@ -656,6 +656,22 @@ export const it = {
     packFormatMissing: "Una parte del pack non ha pagine in questo formato. Scegline un altro.",
     /** The failure toast on a client's Scarica: names the client, as several toasts may show at once. */
     failedPack: "L’esportazione del pack di {name} non è finita.",
+    /** Story 5.10b: a collection's export button and the dialog's confirm. */
+    collectionAction: "Esporta",
+    /** Read by screen readers on a collection's button; `{name}` is the collection's name. */
+    collectionLabel: "Esporta la raccolta {name}",
+    collectionTitle: "Esporta {name}",
+    /** `{n}` available cases of the collection. */
+    collectionDescription: "{n} case approvate in un solo file.",
+    collectionDescriptionOne: "Una case approvata in un solo file.",
+    /** In the collection's dialog: `{n}` "Non disponibile" cases are left out of the file. */
+    collectionUnavailable: "{n} case non disponibili non saranno incluse.",
+    /** In the collection's dialog: no case of the collection is available (`NOT_APPROVED`). */
+    collectionNotApproved: "Questa raccolta non ha una case approvata da esportare.",
+    /** In the collection's dialog: a part has no pages in this format (`FORMAT_NOT_IN_REVISION`). */
+    collectionFormatMissing: "Una parte della raccolta non ha pagine in questo formato. Scegline un altro.",
+    /** The failure toast on a collection's Esporta: names the collection. */
+    failedCollection: "L’esportazione della raccolta {name} non è finita.",
     caseTitle: "Scarica {name}",
     /** Story 5.4: one format is its own file, two or more come as one ZIP. */
     caseDescription: "Scegli uno o più formati.",

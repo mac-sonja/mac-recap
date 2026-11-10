@@ -20,6 +20,7 @@ import { EYEBROW, ICON_BUTTON } from "@/app/(wizard)/_components/configurator/st
 import { FormatSwitch } from "@/app/(wizard)/_components/configurator/top-bar";
 import { AddCasesDialog } from "./add-cases-dialog";
 import { collectionSegments, EMPTY_VALUES, groupOfCase, withCaseMoved, withGroupMoved, type CollectionCandidate, type CollectionGroup, type ViewSegment } from "./collection-file";
+import { CollectionExportButton } from "./collection-export-button";
 import { CollectionPagine } from "./collection-pagine";
 
 /** What every items change returns: the collection's new version and its cases in order. */
@@ -44,6 +45,11 @@ export interface CollectionViewProps {
   candidates: readonly CollectionCandidate[];
   tagOptions: TagOptions;
   actions: CollectionActions;
+  /**
+   * Story 5.10b, what **Esporta** would put in the file: the cases with an approved revision
+   * (none: no Esporta) and the "Non disponibile" ones it leaves out (the dialog says how many).
+   */
+  exportCounts: { available: number; unavailable: number };
 }
 
 const noop = () => {};
@@ -82,9 +88,21 @@ function canvasGroupsOf(segments: readonly ViewSegment[], groups: readonly Colle
  * Every move is shown at once and saved at once with the collection's version (compare-and-set),
  * one after the other; a failed save puts the previous order back and says "Ordine non salvato.
  * Riprova." Adding and removing cases save, then read the page again (a client's intro may appear
- * or go). Removing the last case is refused.
+ * or go). Removing the last case is refused. **Esporta** (Story 5.10b) opens the export dialog of a
+ * case and a client pack for the collection as saved.
  */
-export function CollectionView({ id, name, version, tags: initialTags, groups: initialGroups, assets, candidates, tagOptions, actions }: CollectionViewProps) {
+export function CollectionView({
+  id,
+  name,
+  version,
+  tags: initialTags,
+  groups: initialGroups,
+  assets,
+  candidates,
+  tagOptions,
+  actions,
+  exportCounts,
+}: CollectionViewProps) {
   const router = useRouter();
   const [message, say] = useStatusMessage();
   const [groups, setGroups] = useState(initialGroups);
@@ -268,6 +286,13 @@ export function CollectionView({ id, name, version, tags: initialTags, groups: i
               <Tag aria-hidden="true" className="size-3.5" />
               {it.collection.tags.edit}
             </button>
+            <CollectionExportButton
+              collectionId={id}
+              name={name}
+              availableCount={exportCounts.available}
+              unavailableCount={exportCounts.unavailable}
+              currentFormat={formatId}
+            />
           </div>
         </header>
 

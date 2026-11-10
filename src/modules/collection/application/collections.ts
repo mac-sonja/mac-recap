@@ -12,6 +12,7 @@ import {
   moveItem,
   moveItemInputSchema,
   orderForCreate,
+  recordExportedInputSchema,
   removeItems,
   renameCollectionInputSchema,
   retagCollectionInputSchema,
@@ -213,6 +214,17 @@ export function makeCollectionUseCases({ collections, listCases, liveRevision, b
       const parsed = parseInput(deleteCollectionInputSchema, input);
       if (!parsed.ok) return parsed;
       return collections.softDelete(parsed.value.collectionId, actor.id);
+    },
+
+    /**
+     * Logs that a file of the collection was handed out (Story 5.10b): input `{ collectionId,
+     * exportId, format }`, one `collection_exported` event. `INVALID_INPUT`, `COLLECTION_NOT_FOUND`.
+     */
+    async recordExported(actor: Actor, input: unknown): Promise<Result<void>> {
+      const parsed = parseInput(recordExportedInputSchema, input);
+      if (!parsed.ok) return parsed;
+      const { collectionId, exportId, format } = parsed.value;
+      return collections.recordExported(collectionId, actor.id, exportId, format);
     },
 
     /**

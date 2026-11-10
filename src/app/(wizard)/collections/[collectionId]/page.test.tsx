@@ -142,6 +142,8 @@ describe("CollectionPage (Story 5.10a)", () => {
     expect(mocks.list).toHaveBeenCalledWith({ status: "approved" });
     expect(view.candidates.map((c) => [c.id, c.industry])).toEqual([["x1", "food"]]);
     expect(view.version).toBe(4);
+    // Story 5.10b: Esporta puts the three approved cases in the file and leaves b2 out.
+    expect(view.exportCounts).toEqual({ available: 3, unavailable: 1 });
   });
 
   it("groups a client's cases together as the module does, even when they aren't next to each other", async () => {

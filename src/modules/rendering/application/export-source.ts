@@ -2,10 +2,11 @@ import type { CaseClientInfo, CaseStudy, CaseStudyRevision } from "@/modules/cas
 import type { Page } from "@/modules/generation";
 import type { DetailsForm } from "@/modules/material";
 import { composeParts, type ComposePart } from "@/modules/rendering/compose";
-import { bundleHash, contentHash, packHash } from "@/modules/rendering/application/content-hash";
+import { bundleHash, collectionHash, contentHash, packHash } from "@/modules/rendering/application/content-hash";
 import {
   bundleEntryName,
   NOT_APPROVED,
+  type ExportCollection,
   type ExportFormatId,
   type ExportPart,
   type ExportPartContent,
@@ -148,20 +149,20 @@ export interface DrawPart {
   content: ExportPartContent;
 }
 
-/** One file to draw: one format of a case (Story 5.3) or of a client's pack (Story 5.9a). */
+/** One file to draw: one format of a case (Story 5.3), a client's pack (Story 5.9a) or a collection (Story 5.10b). */
 export interface ExportDrawing {
   format: ExportFormatId;
-  /** In order: the pack's intro first, when it has one, then its cases. */
+  /** In order: the pack's intro first, when it has one, then its cases; a collection's per client group. */
   parts: readonly DrawPart[];
   /** Composed with the pack rule (`composeParts`' `pack` option). */
   pack: boolean;
   /** How many pages the file has (`composeParts`): what a printed file is checked against. */
   pageCount: number;
   contentHash: string;
-  /** The code and name its files are named after: the case's, or the client's. */
+  /** The code and name its files are named after: the case's, the client's, or (no code) the collection's. */
   code: string;
   name: string;
-  /** The client whose logo the pages draw. */
+  /** The first part's client (a case's or a pack's only one); each part draws its own client's logo and files. */
   client: { id: string; logoId: string | null };
 }
 
@@ -352,4 +353,191 @@ export async function readPackSources(deps: PackSourceDeps, clientId: string, fo
 export function composePartOf(part: DrawPart, values: BoundValues = NO_VALUES, assets: ComposePart["assets"] = {}): ComposePart {
   const base = { clientId: part.clientId.toLowerCase(), doc: part.revision.doc, assets, values };
   return part.kind === "case_history" ? { ...base, kind: "case_history", caseId: part.caseId ?? "" } : { ...base, kind: "client_intro" };
+}
+
+// ---------------------------------------------------------------------------
+// A collection (Story 5.10b)
+// ---------------------------------------------------------------------------
+
+/** One case of a collection as its module lists it, in the collection's order (each client's cases together). */
+export interface CollectionEntry {
+  caseId: string;
+  clientId: string;
+}
+
+/** The reads a collection's file starts from (Story 5.10b), besides a case's. */
+export interface CollectionSourceDeps extends ExportSourceDeps {
+  /** The live collection (`collection.getCollection`): its id, name and cases in order. `COLLECTION_NOT_FOUND` when unknown or deleted. */
+  getCollection(collectionId: string): Promise<Result<{ id: string; name: string; items: readonly CollectionEntry[] }>>;
+  /** The client's intro document (`case-study.getClientIntro`), or null when it has none. */
+  getClientIntro(clientId: string): Promise<Result<{ id: string } | null>>;
+}
+
+export const collectionNotApproved = (collectionId: string) =>
+  err({ code: NOT_APPROVED, message: "This collection has no approved case to export.", details: { collectionId } });
+
+/** One client's group of a collection as it stands now: its available cases and, with 2 or more, its approved intro. */
+export interface CollectionGroupParts {
+  clientId: string;
+  /** The client's intro with its approved revision: only when 2 or more of its cases are available and the intro is approved. */
+  intro: { id: string; revision: CaseStudyRevision } | null;
+  cases: readonly { caseStudy: CaseStudy; revision: CaseStudyRevision }[];
+}
+
+/** A collection as it stands now (Story 5.10b): what its file is made of, without what its pages draw. */
+export interface CollectionParts {
+  collection: ExportCollection;
+  /** In the collection's order; a group with no available case is left out. */
+  groups: readonly CollectionGroupParts[];
+  /** Per group: its intro (when it has one), then its cases. */
+  parts: readonly ExportPart[];
+  /** The collection's cases left out: no approved revision any more, or deleted ("Non disponibile"). */
+  unavailable: number;
+}
+
+/**
+ * What a collection's file is made of now (Story 5.10b): the collection, and per client group
+ * in its order, each available case with its live approved revision (a case with none, or
+ * deleted, is left out: "Non disponibile") and, when 2 or more of the group's cases are
+ * available, the client's approved intro (none when it is missing or not approved). Live
+ * revisions only, never a working one. Errors: the collection read's (`COLLECTION_NOT_FOUND`),
+ * `NOT_APPROVED` (no available case), the other reads'.
+ */
+export async function readCollectionParts(deps: CollectionSourceDeps, collectionId: string): Promise<Result<CollectionParts>> {
+  const found = await deps.getCollection(collectionId);
+  if (!found.ok) return found;
+  const collection: ExportCollection = { id: found.value.id, name: found.value.name };
+  const { items } = found.value;
+
+  const read = await Promise.all(
+    items.map(async (item) => {
+      const [c, live] = await Promise.all([deps.getCase(item.caseId), deps.getLiveRevision({ kind: "case", id: item.caseId })]);
+      return { c, live };
+    }),
+  );
+  const groups: { clientId: string; cases: { caseStudy: CaseStudy; revision: CaseStudyRevision }[] }[] = [];
+  for (const { c, live } of read) {
+    // A case deleted since it was listed is left out like the others.
+    if ((!c.ok && c.error.code === "NOT_FOUND") || (!live.ok && live.error.code === "NOT_FOUND")) continue;
+    if (!c.ok) return c;
+    if (!live.ok) return live;
+    if (live.value === null || c.value.deletedAt !== null) continue;
+    // Each client's cases together, where its first case is (the collection keeps them so).
+    const clientId = c.value.client.id.toLowerCase();
+    const group = groups.find((g) => g.clientId === clientId);
+    const entry = { caseStudy: c.value, revision: live.value };
+    if (group === undefined) groups.push({ clientId, cases: [entry] });
+    else group.cases.push(entry);
+  }
+  const available = groups.reduce((n, g) => n + g.cases.length, 0);
+  if (available === 0) return collectionNotApproved(collection.id);
+
+  const withIntros: CollectionGroupParts[] = [];
+  for (const group of groups) {
+    let intro: CollectionGroupParts["intro"] = null;
+    // A client's intro and closing wrap its cases only with 2 or more of them (owner, 2026-11-10).
+    if (group.cases.length >= 2) {
+      const introFound = await deps.getClientIntro(group.clientId);
+      if (!introFound.ok) return introFound;
+      if (introFound.value !== null) {
+        const live = await deps.getLiveRevision({ kind: "client_intro", id: introFound.value.id });
+        if (!live.ok) return live;
+        if (live.value !== null) intro = { id: introFound.value.id, revision: live.value };
+      }
+    }
+    withIntros.push({ ...group, intro });
+  }
+  const parts: ExportPart[] = withIntros.flatMap((group) => [
+    ...(group.intro === null ? [] : [{ subject: { kind: "client_intro" as const, id: group.intro.id }, revisionId: group.intro.revision.id }]),
+    ...group.cases.map(({ caseStudy, revision }) => ({ subject: { kind: "case" as const, id: caseStudy.id }, revisionId: revision.id })),
+  ]);
+  return ok({ collection, groups: withIntros, parts, unavailable: items.length - available });
+}
+
+/** What a collection draws in each format asked for (Story 5.10b). */
+export interface CollectionSource extends CollectionParts {
+  /** One per format, in the order given. */
+  drawings: ExportDrawing[];
+}
+
+/**
+ * A collection in `formats` (Story 5.10b; one or more), read once so every format draws the
+ * same revisions and client info. Per client group in the collection's order: with 2 or more
+ * available cases and an approved intro, the intro's `intro` pages, each case without its own
+ * intro pages (and, in Carosello, its own Chiusura), the intro's `outro` pages once; otherwise
+ * each case with all its pages (`composeParts`, default mode). Page numbers run on. Each
+ * format's content hash covers the collection's id and name and every part's subject,
+ * approved revision and bound values. Errors: as `readCollectionParts`, and
+ * `FORMAT_NOT_IN_REVISION` when any part has no pages in a format, the other reads'.
+ */
+export async function readCollectionSources(
+  deps: CollectionSourceDeps,
+  collectionId: string,
+  formats: readonly ExportFormatId[],
+): Promise<Result<CollectionSource>> {
+  const read = await readCollectionParts(deps, collectionId);
+  if (!read.ok) return read;
+  const parts = read.value;
+
+  const perGroup: ExportSource[][][] = [];
+  for (const group of parts.groups) {
+    const cases: ExportSource[][] = [];
+    for (const { caseStudy, revision } of group.cases) {
+      const sources = await sourcesOf(deps, caseStudy, revision, formats);
+      if (!sources.ok) return sources;
+      cases.push(sources.value);
+    }
+    if (group.intro !== null) {
+      for (const format of formats) {
+        const entry = requireFormat(group.intro.revision, format);
+        if (!entry.ok) return entry;
+        if (entry.value.pages.length === 0) return err(formatNotInRevision(format));
+      }
+    }
+    perGroup.push(cases);
+  }
+
+  const drawings = formats.map((format, f): ExportDrawing => {
+    const drawParts = parts.groups.flatMap((group, g): DrawPart[] => {
+      const cases = perGroup[g].map((sources): DrawPart => {
+        const source = sources[f];
+        return { kind: "case_history", caseId: source.caseStudy.id, clientId: source.info.clientId, revision: source.revision, content: source.content };
+      });
+      if (group.intro === null) return cases;
+      // The intro draws its client's values (client info is live) and binds no case.
+      const intro: DrawPart = {
+        kind: "client_intro",
+        caseId: null,
+        clientId: cases[0].clientId,
+        revision: group.intro.revision,
+        content: {
+          part: { subject: { kind: "client_intro", id: group.intro.id }, revisionId: group.intro.revision.id },
+          template: group.intro.revision.doc.template,
+          client: cases[0].content.client,
+          case: { year: null, services: [], results: [], testimonial: null },
+        },
+      };
+      return [intro, ...cases];
+    });
+    const composed = composeParts(
+      drawParts.map((p) => composePartOf(p)),
+      format,
+    );
+    const first = drawParts.find((p) => p.kind === "case_history") ?? drawParts[0];
+    return {
+      format,
+      parts: drawParts,
+      pack: false,
+      pageCount: composed.segments.reduce((sum, segment) => sum + segment.pages.length, 0),
+      contentHash: collectionHash(
+        parts.collection,
+        drawParts.map((p) => p.content),
+        format,
+      ),
+      code: "",
+      name: parts.collection.name,
+      client: { id: first.clientId, logoId: first.content.client.logoId },
+    };
+  });
+  return ok({ ...parts, drawings });
 }

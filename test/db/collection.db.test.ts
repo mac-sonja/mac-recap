@@ -220,3 +220,26 @@ describe("collections (Story 5.10a)", () => {
     expect(grants.rows[0]).toEqual({ auth: false, insert: false });
   });
 });
+
+describe("collection exports (Story 5.10b)", () => {
+  it("logs collection_exported at the current version without bumping it; refuses a deleted collection", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const made = await created([await caseOf(a.id, "A1")]);
+    const { recordCollectionExported, deleteCollection } = await collection();
+    const exportId = "11111111-1111-4111-8111-111111111111";
+    expect(await recordCollectionExported(await actor(), { collectionId: made.collectionId, exportId, format: "presentazione_16_9" })).toEqual({ ok: true, value: undefined });
+    const events = await pool.query("select type, version, data from public.collection_event where collection_id = $1 and type = 'collection_exported'", [made.collectionId]);
+    expect(events.rows).toEqual([{ type: "collection_exported", version: 1, data: { exportId, format: "presentazione_16_9" } }]);
+    expect((await pool.query("select version from public.collection where id = $1", [made.collectionId])).rows[0]).toEqual({ version: 1 });
+
+    expect(await deleteCollection(await actor(), { collectionId: made.collectionId })).toMatchObject({ ok: true });
+    expect(await recordCollectionExported(await actor(), { collectionId: made.collectionId, exportId, format: "bundle" })).toMatchObject({
+      ok: false,
+      error: { code: "COLLECTION_NOT_FOUND" },
+    });
+    const grants = await pool.query(
+      "select has_function_privilege('authenticated', 'public.record_collection_exported(uuid, uuid, uuid, text)', 'execute') as auth, has_function_privilege('service_role', 'public.record_collection_exported(uuid, uuid, uuid, text)', 'execute') as service",
+    );
+    expect(grants.rows[0]).toEqual({ auth: false, service: true });
+  });
+});

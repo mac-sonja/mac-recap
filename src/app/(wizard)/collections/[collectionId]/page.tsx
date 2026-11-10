@@ -4,7 +4,7 @@ import { requireSurface } from "@/app/_lib/surface";
 import * as caseStudy from "@/modules/case-study";
 import * as collection from "@/modules/collection";
 import { addCollectionItems, moveCollectionGroup, moveCollectionItem, removeCollectionItems, retagCollection } from "./actions";
-import { candidatesOf, collectionGroupsOf } from "./collection-data";
+import { candidatesOf, collectionGroupsOf, exportCountsOf } from "./collection-data";
 import { CollectionView, type CollectionActions } from "./_components/collection-view";
 
 export interface CollectionPageProps {
@@ -27,7 +27,8 @@ const ACTIONS: CollectionActions = {
  * with no approved revision any more is "Non disponibile". An unknown, malformed or deleted
  * collection goes back to Raccolte; any other load failure throws into the wizard group's error
  * boundary. Remounted on every new version, so a change read again (an added or removed case)
- * starts the view afresh.
+ * starts the view afresh. **Esporta** (Story 5.10b) shows only while one of its cases has an
+ * approved revision; its dialog counts the "Non disponibile" ones it leaves out.
  */
 export default async function CollectionPage({ params }: CollectionPageProps) {
   const shell = await requireSurface("manage collections");
@@ -58,6 +59,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
       candidates={candidates.value}
       tagOptions={{ businessLines: caseStudy.BUSINESS_LINES, sectors: sectorList, sectorsFailed: !sectors.ok }}
       actions={ACTIONS}
+      exportCounts={exportCountsOf(detail)}
     />
   );
 }

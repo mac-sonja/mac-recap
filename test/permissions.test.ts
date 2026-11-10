@@ -84,6 +84,7 @@ const collectionActions = await import("@/app/(tool)/collections/actions");
 const collectionPageActions = await import("@/app/(wizard)/collections/[collectionId]/actions");
 const { default: LibraryPage } = await import("@/app/(tool)/library/page");
 const caseStudyModule = await import("@/modules/case-study");
+const collectionModule = await import("@/modules/collection");
 const draftReady = await import("@/app/_lib/draft-ready-actions");
 
 const OWNERS: readonly Role[] = ["owner_designer", "admin"];
@@ -352,4 +353,56 @@ describe("no role exports a client pack with a revision that isn't approved (Sto
     });
     expect(list).not.toHaveBeenCalled();
   });
+});
+
+describe("no role exports a collection with a revision that isn't approved (Story 5.10b, NFR1)", () => {
+  const COLLECTION_ID = "c0c0c0c0-0000-4000-8000-000000000001";
+  const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
+  const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+  const OTHER_ID = "aaaaaaaa-0000-4000-8000-000000000002";
+  const caseOf = (id: string) => ({ id, code: "LUM-2026-01", name: "Caso", year: 2026, businessLines: [], status: "approved", client: { id: CLIENT_ID, name: "Lumen", code: "LUM" }, deletedAt: null });
+
+  function arrange(live: (subject: { kind: string; id: string }) => unknown) {
+    vi.mocked(collectionModule.getCollection).mockResolvedValue(
+      ok({ id: COLLECTION_ID, name: "Pitch moda", version: 1, items: [CASE_ID, OTHER_ID].map((id) => ({ case: caseOf(id), revision: null })) }) as never,
+    );
+    vi.mocked(caseStudyModule.get).mockImplementation(async (id) => ok(caseOf(id as string)) as never);
+    vi.mocked(caseStudyModule.getClientIntro).mockResolvedValue(ok({ id: "dddddddd-0000-4000-8000-000000000001" }) as never);
+    const getLiveRevision = vi.mocked(caseStudyModule.getLiveRevision);
+    getLiveRevision.mockReset();
+    getLiveRevision.mockImplementation(async (subject) => ok(live(subject as { kind: string; id: string })) as never);
+    vi.mocked(caseStudyModule.getEditableRevision).mockClear();
+    vi.mocked(jobsModule.enqueue).mockClear();
+    vi.mocked(collectionModule.recordCollectionExported).mockClear();
+    return getLiveRevision;
+  }
+
+  afterEach(() => {
+    vi.mocked(collectionModule.getCollection).mockReset();
+    vi.mocked(collectionModule.getCollection).mockResolvedValue(ok(null) as never);
+    vi.mocked(caseStudyModule.get).mockReset();
+    vi.mocked(caseStudyModule.get).mockResolvedValue(ok(null) as never);
+  });
+
+  it.each(["owner_designer", "admin", "account_sales_social"] as const)(
+    "as %s: cases with only a working copy are NOT_APPROVED, read from live revisions only, nothing enqueued",
+    async (role) => {
+      session.role = role;
+      // Both cases have a working head, but no live revision; the client's intro isn't approved either.
+      const getLiveRevision = arrange(() => null);
+      for (const format of ["presentazione_16_9", "carosello_1_1"]) {
+        const result = await collectionPageActions.requestCollectionExport({ collectionId: COLLECTION_ID, formats: [format] });
+        expect(result).toMatchObject({ ok: false, status: 409, error: { code: "NOT_APPROVED" } });
+      }
+      expect(await collectionPageActions.getCollectionExportStatus({ collectionId: COLLECTION_ID, exportId: CASE_ID })).toMatchObject({
+        ok: false,
+        error: { code: "NOT_APPROVED" },
+      });
+      expect(getLiveRevision).toHaveBeenCalledWith({ kind: "case", id: CASE_ID });
+      expect(getLiveRevision).toHaveBeenCalledWith({ kind: "case", id: OTHER_ID });
+      expect(caseStudyModule.getEditableRevision).not.toHaveBeenCalled();
+      expect(jobsModule.enqueue).not.toHaveBeenCalled();
+      expect(collectionModule.recordCollectionExported).not.toHaveBeenCalled();
+    },
+  );
 });

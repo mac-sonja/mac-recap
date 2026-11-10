@@ -128,3 +128,13 @@ export async function candidatesOf(detail: CollectionDetail): Promise<Result<Col
       })),
   );
 }
+
+/**
+ * Story 5.10b, what **Esporta** puts in the file: the cases with a live approved revision, and
+ * the "Non disponibile" ones (no approved revision any more) it leaves out. A deleted case has
+ * already left the collection.
+ */
+export function exportCountsOf(detail: CollectionDetail): { available: number; unavailable: number } {
+  const available = detail.items.filter((item) => item.revision !== null).length;
+  return { available, unavailable: detail.items.length - available };
+}

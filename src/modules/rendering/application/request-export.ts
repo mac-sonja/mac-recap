@@ -5,10 +5,13 @@ import {
   bundleHashOf,
   bundleHashOfDrawings,
   notApproved,
+  readCollectionParts,
+  readCollectionSources,
   readExportSources,
   readPackParts,
   readPackSources,
   sameParts,
+  type CollectionSourceDeps,
   type ExportDrawing,
   type ExportSourceDeps,
   type PackSourceDeps,
@@ -19,7 +22,10 @@ import {
   EXPORT_MAX_PARTS,
   EXPORT_STALE,
   EXPORT_TOO_LARGE,
+  collectionStatusInputSchema,
   exportStatusInputSchema,
+  requestCollectionInputSchema,
+  type ExportCollection,
   packStatusInputSchema,
   requestPackInputSchema,
   type PackClient,
@@ -73,7 +79,7 @@ const invalid = (fields: string[]) => err({ code: "INVALID_INPUT", message: `Inv
 const isUuid = (value: unknown) => z.uuid().safeParse(value).success;
 
 /** The fields of a status input that are actually wrong: `subjectKey` (`caseId` or `clientId`), exactly one of `jobId` / `exportId`, nothing else. */
-function statusFields(input: unknown, subjectKey: "caseId" | "clientId" = "caseId"): string[] {
+function statusFields(input: unknown, subjectKey: "caseId" | "clientId" | "collectionId" = "caseId"): string[] {
   const given = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
   const bad: string[] = [];
   if (!isUuid(given[subjectKey])) bad.push(subjectKey);
@@ -386,5 +392,159 @@ export function makePackStatus(deps: RequestPackDeps) {
     if (!current.ok) return current;
     if (!current.value.has(record.contentHash.toLowerCase())) return stale();
     return deliverPack(deps, actor, client, record);
+  };
+}
+
+// ---------------------------------------------------------------------------
+// A collection (Story 5.10b)
+// ---------------------------------------------------------------------------
+
+export interface RequestCollectionDeps extends RequestExportDeps, CollectionSourceDeps {
+  /** `collection.recordCollectionExported`: one `collection_exported` event in `collection_event`. */
+  recordCollectionEvent(actor: Actor, input: { collectionId: string; exportId: string; format: string }): Promise<Result<unknown>>;
+}
+
+/**
+ * Every content hash the collection's file has now: each format it can export alone, and
+ * each bundle of two or more of them. Errors: the reads' (a format a part lacks is left out).
+ */
+async function currentCollectionHashes(deps: CollectionSourceDeps, collectionId: string): Promise<Result<Set<string>>> {
+  const drawings: ExportDrawing[] = [];
+  for (const format of EXPORT_FORMAT_IDS) {
+    const read = await readCollectionSources(deps, collectionId, [format]);
+    if (!read.ok) {
+      if (read.error.code === FORMAT_NOT_IN_REVISION) continue;
+      return read;
+    }
+    drawings.push(read.value.drawings[0]);
+  }
+  const hashes = new Set(drawings.map((d) => d.contentHash));
+  for (let mask = 0; mask < 1 << drawings.length; mask++) {
+    const chosen = drawings.filter((_, i) => (mask & (1 << i)) !== 0);
+    if (chosen.length >= 2) hashes.add(bundleHashOfDrawings(chosen));
+  }
+  return ok(hashes);
+}
+
+/**
+ * A signed GET of a collection's `record` named after the collection, and one
+ * `collection_exported` event (`data { exportId, format }`) in the collection's log, as a
+ * pack's delivery records its export events.
+ */
+async function deliverCollection(
+  deps: Pick<RequestCollectionDeps, "storage" | "recordCollectionEvent">,
+  actor: Actor,
+  collection: ExportCollection,
+  record: ExportRecord,
+): Promise<Result<ExportTicket>> {
+  const fileName = recordFileName("", collection.name, record.format);
+  const url = await deps.storage.presignDownload(record.path, EXPORT_URL_TTL_SECONDS, fileName);
+  if (!url.ok) return url;
+  const recorded = await deps.recordCollectionEvent(actor, { collectionId: collection.id, exportId: record.id, format: record.format });
+  if (!recorded.ok) return recorded;
+  return ok({ status: "ready", exportId: record.id, url: url.value, fileName });
+}
+
+/**
+ * Asks for a collection as a file (Story 5.10b): input `{ collectionId, formats }` (or
+ * `{ collectionId, format }`), one format its own file, two or more one ZIP of them, as for a
+ * case. Per client group in the collection's order: with 2 or more available cases and an
+ * approved intro, the intro, the cases without their own intros (and Carosello Chiusura) and
+ * the closing once; otherwise each case whole. A case with no approved revision, or deleted, is
+ * left out. Live revisions only. Every format is checked before anything is enqueued. Reuses a
+ * stored export with the same content hash (`ready`, with a `collection_exported` event),
+ * else enqueues one `export` job for the collection (`pending`). Authorize first
+ * (`manage collections`). Errors: `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE` (Video),
+ * `COLLECTION_NOT_FOUND`, `NOT_APPROVED` (no available case), `FORMAT_NOT_IN_REVISION`,
+ * `EXPORT_TOO_LARGE` (more parts than an export holds), the reads'.
+ */
+export function makeRequestCollection(deps: RequestCollectionDeps) {
+  return async function requestCollection(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
+    const parsed = requestCollectionInputSchema(input).safeParse(input);
+    if (!parsed.success) return invalid(fieldsOf(parsed.error.issues));
+    const { collectionId } = parsed.data;
+    const formats = formatsOf(parsed.data);
+    if (!formats.ok) return formats;
+
+    const read = await readCollectionSources(deps, collectionId.toLowerCase(), formats.value);
+    if (!read.ok) return read;
+    const { collection, parts, drawings } = read.value;
+    if (parts.length > EXPORT_MAX_PARTS) {
+      return err({ code: EXPORT_TOO_LARGE, message: "This collection holds more parts than one file can.", details: { collectionId: collection.id } });
+    }
+    const bundled = drawings.length > 1 ? drawings.map((d) => d.format).sort() : [];
+    const hash = bundled.length > 0 ? bundleHashOfDrawings(drawings) : drawings[0].contentHash;
+
+    const existing = await deps.exports.findByHash(hash);
+    if (!existing.ok) return existing;
+    if (existing.value !== null) return deliverCollection(deps, actor, collection, existing.value);
+
+    const subject = { kind: "collection" as const, id: collection.id };
+    const payload: ExportPayload =
+      bundled.length > 0
+        ? { subject, parts: [...parts], format: EXPORT_BUNDLE, formats: bundled, requestedBy: actor.id }
+        : { subject, parts: [...parts], format: drawings[0].format, requestedBy: actor.id };
+    const job = await deps.enqueue({ kind: "export", subjectId: collection.id, inputHash: hash, payload });
+    if (!job.ok) return job;
+    return ok({ status: "pending", jobId: job.value.id });
+  };
+}
+
+/**
+ * Where a collection request stands (Story 5.10b): input `{ collectionId, jobId }` or
+ * `{ collectionId, exportId }`. As `packStatus`: `pending`, `failed`, or `ready` (with a
+ * `collection_exported` event). The collection must still have an available case
+ * (`NOT_APPROVED`), and the file must be of the collection as it is now: the same parts with
+ * the same approved revisions in the same order and one of its current content hashes
+ * (`EXPORT_STALE` otherwise, after a reorder, a rename, an added or removed case, a newer
+ * approved version or a client field edit: ask again). A case's own export or a client pack
+ * never has a collection's hash. Authorize first. Errors also: `INVALID_INPUT`, `NOT_FOUND`
+ * (an unknown job or export, or one of none of its cases), `COLLECTION_NOT_FOUND`, the reads'.
+ */
+export function makeCollectionStatus(deps: RequestCollectionDeps) {
+  return async function collectionStatus(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
+    const parsed = collectionStatusInputSchema.safeParse(input);
+    if (!parsed.success) return invalid(statusFields(input, "collectionId"));
+    const collectionId = parsed.data.collectionId.toLowerCase();
+    const notFound = () => err({ code: "NOT_FOUND", message: "No such export.", details: { collectionId } });
+
+    // Approved only (NFR1): nothing is looked up, let alone handed out, without an available case.
+    const read = await readCollectionParts(deps, collectionId);
+    if (!read.ok) return read;
+    const { collection, parts } = read.value;
+    const stale = () => err({ code: EXPORT_STALE, message: "The collection changed since: export it again.", details: { collectionId: collection.id } });
+
+    let record: ExportRecord | null;
+    if ("jobId" in parsed.data) {
+      const jobs = await deps.getJobsFor(collection.id);
+      if (!jobs.ok) return jobs;
+      const wanted = parsed.data.jobId.toLowerCase();
+      const job = jobs.value.find((j) => j.id.toLowerCase() === wanted);
+      if (job === undefined || job.kind !== "export") return notFound();
+      if (job.status === "queued" || job.status === "running") return ok({ status: "pending", jobId: job.id });
+      if (job.status === "failed") return ok({ status: "failed" });
+      const stored = await deps.exports.findByHash(job.inputHash);
+      if (!stored.ok) return stored;
+      if (stored.value === null) return ok({ status: "failed" });
+      record = stored.value;
+    } else {
+      const stored = await deps.exports.findById(parsed.data.exportId);
+      if (!stored.ok) return stored;
+      record = stored.value;
+    }
+    if (record === null) return notFound();
+
+    // Handed out only while it is of the collection as it is now: the same parts and one of its
+    // current content hashes (a rename or a client field edit gives another one; a case's own
+    // export or a client pack never has a collection's hash).
+    if (!sameParts(record.parts, parts)) {
+      const ours = new Set(parts.map((p) => p.subject.id.toLowerCase()));
+      if (!record.parts.some((p) => ours.has(p.subject.id.toLowerCase()))) return notFound();
+      return stale();
+    }
+    const current = await currentCollectionHashes(deps, collection.id);
+    if (!current.ok) return current;
+    if (!current.value.has(record.contentHash.toLowerCase())) return stale();
+    return deliverCollection(deps, actor, collection, record);
   };
 }
