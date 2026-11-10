@@ -2,7 +2,7 @@
 title: 'Story 5.9a: client pack download'
 type: 'feature'
 created: '2026-11-10'
-status: 'in-review'
+status: 'done'
 baseline_commit: '7e0d869dc2720532053eb913c49338e88fabf78c'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -127,7 +127,7 @@ context:
 | 1 | `packStatus` hands out a stored file without comparing hashes: stale after a client or field edit, and a case's own export can pass as the pack (blind, edge) | high | `makePackStatus` checks `sameParts` only; a one-case pack without an approved intro has the same parts as the case's own export | patch |
 | 2 | Assets collected from pages the pack drops can fail the job (edge, blind) | medium | `mediaAssets` uses `pagesIn(part, format)` before composing | patch |
 | 3 | A case deleted or unapproved between listing and reading fails the whole pack (edge) | medium | `readPackParts` returns the `getLiveRevision` error | patch |
-| 4 | A failed event write fails a ready delivery (blind, edge) | low | `deliverPack` returns the `recordEvent` error | patch |
+| 4 | A failed event write fails a ready delivery (blind, edge) | low | Same as single-case `deliver`, decided in the 5.3 review (row 16): the event is written before the file is handed out | reject |
 | 5 | One failed intro read throws the Clienti page (blind) | low | `clients/page.tsx` throws on `getClientIntro` error | patch |
 | 6 | Incomplete refusal mapping; JSDoc contradicts the poll code (blind) | low | `packRefusalFor` covers two codes | patch |
 | 7 | Dialog note not announced (blind) | low | No `aria-describedby` on the note | patch |

@@ -38,6 +38,9 @@ describe("ClientPackButton (Story 5.9a)", () => {
     render(<ClientPackButton clientId={CLIENT_ID} name="Lumen Srl" approvedCount={2} introApproved={false} />);
     open();
     expect(dialog().textContent).toContain(dict.download.packIntroNote);
+    // The note describes the formats, so screen readers hear it.
+    const described = dialog().querySelector("fieldset")!.getAttribute("aria-describedby") ?? "";
+    expect(described.split(" ").map((id) => document.getElementById(id)?.textContent)).toContain(dict.download.packIntroNote);
     expect(dialog().textContent).toContain(fill(dict.download.packDescriptionNoIntro, { n: 2 }));
   });
 
