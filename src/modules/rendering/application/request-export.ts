@@ -9,11 +9,13 @@ import {
   readPackParts,
   readPackSources,
   sameParts,
+  type ExportDrawing,
   type ExportSourceDeps,
   type PackSourceDeps,
 } from "@/modules/rendering/application/export-source";
 import {
   EXPORT_BUNDLE,
+  EXPORT_FORMAT_IDS,
   EXPORT_MAX_PARTS,
   EXPORT_STALE,
   EXPORT_TOO_LARGE,
@@ -29,7 +31,7 @@ import {
   type ExportPayload,
   type ExportRecord,
 } from "@/modules/rendering/domain/export";
-import { isFormatId } from "@/modules/rendering/domain/formats";
+import { FORMAT_NOT_IN_REVISION, isFormatId } from "@/modules/rendering/domain/formats";
 import type { ExportRepository } from "@/modules/rendering/ports/export-repository";
 import type { ExportStorage } from "@/modules/rendering/ports/export-storage";
 import { err, ok, type Result } from "@/shared/result";
@@ -236,6 +238,29 @@ export function makeExportStatus(deps: RequestExportDeps) {
 export interface RequestPackDeps extends RequestExportDeps, PackSourceDeps {}
 
 /**
+ * Every content hash the client's pack has now: each format it can export alone, and each
+ * bundle of two or more of them. Errors: the reads' (a format a part lacks is left out).
+ */
+async function currentPackHashes(deps: PackSourceDeps, clientId: string): Promise<Result<Set<string>>> {
+  const drawings: ExportDrawing[] = [];
+  for (const format of EXPORT_FORMAT_IDS) {
+    const read = await readPackSources(deps, clientId, [format]);
+    if (!read.ok) {
+      if (read.error.code === FORMAT_NOT_IN_REVISION) continue;
+      return read;
+    }
+    drawings.push(read.value.drawings[0]);
+  }
+  const hashes = new Set(drawings.map((d) => d.contentHash));
+  // Every subset of two or more formats, as a bundle.
+  for (let mask = 0; mask < 1 << drawings.length; mask++) {
+    const chosen = drawings.filter((_, i) => (mask & (1 << i)) !== 0);
+    if (chosen.length >= 2) hashes.add(bundleHashOfDrawings(chosen));
+  }
+  return ok(hashes);
+}
+
+/**
  * A signed GET of a pack's `record` named after the client, and one `export` case event
  * per case in it (the existing export event, `data { exportId, format, clientId }`, with the
  * case's own approved revision): the pack's activity, on each case it holds.
@@ -327,6 +352,7 @@ export function makePackStatus(deps: RequestPackDeps) {
     const read = await readPackParts(deps, clientId);
     if (!read.ok) return read;
     const { client, parts } = read.value;
+    const stale = () => err({ code: EXPORT_STALE, message: "The pack changed since: export it again.", details: { clientId: client.id } });
 
     let record: ExportRecord | null;
     if ("jobId" in parsed.data) {
@@ -348,12 +374,17 @@ export function makePackStatus(deps: RequestPackDeps) {
     }
     if (record === null) return notFound();
 
-    // A file is handed out only while it is of the pack as it is now.
+    // A file is handed out only while it is of the pack as it is now: the same parts and the
+    // same content hash (a client or case field edit, or a rename, gives another one; a case's
+    // own export never has a pack's hash).
     if (!sameParts(record.parts, parts)) {
       const ours = new Set(parts.map((p) => p.subject.id.toLowerCase()));
       if (!record.parts.some((p) => ours.has(p.subject.id.toLowerCase()))) return notFound();
-      return err({ code: EXPORT_STALE, message: "The pack changed since: export it again.", details: { clientId: client.id } });
+      return stale();
     }
+    const current = await currentPackHashes(deps, client.id);
+    if (!current.ok) return current;
+    if (!current.value.has(record.contentHash.toLowerCase())) return stale();
     return deliverPack(deps, actor, client, record);
   };
 }

@@ -234,6 +234,8 @@ export async function readPackParts(deps: PackSourceDeps, clientId: string): Pro
   const lives = await Promise.all(listed.value.map((c) => deps.getLiveRevision({ kind: "case", id: c.id })));
   const cases: { caseStudy: CaseStudy; revision: CaseStudyRevision }[] = [];
   for (const [i, live] of lives.entries()) {
+    // A case deleted since it was listed is left out like the others.
+    if (!live.ok && live.error.code === "NOT_FOUND") continue;
     if (!live.ok) return live;
     const caseStudy = listed.value[i];
     // Deleted cases, another client's, and a case no longer approved are left out.

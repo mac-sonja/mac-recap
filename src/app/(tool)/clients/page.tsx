@@ -5,6 +5,7 @@ import { authorize, can } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import { PageHeader } from "@/app/_components/page-header";
 import { it } from "@/shared/i18n/it";
+import { log } from "@/shared/log";
 import { ClientPanel } from "./_components/client-panel";
 import { ClientsTable } from "./_components/clients-table";
 import type { ClientRow } from "./_components/filter-sort";
@@ -44,11 +45,16 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps = {
   }
 
   // Story 5.9a: whether each pack's intro is approved (the dialog's note), read only for cards with Scarica.
-  const introApproved = new Map<string, boolean>();
+  // A failed read leaves it unknown (null): the card keeps Scarica, the dialog claims nothing.
+  const introApproved = new Map<string, boolean | null>();
   await Promise.all(
     [...approved.keys()].map(async (clientId) => {
       const intro = await caseStudy.getClientIntro(clientId);
-      if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
+      if (!intro.ok) {
+        log.warn(`client intro not read for the pack: ${intro.error.code}`, { clientId });
+        introApproved.set(clientId, null);
+        return;
+      }
       introApproved.set(clientId, intro.value !== null && intro.value.approvedRevisionId !== null);
     }),
   );
@@ -59,7 +65,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps = {
     name,
     caseCount,
     approvedCount: approved.get(id) ?? 0,
-    introApproved: introApproved.get(id) ?? false,
+    introApproved: introApproved.get(id) ?? null,
     complete,
     logoUrl,
   }));

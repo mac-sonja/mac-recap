@@ -110,6 +110,9 @@ export function DownloadButton({
   const [refusal, setRefusal] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const refusalId = useId();
+  const noteId = useId();
+  const hasNote = note !== undefined && note !== "";
+  const describedBy = [hasNote ? noteId : null, refusal === null ? null : refusalId].filter((id) => id !== null).join(" ");
 
   const mounted = useRef(true);
   useEffect(() => {
@@ -255,7 +258,7 @@ export function DownloadButton({
           </>
         }
       >
-        <fieldset className="flex flex-col gap-2" aria-describedby={refusal === null ? undefined : refusalId}>
+        <fieldset className="flex flex-col gap-2" aria-describedby={describedBy === "" ? undefined : describedBy}>
           <legend className="sr-only">{it.download.formats}</legend>
           {FORMAT_ORDER.map((id) => (
             <label
@@ -290,7 +293,11 @@ export function DownloadButton({
             </div>
           ))}
         </fieldset>
-        {note !== undefined && note !== "" && <p className="mt-3 font-label text-sm text-foreground-muted">{note}</p>}
+        {hasNote && (
+          <p id={noteId} className="mt-3 font-label text-sm text-foreground-muted">
+            {note}
+          </p>
+        )}
         {refusal !== null && (
           <p id={refusalId} role="alert" className="mt-3 font-label text-sm text-danger">
             {refusal}

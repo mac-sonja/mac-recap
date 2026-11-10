@@ -149,6 +149,22 @@ describe("ClientPage", () => {
       expect(await renderPage()).toContain(PACK);
     });
 
+    it("with an approved intro: Intro e… and no note", async () => {
+      list.mockResolvedValue(ok([caseStudy({ status: "approved" })]));
+      getClientIntro.mockResolvedValue(ok({ ...intro("approved"), approvedRevisionId: "eeeeeeee-0000-4000-8000-000000000001" }));
+      const html = await renderPage();
+      expect(html).toContain(dict.download.packDescriptionOne);
+      expect(html).not.toContain(dict.download.packIntroNote);
+    });
+
+    it("with an intro that isn't approved: the note", async () => {
+      list.mockResolvedValue(ok([caseStudy({ status: "approved" })]));
+      getClientIntro.mockResolvedValue(ok(intro("in_review")));
+      const html = await renderPage();
+      expect(html).toContain(dict.download.packIntroNote);
+      expect(html).toContain(dict.download.packDescriptionNoIntroOne);
+    });
+
     it("is not offered while the client has only cases that aren't approved", async () => {
       list.mockResolvedValue(ok([caseStudy({ status: "draft" }), caseStudy({ id: "aaaaaaaa-0000-4000-8000-000000000002", status: "in_review" })]));
       getClientIntro.mockResolvedValue(ok({ ...intro("approved"), approvedRevisionId: "eeeeeeee-0000-4000-8000-000000000001" }));

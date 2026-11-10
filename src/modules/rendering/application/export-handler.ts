@@ -1,5 +1,6 @@
 import { referencedAssetIds } from "@/modules/case-study";
 import { JOB_ABORTED, type Job, type JobFailure, type JobHandler, type JobOutcome } from "@/modules/jobs";
+import { composeParts } from "@/modules/rendering/compose";
 import { exportHtml } from "@/modules/rendering/application/export-html";
 import {
   bundleHashOfDrawings,
@@ -26,7 +27,7 @@ import {
   type ExportPayload,
   type ExportRecord,
 } from "@/modules/rendering/domain/export";
-import type { BusinessLine } from "@/modules/case-study";
+import { BUSINESS_LINES, type BusinessLine } from "@/modules/case-study";
 import { getFormat } from "@/modules/rendering/domain/formats";
 import type { ExportBrowser } from "@/modules/rendering/ports/export-browser";
 import type { ExportRepository } from "@/modules/rendering/ports/export-repository";
@@ -99,6 +100,8 @@ export function pdfPageCount(bytes: Uint8Array): number {
   return Buffer.from(bytes).toString("latin1").match(/\/Type\s*\/Page(?![a-zA-Z])/g)?.length ?? 0;
 }
 
+const isBusinessLine = (line: string): line is BusinessLine => (BUSINESS_LINES as readonly string[]).includes(line);
+
 const dataUrl = (contentType: string, bytes: Uint8Array) => `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
 
 /**
@@ -111,12 +114,6 @@ function caseIdOf(job: Job): string | null {
   const parsed = exportPayloadSchema.safeParse(raw);
   if (!parsed.success) return job.subjectId;
   return "subject" in parsed.data ? null : parsed.data.parts[0].subject.id;
-}
-
-/** A part's pages in `format` as its revision holds them (before a pack trims them). */
-function pagesIn(part: DrawPart, format: ExportFormatId) {
-  const formats = part.revision.doc.formats;
-  return Object.hasOwn(formats, format) ? (formats[format]?.pages ?? []) : [];
 }
 
 /**
@@ -136,8 +133,14 @@ function pagesIn(part: DrawPart, format: ExportFormatId) {
  */
 export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
   async function mediaAssets(drawing: ExportDrawing, signal: AbortSignal): Promise<Result<Record<string, RenderAsset>, Failure>> {
+    // Only the pages the file draws: a pack drops each case's own intro and Carosello Chiusura.
+    const composed = composeParts(
+      drawing.parts.map((part) => composePartOf(part)),
+      drawing.format,
+      drawing.pack ? { pack: true } : undefined,
+    );
     const wanted = new Set<string>();
-    for (const part of drawing.parts) for (const id of referencedAssetIds({ pages: pagesIn(part, drawing.format) })) wanted.add(id);
+    for (const segment of composed.segments) for (const id of referencedAssetIds({ pages: segment.pages })) wanted.add(id);
     if (wanted.size === 0) return ok({});
     const caseIds = drawing.parts.flatMap((part) => (part.caseId === null ? [] : [part.caseId]));
     const [clientFiles, ...caseLists] = await Promise.all([deps.listClientMedia(drawing.client.id), ...caseIds.map((id) => deps.listCaseMedia(id))]);
@@ -188,7 +191,7 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
     const { client, case: c } = part.content;
     return {
       client: { name: client.name, sector: client.sector, description: client.description, logoUrl: logo, results: client.results, testimonial: client.testimonial },
-      case: { year: c.year, services: c.services.map((line) => it.businessLines[line as BusinessLine]), results: c.results, testimonial: c.testimonial },
+      case: { year: c.year, services: c.services.filter(isBusinessLine).map((line) => it.businessLines[line]), results: c.results, testimonial: c.testimonial },
     };
   }
 

@@ -9,6 +9,7 @@ import {
   CASE_ID,
   CLIENT_ID,
   PACK_CASES,
+  packCaseRevision,
   packDeps,
   CASE_IMAGE,
   CLIENT_IMAGE,
@@ -665,6 +666,37 @@ describe("export handler, client packs (Story 5.9a)", () => {
     const reordered = packDeps({ order: ["A", "B", "C"] });
     vi.mocked(rig.all.listClientCasesInOrder).mockImplementation(reordered.listClientCasesInOrder);
     expect(await rig.handler.run(rig.jobs[0], signal())).toMatchObject({ ok: false, error: { code: "EXPORT_STALE", retryable: false } });
+    expect(rig.exports.rows).toEqual([]);
+  });
+
+  it("draws each case with its own details", async () => {
+    const rig = await packRig({ order: ["C", "A", "B"] });
+    await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["presentazione_16_9"] });
+    expect(await rig.handler.run(rig.jobs[0], signal())).toEqual(ok(undefined));
+    const html = rig.seen[0].html;
+    const at = (key: "A" | "B" | "C") => html.indexOf(`Citazione del caso ${key}.`);
+    for (const key of ["A", "B", "C"] as const) expect(at(key)).toBeGreaterThan(-1);
+    // In the client's order.
+    expect(at("C")).toBeLessThan(at("A"));
+    expect(at("A")).toBeLessThan(at("B"));
+  });
+
+  it("drops each case's own Carosello Chiusura from the drawn slides; the client's closing comes once", async () => {
+    const rig = await packRig({ order: ["A", "B"] });
+    await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["carosello_1_1"] });
+    expect(await rig.handler.run(rig.jobs[0], signal())).toEqual(ok(undefined));
+    const html = rig.seen[0].html;
+    const own = packCaseRevision("A").doc.formats.carosello_1_1.pages;
+    const keep = own.filter((p) => p.role !== "intro" && p.pageKey !== "closing").length;
+    expect(sections(html)).toBe(1 + 2 * keep + 1);
+    expect(html.match(/data-page-key="closing"/g)).toHaveLength(1);
+  });
+
+  it("fails for good when the client is gone (CLIENT_NOT_FOUND, not retried)", async () => {
+    const rig = await packRig();
+    await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["presentazione_16_9"] });
+    vi.mocked(rig.all.getClient).mockResolvedValue(err({ code: "CLIENT_NOT_FOUND", message: "gone" }));
+    expect(await rig.handler.run(rig.jobs[0], signal())).toMatchObject({ ok: false, error: { code: "CLIENT_NOT_FOUND", retryable: false } });
     expect(rig.exports.rows).toEqual([]);
   });
 

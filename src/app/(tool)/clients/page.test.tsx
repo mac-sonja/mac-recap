@@ -96,12 +96,37 @@ describe("ClientsPage", () => {
     expect(getClientIntro).toHaveBeenCalledExactlyOnceWith(LUMEN.id);
   });
 
-  it("throws into the error boundary when a pack's intro can't be read (Story 5.9a)", async () => {
-    requireSurface.mockResolvedValue(shell("owner_designer"));
-    listClientSummaries.mockResolvedValue(ok([LUMEN]));
-    list.mockResolvedValue(ok([{ status: "approved", client: { id: LUMEN.id } }]));
-    getClientIntro.mockResolvedValue(err({ code: "CLIENT_INTRO_LOOKUP_FAILED", message: "down" }));
-    await expect(renderPage()).rejects.toThrow("CLIENT_INTRO_LOOKUP_FAILED");
+  describe("the pack's dialog (Story 5.9a)", () => {
+    const withPack = () => {
+      requireSurface.mockResolvedValue(shell("owner_designer"));
+      listClientSummaries.mockResolvedValue(ok([LUMEN]));
+      list.mockResolvedValue(ok([{ status: "approved", client: { id: LUMEN.id } }]));
+    };
+
+    it("with an approved intro: Intro e… and no note", async () => {
+      withPack();
+      getClientIntro.mockResolvedValue(ok({ approvedRevisionId: "eeeeeeee-0000-4000-8000-000000000001" }));
+      const html = await renderPage();
+      expect(html).toContain(dict.download.packDescriptionOne);
+      expect(html).not.toContain(dict.download.packIntroNote);
+    });
+
+    it("with an intro that isn't approved: the note", async () => {
+      withPack();
+      getClientIntro.mockResolvedValue(ok({ approvedRevisionId: null }));
+      const html = await renderPage();
+      expect(html).toContain(dict.download.packIntroNote);
+      expect(html).toContain(dict.download.packDescriptionNoIntroOne);
+    });
+
+    it("when the intro can't be read: Scarica stays, the dialog claims nothing", async () => {
+      withPack();
+      getClientIntro.mockResolvedValue(err({ code: "CLIENT_INTRO_LOOKUP_FAILED", message: "down" }));
+      const html = await renderPage();
+      expect(html).toContain(`aria-label="${fill(dict.download.packLabel, { name: LUMEN.name })}"`);
+      expect(html).not.toContain(dict.download.packIntroNote);
+      expect(html).not.toContain(dict.download.packDescriptionOne);
+    });
   });
 
   it("carries each client's signed logo URL to its card; a client without one keeps the monogram", async () => {

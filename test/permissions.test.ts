@@ -299,7 +299,7 @@ describe("no role exports a client pack with a revision that isn't approved (Sto
 
   afterEach(() => {
     vi.mocked(caseStudyModule.listClientCasesInOrder).mockReset();
-    vi.mocked(caseStudyModule.listClientCasesInOrder).mockResolvedValue(ok(null) as never);
+    vi.mocked(caseStudyModule.listClientCasesInOrder).mockResolvedValue(ok([]) as never);
   });
 
   it.each(["owner_designer", "admin"] as const)("as %s: a client with only cases not approved is NOT_APPROVED, nothing enqueued", async (role) => {

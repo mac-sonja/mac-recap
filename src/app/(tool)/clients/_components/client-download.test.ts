@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { it as dict } from "@/shared/i18n/it";
+import { fill, it as dict } from "@/shared/i18n/it";
 
 const { requestClientExport, getClientExportStatus } = vi.hoisted(() => ({ requestClientExport: vi.fn(), getClientExportStatus: vi.fn() }));
 vi.mock("@/app/(tool)/clients/export-actions", () => ({ requestClientExport, getClientExportStatus }));
@@ -17,7 +17,7 @@ beforeEach(() => {
 describe("clientDownload (Story 5.9a)", () => {
   it("asks the server for the client's pack in the ticked formats; a pending job is polled by its id", async () => {
     requestClientExport.mockResolvedValue({ ok: true, value: { status: "pending", jobId: "job-1" } });
-    const { onDownload, onPoll } = clientDownload(CLIENT_ID);
+    const { onDownload, onPoll } = clientDownload(CLIENT_ID, "Lumen Srl");
     expect(await onDownload(["presentazione_16_9", "carosello_1_1"])).toEqual({ kind: "pending", ticket: "job-1" });
     expect(requestClientExport).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, formats: ["presentazione_16_9", "carosello_1_1"] });
 
@@ -34,15 +34,16 @@ describe("clientDownload (Story 5.9a)", () => {
 
   it("hands a stored pack over at once", async () => {
     requestClientExport.mockResolvedValue({ ok: true, value: { status: "ready", exportId: "e", url: "u", fileName: "f.pdf" } });
-    expect(await clientDownload(CLIENT_ID).onDownload(["presentazione_16_9"])).toEqual({ kind: "ready", url: "u", fileName: "f.pdf" });
+    expect(await clientDownload(CLIENT_ID, "Lumen Srl").onDownload(["presentazione_16_9"])).toEqual({ kind: "ready", url: "u", fileName: "f.pdf" });
   });
 
   it.each([
     ["NOT_APPROVED", dict.download.packNotApproved],
     ["FORMAT_NOT_IN_REVISION", dict.download.packFormatMissing],
-    ["FORBIDDEN", dict.download.failed],
+    ["FORBIDDEN", fill(dict.download.failedPack, { name: "Lumen Srl" })],
+    ["CLIENT_NOT_FOUND", fill(dict.download.failedPack, { name: "Lumen Srl" })],
   ])("turns %s into the dialog's line", async (code, message) => {
     requestClientExport.mockResolvedValue(refused(code));
-    expect(await clientDownload(CLIENT_ID).onDownload(["presentazione_16_9"])).toEqual({ kind: "refused", message });
+    expect(await clientDownload(CLIENT_ID, "Lumen Srl").onDownload(["presentazione_16_9"])).toEqual({ kind: "refused", message });
   });
 });
