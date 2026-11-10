@@ -54,13 +54,31 @@ export const EXPORT_FILES: Readonly<
   bundle: Object.freeze({ extension: "zip", contentType: "application/zip" }),
 });
 
-/** What an export is made of (5.3: a case; 5.9 and 5.10 add client intros and collections). */
-export const exportSubjectSchema = z.object({ kind: z.literal("case"), id: z.uuid() });
+/** A case as a part of an export (Story 5.3). */
+export const caseSubjectSchema = z.object({ kind: z.literal("case"), id: z.uuid() });
+/** A client's intro document as a part of its pack (Story 5.9a): the intro's own id. */
+export const introSubjectSchema = z.object({ kind: z.literal("client_intro"), id: z.uuid() });
+
+/** What one part of an export is made of: a case, or a client's intro (5.10 adds collections). */
+export const exportSubjectSchema = z.discriminatedUnion("kind", [caseSubjectSchema, introSubjectSchema]);
 export type ExportSubject = z.infer<typeof exportSubjectSchema>;
 
 /** One part of an export: a subject and the approved revision drawn. */
 export const exportPartSchema = z.object({ subject: exportSubjectSchema, revisionId: z.uuid() });
 export type ExportPart = z.infer<typeof exportPartSchema>;
+
+/** A case's export has exactly one part, its case (Stories 5.3, 5.4). */
+const casePartSchema = z.object({ subject: caseSubjectSchema, revisionId: z.uuid() });
+
+/**
+ * A client pack's subject (Story 5.9a): the client whose pack it is. Its parts are the
+ * client's approved intro (when there is one) and its approved cases, in the client's order.
+ */
+export const clientSubjectSchema = z.object({ kind: z.literal("client"), id: z.uuid() }).strict();
+export type ClientSubject = z.infer<typeof clientSubjectSchema>;
+
+/** The most parts an export holds (the `export.parts` check: 1–200). */
+export const EXPORT_MAX_PARTS = 200;
 
 /** A bundle's formats: two or more distinct export formats, sorted (the order the hash takes them in). */
 export const bundleFormatsSchema = z
@@ -69,15 +87,29 @@ export const bundleFormatsSchema = z
   .refine((formats) => new Set(formats).size === formats.length, "formats must be distinct")
   .refine((formats) => formats.every((f, i) => i === 0 || formats[i - 1] < f), "formats must be sorted");
 
+/** A client pack's parts, in order: 1 to `EXPORT_MAX_PARTS`. */
+const packPartsSchema = z.array(exportPartSchema).min(1).max(EXPORT_MAX_PARTS);
+
 /**
  * An `export` job's payload: the ordered parts, the format and who asked (the row's
  * `created_by`). A bundle (Story 5.4) names its formats; one job renders each that has
- * no export yet, then zips them.
+ * no export yet, then zips them. A client pack (Story 5.9a) names its client as
+ * `subject` and holds all of the pack's parts, in order.
  */
 export const exportPayloadSchema = z.union([
-  z.object({ parts: z.array(exportPartSchema).length(1), format: exportFormatIdSchema, requestedBy: z.uuid() }).strict(),
+  z.object({ parts: z.array(casePartSchema).length(1), format: exportFormatIdSchema, requestedBy: z.uuid() }).strict(),
   z
-    .object({ parts: z.array(exportPartSchema).length(1), format: z.literal(EXPORT_BUNDLE), formats: bundleFormatsSchema, requestedBy: z.uuid() })
+    .object({ parts: z.array(casePartSchema).length(1), format: z.literal(EXPORT_BUNDLE), formats: bundleFormatsSchema, requestedBy: z.uuid() })
+    .strict(),
+  z.object({ subject: clientSubjectSchema, parts: packPartsSchema, format: exportFormatIdSchema, requestedBy: z.uuid() }).strict(),
+  z
+    .object({
+      subject: clientSubjectSchema,
+      parts: packPartsSchema,
+      format: z.literal(EXPORT_BUNDLE),
+      formats: bundleFormatsSchema,
+      requestedBy: z.uuid(),
+    })
     .strict(),
 ]);
 export type ExportPayload = z.infer<typeof exportPayloadSchema>;
@@ -93,6 +125,20 @@ export type RequestExportInput = z.infer<typeof requestOneExportInputSchema> | z
 /** The schema an input is read with: `formats` when it has that key, else `format`. */
 export const requestExportInputSchema = (input: unknown) =>
   typeof input === "object" && input !== null && Object.hasOwn(input, "formats") ? requestExportsInputSchema : requestOneExportInputSchema;
+
+/** What a person asks for a client's pack (Story 5.9a): the client in one or more formats, as for a case. */
+export const requestOnePackInputSchema = z.object({ clientId: z.uuid(), format: z.string().min(1).max(64) });
+export const requestPacksInputSchema = z.object({ clientId: z.uuid(), formats: z.array(z.string().min(1).max(64)).min(1).max(8) });
+
+/** The schema a pack input is read with: `formats` when it has that key, else `format`. */
+export const requestPackInputSchema = (input: unknown) =>
+  typeof input === "object" && input !== null && Object.hasOwn(input, "formats") ? requestPacksInputSchema : requestOnePackInputSchema;
+
+/** The state of a pack request (Story 5.9a): by the job it enqueued, or by the export it found. */
+export const packStatusInputSchema = z.union([
+  z.object({ clientId: z.uuid(), jobId: z.uuid() }).strict(),
+  z.object({ clientId: z.uuid(), exportId: z.uuid() }).strict(),
+]);
 
 /** The state of a request: by the job it enqueued, or by the export it found. */
 export const exportStatusInputSchema = z.union([
@@ -166,19 +212,38 @@ const quote = (t: Testimonial | null) => (t === null ? null : [t.quote, t.author
  * versions the shape.
  */
 export function contentHashInput(parts: readonly ExportPartContent[], format: ExportFormatId): string {
-  return JSON.stringify([
-    "export.v1",
-    EXPORT_RENDER_VERSION,
-    format,
-    parts.map(({ part, template, client, case: c }) => [
-      part.subject.kind,
-      part.subject.id.toLowerCase(),
-      part.revisionId.toLowerCase(),
-      template,
-      [client.name, client.sector, client.description, client.logoId?.toLowerCase() ?? null, rows(client.results), quote(client.testimonial)],
-      [c.year, [...c.services], rows(c.results), quote(c.testimonial)],
-    ]),
+  return JSON.stringify(["export.v1", EXPORT_RENDER_VERSION, format, partRows(parts)]);
+}
+
+/** Each part's canonical row: its subject, revision, template, client info and bound case fields. */
+function partRows(parts: readonly ExportPartContent[]) {
+  return parts.map(({ part, template, client, case: c }) => [
+    part.subject.kind,
+    part.subject.id.toLowerCase(),
+    part.revisionId.toLowerCase(),
+    template,
+    [client.name, client.sector, client.description, client.logoId?.toLowerCase() ?? null, rows(client.results), quote(client.testimonial)],
+    [c.year, [...c.services], rows(c.results), quote(c.testimonial)],
   ]);
+}
+
+/** The client a pack is named from and whose fields it draws (Story 5.9a). */
+export interface PackClient {
+  id: string;
+  code: string;
+  name: string;
+}
+
+/**
+ * The canonical text a client pack's content hash is taken of (Story 5.9a): the client
+ * (id, code and name, which also name the file), then every part as `contentHashInput`
+ * takes it (subject, approved revision, template, the client's info and the bound case
+ * fields; an intro part binds no case), in the pack's order, the format and
+ * `EXPORT_RENDER_VERSION`. `export.pack.v1` keeps it apart from any case's hash, so a
+ * case's own exports and their hashes are unchanged.
+ */
+export function packHashInput(client: PackClient, parts: readonly ExportPartContent[], format: ExportFormatId): string {
+  return JSON.stringify(["export.pack.v1", EXPORT_RENDER_VERSION, format, [client.id.toLowerCase(), client.code, client.name], partRows(parts)]);
 }
 
 /**

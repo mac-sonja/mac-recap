@@ -1,5 +1,12 @@
 import { createHash } from "node:crypto";
-import { bundleHashInput, contentHashInput, type ExportFormatId, type ExportPartContent } from "@/modules/rendering/domain/export";
+import {
+  bundleHashInput,
+  contentHashInput,
+  packHashInput,
+  type ExportFormatId,
+  type ExportPartContent,
+  type PackClient,
+} from "@/modules/rendering/domain/export";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
@@ -20,4 +27,12 @@ export function contentHash(parts: readonly ExportPartContent[], format: ExportF
  */
 export function bundleHash(formats: readonly { format: ExportFormatId; contentHash: string }[], entryNames: readonly string[]): string {
   return sha256(bundleHashInput(formats, entryNames));
+}
+
+/**
+ * A client pack's content hash (Story 5.9a): the sha256 of `packHashInput`, the client and
+ * every part (subject, approved revision, bound values) in the pack's order, and the format.
+ */
+export function packHash(client: PackClient, parts: readonly ExportPartContent[], format: ExportFormatId): string {
+  return sha256(packHashInput(client, parts, format));
 }
