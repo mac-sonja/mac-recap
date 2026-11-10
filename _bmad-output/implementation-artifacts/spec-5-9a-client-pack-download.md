@@ -96,18 +96,27 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/rendering/**` (+ unit tests) -- the pack rule in `composeParts`, the pack source, hash, payload, handler and status.
-- [ ] Migration only if the export table's parts check refuses the new subject kinds; then `npm run db:types`.
-- [ ] `src/app/(tool)/clients/export-actions.ts`, `_components/client-download.ts` (+ tests) -- the actions and dialog wiring.
-- [ ] `download-button.tsx`, `clients-table.tsx`, `clients/[clientId]/page.tsx` (+ tests) -- Scarica and the intro note.
-- [ ] `src/shared/i18n/it.ts`, `test/permissions.test.ts` (new actions and the pack guardrail).
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 5.9 stays `in-progress`, with a note that 5.9a is in review.
+- [x] `src/modules/rendering/**` (+ unit tests) -- the pack rule in `composeParts`, the pack source, hash, payload, handler and status.
+- [x] Migration only if the export table's parts check refuses the new subject kinds; then `npm run db:types`.
+- [x] `src/app/(tool)/clients/export-actions.ts`, `_components/client-download.ts` (+ tests) -- the actions and dialog wiring.
+- [x] `download-button.tsx`, `clients-table.tsx`, `clients/[clientId]/page.tsx` (+ tests) -- Scarica and the intro note.
+- [x] `src/shared/i18n/it.ts`, `test/permissions.test.ts` (new actions and the pack guardrail).
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 5.9 stays `in-progress`, with a note that 5.9a is in review.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:db` and `build`, when they run, then they pass.
 - Given a single-case export, when it is requested, then its hash and output are unchanged (existing tests pass as they are).
 
 ## Implementation Notes
+
+- **No migration.** `export.parts` only checks a JSON array of 1–200 entries, so a pack's parts (`client_intro` and `case` subjects) fit; `test/db/export.db.test.ts` adds a pack row (not run here: no Docker). No `db:types` change.
+- **Domain.** `exportSubjectSchema` is now `case | client_intro`; a case payload still takes exactly one `case` part (`casePartSchema`). A pack payload adds `subject: { kind: "client", id }` with 1–200 parts, single format or bundle. `packHashInput` (`export.pack.v1`) covers the client's id, code and name, then every part as `contentHashInput` takes it (shared `partRows`, so a case's hash text is byte-identical), the format and `EXPORT_RENDER_VERSION`. File names reuse `exportFileName` / `bundleFileName` with the client's code and name.
+- **Compose.** `composeParts(..., { pack: true })`: a client's intro part is used with one case or more; without an intro part every case stays whole; an intro with no case gives nothing. Default and `clientFile` unchanged.
+- **Source.** `readPackParts` (client, `listClientCasesInOrder`, each case's and the intro's `getLiveRevision`; a listed case with no live revision, deleted or another client's is left out; none left is `NOT_APPROVED`). `readPackSources` adds each case's values (as a case export) and the intro part (the client's values, no case values), and per format an `ExportDrawing` with its page count from `composeParts`. The handler now draws `ExportDrawing`s (a case is `drawingOfCase`), so single-case exports go through the same code with one part.
+- **Status.** `packStatus` re-reads the pack's parts and hands a file out only when its stored parts equal the current ones (`EXPORT_STALE` otherwise; `NOT_FOUND` when none of its subjects are this client's). Jobs are enqueued and looked up with the client id as subject; `caseIdOf` is null for a pack.
+- **Activity.** `client_event` needs an intro id, so a pack download records the existing `export` case event on each case in the pack (`data { exportId, format, clientId }`, the case's own approved revision).
+- **Access.** `clients/export-actions.ts` authorizes `list clients` and `export` (approved), so owner/designer and admin only; account/sales/social get 403 until 5.9b.
+- **UI.** `ClientPackButton` (Clienti card and client page) wraps `DownloadButton` with `clientDownload`; the dialog's new `note` shows `download.packIntroNote` when the intro has no approved revision (`ClientRow.introApproved`, read per card with Scarica on the Clienti page), and the description drops "Intro e" then.
 
 ## Spec Change Log
 

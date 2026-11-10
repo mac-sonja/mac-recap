@@ -100,8 +100,8 @@ describe("a client's pack (Story 5.9a)", () => {
     expect((await packNow(deps())).drawings[0].contentHash).toBe(base);
     expect((await packNow(deps({ order: ["A", "C", "B"] }))).drawings[0].contentHash).not.toBe(base);
     const updated = deps();
-    const live = updated.getLiveRevision.getMockImplementation()!;
-    updated.getLiveRevision.mockImplementation(async (subject) =>
+    const live = vi.mocked(updated.getLiveRevision).getMockImplementation()!;
+    vi.mocked(updated.getLiveRevision).mockImplementation(async (subject) =>
       subject.kind === "case" && subject.id === PACK_CASES.B ? ok<CaseStudyRevision | null>(revision({ id: INTRO_ID, caseId: PACK_CASES.B })) : live(subject),
     );
     expect((await packNow(updated)).drawings[0].contentHash).not.toBe(base);
@@ -120,8 +120,8 @@ describe("a client's pack (Story 5.9a)", () => {
 
   it("refuses a format a part lacks (FORMAT_NOT_IN_REVISION), enqueueing nothing", async () => {
     const d = deps();
-    const live = d.getLiveRevision.getMockImplementation()!;
-    d.getLiveRevision.mockImplementation(async (subject) => {
+    const live = vi.mocked(d.getLiveRevision).getMockImplementation()!;
+    vi.mocked(d.getLiveRevision).mockImplementation(async (subject) => {
       const found = await live(subject);
       if (subject.kind !== "case" || subject.id !== PACK_CASES.B || !found.ok || found.value === null) return found;
       const doc = { ...found.value.doc, formats: { ...found.value.doc.formats, carosello_1_1: { pages: [] } } };

@@ -114,6 +114,18 @@ describe("rows", () => {
     expect((await inRolledBackTx(INSERT, params(bundle), "service_role")).rowCount).toBe(1);
   });
 
+  it("accepts a client pack row: the intro and the cases as its parts, in order (Story 5.9a, no migration)", async () => {
+    const pack: NewExport = {
+      ...row(),
+      parts: [
+        { subject: { kind: "client_intro", id: "bbbbbbbb-0000-4000-8000-0000000000f1" }, revisionId: REVISION_ID },
+        { subject: { kind: "case", id: CASE_ID }, revisionId: REVISION_ID },
+        { subject: { kind: "case", id: "cccccccc-0000-4000-8000-0000000000f2" }, revisionId: REVISION_ID },
+      ],
+    };
+    expect((await inRolledBackTx(INSERT, params(pack), "service_role")).rowCount).toBe(1);
+  });
+
   it.each([
     ["a bundle at another path", (r: NewExport) => ({ ...r, format: "bundle" as const, contentType: "application/zip" as const, path: `exports/${r.contentHash}/carosello_1_1.zip` })],
     ["a bundle as a PDF", (r: NewExport) => ({ ...r, format: "bundle" as const, contentType: "application/pdf" as const, path: `exports/${r.contentHash}/bundle.pdf` })],
