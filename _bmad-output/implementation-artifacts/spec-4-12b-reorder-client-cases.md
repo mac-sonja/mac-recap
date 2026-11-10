@@ -2,7 +2,8 @@
 title: "Story 4.12b: reorder a client's cases"
 type: 'feature'
 created: '2026-11-10'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: 'ddb6f2ffff2c2f198e01bd93817e9e58d182c396'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
