@@ -1,6 +1,7 @@
 "use client";
 
 import { BadgeCheck, PanelLeft, PanelRight, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { DANGER_ACTION, PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
@@ -42,7 +43,8 @@ import {
   type TypedEditor,
 } from "./bound-fields";
 import { OverflowReport, type FormatPages, type OverflowByFormat } from "./overflow-report";
-import { Canvas } from "./canvas";
+import { Canvas, type CanvasGroup } from "./canvas";
+import { CLOSING_SEGMENT, fileKeyAfterEdit, INTRO_SEGMENT, splitFilePageKey, type ClientFile, type FilePartData } from "./client-file";
 import type { CanvasDrag } from "./canvas-drag";
 import { applyDefaultPage, type GeneratedTexts } from "./default-pages";
 import type { InstagramView } from "./instagram-overlay";
@@ -77,7 +79,7 @@ import {
   type PageEdit,
 } from "./page-editing";
 import { isMedia, pageAssetIds, type MediaUploadRules } from "./media-files";
-import { RightPanel, type RightTab } from "./right-panel";
+import { RightPanel, type FilePagine, type RightTab } from "./right-panel";
 import { findElement, resolveSelection, stepOut, type Selection } from "./selection";
 import { StatusMessage, useStatusMessage } from "./status-message";
 import { ICON_BUTTON, SOON_ID } from "./styles";
@@ -94,7 +96,9 @@ import {
   type Subject,
   type SubjectKey,
 } from "./use-document";
+import { useClientFile } from "./use-client-file";
 
+export type { ClientFile, FilePartData, FilePartRef } from "./client-file";
 export type { AnyEditableFields, ClientEditableFields, EditableFields, FieldActions, FieldOptions } from "./bound-fields";
 export type { Subject } from "./use-document";
 
@@ -172,6 +176,14 @@ export interface ConfiguratorProps {
   fields?: AnyEditableFields;
   fieldOptions?: FieldOptions;
   fieldActions?: FieldActions;
+  /**
+   * Story 4.12a, the client's whole file (`subject.kind` `client_file`): Introduzione, then one
+   * group per approved case, then Chiusura, every page edited in place and saved to its own
+   * part's revision. `revision`, `formats` and `onSave` stand in only (the parts carry their
+   * own); Approva, Aggiorna and Scarta act on the intro alone (`onApprove`, `onUpdateApproved`,
+   * `onDiscard` with its `clientIntroId`).
+   */
+  file?: ClientFile;
 }
 
 /** A fresh id for a new block or element. */
@@ -275,15 +287,20 @@ export function Configurator({
   fieldOptions,
   fieldActions,
   values: loadedValues,
+  file,
 }: ConfiguratorProps) {
   const router = useRouter();
-  /** Story 4.11a: a client's intro and outro, not a case. */
-  const clientMode = subject.kind === "client_intro";
+  /** Story 4.11a: a client's intro and outro (or, Story 4.12a, its whole file), not a case. */
+  const clientMode = subject.kind !== "case";
+  /** Story 4.12a: the client's whole file, each part its own document. */
+  const fileMode = file !== undefined;
   /** Which bindings the field edits offer: the client's own only, in client mode. */
   const fieldMode = clientMode ? "client" : "case";
-  const doc = useDocument({
+  const [message, say] = useStatusMessage();
+  const single = useDocument({
     subject,
-    revision,
+    // The client's file saves through its parts' own documents: this one stays idle.
+    revision: fileMode ? null : revision,
     base: { schemaVersion: CURRENT_SCHEMA_VERSION, kind: revision?.kind ?? "case_history", template },
     initial: initial as Formats,
     save: onSave,
@@ -291,17 +308,41 @@ export function Configurator({
     fork: onFork,
     headVersion,
   });
+  /** The render assets: the page's, then those of files uploaded since (Story 4.5b) and of parts read again (Story 4.12a). */
+  const [assets, setAssets] = useState(initialAssets);
+  /** Story 4.12a: a part of the client's file that can't be read again: the whole page loads afresh. */
+  const reloadPage = useCallback(() => window.location.reload(), []);
+  const addAssets = useCallback((more: Readonly<Record<string, RenderAsset>>) => setAssets((current) => ({ ...current, ...more })), []);
+  const filed = useClientFile(file, { say, reloadPage, onAssets: addAssets });
+  const doc = filed?.doc ?? single;
   const formats = doc.formats;
+  /**
+   * The document Approva, Aggiorna and Scarta act on: the one edited, or in the client's file
+   * the intro's own (Story 4.12a: their blockers are measured on it alone); null without an intro.
+   */
+  const own = filed === null ? single : filed.intro;
+  const ownPart = filed?.introPart ?? null;
+  const ownStatus = filed === null ? header.status : ownPart?.status;
+  const ownHeadVersion = filed === null ? headVersion : ownPart?.headVersion;
+  const ownRevision = filed === null ? revision : (ownPart?.revision ?? null);
+  /** The intro's (or the edited document's) pages, as its own revision holds them. */
+  const ownFormats = own?.formats ?? formats;
   /** Story 4.9: an Approvato case, edited on a copy that goes online only through Aggiorna. */
-  const approvedCase = header.status === "approved";
+  const approvedCase = ownStatus === "approved";
   // An approved revision is edited only when its first save can fork.
-  const editable = revision !== null && revision.editable && !trial && (revision.fork !== true || (onFork !== undefined && headVersion !== undefined));
+  const ownEditable =
+    ownRevision !== null && ownRevision.editable && !trial && (ownRevision.fork !== true || ((filed === null ? onFork : file?.onForkIntro) !== undefined && ownHeadVersion !== undefined));
+  /** Story 4.12a: the file is edited wherever one of its parts is. */
+  const editable = filed === null ? ownEditable : [...(ownPart === null ? [] : [ownPart]), ...filed.cases].some((p) => p.revision.editable);
   /** Story 4.9: an approved case's working copy exists (its first save forked, or it was pending when the page loaded). */
-  const copyPending = approvedCase && editable && !doc.forkPending;
+  const copyPending = approvedCase && ownEditable && own !== null && !own.forkPending;
   /** The text being typed in; a bound one (Story 4.3d) with its editor and stored words. */
   const [editing, setEditing] = useState<{ pageKey: string; elementId: string; bound?: string; editor?: TypedEditor } | null>(null);
-  /** Client and case fields can be changed here (Story 4.3d); never on an approved case (Story 4.9: they can't be staged). */
-  const fieldsOn = editable && !approvedCase && fields !== undefined && fieldOptions !== undefined && fieldActions !== undefined;
+  /**
+   * Client and case fields can be changed here (Story 4.3d); never on an approved case (Story 4.9:
+   * they can't be staged). Story 4.12a: the client's fields write to the client from any part of its file.
+   */
+  const fieldsOn = editable && (fileMode || !approvedCase) && fields !== undefined && fieldOptions !== undefined && fieldActions !== undefined;
   /**
    * A field change shown at once, while it saves and until the page reloads the bound values:
    * kept only while the loaded values and fields are those it was made on.
@@ -310,6 +351,17 @@ export function Configurator({
   const shownLive = fieldShown !== null && fieldShown.base === loadedValues && fieldShown.baseFields === fields;
   const values = shownLive ? fieldShown.values : loadedValues;
   const fieldsNow = shownLive ? fieldShown.fields : fields;
+  /** A part's bound values in the client's file (Story 4.12a), with the client's as shown (a field just changed); the document's otherwise. */
+  const fileIntro = filed?.introPart ?? null;
+  const fileCases = filed?.cases;
+  const partValues = useMemo(
+    () => new Map([...(fileIntro === null ? [] : [fileIntro]), ...(fileCases ?? [])].map((p) => [p.key, { ...p.values, client: values.client }] as const)),
+    [fileCases, fileIntro, values],
+  );
+  const valuesOf = useCallback(
+    (part: FilePartData | undefined): BoundValues => (part === undefined ? values : (partValues.get(part.key) ?? { ...part.values, client: values.client })),
+    [partValues, values],
+  );
   /** A double-click on a meta line: its year field takes the focus once. */
   const [focusYear, setFocusYear] = useState<{ elementId: string; n: number } | null>(null);
   /** One text editing session: its changes are one undo step. */
@@ -321,7 +373,6 @@ export function Configurator({
   const [inView, setInView] = useState<string | null>(null);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
-  const [message, say] = useStatusMessage();
   const [preview, setPreview] = useState(false);
   const [slide, setSlide] = useState(0);
   const [instagram, setInstagram] = useState<InstagramView>("off");
@@ -329,8 +380,6 @@ export function Configurator({
   /** Reduced motion, read when Anteprima opens: the slideshow then switches without a transition. */
   const [still, setStill] = useState(false);
   const [rightTab, setRightTab] = useState<RightTab>("pages");
-  /** The render assets: the page's, then those of files uploaded since (Story 4.5b). */
-  const [assets, setAssets] = useState(initialAssets);
   /** The case's images and videos as last listed. */
   const [files, setFiles] = useState(media);
   /** Every file name listed this session, by lowercased id: a file deleted since is still named in the refused-save banner. */
@@ -338,6 +387,44 @@ export function Configurator({
   const clientNames = useMemo<ReadonlyMap<string, string>>(() => new Map(clientFiles.map((f) => [f.id.toLowerCase(), f.name])), [clientFiles]);
   /** Every file that can go on a page: the case's images and videos as last listed, then the client's (Story 4.5c-2). */
   const pickable = useMemo(() => [...files, ...clientMedia], [files, clientMedia]);
+  /**
+   * Story 4.12a: whether an edit of the client's file puts on a case's page a file it may not
+   * show: another case's (a case holds only its own and the client's files). A file already
+   * there before the edit doesn't count.
+   */
+  const addsOtherCaseFile = useCallback(
+    (next: Formats): boolean => {
+      if (filed === null) return false;
+      const client = files.map((f) => f.id.toLowerCase());
+      for (const id of FORMAT_IDS) {
+        if (next[id] === formats[id]) continue;
+        for (const part of filed.cases) {
+          const allowed = new Set([...(part.ownAssetIds ?? []).map((a) => a.toLowerCase()), ...client]);
+          const of = (pages: readonly Page[]) => pageAssetIds(pages.filter((p) => splitFilePageKey(p.pageKey)?.segment === part.key));
+          const before = of(formats[id]);
+          for (const asset of of(next[id])) if (!before.has(asset) && !allowed.has(asset)) return true;
+        }
+      }
+      return false;
+    },
+    [filed, files, formats],
+  );
+  /**
+   * Records an edit of the document (one undo step, or part of `group`'s). Story 4.12a: the
+   * client's file refuses one that moves a page into another part, touches a part that can't be
+   * edited, or puts another case's file on a case's page, and says so (false).
+   */
+  const commit = useCallback(
+    (next: Formats, changedFormat: FormatId, group?: string): boolean => {
+      if (addsOtherCaseFile(next)) {
+        say(it.configurator.file.otherCase);
+        return false;
+      }
+      // The client's file says itself why it refused (Story 4.12a).
+      return doc.change(next, changedFormat, group) !== false;
+    },
+    [addsOtherCaseFile, doc, say],
+  );
   /** Ids whose render asset is being read. */
   const reading = useRef(new Set<string>());
   /** The latest assets: the Media tab's polling may call an older `listed`. */
@@ -364,6 +451,15 @@ export function Configurator({
   const { page: selectedPage, block, element } = resolveSelection(pages, selection);
   // The page tools act on the selected page, else on the page in view, else on the first.
   const toolPage = selectedPage ?? pages.find((p) => p.pageKey === inView) ?? pages[0];
+
+  /** Story 4.12a: the part of the client's file a page belongs to; undefined for a case or an intro. */
+  const partOfPage = useCallback(
+    (pageKey: string | undefined): FilePartData | undefined => (filed === null || pageKey === undefined ? undefined : filed.partOf(pageKey)),
+    [filed],
+  );
+  /** A page's template: its part's in the client's file. */
+  const templateOf = useCallback((pageKey: string | undefined) => partOfPage(pageKey)?.template ?? template, [partOfPage, template]);
+
 
   const slideshow = preview && formatId !== "presentazione_16_9";
   const soon = useCallback((tool: string) => say(fill(it.configurator.soonMessage, { tool })), [say]);
@@ -591,9 +687,9 @@ export function Configurator({
       const pages = formats[formatId];
       const next = withText(pages, pageKey, elementId, text);
       if (next === pages) return;
-      doc.change({ ...formats, [formatId]: next }, formatId, `text-${session.current}-${pageKey}-${elementId}`);
+      commit({ ...formats, [formatId]: next }, formatId, `text-${session.current}-${pageKey}-${elementId}`);
     },
-    [doc, formatId, formats],
+    [commit, formatId, formats],
   );
 
   const textDone = useCallback(() => {
@@ -608,12 +704,19 @@ export function Configurator({
       if (!editable || selection?.elementId === undefined) return;
       const current = formats[formatId];
       const next = edit(current, selection.pageKey, selection.elementId);
-      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+      if (next !== current) commit({ ...formats, [formatId]: next }, formatId);
     },
-    [doc, editable, formatId, formats, selection],
+    [commit, editable, formatId, formats, selection],
   );
   /** The block ⌘C or ⌘X took, for ⌘V (any page, any format). */
   const clipboard = useRef<Block | null>(null);
+
+  /** An edit's selection as the canvas will show it (Story 4.12a: a page made in the client's file takes its segment's key). */
+  const selectionAfter = useCallback(
+    (next: readonly Page[], at: NonNullable<Selection>): NonNullable<Selection> =>
+      filed === null ? at : { ...at, pageKey: fileKeyAfterEdit(next, at.pageKey, filed.segments[formatId]) },
+    [filed, formatId],
+  );
 
   /** A page edit in the format in view (one undo step), its result selected; a refusal says why. */
   const applyPageEdit = useCallback(
@@ -628,11 +731,11 @@ export function Configurator({
         else if (edit.reason === "formatFull") say(fill(it.configurator.pages.formatFull, { n: MAX_PAGES_PER_FORMAT }));
         return false;
       }
-      doc.change({ ...formats, [formatId]: edit.pages }, formatId);
-      setSelection(edit.selection);
+      if (!commit({ ...formats, [formatId]: edit.pages }, formatId)) return false;
+      setSelection(selectionAfter(edit.pages, edit.selection));
       return true;
     },
-    [doc, formatId, formats, say],
+    [commit, formatId, formats, say, selectionAfter],
   );
 
   /** An Elementi button: Blocco after the selected block (else at the end of the tools' page), anything else into the selected block. */
@@ -653,9 +756,9 @@ export function Configurator({
         return;
       }
       const pageKey = selection?.pageKey ?? toolPage?.pageKey;
-      if (pageKey !== undefined) applyPageEdit(addBlock(current, pageKey, selection?.blockId, formatId, template, newId));
+      if (pageKey !== undefined) applyPageEdit(addBlock(current, pageKey, selection?.blockId, formatId, templateOf(pageKey), newId));
     },
-    [applyPageEdit, block, editable, formatId, formats, say, selection, template, toolPage],
+    [applyPageEdit, block, editable, formatId, formats, say, selection, templateOf, toolPage],
   );
 
   /** The animation the dialog changes (its type and media), or null for a new one. */
@@ -677,9 +780,9 @@ export function Configurator({
         return;
       }
       const next = withAnimation(current, target.pageKey, target.elementId, { animation: choice.animation, assetIds: choice.assetIds });
-      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+      if (next !== current) commit({ ...formats, [formatId]: next }, formatId);
     },
-    [animationDialog, applyPageEdit, doc, editable, formatId, formats],
+    [animationDialog, applyPageEdit, commit, editable, formatId, formats],
   );
 
   /** A selected animation's Tipo, Adattamento or Dimensione; a Dimensione slide is one undo step. */
@@ -688,9 +791,9 @@ export function Configurator({
       if (!editable || selection?.elementId === undefined) return;
       const current = formats[formatId];
       const next = withAnimation(current, selection.pageKey, selection.elementId, patch);
-      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId, gesture ? `media-${mediaGesture.current}-${selection.elementId}` : undefined);
+      if (next !== current) commit({ ...formats, [formatId]: next }, formatId, gesture ? `media-${mediaGesture.current}-${selection.elementId}` : undefined);
     },
-    [doc, editable, formatId, formats, selection],
+    [commit, editable, formatId, formats, selection],
   );
 
   /** The canvas drag in progress (Story 4.3e): an element, a block or an Elementi button; null once it ends. */
@@ -718,7 +821,7 @@ export function Configurator({
       const current = formats[formatId];
       if (drag.kind === "new") {
         const key = drag.element;
-        if (key === "block") applyPageEdit(addBlock(current, target.pageKey, undefined, formatId, template, newId));
+        if (key === "block") applyPageEdit(addBlock(current, target.pageKey, undefined, formatId, templateOf(target.pageKey), newId));
         else if (key !== "animation") applyDrop(insertNewElement(current, target, key, newId));
         else {
           const into = current.find((p) => p.pageKey === target.pageKey)?.blocks.find((b) => b.blockId === target.blockId);
@@ -737,6 +840,11 @@ export function Configurator({
       }
       // Never between formats: a drag started in another format's pages changes nothing.
       if (drag.formatId !== formatId) return;
+      // Story 4.12a: never between the parts of the client's file (each is its own document).
+      if (partOfPage(drag.pageKey)?.key !== partOfPage(target.pageKey)?.key) {
+        say(it.configurator.file.otherPart);
+        return;
+      }
       if (drag.kind === "element") {
         const from = selectionOf(current, drag.pageKey, drag.elementId);
         if (from?.blockId !== undefined) applyDrop(moveElement(current, { pageKey: drag.pageKey, blockId: from.blockId, elementId: drag.elementId }, target));
@@ -745,11 +853,11 @@ export function Configurator({
       const from = { pageKey: drag.pageKey, blockId: drag.blockId };
       applyPageEdit(
         target.blockId === undefined
-          ? moveBlockToPage(current, from, target.pageKey, formatId, template)
+          ? moveBlockToPage(current, from, target.pageKey, formatId, templateOf(target.pageKey))
           : swapBlocks(current, from, { pageKey: target.pageKey, blockId: target.blockId }),
       );
     },
-    [applyDrop, applyPageEdit, editable, formatId, formats, say, template],
+    [applyDrop, applyPageEdit, editable, formatId, formats, partOfPage, say, templateOf],
   );
 
   /** A Layout thumbnail (Story 4.4a): the tools' page takes it, then is selected. */
@@ -764,27 +872,30 @@ export function Configurator({
   const pickDefaultPage = useCallback(
     (defaultPage: DefaultPage) => {
       if (!editable || toolPage === undefined) return;
+      // Story 4.12a: in the client's file, the texts and images of the page's own part; a case's page binds the case's rows.
+      const part = partOfPage(toolPage.pageKey);
+      const own = part === undefined ? (clientMode ? values.client : values.case) : part.subject.kind === "case" ? part.values.case : values.client;
       applyPageEdit(
         applyDefaultPage(formats[formatId], toolPage.pageKey, defaultPage, {
-          texts: generatedTexts[formatId] ?? {},
-          pool: images,
+          texts: (part?.generatedTexts ?? generatedTexts)[formatId] ?? {},
+          pool: part?.images ?? images,
           // Client mode (Story 4.11a): the client's own rows and testimonial, as its Risultati page binds them.
-          resultRows: (clientMode ? values.client : values.case).results.length,
-          hasTestimonial: (clientMode ? values.client : values.case).testimonial !== null,
+          resultRows: own.results.length,
+          hasTestimonial: own.testimonial !== null,
           newId,
         }),
       );
     },
-    [applyPageEdit, clientMode, editable, formatId, formats, generatedTexts, images, toolPage, values],
+    [applyPageEdit, clientMode, editable, formatId, formats, generatedTexts, images, partOfPage, toolPage, values],
   );
 
   /** **Mescola**: the tools' page on its next layout; the selection stays. */
   const shuffle = useCallback(() => {
     if (!editable || toolPage === undefined) return;
     const current = formats[formatId];
-    const next = shuffleLayout(current, toolPage.pageKey, formatId, template);
-    if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
-  }, [doc, editable, formatId, formats, template, toolPage]);
+    const next = shuffleLayout(current, toolPage.pageKey, formatId, templateOf(toolPage.pageKey));
+    if (next !== current) commit({ ...formats, [formatId]: next }, formatId);
+  }, [commit, editable, formatId, formats, templateOf, toolPage]);
 
   /** Sfondo: the selected block's background, else the tools' page's. */
   const background = useCallback(
@@ -792,9 +903,9 @@ export function Configurator({
       if (!editable || toolPage === undefined) return;
       const current = formats[formatId];
       const next = setBackground(current, toolPage.pageKey, block?.blockId, value);
-      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+      if (next !== current) commit({ ...formats, [formatId]: next }, formatId);
     },
-    [block, doc, editable, formatId, formats, toolPage],
+    [block, commit, editable, formatId, formats, toolPage],
   );
 
   /** A dragged border released (Story 4.4b): the page's new track sizes, one undo step; the selection stays. */
@@ -803,9 +914,9 @@ export function Configurator({
       if (!editable) return;
       const current = formats[formatId];
       const next = setTracks(current, pageKey, axis, sizes);
-      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+      if (next !== current) commit({ ...formats, [formatId]: next }, formatId);
     },
-    [doc, editable, formatId, formats],
+    [commit, editable, formatId, formats],
   );
 
   /** A Media file put at `target` (Story 4.5b): a drop goes before the element under it, a click at the end of the block. */
@@ -887,12 +998,27 @@ export function Configurator({
   /** **Togli dalla pagina** on the refused-file banner: those files' images and videos emptied, in every format (one undo step). */
   const removeRefused = useCallback(() => {
     if (doc.refused === null) return;
-    const next = Object.fromEntries(Object.entries(formats).map(([id, pages]) => [id, clearAssets(pages, doc.refused!)])) as Formats;
+    // Story 4.12a: in the client's file, only from the pages of the parts whose save was refused.
+    const clear = (pages: readonly Page[]): readonly Page[] => {
+      if (filed === null) return clearAssets(pages, doc.refused!);
+      let changed = false;
+      const next = pages.map((page) => {
+        const segment = splitFilePageKey(page.pageKey)?.segment;
+        // A case's segment is keyed by the case's part; Introduzione and Chiusura are the intro's.
+        const partKey = segment === INTRO_SEGMENT || segment === CLOSING_SEGMENT ? ownPart?.key : segment;
+        const refused = partKey === undefined ? null : filed.refusedOf(partKey);
+        const out = refused === null ? page : (clearAssets([page], refused)[0] ?? page);
+        if (out !== page) changed = true;
+        return out;
+      });
+      return changed ? next : pages;
+    };
+    const next = Object.fromEntries(Object.entries(formats).map(([id, pages]) => [id, clear(pages)])) as Formats;
     const changed = (Object.keys(next) as FormatId[]).filter((id) => next[id] !== formats[id]);
     if (changed.length === 0) return;
-    doc.change(next, changed.includes(formatId) ? formatId : changed[0]!);
+    if (!commit(next, changed.includes(formatId) ? formatId : changed[0]!)) return;
     say(it.configurator.media.missing.removed);
-  }, [doc, formatId, formats, say]);
+  }, [commit, doc.refused, filed, formatId, formats, ownPart, say]);
 
   /** **Adattamento**: the selected image or video takes `fit` (one undo step). */
   const fitMedia = useCallback(
@@ -900,9 +1026,9 @@ export function Configurator({
       if (!editable || selection?.elementId === undefined) return;
       const current = formats[formatId];
       const next = withFit(current, selection.pageKey, selection.elementId, fit);
-      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+      if (next !== current) commit({ ...formats, [formatId]: next }, formatId);
     },
-    [doc, editable, formatId, formats, selection],
+    [commit, editable, formatId, formats, selection],
   );
 
   /** Ritaglia's drag or Zoom: element `elementId` of page `pageKey` shows `crop`; one gesture, one undo step. */
@@ -911,9 +1037,9 @@ export function Configurator({
       if (!editable) return;
       const current = formats[formatId];
       const next = withCrop(current, pageKey, elementId, crop);
-      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId, `media-${mediaGesture.current}-${elementId}`);
+      if (next !== current) commit({ ...formats, [formatId]: next }, formatId, `media-${mediaGesture.current}-${elementId}`);
     },
-    [doc, editable, formatId, formats],
+    [commit, editable, formatId, formats],
   );
 
   /** **Zoom** moved: the selected cropped element's zoom, its position kept (centred when none). */
@@ -938,9 +1064,41 @@ export function Configurator({
   /** **+ Aggiungi pagina**: after the selected page, else at the end of Output; selected and scrolled into view. */
   const addNewPage = useCallback(() => {
     if (!editable) return;
-    const edit = addPage(formats[formatId], selection?.pageKey, formatId, template, newId);
-    if (applyPageEdit(edit) && edit.ok) scrollTo.current = edit.selection.pageKey;
-  }, [applyPageEdit, editable, formatId, formats, selection, template]);
+    if (filed === null) {
+      const edit = addPage(formats[formatId], selection?.pageKey, formatId, template, newId);
+      if (applyPageEdit(edit) && edit.ok) scrollTo.current = edit.selection.pageKey;
+      return;
+    }
+    // The client's file (Story 4.12a): in the selected page's part, after it, else at the end of the
+    // last part; the page limit counts that part's own pages, not the whole file's.
+    const segments = filed.segments[formatId];
+    const all = formats[formatId];
+    // With nothing selected: the last part with pages, else the first that can take one (the intro if ready, else the first case).
+    const segment =
+      segments.find((s) => s.pages.some((p) => p.pageKey === selection?.pageKey)) ??
+      segments.findLast((s) => s.pages.length > 0) ??
+      segments.find((s) => s.slot === "client_intro") ??
+      segments.find((s) => s.slot === "case");
+    if (segment === undefined) {
+      say(it.configurator.file.noPartForPage);
+      return;
+    }
+    if ((filed.partFormats(segment.partKey)?.[formatId].length ?? 0) >= MAX_PAGES_PER_FORMAT) {
+      say(fill(it.configurator.pages.formatFull, { n: MAX_PAGES_PER_FORMAT }));
+      return;
+    }
+    const after = segment.pages.some((p) => p.pageKey === selection?.pageKey) ? selection!.pageKey : segment.pages.at(-1)?.pageKey;
+    const part = filed.partOf(after ?? "") ?? [...(ownPart === null ? [] : [ownPart]), ...filed.cases].find((p) => p.key === segment.partKey);
+    const edit = addPage(segment.pages, after, formatId, part?.template ?? template, newId);
+    if (!edit.ok) {
+      applyPageEdit(edit);
+      return;
+    }
+    // Where the segment starts in the file: after every page of the segments before it.
+    const start = segments.slice(0, segments.indexOf(segment)).reduce((sum, s) => sum + s.pages.length, 0);
+    const pages = [...all.slice(0, start), ...edit.pages, ...all.slice(start + segment.pages.length)];
+    if (applyPageEdit({ ...edit, pages })) scrollTo.current = selectionAfter(pages, edit.selection).pageKey;
+  }, [applyPageEdit, editable, filed, formatId, formats, ownPart, say, selection, selectionAfter, template]);
 
   useEffect(() => {
     const key = scrollTo.current;
@@ -949,19 +1107,31 @@ export function Configurator({
     canvasRef.current?.querySelector(`[data-canvas-page="${key}"]`)?.scrollIntoView?.({ block: "center", behavior: reducedMotion() ? "auto" : "smooth" });
   });
 
-  /** The bin on a page's label, or **Elimina pagina**: that page out of the format in view (one undo step). */
+  /** Story 4.12a: a case's page about to be deleted from the client's file, asking first. */
+  const [confirmDelete, setConfirmDelete] = useState<{ pageKey: string; part: FilePartData } | null>(null);
+
+  /**
+   * The bin on a page's label, or **Elimina pagina**: that page out of the format in view (one
+   * undo step). Story 4.12a: a case's page in the client's file asks first, since it goes from
+   * the case too (`confirmed` once it did).
+   */
   const removePage = useCallback(
-    (pageKey: string) => {
+    (pageKey: string, confirmed = false) => {
       if (!editable) return;
+      const part = partOfPage(pageKey);
+      if (!confirmed && part?.subject.kind === "case") {
+        setConfirmDelete({ pageKey, part });
+        return;
+      }
       const current = formats[formatId];
       const next = deletePage(current, pageKey);
       if (next === current) return;
-      doc.change({ ...formats, [formatId]: next }, formatId);
+      if (!commit({ ...formats, [formatId]: next }, formatId)) return;
       if (selection?.pageKey === pageKey) setSelection(null);
       if (inView === pageKey) setInView(null);
       say(it.configurator.pages.deleted);
     },
-    [doc, editable, formatId, formats, inView, say, selection],
+    [commit, editable, formatId, formats, inView, partOfPage, say, selection],
   );
 
   /** A Pagine thumbnail dropped on another: the page moves there, keeping its section. */
@@ -970,25 +1140,32 @@ export function Configurator({
       if (!editable) return;
       const current = formats[formatId];
       const next = movePage(current, from, to);
-      if (next !== current) doc.change({ ...formats, [formatId]: next }, formatId);
+      if (next !== current) commit({ ...formats, [formatId]: next }, formatId);
     },
-    [doc, editable, formatId, formats],
+    [commit, editable, formatId, formats],
   );
 
-  const canApprove = editable && !approvedCase && onApprove !== undefined && headVersion !== undefined;
+  const canApprove = ownEditable && own !== null && !approvedCase && onApprove !== undefined && ownHeadVersion !== undefined;
+  /** Whose approval the top bar's buttons ask for: the edited subject, or in the client's file its intro (Story 4.12a). */
+  const approvalSubject = ownPart?.subject ?? subject;
+  /** The approval's subject moved on meanwhile: read it again (Story 4.12a: the intro alone, in the client's file). */
+  const reloadOwn = useCallback(() => {
+    if (filed !== null && ownPart !== null) void filed.reload(ownPart.key, true);
+    else router.refresh();
+  }, [filed, ownPart, router]);
   /** Story 4.9: Aggiorna and Scarta, only while the head differs from the approved revision. */
   const canUpdate = copyPending && onUpdateApproved !== undefined && onDiscard !== undefined;
   /** The overflow report measures behind typing, so a burst of edits isn't re-measured key by key. */
-  const measuredFormats = useDeferredValue(formats);
+  const measuredFormats = useDeferredValue(ownFormats);
   /** Each format's first overflowing page, measured off screen (Story 4.8), with the pages it was measured on. */
   const [overflowFor, setOverflowFor] = useState<{ formats: FormatPages; report: OverflowByFormat } | null>(null);
   const onOverflowReport = useCallback((report: OverflowByFormat, measured: FormatPages) => setOverflowFor({ formats: measured, report }), []);
   // null until the pages in view are the ones measured.
-  const overflowReport = overflowFor !== null && overflowFor.formats === formats ? overflowFor.report : null;
+  const overflowReport = overflowFor !== null && overflowFor.formats === ownFormats ? overflowFor.report : null;
   /** Files the server found missing at the last approval attempt (texts' sources included), for the document and file lists as they were then: any change lets the server check again. */
   const [serverMissingFor, setServerMissingFor] = useState<{ formats: Formats; files: unknown; clientFiles: unknown; ids: readonly string[] } | null>(null);
   const serverMissing =
-    serverMissingFor !== null && serverMissingFor.formats === formats && serverMissingFor.files === files && serverMissingFor.clientFiles === clientFiles
+    serverMissingFor !== null && serverMissingFor.formats === ownFormats && serverMissingFor.files === files && serverMissingFor.clientFiles === clientFiles
       ? serverMissingFor.ids
       : [];
   const [confirmApproval, setConfirmApproval] = useState(false);
@@ -1004,7 +1181,7 @@ export function Configurator({
     const over = FORMAT_IDS.find((id) => overflowReport[id] !== null);
     if (over !== undefined) return fill(a.overflow, { format: it.configurator.formats[over], n: overflowReport[over]! });
     const present = new Set([...files, ...clientFiles].map((f) => f.id.toLowerCase()));
-    const shown = pageAssetIds(Object.values(formats));
+    const shown = pageAssetIds(Object.values(ownFormats));
     // The server's word wins: a file it found deleted may still be in the last listing.
     const missing = serverMissing[0]?.toLowerCase() ?? [...shown].find((id) => !present.has(id));
     if (missing === undefined) return null;
@@ -1013,21 +1190,21 @@ export function Configurator({
 
   /** Confirmed in the dialog: saves what's pending, then approves this exact version. */
   const approve = useCallback(async () => {
-    if (onApprove === undefined || headVersion === undefined || revision === null || overflowReport === null) return;
+    if (onApprove === undefined || ownHeadVersion === undefined || ownRevision === null || own === null || overflowReport === null) return;
     const a = it.configurator.approval;
     setApproving(true);
     let leaving = false;
     try {
-      if (!(await doc.settle())) {
+      if (!(await own.settle())) {
         setConfirmApproval(false);
         say(a.notSaved);
         return;
       }
       const result = await onApprove({
-        ...subjectKey(subject),
-        revisionId: revision.id,
-        expectedRevisionVersion: doc.version(),
-        expectedHeadVersion: headVersion,
+        ...subjectKey(approvalSubject),
+        revisionId: own.revisionId() ?? ownRevision.id,
+        expectedRevisionVersion: own.version(),
+        expectedHeadVersion: ownHeadVersion,
         // 0 (not measured) counts as not cleared.
         overflow: Object.fromEntries(FORMAT_IDS.map((id) => [id, overflowReport[id] !== null])),
       });
@@ -1042,7 +1219,7 @@ export function Configurator({
       }
       const code = result.error.code;
       const ids = result.error.assetIds ?? [];
-      if (code === "MATERIAL_MISSING" && ids.length > 0) setServerMissingFor({ formats, files, clientFiles, ids });
+      if (code === "MATERIAL_MISSING" && ids.length > 0) setServerMissingFor({ formats: ownFormats, files, clientFiles, ids });
       else if (code === "OVERFLOW_NOT_CLEARED") say(a.overflowServer);
       else if (
         code === "STALE_REVISION" ||
@@ -1053,7 +1230,7 @@ export function Configurator({
         code === "NOT_FOUND"
       ) {
         say(clientMode ? it.configurator.clientMode.stale : a.stale);
-        router.refresh();
+        reloadOwn();
       } else say(a.failed);
       setConfirmApproval(false);
     } catch {
@@ -1062,7 +1239,7 @@ export function Configurator({
     } finally {
       if (!leaving) setApproving(false);
     }
-  }, [back.href, clientFiles, clientMode, doc, files, formats, headVersion, onApprove, overflowReport, revision, router, say, subject]);
+  }, [approvalSubject, back.href, clientFiles, clientMode, files, onApprove, overflowReport, own, ownFormats, ownHeadVersion, ownRevision, reloadOwn, router, say]);
 
   /**
    * **Aggiorna la versione approvata**, confirmed (Story 4.9): saves what's pending, then runs
@@ -1070,43 +1247,43 @@ export function Configurator({
    * next edit forks again.
    */
   const updateApproved = useCallback(async () => {
-    const copyId = doc.revisionId();
-    const head = doc.headVersion();
+    const copyId = own?.revisionId();
+    const head = own?.headVersion();
     const u = it.configurator.approvedEdit;
-    if (onUpdateApproved === undefined || copyId === undefined || head === undefined || overflowReport === null) {
+    if (onUpdateApproved === undefined || own === null || copyId === undefined || head === undefined || overflowReport === null) {
       setConfirmCopy(null);
       say(u.updateFailed);
       return;
     }
     setCopyBusy(true);
     try {
-      if (!(await doc.settle())) {
+      if (!(await own.settle())) {
         setConfirmCopy(null);
         say(u.notSaved);
         return;
       }
       const result = await onUpdateApproved({
-        ...subjectKey(subject),
-        revisionId: doc.revisionId() ?? copyId,
-        expectedRevisionVersion: doc.version(),
-        expectedHeadVersion: doc.headVersion() ?? head,
+        ...subjectKey(approvalSubject),
+        revisionId: own.revisionId() ?? copyId,
+        expectedRevisionVersion: own.version(),
+        expectedHeadVersion: own.headVersion() ?? head,
         // 0 (not measured) counts as not cleared.
         overflow: Object.fromEntries(FORMAT_IDS.map((id) => [id, overflowReport[id] !== null])),
       });
       setConfirmCopy(null);
       if (result.ok) {
-        doc.approved();
+        own.approved();
         say(u.updated);
         router.refresh();
         return;
       }
       const code = result.error.code;
       const ids = result.error.assetIds ?? [];
-      if (code === "MATERIAL_MISSING" && ids.length > 0) setServerMissingFor({ formats, files, clientFiles, ids });
+      if (code === "MATERIAL_MISSING" && ids.length > 0) setServerMissingFor({ formats: ownFormats, files, clientFiles, ids });
       else if (code === "OVERFLOW_NOT_CLEARED") say(it.configurator.approval.overflowServer);
       else if (STALE_COPY_CODES.has(code)) {
         say(clientMode ? it.configurator.clientMode.stale : it.configurator.approval.stale);
-        router.refresh();
+        reloadOwn();
       } else say(u.updateFailed);
     } catch {
       setConfirmCopy(null);
@@ -1114,14 +1291,14 @@ export function Configurator({
     } finally {
       setCopyBusy(false);
     }
-  }, [clientFiles, clientMode, doc, files, formats, onUpdateApproved, overflowReport, router, say, subject]);
+  }, [approvalSubject, clientFiles, clientMode, files, onUpdateApproved, overflowReport, own, ownFormats, reloadOwn, router, say]);
 
   /** **Scarta le modifiche**, confirmed (Story 4.9): the copy is dropped and the page shows the approved version again. */
   const discardCopy = useCallback(async () => {
-    const copyId = doc.revisionId();
-    const head = doc.headVersion();
+    const copyId = own?.revisionId();
+    const head = own?.headVersion();
     const u = it.configurator.approvedEdit;
-    if (onDiscard === undefined || copyId === undefined || head === undefined) {
+    if (onDiscard === undefined || own === null || copyId === undefined || head === undefined) {
       setConfirmCopy(null);
       say(u.discardFailed);
       return;
@@ -1130,20 +1307,20 @@ export function Configurator({
     let leaving = false;
     try {
       // A save in flight lands first, so nothing reaches the copy after it is dropped.
-      if (!(await doc.settle())) {
+      if (!(await own.settle())) {
         setConfirmCopy(null);
         say(u.discardFailed);
         return;
       }
-      const result = await onDiscard({ ...subjectKey(subject), revisionId: doc.revisionId() ?? copyId, expectedHeadVersion: doc.headVersion() ?? head });
+      const result = await onDiscard({ ...subjectKey(approvalSubject), revisionId: own.revisionId() ?? copyId, expectedHeadVersion: own.headVersion() ?? head });
       setConfirmCopy(null);
       // Dropped: edits made before the page shows the approved version must not reach the copy.
-      if (result.ok) doc.stop();
+      if (result.ok) own.stop();
       if (result.ok || STALE_COPY_CODES.has(result.error.code)) {
         if (!result.ok) say(clientMode ? it.configurator.clientMode.stale : it.configurator.approval.stale);
-        // The page reads the head again: the approved version, in a fresh configurator.
-        leaving = result.ok;
-        router.refresh();
+        // The page reads the head again: the approved version, in a fresh configurator (Story 4.12a: a fresh intro, the rest of the file kept).
+        leaving = result.ok && filed === null;
+        reloadOwn();
         return;
       }
       say(u.discardFailed);
@@ -1153,16 +1330,16 @@ export function Configurator({
     } finally {
       if (!leaving) setCopyBusy(false);
     }
-  }, [clientMode, doc, onDiscard, router, say, subject]);
+  }, [approvalSubject, clientMode, filed, onDiscard, own, reloadOwn, say]);
 
   /** Removes the selected element or block; false when there is nothing to remove. */
   const removeSelected = useCallback(() => {
     if (!editable) return false;
     const element = selection?.elementId !== undefined;
-    if (!applyPageEdit(removeSelection(formats[formatId], selection, formatId, template))) return false;
+    if (!applyPageEdit(removeSelection(formats[formatId], selection, formatId, templateOf(selection?.pageKey)))) return false;
     say(element ? it.configurator.edit.elementRemoved : it.configurator.edit.blockRemoved);
     return true;
-  }, [applyPageEdit, editable, formatId, formats, say, selection, template]);
+  }, [applyPageEdit, editable, formatId, formats, say, selection, templateOf]);
 
   /** ⌘C / ⌘X on a selected block; false when no block itself is selected. */
   const copyBlock = useCallback(
@@ -1172,18 +1349,18 @@ export function Configurator({
       if (selected === undefined) return false;
       clipboard.current = structuredClone(selected);
       if (!cut) say(it.configurator.edit.copied);
-      else if (applyPageEdit(removeSelection(formats[formatId], selection, formatId, template))) say(it.configurator.edit.cut);
+      else if (applyPageEdit(removeSelection(formats[formatId], selection, formatId, templateOf(selection.pageKey)))) say(it.configurator.edit.cut);
       return true;
     },
-    [applyPageEdit, editable, formatId, formats, say, selection, template],
+    [applyPageEdit, editable, formatId, formats, say, selection, templateOf],
   );
 
   /** ⌘V: the copied block after the selected one, else at the end of the selected page. */
   const paste = useCallback(() => {
     if (!editable || clipboard.current === null || selection === null) return false;
-    applyPageEdit(pasteBlock(formats[formatId], selection, clipboard.current, formatId, template, newId));
+    applyPageEdit(pasteBlock(formats[formatId], selection, clipboard.current, formatId, templateOf(selection.pageKey), newId));
     return true;
-  }, [applyPageEdit, editable, formatId, formats, selection, template]);
+  }, [applyPageEdit, editable, formatId, formats, selection, templateOf]);
 
   const textSettings = useCallback((settings: TextSettings) => applyToSelection((p, k, id) => withTextSettings(p, k, id, settings)), [applyToSelection]);
   const groupAlign = useCallback((align: TextGroupAlign) => applyToSelection((p, k, id) => withGroupAlign(p, k, id, align)), [applyToSelection]);
@@ -1272,8 +1449,81 @@ export function Configurator({
       />
     ) : undefined;
 
+  /**
+   * Story 4.12a, the client's file in the format in view: Introduzione, one group per case
+   * ("{code} · {name}", with its unpublished copy's note and link), then Chiusura; each drawn
+   * with its own part's template and values.
+   */
+  const fileGroups: CanvasGroup[] | undefined = (() => {
+    if (filed === null) return undefined;
+    const t = it.configurator.file;
+    const segments = filed.segments[formatId];
+    const introValues = valuesOf(ownPart ?? undefined);
+    const introGroup = (key: string, label: string): CanvasGroup => ({
+      key,
+      label,
+      template: ownPart?.template ?? template,
+      values: introValues,
+      pages: segments.find((s) => s.key === key)?.pages ?? [],
+      ...(ownPart === null ? { empty: t.introNotReady } : {}),
+    });
+    return [
+      introGroup(INTRO_SEGMENT, it.configurator.clientSections.intro),
+      ...filed.cases.map((part) => ({
+        key: part.key,
+        label: fill(t.caseLabel, { code: part.code, name: part.name }),
+        template: part.template,
+        values: valuesOf(part),
+        pages: segments.find((s) => s.key === part.key)?.pages ?? [],
+        ...(filed.copyPending(part.key)
+          ? {
+              note: (
+                <>
+                  <span>{t.unpublished}</span>
+                  {part.href !== undefined && (
+                    <Link href={part.href} className="font-medium text-foreground underline underline-offset-2 hover:text-foreground-strong">
+                      {t.openCase}
+                    </Link>
+                  )}
+                </>
+              ),
+            }
+          : {}),
+      })),
+      introGroup(CLOSING_SEGMENT, it.configurator.clientSections.outro),
+    ];
+  })();
+  /** Pagine of the client's file: Introduzione and Chiusura thumbnails, a row per case between them. */
+  const filePagine: FilePagine | undefined = (() => {
+    if (fileGroups === undefined) return undefined;
+    let start = 1;
+    const numbered = fileGroups.map((group) => {
+      const at = start;
+      start += group.pages.length;
+      return { group, start: at };
+    });
+    const intro = numbered[0]!;
+    const closing = numbered.at(-1)!;
+    return {
+      intro: { ...intro.group, start: intro.start },
+      closing: { ...closing.group, start: closing.start },
+      projects: numbered.slice(1, -1).map(({ group, start: at }) => {
+        const part = filed!.cases.find((c) => c.key === group.key)!;
+        return { key: group.key, name: part.name, code: part.code, template: group.template, values: group.values, first: group.pages[0], start: at, count: group.pages.length };
+      }),
+    };
+  })();
+  /** A Progetti del cliente row: the canvas scrolls to that case. */
+  const selectGroup = (key: string) => {
+    canvasRef.current?.querySelector(`[data-canvas-group="${key}"]`)?.scrollIntoView?.({ block: "start", behavior: reducedMotion() ? "auto" : "smooth" });
+  };
+  /** The page the tools act on: its part's template and values (Story 4.12a), else the document's. */
+  const toolPart = partOfPage(toolPage?.pageKey);
+  const toolTemplate = toolPart?.template ?? template;
+
   return (
     <div data-editable={editable} className="flex h-dvh flex-col bg-surface text-foreground">
+      {filed?.element}
       <p className="m-auto max-w-prose p-8 text-center font-body text-base text-foreground lg:hidden">{it.configurator.narrowScreen}</p>
 
       <div className="hidden min-h-0 flex-1 flex-col lg:flex">
@@ -1281,7 +1531,7 @@ export function Configurator({
           {it.configurator.soon}
         </span>
         <TopBar
-          header={header}
+          header={filed === null ? header : { name: header.name, code: header.code, ...(ownStatus === undefined ? {} : { status: ownStatus }) }}
           back={back}
           formatId={formatId}
           onFormat={pickFormat}
@@ -1300,13 +1550,53 @@ export function Configurator({
               : undefined
           }
           approvedCase={approvedCase}
+          // Story 4.12a: a client's file with no intro ready has nothing to approve.
+          hideApproval={fileMode && ownPart === null}
           update={
             canUpdate
               ? { blocker: approvalBlocker, pending: copyBusy, onUpdate: () => setConfirmCopy("update"), onDiscard: () => setConfirmCopy("discard") }
               : undefined
           }
         />
-        {(canApprove || canUpdate) && <OverflowReport template={template} formats={measuredFormats} assets={assets} values={values} onReport={onOverflowReport} />}
+        {(canApprove || canUpdate) && (
+          <OverflowReport template={ownPart?.template ?? template} formats={measuredFormats} assets={assets} values={valuesOf(ownPart ?? undefined)} onReport={onOverflowReport} />
+        )}
+        {fileMode && (
+          <Dialog
+            open={confirmDelete !== null}
+            onClose={() => setConfirmDelete(null)}
+            title={it.configurator.file.deleteTitle}
+            description={confirmDelete === null ? "" : fill(it.configurator.file.deleteDescription, { code: confirmDelete.part.code, name: confirmDelete.part.name })}
+            actions={
+              <>
+                <button type="button" data-autofocus onClick={() => setConfirmDelete(null)} className={cn(SECONDARY_ACTION, "h-9 px-4")}>
+                  {it.configurator.file.deleteCancel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pageKey = confirmDelete?.pageKey;
+                    setConfirmDelete(null);
+                    if (pageKey === undefined) return;
+                    // As the bin does: focus goes to the next page's bin, else the previous one's, else Aggiungi pagina.
+                    const at = pages.findIndex((p) => p.pageKey === pageKey);
+                    const next = pages[at + 1]?.pageKey ?? pages[at - 1]?.pageKey;
+                    removePage(pageKey, true);
+                    requestAnimationFrame(() => {
+                      const root = canvasRef.current;
+                      const target =
+                        (next === undefined ? null : root?.querySelector<HTMLElement>(`[data-delete-page="${next}"]`)) ?? root?.querySelector<HTMLElement>("[data-add-page]");
+                      target?.focus();
+                    });
+                  }}
+                  className={DANGER_ACTION}
+                >
+                  {it.configurator.file.deleteConfirm}
+                </button>
+              </>
+            }
+          />
+        )}
         {canUpdate && (
           <Dialog
             open={confirmCopy !== null}
@@ -1393,7 +1683,7 @@ export function Configurator({
           <LeftPanel
             hidden={!leftOpen || preview}
             formatId={formatId}
-            template={template}
+            template={toolTemplate}
             page={toolPage}
             block={block}
             element={element}
@@ -1437,6 +1727,7 @@ export function Configurator({
               template={template}
               pages={pages}
               pageGroups={clientMode ? "role" : "section"}
+              {...(fileGroups === undefined ? {} : { groups: fileGroups })}
               assets={assets}
               values={values}
               selection={selection}
@@ -1474,9 +1765,9 @@ export function Configurator({
             <AnimationDialog
               open={animationDialog !== null}
               formatId={formatId}
-              template={template}
+              template={templateOf(animationDialog?.pageKey)}
               assets={assets}
-              values={values}
+              values={valuesOf(partOfPage(animationDialog?.pageKey))}
               files={pickable}
               initial={animationInitial}
               onSubmit={submitAnimation}
@@ -1520,6 +1811,7 @@ export function Configurator({
             onMovePage={editable ? reorderPage : undefined}
             subject={subject}
             pageGroups={clientMode ? "role" : "section"}
+            {...(filePagine === undefined ? {} : { file: filePagine, onSelectGroup: selectGroup })}
             media={media}
             clientMedia={clientMedia}
             mediaRules={mediaRules}

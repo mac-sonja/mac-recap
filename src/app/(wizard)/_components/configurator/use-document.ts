@@ -26,14 +26,20 @@ export interface EditedRevision {
 /**
  * Whose head revision the configurator edits (Story 4.11a): a case, or a client's intro and
  * outro (`id` the intro's own id, `clientId` its client's: the Media tab lists and uploads there).
+ * Story 4.12a: or a client's whole file (`id` the client's own id): its intro and its approved
+ * cases, each part saved to its own revision (`ClientFile`); the Media tab is the client's.
  */
-export type Subject = { kind: "case"; id: string } | { kind: "client_intro"; id: string; clientId: string };
+export type Subject =
+  | { kind: "case"; id: string }
+  | { kind: "client_intro"; id: string; clientId: string }
+  | { kind: "client_file"; id: string; clientId: string };
 
-/** How an action names the subject: `caseId` for a case (as before), `clientIntroId` for a client's intro. */
-export type SubjectKey = { caseId: string } | { clientIntroId: string };
+/** How an action names the subject: `caseId` for a case (as before), `clientIntroId` for a client's intro, `clientId` for a client's file. */
+export type SubjectKey = { caseId: string } | { clientIntroId: string } | { clientId: string };
 
 /** The id field an action takes for `subject`. */
-export const subjectKey = (subject: Subject): SubjectKey => (subject.kind === "case" ? { caseId: subject.id } : { clientIntroId: subject.id });
+export const subjectKey = (subject: Subject): SubjectKey =>
+  subject.kind === "case" ? { caseId: subject.id } : subject.kind === "client_intro" ? { clientIntroId: subject.id } : { clientId: subject.id };
 
 /** What a fork sends (Story 4.9): the subject's id (`subjectKey`; Story 4.11b: an intro too) and the `headVersion` read. */
 export type ForkInput = SubjectKey & { expectedHeadVersion: number };
@@ -86,9 +92,10 @@ export interface DocumentState {
   canRedo: boolean;
   /**
    * Records an edit made in `formatId` and saves it after {@link DEBOUNCE_MS}. Changes
-   * with the same `group` (one text editing session) make one undo step.
+   * with the same `group` (one text editing session) make one undo step. Story 4.12a: the
+   * client's file returns false for an edit it refuses (a page moved into another part).
    */
-  change: (next: Formats, formatId: FormatId, group?: string) => void;
+  change: (next: Formats, formatId: FormatId, group?: string) => boolean | void;
   /** Saves the latest document now (e.g. when a text editing session ends). */
   flush: () => void;
   /**

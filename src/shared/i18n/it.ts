@@ -603,9 +603,10 @@ export const it = {
         remove: "Non siamo riusciti a rimuovere l’immagine. Riprova.",
       },
     },
-    /** On the client page, inactive until the configurator exists. */
+    /** On the client page: opens the client's file in the configurator (Story 4.12a). */
     layout: "Modifica layout",
-    layoutReason: "Arriva con il configuratore",
+    /** Why Modifica layout is inactive: the file would be empty (Story 4.12a). */
+    layoutReason: "Serve un’introduzione pronta o una case approvata.",
     /** Elimina cliente at the bottom of the edit panel (owner, 2026-10-19). */
     delete: {
       button: "Elimina cliente",
@@ -1010,6 +1011,46 @@ export const it = {
         STALE_STATUS: "L’introduzione non è più da approvare: la ricarichiamo.",
         NOT_FOUND: "Non troviamo più questa introduzione. Ricarica la pagina.",
       },
+    },
+    /** Story 4.12a: the client's whole file (its intro, its approved cases, its closing). */
+    file: {
+      /** Introduzione and Chiusura while the intro is missing, in Bozza or In elaborazione. */
+      introNotReady: "Introduzione non ancora pronta",
+      /** A case group's heading: its code and name. */
+      caseLabel: "{code} · {name}",
+      /** Pagine: the cases' rows. */
+      projects: "Progetti del cliente",
+      /** A case row's second line. */
+      projectPages: "{code} · {n} pagine",
+      /** A case edited here whose copy isn't published yet (Story 4.9's model). */
+      unpublished: "Modifiche non ancora pubblicate",
+      /** The link to that case's own configurator, where Aggiorna and Scarta publish or drop the copy. */
+      openCase: "Apri la case",
+      /** Deleting a case's page from the file. */
+      deleteTitle: "Eliminare la pagina?",
+      deleteDescription: "Questa pagina fa parte della case {code} · {name}: eliminandola qui sparisce anche dalla case. Puoi annullare con ⌘Z.",
+      deleteConfirm: "Elimina",
+      deleteCancel: "Annulla",
+      /** Another case's file placed on a case's page: a case holds only its own and the client's files. */
+      otherCase: "Questa immagine è di un’altra case",
+      /** An edit of a part that can't be edited here (read-only, or not loaded). */
+      locked: "Questa parte non si può modificare qui.",
+      /** An edit with no part of the file to hold it (no intro ready, no case left). */
+      nothingHere: "Qui non c’è ancora nessuna parte del file da modificare.",
+      /** + Aggiungi pagina with no part that can take a page. */
+      noPartForPage: "Non c’è una parte del file a cui aggiungere la pagina.",
+      /** A page, block or element moved from one part of the file into another. */
+      otherPart: "Si sposta solo dentro la stessa parte: ogni case e l’introduzione restano a sé.",
+      /** One part changed elsewhere meanwhile: only it was read again. */
+      partReloaded: "{part} è cambiata nel frattempo: l’abbiamo ricaricata. Il resto è com’era.",
+      /** The intro, named in that message. */
+      introPart: "L’introduzione",
+      /** The case, named in that message. */
+      casePart: "La case {code}",
+      /** That part could not be read again: the page reloads. */
+      reloadFailed: "Non riusciamo a ricaricare questa parte: ricarichiamo la pagina.",
+      /** That case left the file (deleted meanwhile). */
+      caseGone: "La case {code} non c’è più: l’abbiamo tolta dal file.",
     },
     /** Client mode (Story 4.11a): a client's pages grouped by role. `body` arrives with the client file (4.12). */
     clientSections: {

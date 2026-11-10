@@ -17,7 +17,7 @@ import { DeleteCaseButton } from "./delete-case-button";
 
 export interface CaseViewProps {
   /** Name, code and status (always Approvato here). */
-  header: ConfiguratorHeader;
+  header: Required<ConfiguratorHeader>;
   back: { href: string; label: string };
   /** The live revision's template ref (`mac-case@1`). */
   template: string;

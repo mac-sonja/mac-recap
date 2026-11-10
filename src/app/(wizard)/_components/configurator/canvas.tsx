@@ -1,7 +1,7 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
-import { memo, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject } from "react";
+import { memo, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import type { Crop, Page } from "@/modules/generation";
 import { measureOverflow, renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
@@ -18,12 +18,35 @@ import { groupLabelOf, type PageGroups } from "./page-groups";
 import { Slideshow } from "./slideshow";
 import { PAGE_WIDTH, PREVIEW_WIDTH, SEG, SEG_BUTTON } from "./styles";
 
+/**
+ * A run of pages under one heading (Story 4.12a, the client's file): a part's pages, drawn
+ * with that part's template and bound values.
+ */
+export interface CanvasGroup {
+  /** Unique in the file; the heading carries it as `data-canvas-group`. */
+  key: string;
+  label: string;
+  template: string;
+  values: BoundValues;
+  pages: readonly Page[];
+  /** Under the heading (a case's copy not yet published, with its link). */
+  note?: ReactNode;
+  /** Shown in place of the pages when the group has none (an intro not ready yet). */
+  empty?: string;
+}
+
 export interface CanvasProps {
   formatId: FormatId;
   template: string;
+  /** Every page shown, in order (with `groups`: theirs, flattened). */
   pages: readonly Page[];
   /** How the pages are labelled in groups: by section (a case), by role (client mode, Story 4.11a). */
   pageGroups?: PageGroups;
+  /**
+   * Story 4.12a: the pages in explicit groups, each with its own template and values, numbered
+   * on from one group to the next; `pages`, `template` and `values` then only stand in.
+   */
+  groups?: readonly CanvasGroup[];
   assets: Readonly<Record<string, RenderAsset>>;
   values: BoundValues;
   selection: Selection;
@@ -684,6 +707,7 @@ export function Canvas({
   template,
   pages,
   pageGroups = "section",
+  groups: given,
   assets,
   values,
   selection,
@@ -723,6 +747,10 @@ export function Canvas({
   const animate = preview || animateTexts;
   const width = preview && formatId === "presentazione_16_9" ? PREVIEW_WIDTH : PAGE_WIDTH[formatId];
   const slideshow = preview && formatId !== "presentazione_16_9" && pages.length > 0;
+  // A case or an intro: runs of one section (or role) each, labelled as before.
+  const groups = given ?? runsOfPages(pages, pageGroups, template, values);
+  /** Each page's template and values, by page key (the slideshow's pages cross groups). */
+  const partOf = new Map(groups.flatMap((g) => g.pages.map((p) => [p.pageKey, g] as const)));
 
   function onScroll() {
     if (frame.current !== null) return;
@@ -764,12 +792,13 @@ export function Canvas({
           {it.configurator.trial.body}
         </p>
       )}
-      {pages.length === 0 && <p className="mt-10 font-label text-sm text-foreground-muted">{it.configurator.canvas.empty}</p>}
+      {pages.length === 0 && given === undefined && <p className="mt-10 font-label text-sm text-foreground-muted">{it.configurator.canvas.empty}</p>}
       {slideshow && (
         <SlideshowOf
           formatId={formatId}
           template={template}
           pages={pages}
+          partOf={partOf}
           assets={assets}
           values={values}
           slide={slide}
@@ -783,69 +812,80 @@ export function Canvas({
           onPreviewPick={onPreviewPick}
         />
       )}
-      {/* The editor, and Anteprima of Presentazione: the pages stacked. */}
-      {(slideshow ? [] : pages).map((page, i) => {
-        // A section label before the first page of each run of pages in one section.
-        const heading =
-          i === 0 || groupLabelOf(pages[i - 1]!, pageGroups) !== groupLabelOf(page, pageGroups) ? (
-            <div
-              key={`section-${i}`}
-              className={cn(
-                "mt-7 flex w-full items-center gap-2.5 font-label text-[11.5px] font-semibold tracking-[0.06em] text-foreground-muted uppercase first:mt-2",
-                width,
-              )}
-            >
-              {groupLabelOf(page, pageGroups)}
-              <span aria-hidden="true" className="h-px flex-1 bg-border-strong" />
-            </div>
-          ) : null;
-        return [
-          heading,
-          <CanvasPage
-            key={page.pageKey}
-            formatId={formatId}
-            template={template}
-            page={page}
-            number={i + 1}
-            assets={assets}
-            values={values}
-            selection={selection}
-            onSelect={onSelect}
-            preview={preview}
-            animateTexts={animate}
-            editable={editable}
-            editing={editing !== null && editing.pageKey === page.pageKey ? editing.elementId : null}
-            editingBound={editing !== null && editing.pageKey === page.pageKey ? editing.bound : undefined}
-            onEditRequest={onEditRequest}
-            onTextInput={onTextInput}
-            onTextDone={onTextDone}
-            onFieldCommit={onFieldCommit}
-            onPreviewPick={onPreviewPick}
-            onResize={onResize}
-            onPlaceMedia={onPlaceMedia}
-            onCrop={onCrop}
-            onCropDone={onCropDone}
-            dragging={dragging}
-            onDragSource={onDragSource}
-            onCanvasDrop={onCanvasDrop}
-            onDeletePage={
-              onDeletePage === undefined
-                ? undefined
-                : (pageKey) => {
-                    // The bin goes with its page: focus moves to the next page's bin, else the previous one's, else Aggiungi pagina.
-                    const next = pages[i + 1]?.pageKey ?? pages[i - 1]?.pageKey;
-                    onDeletePage(pageKey);
-                    requestAnimationFrame(() => {
-                      const root = scrollRef.current;
-                      const target =
-                        (next === undefined ? null : root?.querySelector<HTMLElement>(`[data-delete-page="${next}"]`)) ?? root?.querySelector<HTMLElement>("[data-add-page]");
-                      target?.focus();
-                    });
-                  }
-            }
-          />,
-        ];
-      })}
+      {/* The editor, and Anteprima of Presentazione: the pages stacked, under their groups' labels. */}
+      {(slideshow ? [] : numberedGroups(groups)).map(({ group, start }) => [
+        // A label before the first page of each group (a run of one section, or a part of the client's file).
+        <div
+          key={`group-${group.key}`}
+          data-canvas-group={given === undefined ? undefined : group.key}
+          className={cn(
+            "mt-7 flex w-full items-center gap-2.5 font-label text-[11.5px] font-semibold tracking-[0.06em] text-foreground-muted uppercase first:mt-2",
+            width,
+          )}
+        >
+          {group.label}
+          <span aria-hidden="true" className="h-px flex-1 bg-border-strong" />
+        </div>,
+        group.note === undefined ? null : (
+          <div key={`note-${group.key}`} className={cn("mt-2 flex w-full flex-wrap items-center gap-x-3 gap-y-1 font-label text-[12.5px] text-foreground-muted", width)}>
+            {group.note}
+          </div>
+        ),
+        group.pages.length === 0 && group.empty !== undefined ? (
+          <p key={`empty-${group.key}`} className={cn("mt-3 w-full rounded-lg bg-surface-raised px-4 py-3 font-label text-[13px] text-foreground-muted shadow-card", width)}>
+            {group.empty}
+          </p>
+        ) : null,
+        ...group.pages.map((page, j) => {
+          const i = start + j;
+          return (
+            <CanvasPage
+              key={page.pageKey}
+              formatId={formatId}
+              template={group.template}
+              page={page}
+              number={i + 1}
+              assets={assets}
+              values={group.values}
+              selection={selection}
+              onSelect={onSelect}
+              preview={preview}
+              animateTexts={animate}
+              editable={editable}
+              editing={editing !== null && editing.pageKey === page.pageKey ? editing.elementId : null}
+              editingBound={editing !== null && editing.pageKey === page.pageKey ? editing.bound : undefined}
+              onEditRequest={onEditRequest}
+              onTextInput={onTextInput}
+              onTextDone={onTextDone}
+              onFieldCommit={onFieldCommit}
+              onPreviewPick={onPreviewPick}
+              onResize={onResize}
+              onPlaceMedia={onPlaceMedia}
+              onCrop={onCrop}
+              onCropDone={onCropDone}
+              dragging={dragging}
+              onDragSource={onDragSource}
+              onCanvasDrop={onCanvasDrop}
+              onDeletePage={
+                onDeletePage === undefined
+                  ? undefined
+                  : (pageKey) => {
+                      // The bin goes with its page: focus moves to the next page's bin, else the previous one's, else Aggiungi pagina.
+                      const next = pages[i + 1]?.pageKey ?? pages[i - 1]?.pageKey;
+                      onDeletePage(pageKey);
+                      requestAnimationFrame(() => {
+                        const root = scrollRef.current;
+                        const target =
+                          (next === undefined ? null : root?.querySelector<HTMLElement>(`[data-delete-page="${next}"]`)) ??
+                          root?.querySelector<HTMLElement>("[data-add-page]");
+                        target?.focus();
+                      });
+                    }
+              }
+            />
+          );
+        }),
+      ])}
       {!preview && onAddPage !== undefined && (
         <button
           type="button"
@@ -868,6 +908,7 @@ function SlideshowOf({
   formatId,
   template,
   pages,
+  partOf,
   assets,
   values,
   slide,
@@ -882,19 +923,22 @@ function SlideshowOf({
 }: Pick<CanvasProps, "template" | "pages" | "assets" | "values" | "slide" | "onStep" | "instagram" | "caption" | "reducedMotion"> &
   TextEditing & {
     formatId: Exclude<FormatId, "presentazione_16_9">;
+    /** Each page's group: its template and values. */
+    partOf: ReadonlyMap<string, Pick<CanvasGroup, "template" | "values">>;
   }) {
   const index = Math.max(0, Math.min(pages.length - 1, slide));
   const page = pages[index]!;
+  const part = partOf.get(page.pageKey);
   return (
     <Slideshow formatId={formatId} index={index} count={pages.length} name={page.name} pageKey={page.pageKey} onStep={onStep} still={reducedMotion}>
       <Slide
         key={page.pageKey}
         formatId={formatId}
-        template={template}
+        template={part?.template ?? template}
         page={page}
         number={index + 1}
         assets={assets}
-        values={values}
+        values={part?.values ?? values}
         editable={editable}
         onTextInput={onTextInput}
         onTextDone={onTextDone}
@@ -983,4 +1027,26 @@ function TextAnimationSwitch({ on, onChange }: { on: boolean; onChange: (on: boo
       {it.configurator.textAnimation}
     </label>
   );
+}
+
+/** The pages cut into runs of one section (or role) each, as a case or an intro groups them: a page moved into another section's place keeps its own label. */
+function runsOfPages(pages: readonly Page[], pageGroups: PageGroups, template: string, values: BoundValues): CanvasGroup[] {
+  const runs: CanvasGroup[] = [];
+  pages.forEach((page, i) => {
+    const label = groupLabelOf(page, pageGroups);
+    const last = runs.at(-1);
+    if (last !== undefined && last.label === label) (last.pages as Page[]).push(page);
+    else runs.push({ key: `section-${i}`, label, template, values, pages: [page] });
+  });
+  return runs;
+}
+
+/** Each group with the index of its first page in the whole list. */
+function numberedGroups(groups: readonly CanvasGroup[]): { group: CanvasGroup; start: number }[] {
+  let start = 0;
+  return groups.map((group) => {
+    const at = start;
+    start += group.pages.length;
+    return { group, start: at };
+  });
 }

@@ -196,6 +196,39 @@ describe("composeParts", () => {
     expect(() => composeParts([a, casePart("aaaa", "lumen")], "video_9_16")).toThrow(/appears twice/);
   });
 
+  describe("the client file (Story 4.12a, clientFile)", () => {
+    it.each(FORMAT_IDS)("includes the intro with one case, the case trimmed as in a file (%s)", (formatId) => {
+      const [intro, a] = [introPart("lumen"), casePart("aaaa", "lumen")];
+      const file = composeParts([intro, a], formatId, { clientFile: true });
+      expect(file.segments.map((s) => s.key)).toEqual(["client_intro:lumen", "case:aaaa", "client_closing:lumen"]);
+      const casePages = file.segments[1].pages;
+      expect(casePages.some((p) => p.role === "intro")).toBe(false);
+      expect(casePages.some((p) => p.pageKey === "closing")).toBe(false);
+      // Risultati e testimonial stay; in Carosello only the case's own Chiusura goes.
+      const expected = a.doc.formats[formatId].pages.filter((p) => p.role !== "intro" && !(formatId === "carosello_1_1" && p.pageKey === "closing"));
+      expect(casePages).toEqual(expected);
+      expect(flat(file).at(-1)).toMatch(new RegExp(`#${expected.length + file.segments[0].pages.length + file.segments[2].pages.length}$`));
+    });
+
+    it("trims the cases even with no intro document (the intro isn't ready)", () => {
+      const [a, b] = [casePart("aaaa", "lumen"), casePart("bbbb", "lumen")];
+      const file = composeParts([a, b], "carosello_1_1", { clientFile: true });
+      expect(file.segments.map((s) => s.key)).toEqual(["case:aaaa", "case:bbbb"]);
+      for (const segment of file.segments) expect(segment.pages.some((p) => p.role === "intro" || p.pageKey === "closing")).toBe(false);
+    });
+
+    it("shows a client's intro and closing alone when it has no case", () => {
+      const file = composeParts([introPart("lumen")], "presentazione_16_9", { clientFile: true });
+      expect(file.segments.map((s) => s.key)).toEqual(["client_intro:lumen", "client_closing:lumen"]);
+    });
+
+    it("leaves an export's file unchanged without the option", () => {
+      const [intro, a] = [introPart("lumen"), casePart("aaaa", "lumen")];
+      expect(composeParts([intro, a], "carosello_1_1")).toEqual(composeParts([intro, a], "carosello_1_1", {}));
+      expect(composeParts([intro, a], "carosello_1_1").segments.map((s) => s.key)).toEqual(["case:aaaa"]);
+    });
+  });
+
   it("returns no segments for no parts", () => {
     expect(composeParts([], "carosello_1_1").segments).toEqual([]);
   });

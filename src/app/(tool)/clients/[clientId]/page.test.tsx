@@ -155,18 +155,33 @@ describe("ClientPage", () => {
     expect(html).toContain("Rebrand");
   });
 
-  it("shows Modifica layout inactive, its reason linked, hidden below 1024 px; no panel without ?modifica=1", async () => {
+  it.each([
+    ["an approved case", () => list.mockResolvedValue(ok([caseStudy({ status: "approved" })]))],
+    ["an intro Da approvare", () => getClientIntro.mockResolvedValue(ok(intro("in_review")))],
+    ["an Approvato intro", () => getClientIntro.mockResolvedValue(ok(intro("approved")))],
+  ])("links Modifica layout to the client's file with %s, hidden below 1024 px; no panel without ?modifica=1 (Story 4.12a)", async (_name, arrange) => {
+    arrange();
+    const html = await renderPage();
+    const link = html.match(new RegExp(`<a [^>]*>${dict.clientPanel.layout}</a>`))?.[0] ?? "";
+    expect(link).toContain(`href="/clients/${LUMEN.id}/configurator"`);
+    expect(link).not.toMatch(/ aria-disabled="/);
+    expect(link).toContain("hidden");
+    expect(link).toContain("lg:inline-flex");
+    expect(html).not.toMatch(new RegExp(`<button [^>]*>${dict.clientPanel.layout}</button>`));
+    expect(html).not.toContain("data-panel");
+    expect(listClientMaterial).not.toHaveBeenCalled();
+  });
+
+  it.each(["generating", "draft", null] as const)("shows Modifica layout inactive, its reason linked, with the intro %s and no approved case", async (status) => {
+    getClientIntro.mockResolvedValue(ok(status === null ? null : intro(status)));
     const html = await renderPage();
     const button = html.match(new RegExp(`<button [^>]*>${dict.clientPanel.layout}</button>`))?.[0] ?? "";
     expect(button).toContain('aria-disabled="true"');
-    // The reason is read once, through aria-describedby only.
-    expect(button).not.toContain("title=");
-    const reasonId = button.match(/aria-describedby="([^"]+)"/)?.[1];
-    expect(html).toContain(`<span id="${reasonId}" class="sr-only">${dict.clientPanel.layoutReason}</span>`);
     expect(button).toContain("hidden");
     expect(button).toContain("lg:inline-flex");
-    expect(html).not.toContain("data-panel");
-    expect(listClientMaterial).not.toHaveBeenCalled();
+    const reasonId = button.match(/aria-describedby="([^"]+)"/)?.[1];
+    expect(html).toContain(`<span id="${reasonId}" class="sr-only">${dict.clientPanel.layoutReason}</span>`);
+    expect(html).not.toMatch(new RegExp(`href="/clients/${LUMEN.id}/configurator"`));
   });
 
   it("opens the edit panel with ?modifica=1, handing it the client's files and its case count", async () => {
@@ -207,7 +222,9 @@ describe("ClientPage", () => {
     it.each(["generating", "draft"] as const)("offers no Apri while the intro is %s", async (status) => {
       getClientIntro.mockResolvedValue(ok(intro(status)));
       const html = await renderPage();
-      expect(html).not.toContain(`/clients/${LUMEN.id}/configurator`);
+      // No Apri beside the badge (and, with no approved case, Modifica layout is inactive: Story 4.12a).
+      expect(html).not.toContain(dict.clients.detail.openIntro);
+      expect(html).not.toMatch(new RegExp(`href="/clients/${LUMEN.id}/configurator"`));
     });
 
     it("throws into the error boundary when the intro can't be read", async () => {
