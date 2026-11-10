@@ -19,6 +19,8 @@ export interface TagsValue {
 export interface TagOptions {
   businessLines: readonly BusinessLine[];
   sectors: readonly ClientSector[];
+  /** The sector list couldn't be read: the industry picker says so (nothing can be picked). */
+  sectorsFailed?: boolean;
 }
 
 /** The fields a save can refuse, as an action names them. */
@@ -40,9 +42,17 @@ export function invalidFields(value: { name?: string } & TagsValue): CollectionF
   return out;
 }
 
-/** `list` with `item` switched on or off, in `order`'s order. */
+/**
+ * `list` with `item` switched on or off, in `order`'s order; values of `list` not in `order` (a
+ * stored industry no longer in the sector list) are kept, after the listed ones.
+ */
 export const toggled = <T,>(list: readonly T[], item: T, order: readonly T[]): T[] =>
-  list.includes(item) ? list.filter((x) => x !== item) : order.filter((x) => x === item || list.includes(x));
+  list.includes(item)
+    ? list.filter((x) => x !== item)
+    : [...order.filter((x) => x === item || list.includes(x)), ...list.filter((x) => !order.includes(x))];
+
+/** The most cases a collection holds: `COLLECTION_ITEMS_MAX` of the collection module (its index is server-only). */
+export const ITEMS_MAX = 200;
 
 /**
  * The client industries as multi-select pills (Story 5.10a), styled as the case's Servizi
@@ -173,6 +183,7 @@ export function TagsFields({
           invalid={sectorsInvalid}
           disabled={disabled}
         />
+        {options.sectorsFailed === true && <p className="font-label text-xs text-danger">{copy.sectorsFailed}</p>}
         {sectorsInvalid && (
           <p id={sectorsErrorId} className="font-label text-xs text-danger">
             {copy.errors.industries}

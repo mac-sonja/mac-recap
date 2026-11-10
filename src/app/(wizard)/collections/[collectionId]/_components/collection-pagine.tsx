@@ -68,6 +68,11 @@ function RowMenu({ label, items }: { label: string; items: readonly MenuItem[] }
     button.current?.focus();
   };
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    // Tab leaves the menu: it closes and focus moves on as usual.
+    if (event.key === "Tab") {
+      setOpen(false);
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -134,6 +139,12 @@ function RowMenu({ label, items }: { label: string; items: readonly MenuItem[] }
     </div>
   );
 }
+
+/** "{n} pagine", "1 pagina" for one. */
+const pageCountLabel = (n: number) => (n === 1 ? it.collection.pages.pageCountOne : fill(it.collection.pages.pageCount, { n }));
+/** "{code} · {n} pagine", "{code} · 1 pagina" for one. */
+const casePagesLabel = (code: string, n: number) =>
+  fill(n === 1 ? it.collection.pages.casePagesOne : it.collection.pages.casePages, { code, n });
 
 export interface CollectionPagineProps {
   formatId: FormatId;
@@ -229,7 +240,7 @@ export function CollectionPagine({ formatId, groups, segments, assets, onSelect,
               <Lock aria-hidden="true" className="size-3 shrink-0" />
               {label}
             </span>
-            <small className="truncate font-label text-[12px]">{fill(copy.pageCount, { n: s?.pages.length ?? 0 })}</small>
+            <small className="truncate font-label text-[12px]">{pageCountLabel(s?.pages.length ?? 0)}</small>
           </span>
         </button>
         <span className="sr-only">{copy.locked}</span>
@@ -321,12 +332,13 @@ export function CollectionPagine({ formatId, groups, segments, assets, onSelect,
                       key={c.caseId}
                       data-drop={caseDrop}
                       onDragOver={(event) => {
-                        // A case moves only within its client's group: another group's rows take no drop.
-                        if (dragging?.kind !== "case" || dragging.clientId !== group.clientId || !event.dataTransfer.types.includes(CASE_DRAG_TYPE)) return;
+                        if (dragging?.kind !== "case" || !event.dataTransfer.types.includes(CASE_DRAG_TYPE)) return;
+                        // Any case drag is taken, so a drop on another client's group reaches onDrop and is refused with why.
                         event.preventDefault();
                         event.stopPropagation();
-                        event.dataTransfer.dropEffect = "move";
-                        if (dropOn !== `case:${c.caseId}`) setDropOn(`case:${c.caseId}`);
+                        const own = dragging.clientId === group.clientId;
+                        event.dataTransfer.dropEffect = own ? "move" : "none";
+                        if (own && dropOn !== `case:${c.caseId}`) setDropOn(`case:${c.caseId}`);
                       }}
                       onDrop={(event) => {
                         if (dragging?.kind !== "case" || !event.dataTransfer.types.includes(CASE_DRAG_TYPE)) return;
@@ -374,7 +386,7 @@ export function CollectionPagine({ formatId, groups, segments, assets, onSelect,
                         <span className="flex min-w-0 flex-col">
                           <span className="truncate font-label text-[12.5px] font-medium text-foreground">{c.name}</span>
                           <small className="truncate font-label text-[12px] text-foreground-muted">
-                            {available ? fill(copy.casePages, { code: c.code, n: s?.pages.length ?? 0 }) : copy.unavailable}
+                            {available ? casePagesLabel(c.code, s?.pages.length ?? 0) : copy.unavailable}
                           </small>
                         </span>
                       </button>

@@ -8,7 +8,7 @@ import { collectionHref } from "@/app/_lib/routes";
 import { createCollection } from "@/app/(tool)/collections/actions";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import { invalidFields, NameField, refusedFields, TagsFields, type CollectionField, type TagOptions, type TagsValue } from "./collection-fields";
+import { invalidFields, ITEMS_MAX, NameField, refusedFields, TagsFields, type CollectionField, type TagOptions, type TagsValue } from "./collection-fields";
 
 export interface CreateCollectionDialogProps {
   open: boolean;
@@ -56,6 +56,7 @@ export function CreateCollectionDialog({ open, onClose, caseIds, options }: Crea
       }
       const fields = refusedFields(result.error.fields);
       if (result.error.code === "INVALID_INPUT" && fields.length > 0) setErrors(fields);
+      else if (result.error.code === "INVALID_INPUT" && result.error.fields?.includes("caseIds")) setFailure(fill(it.library.select.tooMany, { max: ITEMS_MAX }));
       else setFailure(result.error.code === "CASE_NOT_COLLECTABLE" ? copy.notCollectable : copy.failed);
     } catch {
       setFailure(copy.failed);

@@ -146,7 +146,8 @@ export default async function LibraryPage({ searchParams }: { searchParams?: Pro
   // The industry list is a read `manage collections` allows; without it the dialog offers none.
   const selectable = can(actor, "manage collections");
   const sectors = selectable ? await caseStudy.listClientSectors() : null;
-  const tagOptions = { businessLines: caseStudy.BUSINESS_LINES, sectors: sectors?.ok && Array.isArray(sectors.value) ? sectors.value : [] };
+  const sectorsRead = sectors?.ok === true && Array.isArray(sectors.value);
+  const tagOptions = { businessLines: caseStudy.BUSINESS_LINES, sectors: sectorsRead ? sectors.value : [], sectorsFailed: selectable && !sectorsRead };
 
   return (
     <div className="flex flex-col gap-8">

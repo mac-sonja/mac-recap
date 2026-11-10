@@ -99,7 +99,7 @@ export function AddCasesDialog({ open, onClose, candidates, tags, onAdd }: AddCa
       actions={
         <>
           <span aria-live="polite" className="mr-auto self-center font-label text-[13px] text-foreground-muted tabular-nums">
-            {picked.length > 0 ? fill(copy.picked, { n: picked.length }) : ""}
+            {picked.length === 0 ? "" : picked.length === 1 ? copy.pickedOne : fill(copy.picked, { n: picked.length })}
           </span>
           <button type="button" onClick={close} className={SECONDARY_ACTION}>
             {copy.cancel}

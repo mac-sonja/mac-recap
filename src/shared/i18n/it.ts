@@ -848,6 +848,9 @@ export const it = {
       card: "Seleziona {name}",
       /** The bar under the header; `{n}` is how many cards are picked. */
       count: "{n} selezionate",
+      countOne: "1 selezionata",
+      /** More than a collection holds; `{max}` cases. */
+      tooMany: "Una raccolta tiene al massimo {max} case.",
       create: "Crea raccolta",
       clear: "Annulla selezione",
     },
@@ -907,6 +910,8 @@ export const it = {
       namePlaceholder: "Per esempio: Pitch moda",
       businessLines: "Servizi",
       industries: "Settori",
+      /** The sector list couldn't be read: no industry can be picked. */
+      sectorsFailed: "Non siamo riusciti a caricare i settori. Ricarica la pagina e riprova.",
       errors: {
         name: "Dai un nome alla raccolta, fino a 120 caratteri.",
         businessLines: "Scegli almeno un servizio.",
@@ -951,8 +956,10 @@ export const it = {
       locked: "Bloccata: segue le case del cliente",
       /** `{code}` and `{n}` pages of a case. */
       casePages: "{code} · {n} pagine",
+      casePagesOne: "{code} · 1 pagina",
       /** An intro's or a closing's `{n}` pages. */
       pageCount: "{n} pagine",
+      pageCountOne: "1 pagina",
       unavailable: "Non disponibile",
       unavailableNote: "Questa case non ha più una versione approvata.",
       /** Read with a client's group: its name. */
@@ -996,6 +1003,7 @@ export const it = {
       pick: "Scegli {name}",
       /** `{n}` cases picked. */
       picked: "{n} scelte",
+      pickedOne: "1 scelta",
       confirm: "Aggiungi",
       cancel: "Annulla",
       full: "Una raccolta tiene al massimo 200 case.",

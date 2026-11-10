@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { CreateCollectionDialog } from "@/app/(tool)/collections/_components/create-collection-dialog";
-import type { TagOptions } from "@/app/(tool)/collections/_components/collection-fields";
+import { ITEMS_MAX, type TagOptions } from "@/app/(tool)/collections/_components/collection-fields";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
@@ -25,22 +25,39 @@ const SelectionContext = createContext<Selection | null>(null);
 export function LibrarySelection({ options, children }: { options: TagOptions; children: ReactNode }) {
   const [ids, setIds] = useState<readonly string[]>([]);
   const [creating, setCreating] = useState(false);
-  const toggle = (id: string) => setIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  /** Set when a tick would go past what a collection holds: said in the bar, nothing added. */
+  const [full, setFull] = useState(false);
+  const toggle = (id: string) => {
+    if (ids.includes(id)) {
+      setIds(ids.filter((x) => x !== id));
+      setFull(false);
+    } else if (ids.length >= ITEMS_MAX) setFull(true);
+    else setIds([...ids, id]);
+  };
   const copy = it.library.select;
+  const count = ids.length === 1 ? copy.countOne : fill(copy.count, { n: ids.length });
   return (
     <SelectionContext value={{ ids, toggle }}>
       {ids.length > 0 && (
         <div
           role="region"
-          aria-label={fill(copy.count, { n: ids.length })}
+          aria-label={count}
           data-selection-bar=""
           className="sticky top-4 z-10 flex items-center justify-between gap-4 rounded-xl bg-surface-raised px-4 py-3 shadow-popover motion-safe:animate-dialog-in"
         >
           <p aria-live="polite" className="font-label text-sm font-medium text-foreground-strong tabular-nums">
-            {fill(copy.count, { n: ids.length })}
+            {count}
+            {full && <span className="ml-3 font-normal text-danger">{fill(copy.tooMany, { max: ITEMS_MAX })}</span>}
           </p>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setIds([])} className={SECONDARY_ACTION}>
+            <button
+              type="button"
+              onClick={() => {
+                setIds([]);
+                setFull(false);
+              }}
+              className={SECONDARY_ACTION}
+            >
               {copy.clear}
             </button>
             <button type="button" onClick={() => setCreating(true)} className={PRIMARY_ACTION}>

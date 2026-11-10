@@ -59,7 +59,9 @@ export function CollectionsTable({ rows, businessLines, sectors }: CollectionsTa
   const router = useRouter();
   const [lines, setLines] = useState<BusinessLine[]>([]);
   const [industries, setIndustries] = useState<string[]>([]);
-  const [renaming, setRenaming] = useState<CollectionRow | null>(null);
+  // By id: after a refresh the dialog takes the row as read again (its new version).
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const renaming = renamingId === null ? null : (rows.find((r) => r.id === renamingId) ?? null);
   const [deleting, setDeleting] = useState<CollectionRow | null>(null);
   const linesId = useId();
   const industriesId = useId();
@@ -187,7 +189,7 @@ export function CollectionsTable({ rows, businessLines, sectors }: CollectionsTa
                         type="button"
                         aria-label={fill(copy.rename.label, { name: row.name })}
                         title={copy.rename.button}
-                        onClick={() => setRenaming(row)}
+                        onClick={() => setRenamingId(row.id)}
                         className="inline-flex size-8 items-center justify-center rounded-md text-foreground-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-hover hover:text-foreground active:scale-[0.97]"
                       >
                         <Pencil aria-hidden="true" className="size-4" />
@@ -210,7 +212,7 @@ export function CollectionsTable({ rows, businessLines, sectors }: CollectionsTa
         </div>
       )}
 
-      <RenameDialog key={renaming?.id ?? "none"} row={renaming} onClose={() => setRenaming(null)} onDone={() => router.refresh()} />
+      <RenameDialog key={renamingId ?? "none"} row={renaming} onClose={() => setRenamingId(null)} onDone={() => router.refresh()} />
       <DeleteDialog row={deleting} onClose={() => setDeleting(null)} onDone={() => router.refresh()} />
     </div>
   );

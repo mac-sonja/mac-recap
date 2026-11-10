@@ -135,10 +135,14 @@ export function CollectionView({ id, name, version, tags: initialTags, groups: i
         }
         epoch.current += 1;
         setGroups(confirmed.current);
-        say(it.collection.orderFailed);
+        if (result?.ok === false && (result.error.code === "STALE_COLLECTION" || result.error.code === "COLLECTION_NOT_FOUND")) {
+          // Changed elsewhere: retrying with this version can't work, so the page is read again.
+          say(it.collections.stale);
+          router.refresh();
+        } else say(it.collection.orderFailed);
       });
     },
-    [say],
+    [router, say],
   );
 
   const moveGroup = (clientId: string, to: number) => {
@@ -328,7 +332,14 @@ export function CollectionView({ id, name, version, tags: initialTags, groups: i
         description={it.collection.remove.description}
         actions={
           <>
-            <button type="button" data-autofocus onClick={() => setRemoving(null)} className={SECONDARY_ACTION}>
+            <button
+              type="button"
+              data-autofocus
+              onClick={() => {
+                if (!removePending) setRemoving(null);
+              }}
+              className={SECONDARY_ACTION}
+            >
               {it.collection.remove.cancel}
             </button>
             <button type="button" aria-disabled={removePending || undefined} onClick={() => void remove()} className={DANGER_ACTION}>
@@ -357,8 +368,15 @@ export function CollectionView({ id, name, version, tags: initialTags, groups: i
             setTags(next);
             return null;
           }
-          if (result?.ok === false && result.error.code === "INVALID_INPUT") return refusedFields(result.error.fields);
-          return result?.ok === false && result.error.code === "STALE_COLLECTION" ? it.collections.stale : it.collection.tags.failed;
+          if (result?.ok === false && result.error.code === "INVALID_INPUT") {
+            const fields = refusedFields(result.error.fields);
+            return fields.length > 0 ? fields : it.collection.tags.failed;
+          }
+          if (result?.ok === false && (result.error.code === "STALE_COLLECTION" || result.error.code === "COLLECTION_NOT_FOUND")) {
+            router.refresh();
+            return it.collections.stale;
+          }
+          return it.collection.tags.failed;
         }}
       />
     </div>

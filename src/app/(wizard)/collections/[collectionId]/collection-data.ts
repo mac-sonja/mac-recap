@@ -1,6 +1,6 @@
 import * as caseStudy from "@/modules/case-study";
 import type { ClientDetail, ClientSector } from "@/modules/case-study";
-import type { CollectionDetail, CollectionItem } from "@/modules/collection";
+import { groupsOf, type CollectionDetail, type CollectionItem } from "@/modules/collection";
 import * as material from "@/modules/material";
 import type { RenderAsset } from "@/modules/rendering";
 import { log } from "@/shared/log";
@@ -12,15 +12,13 @@ import type { CollectionCandidate, CollectionCase, CollectionGroup, PartPages } 
 // its live approved revision (`getLiveRevision`, never a working or superseded one) and each
 // client's info as it is now: nothing is copied. The caller has authorized `manage collections`.
 
-/** The collection's cases in groups, one per client, in order. */
+/** The collection's cases in groups, one per client, in order: the module's own grouping (`groupsOf`), so the page's group places are the ones a move names. */
 function groupItems(items: readonly CollectionItem[]): { clientId: string; items: CollectionItem[] }[] {
-  const groups: { clientId: string; items: CollectionItem[] }[] = [];
-  for (const item of items) {
-    const last = groups.at(-1);
-    if (last !== undefined && last.clientId === item.case.client.id) last.items.push(item);
-    else groups.push({ clientId: item.case.client.id, items: [item] });
-  }
-  return groups;
+  const byCase = new Map(items.map((item) => [item.case.id, item]));
+  return groupsOf(items.map((item) => ({ caseId: item.case.id, clientId: item.case.client.id }))).map((group) => ({
+    clientId: group.clientId,
+    items: group.caseIds.map((caseId) => byCase.get(caseId)!),
+  }));
 }
 
 /** A client's approved intro document as a part, or null (none approved, or not readable: logged). */
@@ -47,8 +45,9 @@ async function caseOf(item: CollectionItem, client: ClientDetail): Promise<{ par
   const caseId = item.case.id;
   try {
     const [info, form, listed] = await Promise.all([caseStudy.getClientInfoForCase(caseId), material.getDetailsForm({ caseId }), material.listAssets({ caseId })]);
-    if (!info.ok || !form.ok || !listed.ok) {
-      log.warn("collection case not read", { caseId });
+    const failed = !info.ok ? info.error : !form.ok ? form.error : !listed.ok ? listed.error : null;
+    if (failed !== null) {
+      log.warn(`collection case not read: ${failed.code}: ${failed.message}`, { caseId });
       return null;
     }
     const assets = await renderAssetsOf(listed.value, (assetId, spec) => material.getRendition(assetId, spec));
@@ -56,8 +55,8 @@ async function caseOf(item: CollectionItem, client: ClientDetail): Promise<{ par
       part: { template: revision.doc.template, formats: pagesOfDocument(revision.doc.formats), values: boundValuesOf(item.case, info.value, client.logoUrl, form.value) },
       assets,
     };
-  } catch {
-    log.warn("collection case not read: threw", { caseId });
+  } catch (error) {
+    log.warn(`collection case not read: threw: ${error instanceof Error ? error.message : "unknown"}`, { caseId });
     return null;
   }
 }

@@ -56,7 +56,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
       groups={drawn.value.groups}
       assets={drawn.value.assets}
       candidates={candidates.value}
-      tagOptions={{ businessLines: caseStudy.BUSINESS_LINES, sectors: sectorList }}
+      tagOptions={{ businessLines: caseStudy.BUSINESS_LINES, sectors: sectorList, sectorsFailed: !sectors.ok }}
       actions={ACTIONS}
     />
   );
