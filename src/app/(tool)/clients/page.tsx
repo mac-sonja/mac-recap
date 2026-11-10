@@ -18,7 +18,8 @@ export interface ClientsPageProps {
  * The Clients page (Story 2.13), owner/designer only (`list clients`; any other
  * role goes to its landing). Every client with its non-deleted case count loads
  * once; search and sort run in the browser. **Aggiungi cliente** exists only with
- * `manage clients`. A card with approved cases offers **Scarica** (the client pack).
+ * `manage clients`. A card with approved cases offers **Scarica** (the client pack, Story
+ * 5.9a; its dialog notes when the client's intro isn't approved).
  * A failed load throws into Next's error boundary: no partial table. With
  * `?nuovo=1` and `manage clients`, the add panel (**Nuovo cliente**) opens over the list.
  */
@@ -42,12 +43,23 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps = {
     }
   }
 
+  // Story 5.9a: whether each pack's intro is approved (the dialog's note), read only for cards with Scarica.
+  const introApproved = new Map<string, boolean>();
+  await Promise.all(
+    [...approved.keys()].map(async (clientId) => {
+      const intro = await caseStudy.getClientIntro(clientId);
+      if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
+      introApproved.set(clientId, intro.value !== null && intro.value.approvedRevisionId !== null);
+    }),
+  );
+
   const rows: ClientRow[] = listed.value.map(({ id, code, name, caseCount, complete, logoUrl }) => ({
     id,
     code,
     name,
     caseCount,
     approvedCount: approved.get(id) ?? 0,
+    introApproved: introApproved.get(id) ?? false,
     complete,
     logoUrl,
   }));

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
 import type { CaseStudy, ClientDetail, ClientIntro, ClientSector, ListedClientAsset, ListScope } from "@/modules/case-study";
-import { it as dict } from "@/shared/i18n/it";
+import { fill, it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
@@ -34,6 +34,9 @@ vi.mock("@/modules/case-study", () => ({
   listClientSectors: () => listClientSectors(),
   getClientIntro: (clientId: unknown) => getClientIntro(clientId),
 }));
+
+// The pack's server actions (Story 5.9a) are never called while the page renders.
+vi.mock("../export-actions", () => ({ requestClientExport: vi.fn(), getClientExportStatus: vi.fn() }));
 
 vi.mock("../_lib/client-limits", () => ({ clientLimits: () => ({}), clientMaterialLimits: () => ({}) }));
 // The panel is a browser component (tested on its own): here only what the page hands it.
@@ -138,6 +141,21 @@ const intro = (status: ClientIntro["status"]): ClientIntro => ({
 const NEW_HREF = `/case-studies/new?clientId=${LUMEN.id}`;
 
 describe("ClientPage", () => {
+  describe("Scarica, the client's pack (Story 5.9a)", () => {
+    const PACK = `aria-label="${fill(dict.download.packLabel, { name: LUMEN.name })}"`;
+
+    it("is offered once the client has an approved case", async () => {
+      list.mockResolvedValue(ok([caseStudy({ status: "approved" }), caseStudy({ id: "aaaaaaaa-0000-4000-8000-000000000002", status: "draft" })]));
+      expect(await renderPage()).toContain(PACK);
+    });
+
+    it("is not offered while the client has only cases that aren't approved", async () => {
+      list.mockResolvedValue(ok([caseStudy({ status: "draft" }), caseStudy({ id: "aaaaaaaa-0000-4000-8000-000000000002", status: "in_review" })]));
+      getClientIntro.mockResolvedValue(ok({ ...intro("approved"), approvedRevisionId: "eeeeeeee-0000-4000-8000-000000000001" }));
+      expect(await renderPage()).not.toContain(PACK);
+    });
+  });
+
   it("shows the name, the code, Modifica, the new-case call to action and the client's cases only", async () => {
     const html = await renderPage();
     expect(requireSurface).toHaveBeenCalledWith("list clients");

@@ -10,6 +10,7 @@ const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
 const listClientSummaries = vi.fn<() => Promise<Result<ClientSummary[]>>>();
 const list = vi.fn<() => Promise<Result<{ status: string; client: { id: string } }[]>>>();
 const listClientSectors = vi.fn<() => Promise<Result<ClientSector[]>>>();
+const getClientIntro = vi.fn<(clientId: string) => Promise<Result<{ approvedRevisionId: string | null } | null>>>();
 const SECTORS: ClientSector[] = [
   { key: "lusso", label: "Lusso" },
   { key: "nautica", label: "Nautica" },
@@ -26,7 +27,10 @@ vi.mock("@/modules/case-study", () => ({
   listClientSummaries: () => listClientSummaries(),
   list: () => list(),
   listClientSectors: () => listClientSectors(),
+  getClientIntro: (clientId: string) => getClientIntro(clientId),
 }));
+// The pack's server actions (Story 5.9a) are never called while the page renders.
+vi.mock("./export-actions", () => ({ requestClientExport: vi.fn(), getClientExportStatus: vi.fn() }));
 
 vi.mock("./_lib/client-limits", () => ({ clientLimits: () => ({}), clientMaterialLimits: () => ({}) }));
 // The panel is a browser component (tested on its own): here only whether the page renders it.
@@ -56,6 +60,8 @@ beforeEach(() => {
   list.mockResolvedValue(ok([]));
   listClientSectors.mockReset();
   listClientSectors.mockResolvedValue(ok(SECTORS));
+  getClientIntro.mockReset();
+  getClientIntro.mockResolvedValue(ok(null));
 });
 
 describe("ClientsPage", () => {
@@ -86,6 +92,16 @@ describe("ClientsPage", () => {
     );
     const html = await renderPage();
     expect(html.match(/aria-label="Scarica il pack di [^"]+"/g)).toEqual([`aria-label="${fill(dict.download.packLabel, { name: LUMEN.name })}"`]);
+    // Story 5.9a: the intro is read only for cards with Scarica (the dialog's note).
+    expect(getClientIntro).toHaveBeenCalledExactlyOnceWith(LUMEN.id);
+  });
+
+  it("throws into the error boundary when a pack's intro can't be read (Story 5.9a)", async () => {
+    requireSurface.mockResolvedValue(shell("owner_designer"));
+    listClientSummaries.mockResolvedValue(ok([LUMEN]));
+    list.mockResolvedValue(ok([{ status: "approved", client: { id: LUMEN.id } }]));
+    getClientIntro.mockResolvedValue(err({ code: "CLIENT_INTRO_LOOKUP_FAILED", message: "down" }));
+    await expect(renderPage()).rejects.toThrow("CLIENT_INTRO_LOOKUP_FAILED");
   });
 
   it("carries each client's signed logo URL to its card; a client without one keeps the monogram", async () => {

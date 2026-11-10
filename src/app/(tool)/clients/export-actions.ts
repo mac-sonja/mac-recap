@@ -1,22 +1,9 @@
 "use server";
 
 import { failure, type ActionResult } from "@/app/_lib/action-result";
-import { authorize, getActor, type Actor } from "@/modules/access";
+import { authorize, getActor } from "@/modules/access";
 import * as rendering from "@/modules/rendering/server";
 import type { ExportTicket } from "@/modules/rendering/server";
-import type { Result } from "@/shared/result";
-
-/**
- * Who may download a client's pack (Story 5.9a, part 1): owner/designer for now, as the
- * Clienti list is theirs (`list clients`), and only what may be exported (`export` of
- * approved content). Account/sales/social get the pack in 5.9b.
- */
-function authorizePack(actor: Actor): Result<void> {
-  const clients = authorize(actor, "list clients");
-  if (!clients.ok) return clients;
-  // What is exported is always approved: the module checks every part has an approved revision.
-  return authorize(actor, "export", { status: "approved" });
-}
 
 /**
  * **Scarica** on a client (Story 5.9a): input `{ clientId, formats }`. Builds the client's
@@ -32,7 +19,11 @@ function authorizePack(actor: Actor): Result<void> {
 export async function requestClientExport(input: unknown): Promise<ActionResult<ExportTicket>> {
   const actor = await getActor();
   if (!actor.ok) return failure(actor.error);
-  const decision = authorizePack(actor.value);
+  // Owner/designer for now (5.9a): the Clienti list is theirs; account/sales/social get the pack in 5.9b.
+  const clients = authorize(actor.value, "list clients");
+  if (!clients.ok) return failure(clients.error);
+  // What is exported is always approved: the module checks every part has an approved revision.
+  const decision = authorize(actor.value, "export", { status: "approved" });
   if (!decision.ok) return failure(decision.error);
   const requested = await rendering.requestPack(actor.value, input);
   return requested.ok ? requested : failure(requested.error);
@@ -48,7 +39,11 @@ export async function requestClientExport(input: unknown): Promise<ActionResult<
 export async function getClientExportStatus(input: unknown): Promise<ActionResult<ExportTicket>> {
   const actor = await getActor();
   if (!actor.ok) return failure(actor.error);
-  const decision = authorizePack(actor.value);
+  // Owner/designer for now (5.9a): the Clienti list is theirs; account/sales/social get the pack in 5.9b.
+  const clients = authorize(actor.value, "list clients");
+  if (!clients.ok) return failure(clients.error);
+  // What is exported is always approved: the module checks every part has an approved revision.
+  const decision = authorize(actor.value, "export", { status: "approved" });
   if (!decision.ok) return failure(decision.error);
   const status = await rendering.packStatus(actor.value, input);
   return status.ok ? status : failure(status.error);

@@ -47,7 +47,7 @@ export interface DownloadButtonProps {
   description: string;
   /**
    * Asks for the ticked formats' file, in the picker's order (Story 5.3: one format, its
-   * own file; 5.4: two or more, one ZIP; 5.9 wires the client pack). Without it
+   * own file; 5.4: two or more, one ZIP; 5.9a: a client's pack). Without it
    * **Scarica** in the dialog stays inactive.
    */
   onDownload?: (formats: ExportFormatId[]) => Promise<DownloadStart>;
@@ -57,6 +57,8 @@ export interface DownloadButtonProps {
   failedMessage?: string;
   /** The format shown in the view, ticked when the dialog opens; without one (a table row), Presentazione is. */
   currentFormat?: FormatId;
+  /** A line under the formats (Story 5.9a: a client pack whose intro isn't approved). */
+  note?: string;
 }
 
 type Phase =
@@ -100,6 +102,7 @@ export function DownloadButton({
   onPoll,
   failedMessage = it.download.failed,
   currentFormat,
+  note,
 }: DownloadButtonProps) {
   const [open, setOpen] = useState(false);
   const [ticked, setTicked] = useState<ExportFormatId[]>(() => defaultTicked(currentFormat));
@@ -287,6 +290,7 @@ export function DownloadButton({
             </div>
           ))}
         </fieldset>
+        {note !== undefined && note !== "" && <p className="mt-3 font-label text-sm text-foreground-muted">{note}</p>}
         {refusal !== null && (
           <p id={refusalId} role="alert" className="mt-3 font-label text-sm text-danger">
             {refusal}
