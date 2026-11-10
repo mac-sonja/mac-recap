@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Actor } from "@/modules/access";
 import { listActivityOfCase, listScopeActivity } from "@/modules/case-study/adapters/supabase/case-activity";
+import { listClientIndustries as readClientIndustries } from "@/modules/case-study/adapters/supabase/client-industries";
 import { ACTIVITY_LIMIT, type CaseActivity } from "@/modules/case-study/domain/case-activity";
 import { listScopeSchema } from "@/modules/case-study/domain/case-study";
 import { parseInput } from "@/modules/case-study/domain/validation";
@@ -380,10 +381,21 @@ export function getClient(id: unknown): Promise<Result<ClientDetail>> {
 
 /**
  * Every client sector (`{ key, label }`) in display order: the four seeded ones, then
- * the ones people added, as they were added. Call only after `authorize(actor, 'list clients')`.
+ * the ones people added, as they were added. Call only after `authorize(actor, 'list clients')`,
+ * or (Story 5.10a: a collection's industry tags, for every role) `authorize(actor, 'manage collections')`.
  */
 export function listClientSectors(): Promise<Result<ClientSector[]>> {
   return makeListClientSectors(createSupabaseClientSectorRepository())();
+}
+
+/**
+ * Every non-deleted client's sector key, by client id (null for a client with none): Story
+ * 5.10a's **Aggiungi casi** lists first the cases whose client's industry is one of the
+ * collection's tags. Call only after `authorize(actor, 'manage collections')`.
+ * `CLIENT_LOOKUP_FAILED` when the read fails.
+ */
+export function listClientIndustries(): Promise<Result<Record<string, string | null>>> {
+  return readClientIndustries();
 }
 
 /**

@@ -25,6 +25,7 @@ const EXPECTED: Record<Action, Partial<Record<Role, Cell>>> = {
   "job work": { system: "all" },
   "create link": { owner_designer: "approved", admin: "approved", account_sales_social: "approved" },
   "turn off link": { owner_designer: "all", admin: "all", account_sales_social: "all" },
+  "manage collections": { owner_designer: "all", admin: "all", account_sales_social: "all" },
   "manage templates": { owner_designer: "all", admin: "all" },
   "manage users": { admin: "all" },
   "change permissions or guardrails": {},
@@ -77,6 +78,10 @@ describe("AD-11 permission matrix", () => {
     for (const action of ["list clients", "manage clients"] as const) {
       expect(ROLES.filter((role) => can(role, action))).toEqual(["owner_designer", "admin"]);
     }
+  });
+
+  it("lets every person's role manage collections, admin included (Story 5.10a)", () => {
+    expect(ROLES.filter((role) => can(role, "manage collections"))).toEqual(["owner_designer", "account_sales_social", "admin"]);
   });
 
   it("denies unknown roles and actions", () => {

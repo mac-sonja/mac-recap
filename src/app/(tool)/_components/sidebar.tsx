@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Folder, LayoutDashboard, Library, Plus, Search, Users, type LucideIcon } from "lucide-react";
+import { Building2, Folder, Layers, LayoutDashboard, Library, Plus, Search, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
@@ -22,6 +22,8 @@ export interface SidebarProps {
   showClients: boolean;
   /** Account/sales/social: the Libreria item (approved cases only). */
   showLibrary?: boolean;
+  /** `manage collections` (every role, Story 5.10a): the Raccolte item, after Clienti (after Libreria without it). */
+  showCollections?: boolean;
   /** `manage users` (admin): the Organizzazione item, right after Clienti. */
   showOrganization?: boolean;
   displayName: string;
@@ -136,6 +138,7 @@ export function Sidebar({
   showCaseStudies,
   showClients,
   showLibrary = false,
+  showCollections = false,
   showOrganization = false,
   displayName,
   roleLabel,
@@ -148,6 +151,7 @@ export function Sidebar({
   const isCaseStudies = pathname === "/case-studies" || pathname.startsWith("/case-studies/");
   // The list and every client's page.
   const isClients = pathname === "/clients" || pathname.startsWith("/clients/");
+  const isCollections = pathname === "/collections" || pathname.startsWith("/collections/");
 
   return (
     <aside className="sticky top-0 flex h-dvh w-16 shrink-0 flex-col border-r bg-surface-sidebar xl:w-64">
@@ -188,6 +192,7 @@ export function Sidebar({
           <NavLink href="/library" icon={Library} label={it.shell.nav.library} active={pathname === "/library"} />
         )}
         {showClients && <NavLink href="/clients" icon={Building2} label={it.shell.nav.clients} active={isClients} />}
+        {showCollections && <NavLink href="/collections" icon={Layers} label={it.shell.nav.collections} active={isCollections} />}
         {showOrganization && (
           <NavLink
             href="/organization"

@@ -27,6 +27,7 @@ export const ACTIONS = [
   "job work",
   "create link",
   "turn off link",
+  "manage collections",
   "manage templates",
   "manage users",
   "change permissions or guardrails",
@@ -78,6 +79,8 @@ const MATRIX: Readonly<Record<Action, Readonly<Partial<Record<Role, Rule>>>>> = 
   "create link": { ...owners(approved), account_sales_social: approved },
   // IR-PERM (interim): any sharer may turn off any link.
   "turn off link": { ...owners(true), account_sales_social: true },
+  // Story 5.10a (owner, 2026-11-10): every role creates, sees and changes every collection, admin included.
+  "manage collections": { ...owners(true), account_sales_social: true },
   // IR-C4 (interim): in the matrix, no surface yet.
   "manage templates": { ...owners(true) },
   // The last-admin rule is enforced by the Story 6.3 use case.

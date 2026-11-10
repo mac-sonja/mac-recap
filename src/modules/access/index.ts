@@ -149,6 +149,13 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   EXPORT_STALE: 409,
   // Clients and case history codes (Story 2.12, AD-21).
   CLIENT_NOT_FOUND: 404,
+  // Collections (Story 5.10a): unknown or deleted, changed meanwhile (compare-and-set), a case that
+  // can't join (not approved, deleted), over 200 cases, the last case removed.
+  COLLECTION_NOT_FOUND: 404,
+  STALE_COLLECTION: 409,
+  CASE_NOT_COLLECTABLE: 409,
+  COLLECTION_FULL: 409,
+  COLLECTION_LAST_ITEM: 409,
   CLIENT_NAME_TAKEN: 409,
   CLIENT_CODE_EXHAUSTED: 409,
   // Client info (Story 2.14, AD-22).

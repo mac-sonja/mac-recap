@@ -6,6 +6,7 @@ import { caseViewHref } from "@/app/_lib/routes";
 import type { Page } from "@/modules/generation";
 import { renderFormat, type BoundValues, type RenderAsset } from "@/modules/rendering";
 import { cn } from "@/shared/utils";
+import { CardCheckbox } from "./library-selection";
 
 /** What a card's cover draws: page 1 of the live revision's Presentazione 16:9. */
 export interface LibraryCover {
@@ -29,11 +30,13 @@ export interface LibraryCardProps {
  * One approved case in the library (Story 5.1): its cover, name, client and year. The whole
  * card is a link to the case view, so Tab reaches it and Enter opens it; the cover is
  * decoration (hidden from screen readers), drawn still and read-only by the shared renderer,
- * scaled to the card's width like the configurator's Pagine thumbnails.
+ * scaled to the card's width like the configurator's Pagine thumbnails. In the selection mode
+ * (Story 5.10a) a checkbox sits over the cover's corner, outside the link.
  */
 export function LibraryCard({ id, name, clientName, year, cover }: LibraryCardProps) {
   return (
-    <li className="min-w-0">
+    <li className="relative min-w-0">
+      <CardCheckbox id={id} name={name} />
       <Link
         href={caseViewHref(id)}
         data-case-id={id}

@@ -1,4 +1,5 @@
 import { FolderOpen } from "lucide-react";
+import type { ComponentProps, ReactNode } from "react";
 import Link from "next/link";
 import { SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { CARD } from "@/app/_components/field-styles";
@@ -16,6 +17,7 @@ import { CaseViewsToggle } from "../case-studies/_components/case-views-toggle";
 import type { LibraryCardProps, LibraryCover } from "./_components/library-card";
 import { LibraryFilters } from "./_components/library-filters";
 import { LibraryGrid } from "./_components/library-grid";
+import { LibrarySelection } from "./_components/library-selection";
 import {
   facetOptions,
   filterCases,
@@ -84,6 +86,11 @@ const toLibraryCase = (c: ListedCaseStudy): LibraryCase => ({
   updatedAt: c.updatedAt,
 });
 
+/** The library's content inside the selection mode (Story 5.10a) when `on`; as it is otherwise. */
+function Selectable({ on, options, children }: { on: boolean; options: ComponentProps<typeof LibrarySelection>["options"]; children: ReactNode }) {
+  return on ? <LibrarySelection options={options}>{children}</LibrarySelection> : <>{children}</>;
+}
+
 /**
  * The library of approved cases (Story 5.1): the account/sales/social landing, and the
  * owner/designer's **Libreria** view (with the Tabella / Libreria switch). A role that may not
@@ -135,6 +142,12 @@ export default async function LibraryPage({ searchParams }: { searchParams?: Pro
 
   const toggle = can(actor, "list cases", {}) ? <CaseViewsToggle current="library" /> : undefined;
   const query = state.q.trim();
+  // Story 5.10a: cards can be picked for a collection by a role that may manage them (every role).
+  // The industry list is a read `manage collections` allows; without it the dialog offers none.
+  const selectable = can(actor, "manage collections");
+  const sectors = selectable ? await caseStudy.listClientSectors() : null;
+  const sectorsRead = sectors?.ok === true && Array.isArray(sectors.value);
+  const tagOptions = { businessLines: caseStudy.BUSINESS_LINES, sectors: sectorsRead ? sectors.value : [], sectorsFailed: selectable && !sectorsRead };
 
   return (
     <div className="flex flex-col gap-8">
@@ -147,26 +160,28 @@ export default async function LibraryPage({ searchParams }: { searchParams?: Pro
           <p className="max-w-sm font-body text-[15px] leading-snug text-foreground-muted">{it.library.empty}</p>
         </div>
       ) : (
-        <LibraryFilters state={{ ...state, page: shown.page }} options={options}>
-          <div className="flex flex-col gap-4">
-            <p role="status" className={cn("font-body text-[15px] text-foreground", shown.total > 0 && "sr-only")}>
-              {shown.total > 0
-                ? fill(it.library.count, { n: shown.total })
-                : query !== ""
-                  ? fill(it.library.noResults, { query })
-                  : it.library.noResultsFilters}
-            </p>
-            {shown.total === 0 ? (
-              <div className="flex flex-col items-start">
-                <Link href="/library" className={SECONDARY_ACTION}>
-                  {it.library.clearSearch}
-                </Link>
-              </div>
-            ) : (
-              <LibraryGrid cards={cards} state={state} page={shown.page} pageCount={shown.pageCount} />
-            )}
-          </div>
-        </LibraryFilters>
+        <Selectable on={selectable} options={tagOptions}>
+          <LibraryFilters state={{ ...state, page: shown.page }} options={options}>
+            <div className="flex flex-col gap-4">
+              <p role="status" className={cn("font-body text-[15px] text-foreground", shown.total > 0 && "sr-only")}>
+                {shown.total > 0
+                  ? fill(it.library.count, { n: shown.total })
+                  : query !== ""
+                    ? fill(it.library.noResults, { query })
+                    : it.library.noResultsFilters}
+              </p>
+              {shown.total === 0 ? (
+                <div className="flex flex-col items-start">
+                  <Link href="/library" className={SECONDARY_ACTION}>
+                    {it.library.clearSearch}
+                  </Link>
+                </div>
+              ) : (
+                <LibraryGrid cards={cards} state={state} page={shown.page} pageCount={shown.pageCount} />
+              )}
+            </div>
+          </LibraryFilters>
+        </Selectable>
       )}
     </div>
   );

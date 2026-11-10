@@ -478,3 +478,26 @@ describe("case view copy", () => {
     expect(fill(t("caseStudies.table.editLabel"), { name: "Rebrand" })).toBe("Modifica Rebrand");
   });
 });
+
+describe("collections copy (Story 5.10a)", () => {
+  test("has the spec's strings", () => {
+    expect(t("shell.nav.collections")).toBe("Raccolte");
+    expect(t("collections.title")).toBe("Raccolte");
+    expect(t("library.select.create")).toBe("Crea raccolta");
+    expect(fill(t("library.select.count"), { n: 3 })).toBe("3 selezionate");
+    expect(t("collection.pages.moveUp")).toBe("Sposta su");
+    expect(t("collection.pages.moveDown")).toBe("Sposta giù");
+    expect(t("collection.pages.remove")).toBe("Rimuovi dalla raccolta");
+    expect(t("collection.pages.unavailable")).toBe("Non disponibile");
+    expect(t("collection.orderFailed")).toBe("Ordine non salvato. Riprova.");
+    expect(t("collection.remove.last")).toBe("Una raccolta ha almeno una case.");
+    expect(t("collection.add.button")).toBe("Aggiungi casi");
+    expect(t("collection.add.confirm")).toBe("Aggiungi");
+  });
+
+  test("its calls to action are at most three words", () => {
+    for (const label of [it.library.select.create, it.library.select.clear, it.collections.emptyAction, it.collection.add.button, it.collection.tags.edit, it.collections.delete.confirm]) {
+      expect(label.split(/\s+/).length, label).toBeLessThanOrEqual(3);
+    }
+  });
+});

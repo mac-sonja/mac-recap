@@ -82,6 +82,9 @@ describe("ToolLayout", () => {
     const account = await renderLayout();
     expect(account).toContain('href="/library"');
     expect(account).not.toContain('href="/organization"');
+    // Story 5.10a: Raccolte for every role, admin included.
+    expect(admin).toContain('href="/collections"');
+    expect(account).toContain('href="/collections"');
   });
 
   it("shows the cases to review after Case and no count after Clienti (owner, 2026-10-28)", async () => {

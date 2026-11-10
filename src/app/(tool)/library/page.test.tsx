@@ -48,6 +48,8 @@ vi.mock("@/modules/case-study", async () => {
   const actual = await vi.importActual<typeof import("@/modules/case-study")>("@/modules/case-study");
   return {
     referencedAssetIds: actual.referencedAssetIds,
+    BUSINESS_LINES: actual.BUSINESS_LINES,
+    listClientSectors: async () => ok([{ key: "moda", label: "Moda" }]),
     list: (scope: ListScope) => list(scope),
     getLiveRevision: (subject: unknown) => getLiveRevision(subject),
     getEditableRevision: (subject: unknown) => getEditableRevision(subject),
@@ -186,11 +188,21 @@ describe("LibraryPage", () => {
     expect(list).toHaveBeenCalledExactlyOnceWith({ status: "approved" });
     expect(cardIds(html)).toEqual([idOf(1)]);
     expect(html).toMatch(/<h1[^>]*>Libreria<\/h1>/);
-    // No status badge or filter, no selection, no Share or Export on cards.
+    // No status badge or filter, no Share or Export on cards; no selection bar until a card is picked.
     expect(html).not.toContain("data-status=");
     expect(html).not.toContain("Approvato");
-    expect(html).not.toContain('type="checkbox"');
     expect(html).not.toMatch(/Condividi|Esporta|Scarica|Crea raccolta/);
+  });
+
+  it.each(["owner_designer", "admin", "account_sales_social"] as const)("gives each card a checkbox outside its link for %s (Story 5.10a)", async (role) => {
+    requireSurface.mockResolvedValue(shellFor(role));
+    list.mockResolvedValue(ok([listedCase(1, { name: "Rebrand Lumen" })]));
+    const html = await render();
+    const item = html.match(/<li class="relative min-w-0">[\s\S]*?<\/li>/)?.[0] ?? "";
+    expect(item).toMatch(/<input type="checkbox" data-select-case="aaaaaaaa-0000-4000-8000-000000000001" aria-label="Seleziona Rebrand Lumen"/);
+    // The checkbox sits before the card's link, never inside it.
+    const link = item.match(/<a [\s\S]*?<\/a>/)?.[0] ?? "";
+    expect(link).not.toContain('type="checkbox"');
   });
 
   it("shows each card's name, client and year, and links it to the case view", async () => {

@@ -53,3 +53,9 @@ export const caseHref = (id: string, status: CaseStatus, canEdit: boolean): stri
 
 /** The Case studies table filtered to one status (`?stato=`), e.g. the To review queue. */
 export const caseStudiesHref = (status: CaseStatus) => `/case-studies?stato=${encodeURIComponent(status)}`;
+
+/** The Raccolte list (Story 5.10a): every role. */
+export const collectionsHref = () => "/collections";
+
+/** One collection (Story 5.10a), in the configurator's file view: every role. */
+export const collectionHref = (id: string) => `/collections/${encodeURIComponent(id)}`;

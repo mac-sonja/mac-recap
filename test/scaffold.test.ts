@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const pkg = JSON.parse(readFileSync(`${root}package.json`, "utf8")) as Record<string, Record<string, string>>;
-const MODULES = ["case-study", "material", "generation", "rendering", "sharing", "access", "jobs"];
+const MODULES = ["case-study", "material", "generation", "rendering", "sharing", "access", "jobs", "collection"];
 
 const isDir = (p: string) => existsSync(`${root}${p}`) && statSync(`${root}${p}`).isDirectory();
 
