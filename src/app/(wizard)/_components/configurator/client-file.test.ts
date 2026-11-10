@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Page } from "@/modules/generation";
 import { CASE_TEMPLATE, CLIENT_TEMPLATE, FORMAT_IDS, starterPages, TEMPLATE_TEXT_KEYS, type BoundValues, type FormatId } from "@/modules/rendering";
 import {
+  moveKey,
   CLOSING_SEGMENT,
   fileKeyAfterEdit,
   filePages,
@@ -133,5 +134,17 @@ describe("the client's file (Story 4.12a)", () => {
     expect([...changed.keys()]).toEqual(["case:a"]);
     expect(changed.get("case:a")![F].map((p) => p.pageKey)).toEqual(["intro", "results"]);
     expect(changed.get("case:a")!.video_9_16).toBe(a.formats.video_9_16);
+  });
+});
+
+describe("moveKey (Story 4.12b)", () => {
+  it("moves a key to an index, clamped, and returns the same list when nothing moves", () => {
+    const keys = ["a", "b", "c"];
+    expect(moveKey(keys, "c", 0)).toEqual(["c", "a", "b"]);
+    expect(moveKey(keys, "a", 1)).toEqual(["b", "a", "c"]);
+    expect(moveKey(keys, "a", 9)).toEqual(["b", "c", "a"]);
+    expect(moveKey(keys, "b", 1)).toBe(keys);
+    expect(moveKey(keys, "x", 0)).toBe(keys);
+    expect(moveKey(keys, "a", -1)).toBe(keys);
   });
 });

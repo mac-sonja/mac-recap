@@ -341,7 +341,7 @@ export function RightPanel({
                       data-project={row.key}
                       onClick={() => onSelectGroup?.(row.key)}
                       // Story 4.12b: dragged onto another row, or Alt+↑/↓, it moves to that place; saved at once.
-                      draggable={onMoveProject !== undefined}
+                      draggable={onMoveProject === undefined ? undefined : true}
                       {...(onMoveProject === undefined
                         ? {}
                         : { title: it.configurator.file.projectMove, "aria-keyshortcuts": "Alt+ArrowUp Alt+ArrowDown" })}
