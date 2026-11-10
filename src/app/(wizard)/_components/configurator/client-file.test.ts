@@ -105,6 +105,17 @@ describe("the client's file (Story 4.12a)", () => {
     expect(splitFilePageKey("case:a|content")).toEqual({ segment: "case:a", pageKey: "content" });
   });
 
+  it("keeps an edited page in its run whatever role the edit gave it; refuses with no segment", () => {
+    const segments = fileSegments(intro, [a, b], F, own);
+    const pages = filePages(segments).map((p) => (p.pageKey === "case:a|content" ? { ...p, role: "intro" as const } : p));
+    expect(splitFile(pages, segments)!.get("case:a")![0]).toMatchObject({ pageKey: "content", role: "body" });
+    const introAsOutro = filePages(segments).map((p) => (p.pageKey === `${INTRO_SEGMENT}|intro` ? { ...p, role: "outro" as const } : p));
+    expect(splitFile(introAsOutro, segments)!.get(INTRO_SEGMENT)![0]!.role).toBe("intro");
+    const empty = Object.fromEntries(FORMAT_IDS.map((id) => [id, []])) as unknown as Record<FormatId, ReturnType<typeof fileSegments>>;
+    const none = Object.fromEntries(FORMAT_IDS.map((id) => [id, []])) as unknown as Record<FormatId, Page[]>;
+    expect(partsChanged({ ...none, [F]: [filePages(segments)[0]!] }, none, empty, [], own)).toBe("empty");
+  });
+
   it("merges a case's shown pages back around the pages the file doesn't show", () => {
     const old = a.formats[F];
     const shown = old.filter((p) => p.role !== "intro");

@@ -26,13 +26,16 @@ const refresh = vi.fn();
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push }) }));
 vi.mock("@/app/(tool)/case-studies/actions", () => ({ listAssets: vi.fn(), presignAssetUpload: vi.fn(), confirmAssetUpload: vi.fn(), setAssetFavourite: vi.fn() }));
-vi.mock("@/app/(tool)/clients/actions", () => ({
+const clientActions = vi.hoisted(() => ({
   requestClientLogoUpload: vi.fn(),
   confirmClientLogoUpload: vi.fn(),
   requestClientMaterialUpload: vi.fn(),
   confirmClientMaterialUpload: vi.fn(),
   listClientMaterial: vi.fn(),
 }));
+vi.mock("@/app/(tool)/clients/actions", () => clientActions);
+const uploads = vi.hoisted(() => ({ uploadFile: vi.fn() }));
+vi.mock("../../_lib/upload", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../_lib/upload")>()), uploadFile: uploads.uploadFile }));
 
 const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
 const INTRO_ID = "44444444-0000-4000-8000-000000000001";
@@ -120,6 +123,26 @@ const listed = (id: string, name: string): ListedAsset => ({
 });
 const RULES: MediaUploadRules = { maxFiles: 3, maxFileBytes: 50 * 1024 * 1024, contentTypes: ["image/jpeg"], imagePixels: { min: 1600, max: 8000 } };
 
+const FIELD_OPTIONS: NonNullable<ConfiguratorProps["fieldOptions"]> = {
+  sectors: [{ key: "illuminazione", label: "Illuminazione" }],
+  limits: {
+    nameMax: 120,
+    descriptionMax: 400,
+    briefMax: 5000,
+    resultLabelMax: 80,
+    resultValueMax: 20,
+    testimonialQuoteMax: 600,
+    testimonialAuthorMax: 120,
+    sectorLabelMin: 2,
+    sectorLabelMax: 40,
+    logoTypes: ["image/png"],
+    logoMaxBytes: 5 * 1024 * 1024,
+    logoMinShortSide: 400,
+  },
+  years: { min: 1900, max: 2100 },
+  businessLines: ["branding"],
+};
+
 type Save = (input: SaveInput) => Promise<ActionResult<{ version: number }>>;
 const savedOk: Save = async (input) => ({ ok: true, value: { version: input.expectedVersion + 1 } });
 const forkedOk = async (input: { expectedHeadVersion: number }): Promise<ActionResult<ForkResult>> => ({
@@ -135,6 +158,10 @@ function setup({
   onForkCase = vi.fn(forkedOk),
   onReload = vi.fn<ClientFile["onReload"]>(async () => ({ ok: true, value: null })),
   onApprove,
+  onForkIntro,
+  onUpdateApproved,
+  onDiscard,
+  fields,
 }: {
   intro?: FilePartData | null;
   cases?: FilePartData[];
@@ -143,8 +170,13 @@ function setup({
   onForkCase?: ClientFile["onForkCase"];
   onReload?: ClientFile["onReload"];
   onApprove?: ConfiguratorProps["onApprove"];
+  onForkIntro?: ClientFile["onForkIntro"];
+  onUpdateApproved?: ConfiguratorProps["onUpdateApproved"];
+  onDiscard?: ConfiguratorProps["onDiscard"];
+  /** The client's fields and their saves. */
+  fields?: { updateClient: ReturnType<typeof vi.fn> };
 } = {}) {
-  const file: ClientFile = { clientId: CLIENT_ID, intro, cases, onSaveIntro, onSaveCase, onForkCase, onReload };
+  const file: ClientFile = { clientId: CLIENT_ID, intro, cases, onSaveIntro, onSaveCase, onForkCase, onReload, ...(onForkIntro === undefined ? {} : { onForkIntro }) };
   render(
     <Configurator
       subject={{ kind: "client_file", id: CLIENT_ID, clientId: CLIENT_ID }}
@@ -164,8 +196,25 @@ function setup({
       clientMedia={[listed(A_IMAGE, "a.jpg"), listed(B_IMAGE, "b.jpg")]}
       mediaRules={RULES}
       onApprove={onApprove}
+      onUpdateApproved={onUpdateApproved}
+      onDiscard={onDiscard}
       headVersion={3}
       file={file}
+      {...(fields === undefined
+        ? {}
+        : {
+            fields: {
+              client: { id: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Lampade.", logoId: "eeeeeeee-0000-4000-8000-000000000001" },
+              record: { results: [{ label: "Vendite", value: "+30%" }], testimonial: { quote: "", author: "" } },
+            },
+            fieldOptions: FIELD_OPTIONS,
+            fieldActions: {
+              updateClient: fields.updateClient,
+              addClientSector: vi.fn(),
+              saveClientResults: vi.fn(async () => ({ ok: true as const, value: null })),
+              saveClientTestimonial: vi.fn(async () => ({ ok: true as const, value: null })),
+            } as unknown as NonNullable<ConfiguratorProps["fieldActions"]>,
+          })}
     />,
   );
   return { file, onSaveIntro, onSaveCase, onForkCase, onReload };
@@ -210,8 +259,17 @@ async function type(pageKey: string, id: string, text: string) {
 }
 const shownText = (pageKey: string, id: string) => pageNode(pageKey)!.querySelector<HTMLElement>(`[data-element-id="${id}"]`)!.textContent;
 
+const debounce = async () => {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, DEBOUNCE_MS + 50));
+  });
+  await flush();
+};
+
 beforeEach(() => {
   n = 0;
+  for (const fn of Object.values(clientActions)) fn.mockReset();
+  uploads.uploadFile.mockReset().mockResolvedValue(undefined);
   Element.prototype.scrollIntoView = vi.fn();
   push.mockReset();
   refresh.mockReset();
@@ -366,6 +424,11 @@ describe("Configurator on a client's whole file (Story 4.12a)", () => {
     fireEvent.click(within(document.querySelector<HTMLElement>("dialog[open]")!).getByRole("button", { name: dict.configurator.file.deleteConfirm, hidden: true }));
     await flush();
     expect(pageNode(`case:${CASE_A}|content`)).toBeNull();
+    await debounce();
+    expect(onSaveCase).toHaveBeenCalledTimes(1);
+    const sent = vi.mocked(onSaveCase).mock.calls[0]![0];
+    expect(sent).toMatchObject({ caseId: CASE_A });
+    expect(sent.doc.formats.presentazione_16_9.pages.map((p) => p.pageKey)).toEqual(["intro", "results"]);
   });
 
   it("deleting an intro page asks nothing, as before", async () => {
@@ -400,8 +463,8 @@ describe("Configurator on a client's whole file (Story 4.12a)", () => {
     expect(JSON.stringify(vi.mocked(onSaveCase).mock.calls[0]![0].doc)).toContain(CLIENT_IMAGE);
   });
 
-  it("refuses a block moved into another part", async () => {
-    setup();
+  it("refuses a block moved into another part, saving nothing", async () => {
+    const { onSaveCase, onSaveIntro } = setup();
     await flush();
     const from = pageNode(`case:${CASE_A}|content`)!.querySelector<HTMLElement>("[data-block-id]")!;
     fireEvent.click(from);
@@ -412,6 +475,9 @@ describe("Configurator on a client's whole file (Story 4.12a)", () => {
     fireEvent.drop(pageNode("client_intro|intro")!, { dataTransfer });
     await flush();
     expect(status().textContent).toBe(dict.configurator.file.otherPart);
+    await debounce();
+    expect(onSaveCase).not.toHaveBeenCalled();
+    expect(onSaveIntro).not.toHaveBeenCalled();
   });
 
   it("+ Aggiungi pagina adds to the selected page's part, counting that part's pages only", async () => {
@@ -460,5 +526,140 @@ describe("Configurator on a client's whole file (Story 4.12a)", () => {
     expect(canvas().textContent!.split(dict.configurator.file.introNotReady).length - 1).toBe(2);
     expect(within(header()).queryByRole("button", { name: dict.configurator.approve, hidden: true })).toBeNull();
     expect(pageNode(`case:${CASE_A}|content`)).not.toBeNull();
+  });
+  it("a stale save whose part left the file drops its pages and says so, with no page reload", async () => {
+    const onReload = vi.fn<ClientFile["onReload"]>(async () => ({ ok: true, value: null }));
+    const onSaveCase = vi.fn<Save>(async () => ({ ok: false, status: 409, error: { code: "STALE_REVISION", message: "m" } }));
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, reload } as Location);
+    const { file } = setup({ onReload, onSaveCase });
+    await flush();
+    const text = ownText(file.cases[1]!.formats.presentazione_16_9.find((p) => p.pageKey === "content")!);
+    await type(`case:${CASE_B}|content`, text.id, "B cambiata");
+    expect(onReload).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, part: "case", caseId: CASE_B });
+    expect(groups()).toEqual(["client_intro", `case:${CASE_A}`, "client_closing"]);
+    expect(pageNode(`case:${CASE_B}|content`)).toBeNull();
+    expect(status().textContent).toBe(fill(dict.configurator.file.caseGone, { code: "LUM-2026-01" }));
+    expect(reload).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("a part that can't be read again says so and loads the whole page afresh", async () => {
+    const onReload = vi.fn<ClientFile["onReload"]>(async () => ({ ok: false, status: 500, error: { code: "REVISION_LOOKUP_FAILED", message: "m" } }));
+    const onSaveCase = vi.fn<Save>(async () => ({ ok: false, status: 409, error: { code: "STALE_REVISION", message: "m" } }));
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, reload } as Location);
+    const { file } = setup({ onReload, onSaveCase });
+    await flush();
+    const text = ownText(file.cases[0]!.formats.presentazione_16_9.find((p) => p.pageKey === "content")!);
+    await type(`case:${CASE_A}|content`, text.id, "A cambiata");
+    expect(status().textContent).toBe(dict.configurator.file.reloadFailed);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("a stale intro save reads the intro again, alone", async () => {
+    const fresh = introPart({ revision: { id: "dddddddd-0000-4000-8000-000000000009", version: 7, editable: true, kind: "client_intro", fork: false } });
+    const freshText = ownText(fresh.formats.presentazione_16_9[0]!);
+    const onReload = vi.fn<ClientFile["onReload"]>(async () => ({ ok: true, value: fresh }));
+    const onSaveIntro = vi.fn<Save>(async () => ({ ok: false, status: 409, error: { code: "STALE_REVISION", message: "m" } }));
+    const { file, onSaveCase } = setup({ onReload, onSaveIntro });
+    await flush();
+    const text = ownText(file.intro!.formats.presentazione_16_9[0]!);
+    await type("client_intro|intro", text.id, "Intro cambiata");
+    expect(onReload).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, part: "client_intro" });
+    expect(status().textContent).toBe(fill(dict.configurator.file.partReloaded, { part: dict.configurator.file.introPart }));
+    expect(shownText("client_intro|intro", freshText.id)).toBe(freshText.text);
+    expect(onSaveCase).not.toHaveBeenCalled();
+  });
+
+  it("refuses an edit of a part that can't be edited here, changing nothing", async () => {
+    const { onSaveIntro } = setup({ intro: introPart({ revision: { id: INTRO_REVISION, version: 4, editable: false, kind: "client_intro", fork: false } }) });
+    await flush();
+    fireEvent.click(canvas().querySelector<HTMLElement>('[data-delete-page="client_intro|intro"]')!);
+    await flush();
+    expect(status().textContent).toBe(dict.configurator.file.locked);
+    expect(pageNode("client_intro|intro")).not.toBeNull();
+    await debounce();
+    expect(onSaveIntro).not.toHaveBeenCalled();
+  });
+
+  describe("an Approvato intro with a copy pending, in the file", () => {
+    const u = dict.configurator.approvedEdit;
+    const COPY = "dddddddd-0000-4000-8000-0000000000c1";
+    const approvedIntro = () => introPart({ status: "approved", revision: { id: COPY, version: 2, editable: true, kind: "client_intro", fork: false }, headVersion: 6 });
+    const dialog = () => document.querySelector<HTMLElement>("dialog[open]")!;
+
+    it("Aggiorna updates the intro's copy by clientIntroId", async () => {
+      const onUpdateApproved = vi.fn<NonNullable<ConfiguratorProps["onUpdateApproved"]>>(async () => ({ ok: true, value: undefined }));
+      setup({ intro: approvedIntro(), onUpdateApproved, onDiscard: vi.fn(), onForkIntro: vi.fn() });
+      await flush();
+      fireEvent.click(within(header()).getByRole("button", { name: u.update, hidden: true }));
+      fireEvent.click(within(dialog()).getByRole("button", { name: u.updateConfirm, hidden: true }));
+      await flush();
+      expect(onUpdateApproved).toHaveBeenCalledExactlyOnceWith({
+        clientIntroId: INTRO_ID,
+        revisionId: COPY,
+        expectedRevisionVersion: 2,
+        expectedHeadVersion: 6,
+        overflow: Object.fromEntries(FORMAT_IDS.map((id) => [id, false])),
+      });
+      expect(status().textContent).toBe(u.updated);
+    });
+
+    it("Scarta drops the intro's copy by clientIntroId, stays on the page and reads the intro alone again", async () => {
+      const onDiscard = vi.fn<NonNullable<ConfiguratorProps["onDiscard"]>>(async () => ({ ok: true, value: undefined }));
+      const onReload = vi.fn<ClientFile["onReload"]>(async () => ({ ok: true, value: introPart({ status: "approved", revision: { id: INTRO_REVISION, version: 4, editable: true, kind: "client_intro", fork: true } }) }));
+      setup({ intro: approvedIntro(), onDiscard, onReload, onUpdateApproved: vi.fn(), onForkIntro: vi.fn() });
+      await flush();
+      fireEvent.click(within(header()).getByRole("button", { name: u.discard, hidden: true }));
+      fireEvent.click(within(dialog()).getByRole("button", { name: u.discardConfirm, hidden: true }));
+      await flush();
+      expect(onDiscard).toHaveBeenCalledExactlyOnceWith({ clientIntroId: INTRO_ID, revisionId: COPY, expectedHeadVersion: 6 });
+      expect(onReload).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, part: "client_intro" });
+      expect(push).not.toHaveBeenCalled();
+      expect(refresh).not.toHaveBeenCalled();
+      expect(groups()).toContain(`case:${CASE_A}`);
+      expect(within(header()).queryByRole("button", { name: u.discard, hidden: true })).toBeNull();
+    });
+
+    it("keeps the client's fields editable in the file: a new name saves through updateClient", async () => {
+      const updateClient = vi.fn(async () => ({ ok: true as const, value: null }));
+      const { file } = setup({ intro: approvedIntro(), fields: { updateClient } });
+      await flush();
+      const pages = file.intro!.formats.presentazione_16_9;
+      let at: { pageKey: string; id: string } | undefined;
+      const walk = (pageKey: string, elements: readonly DocumentElement[]) => {
+        for (const el of elements) {
+          if (at === undefined && el.type === "text" && el.binding?.record === "client" && el.binding.field === "name") at = { pageKey, id: el.elementId };
+          if (el.type === "text_group" || el.type === "row") walk(pageKey, el.items as readonly DocumentElement[]);
+        }
+      };
+      for (const page of pages) for (const block of page.blocks) walk(page.pageKey, block.elements);
+      const segment = pages.find((p) => p.pageKey === at!.pageKey)!.role === "outro" ? "client_closing" : "client_intro";
+      const target = () => pageNode(`${segment}|${at!.pageKey}`)!.querySelector<HTMLElement>(`[data-element-id="${at!.id}"]`)!;
+      fireEvent.doubleClick(target());
+      target().textContent = "Lumen Spa";
+      fireEvent.input(target());
+      fireEvent.keyDown(target(), { key: "Enter" });
+      await flush();
+      expect(updateClient).toHaveBeenCalledExactlyOnceWith({ clientId: CLIENT_ID, name: "Lumen Spa", industry: "illuminazione", description: "Lampade.", logoId: "eeeeeeee-0000-4000-8000-000000000001" });
+    });
+  });
+
+  it("uploads a dropped image to the client's material, by the client's id", async () => {
+    const ADDED = "bbbbbbbb-0000-4000-8000-000000000002";
+    clientActions.requestClientMaterialUpload.mockResolvedValue({ ok: true, value: { assetId: ADDED, url: "https://storage.test/u", method: "PUT", headers: {} } });
+    clientActions.confirmClientMaterialUpload.mockResolvedValue({ ok: true, value: { id: ADDED } });
+    clientActions.listClientMaterial.mockResolvedValue({ ok: true, value: [] });
+    setup();
+    await flush();
+    fireEvent.click(within(rightPanel()).getByRole("button", { name: dict.configurator.tabs.media, hidden: true }));
+    const zone = within(rightPanel()).getByRole("button", { name: `${dict.configurator.media.drop.lead}, ${dict.configurator.media.drop.choose}`, hidden: true });
+    fireEvent.drop(zone, { dataTransfer: { files: [new File(["x"], "nuova.jpg", { type: "image/jpeg" })], dropEffect: "copy" } });
+    await flush();
+    expect(clientActions.requestClientMaterialUpload).toHaveBeenCalledWith({ clientId: CLIENT_ID, contentType: "image/jpeg", sizeBytes: 1 });
+    expect(clientActions.confirmClientMaterialUpload).toHaveBeenCalledWith({ clientId: CLIENT_ID, assetId: ADDED, contentType: "image/jpeg", fileName: "nuova.jpg" });
   });
 });
