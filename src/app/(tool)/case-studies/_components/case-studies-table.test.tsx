@@ -100,7 +100,6 @@ describe("CaseStudiesTable", () => {
       COLUMNS.client,
       COLUMNS.year,
       COLUMNS.status,
-      COLUMNS.businessLine,
       COLUMNS.links,
       COLUMNS.actions, // screen readers only: the Scarica and Modifica column shows no header
       COLUMNS.updated,
@@ -118,13 +117,12 @@ describe("CaseStudiesTable", () => {
     expect(cells[2].textContent).toBe("Acme");
     expect(cells[3].textContent).toBe("2026");
     expect(cells[4].textContent).toBe(dict.status.draft);
-    expect(cells[5].textContent).toBe(dict.businessLines.social_media);
-    expect(cells[6].textContent).toBe(""); // Link: no public link yet
-    expect(cells[7].textContent).toBe(""); // Scarica: a draft has nothing to download
-    expect(cells[8].querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-12T10:00:00+00:00");
-    expect(cells[8].textContent).toBe("12 ott, 12:00");
-    // A case created before the business line existed leaves the cell empty.
-    expect(within(table).getAllByRole("row")[2].querySelectorAll("td")[5].textContent).toBe("");
+    expect(cells[5].textContent).toBe(""); // Link: no public link yet
+    expect(cells[6].textContent).toBe(""); // Scarica: a draft has nothing to download
+    expect(cells[7].querySelector("time")?.getAttribute("dateTime")).toBe("2026-10-12T10:00:00+00:00");
+    expect(cells[7].textContent).toBe("12 ott, 12:00");
+    // Servizi is hidden (owner, 2026-11-10): no cell shows the business line.
+    expect(table.textContent).not.toContain(dict.businessLines.social_media);
   });
 
   it("puts the status filter and the search in one toolbar, Tutte selected, each segment with its count", () => {
@@ -198,12 +196,10 @@ describe("CaseStudiesTable", () => {
     expect(names()).toEqual(["Alfa"]);
   });
 
-  it("sorts by Area, cases without one first", async () => {
-    const user = userEvent.setup();
+  it("hides the Servizi column (owner, 2026-11-10)", () => {
     render(<CaseStudiesTable rows={rows} canCreate />);
-    await user.click(within(header(COLUMNS.businessLine)).getByRole("button"));
-    expect(names()).toEqual(["Émile", "Alfa", "Zeta"]);
-    expect(header(COLUMNS.businessLine).getAttribute("aria-sort")).toBe("ascending");
+    const table = screen.getByRole("table", { name: dict.caseStudies.table.caption });
+    expect(within(table).queryByRole("columnheader", { name: new RegExp(COLUMNS.businessLine) })).toBeNull();
   });
 
   it("names both the search and the status when together they leave no rows", () => {

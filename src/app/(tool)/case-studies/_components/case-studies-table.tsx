@@ -16,7 +16,6 @@ import { cn } from "@/shared/utils";
 import {
   DEFAULT_SORT,
   REVIEW_QUEUE_SORT,
-  businessLineLabel,
   filterRows,
   nextSort,
   sortRows,
@@ -66,7 +65,7 @@ const COLUMNS: ReadonlyArray<{ key: SortKey; label: string }> = [
   { key: "client", label: it.caseStudies.table.columns.client },
   { key: "year", label: it.caseStudies.table.columns.year },
   { key: "status", label: it.caseStudies.table.columns.status },
-  { key: "businessLine", label: it.caseStudies.table.columns.businessLine },
+  // Servizi is hidden from the table (owner, 2026-11-10); its sort key still works from the URL.
   { key: "updated", label: it.caseStudies.table.columns.updated },
 ];
 
@@ -393,7 +392,6 @@ export function CaseStudiesTable({
                     <td className="whitespace-nowrap px-4 py-3.5">
                       <StatusBadge status={row.status} />
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-foreground-muted">{businessLineLabel(row)}</td>
                     <td className="px-4 py-2">
                       {row.publicUrl != null && (
                         <a
