@@ -69,6 +69,39 @@ export interface ClientFile {
    * undefined: the project rows don't move (a role that may not reorder).
    */
   onReorderCases?: (input: CaseOrderInput) => Promise<ActionResult<{ caseIds: string[] }>>;
+  /**
+   * Story 4.12b: the client's case order as the server holds it (case ids), cases not in the file
+   * included (a part that couldn't be read); null or absent: none saved yet. A save keeps those
+   * where they are (`mergeCaseOrder`).
+   */
+  caseOrder?: readonly string[] | null;
+}
+
+/**
+ * The case order to save (Story 4.12b): `saved` (the server's, case ids) with the file's cases,
+ * wherever they sit in it, replaced in turn by `shown` (the file's cases in their new order); ids
+ * the file doesn't show stay in their saved places; a shown case not in `saved` goes at the end.
+ * With nothing saved, `shown` itself.
+ */
+export function mergeCaseOrder(saved: readonly string[], shown: readonly string[]): string[] {
+  const shownSet = new Set(shown);
+  const queue = [...shown];
+  const merged = saved.map((id) => (shownSet.has(id) ? queue.shift()! : id));
+  return [...merged, ...queue];
+}
+
+/**
+ * `mounted` (the file's parts as mounted) with its cases in the order of `keys` (Story 4.12b): the
+ * other parts first, then the named cases, then any case not named, as they were. `mounted` itself
+ * when nothing moves.
+ */
+export function withCaseOrder<T extends { part: { key: string; subject: { kind: string } } }>(mounted: readonly T[], keys: readonly string[]): T[] {
+  const isCase = (m: T) => m.part.subject.kind === "case";
+  const byKey = new Map(mounted.filter(isCase).map((m) => [m.part.key, m]));
+  const ordered = keys.flatMap((k) => byKey.get(k) ?? []);
+  const rest = mounted.filter((m) => isCase(m) && !keys.includes(m.part.key));
+  const next = [...mounted.filter((m) => !isCase(m)), ...ordered, ...rest];
+  return next.length === mounted.length && next.every((m, i) => m === mounted[i]) ? (mounted as T[]) : next;
 }
 
 /** `keys` with `key` moved to index `to` (clamped); `keys` itself when it isn't there or doesn't move. */

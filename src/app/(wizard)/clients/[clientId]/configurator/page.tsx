@@ -26,7 +26,7 @@ import {
   updateApprovedIntroVersion,
 } from "./actions";
 import { caseMediaOfClient, caseMediaRenderAssets } from "./case-media";
-import { casePartsOf, introPartOf } from "./file-parts";
+import { casePartsOf, fileFingerprint, introPartOf } from "./file-parts";
 
 /** Client mode's field edits: the client's own actions only (no case binding is offered). */
 const FIELD_ACTIONS: FieldActions = { updateClient, addClientSector, saveClientResults, saveClientTestimonial };
@@ -99,6 +99,8 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
   if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
   const cases = await casePartsOf(client, caseAssets);
   if (!cases.ok) throw new Error(`Case studies could not be listed: ${cases.error.code}`);
+  // Story 4.12b: the saved order as stored, so a reorder keeps the cases the file leaves out in place.
+  const savedOrder = await caseStudy.getClientCaseOrder(client.id);
   // Nothing to show: no intro ready and no approved case.
   if (intro.value === null && cases.value.length === 0) redirect(back);
 
@@ -108,10 +110,7 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
   // the server holds; one that changes only bound values (a field save) keeps it mounted. The
   // parts are fingerprinted in key order: a case order saved from this file (Story 4.12b) is
   // already shown, so it never remounts it.
-  const fingerprint = [...(introPart === null ? [] : [introPart]), ...cases.value]
-    .map((p) => `${p.key}:${p.revision.id}:${p.revision.version}:${p.revision.editable}:${p.status}:${p.headVersion}`)
-    .sort()
-    .join(",");
+  const fingerprint = fileFingerprint([...(introPart === null ? [] : [introPart]), ...cases.value]);
 
   return (
     <Configurator
@@ -158,8 +157,9 @@ export default async function ClientConfiguratorPage({ params }: ClientConfigura
         onSaveCase: saveRevisionDoc,
         onForkCase: forkCaseHead,
         onReload: reloadFilePart,
-        // Story 4.12b: the project rows drag (and move with Alt+↑/↓) only for a role that may save the order.
-        ...(can(shell.actor, "manage clients") ? { onReorderCases: reorderClientCases } : {}),
+        // Story 4.12b: the project rows drag (and move with Alt+↑/↓) only for a role that may save the
+        // order, and only once the saved order was read (a save keeps the cases left out of the file in it).
+        ...(can(shell.actor, "manage clients") && savedOrder.ok ? { onReorderCases: reorderClientCases, caseOrder: savedOrder.value } : {}),
       }}
     />
   );

@@ -128,3 +128,14 @@ export async function casePartsOf(client: ClientDetail, assets: Readonly<Record<
   });
   return ok(out);
 }
+
+/**
+ * The client configurator's remount key part (Story 4.12a): each part's revision, version,
+ * editability, status and head version. Listed in key order (Story 4.12b): a case order saved from
+ * the file is already shown, so a refresh after it never remounts the file; any revision change does.
+ */
+export const fileFingerprint = (parts: readonly FilePartData[]): string =>
+  parts
+    .map((p) => `${p.key}:${p.revision.id}:${p.revision.version}:${p.revision.editable}:${p.status}:${p.headVersion}`)
+    .sort()
+    .join(",");

@@ -2,7 +2,7 @@
 title: "Story 4.12b: reorder a client's cases"
 type: 'feature'
 created: '2026-11-10'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'ddb6f2ffff2c2f198e01bd93817e9e58d182c396'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -89,6 +89,7 @@ context:
 - **Storage.** `client_case_order` (one row per client: `case_ids uuid[]`, `updated_by`, `updated_at`), RLS on with no policies, revoked from anon/authenticated, `select` only for the service role. `set_client_case_order(p_client_id, p_case_ids, p_actor_id)` (security definer, service role only, per-client advisory lock) replaces the row; `INVALID_INPUT` for a null argument, a null, repeated, foreign, unknown or deleted id, or more than 500 ids; `CLIENT_NOT_FOUND` for an unknown or deleted client. No event is written: `client_event` needs an intro, and a client setting is not a case event.
 - **Module.** `domain/client-case-order.ts`: `orderClientCases` (pure rule; ids compared case-insensitively, equal creation times keep the list's order) and the input schema. `ports/` + `adapters/supabase/client-case-order-repository.ts`. `application/client-case-order.ts`: `setClientCaseOrder` and `listClientCasesInOrder` (approved cases of the client, ordered). `index.ts` exports both use cases, `orderClientCases` and `ClientCaseOrder` (for B5).
 - **Route.** `casePartsOf` reads `listClientCasesInOrder`. New action `reorderClientCases` (`manage clients`). The page passes `file.onReorderCases` only when the actor `can` `manage clients`; the configurator key's fingerprint is now sorted by part key, so a refresh after a reorder saved here doesn't remount the file.
+- **Review fixes.** A save sends `mergeCaseOrder(saved, shown)`: the server's saved order (`ClientFile.caseOrder`, read with `getClientCaseOrder`) with the file's cases replaced in their new order, so a case the file leaves out keeps its place; the page offers no reorder when that read fails. `INVALID_INPUT` / `CLIENT_NOT_FOUND` on a save says "Le case del cliente sono cambiate nel frattempo: ricarichiamo la pagina." and loads the page afresh. A failed order read in `listClientCasesInOrder` is logged and falls back to newest first. While Cerca filters, rows don't move. The hint is also `aria-describedby`. A rolled-back keyboard move keeps the focus on its row. `fileFingerprint` (file-parts) and `withCaseOrder` (client-file) are exported and unit-tested.
 - **Configurator.** `ClientFile.onReorderCases`; `moveKey` in `client-file.ts`. `useClientFile().moveCase(key, to)` reorders the mounted cases (so canvas and Pagine follow in every format), announces "{code} spostata in posizione {n} di {total}", and queues the save (saves run one after another). A failed or thrown save of the latest move puts back the last confirmed order and says "Ordine non salvato. Riprova."; it is never an undo step. `RightPanel.onMoveProject`: rows draggable (own drag type, drop line as for pages), Alt+↑/↓ with `aria-keyshortcuts` and a `title`, focus kept on the moved row. Without `onReorderCases` the rows don't drag or move.
 
 ## Spec Change Log

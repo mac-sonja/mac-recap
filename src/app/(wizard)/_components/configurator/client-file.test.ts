@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { Page } from "@/modules/generation";
 import { CASE_TEMPLATE, CLIENT_TEMPLATE, FORMAT_IDS, starterPages, TEMPLATE_TEXT_KEYS, type BoundValues, type FormatId } from "@/modules/rendering";
 import {
+  mergeCaseOrder,
   moveKey,
+  withCaseOrder,
   CLOSING_SEGMENT,
   fileKeyAfterEdit,
   filePages,
@@ -146,5 +148,32 @@ describe("moveKey (Story 4.12b)", () => {
     expect(moveKey(keys, "b", 1)).toBe(keys);
     expect(moveKey(keys, "x", 0)).toBe(keys);
     expect(moveKey(keys, "a", -1)).toBe(keys);
+  });
+});
+
+describe("mergeCaseOrder (Story 4.12b)", () => {
+  it("keeps the ids the file doesn't show in their saved places, the shown ones in their new order", () => {
+    expect(mergeCaseOrder(["a", "x", "b", "y", "c"], ["c", "a", "b"])).toEqual(["c", "x", "a", "y", "b"]);
+  });
+  it("puts a shown case not saved yet at the end, and is the shown order with nothing saved", () => {
+    expect(mergeCaseOrder(["a", "x"], ["n", "a"])).toEqual(["n", "x", "a"]);
+    expect(mergeCaseOrder([], ["b", "a"])).toEqual(["b", "a"]);
+  });
+});
+
+describe("withCaseOrder (Story 4.12b)", () => {
+  const m = (key: string, kind: string) => ({ part: { key, subject: { kind } } });
+  const intro = m("client_intro:i", "client_intro");
+  const a = m("case:a", "case");
+  const b = m("case:b", "case");
+  const c = m("case:c", "case");
+  it("puts the other parts first, the named cases in order, then the unnamed ones as they were", () => {
+    expect(withCaseOrder([intro, a, b, c], ["case:c", "case:a"])).toEqual([intro, c, a, b]);
+    expect(withCaseOrder([a, intro, b], ["case:b", "case:gone"])).toEqual([intro, b, a]);
+  });
+  it("returns the same array when nothing moves", () => {
+    const mounted = [intro, a, b];
+    expect(withCaseOrder(mounted, ["case:a", "case:b"])).toBe(mounted);
+    expect(withCaseOrder(mounted, ["case:a"])).toBe(mounted);
   });
 });

@@ -163,6 +163,7 @@ function setup({
   onDiscard,
   fields,
   onReorderCases,
+  caseOrder,
 }: {
   intro?: FilePartData | null;
   cases?: FilePartData[];
@@ -178,6 +179,8 @@ function setup({
   fields?: { updateClient: ReturnType<typeof vi.fn> };
   /** Story 4.12b: the cases' order save; undefined: the rows don't move. */
   onReorderCases?: ClientFile["onReorderCases"];
+  /** Story 4.12b: the server's saved order (case ids). */
+  caseOrder?: string[];
 } = {}) {
   const file: ClientFile = {
     clientId: CLIENT_ID,
@@ -189,6 +192,7 @@ function setup({
     onReload,
     ...(onForkIntro === undefined ? {} : { onForkIntro }),
     ...(onReorderCases === undefined ? {} : { onReorderCases }),
+    ...(caseOrder === undefined ? {} : { caseOrder }),
   };
   render(
     <Configurator
@@ -818,6 +822,85 @@ describe("Reordering the client's cases (Story 4.12b)", () => {
     const text = ownText(file.cases[2]!.formats.presentazione_16_9.find((p) => p.pageKey === "content")!);
     await type(`case:${CASE_C}|content`, text.id, "C cambiata");
     expect(vi.mocked(onSaveCase).mock.calls.at(-1)![0]).toMatchObject({ caseId: CASE_C });
+  });
+
+  it("a save keeps the saved cases the file doesn't show (a read that failed) in their places", async () => {
+    const HIDDEN = "aaaaaaaa-0000-4000-8000-0000000000ff";
+    const onReorderCases = vi.fn<Reorder>(reorderedOk);
+    setup({ cases: threeCases(), onReorderCases, caseOrder: [CASE_A, HIDDEN, CASE_B, CASE_C] });
+    await flush();
+    await drag(CASE_C, CASE_A);
+    expect(onReorderCases).toHaveBeenLastCalledWith({ clientId: CLIENT_ID, caseIds: [CASE_C, HIDDEN, CASE_A, CASE_B] });
+    // The next save starts from what the last one kept.
+    await drag(CASE_B, CASE_C);
+    expect(onReorderCases).toHaveBeenLastCalledWith({ clientId: CLIENT_ID, caseIds: [CASE_B, HIDDEN, CASE_C, CASE_A] });
+  });
+
+  it("two fast moves save strictly one after the other, even when the first save answers late", async () => {
+    let release: () => void = () => {};
+    const calls: string[][] = [];
+    let open = 0;
+    let overlap = false;
+    const onReorderCases = vi.fn<Reorder>(async (input) => {
+      calls.push(input.caseIds);
+      open += 1;
+      if (open > 1) overlap = true;
+      if (calls.length === 1) await new Promise<void>((resolve) => (release = resolve));
+      open -= 1;
+      return reorderedOk(input);
+    });
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    await drag(CASE_C, CASE_A);
+    await drag(CASE_B, CASE_C);
+    expect(calls).toHaveLength(1);
+    await act(async () => release());
+    await flush();
+    expect(calls).toEqual([
+      [CASE_C, CASE_A, CASE_B],
+      [CASE_B, CASE_C, CASE_A],
+    ]);
+    expect(overlap).toBe(false);
+    expect(rows()).toEqual([`case:${CASE_B}`, `case:${CASE_C}`, `case:${CASE_A}`]);
+  });
+
+  it.each(["INVALID_INPUT", "CLIENT_NOT_FOUND"])("a save refused with %s (a case gone meanwhile) says so and loads the page afresh", async (code) => {
+    const reload = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, reload } as Location);
+    const onReorderCases = vi.fn<Reorder>(async () => ({ ok: false, status: 400, error: { code, message: "m" } }));
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    await drag(CASE_C, CASE_A);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(status().textContent).toBe(dict.configurator.file.orderStale);
+    vi.restoreAllMocks();
+  });
+
+  it("after a failed keyboard move, the row is back in place and keeps the focus", async () => {
+    const onReorderCases = vi.fn<Reorder>(async () => ({ ok: false, status: 500, error: { code: "CLIENT_WRITE_FAILED", message: "m" } }));
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    row(CASE_B).focus();
+    fireEvent.keyDown(row(CASE_B), { key: "ArrowUp", altKey: true });
+    await flush();
+    expect(rows()).toEqual([`case:${CASE_A}`, `case:${CASE_B}`, `case:${CASE_C}`]);
+    expect(status().textContent).toBe(dict.configurator.file.reorderFailed);
+    expect(document.activeElement).toBe(row(CASE_B));
+  });
+
+  it("while Cerca filters the rows, they neither drag nor move with Alt+↑/↓", async () => {
+    const onReorderCases = vi.fn<Reorder>(reorderedOk);
+    setup({ cases: threeCases(), onReorderCases });
+    await flush();
+    expect(row(CASE_B).getAttribute("aria-describedby")).toBeTruthy();
+    expect(document.getElementById(row(CASE_B).getAttribute("aria-describedby")!)!.textContent).toBe(dict.configurator.file.projectMove);
+    fireEvent.change(within(rightPanel()).getByRole("searchbox", { hidden: true }), { target: { value: "Showroom" } });
+    await flush();
+    expect(rows()).toEqual([`case:${CASE_B}`]);
+    expect(row(CASE_B).getAttribute("draggable")).toBeNull();
+    fireEvent.keyDown(row(CASE_B), { key: "ArrowUp", altKey: true });
+    await flush();
+    expect(onReorderCases).not.toHaveBeenCalled();
   });
 
   it("without the order's save (a role that can't reorder), rows don't drag and Alt+↑ does nothing", async () => {

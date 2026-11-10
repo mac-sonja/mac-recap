@@ -97,7 +97,7 @@ export interface RightPanelProps {
    * Story 4.12b: a project row dropped on another (or moved with Alt+↑/↓) goes to that row's
    * position (from 0, among every row); undefined: the rows don't move.
    */
-  onMoveProject?: (key: string, to: number) => void;
+  onMoveProject?: (key: string, to: number, onRollback?: () => void) => void;
   /** The case's images and videos, oldest first; client mode: the client's. */
   media: readonly ListedAsset[];
   /** The client's images and videos, in position order: the Media tab's "Del cliente" group (Story 4.5c-2); client mode: its cases' ("Dalle sue case"). */
@@ -197,6 +197,9 @@ export function RightPanel({
   const projectIndex = (key: string) => file?.projects.findIndex((row) => row.key === key) ?? -1;
   /** The row moved with the keyboard: it keeps the focus once it has moved. */
   const refocus = useRef<string | null>(null);
+  /** Rows move only with every row shown: a filtered list would swap with a hidden row. */
+  const moveProject = q === "" ? onMoveProject : undefined;
+  const moveHintId = useId();
   const projectsRef = useRef<HTMLDivElement>(null);
   const projectOrder = file?.projects.map((row) => row.key).join(",");
   useLayoutEffect(() => {
@@ -331,6 +334,11 @@ export function RightPanel({
             {fileGroup(file.intro)}
             <div className="mb-4 last:mb-0">
               <p className={EYEBROW}>{it.configurator.file.projects}</p>
+              {moveProject !== undefined && (
+                <span id={moveHintId} hidden>
+                  {it.configurator.file.projectMove}
+                </span>
+              )}
               <div ref={projectsRef} className="flex flex-col gap-1.5">
                 {file.projects
                   .filter((row) => matches(row.name) || matches(row.code))
@@ -341,21 +349,24 @@ export function RightPanel({
                       data-project={row.key}
                       onClick={() => onSelectGroup?.(row.key)}
                       // Story 4.12b: dragged onto another row, or Alt+↑/↓, it moves to that place; saved at once.
-                      draggable={onMoveProject === undefined ? undefined : true}
-                      {...(onMoveProject === undefined
+                      draggable={moveProject === undefined ? undefined : true}
+                      {...(moveProject === undefined
                         ? {}
-                        : { title: it.configurator.file.projectMove, "aria-keyshortcuts": "Alt+ArrowUp Alt+ArrowDown" })}
+                        : { title: it.configurator.file.projectMove, "aria-describedby": moveHintId, "aria-keyshortcuts": "Alt+ArrowUp Alt+ArrowDown" })}
                       onKeyDown={(event) => {
-                        if (onMoveProject === undefined || !event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+                        if (moveProject === undefined || !event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
                         if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
                         event.preventDefault();
                         const to = projectIndex(row.key) + (event.key === "ArrowUp" ? -1 : 1);
                         if (to < 0 || to >= file.projects.length) return;
                         refocus.current = row.key;
-                        onMoveProject(row.key, to);
+                        // A failed save puts the row back: it keeps the focus there too.
+                        moveProject(row.key, to, () => {
+                          refocus.current = row.key;
+                        });
                       }}
                       onDragStart={(event) => {
-                        if (onMoveProject === undefined) return;
+                        if (moveProject === undefined) return;
                         setDraggingProject(row.key);
                         event.dataTransfer.setData(PROJECT_DRAG_TYPE, row.key);
                         event.dataTransfer.effectAllowed = "move";
@@ -365,19 +376,19 @@ export function RightPanel({
                         setProjectDropOn(null);
                       }}
                       onDragOver={(event) => {
-                        if (onMoveProject === undefined || !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return;
+                        if (moveProject === undefined || !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return;
                         event.preventDefault();
                         event.dataTransfer.dropEffect = "move";
                         if (projectDropOn !== row.key) setProjectDropOn(row.key);
                       }}
                       onDragLeave={() => setProjectDropOn((current) => (current === row.key ? null : current))}
                       onDrop={(event) => {
-                        if (onMoveProject === undefined || !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return;
+                        if (moveProject === undefined || !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return;
                         event.preventDefault();
                         setProjectDropOn(null);
                         const from = event.dataTransfer.getData(PROJECT_DRAG_TYPE) || draggingProject;
                         setDraggingProject(null);
-                        if (from && from !== row.key && projectIndex(from) >= 0) onMoveProject(from, projectIndex(row.key));
+                        if (from && from !== row.key && projectIndex(from) >= 0) moveProject(from, projectIndex(row.key));
                       }}
                       // Where the case lands: above this row when it comes from below, below it when it comes from above.
                       data-drop={

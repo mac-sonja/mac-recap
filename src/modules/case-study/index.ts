@@ -37,7 +37,7 @@ import { makeListClients } from "@/modules/case-study/application/list-clients";
 import { makeListReadyDrafts } from "@/modules/case-study/application/list-ready-drafts";
 import { makeReadClientLogo, type ClientLogoFile } from "@/modules/case-study/application/read-client-logo";
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
-import { makeListClientCasesInOrder, makeSetClientCaseOrder } from "@/modules/case-study/application/client-case-order";
+import { makeGetClientCaseOrder, makeListClientCasesInOrder, makeSetClientCaseOrder } from "@/modules/case-study/application/client-case-order";
 import { createSupabaseClientCaseOrderRepository } from "@/modules/case-study/adapters/supabase/client-case-order-repository";
 import type { ClientCaseOrder } from "@/modules/case-study/domain/client-case-order";
 import {
@@ -913,9 +913,19 @@ export function setClientCaseOrder(actor: Actor, input: unknown): Promise<Result
  * A client's approved, non-deleted cases in the client's order (Story 4.12b, `orderClientCases`):
  * its saved order, then any approved case not in it (approved later), newest created first;
  * with no saved order, newest created first. Saved ids no longer approved or gone are skipped.
- * For the client's file now and its pack (B5). `INVALID_INPUT` for a malformed id; otherwise
- * `err` only when a read fails.
+ * For the client's file now and its pack (B5). A saved order that can't be read is logged and
+ * left out (newest created first). `INVALID_INPUT` for a malformed id; otherwise `err` only when
+ * the cases' read fails.
  */
 export function listClientCasesInOrder(clientId: unknown): Promise<Result<ListedCaseStudy[]>> {
   return makeListClientCasesInOrder(createSupabaseCaseStudyRepository(), createSupabaseClientCaseOrderRepository())(clientId);
+}
+
+/**
+ * The client's saved case order as stored (case ids, gone or no-longer-approved ones included),
+ * or null when it has none (Story 4.12b): what a reorder in the client's file keeps the cases it
+ * doesn't show in. `INVALID_INPUT` for a malformed id; otherwise `err` only when the read fails.
+ */
+export function getClientCaseOrder(clientId: unknown): Promise<Result<string[] | null>> {
+  return makeGetClientCaseOrder(createSupabaseClientCaseOrderRepository())(clientId);
 }

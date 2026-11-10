@@ -4,7 +4,7 @@ import type { ListedCaseStudy } from "@/modules/case-study/domain/case-study";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import type { ClientCaseOrderRepository } from "@/modules/case-study/ports/client-case-order-repository";
 import { err, ok } from "@/shared/result";
-import { makeListClientCasesInOrder, makeSetClientCaseOrder } from "./client-case-order";
+import { makeGetClientCaseOrder, makeListClientCasesInOrder, makeSetClientCaseOrder } from "./client-case-order";
 
 const actor: Actor = {
   id: "00000000-0000-4000-8000-000000000002",
@@ -71,10 +71,31 @@ describe("listClientCasesInOrder (Story 4.12b)", () => {
     expect(result.ok && result.value.map((c) => c.id)).toEqual([A, B, C]);
   });
 
-  it("refuses a malformed id and passes a failed read on", async () => {
+  it("refuses a malformed id and passes a failed read of the cases on", async () => {
     expect(await makeListClientCasesInOrder(fakeCases(rows), fakeOrders())("nope")).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
-    const orders = fakeOrders();
-    orders.find.mockResolvedValueOnce(err({ code: "CLIENT_LOOKUP_FAILED", message: "boom" }));
-    expect(await makeListClientCasesInOrder(fakeCases(rows), orders)(CLIENT_ID)).toMatchObject({ ok: false, error: { code: "CLIENT_LOOKUP_FAILED" } });
+    const cases = fakeCases(rows);
+    cases.list.mockResolvedValueOnce(err({ code: "CASE_STUDY_LOOKUP_FAILED", message: "boom" }));
+    expect(await makeListClientCasesInOrder(cases, fakeOrders([A]))(CLIENT_ID)).toMatchObject({ ok: false, error: { code: "CASE_STUDY_LOOKUP_FAILED" } });
+  });
+
+  it.each(["CLIENT_LOOKUP_FAILED", "CLIENT_INVALID"] as const)("falls back to newest first, logged, when the saved order's read fails (%s)", async (code) => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const orders = fakeOrders([A, B]);
+      orders.find.mockResolvedValueOnce(err({ code, message: "boom" }));
+      const result = await makeListClientCasesInOrder(fakeCases(rows), orders)(CLIENT_ID);
+      expect(result.ok && result.value.map((c) => c.id)).toEqual([C, B, A]);
+      expect(write).toHaveBeenCalledWith(expect.stringContaining("client case order not read"));
+    } finally {
+      write.mockRestore();
+    }
+  });
+});
+
+describe("getClientCaseOrder (Story 4.12b)", () => {
+  it("returns the saved ids as stored, or null; refuses a malformed id", async () => {
+    expect(await makeGetClientCaseOrder(fakeOrders([B, A]))(CLIENT_ID)).toEqual(ok([B, A]));
+    expect(await makeGetClientCaseOrder(fakeOrders())(CLIENT_ID)).toEqual(ok(null));
+    expect(await makeGetClientCaseOrder(fakeOrders())("nope")).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
   });
 });

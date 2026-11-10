@@ -27,7 +27,7 @@ vi.mock("@/modules/case-study", async () => ({
 }));
 vi.mock("@/modules/material", () => ({ getDetailsForm, listAssets, getRendition: vi.fn() }));
 
-const { casePartOf, casePartsOf } = await import("./file-parts");
+const { casePartOf, casePartsOf, fileFingerprint } = await import("./file-parts");
 
 const CLIENT_ID = "cccccccc-0000-4000-8000-000000000001";
 const CASE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
@@ -93,5 +93,26 @@ describe("casePartsOf (Story 4.12a)", () => {
     });
     const parts = await casePartsOf(client, {});
     expect(parts.ok && parts.value.map((p) => p.key)).toEqual([`case:${CASE_ID}`]);
+  });
+});
+
+describe("fileFingerprint (Story 4.12b)", () => {
+  const part = (key: string, over: { id?: string; version?: number; status?: "approved" | "in_review" } = {}) =>
+    ({
+      key,
+      status: over.status ?? "approved",
+      headVersion: 1,
+      revision: { id: over.id ?? `${key}-r`, version: over.version ?? 1, editable: true, kind: "case_history", fork: false },
+    }) as unknown as Parameters<typeof fileFingerprint>[0][number];
+
+  it("is the same for the same revisions in another case order", () => {
+    expect(fileFingerprint([part("client_intro:i"), part("case:a"), part("case:b")])).toBe(fileFingerprint([part("case:b"), part("client_intro:i"), part("case:a")]));
+  });
+
+  it("changes with a revision's id, version or a part's status", () => {
+    const base = fileFingerprint([part("case:a"), part("case:b")]);
+    expect(fileFingerprint([part("case:a", { id: "other" }), part("case:b")])).not.toBe(base);
+    expect(fileFingerprint([part("case:a", { version: 2 }), part("case:b")])).not.toBe(base);
+    expect(fileFingerprint([part("case:a", { status: "in_review" }), part("case:b")])).not.toBe(base);
   });
 });

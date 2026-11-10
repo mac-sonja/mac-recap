@@ -19,7 +19,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | A5 | 3.8 tell me when the draft is ready | ✅ #150 | — | — | jobs, notifications |
 | A6 | 3.11 client intro and outro with test text | ✅ #155 (migration on the mac-recap project 2026-11-06); started 2026-11-06 with a placeholder client template (owner); the cover/outro design replaces only the template later | — | B3 (both add a job kind) | rendering/templates, jobs, migration |
 | A7 | 4.11 client intro in the configurator | ✅ #156 (4.11a), #157 (4.11b) (migrations on the mac-recap project 2026-11-10) | A6 | B6, B7 | configurator (client mode) |
-| A8 | 4.12 client overview configurator, incl. the C38 shared-page confirmation | 🔄 4.12a ✅ #158 (no migration); 4.12b (reorder cases) to do | A7 | B6, B7 | configurator (client file) |
+| A8 | 4.12 client overview configurator, incl. the C38 shared-page confirmation | 🔄 4.12a ✅ #158 (no migration); 4.12b (reorder cases) in review on `claude/brave-gates-8mouz1`, migration not applied yet | A7 | B6, B7 | configurator (client file) |
 | A9 | 4.9 edit an approved case | ✅ #152 (migration on dev) | A4 ✅, B1 | B1 | approved-case page, case-study |
 | B1 | 5.2 the rest: narrow viewports | ✅ #146 | — | A9 | `(tool)/case-studies/[caseId]` |
 | B2 | 5.1 library of approved case studies | ✅ #149 | A4 ✅ | — | `(tool)/library` |

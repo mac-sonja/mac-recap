@@ -9,6 +9,7 @@ import type { ListedCaseStudy } from "@/modules/case-study/domain/case-study";
 import { parseInput } from "@/modules/case-study/domain/validation";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import type { ClientCaseOrderRepository } from "@/modules/case-study/ports/client-case-order-repository";
+import { log } from "@/shared/log";
 import { ok, type Result } from "@/shared/result";
 
 /**
@@ -32,7 +33,8 @@ export function makeSetClientCaseOrder(orders: ClientCaseOrderRepository) {
 /**
  * A client's approved cases in the client's order (`orderClientCases`): its saved order, then
  * any approved case not in it, newest created first; with no saved order, newest created
- * first. `INVALID_INPUT` for a malformed id; otherwise `err` only when a read fails.
+ * first. A saved order that can't be read (or is malformed) is logged and left out: newest
+ * created first. `INVALID_INPUT` for a malformed id; otherwise `err` only when the cases' read fails.
  */
 export function makeListClientCasesInOrder(cases: CaseStudyRepository, orders: ClientCaseOrderRepository) {
   return async function listClientCasesInOrder(clientId: unknown): Promise<Result<ListedCaseStudy[]>> {
@@ -40,7 +42,23 @@ export function makeListClientCasesInOrder(cases: CaseStudyRepository, orders: C
     if (!parsed.ok) return parsed;
     const [approved, saved] = await Promise.all([cases.list({ clientId: parsed.value, status: "approved" }), orders.find(parsed.value)]);
     if (!approved.ok) return approved;
-    if (!saved.ok) return saved;
+    if (!saved.ok) {
+      // The order is a preference: without it the cases still list, newest created first.
+      log.warn(`client case order not read: ${saved.error.code}`, { clientId: parsed.value });
+      return ok(orderClientCases(approved.value, null));
+    }
     return ok(orderClientCases(approved.value, saved.value));
+  };
+}
+
+/**
+ * The client's saved case order (case ids, any no longer approved or gone included), or null
+ * when it has none. `INVALID_INPUT` for a malformed id; otherwise `err` only when the read fails.
+ */
+export function makeGetClientCaseOrder(orders: ClientCaseOrderRepository) {
+  return async function getClientCaseOrder(clientId: unknown): Promise<Result<string[] | null>> {
+    const parsed = parseInput(z.uuid(), clientId);
+    if (!parsed.ok) return parsed;
+    return orders.find(parsed.value);
   };
 }
