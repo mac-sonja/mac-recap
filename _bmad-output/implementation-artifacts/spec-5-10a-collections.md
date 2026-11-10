@@ -2,7 +2,8 @@
 title: 'Story 5.10a: collections (create, list, arrange)'
 type: 'feature'
 created: '2026-11-10'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: 'f04c6fb51ef878f2d3ab6689d76b476f129ce36b'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -25,6 +26,7 @@ context:
 - **Scope:** this is part 1. Part 2 (5.10b, deferred) adds **Esporta**.
 - **Client intro:** a client's approved intro and closing wrap that client's cases only when 2 or more of them are in the collection. A client with one case shows that case with its own intro and closing.
 - **Who:** every role can create, see and change every collection, including admin. This replaces the story's "admin → FORBIDDEN". New policy action `manage collections`, allowed for all roles.
+- **Defaults approved with the spec:** creation keeps selection order with each client's cases gathered at its first selected case; an added case joins the end of its client's group or a new group at the end; the spec is kept whole (~2,400 tokens).
 
 **Always:**
 - **Data:**
