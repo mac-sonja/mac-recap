@@ -391,6 +391,98 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"collection": {
+                  Row: {
+                    "created_at": string,"created_by": string,"deleted_at": string | null,"id": string,"name": string,"updated_at": string,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by": string,"deleted_at"?: string | null,"id"?: string,"name": string,"updated_at"?: string,"version"?: number
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string,"deleted_at"?: string | null,"id"?: string,"name"?: string,"updated_at"?: string,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "collection_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"collection_event": {
+                  Row: {
+                    "actor_id": string,"at": string,"collection_id": string,"data": NonNullable<Json>,"id": string,"type": string,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actor_id": string,"at"?: string,"collection_id": string,"data"?: NonNullable<Json>,"id"?: string,"type": string,"version": number
+                  }
+                  Update: {
+                    "actor_id"?: string,"at"?: string,"collection_id"?: string,"data"?: NonNullable<Json>,"id"?: string,"type"?: string,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "collection_event_actor_id_fkey"
+      columns: ["actor_id"]
+isOneToOne: false
+      referencedRelation: "profile"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "collection_event_collection_id_fkey"
+      columns: ["collection_id"]
+isOneToOne: false
+      referencedRelation: "collection"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"collection_item": {
+                  Row: {
+                    "case_id": string,"collection_id": string,"position": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "case_id": string,"collection_id": string,"position": number
+                  }
+                  Update: {
+                    "case_id"?: string,"collection_id"?: string,"position"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "collection_item_case_id_fkey"
+      columns: ["case_id"]
+isOneToOne: false
+      referencedRelation: "case_study"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "collection_item_collection_id_fkey"
+      columns: ["collection_id"]
+isOneToOne: false
+      referencedRelation: "collection"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"collection_tag": {
+                  Row: {
+                    "collection_id": string,"key": string,"kind": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "collection_id": string,"key": string,"kind": string
+                  }
+                  Update: {
+                    "collection_id"?: string,"key"?: string,"kind"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "collection_tag_collection_id_fkey"
+      columns: ["collection_id"]
+isOneToOne: false
+      referencedRelation: "collection"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"context_form": {
                   Row: {
                     "case_id": string,"context": string,"created_at": string,"results": NonNullable<Json>,"solution": string,"testimonial_author": string,"testimonial_quote": string,"updated_at": string,"updated_by": string
@@ -601,6 +693,15 @@ isOneToOne: false
 "client_name_key":
 { Args: { "p_name": string }; Returns: string
                            },
+"collection_check_items":
+{ Args: { "p_case_ids": (string)[],"p_kept": (string)[] }; Returns: undefined
+                           },
+"collection_check_tags":
+{ Args: { "p_business_lines": (string)[],"p_industries": (string)[] }; Returns: undefined
+                           },
+"collection_lock":
+{ Args: { "p_collection_id": string,"p_expected_version": number }; Returns: undefined
+                           },
 "create_asset":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_content_type": string,"p_id": string,"p_kind": string,"p_original_file_name": string,"p_s3_key": string,"p_size_bytes": number }; Returns: {
               "case_id": string,
@@ -686,6 +787,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"create_collection":
+{ Args: { "p_actor_id": string,"p_business_lines": (string)[],"p_case_ids": (string)[],"p_industries": (string)[],"p_name": string }; Returns: Json
+                           },
 "create_working_revision":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_doc": Json,"p_expected_head_version": number,"p_manifest": Json,"p_meta": Json }; Returns: {
               "case_id": string | null,
@@ -768,6 +872,9 @@ isOneToOne: false
                            },
 "delete_client_logo":
 { Args: { "p_logo_id": string }; Returns: boolean
+                           },
+"delete_collection":
+{ Args: { "p_actor_id": string,"p_collection_id": string }; Returns: undefined
                            },
 "discard_head":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_expected_head_version": number,"p_revision_id": string }; Returns: {
@@ -922,6 +1029,9 @@ isOneToOne: false
 "jobs_renew":
 { Args: { "p_attempts": number,"p_id": string }; Returns: boolean
                            },
+"rename_collection":
+{ Args: { "p_actor_id": string,"p_collection_id": string,"p_expected_version": number,"p_name": string }; Returns: number
+                           },
 "restore_asset":
 { Args: { "p_asset_id": string,"p_case_id": string }; Returns: boolean
                            },
@@ -993,6 +1103,12 @@ isOneToOne: false
       } },
 "set_client_case_order":
 { Args: { "p_actor_id": string,"p_case_ids": (string)[],"p_client_id": string }; Returns: (string)[]
+                           },
+"set_collection_items":
+{ Args: { "p_actor_id": string,"p_case_ids": (string)[],"p_collection_id": string,"p_event_data": Json,"p_event_type": string,"p_expected_version": number }; Returns: number
+                           },
+"set_collection_tags":
+{ Args: { "p_actor_id": string,"p_business_lines": (string)[],"p_collection_id": string,"p_expected_version": number,"p_industries": (string)[] }; Returns: number
                            },
 "transition_case_study":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {

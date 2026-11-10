@@ -25,6 +25,7 @@ const EXPECTED: Record<Action, Partial<Record<Role, Cell>>> = {
   "job work": { system: "all" },
   "create link": { owner_designer: "approved", admin: "approved", account_sales_social: "approved" },
   "turn off link": { owner_designer: "all", admin: "all", account_sales_social: "all" },
+  "manage collections": { owner_designer: "all", admin: "all", account_sales_social: "all" },
   "manage templates": { owner_designer: "all", admin: "all" },
   "manage users": { admin: "all" },
   "change permissions or guardrails": {},

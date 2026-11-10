@@ -16,6 +16,7 @@ export const MODULES = [
   "sharing",
   "access",
   "jobs",
+  "collection",
 ];
 
 const SOURCE = "**/*.{ts,tsx,mts,cts,js,mjs,cjs,jsx}";
