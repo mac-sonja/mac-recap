@@ -2,7 +2,7 @@
 title: 'Story 5.9a: client pack download'
 type: 'feature'
 created: '2026-11-10'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '7e0d869dc2720532053eb913c49338e88fabf78c'
 route: 'dispatch'
 review_loop_iteration: 0
