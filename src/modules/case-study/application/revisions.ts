@@ -10,6 +10,7 @@ import {
   type Revision,
   type RevisionSubject,
 } from "@/modules/case-study/domain/revision";
+import { approveIntroInputSchema, saveIntroRevisionDocInputSchema } from "@/modules/case-study/domain/client-intro";
 import { parseInput } from "@/modules/case-study/domain/validation";
 import type { CaseStudyRepository } from "@/modules/case-study/ports/case-study-repository";
 import type { ClientIntroRepository } from "@/modules/case-study/ports/client-intro-repository";
@@ -310,5 +311,135 @@ export function makeDiscardHead(deps: { revisions: RevisionRepository }) {
     const discarded = await deps.revisions.discardHead({ ...parsed.value, actorId: actor.id });
     if (!discarded.ok) return discarded;
     return upgraded(discarded.value);
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Client intros (Story 4.11a)
+// ---------------------------------------------------------------------------
+
+export interface IntroRevisionDeps {
+  revisions: Pick<RevisionRepository, "findById">;
+  intros: Pick<ClientIntroRepository, "findById" | "saveDoc" | "approve">;
+  cases: Pick<CaseStudyRepository, "list">;
+  clients: Pick<ClientRepository, "listAssets">;
+  caseAssetIds: CaseAssetIds;
+}
+
+const introRevisionNotFound = (clientIntroId: string, revisionId: string) =>
+  err({ code: "NOT_FOUND", message: "No revision of this client intro with this id.", details: { clientIntroId, revisionId } });
+
+/**
+ * The assets an intro of client `clientId` may reference: the client's files and the live
+ * files of each of the client's non-deleted cases ("Dalle sue case"), lowercased.
+ */
+async function assetsOfIntro(deps: IntroRevisionDeps, clientId: string): Promise<Result<Set<string>>> {
+  const [ofClient, cases] = await Promise.all([deps.clients.listAssets(clientId), deps.cases.list({ clientId })]);
+  if (!ofClient.ok) return ofClient;
+  if (!cases.ok) return cases;
+  const ofCases = await Promise.all(cases.value.map((c) => deps.caseAssetIds(c.id)));
+  const ids = ofClient.value.map((asset) => asset.id);
+  for (const listed of ofCases) {
+    if (!listed.ok) return listed;
+    ids.push(...listed.value);
+  }
+  return ok(new Set(ids.map((id) => id.toLowerCase())));
+}
+
+/** The intro `clientIntroId` and its revision `revisionId` (else `NOT_FOUND`), the revision upgraded. */
+async function introRevisionOf(deps: IntroRevisionDeps, clientIntroId: string, revisionId: string) {
+  const [intro, found] = await Promise.all([deps.intros.findById(clientIntroId), deps.revisions.findById(revisionId)]);
+  if (!intro.ok) return intro;
+  if (!found.ok) return found;
+  if (intro.value === null || found.value === null || found.value.clientIntroId?.toLowerCase() !== clientIntroId) {
+    return introRevisionNotFound(clientIntroId, revisionId);
+  }
+  return ok({ intro: intro.value, revision: found.value });
+}
+
+/**
+ * Saves an edited `doc` of a client intro's head revision (Story 4.11a), as
+ * `makeSaveRevisionDoc` does for a case: compare-and-set on `version`, one `revision_saved`
+ * client event. The media guardrail allows the client's files and the live files of the
+ * client's non-deleted cases (`ASSET_NOT_ALLOWED` otherwise); references the revision already
+ * has are kept. The caller has authorized the actor to `edit`; the database checks the intro
+ * is `in_review`.
+ */
+export function makeSaveIntroRevisionDoc(deps: IntroRevisionDeps) {
+  return async function saveIntroRevisionDoc(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+    const parsed = parseInput(saveIntroRevisionDocInputSchema, input);
+    if (!parsed.ok) return parsed;
+    const { clientIntroId, revisionId, doc, expectedVersion } = parsed.value;
+    const valid = validateNewDocument(doc);
+    if (!valid.ok) return valid;
+    if (valid.value.kind !== "client_intro") {
+      return err({ code: "DOCUMENT_INVALID", message: "A client intro's document must be of kind client_intro.", details: { kind: valid.value.kind } });
+    }
+
+    const found = await introRevisionOf(deps, clientIntroId, revisionId);
+    if (!found.ok) return found;
+    const current = upgraded(found.value.revision);
+    if (!current.ok) return current;
+
+    const kept = new Set([...referencedAssetIds(current.value.doc), ...referencedAssetIds(current.value.generatedDoc)]);
+    const added = [...referencedAssetIds(valid.value)].filter((id) => !kept.has(id));
+    if (added.length > 0) {
+      const allowed = await assetsOfIntro(deps, found.value.intro.clientId);
+      if (!allowed.ok) return allowed;
+      const foreign = added.filter((id) => !allowed.value.has(id));
+      if (foreign.length > 0) {
+        return err({
+          code: "ASSET_NOT_ALLOWED",
+          message: "The document references a file that is not this client's or one of its cases'.",
+          details: { revisionId, assetIds: foreign.slice(0, 10) },
+        });
+      }
+    }
+
+    const saved = await deps.intros.saveDoc({ revisionId, doc: valid.value, expectedVersion, actorId: actor.id });
+    if (!saved.ok) return saved;
+    return upgraded(saved.value);
+  };
+}
+
+/**
+ * Approves a client intro (Story 4.11a, Story 4.8's rules): a person's call, never automatic
+ * or in bulk. Every format of the revision's `doc` must be in `overflow` and `false` (else
+ * `OVERFLOW_NOT_CLEARED`); every file it references must be a file of the client or a live
+ * file of one of its non-deleted cases (else `MATERIAL_MISSING`, naming up to 10). Then, in
+ * one transaction, the revision and the intro become `approved` with `approved_revision_id`,
+ * a `transition` and a `revision_approved` client event. Only an `in_review` intro
+ * (`CASE_NOT_APPROVABLE`); editing an approved intro comes with Story 4.11b. The caller has
+ * authorized the actor to `approve`.
+ */
+export function makeApproveIntro(deps: IntroRevisionDeps) {
+  return async function approveIntro(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
+    const parsed = parseInput(approveIntroInputSchema, input);
+    if (!parsed.ok) return parsed;
+    const { clientIntroId, revisionId, expectedRevisionVersion, expectedHeadVersion, overflow } = parsed.value;
+
+    const found = await introRevisionOf(deps, clientIntroId, revisionId);
+    if (!found.ok) return found;
+    if (found.value.revision.version !== expectedRevisionVersion) {
+      return err({ code: "STALE_REVISION", message: "The revision changed since it was measured.", details: { revisionId, version: found.value.revision.version } });
+    }
+    const current = upgraded(found.value.revision);
+    if (!current.ok) return current;
+
+    const notCleared = Object.keys(current.value.doc.formats).filter((id) => overflow[id] !== false);
+    if (notCleared.length > 0) {
+      return err({ code: "OVERFLOW_NOT_CLEARED", message: "A format overflows, or was not measured.", details: { revisionId, formats: notCleared } });
+    }
+
+    const allowed = await assetsOfIntro(deps, found.value.intro.clientId);
+    if (!allowed.ok) return allowed;
+    const missing = [...referencedAssetIds(current.value.doc)].filter((id) => !allowed.value.has(id));
+    if (missing.length > 0) {
+      return err({ code: "MATERIAL_MISSING", message: "The revision references a file that is no longer there.", details: { revisionId, assetIds: missing.slice(0, 10) } });
+    }
+
+    const approved = await deps.intros.approve({ clientIntroId, revisionId, expectedRevisionVersion, expectedHeadVersion, actorId: actor.id });
+    if (!approved.ok) return approved;
+    return upgraded(approved.value);
   };
 }

@@ -25,6 +25,12 @@ export const editClientPanelHref = (id: string) => `${clientHref(id)}?modifica=1
 /** A case's configurator (Story 4.2): only a case in Da approvare or Approvato opens there. */
 export const configuratorHref = (id: string) => `/case-studies/${encodeURIComponent(id)}/configurator`;
 
+/**
+ * A client's intro and outro in the configurator (Story 4.11a): an intro Da approvare opens
+ * editable, an Approvato one read-only; any other goes back to the client page.
+ */
+export const clientConfiguratorHref = (clientId: string) => `${clientHref(clientId)}/configurator`;
+
 /** An approved case's read-only detail page (Story 5.2): every role that may `view` it. */
 export const caseViewHref = (id: string) => `/case-studies/${encodeURIComponent(id)}`;
 

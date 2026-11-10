@@ -318,3 +318,103 @@ describe("start rule and the generate job (Story 3.11)", () => {
     expect((await introRow(client.id))?.status).toBe("generating");
   });
 });
+
+describe("intro save and approve (Story 4.11a)", () => {
+  const saveSql = "select * from public.save_intro_revision_doc($1, $2, $3, $4)";
+  const approveSql = "select * from public.approve_client_intro($1, $2, $3, $4, $5)";
+  const FIXTURE_ASSET = "aaaaaaaa-0000-4000-8000-000000000001";
+
+  /** A fresh client with 2 images, its intro `in_review` with a working head whose image is the client's first. */
+  async function reviewIntro(status: "in_review" | "generating" = "in_review") {
+    const client = await clientWith(2);
+    const intro = (await pool.query("select id from public.create_client_intro($1, $2)", [client.id, TEST_ACTOR_ID])).rows[0].id as string;
+    const doc = JSON.parse(JSON.stringify(clientIntroV2(FORMAT_IDS)).replaceAll(FIXTURE_ASSET, client.imageIds[0]!));
+    const revision = (
+      await pool.query("select id from public.create_working_revision_for_client_intro($1, $2, '{}', $3, 0, $4)", [intro, JSON.stringify(doc), META, TEST_ACTOR_ID])
+    ).rows[0].id as string;
+    const transition = "select 1 from public.transition_client_intro($1, $2, $3, $4, $5)";
+    await pool.query(transition, [intro, "generate", "draft", "generating", TEST_ACTOR_ID]);
+    if (status === "in_review") await pool.query(transition, [intro, "generation_succeeded", "generating", "in_review", TEST_ACTOR_ID]);
+    return { client, intro, revision, doc, headVersion: 1 };
+  }
+
+  const clear = () => Object.fromEntries(FORMAT_IDS.map((id) => [id, false]));
+
+  it.each(["save_intro_revision_doc", "approve_client_intro"])("%s is security definer with an empty search_path, executable by service_role only", async (name) => {
+    const { rows } = await pool.query(
+      `select p.prosecdef, p.proconfig,
+              has_function_privilege('service_role', p.oid, 'execute') as service,
+              has_function_privilege('authenticated', p.oid, 'execute') as authed,
+              has_function_privilege('anon', p.oid, 'execute') as anon
+         from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = $1`,
+      [name],
+    );
+    expect(rows).toEqual([{ prosecdef: true, proconfig: ['search_path=""'], service: true, authed: false, anon: false }]);
+  });
+
+  it("save_intro_revision_doc writes the doc by compare-and-set, bumps the version and logs a client event, never a case event", async () => {
+    const { intro, revision, doc } = await reviewIntro();
+    const edited = JSON.stringify({ ...doc, template: "mac-client@1" });
+    const saved = (await pool.query(saveSql, [revision, edited, 0, TEST_ACTOR_ID])).rows[0];
+    expect(saved).toMatchObject({ id: revision, version: 1 });
+    await expect(pool.query(saveSql, [revision, edited, 0, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "STALE_REVISION" });
+    const events = (await eventsOf(intro)).filter((e) => e.type === "revision_saved");
+    expect(events).toEqual([{ type: "revision_saved", data: { version: 1 }, revision_id: revision }]);
+    expect((await pool.query("select count(*)::int as n from public.case_event where revision_id = $1", [revision])).rows[0].n).toBe(0);
+    // A case document, and an intro that is not in review, are refused.
+    await expect(pool.query(saveSql, [revision, JSON.stringify({ ...doc, kind: "case_history" }), 1, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    await expect(pool.query(saveSql, [UNKNOWN_ID, edited, 1, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "NOT_FOUND" });
+    const generating = await reviewIntro("generating");
+    await expect(pool.query(saveSql, [generating.revision, edited, 0, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "CASE_NOT_EDITABLE" });
+  });
+
+  it("approve_client_intro approves the revision and the intro, sets approved_revision_id and writes both client events", async () => {
+    const { client, intro, revision, headVersion } = await reviewIntro();
+    await expect(pool.query(approveSql, [intro, revision, 0, headVersion + 1, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "STALE_HEAD" });
+    await expect(pool.query(approveSql, [intro, revision, 5, headVersion, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "STALE_REVISION" });
+    expect((await pool.query(approveSql, [intro, revision, 0, headVersion, TEST_ACTOR_ID])).rows[0]).toMatchObject({ id: revision, status: "approved" });
+    expect((await pool.query("select status, approved_revision_id from public.client_intro where id = $1", [intro])).rows[0]).toEqual({
+      status: "approved",
+      approved_revision_id: revision,
+    });
+    const events = (await eventsOf(intro)).slice(-2);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        { type: "transition", data: { event: "approve", from: "in_review", to: "approved" }, revision_id: null },
+        { type: "revision_approved", data: { revisionId: revision, version: 0 }, revision_id: revision },
+      ]),
+    );
+    // Approvato is terminal here: no second approval, no save (editing an approved intro is Story 4.11b).
+    await expect(pool.query(approveSql, [intro, revision, 0, headVersion, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "CASE_NOT_APPROVABLE" });
+    await expect(pool.query(saveSql, [revision, JSON.stringify(clientIntroV2(FORMAT_IDS)), 0, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "CASE_NOT_EDITABLE" });
+    expect(await introRow(client.id)).toMatchObject({ status: "approved" });
+  });
+
+  it("the use cases save and approve an intro end to end, refusing a deleted placed file", async () => {
+    const [caseStudy, material] = await Promise.all([import("@/modules/case-study"), import("@/modules/material")]);
+    const who = await actor();
+    const { intro, revision, doc, headVersion } = await reviewIntro();
+    const saved = await caseStudy.saveIntroRevisionDoc(who, { clientIntroId: intro, revisionId: revision, doc, expectedVersion: 0 }, material.liveAssetIds);
+    expect(saved).toMatchObject({ ok: true, value: { version: 1 } });
+
+    const blocked = await reviewIntro();
+    await pool.query("select public.delete_client_asset($1)", [blocked.client.imageIds[0]]);
+    expect(
+      await caseStudy.approveIntro(
+        who,
+        { clientIntroId: blocked.intro, revisionId: blocked.revision, expectedRevisionVersion: 0, expectedHeadVersion: blocked.headVersion, overflow: clear() },
+        material.liveAssetIds,
+      ),
+    ).toMatchObject({ ok: false, error: { code: "MATERIAL_MISSING", details: { assetIds: [blocked.client.imageIds[0]] } } });
+    expect((await pool.query("select status from public.client_intro where id = $1", [blocked.intro])).rows[0].status).toBe("in_review");
+
+    const approved = await caseStudy.approveIntro(
+      who,
+      { clientIntroId: intro, revisionId: revision, expectedRevisionVersion: 1, expectedHeadVersion: headVersion, overflow: clear() },
+      material.liveAssetIds,
+    );
+    expect(approved).toMatchObject({ ok: true, value: { status: "approved" } });
+    expect(await caseStudy.getLiveRevision({ kind: "client_intro", id: intro })).toMatchObject({ ok: true, value: { id: revision } });
+  });
+});

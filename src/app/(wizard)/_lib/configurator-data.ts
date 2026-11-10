@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { referencedAssetIds, type CaseClientInfo, type CaseStudy, type ListedClientAsset } from "@/modules/case-study";
+import { referencedAssetIds, type CaseClientInfo, type CaseStudy, type ClientDetail, type ListedClientAsset } from "@/modules/case-study";
 import type { Page } from "@/modules/generation";
 import type { DetailsForm, ListedAsset, RenditionLink } from "@/modules/material";
 import { CASE_TEMPLATE, FORMAT_IDS, starterPages, type BoundValues, type FormatId, type RenderAsset, type TemplateContext } from "@/modules/rendering";
 import { it } from "@/shared/i18n/it";
 import { log } from "@/shared/log";
-import type { EditableFields } from "../_components/configurator/bound-fields";
+import type { ClientEditableFields, EditableFields } from "../_components/configurator/bound-fields";
 import type { Result } from "@/shared/result";
 
 /** Each registry format's pages, in order (`[]` for a format the document lacks). */
@@ -55,6 +55,37 @@ export function editableFieldsOf(caseStudy: CaseStudy, info: CaseClientInfo, for
       businessLines: [...caseStudy.businessLines],
       results: form.results.map((row) => ({ label: row.label, value: row.value })),
       testimonial: { quote: form.testimonialQuote, author: form.testimonialAuthor },
+    },
+  };
+}
+
+/**
+ * Client mode (Story 4.11a): the values a client's intro and outro bind to, from the client
+ * itself (`sector` its sector's label) and its brief's result rows and testimonial. A client
+ * page binds no case, so the case's values are empty.
+ */
+export function clientBoundValuesOf(client: ClientDetail, sector: string): BoundValues {
+  const { brief } = client;
+  return {
+    client: {
+      name: client.name,
+      sector,
+      description: client.description ?? "",
+      logoUrl: client.logoUrl,
+      results: brief.results,
+      testimonial: brief.testimonialQuote === "" ? null : { quote: brief.testimonialQuote, author: brief.testimonialAuthor },
+    },
+    case: { year: null, services: [], results: [], testimonial: null },
+  };
+}
+
+/** Client mode (Story 4.11a): the client's stored fields its field edits start from, its own result rows and testimonial included. */
+export function clientEditableFieldsOf(client: ClientDetail): ClientEditableFields {
+  return {
+    client: { id: client.id, name: client.name, industry: client.industry, description: client.description ?? "", logoId: client.logoId },
+    record: {
+      results: client.brief.results.map((row) => ({ label: row.label, value: row.value })),
+      testimonial: { quote: client.brief.testimonialQuote, author: client.brief.testimonialAuthor },
     },
   };
 }
@@ -129,33 +160,8 @@ export async function renderAssetsOf(
   return Object.fromEntries(entries.filter((entry) => entry !== null));
 }
 
-/**
- * The client's images and videos as the configurator's Media lists them (Story 4.5c-2,
- * "Del cliente"), in position order, shaped as a case file's listing: never a favourite,
- * never pending, the file name as listed on the client page. The tile shows the image's
- * display copy (else its signed original) and the video's poster (else no thumbnail).
- * PDFs and text files are left out: they never go on a page.
- */
-export function clientMediaOf(files: readonly ListedClientAsset[], assets: Readonly<Record<string, RenderAsset>>): ListedAsset[] {
-  return files.flatMap((file): ListedAsset[] => {
-    if (file.kind !== "image" && file.kind !== "video") return [];
-    const drawn = assets[file.id];
-    const thumbnailUrl = file.kind === "image" ? (drawn?.url ?? file.thumbnailUrl) : drawn?.kind === "video" ? (drawn.posterUrl ?? null) : null;
-    return [
-      {
-        id: file.id,
-        kind: file.kind,
-        originalFileName: file.fileName,
-        contentType: file.contentType,
-        sizeBytes: file.sizeBytes,
-        createdAt: file.createdAt,
-        isFavourite: false,
-        thumbnailUrl,
-        thumbnailPending: false,
-      },
-    ];
-  });
-}
+// Story 4.11a: `clientMediaOf` lives with the Media tab's helpers, so the tab can map a fresh client listing too.
+export { clientMediaOf } from "../_components/configurator/media-files";
 
 /** A client's images and videos (Story 4.5c-2): the only client files a page shows. */
 export const clientMediaFiles = <F extends Pick<ListedClientAsset, "kind">>(files: readonly F[]): F[] =>

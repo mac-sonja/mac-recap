@@ -18,7 +18,7 @@ function setup(over: Partial<UseDocumentOptions> = {}) {
   const save = vi.fn<Save>(okSave);
   const onStale = vi.fn();
   const options: UseDocumentOptions = {
-    caseId: "aaaaaaaa-0000-4000-8000-000000000001",
+    subject: { kind: "case", id: "aaaaaaaa-0000-4000-8000-000000000001" },
     revision: { id: "dddddddd-0000-4000-8000-000000000001", version: 4, editable: true },
     base: { schemaVersion: 2, kind: "case_history", template: "mac-case@1" },
     initial: START,
@@ -297,7 +297,7 @@ describe("useDocument on an approved case (Story 4.9)", () => {
   it("follows a new headVersion prop after a refresh", async () => {
     const fork = vi.fn<Fork>(fresh);
     const options = (headVersion: number): UseDocumentOptions => ({
-      caseId: CASE,
+      subject: { kind: "case", id: CASE },
       revision: { id: APPROVED, version: 2, editable: true, fork: true },
       base: { schemaVersion: 2, kind: "case_history", template: "mac-case@1" },
       initial: START,
@@ -327,5 +327,17 @@ describe("useDocument on an approved case (Story 4.9)", () => {
     hook.unmount();
     await advance(0);
     expect(save).not.toHaveBeenCalled();
+  });
+});
+
+describe("a client's intro (Story 4.11a)", () => {
+  it("saves named by clientIntroId, never caseId", async () => {
+    const { hook, save } = setup({ subject: { kind: "client_intro", id: "44444444-0000-4000-8000-000000000001", clientId: "cccccccc-0000-4000-8000-000000000001" } });
+    act(() => hook.result.current.change(formatsNamed("a"), "presentazione_16_9"));
+    await advance(DEBOUNCE_MS);
+    expect(save).toHaveBeenCalledTimes(1);
+    const sent = save.mock.calls[0]![0];
+    expect(sent).toMatchObject({ clientIntroId: "44444444-0000-4000-8000-000000000001", revisionId: "dddddddd-0000-4000-8000-000000000001", expectedVersion: 4 });
+    expect("caseId" in sent).toBe(false);
   });
 });

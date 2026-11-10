@@ -23,6 +23,18 @@ export interface EditedRevision {
   fork?: boolean;
 }
 
+/**
+ * Whose head revision the configurator edits (Story 4.11a): a case, or a client's intro and
+ * outro (`id` the intro's own id, `clientId` its client's: the Media tab lists and uploads there).
+ */
+export type Subject = { kind: "case"; id: string } | { kind: "client_intro"; id: string; clientId: string };
+
+/** How an action names the subject: `caseId` for a case (as before), `clientIntroId` for a client's intro. */
+export type SubjectKey = { caseId: string } | { clientIntroId: string };
+
+/** The id field an action takes for `subject`. */
+export const subjectKey = (subject: Subject): SubjectKey => (subject.kind === "case" ? { caseId: subject.id } : { clientIntroId: subject.id });
+
 /** What a fork sends (Story 4.9): the case and the `headVersion` read. */
 export interface ForkInput {
   caseId: string;
@@ -36,20 +48,23 @@ export interface ForkResult {
   headVersion: number;
 }
 
-/** What a save sends: the whole document (each format as `{ pages }`, as stored), and the version it was based on. */
-export interface SaveInput {
-  caseId: string;
+/**
+ * What a save sends: the subject's id (`subjectKey`), the whole document (each format as
+ * `{ pages }`, as stored), and the version it was based on.
+ */
+export type SaveInput = SubjectKey & {
   revisionId: string;
   doc: { schemaVersion: number; kind: string; template: string; formats: Readonly<Record<FormatId, { pages: readonly Page[] }>> };
   expectedVersion: number;
-}
+};
 
 /** The document shape of `formats`: each format's pages under `pages`. */
 const stored = (formats: Formats): SaveInput["doc"]["formats"] =>
   Object.fromEntries(Object.entries(formats).map(([id, pages]) => [id, { pages }])) as SaveInput["doc"]["formats"];
 
 export interface UseDocumentOptions {
-  caseId: string;
+  /** Whose head revision is edited (Story 4.11a): a case, or a client's intro (never forked). */
+  subject: Subject;
   revision: EditedRevision | null;
   /** The document's fields other than its pages, sent back unchanged. */
   base: { schemaVersion: number; kind: string; template: string };
@@ -150,7 +165,7 @@ interface Step {
  * version; a failed fork is retried like a failed save, a stale one reloads. Edits never fork
  * by themselves: only a save does.
  */
-export function useDocument({ caseId, revision, base, initial, save, onStale, fork, headVersion }: UseDocumentOptions): DocumentState {
+export function useDocument({ subject, revision, base, initial, save, onStale, fork, headVersion }: UseDocumentOptions): DocumentState {
   const [formats, setFormats] = useState<Formats>(initial);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [banner, setBanner] = useState(false);
@@ -177,9 +192,9 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The latest props, for the save loop running across renders.
-  const latest = useRef({ caseId, revision, base, save, onStale, fork });
+  const latest = useRef({ subject, revision, base, save, onStale, fork });
   useEffect(() => {
-    latest.current = { caseId, revision, base, save, onStale, fork };
+    latest.current = { subject, revision, base, save, onStale, fork };
     if (headVersion !== headProp.current) {
       headProp.current = headVersion;
       head.current = headVersion;
@@ -194,7 +209,7 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
   };
 
   const run = useCallback(async function run(): Promise<void> {
-    const { caseId, revision, base, save, onStale, fork } = latest.current;
+    const { subject, revision, base, save, onStale, fork } = latest.current;
     if (stopped.current || revision === null || !revision.editable || inFlight.current) return;
     if (current.current === saved.current) {
       // Undone back to what the server holds: nothing to send.
@@ -214,7 +229,7 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
       let forked: ActionResult<ForkResult> | null;
       const expected = head.current;
       try {
-        forked = fork === undefined || expected === undefined ? null : await fork({ caseId, expectedHeadVersion: expected });
+        forked = fork === undefined || expected === undefined || subject.kind !== "case" ? null : await fork({ caseId: subject.id, expectedHeadVersion: expected });
       } catch {
         forked = null;
       }
@@ -241,7 +256,7 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
     const sent = current.current;
     let result: ActionResult<{ version: number }> | null;
     try {
-      result = await save({ caseId, revisionId: revisionId.current ?? revision.id, doc: { ...base, formats: stored(sent) }, expectedVersion: version.current });
+      result = await save({ ...subjectKey(subject), revisionId: revisionId.current ?? revision.id, doc: { ...base, formats: stored(sent) }, expectedVersion: version.current });
     } catch {
       result = null;
     }
@@ -385,20 +400,20 @@ export function useDocument({ caseId, revision, base, initial, save, onStale, fo
       window.removeEventListener("beforeunload", onBeforeUnload);
       clearTimers();
       // Leaving in the app (no beforeunload) with an edit not yet sent: send it, best effort.
-      const { caseId, revision, base, save, fork } = latest.current;
+      const { subject, revision, base, save, fork } = latest.current;
       if (!stopped.current && !inFlight.current && current.current !== saved.current && revision?.editable === true) {
         const doc = { ...base, formats: stored(current.current) };
         const send = async () => {
           let target = { revisionId: revisionId.current ?? revision.id, version: version.current };
           // Story 4.9: still on the approved revision: fork first, then save to the copy.
           if (needsFork.current) {
-            if (fork === undefined || head.current === undefined) return;
+            if (fork === undefined || head.current === undefined || subject.kind !== "case") return;
             const expected = head.current;
-            const forked = await fork({ caseId, expectedHeadVersion: expected });
+            const forked = await fork({ caseId: subject.id, expectedHeadVersion: expected });
             if (!forked.ok || !createdByThisFork(forked.value, expected)) return;
             target = { revisionId: forked.value.revisionId, version: forked.value.version };
           }
-          await save({ caseId, revisionId: target.revisionId, doc, expectedVersion: target.version });
+          await save({ ...subjectKey(subject), revisionId: target.revisionId, doc, expectedVersion: target.version });
         };
         void send().catch(() => undefined);
       }

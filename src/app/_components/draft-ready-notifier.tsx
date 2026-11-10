@@ -15,18 +15,18 @@ import {
   type DraftReadySession,
   type ReadyDraftNotice,
 } from "@/app/_lib/draft-ready";
-import { clientHref, configuratorHref } from "@/app/_lib/routes";
+import { clientConfiguratorHref, clientHref, configuratorHref } from "@/app/_lib/routes";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
 const copy = it.draftReady;
 
-/** Whether a ready draft is a client's intro (Story 3.11): its toast opens the client page. */
+/** Whether a ready draft is a client's intro (Story 3.11): its toast opens the intro's configurator (Story 4.11a). */
 const isIntro = (draft: ReadyDraftNotice) => draft.kind === "client_intro";
 /** What a toast says: the case's name, or the client's intro. */
 const titleOf = (draft: ReadyDraftNotice) => fill(isIntro(draft) ? copy.introTitle : copy.title, { name: draft.name });
-/** Where **Apri** goes: the case's configurator, or the client's page for an intro (until Story 4.11). */
-const hrefOf = (draft: ReadyDraftNotice) => (isIntro(draft) ? clientHref(draft.id) : configuratorHref(draft.id));
+/** Where **Apri** goes: the case's configurator, or the client's intro in the configurator (Story 4.11a; `id` is the client's). */
+const hrefOf = (draft: ReadyDraftNotice) => (isIntro(draft) ? clientConfiguratorHref(draft.id) : configuratorHref(draft.id));
 
 /** The wizard's path; with `?caseId=` it is that case's page (its generating screen while it generates). */
 const WIZARD_PATH = "/case-studies/new";
@@ -80,7 +80,9 @@ export function DraftReadyNotifier({ startedAt }: { startedAt: string }) {
   useEffect(() => {
     const wizardCaseId = pathname === WIZARD_PATH ? searchParams?.get("caseId") : null;
     openCaseRef.current = (id, kind) =>
-      kind === "client_intro" ? pathname === clientHref(id) : pathname === configuratorHref(id) || wizardCaseId === id;
+      kind === "client_intro"
+        ? pathname === clientHref(id) || pathname === clientConfiguratorHref(id)
+        : pathname === configuratorHref(id) || wizardCaseId === id;
   });
 
   useEffect(() => {

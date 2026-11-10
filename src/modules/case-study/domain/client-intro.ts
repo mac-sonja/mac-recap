@@ -54,3 +54,30 @@ export const createIntroWorkingRevisionInputSchema = z.strictObject({
   expectedHeadVersion: z.number().int().nonnegative().max(2_147_483_647),
 });
 export type CreateIntroWorkingRevisionInput = z.infer<typeof createIntroWorkingRevisionInputSchema>;
+
+/**
+ * What the configurator's autosave sends for an intro (Story 4.11a): the whole edited `doc`
+ * of the intro's head revision and the `version` it was based on, as `saveRevisionDoc`
+ * takes for a case. `doc` is validated separately (`generation.validateNewDocument`).
+ */
+export const saveIntroRevisionDocInputSchema = z.strictObject({
+  clientIntroId: z.uuid().transform((id) => id.toLowerCase()),
+  revisionId: z.uuid().transform((id) => id.toLowerCase()),
+  doc: z.unknown(),
+  // Postgres integer range.
+  expectedVersion: z.number().int().nonnegative().max(2_147_483_647),
+});
+export type SaveIntroRevisionDocInput = z.infer<typeof saveIntroRevisionDocInputSchema>;
+
+/**
+ * `approveIntro` (Story 4.11a, Story 4.8's rules): the intro's head revision, the versions
+ * it was read at, and whether each format overflows as the person's browser measured it.
+ */
+export const approveIntroInputSchema = z.strictObject({
+  clientIntroId: z.uuid().transform((id) => id.toLowerCase()),
+  revisionId: z.uuid().transform((id) => id.toLowerCase()),
+  expectedRevisionVersion: z.number().int().nonnegative().max(2_147_483_647),
+  expectedHeadVersion: z.number().int().nonnegative().max(2_147_483_647),
+  overflow: z.record(z.string().max(64), z.boolean()),
+});
+export type ApproveIntroInput = z.infer<typeof approveIntroInputSchema>;

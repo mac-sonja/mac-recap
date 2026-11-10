@@ -32,6 +32,25 @@ const REVISION_REFUSALS: Refusals = {
   INVALID_INPUT: { code: "INVALID_INPUT", message: "The revision is malformed." },
 };
 
+/** `save_intro_revision_doc` raises these as P0001; nothing is written then. */
+const SAVE_REFUSALS: Refusals = {
+  NOT_FOUND: { code: "NOT_FOUND", message: "No revision of a client intro with this id." },
+  STALE_HEAD: { code: "STALE_HEAD", message: "The revision is no longer the client intro's head." },
+  CASE_NOT_EDITABLE: { code: "CASE_NOT_EDITABLE", message: "The client intro cannot be edited in its current status." },
+  REVISION_NOT_WRITABLE: { code: "REVISION_NOT_WRITABLE", message: "Only a working revision can be edited." },
+  STALE_REVISION: { code: "STALE_REVISION", message: "The revision changed since it was read." },
+  INVALID_INPUT: { code: "INVALID_INPUT", message: "The document is malformed." },
+};
+/** `approve_client_intro` raises these as P0001; nothing is written then. */
+const APPROVE_REFUSALS: Refusals = {
+  NOT_FOUND: { code: "NOT_FOUND", message: "No revision of this client intro with this id." },
+  STALE_HEAD: { code: "STALE_HEAD", message: "The client intro's head revision changed since it was read." },
+  CASE_NOT_APPROVABLE: { code: "CASE_NOT_APPROVABLE", message: "Only a client intro in review can be approved." },
+  REVISION_NOT_WRITABLE: { code: "REVISION_NOT_WRITABLE", message: "Only a working revision can be approved." },
+  STALE_REVISION: { code: "STALE_REVISION", message: "The revision changed since it was read." },
+  INVALID_INPUT: { code: "INVALID_INPUT", message: "The approval is malformed." },
+};
+
 /** Maps a `client_intro` row to the domain shape, rejecting values outside the domain. */
 export function toClientIntro(row: ClientIntroRow): Result<ClientIntro> {
   const parsed = clientIntroSchema.safeParse({
@@ -134,6 +153,49 @@ export function createSupabaseClientIntroRepository(
       if (data === null) {
         log.error("intro revision create failed: no row returned", { ...details, actorId: input.actorId });
         return err({ code: "REVISION_WRITE_FAILED", message: "Could not create the revision.", details });
+      }
+      return toRevision(data);
+    },
+
+    async saveDoc(input) {
+      const { data, error } = await client().rpc("save_intro_revision_doc", {
+        p_revision_id: input.revisionId,
+        p_doc: input.doc as Json,
+        p_expected_version: input.expectedVersion,
+        p_actor_id: input.actorId,
+      });
+      const details = { revisionId: input.revisionId };
+      if (error) {
+        const refused = refusalOf(error, SAVE_REFUSALS);
+        if (refused) return err({ ...refused, details: { ...details, expectedVersion: input.expectedVersion } });
+        log.error(`intro revision save failed: ${error.code}`, { actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not save the revision.", details });
+      }
+      if (data === null) {
+        log.error("intro revision save failed: no row returned", { actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not save the revision.", details });
+      }
+      return toRevision(data);
+    },
+
+    async approve(input) {
+      const { data, error } = await client().rpc("approve_client_intro", {
+        p_client_intro_id: input.clientIntroId,
+        p_revision_id: input.revisionId,
+        p_expected_revision_version: input.expectedRevisionVersion,
+        p_expected_head_version: input.expectedHeadVersion,
+        p_actor_id: input.actorId,
+      });
+      const details = { clientIntroId: input.clientIntroId, revisionId: input.revisionId };
+      if (error) {
+        const refused = refusalOf(error, APPROVE_REFUSALS);
+        if (refused) return err({ ...refused, details });
+        log.error(`intro approve failed: ${error.code}`, { actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not approve the revision.", details });
+      }
+      if (data === null) {
+        log.error("intro approve failed: no row returned", { actorId: input.actorId });
+        return err({ code: "REVISION_WRITE_FAILED", message: "Could not approve the revision.", details });
       }
       return toRevision(data);
     },

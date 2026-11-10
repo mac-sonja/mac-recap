@@ -15,14 +15,14 @@ import { BusinessLinePills } from "@/app/(wizard)/_components/business-line-pill
 import type { ClientSector } from "@/modules/case-study";
 import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import type { EditableFields, FieldChange, FieldOptions, PanelEditor } from "./bound-fields";
+import { isClientFields, type AnyEditableFields, type FieldChange, type FieldOptions, type PanelEditor } from "./bound-fields";
 import { EYEBROW, PANEL_SECTION } from "./styles";
 
 export interface BoundFieldPanelProps {
   /** The selected element's editor: the meta line, the services or the logos. */
   editor: PanelEditor;
   /** The stored fields, as last saved. */
-  fields: EditableFields;
+  fields: AnyEditableFields;
   options: FieldOptions;
   /** The client's logo as the page shows it. */
   logoUrl: string | null;
@@ -101,7 +101,8 @@ export function BoundFieldPanel({ editor, fields, options, logoUrl, onChange, on
           )}
         </section>
       )}
-      {(editor.kind === "meta" || editor.kind === "services") && (
+      {/* Client mode (Story 4.11a): the client's fields only, no Dati della case. */}
+      {!isClientFields(fields) && (editor.kind === "meta" || editor.kind === "services") && (
         <section className={PANEL_SECTION} aria-labelledby={`${id}-case`}>
           <p id={`${id}-case`} className={EYEBROW}>
             {t.caseHeading}
@@ -136,7 +137,7 @@ function SectorField({
   onPick,
   onAddSector,
 }: {
-  fields: EditableFields;
+  fields: AnyEditableFields;
   options: FieldOptions;
   onPick: (sector: ClientSector) => void;
   onAddSector: BoundFieldPanelProps["onAddSector"];
@@ -316,7 +317,7 @@ function LogoField({
   onLinked,
   onFailed,
 }: {
-  fields: EditableFields;
+  fields: AnyEditableFields;
   options: FieldOptions;
   logoUrl: string | null;
   onLinked: (logoId: string, previewUrl: string | null) => Promise<boolean>;

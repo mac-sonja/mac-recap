@@ -13,6 +13,7 @@ import {
   shownValues,
   typedChange,
   typedValueOf,
+  type ClientEditableFields,
   type EditableFields,
   type FieldActions,
   type FieldChange,
@@ -277,5 +278,126 @@ describe("shownValues", () => {
     const logo = plan(change);
     if (!logo.ok) throw new Error("setup");
     expect(shownValues(VALUES, logo.next, change, ctx).client.logoUrl).toBe("blob:new");
+  });
+});
+
+describe("client mode (Story 4.11a)", () => {
+  const CLIENT_FIELDS: ClientEditableFields = {
+    client: { id: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Lampade.", logoId: LOGO },
+    record: { results: [{ label: "Vendite", value: "+30%" }], testimonial: { quote: "Bravi.", author: "Ada" } },
+  };
+  const text = (record: "client" | "case", field: string, index?: number): DocumentElement =>
+    ({ elementId: EL, type: "text", style: "text", binding: { record, field, ...(index === undefined ? {} : { index }) } }) as DocumentElement;
+  const limits = { ...OPTIONS, limits: { ...LIMITS, descriptionMax: 400 } as ClientLimits };
+
+  it("offers only the client's bindings: name, description, sector, its own rows and testimonial, the logos", () => {
+    expect(boundEditorOf(text("client", "name"), "client")).toEqual({ kind: "name" });
+    expect(boundEditorOf(text("client", "description"), "client")).toEqual({ kind: "description" });
+    expect(boundEditorOf(text("client", "sector"), "client")).toEqual({ kind: "meta" });
+    expect(boundEditorOf(text("client", "resultValue", 0), "client")).toEqual({ kind: "resultValue", index: 0 });
+    expect(boundEditorOf(text("client", "testimonialQuote"), "client")).toEqual({ kind: "testimonialQuote" });
+    expect(boundEditorOf({ elementId: EL, type: "logos" } as DocumentElement, "client")).toEqual({ kind: "logos" });
+    expect(boundEditorOf(text("case", "year"), "client")).toBeNull();
+    expect(boundEditorOf(text("case", "resultValue", 0), "client")).toBeNull();
+    expect(boundEditorOf({ elementId: EL, type: "services" } as DocumentElement, "client")).toBeNull();
+    // Case mode is as before: the client's own rows aren't offered there.
+    expect(boundEditorOf(text("client", "resultValue", 0))).toBeNull();
+  });
+
+  it("reads typed values from the client's own record", () => {
+    expect(typedValueOf({ kind: "resultLabel", index: 0 }, CLIENT_FIELDS)).toBe("Vendite");
+    expect(typedValueOf({ kind: "testimonialAuthor" }, CLIENT_FIELDS)).toBe("Ada");
+    expect(typedValueOf({ kind: "description" }, CLIENT_FIELDS)).toBe("Lampade.");
+  });
+
+  it("saves rows through saveClientResults and the testimonial through saveClientTestimonial", () => {
+    expect(planFieldSave(CLIENT_FIELDS, { field: "resultValue", index: 0, text: "+40%" }, CASE_ID, limits)).toMatchObject({
+      ok: true,
+      save: { action: "saveClientResults", input: { clientId: CLIENT_ID, results: [{ label: "Vendite", value: "+40%" }] } },
+      next: { record: { results: [{ label: "Vendite", value: "+40%" }] } },
+    });
+    expect(planFieldSave(CLIENT_FIELDS, { field: "testimonialAuthor", text: "Ada L." }, CASE_ID, limits)).toMatchObject({
+      ok: true,
+      save: { action: "saveClientTestimonial", input: { clientId: CLIENT_ID, quote: "Bravi.", author: "Ada L." } },
+    });
+  });
+
+  it("saves the description through updateClient, refusing an empty or too long one", () => {
+    expect(planFieldSave(CLIENT_FIELDS, { field: "description", text: "  Luce.  " }, CASE_ID, limits)).toMatchObject({
+      ok: true,
+      save: { action: "updateClient", input: { clientId: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Luce.", logoId: LOGO } },
+    });
+    expect(planFieldSave(CLIENT_FIELDS, { field: "description", text: " " }, CASE_ID, limits)).toMatchObject({ ok: false, reason: "required" });
+    expect(planFieldSave(CLIENT_FIELDS, { field: "description", text: "x".repeat(401) }, CASE_ID, limits)).toMatchObject({ ok: false, reason: "tooLong", max: 400 });
+  });
+
+  it("a new sector or logo saves through updateClient with the client's other fields, and shows at once", () => {
+    const values: BoundValues = {
+      client: { name: "Lumen Srl", sector: "Illuminazione", description: "Lampade.", logoUrl: "https://cdn.test/old.png", results: [], testimonial: null },
+      case: { year: null, services: [], results: [], testimonial: null },
+    };
+    const ctx = { sectors: [{ key: "moda", label: "Moda" }], serviceLabel: (line: string) => line };
+    const sector: FieldChange = { field: "sector", key: "moda" };
+    const sectorPlan = planFieldSave(CLIENT_FIELDS, sector, CASE_ID, limits);
+    expect(sectorPlan).toMatchObject({
+      ok: true,
+      save: { action: "updateClient", input: { clientId: CLIENT_ID, name: "Lumen Srl", industry: "moda", description: "Lampade.", logoId: LOGO } },
+    });
+    if (!sectorPlan.ok) throw new Error("setup");
+    expect(shownValues(values, sectorPlan.next, sector, ctx).client.sector).toBe("Moda");
+
+    const logo: FieldChange = { field: "logo", logoId: NEW_LOGO, previewUrl: "blob:new" };
+    const logoPlan = planFieldSave(CLIENT_FIELDS, logo, CASE_ID, limits);
+    expect(logoPlan).toMatchObject({
+      ok: true,
+      save: { action: "updateClient", input: { clientId: CLIENT_ID, name: "Lumen Srl", industry: "illuminazione", description: "Lampade.", logoId: NEW_LOGO } },
+    });
+    if (!logoPlan.ok) throw new Error("setup");
+    expect(shownValues(values, logoPlan.next, logo, ctx).client.logoUrl).toBe("blob:new");
+  });
+
+  it("opens no sector editor for an element with an empty bindings list", () => {
+    expect(boundEditorOf({ elementId: EL, type: "text", style: "text", bindings: [] } as unknown as DocumentElement, "client")).toBeNull();
+  });
+
+  it("counts the client name in characters, as the server does", () => {
+    // 120 emoji: 240 UTF-16 units, 120 characters.
+    expect(planFieldSave(CLIENT_FIELDS, { field: "name", text: "😀".repeat(120) }, CASE_ID, limits)).toMatchObject({ ok: true });
+    expect(planFieldSave(CLIENT_FIELDS, { field: "name", text: "😀".repeat(121) }, CASE_ID, limits)).toMatchObject({ ok: false, reason: "tooLong", max: 120 });
+  });
+
+  it("names the intro in client mode's error and missing-row words", () => {
+    expect(saveErrorMessage("STALE_STATUS", "client")).toBe(dict.configurator.clientMode.errors.STALE_STATUS);
+    expect(saveErrorMessage("CLIENT_NAME_TAKEN", "client")).toBe(dict.configurator.fields.errors.CLIENT_NAME_TAKEN);
+    expect(saveErrorMessage("STALE_STATUS")).toBe(dict.configurator.fields.errors.STALE_STATUS);
+    expect(refusalMessage({ reason: "noRow" }, "client")).toBe(dict.configurator.clientMode.noRow);
+  });
+
+  it("saves nothing for a case field", () => {
+    expect(planFieldSave(CLIENT_FIELDS, { field: "year", text: "2025" }, CASE_ID, limits)).toEqual({ ok: false, reason: "unchanged" });
+    expect(planFieldSave(CLIENT_FIELDS, { field: "service", line: "branding" }, CASE_ID, limits)).toEqual({ ok: false, reason: "unchanged" });
+  });
+
+  it("runs the client's saves through their actions", async () => {
+    const saveClientResults = vi.fn(async () => ({ ok: true as const, value: null }));
+    const actions = { updateClient: vi.fn(), addClientSector: vi.fn(), saveClientResults } as unknown as FieldActions;
+    await runFieldSave(actions, { action: "saveClientResults", input: { clientId: CLIENT_ID, results: [] } });
+    expect(saveClientResults).toHaveBeenCalledWith({ clientId: CLIENT_ID, results: [] });
+    // An action the page didn't pass fails without a call.
+    expect(await runFieldSave(actions, { action: "saveClientTestimonial", input: { clientId: CLIENT_ID, quote: "", author: "" } })).toMatchObject({ ok: false });
+  });
+
+  it("shows the client's own rows, testimonial and description at once, leaving the case's values alone", () => {
+    const values: BoundValues = {
+      client: { name: "Lumen Srl", sector: "Illuminazione", description: "Lampade.", logoUrl: null, results: [], testimonial: null },
+      case: { year: null, services: [], results: [], testimonial: null },
+    };
+    const change: FieldChange = { field: "resultValue", index: 0, text: "+40%" };
+    const plan = planFieldSave(CLIENT_FIELDS, change, CASE_ID, limits);
+    if (!plan.ok) throw new Error("setup");
+    const shown = shownValues(values, plan.next, change, { sectors: [], serviceLabel: (line) => line });
+    expect(shown.client.results).toEqual([{ label: "Vendite", value: "+40%" }]);
+    expect(shown.client.testimonial).toEqual({ quote: "Bravi.", author: "Ada" });
+    expect(shown.case).toBe(values.case);
   });
 });

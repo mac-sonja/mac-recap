@@ -13,6 +13,22 @@ export interface IntroStatusChange {
   actorId: string;
 }
 
+export interface IntroDocSave {
+  revisionId: string;
+  /** Already validated by `generation.validateNewDocument`, of kind `client_intro`. */
+  doc: object;
+  expectedVersion: number;
+  actorId: string;
+}
+
+export interface IntroApproval {
+  clientIntroId: string;
+  revisionId: string;
+  expectedRevisionVersion: number;
+  expectedHeadVersion: number;
+  actorId: string;
+}
+
 export interface NewIntroWorkingRevision {
   clientIntroId: string;
   /** Already validated by `generation.validateNewDocument`, of kind `client_intro`. */
@@ -52,6 +68,22 @@ export interface ClientIntroRepository {
    * `err` only when the write fails. Nothing is written on any `err`.
    */
   createWorkingRevision(input: NewIntroWorkingRevision): Promise<Result<Revision>>;
+  /**
+   * Story 4.11a: writes `doc` to the `working` head revision of an `in_review` intro by
+   * compare-and-set on `version` (then incremented), with one `revision_saved` client event,
+   * atomically. `err NOT_FOUND`, `STALE_HEAD` (no longer the head), `CASE_NOT_EDITABLE` (the
+   * intro is not `in_review`), `REVISION_NOT_WRITABLE` (not `working`), `STALE_REVISION`
+   * (`version` moved), otherwise `err` only when the write fails. Nothing is written on any `err`.
+   */
+  saveDoc(input: IntroDocSave): Promise<Result<Revision>>;
+  /**
+   * Story 4.11a: approves the `working` head of an `in_review` intro by compare-and-set on
+   * `version` and `head_version`: the revision `approved`, the intro `approved` with
+   * `approved_revision_id`, a `transition` and a `revision_approved` client event, atomically.
+   * `err NOT_FOUND`, `STALE_HEAD`, `CASE_NOT_APPROVABLE`, `REVISION_NOT_WRITABLE`,
+   * `STALE_REVISION`, otherwise `err` only when the write fails. Nothing is written on any `err`.
+   */
+  approve(input: IntroApproval): Promise<Result<Revision>>;
   /**
    * Story 3.8 for intros: the intros Da approvare of non-deleted clients with a
    * `generation_succeeded` transition after `since` that follows their latest `generate`,

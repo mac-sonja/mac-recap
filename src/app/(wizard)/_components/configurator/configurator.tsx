@@ -28,13 +28,14 @@ import {
   boundEditorOf,
   isTypedEditor,
   planFieldSave,
+  recordOf,
   refusalMessage,
   runFieldSave,
   saveErrorMessage,
   shownValues,
   typedChange,
   typedValueOf,
-  type EditableFields,
+  type AnyEditableFields,
   type FieldActions,
   type FieldChange,
   type FieldOptions,
@@ -82,9 +83,20 @@ import { StatusMessage, useStatusMessage } from "./status-message";
 import { ICON_BUTTON, SOON_ID } from "./styles";
 import { isOwnText, textElementAt, withGroupAlign, withText, withTextSettings, type TextSettings } from "./text-editing";
 import { TopBar, type ConfiguratorHeader } from "./top-bar";
-import { useDocument, type EditedRevision, type ForkInput, type ForkResult, type Formats, type SaveInput } from "./use-document";
+import {
+  subjectKey,
+  useDocument,
+  type EditedRevision,
+  type ForkInput,
+  type ForkResult,
+  type Formats,
+  type SaveInput,
+  type Subject,
+  type SubjectKey,
+} from "./use-document";
 
-export type { EditableFields, FieldActions, FieldOptions } from "./bound-fields";
+export type { AnyEditableFields, ClientEditableFields, EditableFields, FieldActions, FieldOptions } from "./bound-fields";
+export type { Subject } from "./use-document";
 
 export interface ConfiguratorProps {
   /** The top bar's document: name, code and status (a case today; a client's intro or file later). */
@@ -104,13 +116,19 @@ export interface ConfiguratorProps {
   /** No revision yet: the starter pages, with the *Bozza di prova* note. */
   trial: boolean;
   theme: ThemeChoice;
-  /** The case whose head revision is edited (Story 4.3a). */
-  caseId: string;
+  /**
+   * Whose head revision is edited (Story 4.3a): a case, or (Story 4.11a, client mode) a
+   * client's intro and outro, `id` the intro's own id. Client mode groups the pages by role
+   * (Introduzione, Chiusura), lists the client's files as the Media tab's own (uploads go to
+   * the client) and the client's cases' under "Dalle sue case", edits only the client's
+   * fields, and after Approva goes back to `back`. It never forks.
+   */
+  subject: Subject;
   /** The head revision and its document kind; null with no revision (the trial pages). */
   revision: (EditedRevision & { kind: DocumentKind }) | null;
   /** The autosave's server action. */
   onSave: (input: SaveInput) => Promise<ActionResult<{ version: number }>>;
-  /** The case's images and videos, oldest first: the Media tab's files (Story 4.5a). */
+  /** The case's images and videos, oldest first: the Media tab's files (Story 4.5a). Client mode: the client's, in position order. */
   media: readonly ListedAsset[];
   /** What the Media tab's drop zone uploads (Story 2.7's rules, images and videos only). */
   mediaRules: MediaUploadRules;
@@ -120,9 +138,8 @@ export interface ConfiguratorProps {
    * Sfondo · Immagine, the Animazione dialog). Never starred, removed or uploaded here.
    */
   clientMedia?: readonly ListedAsset[];
-  /** **Approva** (Story 4.8); undefined: it says it arrives soon. */
-  onApprove?: (input: {
-    caseId: string;
+  /** **Approva** (Story 4.8); undefined: it says it arrives soon. Client mode (Story 4.11a): keyed by `clientIntroId`, back to `back` after. */
+  onApprove?: (input: SubjectKey & {
     revisionId: string;
     expectedRevisionVersion: number;
     expectedHeadVersion: number;
@@ -142,16 +159,16 @@ export interface ConfiguratorProps {
   }) => Promise<ActionResult<void>>;
   /** Story 4.9: **Scarta le modifiche**, the copy dropped. */
   onDiscard?: (input: { caseId: string; revisionId: string; expectedHeadVersion: number }) => Promise<ActionResult<void>>;
-  /** The client's files (ids and names): a page may show them, so they count as present (Story 4.8). */
+  /** The client's files (ids and names): a page may show them, so they count as present (Story 4.8). Client mode: the client's cases' files. */
   clientFiles?: readonly { id: string; name: string }[];
   /** The render assets of files listed after the page loaded (Story 4.5b): a new upload can be drawn once its rendition is ready. */
-  onRenderAssets?: (input: { caseId: string; assetIds: string[] }) => Promise<ActionResult<Record<string, RenderAsset>>>;
+  onRenderAssets?: (input: SubjectKey & { assetIds: string[] }) => Promise<ActionResult<Record<string, RenderAsset>>>;
   /**
    * The client's and the case's stored fields (Story 4.3d), with what their editors need and
    * the saves. All three given (and the case editable): bound texts and the meta line,
    * services and logos can be changed; otherwise a bound text says it can't be edited yet.
    */
-  fields?: EditableFields;
+  fields?: AnyEditableFields;
   fieldOptions?: FieldOptions;
   fieldActions?: FieldActions;
 }
@@ -238,7 +255,7 @@ export function Configurator({
   images,
   trial,
   theme,
-  caseId,
+  subject,
   revision,
   onSave,
   media,
@@ -257,8 +274,12 @@ export function Configurator({
   values: loadedValues,
 }: ConfiguratorProps) {
   const router = useRouter();
+  /** Story 4.11a: a client's intro and outro, not a case. */
+  const clientMode = subject.kind === "client_intro";
+  /** Which bindings the field edits offer: the client's own only, in client mode. */
+  const fieldMode = clientMode ? "client" : "case";
   const doc = useDocument({
-    caseId,
+    subject,
     revision,
     base: { schemaVersion: CURRENT_SCHEMA_VERSION, kind: revision?.kind ?? "case_history", template },
     initial: initial as Formats,
@@ -440,7 +461,7 @@ export function Configurator({
         return;
       }
       // A client or case field (Story 4.3d); anything else can't be edited here.
-      const editor = fieldsOn && fieldsNow !== undefined ? boundEditorOf(text) : null;
+      const editor = fieldsOn && fieldsNow !== undefined ? boundEditorOf(text, fieldMode) : null;
       if (editor === null || fieldsNow === undefined) {
         say(it.configurator.editSoon);
         return;
@@ -461,15 +482,15 @@ export function Configurator({
         say(it.configurator.fields.needClientInfo);
         return;
       }
-      if ((editor.kind === "resultLabel" || editor.kind === "resultValue") && fieldsNow.case.results[editor.index] === undefined) {
-        say(it.configurator.fields.noRow);
+      if ((editor.kind === "resultLabel" || editor.kind === "resultValue") && recordOf(fieldsNow).results[editor.index] === undefined) {
+        say(clientMode ? it.configurator.clientMode.noRow : it.configurator.fields.noRow);
         return;
       }
       session.current += 1;
       select();
       setEditing({ pageKey, elementId, bound: typedValueOf(editor, fieldsNow), editor });
     },
-    [editable, fieldsNow, fieldsOn, formatId, formats, say],
+    [clientMode, editable, fieldMode, fieldsNow, fieldsOn, formatId, formats, say],
   );
 
   /** The latest shown fields and values, for a save queued behind another. */
@@ -491,10 +512,10 @@ export function Configurator({
       const run = async (): Promise<boolean> => {
         const now = fieldState.current;
         if (!fieldsOn || fieldActions === undefined || fieldOptions === undefined || now.fieldsNow === undefined) return false;
-        const plan = planFieldSave(now.fieldsNow, change, caseId, fieldOptions);
+        const plan = planFieldSave(now.fieldsNow, change, subject.id, fieldOptions);
         if (!plan.ok) {
           if (plan.reason === "unchanged") return true;
-          say(refusalMessage(plan));
+          say(refusalMessage(plan, fieldMode));
           return false;
         }
         const before = now.fieldShown;
@@ -525,7 +546,7 @@ export function Configurator({
           fieldShown: before,
         };
         const code = result === undefined ? undefined : result.error.code;
-        say(saveErrorMessage(code));
+        say(saveErrorMessage(code, fieldMode));
         // The case moved on (approved, deleted): the page shows where it is now.
         if (code === "STALE_STATUS" || code === "NOT_FOUND") router.refresh();
         return false;
@@ -534,7 +555,7 @@ export function Configurator({
       fieldQueue.current = next;
       return next;
     },
-    [caseId, fieldActions, fieldOptions, fieldsOn, router, say],
+    [fieldActions, fieldMode, fieldOptions, fieldsOn, router, say, subject.id],
   );
 
   /**
@@ -544,10 +565,10 @@ export function Configurator({
   const previewPick = useCallback(
     (pageKey: string, elementId: string) => {
       if (!fieldsOn) return;
-      const editor = boundEditorOf(textElementAt(formats[formatId], pageKey, elementId));
+      const editor = boundEditorOf(textElementAt(formats[formatId], pageKey, elementId), fieldMode);
       if (isTypedEditor(editor) || editor?.kind === "meta") say(it.configurator.fields.fromEditor);
     },
-    [fieldsOn, formatId, formats, say],
+    [fieldMode, fieldsOn, formatId, formats, say],
   );
 
   /** A bound text's typing ended: what was typed saves, Esc (null) leaves it as it was. */
@@ -744,13 +765,14 @@ export function Configurator({
         applyDefaultPage(formats[formatId], toolPage.pageKey, defaultPage, {
           texts: generatedTexts[formatId] ?? {},
           pool: images,
-          resultRows: values.case.results.length,
-          hasTestimonial: values.case.testimonial !== null,
+          // Client mode (Story 4.11a): the client's own rows and testimonial, as its Risultati page binds them.
+          resultRows: (clientMode ? values.client : values.case).results.length,
+          hasTestimonial: (clientMode ? values.client : values.case).testimonial !== null,
           newId,
         }),
       );
     },
-    [applyPageEdit, editable, formatId, formats, generatedTexts, images, toolPage, values],
+    [applyPageEdit, clientMode, editable, formatId, formats, generatedTexts, images, toolPage, values],
   );
 
   /** **Mescola**: the tools' page on its next layout; the selection stays. */
@@ -814,7 +836,7 @@ export function Configurator({
       const missing = of.filter((f) => !(f.id in assetsNow.current) && !reading.current.has(f.id)).map((f) => f.id);
       if (missing.length === 0) return;
       for (const id of missing) reading.current.add(id);
-      void onRenderAssets({ caseId, assetIds: missing })
+      void onRenderAssets({ ...subjectKey(subject), assetIds: missing })
         .then((result) => {
           if (result.ok && Object.keys(result.value).length > 0) setAssets((current) => ({ ...current, ...result.value }));
         })
@@ -823,7 +845,7 @@ export function Configurator({
           for (const id of missing) reading.current.delete(id);
         });
     },
-    [caseId, onRenderAssets],
+    [onRenderAssets, subject],
   );
 
   /** The Media tab read the files again: keep them, and read the render assets of new ones, the client's included (Story 4.5c-2). */
@@ -999,7 +1021,7 @@ export function Configurator({
         return;
       }
       const result = await onApprove({
-        caseId,
+        ...subjectKey(subject),
         revisionId: revision.id,
         expectedRevisionVersion: doc.version(),
         expectedHeadVersion: headVersion,
@@ -1010,7 +1032,9 @@ export function Configurator({
         // Stays pending until the next page shows: no second approval meanwhile.
         leaving = true;
         setConfirmApproval(false);
-        router.push(result.value.waiting ? "/case-studies?stato=in_review&approvata=1" : "/case-studies?approvata=1");
+        // Client mode (Story 4.11a): back to the client page, whose badge now reads Approvato.
+        if (clientMode) router.push(back.href);
+        else router.push(result.value.waiting ? "/case-studies?stato=in_review&approvata=1" : "/case-studies?approvata=1");
         return;
       }
       const code = result.error.code;
@@ -1025,7 +1049,7 @@ export function Configurator({
         code === "REVISION_WRITE_FAILED" ||
         code === "NOT_FOUND"
       ) {
-        say(a.stale);
+        say(clientMode ? it.configurator.clientMode.stale : a.stale);
         router.refresh();
       } else say(a.failed);
       setConfirmApproval(false);
@@ -1035,7 +1059,7 @@ export function Configurator({
     } finally {
       if (!leaving) setApproving(false);
     }
-  }, [caseId, clientFiles, doc, files, formats, headVersion, onApprove, overflowReport, revision, router, say]);
+  }, [back.href, clientFiles, clientMode, doc, files, formats, headVersion, onApprove, overflowReport, revision, router, say, subject]);
 
   /**
    * **Aggiorna la versione approvata**, confirmed (Story 4.9): saves what's pending, then runs
@@ -1059,7 +1083,7 @@ export function Configurator({
         return;
       }
       const result = await onUpdateApproved({
-        caseId,
+        caseId: subject.id,
         revisionId: doc.revisionId() ?? copyId,
         expectedRevisionVersion: doc.version(),
         expectedHeadVersion: doc.headVersion() ?? head,
@@ -1078,7 +1102,7 @@ export function Configurator({
       if (code === "MATERIAL_MISSING" && ids.length > 0) setServerMissingFor({ formats, files, clientFiles, ids });
       else if (code === "OVERFLOW_NOT_CLEARED") say(it.configurator.approval.overflowServer);
       else if (STALE_COPY_CODES.has(code)) {
-        say(it.configurator.approval.stale);
+        say(clientMode ? it.configurator.clientMode.stale : it.configurator.approval.stale);
         router.refresh();
       } else say(u.updateFailed);
     } catch {
@@ -1087,7 +1111,7 @@ export function Configurator({
     } finally {
       setCopyBusy(false);
     }
-  }, [caseId, clientFiles, doc, files, formats, onUpdateApproved, overflowReport, router, say]);
+  }, [clientFiles, clientMode, doc, files, formats, onUpdateApproved, overflowReport, router, say, subject.id]);
 
   /** **Scarta le modifiche**, confirmed (Story 4.9): the copy is dropped and the page shows the approved version again. */
   const discardCopy = useCallback(async () => {
@@ -1108,7 +1132,7 @@ export function Configurator({
         say(u.discardFailed);
         return;
       }
-      const result = await onDiscard({ caseId, revisionId: doc.revisionId() ?? copyId, expectedHeadVersion: doc.headVersion() ?? head });
+      const result = await onDiscard({ caseId: subject.id, revisionId: doc.revisionId() ?? copyId, expectedHeadVersion: doc.headVersion() ?? head });
       setConfirmCopy(null);
       // Dropped: edits made before the page shows the approved version must not reach the copy.
       if (result.ok) doc.stop();
@@ -1126,7 +1150,7 @@ export function Configurator({
     } finally {
       if (!leaving) setCopyBusy(false);
     }
-  }, [caseId, doc, onDiscard, router, say]);
+  }, [doc, onDiscard, router, say, subject.id]);
 
   /** Removes the selected element or block; false when there is nothing to remove. */
   const removeSelected = useCallback(() => {
@@ -1228,7 +1252,7 @@ export function Configurator({
   }, [preview, slideshow, step]);
 
   /** Dati del cliente / Dati della case for a selected meta line, services or logos (Story 4.3d). */
-  const panelEditor = fieldsOn ? boundEditorOf(element) : null;
+  const panelEditor = fieldsOn ? boundEditorOf(element, fieldMode) : null;
   const fieldsPanel =
     panelEditor !== null && !isTypedEditor(panelEditor) && fieldsNow !== undefined && fieldOptions !== undefined && fieldActions !== undefined && selection?.elementId !== undefined ? (
       <BoundFieldPanel
@@ -1320,7 +1344,7 @@ export function Configurator({
                 if (!approving) setConfirmApproval(false);
               }}
               title={fill(it.configurator.approval.title, { name: header.name })}
-              description={it.configurator.approval.description}
+              description={clientMode ? it.configurator.clientMode.approvalDescription : it.configurator.approval.description}
               actions={
                 <>
                   <button type="button" data-autofocus disabled={approving} onClick={() => setConfirmApproval(false)} className={cn(SECONDARY_ACTION, "h-9 px-4")}>
@@ -1403,6 +1427,7 @@ export function Configurator({
               formatId={formatId}
               template={template}
               pages={pages}
+              pageGroups={clientMode ? "role" : "section"}
               assets={assets}
               values={values}
               selection={selection}
@@ -1484,7 +1509,8 @@ export function Configurator({
             currentPageKey={selectedPage?.pageKey}
             onSelectPage={selectPage}
             onMovePage={editable ? reorderPage : undefined}
-            caseId={caseId}
+            subject={subject}
+            pageGroups={clientMode ? "role" : "section"}
             media={media}
             clientMedia={clientMedia}
             mediaRules={mediaRules}
@@ -1506,9 +1532,9 @@ export function Configurator({
 /** A field change shown before the page reloads (Story 4.3d): on the loaded values and fields it was made on. */
 interface FieldShown {
   base: BoundValues;
-  baseFields: EditableFields | undefined;
+  baseFields: AnyEditableFields | undefined;
   values: BoundValues;
-  fields: EditableFields;
+  fields: AnyEditableFields;
 }
 
 /** The selection of element `elementId` of page `pageKey`, with its block. */

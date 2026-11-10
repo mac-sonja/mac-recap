@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { listScopeFor } from "@/app/_lib/list-scope";
-import { newCaseForClientHref } from "@/app/_lib/routes";
+import { clientConfiguratorHref, newCaseForClientHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
 import { authorize, can } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
@@ -38,7 +38,8 @@ export interface ClientPageProps {
  * the client's data, files and brief, and **Elimina cliente** (which needs the
  * case history count); a failed read throws into the error boundary. Story 3.11: once the
  * client has an intro-and-outro draft, "Introduzione:" and its status badge (refreshed while
- * In elaborazione).
+ * In elaborazione). Story 4.11a: **Apri** beside it, for a role that may `edit`, once the intro
+ * is Da approvare or Approvato: the intro and outro in the configurator.
  */
 export default async function ClientPage({ params, searchParams }: ClientPageProps) {
   const shell = await requireSurface("list clients");
@@ -120,7 +121,9 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
               <span className="sr-only">{it.clients.detail.code} </span>
               {client.code}
             </p>
-            {intro.value === null ? null : <IntroStatus status={intro.value.status} />}
+            {intro.value === null ? null : (
+              <IntroStatus status={intro.value.status} href={can(actor, "edit") ? clientConfiguratorHref(client.id) : undefined} />
+            )}
             {client.industry === null ? null : (
               <IndustryPills options={sectors.value} selected={client.industry} label={it.clients.detail.industries} />
             )}

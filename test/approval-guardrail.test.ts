@@ -23,12 +23,33 @@ const sources = () => files("src", /\.(ts|tsx)$/).filter((rel) => !/\.test\.tsx?
 
 /** The only caller of `caseStudy.approve`: a server action that resolves the actor from the session. */
 const APPROVE_CALLER = "src/app/(wizard)/case-studies/[caseId]/configurator/actions.ts";
+/** Story 4.11a: the only caller of `caseStudy.approveIntro`, the client-mode configurator's action. */
+const APPROVE_INTRO_CALLER = "src/app/(wizard)/clients/[clientId]/configurator/actions.ts";
 
 describe("approval happens only through a person's call to approve (Story 4.8)", () => {
-  it("the case-study module exports one approve and no bulk or automatic variant", async () => {
+  it("the case-study module exports one approve per subject (Story 4.11a: the intro's) and no bulk or automatic variant", async () => {
     // Functions only: event-name constants (`APPROVED_VERSION_UPDATED`) approve nothing.
     const api = Object.entries(await import("@/modules/case-study")).filter(([, value]) => typeof value === "function");
-    expect(api.map(([name]) => name).filter((name) => /approv/i.test(name))).toEqual(["approve"]);
+    expect(api.map(([name]) => name).filter((name) => /approv/i.test(name))).toEqual(["approve", "approveIntro"]);
+  });
+
+  it("only the client-mode configurator's server action calls approveIntro, with the session's actor (Story 4.11a)", () => {
+    const callers = sources().filter((rel) => /\bcaseStudy\.approveIntro\s*\(/.test(read(rel)));
+    expect(callers).toEqual([APPROVE_INTRO_CALLER]);
+    const action = read(APPROVE_INTRO_CALLER);
+    expect(action).toMatch(/^"use server";/);
+    expect(action).toMatch(/const actor = await getActor\(\);[\s\S]*authorize\(actor\.value, "approve"\)[\s\S]*caseStudy\.approveIntro\(actor\.value, input, material\.liveAssetIds\)/);
+  });
+
+  it("the intro approve use case checks every format's overflow and the material before it writes (Story 4.11a)", () => {
+    const useCase = read("src/modules/case-study/application/revisions.ts");
+    const body = useCase.slice(useCase.indexOf("export function makeApproveIntro"));
+    const overflow = body.indexOf("OVERFLOW_NOT_CLEARED");
+    const material = body.indexOf("MATERIAL_MISSING");
+    const write = body.indexOf("deps.intros.approve(");
+    expect(overflow).toBeGreaterThan(0);
+    expect(material).toBeGreaterThan(overflow);
+    expect(write).toBeGreaterThan(material);
   });
 
   it("no source moves a case to approved through the generic transition", () => {

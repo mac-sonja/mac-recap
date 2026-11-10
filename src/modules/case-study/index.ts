@@ -39,11 +39,13 @@ import { makeReadClientLogo, type ClientLogoFile } from "@/modules/case-study/ap
 import { makeRecordEvent } from "@/modules/case-study/application/record-event";
 import {
   makeApprove,
+  makeApproveIntro,
   makeCreateWorkingRevision,
   makeDiscardHead,
   makeForkHead,
   makeGetEditableRevision,
   makeGetLiveRevision,
+  makeSaveIntroRevisionDoc,
   makeSaveRevisionDoc,
   type CaseAssetIds,
   type CaseStudyRevision,
@@ -746,7 +748,8 @@ export function getClientIntroById(introId: unknown): Promise<Result<ClientIntro
 /**
  * The only way a client intro's status changes (AD-3): the case transition table and
  * events, compare-and-set, with one `transition` client event `{ event, from, to }` and the
- * actor, in one transaction. `approve` is refused (intro approval arrives with Story 4.11).
+ * actor, in one transaction. `approve` is refused: an intro is approved only through
+ * `approveIntro` (Story 4.11a), which checks overflow and material.
  * Call only with an already-authorized actor. Errors: `NOT_FOUND`, `INVALID_TRANSITION`,
  * `STALE_STATUS`; nothing is written on any of them.
  */
@@ -767,6 +770,52 @@ export function transitionIntro(introId: unknown, event: unknown, actor: Actor):
  */
 export function createIntroWorkingRevision(actor: Actor, input: unknown): Promise<Result<CaseStudyRevision>> {
   return makeCreateIntroWorkingRevision(introDeps())(actor, input);
+}
+
+function introRevisionDeps(caseAssetIds: CaseAssetIds) {
+  return {
+    revisions: createSupabaseRevisionRepository(),
+    intros: createSupabaseClientIntroRepository(),
+    cases: createSupabaseCaseStudyRepository(),
+    clients: createSupabaseClientRepository(),
+    caseAssetIds,
+  };
+}
+
+/**
+ * Saves the edited document of a client intro's head revision (Story 4.11a, the
+ * configurator's autosave in client mode): input `{ clientIntroId, revisionId, doc,
+ * expectedVersion }`, as `saveRevisionDoc` takes for a case. Writes `doc` by compare-and-set
+ * on `version` with one `revision_saved` client event (never a case event), in one
+ * transaction. The media guardrail allows the client's files and the live files of the
+ * client's non-deleted cases (pass `material.liveAssetIds` as `caseAssetIds`). Call only
+ * after `authorize(actor, 'edit')`.
+ *
+ * Errors, with nothing written: `INVALID_INPUT`, `DOCUMENT_INVALID` (also a document not of
+ * kind `client_intro`), `DOCUMENT_SCHEMA_UNSUPPORTED`, `FORMAT_NOT_IN_REVISION`, `NOT_FOUND`,
+ * `ASSET_NOT_ALLOWED`, the asset lookup errors, `STALE_HEAD`, `CASE_NOT_EDITABLE` (the intro
+ * is not `in_review`), `REVISION_NOT_WRITABLE`, `STALE_REVISION`. `REVISION_WRITE_FAILED` may
+ * come after the write committed: re-read the head.
+ */
+export function saveIntroRevisionDoc(actor: Actor, input: unknown, caseAssetIds: CaseAssetIds): Promise<Result<CaseStudyRevision>> {
+  return makeSaveIntroRevisionDoc(introRevisionDeps(caseAssetIds))(actor, input);
+}
+
+/**
+ * Approves a client intro (Story 4.11a, Story 4.8's rules): input `{ clientIntroId,
+ * revisionId, expectedRevisionVersion, expectedHeadVersion, overflow }`. The only way an
+ * intro becomes `approved`: a person's call, never in bulk or automatically. The revision
+ * and the intro become `approved`, `approved_revision_id` is set, and a `transition` and a
+ * `revision_approved` client event are written, in one transaction. Authorize `approve`
+ * first; pass `material.liveAssetIds` as `caseAssetIds`.
+ *
+ * Errors, with nothing written: `INVALID_INPUT`, `NOT_FOUND`, `OVERFLOW_NOT_CLEARED`,
+ * `MATERIAL_MISSING` (`details.assetIds`), the asset lookup errors, `STALE_HEAD`,
+ * `CASE_NOT_APPROVABLE` (not `in_review`), `REVISION_NOT_WRITABLE`, `STALE_REVISION`.
+ * `REVISION_WRITE_FAILED` may come after the write committed: re-read the intro.
+ */
+export function approveIntro(actor: Actor, input: unknown, caseAssetIds: CaseAssetIds): Promise<Result<CaseStudyRevision>> {
+  return makeApproveIntro(introRevisionDeps(caseAssetIds))(actor, input);
 }
 
 /**
