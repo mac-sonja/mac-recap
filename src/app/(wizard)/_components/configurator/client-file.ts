@@ -42,10 +42,17 @@ export interface FilePartData {
 /** What reloading one part asks for: the intro, or one case, of client `clientId`. */
 export type FilePartRef = { clientId: string; part: "client_intro" } | { clientId: string; part: "case"; caseId: string };
 
+/** What saving the order of the client's cases takes (Story 4.12b): every case of the file, in order. */
+export interface CaseOrderInput {
+  clientId: string;
+  caseIds: string[];
+}
+
 /**
  * The client's whole file (Story 4.12a): the intro (null while it isn't ready: missing, Bozza
- * or In elaborazione), then its approved cases, newest first. Each part saves to its own
- * revision through its own actions; a stale part is read again alone (`onReload`).
+ * or In elaborazione), then its approved cases in the client's order (Story 4.12b; newest
+ * created first until reordered). Each part saves to its own revision through its own actions;
+ * a stale part is read again alone (`onReload`).
  */
 export interface ClientFile {
   clientId: string;
@@ -57,6 +64,21 @@ export interface ClientFile {
   onForkCase: (input: ForkInput) => Promise<ActionResult<ForkResult>>;
   /** One part read again; `null`: the intro is no longer ready (or the case left the file). */
   onReload: (input: FilePartRef) => Promise<ActionResult<FilePartData | null>>;
+  /**
+   * Story 4.12b: saves the cases' order (a client setting, saved at once, never an undo step);
+   * undefined: the project rows don't move (a role that may not reorder).
+   */
+  onReorderCases?: (input: CaseOrderInput) => Promise<ActionResult<{ caseIds: string[] }>>;
+}
+
+/** `keys` with `key` moved to index `to` (clamped); `keys` itself when it isn't there or doesn't move. */
+export function moveKey(keys: readonly string[], key: string, to: number): readonly string[] {
+  const from = keys.indexOf(key);
+  const target = Math.max(0, Math.min(keys.length - 1, to));
+  if (from < 0 || target === from) return keys;
+  const next = keys.filter((k) => k !== key);
+  next.splice(target, 0, key);
+  return next;
 }
 
 /** Where a segment sits in the file. */

@@ -112,6 +112,8 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   // The client's whole file (Story 4.12a): `edit`, reads only.
   "client-configurator.getClientFileRenderAssets": { call: clientConfigurator.getClientFileRenderAssets as Action, allowed: OWNERS },
   "client-configurator.reloadFilePart": { call: clientConfigurator.reloadFilePart as Action, allowed: OWNERS },
+  // The order of the client's cases (Story 4.12b): `manage clients`.
+  "client-configurator.reorderClientCases": { call: clientConfigurator.reorderClientCases as Action, allowed: OWNERS },
   // The draft-ready poll (Story 3.8): `generate`, a read only.
   "draft-ready.listReadyDrafts": { call: draftReady.listReadyDrafts as Action, allowed: OWNERS },
   // Story 5.3: Scarica on an approved case.
@@ -134,6 +136,8 @@ beforeEach(() => {
   vi.mocked(caseStudyModule.saveIntroRevisionDoc).mockResolvedValue(ok({ version: 1 } as never));
   // Approva and Aggiorna on an intro read its status first (Story 4.11b).
   vi.mocked(caseStudyModule.getClientIntroById).mockResolvedValue(ok({ status: "in_review" } as never));
+  // The case order's save returns the saved ids (Story 4.12b).
+  vi.mocked(caseStudyModule.setClientCaseOrder).mockResolvedValue(ok({ clientId: "c", caseIds: [] }));
 });
 
 describe("permission suite through the real actor resolver (Story 6.4)", () => {

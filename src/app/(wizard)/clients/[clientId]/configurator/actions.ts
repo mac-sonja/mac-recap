@@ -194,6 +194,24 @@ export async function reloadFilePart(input: unknown): Promise<ActionResult<FileP
   return part.ok ? { ok: true, value: part.value } : failure(part.error);
 }
 
+/**
+ * The order of the client's cases in its file (Story 4.12b), saved at once after a project row
+ * is dragged or moved with Alt+↑/↓: input `{ clientId, caseIds }`, the case ids in the order
+ * shown, each once. The file and the client pack (B5) then list the client's approved cases in
+ * that order; a case approved later goes at the end. A client setting, not a page edit: no case,
+ * intro or revision changes. Returns `{ caseIds }` as saved. 403 `FORBIDDEN` unless the role may
+ * `manage clients`; 400 `INVALID_INPUT` (also an id that isn't one of the client's own
+ * non-deleted cases); 404 `CLIENT_NOT_FOUND`. Nothing is written on any error.
+ */
+export async function reorderClientCases(input: unknown): Promise<ActionResult<{ caseIds: string[] }>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage clients");
+  if (!decision.ok) return failure(decision.error);
+  const saved = await caseStudy.setClientCaseOrder(actor.value, input);
+  return saved.ok ? { ok: true, value: { caseIds: saved.value.caseIds } } : failure(saved.error);
+}
+
 /** What `reloadFilePart` takes. */
 const filePartRefSchema = z.discriminatedUnion("part", [
   z.strictObject({ clientId: z.uuid(), part: z.literal("client_intro") }),

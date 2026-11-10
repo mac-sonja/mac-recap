@@ -18,6 +18,12 @@ vi.mock("@/modules/case-study", async () => ({
   getEditableRevision,
   getClientInfoForCase,
   list,
+  // Story 4.12b: the client's order (none saved here) over the approved cases `list` returns.
+  listClientCasesInOrder: async (clientId: string) => {
+    const { orderClientCases } = await vi.importActual<typeof import("@/modules/case-study/domain/client-case-order")>("@/modules/case-study/domain/client-case-order");
+    const listed = await list({ clientId, status: "approved" });
+    return listed.ok ? { ok: true, value: orderClientCases(listed.value, null) } : listed;
+  },
 }));
 vi.mock("@/modules/material", () => ({ getDetailsForm, listAssets, getRendition: vi.fn() }));
 

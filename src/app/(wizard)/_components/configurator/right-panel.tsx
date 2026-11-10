@@ -1,7 +1,7 @@
 "use client";
 
 import { LayoutGrid, List, PanelRight, Search } from "lucide-react";
-import { memo, useId, useMemo, useState, type Ref } from "react";
+import { memo, useId, useLayoutEffect, useMemo, useRef, useState, type Ref } from "react";
 import { SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
 import type { Page } from "@/modules/generation";
 import type { ListedAsset } from "@/modules/material";
@@ -32,6 +32,8 @@ function runsOf<T extends { page: Page }>(items: readonly T[], groups: PageGroup
 
 /** A Pagine thumbnail's drag data type (Story 4.13): its page key, in a type the canvas and the Media tab ignore. */
 const PAGE_DRAG_TYPE = "application/x-mac-page";
+/** A **Progetti del cliente** row's drag data type (Story 4.12b): its case's group key; pages and rows never mix. */
+const PROJECT_DRAG_TYPE = "application/x-mac-project";
 
 /** A run of Pagine thumbnails in the client's file (Story 4.12a): Introduzione or Chiusura, drawn with the intro's template and values. */
 export interface PagineGroup {
@@ -91,6 +93,11 @@ export interface RightPanelProps {
   file?: FilePagine;
   /** A **Progetti del cliente** row clicked: the canvas scrolls to that case. */
   onSelectGroup?: (key: string) => void;
+  /**
+   * Story 4.12b: a project row dropped on another (or moved with Alt+↑/↓) goes to that row's
+   * position (from 0, among every row); undefined: the rows don't move.
+   */
+  onMoveProject?: (key: string, to: number) => void;
   /** The case's images and videos, oldest first; client mode: the client's. */
   media: readonly ListedAsset[];
   /** The client's images and videos, in position order: the Media tab's "Del cliente" group (Story 4.5c-2); client mode: its cases' ("Dalle sue case"). */
@@ -158,6 +165,7 @@ export function RightPanel({
   pageGroups = "section",
   file,
   onSelectGroup,
+  onMoveProject,
   media,
   clientMedia,
   mediaRules,
@@ -183,6 +191,21 @@ export function RightPanel({
   const [dragging, setDragging] = useState<string | null>(null);
   const indexOf = (pageKey: string) => pages.findIndex((p) => p.pageKey === pageKey);
   const matches = (name: string) => q === "" || name.toLocaleLowerCase("it").includes(q);
+  /** Story 4.12b: the project row being dragged, and the one it would land on. */
+  const [draggingProject, setDraggingProject] = useState<string | null>(null);
+  const [projectDropOn, setProjectDropOn] = useState<string | null>(null);
+  const projectIndex = (key: string) => file?.projects.findIndex((row) => row.key === key) ?? -1;
+  /** The row moved with the keyboard: it keeps the focus once it has moved. */
+  const refocus = useRef<string | null>(null);
+  const projectsRef = useRef<HTMLDivElement>(null);
+  const projectOrder = file?.projects.map((row) => row.key).join(",");
+  useLayoutEffect(() => {
+    const key = refocus.current;
+    if (key === null) return;
+    refocus.current = null;
+    const row = projectsRef.current?.querySelector<HTMLElement>(`[data-project="${key}"]`);
+    if (row !== null && row !== undefined && document.activeElement !== row) row.focus();
+  }, [projectOrder]);
 
   /** A page's thumbnail button: selects it; drags onto another to move it there (Story 4.13). */
   const thumb = (page: Page, number: number, template: string, values: BoundValues) => (
@@ -308,7 +331,7 @@ export function RightPanel({
             {fileGroup(file.intro)}
             <div className="mb-4 last:mb-0">
               <p className={EYEBROW}>{it.configurator.file.projects}</p>
-              <div className="flex flex-col gap-1.5">
+              <div ref={projectsRef} className="flex flex-col gap-1.5">
                 {file.projects
                   .filter((row) => matches(row.name) || matches(row.code))
                   .map((row) => (
@@ -317,8 +340,54 @@ export function RightPanel({
                       type="button"
                       data-project={row.key}
                       onClick={() => onSelectGroup?.(row.key)}
+                      // Story 4.12b: dragged onto another row, or Alt+↑/↓, it moves to that place; saved at once.
+                      draggable={onMoveProject !== undefined}
+                      {...(onMoveProject === undefined
+                        ? {}
+                        : { title: it.configurator.file.projectMove, "aria-keyshortcuts": "Alt+ArrowUp Alt+ArrowDown" })}
+                      onKeyDown={(event) => {
+                        if (onMoveProject === undefined || !event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+                        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+                        event.preventDefault();
+                        refocus.current = row.key;
+                        onMoveProject(row.key, projectIndex(row.key) + (event.key === "ArrowUp" ? -1 : 1));
+                      }}
+                      onDragStart={(event) => {
+                        if (onMoveProject === undefined) return;
+                        setDraggingProject(row.key);
+                        event.dataTransfer.setData(PROJECT_DRAG_TYPE, row.key);
+                        event.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => {
+                        setDraggingProject(null);
+                        setProjectDropOn(null);
+                      }}
+                      onDragOver={(event) => {
+                        if (onMoveProject === undefined || !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        if (projectDropOn !== row.key) setProjectDropOn(row.key);
+                      }}
+                      onDragLeave={() => setProjectDropOn((current) => (current === row.key ? null : current))}
+                      onDrop={(event) => {
+                        if (onMoveProject === undefined || !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return;
+                        event.preventDefault();
+                        setProjectDropOn(null);
+                        const from = event.dataTransfer.getData(PROJECT_DRAG_TYPE) || draggingProject;
+                        setDraggingProject(null);
+                        if (from && from !== row.key && projectIndex(from) >= 0) onMoveProject(from, projectIndex(row.key));
+                      }}
+                      // Where the case lands: above this row when it comes from below, below it when it comes from above.
+                      data-drop={
+                        projectDropOn === row.key && draggingProject !== null && draggingProject !== row.key
+                          ? projectIndex(draggingProject) > projectIndex(row.key)
+                            ? "before"
+                            : "after"
+                          : undefined
+                      }
                       className={cn(
                         "flex rounded-lg p-1.5 text-left transition-colors duration-150 hover:bg-surface-hover",
+                        "data-[drop=before]:shadow-[0_-3px_0_var(--color-accent)] data-[drop=after]:shadow-[0_3px_0_var(--color-accent)]",
                         view === "grid" ? "flex-col gap-1.5" : "flex-row items-center gap-2.5",
                       )}
                     >

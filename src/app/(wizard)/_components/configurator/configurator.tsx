@@ -1812,6 +1812,7 @@ export function Configurator({
             subject={subject}
             pageGroups={clientMode ? "role" : "section"}
             {...(filePagine === undefined ? {} : { file: filePagine, onSelectGroup: selectGroup })}
+            {...(filed?.moveCase === undefined || trial ? {} : { onMoveProject: filed.moveCase })}
             media={media}
             clientMedia={clientMedia}
             mediaRules={mediaRules}
