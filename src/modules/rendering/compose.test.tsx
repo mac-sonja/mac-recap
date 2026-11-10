@@ -229,6 +229,44 @@ describe("composeParts", () => {
     });
   });
 
+  describe("the client pack (Story 5.9a, pack)", () => {
+    it.each(FORMAT_IDS)("wraps one case in the client's intro and closing, the case trimmed (%s)", (formatId) => {
+      const [intro, a] = [introPart("lumen"), casePart("aaaa", "lumen")];
+      const file = composeParts([intro, a], formatId, { pack: true });
+      expect(file.segments.map((s) => s.key)).toEqual(["client_intro:lumen", "case:aaaa", "client_closing:lumen"]);
+      const expected = a.doc.formats[formatId].pages.filter((p) => p.role !== "intro" && !(formatId === "carosello_1_1" && p.pageKey === "closing"));
+      expect(file.segments[1].pages).toEqual(expected);
+      const numbers = flat(file).map((k) => Number(k.split("#")[1]));
+      expect(numbers).toEqual(numbers.map((_, i) => i + 1));
+    });
+
+    it("puts the intro first, the cases in the parts' order, and the closing once", () => {
+      const parts = [introPart("lumen"), casePart("cccc", "lumen"), casePart("aaaa", "lumen"), casePart("bbbb", "lumen")];
+      const file = composeParts(parts, "presentazione_16_9", { pack: true });
+      expect(file.segments.map((s) => s.key)).toEqual(["client_intro:lumen", "case:cccc", "case:aaaa", "case:bbbb", "client_closing:lumen"]);
+    });
+
+    it("drops each case's own Carosello Chiusura and keeps Risultati; the client's closing comes once", () => {
+      const [intro, a, b] = [introPart("lumen"), casePart("aaaa", "lumen"), casePart("bbbb", "lumen")];
+      const file = composeParts([intro, a, b], "carosello_1_1", { pack: true });
+      for (const segment of file.segments.filter((s) => s.slot === "case")) {
+        expect(segment.pages.some((p) => p.pageKey === "closing" || p.role === "intro")).toBe(false);
+        expect(segment.pages.some((p) => p.pageKey === "results")).toBe(true);
+      }
+      expect(file.segments.filter((s) => s.slot === "client_closing")).toHaveLength(1);
+    });
+
+    it("keeps every case whole without an intro part (the intro isn't approved)", () => {
+      const [a, b] = [casePart("aaaa", "lumen"), casePart("bbbb", "lumen")];
+      const file = composeParts([a, b], "carosello_1_1", { pack: true });
+      expect(file.segments.map((s) => s.pages)).toEqual([a.doc.formats.carosello_1_1.pages, b.doc.formats.carosello_1_1.pages]);
+    });
+
+    it("gives an intro with no case nothing", () => {
+      expect(composeParts([introPart("lumen")], "presentazione_16_9", { pack: true }).segments).toEqual([]);
+    });
+  });
+
   it("returns no segments for no parts", () => {
     expect(composeParts([], "carosello_1_1").segments).toEqual([]);
   });

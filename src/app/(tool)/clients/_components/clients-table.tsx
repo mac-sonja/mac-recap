@@ -4,13 +4,13 @@ import { Building2, ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
-import { DownloadButton } from "@/app/_components/download-button";
 import { CARD, SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
 import { clientHref, newClientPanelHref } from "@/app/_lib/routes";
 import { markPanelOpenedInApp } from "../_lib/panel-history";
 import { SEARCH_DEBOUNCE_MS } from "@/app/(tool)/case-studies/_components/case-studies-table";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
+import { ClientPackButton } from "./client-pack-button";
 import { LogoTile } from "./logo-tile";
 import {
   DEFAULT_CLIENT_SORT,
@@ -264,13 +264,7 @@ export function ClientsTable({ rows, canManage }: ClientsTableProps) {
                 </Link>
                 {row.approvedCount > 0 && (
                   <div className="absolute right-4 bottom-4">
-                    <DownloadButton
-                      label={fill(it.download.packLabel, { name: row.name })}
-                      title={fill(it.download.packTitle, { name: row.name })}
-                      description={
-                        row.approvedCount === 1 ? it.download.packDescriptionOne : fill(it.download.packDescription, { n: row.approvedCount })
-                      }
-                    />
+                    <ClientPackButton clientId={row.id} name={row.name} approvedCount={row.approvedCount} introApproved={row.introApproved} />
                   </div>
                 )}
               </li>

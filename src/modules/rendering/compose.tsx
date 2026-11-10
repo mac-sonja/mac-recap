@@ -50,6 +50,13 @@ export interface ComposeOptions {
    * off: their files are unchanged.
    */
   clientFile?: boolean;
+  /**
+   * Story 5.9a, a client's pack: a client's intro document, when it is among the parts, is
+   * included whatever its number of cases (one is enough), with its cases trimmed as in a
+   * file. Without an intro part, every case keeps all its pages (as by default). A client
+   * with no case in the parts gets nothing. Single-case exports leave it off.
+   */
+  pack?: boolean;
 }
 
 /** A case's own Chiusura in Carosello: the client file ends with the client's own, once. */
@@ -72,12 +79,14 @@ function pagesOf(part: ComposePart, formatId: FormatId): readonly Page[] {
  * page numbers run on from 1. Pure: pages are the revisions' own objects.
  * Parts' `clientId`s are trusted: the caller builds them from the records.
  * With `options.clientFile` (Story 4.12a) a client's intro is included with any number of
- * cases, and cases are trimmed even without it (see {@link ComposeOptions}).
+ * cases, and cases are trimmed even without it; with `options.pack` (Story 5.9a) a client's
+ * intro is included with one case or more (see {@link ComposeOptions}).
  * Throws for a bug: a format missing from a part, a part whose document is of the other
  * kind, the same case twice, or two intro documents for one client.
  */
 export function composeParts(parts: readonly ComposePart[], formatId: FormatId, options: ComposeOptions = {}): ComposedFile {
   const clientFile = options.clientFile === true;
+  const pack = options.pack === true;
   const intros = new Map<string, ClientIntroPart>();
   const caseCount = new Map<string, number>();
   const cases = new Set<string>();
@@ -93,7 +102,7 @@ export function composeParts(parts: readonly ComposePart[], formatId: FormatId, 
     }
   }
   const introOf = (clientId: string): ClientIntroPart | undefined =>
-    clientFile || (caseCount.get(clientId) ?? 0) >= 2 ? intros.get(clientId) : undefined;
+    clientFile || (pack && caseCount.has(clientId)) || (caseCount.get(clientId) ?? 0) >= 2 ? intros.get(clientId) : undefined;
   /** A case's pages in a file: without its own intro pages and, in Carosello, its own Chiusura. */
   const trimmed = (part: CasePart) =>
     pagesOf(part, formatId).filter((p) => p.role !== "intro" && !(formatId === CAROSELLO && p.pageKey === CASE_CLOSING_KEY));

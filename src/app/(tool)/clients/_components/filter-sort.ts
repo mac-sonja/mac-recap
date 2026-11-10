@@ -11,6 +11,11 @@ export interface ClientRow {
   caseCount: number;
   /** Of those, the approved ones: with at least one the card offers **Scarica** (the client pack). */
   approvedCount: number;
+  /**
+   * Whether the client's intro is approved (Story 5.9a): without it the pack's dialog says each
+   * case keeps its own intro and closing; null when it couldn't be read (the dialog says nothing).
+   */
+  introApproved: boolean | null;
   /** Every required field is filled; an unfinished client's row opens its wizard. */
   complete: boolean;
   /** A signed URL of the client's logo (valid minutes), or null: the card then shows the monogram. */

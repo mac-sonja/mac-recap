@@ -8,12 +8,14 @@ import * as jobs from "@/modules/jobs";
 import * as material from "@/modules/material";
 import { createSupabaseExportRepository } from "@/modules/rendering/adapters/supabase/export-repository";
 import { createSupabaseExportStorage } from "@/modules/rendering/adapters/supabase/export-storage";
-import type { ExportSourceDeps } from "@/modules/rendering/application/export-source";
+import type { ExportSourceDeps, PackSourceDeps } from "@/modules/rendering/application/export-source";
 import {
   makeExportStatus,
+  makePackStatus,
   makeRequestExport,
+  makeRequestPack,
   type ExportTicket,
-  type RequestExportDeps,
+  type RequestPackDeps,
 } from "@/modules/rendering/application/request-export";
 import type { Result } from "@/shared/result";
 
@@ -29,9 +31,17 @@ export const exportSourceDeps = (): ExportSourceDeps => ({
   getDetailsForm: material.getDetailsForm,
 });
 
-function deps(): RequestExportDeps {
+/** The reads a client's pack starts from (Story 5.9a): a case's, and the client, its intro and its cases in order. */
+export const packSourceDeps = (): PackSourceDeps => ({
+  ...exportSourceDeps(),
+  getClient: caseStudy.getClient,
+  getClientIntro: caseStudy.getClientIntro,
+  listClientCasesInOrder: caseStudy.listClientCasesInOrder,
+});
+
+function deps(): RequestPackDeps {
   return {
-    ...exportSourceDeps(),
+    ...packSourceDeps(),
     exports: createSupabaseExportRepository(),
     storage: createSupabaseExportStorage(),
     enqueue: jobs.enqueue,
@@ -62,4 +72,28 @@ export function requestExport(actor: Actor, input: unknown): Promise<Result<Expo
  */
 export function exportStatus(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
   return makeExportStatus(deps())(actor, input);
+}
+
+/**
+ * Asks for a client's pack as a file (Story 5.9a): input `{ clientId, formats }` (or
+ * `{ clientId, format }`). The client's approved intro, its approved cases in the client's
+ * order and the intro's closing once (without an approved intro, each case whole), from
+ * live revisions only. `ready` when the same pack was exported before (with an `export`
+ * case event per case), else an `export` job and `pending`. Nothing is enqueued on any
+ * error. Call only after authorizing the actor (owner/designer for now: `list clients` and
+ * `export`). Errors: `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE`, `FORMAT_NOT_IN_REVISION`,
+ * `CLIENT_NOT_FOUND`, `NOT_APPROVED` (no approved case), `EXPORT_TOO_LARGE`, the reads'.
+ */
+export function requestPack(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
+  return makeRequestPack(deps())(actor, input);
+}
+
+/**
+ * Where a pack request stands: input `{ clientId, jobId }` or `{ clientId, exportId }`;
+ * as `exportStatus`. `EXPORT_STALE` when the pack changed since. Call only after
+ * authorizing as `requestPack`. Errors: `INVALID_INPUT`, `NOT_FOUND`, `CLIENT_NOT_FOUND`,
+ * `NOT_APPROVED`, `EXPORT_STALE`, the reads'.
+ */
+export function packStatus(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
+  return makePackStatus(deps())(actor, input);
 }

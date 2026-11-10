@@ -1,11 +1,28 @@
 import { z } from "zod";
 import type { Actor } from "@/modules/access";
 import { CASE_EXPORTED } from "@/modules/case-study";
-import { bundleHashOf, notApproved, readExportSources, type ExportSourceDeps } from "@/modules/rendering/application/export-source";
+import {
+  bundleHashOf,
+  bundleHashOfDrawings,
+  notApproved,
+  readExportSources,
+  readPackParts,
+  readPackSources,
+  sameParts,
+  type ExportDrawing,
+  type ExportSourceDeps,
+  type PackSourceDeps,
+} from "@/modules/rendering/application/export-source";
 import {
   EXPORT_BUNDLE,
+  EXPORT_FORMAT_IDS,
+  EXPORT_MAX_PARTS,
   EXPORT_STALE,
+  EXPORT_TOO_LARGE,
   exportStatusInputSchema,
+  packStatusInputSchema,
+  requestPackInputSchema,
+  type PackClient,
   isExportFormatId,
   notExportable,
   recordFileName,
@@ -14,7 +31,7 @@ import {
   type ExportPayload,
   type ExportRecord,
 } from "@/modules/rendering/domain/export";
-import { isFormatId } from "@/modules/rendering/domain/formats";
+import { FORMAT_NOT_IN_REVISION, isFormatId } from "@/modules/rendering/domain/formats";
 import type { ExportRepository } from "@/modules/rendering/ports/export-repository";
 import type { ExportStorage } from "@/modules/rendering/ports/export-storage";
 import { err, ok, type Result } from "@/shared/result";
@@ -55,16 +72,16 @@ const invalid = (fields: string[]) => err({ code: "INVALID_INPUT", message: `Inv
 
 const isUuid = (value: unknown) => z.uuid().safeParse(value).success;
 
-/** The fields of a status input that are actually wrong: `caseId`, exactly one of `jobId` / `exportId`, nothing else. */
-function statusFields(input: unknown): string[] {
+/** The fields of a status input that are actually wrong: `subjectKey` (`caseId` or `clientId`), exactly one of `jobId` / `exportId`, nothing else. */
+function statusFields(input: unknown, subjectKey: "caseId" | "clientId" = "caseId"): string[] {
   const given = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
   const bad: string[] = [];
-  if (!isUuid(given.caseId)) bad.push("caseId");
+  if (!isUuid(given[subjectKey])) bad.push(subjectKey);
   const ids = (["jobId", "exportId"] as const).filter((key) => Object.hasOwn(given, key));
   if (ids.length === 0) bad.push("jobId");
   else if (ids.length > 1) bad.push(...ids);
   else if (!isUuid(given[ids[0]])) bad.push(ids[0]);
-  bad.push(...Object.keys(given).filter((key) => !["caseId", "jobId", "exportId"].includes(key)));
+  bad.push(...Object.keys(given).filter((key) => ![subjectKey, "jobId", "exportId"].includes(key)));
   return bad.length > 0 ? bad : ["input"];
 }
 
@@ -142,7 +159,8 @@ export function makeRequestExport(deps: RequestExportDeps) {
     // Every format's approval and pages are checked before anything is enqueued.
     const sources = await readExportSources(deps, caseId, formats.value);
     if (!sources.ok) return sources;
-    const [{ caseStudy, content }] = sources.value;
+    const [{ caseStudy, revision }] = sources.value;
+    const part = { subject: { kind: "case" as const, id: caseStudy.id }, revisionId: revision.id };
     const bundled = sources.value.length > 1 ? sources.value.map((s) => s.format).sort() : [];
     const hash = bundled.length > 0 ? bundleHashOf(sources.value) : sources.value[0].contentHash;
 
@@ -152,8 +170,8 @@ export function makeRequestExport(deps: RequestExportDeps) {
 
     const payload: ExportPayload =
       bundled.length > 0
-        ? { parts: [content.part], format: EXPORT_BUNDLE, formats: bundled, requestedBy: actor.id }
-        : { parts: [content.part], format: sources.value[0].format, requestedBy: actor.id };
+        ? { parts: [part], format: EXPORT_BUNDLE, formats: bundled, requestedBy: actor.id }
+        : { parts: [part], format: sources.value[0].format, requestedBy: actor.id };
     const job = await deps.enqueue({ kind: "export", subjectId: caseStudy.id, inputHash: hash, payload });
     if (!job.ok) return job;
     return ok({ status: "pending", jobId: job.value.id });
@@ -210,5 +228,163 @@ export function makeExportStatus(deps: RequestExportDeps) {
       return err({ code: EXPORT_STALE, message: "A newer version was approved since: export it again.", details: { caseId } });
     }
     return deliver(deps, actor, caseStudy, record);
+  };
+}
+
+// ---------------------------------------------------------------------------
+// A client's pack (Story 5.9a)
+// ---------------------------------------------------------------------------
+
+export interface RequestPackDeps extends RequestExportDeps, PackSourceDeps {}
+
+/**
+ * Every content hash the client's pack has now: each format it can export alone, and each
+ * bundle of two or more of them. Errors: the reads' (a format a part lacks is left out).
+ */
+async function currentPackHashes(deps: PackSourceDeps, clientId: string): Promise<Result<Set<string>>> {
+  const drawings: ExportDrawing[] = [];
+  for (const format of EXPORT_FORMAT_IDS) {
+    const read = await readPackSources(deps, clientId, [format]);
+    if (!read.ok) {
+      if (read.error.code === FORMAT_NOT_IN_REVISION) continue;
+      return read;
+    }
+    drawings.push(read.value.drawings[0]);
+  }
+  const hashes = new Set(drawings.map((d) => d.contentHash));
+  // Every subset of two or more formats, as a bundle.
+  for (let mask = 0; mask < 1 << drawings.length; mask++) {
+    const chosen = drawings.filter((_, i) => (mask & (1 << i)) !== 0);
+    if (chosen.length >= 2) hashes.add(bundleHashOfDrawings(chosen));
+  }
+  return ok(hashes);
+}
+
+/**
+ * A signed GET of a pack's `record` named after the client, and one `export` case event
+ * per case in it (the existing export event, `data { exportId, format, clientId }`, with the
+ * case's own approved revision): the pack's activity, on each case it holds.
+ */
+async function deliverPack(
+  deps: Pick<RequestExportDeps, "storage" | "recordEvent">,
+  actor: Actor,
+  client: PackClient,
+  record: ExportRecord,
+): Promise<Result<ExportTicket>> {
+  const fileName = recordFileName(client.code, client.name, record.format);
+  const url = await deps.storage.presignDownload(record.path, EXPORT_URL_TTL_SECONDS, fileName);
+  if (!url.ok) return url;
+  for (const part of record.parts) {
+    if (part.subject.kind !== "case") continue;
+    const recorded = await deps.recordEvent(actor, {
+      caseId: part.subject.id,
+      type: CASE_EXPORTED,
+      revisionId: part.revisionId,
+      data: { exportId: record.id, format: record.format, clientId: client.id },
+    });
+    if (!recorded.ok) return recorded;
+  }
+  return ok({ status: "ready", exportId: record.id, url: url.value, fileName });
+}
+
+/**
+ * Asks for a client's pack as a file (Story 5.9a): input `{ clientId, formats }` (or
+ * `{ clientId, format }`), one format its own file, two or more one ZIP of them, as for a
+ * case. The pack is the client's approved intro (`intro` pages), its approved cases in the
+ * client's order (4.12b) without their own intros (and Carosello Chiusura), and the intro's
+ * closing once; without an approved intro, each case with all its pages. Live revisions
+ * only. Every format is checked before anything is enqueued. Reuses a stored export with
+ * the same content hash (`ready`, with an `export` case event per case), else enqueues one
+ * `export` job for the client (`pending`). Authorize first (owner/designer: `list clients`
+ * and `export`). Errors: `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE` (Video),
+ * `CLIENT_NOT_FOUND`, `NOT_APPROVED` (no approved case), `FORMAT_NOT_IN_REVISION` (a part
+ * has no pages in a format), `EXPORT_TOO_LARGE` (more parts than an export holds), the reads'.
+ */
+export function makeRequestPack(deps: RequestPackDeps) {
+  return async function requestPack(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
+    const parsed = requestPackInputSchema(input).safeParse(input);
+    if (!parsed.success) return invalid(fieldsOf(parsed.error.issues));
+    const { clientId } = parsed.data;
+    const formats = formatsOf(parsed.data);
+    if (!formats.ok) return formats;
+
+    const read = await readPackSources(deps, clientId, formats.value);
+    if (!read.ok) return read;
+    const { client, parts, drawings } = read.value;
+    if (parts.length > EXPORT_MAX_PARTS) {
+      return err({ code: EXPORT_TOO_LARGE, message: "This pack holds more cases than one file can.", details: { clientId: client.id } });
+    }
+    const bundled = drawings.length > 1 ? drawings.map((d) => d.format).sort() : [];
+    const hash = bundled.length > 0 ? bundleHashOfDrawings(drawings) : drawings[0].contentHash;
+
+    const existing = await deps.exports.findByHash(hash);
+    if (!existing.ok) return existing;
+    if (existing.value !== null) return deliverPack(deps, actor, client, existing.value);
+
+    const subject = { kind: "client" as const, id: client.id };
+    const payload: ExportPayload =
+      bundled.length > 0
+        ? { subject, parts: [...parts], format: EXPORT_BUNDLE, formats: bundled, requestedBy: actor.id }
+        : { subject, parts: [...parts], format: drawings[0].format, requestedBy: actor.id };
+    const job = await deps.enqueue({ kind: "export", subjectId: client.id, inputHash: hash, payload });
+    if (!job.ok) return job;
+    return ok({ status: "pending", jobId: job.value.id });
+  };
+}
+
+/**
+ * Where a pack request stands (Story 5.9a): input `{ clientId, jobId }` or `{ clientId,
+ * exportId }`. As `exportStatus` for a case: `pending`, `failed`, or `ready` (with an
+ * `export` case event per case). The client must still have an approved case
+ * (`NOT_APPROVED`), and the file must be of the pack as it is now, the same parts with the
+ * same approved revisions in the same order (`EXPORT_STALE` otherwise: ask again).
+ * Authorize first. Errors also: `INVALID_INPUT`, `NOT_FOUND` (an unknown job or export,
+ * or another client's), `CLIENT_NOT_FOUND`, the reads'.
+ */
+export function makePackStatus(deps: RequestPackDeps) {
+  return async function packStatus(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {
+    const parsed = packStatusInputSchema.safeParse(input);
+    if (!parsed.success) return invalid(statusFields(input, "clientId"));
+    const { clientId } = parsed.data;
+    const notFound = () => err({ code: "NOT_FOUND", message: "No such export.", details: { clientId } });
+
+    // Approved only (NFR1): nothing is looked up, let alone handed out, without an approved case.
+    const read = await readPackParts(deps, clientId);
+    if (!read.ok) return read;
+    const { client, parts } = read.value;
+    const stale = () => err({ code: EXPORT_STALE, message: "The pack changed since: export it again.", details: { clientId: client.id } });
+
+    let record: ExportRecord | null;
+    if ("jobId" in parsed.data) {
+      const jobs = await deps.getJobsFor(client.id);
+      if (!jobs.ok) return jobs;
+      const wanted = parsed.data.jobId.toLowerCase();
+      const job = jobs.value.find((j) => j.id.toLowerCase() === wanted);
+      if (job === undefined || job.kind !== "export") return notFound();
+      if (job.status === "queued" || job.status === "running") return ok({ status: "pending", jobId: job.id });
+      if (job.status === "failed") return ok({ status: "failed" });
+      const stored = await deps.exports.findByHash(job.inputHash);
+      if (!stored.ok) return stored;
+      if (stored.value === null) return ok({ status: "failed" });
+      record = stored.value;
+    } else {
+      const stored = await deps.exports.findById(parsed.data.exportId);
+      if (!stored.ok) return stored;
+      record = stored.value;
+    }
+    if (record === null) return notFound();
+
+    // A file is handed out only while it is of the pack as it is now: the same parts and the
+    // same content hash (a client or case field edit, or a rename, gives another one; a case's
+    // own export never has a pack's hash).
+    if (!sameParts(record.parts, parts)) {
+      const ours = new Set(parts.map((p) => p.subject.id.toLowerCase()));
+      if (!record.parts.some((p) => ours.has(p.subject.id.toLowerCase()))) return notFound();
+      return stale();
+    }
+    const current = await currentPackHashes(deps, client.id);
+    if (!current.ok) return current;
+    if (!current.value.has(record.contentHash.toLowerCase())) return stale();
+    return deliverPack(deps, actor, client, record);
   };
 }

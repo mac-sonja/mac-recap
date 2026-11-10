@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { composeParts, renderComposed, type ComposePart } from "@/modules/rendering/compose";
+import { composeParts, renderComposed, type ComposeOptions, type ComposePart } from "@/modules/rendering/compose";
 import type { FormatId } from "@/modules/rendering/domain/formats";
 
 /**
@@ -14,9 +14,11 @@ export function exportHtml(input: {
   format: FormatId;
   size: { width: number; height: number };
   fontCss: string;
+  /** How the parts are composed: a client pack's rule (Story 5.9a) or, left out, the default. */
+  compose?: ComposeOptions;
 }): string {
   const { width, height } = input.size;
-  const body = renderToStaticMarkup(renderComposed(composeParts(input.parts, input.format), { still: true }));
+  const body = renderToStaticMarkup(renderComposed(composeParts(input.parts, input.format, input.compose), { still: true }));
   const pageCss = [
     `@page{size:${width}px ${height}px;margin:0}`,
     `html,body{margin:0;padding:0;background:#FFFFFF}`,

@@ -10,7 +10,11 @@ import {
   exportStatusInputSchema,
   isExportFormatId,
   notExportable,
+  packHashInput,
+  packStatusInputSchema,
   recordFileName,
+  requestPackInputSchema,
+  type ExportPartContent,
   requestExportInputSchema,
 } from "@/modules/rendering/domain/export";
 import { FORMAT_IDS, getFormat } from "@/modules/rendering/domain/formats";
@@ -126,5 +130,54 @@ describe("bundles (Story 5.4)", () => {
     expect(requestExportInputSchema(one).safeParse(one).success).toBe(true);
     const none = { caseId: CASE, formats: [] };
     expect(requestExportInputSchema(none).safeParse(none).success).toBe(false);
+  });
+});
+
+describe("client packs (Story 5.9a)", () => {
+  const CLIENT = "dddddddd-0000-4000-8000-000000000001";
+  const INTRO = "bbbbbbbb-0000-4000-8000-000000000001";
+  const OTHER = "cccccccc-0000-4000-8000-000000000002";
+  const casePart = { subject: { kind: "case" as const, id: CASE }, revisionId: REV };
+  const introPart = { subject: { kind: "client_intro" as const, id: INTRO }, revisionId: REV };
+  const content = (part: ExportPartContent["part"]): ExportPartContent => ({
+    part,
+    template: "mac-case@1",
+    client: { name: "Lumen", sector: "Lusso", description: "", logoId: null, results: [], testimonial: null },
+    case: { year: 2026, services: [], results: [], testimonial: null },
+  });
+  const client = { id: CLIENT, code: "LUM", name: "Lumen Srl" };
+
+  it("take a payload naming the client, with all the pack's parts in order", () => {
+    const payload = { subject: { kind: "client", id: CLIENT }, parts: [introPart, casePart], format: "presentazione_16_9", requestedBy: CASE };
+    expect(exportPayloadSchema.safeParse(payload).success).toBe(true);
+    expect(exportPayloadSchema.safeParse({ ...payload, format: "bundle", formats: ["carosello_1_1", "presentazione_16_9"] }).success).toBe(true);
+    expect(exportPayloadSchema.safeParse({ ...payload, parts: [] }).success).toBe(false);
+    expect(exportPayloadSchema.safeParse({ ...payload, subject: { kind: "case", id: CASE } }).success).toBe(false);
+  });
+
+  it("keep a case's payload to its one case part", () => {
+    const payload = { parts: [introPart], format: "presentazione_16_9", requestedBy: CASE };
+    expect(exportPayloadSchema.safeParse(payload).success).toBe(false);
+    expect(exportPayloadSchema.safeParse({ ...payload, parts: [casePart, casePart] }).success).toBe(false);
+  });
+
+  it("are asked for by client and read by job or by export", () => {
+    expect(requestPackInputSchema({ clientId: CLIENT, formats: ["x"] }).safeParse({ clientId: CLIENT, formats: ["x"] }).success).toBe(true);
+    expect(requestPackInputSchema({ clientId: CLIENT, format: "x" }).safeParse({ clientId: CLIENT, format: "x" }).success).toBe(true);
+    expect(packStatusInputSchema.safeParse({ clientId: CLIENT, jobId: REV }).success).toBe(true);
+    expect(packStatusInputSchema.safeParse({ clientId: CLIENT, exportId: REV, jobId: REV }).success).toBe(false);
+  });
+
+  it("hash apart from a case's export, and change with the parts' order, a part's revision and the client's fields", () => {
+    const parts = [content(introPart), content(casePart), content({ subject: { kind: "case", id: OTHER }, revisionId: REV })];
+    const base = packHashInput(client, parts, "presentazione_16_9");
+    expect(JSON.parse(base)[0]).toBe("export.pack.v1");
+    expect(base).not.toContain("{");
+    expect(base).not.toBe(contentHashInput(parts, "presentazione_16_9"));
+    expect(packHashInput(client, [parts[0], parts[2], parts[1]], "presentazione_16_9")).not.toBe(base);
+    expect(packHashInput(client, [parts[0], content({ ...casePart, revisionId: INTRO }), parts[2]], "presentazione_16_9")).not.toBe(base);
+    expect(packHashInput({ ...client, name: "Lumen SpA" }, parts, "presentazione_16_9")).not.toBe(base);
+    expect(packHashInput(client, parts, "carosello_1_1")).not.toBe(base);
+    expect(packHashInput(client, parts, "presentazione_16_9")).toBe(base);
   });
 });

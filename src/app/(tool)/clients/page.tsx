@@ -5,6 +5,7 @@ import { authorize, can } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import { PageHeader } from "@/app/_components/page-header";
 import { it } from "@/shared/i18n/it";
+import { log } from "@/shared/log";
 import { ClientPanel } from "./_components/client-panel";
 import { ClientsTable } from "./_components/clients-table";
 import type { ClientRow } from "./_components/filter-sort";
@@ -18,7 +19,8 @@ export interface ClientsPageProps {
  * The Clients page (Story 2.13), owner/designer only (`list clients`; any other
  * role goes to its landing). Every client with its non-deleted case count loads
  * once; search and sort run in the browser. **Aggiungi cliente** exists only with
- * `manage clients`. A card with approved cases offers **Scarica** (the client pack).
+ * `manage clients`. A card with approved cases offers **Scarica** (the client pack, Story
+ * 5.9a; its dialog notes when the client's intro isn't approved).
  * A failed load throws into Next's error boundary: no partial table. With
  * `?nuovo=1` and `manage clients`, the add panel (**Nuovo cliente**) opens over the list.
  */
@@ -42,12 +44,28 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps = {
     }
   }
 
+  // Story 5.9a: whether each pack's intro is approved (the dialog's note), read only for cards with Scarica.
+  // A failed read leaves it unknown (null): the card keeps Scarica, the dialog claims nothing.
+  const introApproved = new Map<string, boolean | null>();
+  await Promise.all(
+    [...approved.keys()].map(async (clientId) => {
+      const intro = await caseStudy.getClientIntro(clientId);
+      if (!intro.ok) {
+        log.warn(`client intro not read for the pack: ${intro.error.code}`, { clientId });
+        introApproved.set(clientId, null);
+        return;
+      }
+      introApproved.set(clientId, intro.value !== null && intro.value.approvedRevisionId !== null);
+    }),
+  );
+
   const rows: ClientRow[] = listed.value.map(({ id, code, name, caseCount, complete, logoUrl }) => ({
     id,
     code,
     name,
     caseCount,
     approvedCount: approved.get(id) ?? 0,
+    introApproved: introApproved.get(id) ?? null,
     complete,
     logoUrl,
   }));

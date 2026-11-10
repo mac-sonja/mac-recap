@@ -643,6 +643,17 @@ export const it = {
     /** `{n}` approved cases of the client. */
     packDescription: "Intro e {n} case approvate in un solo file.",
     packDescriptionOne: "Intro e una case approvata in un solo file.",
+    /** Story 5.9a: the pack's line when the client's intro isn't approved (no intro in the file). */
+    packDescriptionNoIntro: "{n} case approvate in un solo file.",
+    packDescriptionNoIntroOne: "Una case approvata in un solo file.",
+    /** Story 5.9a: in the pack's dialog when the client's intro isn't approved (each case keeps its own). */
+    packIntroNote: "L’introduzione del cliente non è approvata: ogni case tiene la sua intro e la sua chiusura.",
+    /** In the pack's dialog: the client has no approved case (`NOT_APPROVED`). */
+    packNotApproved: "Questo cliente non ha ancora una case approvata.",
+    /** In the pack's dialog: a part of the pack has no pages in this format (`FORMAT_NOT_IN_REVISION`). */
+    packFormatMissing: "Una parte del pack non ha pagine in questo formato. Scegline un altro.",
+    /** The failure toast on a client's Scarica: names the client, as several toasts may show at once. */
+    failedPack: "L’esportazione del pack di {name} non è finita.",
     caseTitle: "Scarica {name}",
     /** Story 5.4: one format is its own file, two or more come as one ZIP. */
     caseDescription: "Scegli uno o più formati.",

@@ -12,6 +12,7 @@ import { fill, it } from "@/shared/i18n/it";
 import { CaseStudiesTable } from "../../case-studies/_components/case-studies-table";
 import type { CaseStudyRow } from "../../case-studies/_components/filter-sort";
 import { cn } from "@/shared/utils";
+import { ClientPackButton } from "../_components/client-pack-button";
 import { ClientPanel } from "../_components/client-panel";
 import { IndustryPills } from "../_components/industry-pills";
 import { IntroStatus } from "../_components/intro-status";
@@ -40,7 +41,8 @@ export interface ClientPageProps {
  * case history count); a failed read throws into the error boundary. Story 3.11: once the
  * client has an intro-and-outro draft, "Introduzione:" and its status badge (refreshed while
  * In elaborazione). Story 4.11a: **Apri** beside it, for a role that may `edit`, once the intro
- * is Da approvare or Approvato: the intro and outro in the configurator.
+ * is Da approvare or Approvato: the intro and outro in the configurator. Story 5.9a: **Scarica**
+ * (the client's pack) once the client has an approved case.
  */
 export default async function ClientPage({ params, searchParams }: ClientPageProps) {
   const shell = await requireSurface("list clients");
@@ -84,7 +86,10 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
 
   // Story 4.12a: the client's file has something to show (an intro ready, or an approved case).
   const introReady = intro.value !== null && (intro.value.status === "in_review" || intro.value.status === "approved");
-  const hasFile = introReady || listed.value.some((c) => c.status === "approved");
+  const approvedCount = listed.value.filter((c) => c.status === "approved").length;
+  const hasFile = introReady || approvedCount > 0;
+  // Story 5.9a: the pack draws the intro only once it is approved.
+  const introApproved = intro.value !== null && intro.value.approvedRevisionId !== null;
   const canCreate = can(actor, "create case");
   const newHref = newCaseForClientHref(client.id);
   const canManage = can(actor, "manage clients");
@@ -137,6 +142,10 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Story 5.9a: the client's pack, with at least one approved case (owner/designer: this page is theirs). */}
+          {can(actor, "export", { status: "approved" }) && (
+            <ClientPackButton clientId={client.id} name={client.name} approvedCount={approvedCount} introApproved={introApproved} />
+          )}
           {can(actor, "edit") &&
             // Story 4.12a: the client's whole file in the configurator (hidden below 1024 px, as the configurator is);
             // inactive, saying why, while the file would be empty (no intro ready, no approved case).

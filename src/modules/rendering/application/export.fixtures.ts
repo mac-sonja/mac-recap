@@ -4,10 +4,11 @@
 import { vi } from "vitest";
 import type { Actor } from "@/modules/access";
 import type { CaseClientInfo, CaseStudy, CaseStudyRevision } from "@/modules/case-study";
-import { caseHistoryV2 } from "@/modules/generation";
+import { caseHistoryV2, clientIntroV2, type CaseStudyDocument } from "@/modules/generation";
 import type { DetailsForm } from "@/modules/material";
-import type { ExportSourceDeps } from "@/modules/rendering/application/export-source";
+import type { PackSourceDeps } from "@/modules/rendering/application/export-source";
 import { FORMAT_IDS } from "@/modules/rendering/domain/formats";
+import { CLIENT_TEMPLATE } from "@/modules/rendering/templates";
 import { ok } from "@/shared/result";
 
 export const CASE_ID = "cccccccc-0000-4000-8000-000000000001";
@@ -87,13 +88,111 @@ export const detailsForm = (over: Partial<DetailsForm> = {}): DetailsForm => ({
   ...over,
 });
 
-/** The reads of an approved case, each a spy; `over` replaces single ones. */
-export function sourceDeps(over: Partial<ExportSourceDeps> = {}) {
+/**
+ * The reads of an approved case, each a spy; `over` replaces single ones. Its client's pack
+ * (Story 5.9a) holds that one case and no intro.
+ */
+export function sourceDeps(over: Partial<PackSourceDeps> = {}) {
   return {
     getCase: vi.fn(async () => ok(caseStudy())),
     getLiveRevision: vi.fn(async () => ok<CaseStudyRevision | null>(revision())),
     getClientInfoForCase: vi.fn(async () => ok(clientInfo())),
     getDetailsForm: vi.fn(async () => ok(detailsForm())),
+    getClient: vi.fn(async () => ok({ id: CLIENT_ID, code: "LUM", name: "Lumen Srl" })),
+    getClientIntro: vi.fn(async () => ok<{ id: string } | null>(null)),
+    listClientCasesInOrder: vi.fn(async () => ok<CaseStudy[]>([caseStudy()])),
     ...over,
-  } satisfies ExportSourceDeps;
+  } satisfies PackSourceDeps;
+}
+
+// ---------------------------------------------------------------------------
+// A client's pack (Story 5.9a): three approved cases A, B, C of the client above and its intro.
+// ---------------------------------------------------------------------------
+
+export const PACK_CASES = {
+  A: "cccccccc-0000-4000-8000-00000000000a",
+  B: "cccccccc-0000-4000-8000-00000000000b",
+  C: "cccccccc-0000-4000-8000-00000000000c",
+} as const;
+export type PackCase = keyof typeof PACK_CASES;
+/** Each case's approved revision. */
+export const PACK_REVISIONS: Readonly<Record<PackCase, string>> = {
+  A: "eeeeeeee-0000-4000-8000-00000000000a",
+  B: "eeeeeeee-0000-4000-8000-00000000000b",
+  C: "eeeeeeee-0000-4000-8000-00000000000c",
+};
+export const INTRO_ID = "bbbbbbbb-0000-4000-8000-000000000001";
+export const INTRO_REVISION_ID = "eeeeeeee-0000-4000-8000-0000000000f1";
+
+/** The client's intro document: one intro page and one closing page per format, in the client template. */
+export function introDoc(): CaseStudyDocument {
+  const doc = clientIntroV2(FORMAT_IDS);
+  const formats = Object.fromEntries(
+    Object.entries(doc.formats).map(([formatId, { pages }]) => [
+      formatId,
+      { pages: [...pages, { ...pages[0], pageKey: "closing", name: "Chiusura", role: "outro" as const, section: "risultati" }] },
+    ]),
+  );
+  return { ...doc, template: CLIENT_TEMPLATE, formats } as CaseStudyDocument;
+}
+
+export const introRevision = (over: Partial<CaseStudyRevision> = {}): CaseStudyRevision =>
+  revision({ id: INTRO_REVISION_ID, caseId: null, clientIntroId: INTRO_ID, doc: introDoc(), generatedDoc: introDoc(), ...over } as Partial<CaseStudyRevision>);
+
+const PACK_YEARS: Readonly<Record<PackCase, number>> = { A: 2024, B: 2025, C: 2026 };
+
+/** Each pack case's own details: results and a testimonial that name the case. */
+export const packDetails = (key: PackCase): DetailsForm =>
+  detailsForm({
+    results: [
+      { label: `visitatori ${key}`, value: `1${key}` },
+      { label: `ordini ${key}`, value: `2${key}` },
+    ],
+    testimonialQuote: `Citazione del caso ${key}.`,
+    testimonialAuthor: `Autore ${key}`,
+  });
+
+/**
+ * A pack case's approved revision: the reference document, whose Carosello also ends with the
+ * case's own Chiusura (`closing`), which a pack drops.
+ */
+export function packCaseRevision(key: PackCase): CaseStudyRevision {
+  const base = revision({ id: PACK_REVISIONS[key], caseId: PACK_CASES[key] });
+  const carosello = base.doc.formats.carosello_1_1.pages;
+  const last = carosello[carosello.length - 1];
+  const closing = { ...last, pageKey: "closing", name: "Chiusura", role: "outro" as const };
+  const doc = { ...base.doc, formats: { ...base.doc.formats, carosello_1_1: { pages: [...carosello, closing] } } } as CaseStudyDocument;
+  return { ...base, doc, generatedDoc: doc };
+}
+
+/**
+ * The reads of client CLIENT_ID's pack: its approved cases in `order` (the client's order),
+ * each with its own approved revision, and its intro approved or not (`intro`: `approved`,
+ * `unapproved` (an intro with no approved revision) or `none`).
+ */
+export function packDeps(options: { order?: PackCase[]; intro?: "approved" | "unapproved" | "none" } = {}, over: Partial<PackSourceDeps> = {}) {
+  const order = options.order ?? ["C", "A", "B"];
+  const intro = options.intro ?? "approved";
+  const caseFor = (key: PackCase) =>
+    caseStudy({
+      id: PACK_CASES[key],
+      code: `LUM-2026-0${key}`,
+      name: `Caso ${key}`,
+      year: PACK_YEARS[key],
+      approvedRevisionId: PACK_REVISIONS[key],
+      headRevisionId: PACK_REVISIONS[key],
+    });
+  const keyOf = (id: string) => (Object.keys(PACK_CASES) as PackCase[]).find((k) => PACK_CASES[k] === id.toLowerCase());
+  return sourceDeps({
+    getCase: vi.fn(async (id: string) => ok(caseFor(keyOf(id) ?? "A"))),
+    getLiveRevision: vi.fn(async (subject: { kind: string; id: string }) => {
+      if (subject.kind === "client_intro") return ok<CaseStudyRevision | null>(intro === "approved" ? introRevision() : null);
+      const key = keyOf(subject.id);
+      return ok<CaseStudyRevision | null>(key === undefined ? null : packCaseRevision(key));
+    }),
+    getDetailsForm: vi.fn(async ({ caseId }: { caseId: string }) => ok(packDetails(keyOf(caseId) ?? "A"))),
+    getClientIntro: vi.fn(async () => ok<{ id: string } | null>(intro === "none" ? null : { id: INTRO_ID })),
+    listClientCasesInOrder: vi.fn(async () => ok<CaseStudy[]>(order.map(caseFor))),
+    ...over,
+  });
 }

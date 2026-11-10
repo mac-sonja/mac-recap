@@ -337,3 +337,7 @@
 - source_spec: none
   summary: Story 4.12 part 2 (4.12b): reorder the client's cases by dragging their rows in Progetti del cliente, saved for the client (new storage) and followed by the client file and the client pack.
   evidence: Owner chose on 2026-11-10 to build A8 in two parts; part 1 (4.12a) opens and edits the client's whole file.
+
+- source_spec: none
+  summary: Story 5.9 part 2 (5.9b): account/sales/social users get a read-only Clienti list (only clients with at least one approved case; no add, edit or overview) with Scarica per row and on a read-only client page; a new `download client pack` policy action.
+  evidence: Owner chose on 2026-11-10 to build B5 in two parts; part 1 (5.9a) builds the client pack download for owner/designers.
