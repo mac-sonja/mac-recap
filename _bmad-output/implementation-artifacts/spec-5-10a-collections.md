@@ -2,7 +2,7 @@
 title: 'Story 5.10a: collections (create, list, arrange)'
 type: 'feature'
 created: '2026-11-10'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'f04c6fb51ef878f2d3ab6689d76b476f129ce36b'
 route: 'dispatch'
 review_loop_iteration: 0
