@@ -78,6 +78,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      # Story 5.8: one result per guardrail; fails when one has a failed test or none ran.
+      - run: npm run test:guardrails
       - run: npm run build
       # Re-run the client-bundle secret check now that .next/static exists.
       - run: npx vitest run test/secret-key.test.ts
