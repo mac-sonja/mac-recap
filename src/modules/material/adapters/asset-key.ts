@@ -20,7 +20,8 @@ export function renditionKey(caseId: string, assetId: string, specHash: string, 
 /**
  * A client file's original, as the case-study module stores it:
  * `clients/{clientId}/material/{assetId}.{ext}` (case-study's `clientMaterialKey`;
- * `test/client-material-types.test.ts` keeps both equal). Read only, by the rendition worker.
+ * `test/client-material-types.test.ts` keeps both equal). Only read through it: by the rendition
+ * worker and by `readClientFileBytes` (the generate job, Story 3.9).
  */
 export function clientAssetKey(clientId: string, assetId: string, contentType: AllowedContentType): string {
   return `clients/${clientId}/material/${assetId}.${extensionFor(contentType)}`;

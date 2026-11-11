@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { Actor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import * as jobs from "@/modules/jobs";
-import { assetKey } from "@/modules/material/adapters/asset-key";
+import { assetKey, clientAssetKey } from "@/modules/material/adapters/asset-key";
 import { createSupabaseAssetRepository } from "@/modules/material/adapters/supabase/asset-repository";
 import { createSupabaseDetailsFormRepository } from "@/modules/material/adapters/supabase/details-form-repository";
 import { createSupabaseObjectStorage } from "@/modules/material/adapters/supabase/object-storage";
@@ -17,6 +17,7 @@ import {
 import { makeBuildManifest, type MaterialManifest } from "@/modules/material/application/build-manifest";
 import { makeEnqueueClientRenditions, makeGetClientRendition, type ClientFiles } from "@/modules/material/application/client-renditions";
 import { makeConfirmUpload } from "@/modules/material/application/confirm-upload";
+import { makeReadClientFileBytes } from "@/modules/material/application/read-client-file";
 import type { MaterialDeps } from "@/modules/material/application/deps";
 import { makeGetDetailsForm } from "@/modules/material/application/get-details-form";
 import { makeGetRendition } from "@/modules/material/application/get-rendition";
@@ -290,6 +291,18 @@ const clientFiles = (): ClientFiles => ({ get: caseStudy.getClientAsset });
  */
 export function enqueueClientRenditions(file: { id: string; clientId: string; kind: AssetKind }, actorId: string): Promise<void> {
   return makeEnqueueClientRenditions({ jobs: { enqueue: jobs.enqueue } })(file, actorId);
+}
+
+/**
+ * The original bytes of one live client file (`{ clientId, assetId }`), for the generate job
+ * (Story 3.9) to send a client's PDFs to the AI. Module-only: no server action, no signed
+ * link; no authorization of its own. Errors: `INVALID_INPUT`, `NOT_FOUND` (an unknown or
+ * removed file, another client's or a deleted client's file, or a missing object),
+ * `STORAGE_NOT_CONFIGURED`, `CLIENT_LOOKUP_FAILED` and `CLIENT_INVALID` (the file lookup),
+ * `STORAGE_FAILED` (the download).
+ */
+export function readClientFileBytes(input: { clientId: string; assetId: string }): Promise<Result<{ bytes: Uint8Array; contentType: string }>> {
+  return makeReadClientFileBytes({ files: clientFiles(), storage: configuredStorage() }, (file) => clientAssetKey(file.clientId, file.id, file.contentType))(input);
 }
 
 /**

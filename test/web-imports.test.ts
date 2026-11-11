@@ -47,6 +47,8 @@ describe("worker-only module entries (Story 3.2)", () => {
     // Story 3.6: the narrative generator and the document reader are reached from the worker only.
     expect(reached).toContain("src/modules/generation/worker.ts");
     expect(reached).toContain("src/modules/generation/adapters/anthropic/narrative-generator.ts");
+    // Story 3.9: the client intro writer too.
+    expect(reached).toContain("src/modules/generation/adapters/anthropic/client-intro-writer.ts");
     expect(reached).toContain("src/modules/generation/adapters/documents/document-reader.ts");
     // Story 5.3: exports render in the worker only, with Playwright.
     expect(reached).toContain("src/modules/rendering/worker.ts");

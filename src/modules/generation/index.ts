@@ -138,8 +138,8 @@ export {
   clientIntroTestTexts,
 } from "@/modules/generation/application/client-intro-draft";
 export type { ClientDraftTexts, ClientIntroDraftClient, ClientIntroDraftInput } from "@/modules/generation/application/client-intro-draft";
-export { testDraftTextSource } from "@/modules/generation/application/text-source";
-export type { TextSource, TextSourceInput } from "@/modules/generation/application/text-source";
+export { clientTestTextSource, testDraftTextSource } from "@/modules/generation/application/text-source";
+export type { ClientTextSource, ClientTextSourceInput, TextSource, TextSourceInput } from "@/modules/generation/application/text-source";
 
 /** The uuid prefix of the ids an upgrade gives the template's pages; a 12-digit counter per format follows. */
 export const UPGRADE_ID_PREFIX = "00000000-0000-4000-8000-";

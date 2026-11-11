@@ -12,7 +12,8 @@ import {
   type GenerateManifest,
 } from "@/modules/generation/application/generate-case";
 import { sameInEveryFormat, TEST_DRAFT_MARKER, testDraftTexts, type DraftTexts } from "@/modules/generation/application/test-draft";
-import { testDraftTextSource, type SourceAsset, type TextSource } from "@/modules/generation/application/text-source";
+import type { ClientDraftTexts } from "@/modules/generation/application/client-intro-draft";
+import { testDraftTextSource, type ClientTextSource, type SourceAsset, type TextSource } from "@/modules/generation/application/text-source";
 import { validateNewDocument } from "@/modules/generation";
 import { err, ok } from "@/shared/result";
 
@@ -257,18 +258,26 @@ describe("generate handler: a client intro (Story 3.11)", () => {
   const CLIENT_ID = "cccccccc-0000-4000-8000-0000000000c1";
   const IMAGES = ["aaaaaaaa-0000-4000-8000-0000000000a1", "aaaaaaaa-0000-4000-8000-0000000000a2", "aaaaaaaa-0000-4000-8000-0000000000a3"];
   const DESCRIPTION = "Lampade di design per hotel.";
+  const PDF_ID = "bbbbbbbb-0000-4000-8000-0000000000b1";
   const introJob = { id: "dddddddd-0000-4000-8000-0000000000f1", subjectId: INTRO_ID, payload: { subject: "client_intro", baseHeadVersion: 0 } as Record<string, unknown> };
 
   function makeIntro(over: Partial<ClientIntroGenerateDeps> = {}, base: Partial<GenerateDeps> = {}) {
     const intro = {
       getIntro: vi.fn(async () => ok({ clientId: CLIENT_ID, status: "generating" as const, headVersion: 0 })),
-      getClient: vi.fn(async () => ok({ description: DESCRIPTION, brief: { context: "Il contesto.", results: [{ label: "a", value: "1" }], testimonialQuote: "" } })),
+      getClient: vi.fn(async () =>
+        ok({
+          name: "Lumen",
+          industry: "interior_design",
+          description: DESCRIPTION,
+          brief: { context: "Il contesto.", solution: "", results: [{ label: "a", value: "1" }], testimonialQuote: "", testimonialAuthor: "" },
+        }),
+      ),
       listClientAssets: vi.fn(async () =>
         ok([
-          { id: IMAGES[0], kind: "image" },
-          { id: "bbbbbbbb-0000-4000-8000-0000000000b1", kind: "document" },
-          { id: IMAGES[1], kind: "image" },
-          { id: IMAGES[2], kind: "image" },
+          { id: IMAGES[0], kind: "image", contentType: "image/jpeg" },
+          { id: PDF_ID, kind: "document", contentType: "application/pdf" },
+          { id: IMAGES[1], kind: "image", contentType: "image/jpeg" },
+          { id: IMAGES[2], kind: "image", contentType: "image/jpeg" },
         ]),
       ),
       transitionIntro: vi.fn(async () => ok({})),
@@ -301,18 +310,120 @@ describe("generate handler: a client intro (Story 3.11)", () => {
     expect(deps.recordEvent).not.toHaveBeenCalled();
   });
 
-  it("always writes test text: the text source (the AI when ANTHROPIC_API_KEY is set) is never asked", async () => {
+  it("writes test text without the key (no client text source): the case text source is never asked", async () => {
     const texts = vi.fn(async () => {
-      throw new Error("no LLM for intros");
+      throw new Error("the case source writes no intros");
     });
     const { handler, intro } = makeIntro({}, { textSource: { texts } });
     expect(await handler.run(introJob, live)).toEqual(ok(undefined));
     expect(texts).not.toHaveBeenCalled();
     expect(JSON.stringify(revisionInput(intro).doc)).toContain(TEST_DRAFT_MARKER);
+    expect(revisionInput(intro).manifest).toEqual({ testDraft: true, assetIds: IMAGES });
+  });
+
+  describe("with the AI's texts (Story 3.9)", () => {
+    const meta = { model: "claude-opus-5-5", fellBack: true, promptVersion: "client-intro@1" };
+    const aiTexts: ClientDraftTexts = {
+      introHead: { text: "Luce per l'ospitalità", sourceRefs: [{ kind: "client_field", id: "description" }] },
+      introBody: { text: "Lumen disegna lampade per hotel e le produce in Italia.", sourceRefs: [{ kind: "asset", id: PDF_ID }] },
+      outroHead: { text: "Un'identità che fa luce", sourceRefs: [{ kind: "client_field", id: "context" }], aspect: "graphic" },
+      outroBody: { text: "Abbiamo costruito con Lumen un'identità coerente su ogni touchpoint.", sourceRefs: [{ kind: "client_field", id: "context" }] },
+    };
+    const aiSource = (result: Awaited<ReturnType<ClientTextSource["texts"]>>) => ({ texts: vi.fn<ClientTextSource["texts"]>(async () => result) });
+
+    /** Everything logged during `run`. */
+    const capture = () => {
+      const lines: string[] = [];
+      vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+        lines.push(String(chunk));
+        return true;
+      });
+      vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+        lines.push(String(chunk));
+        return true;
+      });
+      return () => lines.join("");
+    };
+    const expectNoClientText = (logged: string) => {
+      expect(logged).not.toContain(DESCRIPTION);
+      for (const t of Object.values(aiTexts)) expect(logged).not.toContain(t.text);
+    };
+
+    it("asks the client source with the client's current data and files, and lays the four texts into every format with real meta", async () => {
+      const logged = capture();
+      const source = aiSource(ok({ texts: aiTexts, meta }));
+      const { handler, intro } = makeIntro({ textSource: source });
+      expect(await handler.run(introJob, live)).toEqual(ok(undefined));
+      expect(source.texts).toHaveBeenCalledExactlyOnceWith({
+        clientId: CLIENT_ID,
+        client: expect.objectContaining({ name: "Lumen", industry: "interior_design", description: DESCRIPTION }),
+        assets: expect.arrayContaining([{ id: PDF_ID, kind: "document", contentType: "application/pdf" }]),
+      });
+      const input = revisionInput(intro);
+      expect(input.meta).toEqual(meta);
+      expect(input.manifest).toEqual({ assetIds: IMAGES });
+      expect(validateNewDocument(input.doc).ok).toBe(true);
+      const doc = JSON.stringify(input.doc);
+      expect(doc).not.toContain(TEST_DRAFT_MARKER);
+      // The client's name stays a binding; the AI's texts and refs are on the pages.
+      expect(doc).not.toContain("\"Lumen\"");
+      const formats = (input.doc as unknown as { formats: Record<string, unknown> }).formats;
+      for (const format of Object.values(formats)) {
+        const json = JSON.stringify(format);
+        for (const key of ["introHead", "introBody", "outroHead", "outroBody"] as const) expect(json).toContain(JSON.stringify(aiTexts[key].text));
+        expect(json).toContain(JSON.stringify({ kind: "asset", id: PDF_ID }));
+      }
+      expect(intro.transitionIntro).toHaveBeenCalledExactlyOnceWith(INTRO_ID, "generation_succeeded", SYSTEM);
+      expect(logged()).toContain(INTRO_ID);
+      expectNoClientText(logged());
+    });
+
+    it("an aborted job makes no AI call and writes nothing", async () => {
+      const source = aiSource(ok({ texts: aiTexts, meta }));
+      const { handler, intro } = makeIntro({ textSource: source });
+      const stopped = new AbortController();
+      stopped.abort();
+      expect(await handler.run(introJob, stopped.signal)).toMatchObject({ ok: false, error: { code: "ABORTED" } });
+      expect(source.texts).not.toHaveBeenCalled();
+      expect(intro.createIntroWorkingRevision).not.toHaveBeenCalled();
+    });
+
+    it("a source failure keeps its code and retry flag: INVALID_SOURCE_REF is final and the intro goes back to Bozza", async () => {
+      const bad = makeIntro({ textSource: aiSource(err({ code: "INVALID_SOURCE_REF", message: "m", retryable: false })) });
+      expect(await bad.handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "INVALID_SOURCE_REF", retryable: false } });
+      expect(bad.intro.createIntroWorkingRevision).not.toHaveBeenCalled();
+      await bad.handler.onPermanentFailure(introJob);
+      expect(bad.intro.transitionIntro).toHaveBeenCalledExactlyOnceWith(INTRO_ID, "generation_failed", SYSTEM);
+      const down = makeIntro({ textSource: aiSource(err({ code: "LLM_UNAVAILABLE", message: "m", retryable: true })) });
+      expect(await down.handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "LLM_UNAVAILABLE", retryable: true } });
+      expect(down.intro.transitionIntro).not.toHaveBeenCalled();
+    });
+
+    it("a throwing source is TEXT_SOURCE_FAILED, retryable; the error's message is not logged", async () => {
+      const logged = capture();
+      const { handler } = makeIntro({
+        textSource: {
+          texts: async () => {
+            throw new Error(SECRET);
+          },
+        },
+      });
+      expect(await handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "TEXT_SOURCE_FAILED", retryable: true } });
+      expect(logged()).toContain("text source threw");
+      expect(logged()).not.toContain(SECRET);
+      expectNoClientText(logged());
+    });
   });
 
   it("re-checks the gate: fewer than 2 client images is NO_CLIENT_IMAGES, final, nothing written", async () => {
-    const { handler, intro } = makeIntro({ listClientAssets: vi.fn(async () => ok([{ id: IMAGES[0], kind: "image" }, { id: IMAGES[1], kind: "video" }])) });
+    const { handler, intro } = makeIntro({
+      listClientAssets: vi.fn(async () =>
+        ok([
+          { id: IMAGES[0], kind: "image", contentType: "image/jpeg" },
+          { id: IMAGES[1], kind: "video", contentType: "video/mp4" },
+        ]),
+      ),
+    });
     expect(await handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "NO_CLIENT_IMAGES", retryable: false } });
     expect(intro.createIntroWorkingRevision).not.toHaveBeenCalled();
   });
