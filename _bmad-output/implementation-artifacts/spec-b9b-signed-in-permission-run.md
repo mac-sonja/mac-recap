@@ -2,7 +2,8 @@
 title: 'B9 part 2: permission matrix against the database with a signed-in user per role (rest of Story 6.4)'
 type: 'chore'
 created: '2026-11-11'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: 'd6bcd125611b6cafa6aa23939c9108449e20f0e5'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
