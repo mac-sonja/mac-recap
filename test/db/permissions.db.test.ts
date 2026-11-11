@@ -18,7 +18,7 @@ import type { Role } from "@/modules/access";
 import { switchSession, TEST_ACTOR_ID, TEST_ROLES, TEST_USERS, TestCookieStore, type TestRole } from "../helpers/db-actor";
 import { addTestLogo, createTestClient, nameWithLetters, freshPrefix, TEST_DESCRIPTION, TEST_INDUSTRY, type TestClient } from "../helpers/db-clients";
 import { listServerActionFiles } from "../helpers/authorize-guard";
-import { EXPECTED, OWNERS, SIGN_IN_ACTIONS } from "../helpers/permission-matrix";
+import { EXPECTED, OWNERS, ROLES, SIGN_IN_ACTIONS } from "../helpers/permission-matrix";
 
 const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -26,7 +26,7 @@ if (missing.length > 0) {
   throw new Error(`Missing ${missing.join(", ")}: run the DB suite with \`npm run test:db\` (start the stack with \`npm run db:start\`).`);
 }
 
-// Outside a Next request: the request's origin (only `addUser` reads it, for the invite link),
+// Outside a Next request: the request's origin (of the actions loaded here, only `addUser` reads it, for the invite link),
 // `connection()` and the navigation helpers a page calls. `redirect` throws, as Next's does.
 vi.mock("@/app/_lib/origin", () => ({ requestOrigin: async () => "http://localhost:3000" }));
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => undefined }));
@@ -72,11 +72,12 @@ const signInAs = (role: TestRole) => switchSession(stores[role]);
 
 let pool: pg.Pool;
 
-/** The tables whose rows an action could write: everything in `public`, and the stored objects. */
+/** The tables whose rows an action could write: everything in `public`, the stored objects, and the Auth users and identities (Organizzazione). */
 async function snapshot(): Promise<Record<string, string>> {
   const { rows: tables } = await pool.query<{ schema: string; name: string }>(
     `select n.nspname as schema, c.relname as name from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-      where c.relkind in ('r', 'p') and (n.nspname = 'public' or (n.nspname = 'storage' and c.relname = 'objects')) order by 1, 2`,
+      where c.relkind in ('r', 'p') and (n.nspname = 'public' or (n.nspname = 'storage' and c.relname = 'objects')
+        or (n.nspname = 'auth' and c.relname in ('users', 'identities'))) order by 1, 2`,
   );
   const out: Record<string, string> = {};
   for (const { schema, name } of tables) {
@@ -231,6 +232,20 @@ afterAll(async () => {
   await pool.end();
 });
 
+/**
+ * The allowed actions that read the case or intro by the given id before the use case validates
+ * the input (its status decides what runs next): with no input they answer 404 `NOT_FOUND`, still
+ * past the policy. Every other allowed action answers ok or 400 to no input.
+ */
+const READ_FIRST = new Set([
+  "configurator.approveCase",
+  "configurator.updateApprovedVersion",
+  "configurator.saveCaseResults",
+  "configurator.saveCaseTestimonial",
+  "client-configurator.approveIntro",
+  "client-configurator.updateApprovedIntroVersion",
+]);
+
 /** The same input for every denied call: real ids, so a missing check would reach real rows. */
 const target = () => ({
   caseId: seed.draftCaseId,
@@ -247,7 +262,17 @@ const target = () => ({
 describe("NFR3 guardrail: the permission matrix end to end, signed in per role (Story 6.4, B9 part 2)", () => {
   it("covers every server action on disk, from the same EXPECTED as the stubbed suite", () => {
     expect(DISCOVERED.filter((file) => !Object.hasOwn(EXPECTED, file))).toEqual([]);
+    expect(Object.keys(EXPECTED).filter((file) => !DISCOVERED.includes(file))).toEqual([]);
+    const unresolved = Object.entries(EXPECTED).flatMap(([file, { label, actions }]) =>
+      Object.keys(actions).filter((name) => typeof MODULES[file]?.[name] !== "function").map((name) => `${label}.${name}`),
+    );
+    expect(unresolved, "EXPECTED actions that are not a function on disk").toEqual([]);
+    expect(Object.keys(ACTIONS).length).toBe(Object.values(EXPECTED).reduce((n, { actions }) => n + Object.keys(actions).length, 0));
     expect(Object.keys(ACTIONS).length).toBe(Object.values(MODULES).reduce((n, exports) => n + Object.keys(exports).length, 0));
+  });
+
+  it("signs in one test user for each role the matrix knows", () => {
+    expect([...TEST_ROLES].sort()).toEqual([...ROLES].sort());
   });
 
   it("resolves each signed-in test user to its own role through the real session and profile", async () => {
@@ -297,10 +322,14 @@ describe("NFR3 guardrail: the permission matrix end to end, signed in per role (
       });
     });
 
-    it.each(allowedTo(role))("%s gets past the policy (with no input: 400, never 401 or 403)", async (name) => {
+    it.each(allowedTo(role))("%s gets past the policy (with no input: ok or 400; the case/intro readers 404)", async (name) => {
       signInAs(role);
       const result = await action(name)({});
-      expect(result.ok || (result.status !== 401 && result.status !== 403), JSON.stringify(result)).toBe(true);
+      if (READ_FIRST.has(name)) {
+        expect(result, JSON.stringify(result)).toMatchObject({ ok: false, status: 404, error: { code: "NOT_FOUND" } });
+      } else {
+        expect(result.ok || result.status === 400, JSON.stringify(result)).toBe(true);
+      }
     });
   });
 
@@ -346,10 +375,15 @@ describe("NFR3 guardrail: the permission matrix end to end, signed in per role (
       expect((await pool.query("select job_title from public.profile where id = $1", [TEST_USERS.account_sales_social.id])).rows[0]).toEqual({ job_title: "Account" });
     });
 
-    it.each(["owner_designer", "account_sales_social"] as const)("sends %s to its landing instead", async (role) => {
+    it.each([
+      ["owner_designer", "/home"],
+      ["account_sales_social", "/library"],
+    ] as const)("sends %s to its landing (%s) instead", async (role, landing) => {
       signInAs(role);
+      const { landingFor } = await import("@/modules/access");
+      expect(landingFor(role)).toBe(landing);
       const { default: UsersPage } = await import("@/app/(tool)/organization/page");
-      await expect(UsersPage()).rejects.toThrow(/^REDIRECT \//);
+      await expect(UsersPage()).rejects.toThrow(new Error(`REDIRECT ${landing}`));
     });
   });
 
@@ -381,10 +415,22 @@ describe("NFR3 guardrail: the permission matrix end to end, signed in per role (
       for (const name of ["case-studies.listAssets", "case-studies.getDetailsForm", "configurator.getRenderAssets"]) {
         expect(await action(name)({ caseId: seed.draftCaseId, assetIds: [] }), name).toMatchObject({ ok: false, status: 403, error: { code: "FORBIDDEN" } });
       }
+      // Through actions this role IS allowed: the refusal comes from the approved-only scope, not the role.
       expect(await action("export.requestCaseExport")({ caseId: seed.draftCaseId, format: F })).toMatchObject({ ok: false, error: { code: "NOT_APPROVED" } });
-      // The case page never shows a draft to this role: it sends the person elsewhere.
+      expect(await action("export.getCaseExportStatus")({ caseId: seed.draftCaseId, jobId: randomUUID() })).toMatchObject({ ok: false, error: { code: "NOT_APPROVED" } });
+      expect(await action("client-export.requestClientExport")({ clientId: seed.draftOnlyClient.id, formats: [F] })).toMatchObject({ ok: false, error: { code: "NOT_APPROVED" } });
+      expect(
+        await action("collections.createCollection")({ name: "Con bozza", businessLines: ["branding"], industries: [TEST_INDUSTRY], caseIds: [seed.draftCaseId] }),
+      ).toMatchObject({ ok: false, error: { code: "CASE_NOT_COLLECTABLE" } });
+      const { rows } = await pool.query<{ version: number }>("select version from public.collection where id = $1", [seed.collectionId]);
+      expect(await action("collection.addCollectionItems")({ collectionId: seed.collectionId, expectedVersion: rows[0].version, caseIds: [seed.draftCaseId] })).toMatchObject({
+        ok: false,
+        error: { code: "CASE_NOT_COLLECTABLE" },
+      });
+      // The case page never shows a draft to this role: it sends the person to the draft's wizard, which is not theirs.
+      const { wizardHref } = await import("@/app/_lib/routes");
       const { default: CaseViewPage } = await import("@/app/(tool)/case-studies/[caseId]/page");
-      await expect(CaseViewPage({ params: Promise.resolve({ caseId: seed.draftCaseId }) })).rejects.toThrow(/^REDIRECT /);
+      await expect(CaseViewPage({ params: Promise.resolve({ caseId: seed.draftCaseId }) })).rejects.toThrow(new Error(`REDIRECT ${wizardHref(seed.draftCaseId)}`));
       // The library's list scope is approved only.
       const { getActor } = await import("@/modules/access");
       const { listScopeFor } = await import("@/app/_lib/list-scope");

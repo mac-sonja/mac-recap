@@ -129,7 +129,7 @@ export async function ensureTestUsers(): Promise<void> {
       await pool.query(
         `insert into public.profile (id, email, display_name, role) values ($1, $2, $3, $4)
          on conflict (id) do update set email = excluded.email, display_name = excluded.display_name,
-           role = excluded.role, disabled_at = null, designer_requested_at = null`,
+           role = excluded.role, disabled_at = null, designer_requested_at = null, job_title = null`,
         [id, email, name, role],
       );
     }

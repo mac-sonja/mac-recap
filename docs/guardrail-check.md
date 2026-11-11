@@ -56,7 +56,7 @@ so NFR2 is tested as the approval rules built today.
 | No server action (sign-in included), page or route, environment variable, table, column or database function names a guardrail or permission setting | `test/guardrails/nfr3-no-guardrail-setting.test.ts`, `test/permissions.test.ts` |
 | Account/sales/social has no write action outside exports and collections | `test/permissions.test.ts` |
 | Every server action, for every role, through the real actor resolver and policy (the role matrix below) | `test/permissions.test.ts` (`npm test`, untagged) |
-| **The signed-in proof.** The same matrix end to end with one real signed-in test user per role (owner/designer, admin, account/sales/social) against the local database: every denied action `FORBIDDEN` with no row changed in any `public` table or stored object, every allowed action past the policy, the representative allowed actions run for real, a disabled profile and no session refused (401) | `test/db/permissions.db.test.ts` (`npm run test:db`) |
+| **The signed-in proof.** The same matrix end to end with one real signed-in test user per role (owner/designer, admin, account/sales/social) against the local database: every denied action `FORBIDDEN` with no row changed in any `public` table, stored object or Auth user or identity, every allowed action past the policy, the representative allowed actions run for real, a disabled profile and no session refused (401) | `test/db/permissions.db.test.ts` (`npm run test:db`) |
 
 The role-matrix tests of the permission suite are not tagged: they run in `npm test` (and
 CI), not in the `test:guardrails` table. The permission suite (`test/permissions.test.ts`,
@@ -82,8 +82,10 @@ drift, and runs it with nothing of the access path stubbed: one Auth user and pr
 `authorize`, against the real modules and tables. For each role it proves:
 
 - every action EXPECTED denies returns 403 `FORBIDDEN`, called with real ids, and a snapshot
-  of every `public` table and of the stored objects is the same before and after;
-- every action it allows gets past the policy (never 401 or 403);
+  of every `public` table, the stored objects and the Auth users and identities is the same
+  before and after;
+- every action it allows gets past the policy (ok or 400 with no input; 404 for the six that
+  read the case or intro first);
 - `change permissions or guardrails` is denied to the signed-in actor.
 
 On seeded data (a client, an approved case, a draft case, a collection) owner/designer and
