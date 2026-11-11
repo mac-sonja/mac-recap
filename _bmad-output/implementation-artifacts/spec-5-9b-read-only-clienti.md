@@ -2,7 +2,8 @@
 title: 'Story 5.9b: read-only Clienti and client pack for account/sales/social'
 type: 'feature'
 created: '2026-11-11'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: 'feda38aadda9726df2187f06803b1e7f6175a4f5'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
