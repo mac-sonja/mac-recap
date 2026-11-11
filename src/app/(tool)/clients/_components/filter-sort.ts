@@ -7,7 +7,10 @@ export interface ClientRow {
   /** The automatic client code (e.g. `LUM`), shown in the ID column. */
   code: string;
   name: string;
-  /** Non-deleted case studies of this client. */
+  /**
+   * Non-deleted case studies of this client, every status. On the read-only list (Story 5.9b)
+   * the approved ones only, so no draft is ever counted there.
+   */
   caseCount: number;
   /** Of those, the approved ones: with at least one the card offers **Scarica** (the client pack). */
   approvedCount: number;

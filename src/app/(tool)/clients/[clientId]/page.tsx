@@ -64,20 +64,21 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
   }
   const client = found.value;
 
-  // Story 3.11: the intro-and-outro draft's status, once the client has one.
-  const intro = await caseStudy.getClientIntro(client.id);
-  if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
-
-  // The sector labels (the pill here and the panel's Settore) come from the shared list.
-  const sectors = await caseStudy.listClientSectors();
-  if (!sectors.ok) throw new Error(`Client sectors could not be listed: ${sectors.error.code}`);
-
   // Story 5.9b: a read-only actor sees approved cases only, whatever its own list scope.
   const scope = readOnly ? ({ status: "approved" } as const) : listScopeFor(actor);
   if (scope === null || !authorize(actor, "list cases", scope).ok) redirect(landing);
   const listed = await caseStudy.list({ ...scope, clientId: client.id });
   if (!listed.ok) throw new Error(`Case studies could not be listed: ${listed.error.code}`);
   if (readOnly && !listed.value.some((c) => c.status === "approved")) redirect("/clients");
+
+  // Story 3.11: the intro-and-outro draft's status, once the client has one. Read-only (5.9b), the
+  // status isn't shown, but the pack dialog's note still needs whether the intro is approved.
+  const intro = await caseStudy.getClientIntro(client.id);
+  if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
+
+  // The sector labels (the pill here and the panel's Settore) come from the shared list.
+  const sectors = await caseStudy.listClientSectors();
+  if (!sectors.ok) throw new Error(`Client sectors could not be listed: ${sectors.error.code}`);
 
   // Read-only, approved cases only (the list is already scoped; this keeps it so).
   const cases = readOnly ? listed.value.filter((c) => c.status === "approved") : listed.value;

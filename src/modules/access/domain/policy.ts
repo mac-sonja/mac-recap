@@ -76,7 +76,8 @@ const MATRIX: Readonly<Record<Action, Readonly<Partial<Record<Role, Rule>>>>> = 
   discard: { ...owners(true) },
   view: { ...owners(approved), account_sales_social: approved },
   export: { ...owners(approved), account_sales_social: approved },
-  // Story 5.9b: a client's pack (its approved intro, cases and closing), for every role; what is exported is always approved.
+  // Story 5.9b: a client's pack (its approved intro, cases and closing), for owner/designer, admin and
+  // account/sales/social (not system); what is exported is always approved.
   "download client pack": { ...owners(approved), account_sales_social: approved },
   "job work": { system: true },
   "create link": { ...owners(approved), account_sales_social: approved },

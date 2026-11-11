@@ -301,8 +301,8 @@ async function deliverPack(
  * closing once; without an approved intro, each case with all its pages. Live revisions
  * only. Every format is checked before anything is enqueued. Reuses a stored export with
  * the same content hash (`ready`, with an `export` case event per case), else enqueues one
- * `export` job for the client (`pending`). Authorize first (every role: `download client
- * pack` and `export`, approved; Story 5.9b). Errors: `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE` (Video),
+ * `export` job for the client (`pending`). Authorize first (`download client pack` and
+ * `export`, approved: owner/designer, admin, account/sales/social; Story 5.9b). Errors: `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE` (Video),
  * `CLIENT_NOT_FOUND`, `NOT_APPROVED` (no approved case), `FORMAT_NOT_IN_REVISION` (a part
  * has no pages in a format), `EXPORT_TOO_LARGE` (more parts than an export holds), the reads'.
  */

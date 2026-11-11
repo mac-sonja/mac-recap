@@ -436,6 +436,8 @@ export const it = {
     empty: "Ancora nessun cliente. Aggiungi il primo e partiamo.",
     /** The empty state where clients can't be added: below 1024 px, or without `manage clients`. */
     emptyReadOnly: "Ancora nessun cliente.",
+    /** The read-only list's empty state (Story 5.9b): it shows only clients with an approved case. */
+    emptyNoApproved: "Nessun cliente con case history approvate.",
     /** Read by screen readers while the table loads. */
     loading: "Un attimo…",
     add: "Aggiungi cliente",

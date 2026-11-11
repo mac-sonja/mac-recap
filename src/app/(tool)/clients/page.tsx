@@ -94,7 +94,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps = {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={it.clients.heading} lead={it.clients.lead} />
-      <ClientsTable rows={rows} canManage={canManage} showProfileStatus={!readOnly} />
+      <ClientsTable rows={rows} canManage={canManage} readOnly={readOnly} />
       {adding && (
         <ClientPanel
           client={null}

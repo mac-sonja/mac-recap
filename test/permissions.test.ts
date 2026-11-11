@@ -369,12 +369,64 @@ describe("no role exports a client pack with a revision that isn't approved (Sto
       error: { code: "NOT_APPROVED" },
     });
     expect(caseStudyModule.listClientCasesInOrder).toHaveBeenCalledWith(CLIENT_ID);
-    const updateClient = vi.mocked(caseStudyModule.updateClient);
-    updateClient.mockClear();
-    for (const write of [clients.createClient, clients.updateClient, clients.deleteClient, clients.saveClientBriefField, clients.startClientIntro]) {
+    // Each write and the module function behind it: refused before the module is called.
+    const writes = [
+      [clients.createClient, caseStudyModule.createClient],
+      [clients.updateClient, caseStudyModule.updateClient],
+      [clients.deleteClient, caseStudyModule.deleteClient],
+      [clients.saveClientBriefField, caseStudyModule.saveClientBriefField],
+      [clients.startClientIntro, caseStudyModule.startClientIntro],
+    ] as const;
+    for (const [, behind] of writes) vi.mocked(behind).mockClear();
+    for (const [write, behind] of writes) {
       expect(await write({ id: CLIENT_ID })).toMatchObject({ ok: false, status: 403, error: { code: "FORBIDDEN" } });
+      expect(behind).not.toHaveBeenCalled();
     }
-    expect(updateClient).not.toHaveBeenCalled();
+  });
+
+  it("as account/sales/social: an approved pack is exported (a job for the client) and its status answers (5.9b)", async () => {
+    session.role = "account_sales_social";
+    const { caseHistoryV2 } = await import("@/modules/generation");
+    const { FORMAT_IDS } = await import("@/modules/rendering");
+    const doc = caseHistoryV2(FORMAT_IDS);
+    const JOB_ID = "99999999-0000-4000-8000-000000000001";
+    const listedCase = { ...approvedCase, year: 2026, businessLines: [], status: "approved" };
+    vi.mocked(caseStudyModule.listClientCasesInOrder).mockResolvedValue(ok([listedCase]) as never);
+    // The case is approved; the client's intro isn't (each case keeps its own pages).
+    const getLiveRevision = arrange((subject) =>
+      subject.kind === "case" ? { id: "eeeeeeee-0000-4000-8000-000000000001", caseId: subject.id, status: "approved", doc } : null,
+    );
+    vi.mocked(caseStudyModule.get).mockResolvedValue(ok(listedCase) as never);
+    vi.mocked(caseStudyModule.getClientInfoForCase).mockResolvedValue(
+      ok({ clientId: CLIENT_ID, name: "Lumen", industry: null, description: null, logoId: null, brief: { context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" } }) as never,
+    );
+    const material = await import("@/modules/material");
+    vi.mocked(material.getDetailsForm).mockResolvedValue(ok({ context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" }) as never);
+    vi.mocked(jobsModule.enqueue).mockResolvedValue(ok({ id: JOB_ID }) as never);
+    vi.mocked(jobsModule.getJobsFor).mockResolvedValue(ok([{ id: JOB_ID, kind: "export", status: "queued", inputHash: "h" }]) as never);
+
+    const result = await clientExportActions.requestClientExport({ clientId: CLIENT_ID, formats: ["presentazione_16_9"] });
+    expect(result).toMatchObject({ ok: true, value: { status: "pending" } });
+    expect(jobsModule.enqueue).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ subjectId: CLIENT_ID, payload: expect.objectContaining({ subject: { kind: "client", id: CLIENT_ID } }) }),
+    );
+    expect(await clientExportActions.getClientExportStatus({ clientId: CLIENT_ID, jobId: JOB_ID })).toMatchObject({
+      ok: true,
+      value: { status: "pending", jobId: JOB_ID },
+    });
+    expect(getLiveRevision).toHaveBeenCalledWith({ kind: "case", id: CASE_ID });
+    expect(caseStudyModule.getEditableRevision).not.toHaveBeenCalled();
+
+    vi.mocked(caseStudyModule.get).mockReset();
+    vi.mocked(caseStudyModule.get).mockResolvedValue(ok(null) as never);
+    vi.mocked(caseStudyModule.getClientInfoForCase).mockReset();
+    vi.mocked(caseStudyModule.getClientInfoForCase).mockResolvedValue(ok(null) as never);
+    vi.mocked(material.getDetailsForm).mockReset();
+    vi.mocked(material.getDetailsForm).mockResolvedValue(ok(null) as never);
+    vi.mocked(jobsModule.enqueue).mockReset();
+    vi.mocked(jobsModule.enqueue).mockResolvedValue(ok(null) as never);
+    vi.mocked(jobsModule.getJobsFor).mockReset();
+    vi.mocked(jobsModule.getJobsFor).mockResolvedValue(ok(null) as never);
   });
 });
 

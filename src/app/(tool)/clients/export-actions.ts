@@ -12,14 +12,14 @@ import type { ExportTicket } from "@/modules/rendering/server";
  * when the same pack was exported before, returns `{ status: "ready", url, fileName }` at
  * once (with an `export` case event per case), otherwise enqueues an `export` job and
  * returns `{ status: "pending", jobId }`. Web requests never render. 403 `FORBIDDEN`
- * without `download client pack` (Story 5.9b: every role); 400 `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE`,
+ * without `download client pack` (Story 5.9b: owner/designer, admin, account/sales/social); 400 `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE`,
  * `FORMAT_NOT_IN_REVISION`; 404 `CLIENT_NOT_FOUND`; 409 `NOT_APPROVED` (no approved case).
  * Nothing is enqueued on any error.
  */
 export async function requestClientExport(input: unknown): Promise<ActionResult<ExportTicket>> {
   const actor = await getActor();
   if (!actor.ok) return failure(actor.error);
-  // Story 5.9b: every role that may download a client's pack (owner/designer, admin, account/sales/social).
+  // Story 5.9b: owner/designer, admin and account/sales/social (`download client pack`).
   const pack = authorize(actor.value, "download client pack", { status: "approved" });
   if (!pack.ok) return failure(pack.error);
   // What is exported is always approved: the module checks every part has an approved revision.
@@ -39,7 +39,7 @@ export async function requestClientExport(input: unknown): Promise<ActionResult<
 export async function getClientExportStatus(input: unknown): Promise<ActionResult<ExportTicket>> {
   const actor = await getActor();
   if (!actor.ok) return failure(actor.error);
-  // Story 5.9b: every role that may download a client's pack (owner/designer, admin, account/sales/social).
+  // Story 5.9b: owner/designer, admin and account/sales/social (`download client pack`).
   const pack = authorize(actor.value, "download client pack", { status: "approved" });
   if (!pack.ok) return failure(pack.error);
   // What is exported is always approved: the module checks every part has an approved revision.

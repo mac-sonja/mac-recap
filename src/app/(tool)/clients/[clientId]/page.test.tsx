@@ -1,12 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ShellActor } from "@/app/_lib/surface";
+import type { requireSurface as RequireSurface, ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
 import type { CaseStudy, ClientDetail, ClientIntro, ClientSector, ListedClientAsset, ListScope } from "@/modules/case-study";
 import { fill, it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
-const requireSurface = vi.fn<(action: unknown) => Promise<ShellActor | null>>();
+const requireSurface = vi.fn<typeof RequireSurface>();
 const getClient = vi.fn<(id: unknown) => Promise<Result<ClientDetail>>>();
 const list = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
 const listClientMaterial = vi.fn<(input: unknown) => Promise<Result<ListedClientAsset[]>>>();
@@ -26,7 +26,7 @@ vi.mock("next/navigation", () => ({
     throw new Error(`REDIRECT ${path}`);
   }),
 }));
-vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: unknown) => requireSurface(action) }));
+vi.mock("@/app/_lib/surface", () => ({ requireSurface: (...args: Parameters<typeof RequireSurface>) => requireSurface(...args) }));
 vi.mock("@/modules/case-study", () => ({
   getClient: (id: unknown) => getClient(id),
   list: (scope: ListScope) => list(scope),
@@ -385,6 +385,9 @@ describe("ClientPage", () => {
       account();
       list.mockResolvedValue(ok([]));
       await expect(renderPage()).rejects.toThrow("REDIRECT /clients");
+      // Nothing more about the client is read before the redirect.
+      expect(getClientIntro).not.toHaveBeenCalled();
+      expect(listClientSectors).not.toHaveBeenCalled();
     });
   });
 

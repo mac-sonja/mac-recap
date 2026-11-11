@@ -2,7 +2,7 @@
 title: 'Story 5.9b: read-only Clienti and client pack for account/sales/social'
 type: 'feature'
 created: '2026-11-11'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'feda38aadda9726df2187f06803b1e7f6175a4f5'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -87,10 +87,10 @@ context:
 
 - **Policy.** `download client pack`: owners and account/sales/social, approved only (as `export`). `list clients` / `manage clients` unchanged.
 - **Surface.** `requireSurface` also takes a list of uses (`{ action, resource? }[]`) and lets the actor in when any is allowed. `clients/_lib/clients-surface.ts` holds `CLIENTS_SURFACE` (`list clients`, or `download client pack` approved) and `clientsAccess(actor)` (`full` / `read-only` / `null`), used by both client routes and the sidebar (Clienti shows when not `null`). Pages authorize `list clients` (full) or `download client pack` (read-only), and `list cases` approved, before any module call.
-- **List.** Read-only lists `caseStudy.list({ status: "approved" })`, keeps only clients with an approved case and counts approved cases; `ClientsTable` gets `showProfileStatus` (default on, off read-only) to hide "Profilo completo/da completare". The add link and `?nuovo=1` panel stay behind `manage clients`. No new i18n string: the current lead and `emptyReadOnly` fit.
-- **Client page.** Read-only lists `{ status: "approved", clientId }`, redirects to `/clients` with no approved case, filters rows to approved, hides the intro status; layout, Modifica, edit panel and Nuova case history were already behind `edit` / `manage clients` / `create case`. Scarica now shows on `download client pack` (approved) instead of `export` (same roles for owners).
+- **List.** Read-only lists `caseStudy.list({ status: "approved" })`, keeps only clients with an approved case and counts approved cases; `ClientsTable` gets `readOnly` (default off) to hide "Profilo completo/da completare" and show `clients.emptyNoApproved` ("Nessun cliente con case history approvate.") when empty. The add link and `?nuovo=1` panel stay behind `manage clients`.
+- **Client page.** Read-only lists `{ status: "approved", clientId }`, lists cases right after `getClient` and redirects to `/clients` with no approved case before reading the intro or sectors (the intro is still read for the pack dialog's note), filters rows to approved, hides the intro status; layout, Modifica, edit panel and Nuova case history were already behind `edit` / `manage clients` / `create case`. Scarica now shows on `download client pack` (approved) instead of `export` (same roles for owners).
 - **Pack actions.** `requestClientExport` / `getClientExportStatus` authorize `download client pack` + `export` (approved); module comments updated. Pack content and hash untouched.
-- **Tests.** `policy.test.ts` (row, approved-only, every role), `surface.test.ts` (list of uses), `layout.test.tsx` (account sees Clienti), page tests (read-only list, `?nuovo=1`, empty; read-only client page, `?modifica=1`, redirect), `test/permissions.test.ts` (`client-export.*` for SHARERS, `ownsNoContent`, pack guardrails for account too, account client writes → `FORBIDDEN`). Owner tests change only in the `requireSurface` argument (now `CLIENTS_SURFACE`).
+- **Tests.** `policy.test.ts` (row, approved-only, every role), `surface.test.ts` (list of uses), `layout.test.tsx` (account sees Clienti), page tests (read-only list, `?nuovo=1`, empty; read-only client page, `?modifica=1`, redirect), `test/permissions.test.ts` (`client-export.*` for SHARERS, `ownsNoContent`, pack guardrails for account too, account client writes → `FORBIDDEN` with each module write uncalled, an account happy-path pack reaching `pending` and its status), `clients/_lib/clients-surface.test.ts` (`CLIENTS_SURFACE` and `clientsAccess` against the real policy). Owner tests change only in the `requireSurface` argument (now `CLIENTS_SURFACE`).
 - **Not run:** `npm run test:db` (no Docker here); no migration or DB change in this story.
 
 ## Spec Change Log

@@ -1,12 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ShellActor } from "@/app/_lib/surface";
+import type { requireSurface as RequireSurface, ShellActor } from "@/app/_lib/surface";
 import type { Actor, Role } from "@/modules/access";
 import type { ClientSector, ClientSummary } from "@/modules/case-study";
 import { fill, it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
-const requireSurface = vi.fn<(action: unknown) => Promise<ShellActor | null>>();
+const requireSurface = vi.fn<typeof RequireSurface>();
 const listClientSummaries = vi.fn<() => Promise<Result<ClientSummary[]>>>();
 const list = vi.fn<(scope?: unknown) => Promise<Result<{ status: string; client: { id: string } }[]>>>();
 const listClientSectors = vi.fn<() => Promise<Result<ClientSector[]>>>();
@@ -22,7 +22,7 @@ vi.mock("next/navigation", () => ({
     throw new Error(`REDIRECT ${path}`);
   }),
 }));
-vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: unknown) => requireSurface(action) }));
+vi.mock("@/app/_lib/surface", () => ({ requireSurface: (...args: Parameters<typeof RequireSurface>) => requireSurface(...args) }));
 vi.mock("@/modules/case-study", () => ({
   listClientSummaries: () => listClientSummaries(),
   list: (scope: unknown) => list(scope),
@@ -227,11 +227,12 @@ describe("ClientsPage", () => {
       expect(listClientSectors).not.toHaveBeenCalled();
     });
 
-    it("shows the read-only empty line when no client has an approved case", async () => {
+    it("says no client has an approved case when clients exist but none has one", async () => {
       account();
       list.mockResolvedValue(ok([]));
       const html = await renderPage();
-      expect(html).toContain(dict.clients.emptyReadOnly);
+      expect(html).toContain(dict.clients.emptyNoApproved);
+      expect(html).not.toContain(dict.clients.emptyReadOnly);
       expect(html).not.toContain(dict.clients.add);
       expect(html).not.toContain("<li data-client-id=");
     });
