@@ -349,3 +349,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-10a-collections.md`
   summary: Drag-and-drop tests for the collection Pagine rows (group and case drops).
   evidence: Needs a DataTransfer shim in happy-dom; the shared move path is covered through the menu and Alt+arrow tests.
+
+- source_spec: none
+  summary: Story 5.11 part 2 (5.11b): collection exports apply the collection's text edits, hidden pages and page order to a copy of the documents, and the collection content hash includes them.
+  evidence: Owner chose on 2026-11-11 to build B7 in two parts; part 1 (5.11a) stores and shows the edits on the collection page.
