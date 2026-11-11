@@ -56,6 +56,7 @@ so NFR2 is tested as the approval rules built today.
 | No server action (sign-in included), page or route, environment variable, table, column or database function names a guardrail or permission setting | `test/guardrails/nfr3-no-guardrail-setting.test.ts`, `test/permissions.test.ts` |
 | Account/sales/social has no write action outside exports and collections | `test/permissions.test.ts` |
 | Every server action, for every role, through the real actor resolver and policy (the role matrix below) | `test/permissions.test.ts` (`npm test`, untagged) |
+| **The signed-in proof.** The same matrix end to end with one real signed-in test user per role (owner/designer, admin, account/sales/social) against the local database: every denied action `FORBIDDEN` with no row changed in any `public` table, stored object or Auth user or identity, every allowed action past the policy, the representative allowed actions run for real, a disabled profile and no session refused (401) | `test/db/permissions.db.test.ts` (`npm run test:db`) |
 
 The role-matrix tests of the permission suite are not tagged: they run in `npm test` (and
 CI), not in the `test:guardrails` table. The permission suite (`test/permissions.test.ts`,
@@ -69,7 +70,31 @@ also proves that account/sales/social's collection edits reach the collection's 
 and call no case-study or material function, that the role can't edit a client or an intro,
 and that it sees on Clienti only the clients with an approved case. That the collection's
 use cases write no revision, intro, case or client row is proved against the database by
-`test/db/collection.db.test.ts` (`npm run test:db`, as an owner/designer; per role is B9 part 2).
+`test/db/collection.db.test.ts` (`npm run test:db`, as an owner/designer) and, as a signed-in
+account/sales/social user, by `test/db/permissions.db.test.ts`.
+
+**The signed-in run** (`test/db/permissions.db.test.ts`, `npm run test:db`, tagged
+`NFR3 guardrail`; Story 6.4, B9 part 2) is the signed-in proof of NFR3. It reads the same
+EXPECTED list as the permission suite (`test/helpers/permission-matrix.ts`), so the two can't
+drift, and runs it with nothing of the access path stubbed: one Auth user and profile per role
+(owner/designer, admin, account/sales/social), each signed in once per run
+(`test/db/global-setup.ts`), resolved by the real `getActor` and checked by the real
+`authorize`, against the real modules and tables. For each role it proves:
+
+- every action EXPECTED denies returns 403 `FORBIDDEN`, called with real ids, and a snapshot
+  of every `public` table, the stored objects and the Auth users and identities is the same
+  before and after;
+- every action it allows gets past the policy (ok or 400 with no input; 404 for the six that
+  read the case or intro first);
+- `change permissions or guardrails` is denied to the signed-in actor.
+
+On seeded data (a client, an approved case, a draft case, a collection) owner/designer and
+admin create and edit a client, create a case, save a case in review and approve it; the admin
+opens Organizzazione and changes a job title, which sends anyone else to their landing.
+Account/sales/social exports the approved case and the client's pack (an export job is
+enqueued, never drawn), is refused every read of the draft, sees on Clienti only the clients
+with an approved case, and edits a collection's text with no revision, case, client or intro
+row changed. With no session, or with a disabled profile, every action is 401.
 
 ### NFR6: no material, nothing generated
 
@@ -109,12 +134,10 @@ use cases write no revision, intro, case or client row is proved against the dat
 - **The per-block check** (Story 4.7): removed for the demo by the sprint change proposal
   of 2026-10-28. NFR2 is
   tested as the approval rules above.
-- **The signed-in database run** (B9 part 2): the permission matrix against the local
-  database, with a signed-in test user per role. Today the suite runs the real actor
-  resolver and policy with the database adapters stubbed.
 
 ## Record
 
 NFR3 re-checked after Epic 6 (login, users and roles) on 2026-11-11: `npm run
-test:guardrails` and the permission suite pass on the post-login build. The manual checks above are still
+test:guardrails` and the permission suite pass on the post-login build, and the signed-in run
+(`test/db/permissions.db.test.ts`) passes against the local database. The manual checks above are still
 to run before the demo.
