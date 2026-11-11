@@ -1,7 +1,7 @@
 "use client";
 
-import { GripVertical, Lock, MoreHorizontal, Plus } from "lucide-react";
-import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { ChevronRight, EyeOff, GripVertical, Lock, MoreHorizontal, Plus } from "lucide-react";
+import { Fragment, memo, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { SECONDARY_ACTION } from "@/app/_components/button-styles";
 import type { Page } from "@/modules/generation";
 import { renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
@@ -13,6 +13,8 @@ import type { CollectionGroup, ViewSegment } from "./collection-file";
 /** A group's drag data type: its client id. A case's: its case id. They never mix. */
 const GROUP_DRAG_TYPE = "application/x-mac-collection-group";
 const CASE_DRAG_TYPE = "application/x-mac-collection-case";
+/** Story 5.11a: a page's drag data type (its run and place). It never mixes with the other two. */
+const PAGE_DRAG_TYPE = "application/x-mac-collection-page";
 
 /** A page's still thumbnail, drawn by the format's renderer (as the configurator's Pagine). */
 const Thumbnail = memo(function Thumbnail({
@@ -164,6 +166,171 @@ export interface CollectionPagineProps {
   onAdd: () => void;
   /** A case dropped on another client's group: refused, and said why. */
   onRefused: (text: string) => void;
+  /** Story 5.11a: a run's page at `from` to place `to` (both within the run, hidden pages counted). */
+  onMovePage: (segmentKey: string, from: number, to: number) => void;
+  /** Story 5.11a: **Elimina dalla raccolta** (`hidden`) or **Ripristina** on a page of a run. */
+  onPageHidden: (segmentKey: string, pageKey: string, hidden: boolean) => void;
+}
+
+/**
+ * Story 5.11a: a run's pages under its row, behind a toggle ("Pagine di {name}"). Each page shows
+ * its thumbnail, number and name, or "Eliminata dalla raccolta" when hidden. Pages move within
+ * the run (so within their part) by drag, Alt+↑/↓ or the menu (**Sposta su**, **Sposta giù**);
+ * the menu also has **Elimina dalla raccolta**, or **Ripristina** for a hidden page.
+ */
+function RunPages({
+  formatId,
+  segment,
+  name,
+  numberOf,
+  assets,
+  onSelectPage,
+  onMovePage,
+  onPageHidden,
+  onRefused,
+}: {
+  formatId: FormatId;
+  segment: ViewSegment;
+  name: string;
+  numberOf: ReadonlyMap<string, number>;
+  assets: Readonly<Record<string, RenderAsset>>;
+  onSelectPage: (shownKey: string, hidden: boolean) => void;
+  onMovePage: (segmentKey: string, from: number, to: number) => void;
+  onPageHidden: (segmentKey: string, pageKey: string, hidden: boolean) => void;
+  onRefused: (text: string) => void;
+}) {
+  const copy = it.collection.edits;
+  const [open, setOpen] = useState(false);
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [dropOn, setDropOn] = useState<number | null>(null);
+  const listId = useId();
+  const hintId = useId();
+  const refocus = useRef<string | null>(null);
+  const list = useRef<HTMLOListElement>(null);
+  const order = segment.entries.map((e) => e.pageKey).join(",");
+  useEffect(() => {
+    const key = refocus.current;
+    if (key === null) return;
+    refocus.current = null;
+    list.current?.querySelector<HTMLElement>(`[data-page-row="${key}"]`)?.focus();
+  }, [order]);
+  const count = segment.entries.length;
+  if (count === 0) return null;
+  const label = fill(copy.pagesOf, { name });
+  const keys = (event: KeyboardEvent, pageKey: string, index: number) => {
+    if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+    event.preventDefault();
+    const to = index + (event.key === "ArrowUp" ? -1 : 1);
+    if (to < 0 || to >= count) return;
+    refocus.current = pageKey;
+    onMovePage(segment.key, index, to);
+  };
+  return (
+    <div className="pl-1.5">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        onClick={() => setOpen((was) => !was)}
+        className="flex items-center gap-1 rounded-md px-1 py-0.5 font-label text-[12px] text-foreground-muted hover:bg-surface-hover hover:text-foreground"
+      >
+        <ChevronRight aria-hidden="true" className={cn("size-3.5 transition-transform duration-150 ease-out", open && "rotate-90")} />
+        {label}
+      </button>
+      <span id={hintId} hidden>
+        {copy.pageDragHint}
+      </span>
+      {open && (
+        <ol id={listId} ref={list} aria-label={label} className="mt-1 flex flex-col gap-0.5">
+          {segment.entries.map((entry, i) => {
+            const drop = dropOn === i && dragging !== null && dragging !== i ? (dragging > i ? "before" : "after") : undefined;
+            const pageName = entry.page.name;
+            return (
+              <li
+                key={entry.pageKey}
+                data-drop={drop}
+                onDragOver={(event) => {
+                  if (!event.dataTransfer.types.includes(PAGE_DRAG_TYPE)) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const own = dragging !== null;
+                  event.dataTransfer.dropEffect = own ? "move" : "none";
+                  if (own && dropOn !== i) setDropOn(i);
+                }}
+                onDrop={(event) => {
+                  if (!event.dataTransfer.types.includes(PAGE_DRAG_TYPE)) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const from = dragging;
+                  setDragging(null);
+                  setDropOn(null);
+                  // A page dragged from another run (another part) stays in its own.
+                  if (from === null) {
+                    onRefused(copy.otherPart);
+                    return;
+                  }
+                  if (from !== i) onMovePage(segment.key, from, i);
+                }}
+                className="flex items-center gap-1 rounded-md data-[drop=after]:shadow-[0_3px_0_var(--color-accent)] data-[drop=before]:shadow-[0_-3px_0_var(--color-accent)]"
+              >
+                <button
+                  type="button"
+                  data-page-row={entry.pageKey}
+                  data-hidden={entry.hidden ? "" : undefined}
+                  draggable
+                  aria-describedby={hintId}
+                  aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                  title={copy.pageDragHint}
+                  onClick={() => onSelectPage(entry.page.pageKey, entry.hidden)}
+                  onKeyDown={(event) => keys(event, entry.pageKey, i)}
+                  onDragStart={(event) => {
+                    event.stopPropagation();
+                    setDragging(i);
+                    event.dataTransfer.setData(PAGE_DRAG_TYPE, `${segment.key}|${entry.pageKey}`);
+                    event.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragEnd={() => {
+                    setDragging(null);
+                    setDropOn(null);
+                  }}
+                  className={cn(
+                    "flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-md p-1 text-left transition-colors duration-150 hover:bg-surface-hover active:cursor-grabbing",
+                    entry.hidden && "opacity-60",
+                  )}
+                >
+                  <span className="block w-[40px] shrink-0">
+                    {entry.hidden ? (
+                      <span aria-hidden="true" className={cn("grid w-full place-items-center rounded-md bg-surface-control text-foreground-muted", ASPECT[formatId])}>
+                        <EyeOff className="size-3" />
+                      </span>
+                    ) : (
+                      <Thumbnail formatId={formatId} template={segment.template} page={entry.page} number={numberOf.get(entry.page.pageKey) ?? 1} assets={assets} values={segment.values} />
+                    )}
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-label text-[12px] text-foreground">
+                      {entry.hidden ? pageName : fill(copy.pageRow, { n: numberOf.get(entry.page.pageKey) ?? i + 1, name: pageName })}
+                    </span>
+                    {entry.hidden && <small className="truncate font-label text-[11.5px] text-foreground-muted">{copy.hiddenRow}</small>}
+                  </span>
+                </button>
+                <RowMenu
+                  label={fill(copy.pageMenu, { name: pageName })}
+                  items={[
+                    { label: it.collection.pages.moveUp, disabled: i === 0, onSelect: () => onMovePage(segment.key, i, i - 1) },
+                    { label: it.collection.pages.moveDown, disabled: i === count - 1, onSelect: () => onMovePage(segment.key, i, i + 1) },
+                    entry.hidden
+                      ? { label: copy.restorePage, onSelect: () => onPageHidden(segment.key, entry.pageKey, false) }
+                      : { label: copy.hidePage, danger: true, onSelect: () => onPageHidden(segment.key, entry.pageKey, true) },
+                  ]}
+                />
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -174,7 +341,20 @@ export interface CollectionPagineProps {
  * whole, cases only within their group: by drag, by Alt+↑/↓, or by the row's menu (**Sposta su**,
  * **Sposta giù**). A case's menu also has **Rimuovi dalla raccolta**. **Aggiungi casi** at the end.
  */
-export function CollectionPagine({ formatId, groups, segments, assets, onSelect, onMoveGroup, onMoveCase, onRemove, onAdd, onRefused }: CollectionPagineProps) {
+export function CollectionPagine({
+  formatId,
+  groups,
+  segments,
+  assets,
+  onSelect,
+  onMoveGroup,
+  onMoveCase,
+  onRemove,
+  onAdd,
+  onRefused,
+  onMovePage,
+  onPageHidden,
+}: CollectionPagineProps) {
   const copy = it.collection.pages;
   const hintId = useId();
   /** What is being dragged: a group (its client) or a case (with its client). */
@@ -198,6 +378,31 @@ export function CollectionPagine({ formatId, groups, segments, assets, onSelect,
     n += s.pages.length;
   }
   const segment = (key: string) => segments.find((s) => s.key === key);
+  /** Each shown page's number in the format (a hidden page has none). */
+  const pageNumbers = new Map<string, number>();
+  let counted = 1;
+  for (const s of segments) for (const p of s.pages) pageNumbers.set(p.pageKey, counted++);
+  /** A page row clicked: the canvas scrolls to the page, or to the strip of a hidden one. */
+  const selectPage = (shownKey: string, hidden: boolean) => {
+    const canvasPage = document.querySelector(hidden ? `[data-hidden-page="${shownKey}"]` : `[data-canvas-page="${shownKey}"]`);
+    canvasPage?.scrollIntoView?.({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true ? "auto" : "smooth" });
+  };
+  const runPages = (key: string, name: string) => {
+    const s = segment(key);
+    return s === undefined ? null : (
+      <RunPages
+        formatId={formatId}
+        segment={s}
+        name={name}
+        numberOf={pageNumbers}
+        assets={assets}
+        onSelectPage={selectPage}
+        onMovePage={onMovePage}
+        onPageHidden={onPageHidden}
+        onRefused={onRefused}
+      />
+    );
+  };
 
   const endDrag = () => {
     setDragging(null);
@@ -226,7 +431,7 @@ export function CollectionPagine({ formatId, groups, segments, assets, onSelect,
     const s = segment(key);
     const first = s?.pages[0];
     return (
-      <li key={key} data-locked={key} className="flex items-center gap-2.5 rounded-lg p-1.5 text-foreground-muted">
+      <li key={key} data-locked={key} className="flex flex-col gap-1 rounded-lg p-1.5 text-foreground-muted">
         <button type="button" onClick={() => onSelect(key)} className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-left" title={copy.locked}>
           <span className="block w-[52px] shrink-0">
             {first !== undefined && s !== undefined ? (
@@ -244,6 +449,7 @@ export function CollectionPagine({ formatId, groups, segments, assets, onSelect,
           </span>
         </button>
         <span className="sr-only">{copy.locked}</span>
+        {runPages(key, label)}
       </li>
     );
   };
@@ -400,7 +606,12 @@ export function CollectionPagine({ formatId, groups, segments, assets, onSelect,
                       />
                     </li>
                   );
-                  return row;
+                  return (
+                    <Fragment key={c.caseId}>
+                      {row}
+                      {available && <li data-run-pages={c.caseId}>{runPages(`case:${c.caseId}`, c.name)}</li>}
+                    </Fragment>
+                  );
                 })}
                 {closingShown && locked(`client_closing:${group.clientId}`, copy.closing)}
               </ul>

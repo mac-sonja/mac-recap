@@ -156,6 +156,9 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   CASE_NOT_COLLECTABLE: 409,
   COLLECTION_FULL: 409,
   COLLECTION_LAST_ITEM: 409,
+  // Collection edits (Story 5.11a): a part's last page hidden, a text that isn't a free text.
+  COLLECTION_LAST_PAGE: 409,
+  TEXT_NOT_EDITABLE: 409,
   CLIENT_NAME_TAKEN: 409,
   CLIENT_CODE_EXHAUSTED: 409,
   // Client info (Story 2.14, AD-22).

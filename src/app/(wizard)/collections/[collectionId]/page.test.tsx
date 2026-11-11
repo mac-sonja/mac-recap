@@ -12,6 +12,7 @@ import type { CollectionViewProps } from "./_components/collection-view";
 const mocks = vi.hoisted(() => ({
   requireSurface: vi.fn(),
   getCollection: vi.fn(),
+  getCollectionEdits: vi.fn(),
   getClient: vi.fn(),
   getClientIntro: vi.fn(),
   getLiveRevision: vi.fn(),
@@ -31,10 +32,20 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("@/app/_lib/surface", () => ({ requireSurface: mocks.requireSurface }));
-vi.mock("./actions", () => ({ moveCollectionGroup: vi.fn(), moveCollectionItem: vi.fn(), addCollectionItems: vi.fn(), removeCollectionItems: vi.fn(), retagCollection: vi.fn() }));
+vi.mock("./actions", () => ({
+  moveCollectionGroup: vi.fn(),
+  moveCollectionItem: vi.fn(),
+  addCollectionItems: vi.fn(),
+  removeCollectionItems: vi.fn(),
+  retagCollection: vi.fn(),
+  setCollectionText: vi.fn(),
+  restoreCollectionText: vi.fn(),
+  setCollectionPageHidden: vi.fn(),
+  setCollectionPageOrder: vi.fn(),
+}));
 vi.mock("@/modules/collection", async () => {
   const actual = await vi.importActual<typeof import("@/modules/collection")>("@/modules/collection");
-  return { groupsOf: actual.groupsOf, getCollection: mocks.getCollection };
+  return { groupsOf: actual.groupsOf, getCollection: mocks.getCollection, getCollectionEdits: mocks.getCollectionEdits };
 });
 vi.mock("@/modules/case-study", async () => {
   const actual = await vi.importActual<typeof import("@/modules/case-study")>("@/modules/case-study");
@@ -99,6 +110,7 @@ beforeEach(() => {
   mocks.listClientIndustries.mockResolvedValue(ok({ [CLIENT_B]: "food" }));
   mocks.getDetailsForm.mockResolvedValue(ok({ context: "", solution: "", results: [], testimonialQuote: "", testimonialAuthor: "" }));
   mocks.listAssets.mockResolvedValue(ok([]));
+  mocks.getCollectionEdits.mockResolvedValue(ok({ textEdits: [], hiddenPages: [], pageOrders: [] }));
 });
 
 describe("CollectionPage (Story 5.10a)", () => {
@@ -165,5 +177,25 @@ describe("CollectionPage (Story 5.10a)", () => {
     mocks.getDetailsForm.mockResolvedValue(err({ code: "MATERIAL_LOOKUP_FAILED", message: "m" }));
     const view = await props();
     expect(view.groups[0]!.cases[0]!.part).toBeNull();
+  });
+
+  it("loads the collection's own edits (Story 5.11a), keyed by part, and fails the page when they can't be read", async () => {
+    mocks.getCollection.mockResolvedValue(ok(detail([{ case: listed("a1", CLIENT_A, "a1"), revision: revision() }])));
+    const part = { kind: "case" as const, id: "a1" };
+    mocks.getCollectionEdits.mockResolvedValue(
+      ok({
+        textEdits: [{ part, formatId: "presentazione_16_9", pageKey: "p1", elementId: "e1", text: "Mia", originalChanged: true }],
+        hiddenPages: [{ part: { kind: "client_intro", id: CLIENT_A }, formatId: "presentazione_16_9", pageKey: "p2" }],
+        pageOrders: [{ part, formatId: "carosello_1_1", pageKeys: ["b", "a"] }],
+      }),
+    );
+    const view = await props();
+    expect(view.edits).toEqual({
+      texts: [{ partKey: "case:a1", formatId: "presentazione_16_9", pageKey: "p1", elementId: "e1", text: "Mia", originalChanged: true }],
+      hidden: [{ partKey: `client_intro:${CLIENT_A}`, formatId: "presentazione_16_9", pageKey: "p2" }],
+      orders: [{ partKey: "case:a1", formatId: "carosello_1_1", pageKeys: ["b", "a"] }],
+    });
+    mocks.getCollectionEdits.mockResolvedValue(err({ code: "COLLECTION_LOOKUP_FAILED", message: "m" }));
+    await expect(CollectionPage({ params: params() })).rejects.toThrow("COLLECTION_LOOKUP_FAILED");
   });
 });

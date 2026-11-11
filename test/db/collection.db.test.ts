@@ -243,3 +243,303 @@ describe("collection exports (Story 5.10b)", () => {
     expect(grants.rows[0]).toEqual({ auth: false, service: true });
   });
 });
+
+describe("collection edits (Story 5.11a)", () => {
+  const F = "presentazione_16_9";
+
+  /** An approved case of `clientId` whose live approved revision is the reference v2 case history. */
+  async function caseWithRevision(clientId: string, name: string) {
+    const caseId = await caseOf(clientId, name);
+    const { caseHistoryV2 } = await import("@/modules/generation");
+    const { FORMAT_IDS } = await import("@/modules/rendering");
+    const doc = caseHistoryV2(FORMAT_IDS);
+    const { rows } = await pool.query(
+      `insert into public.revision (case_id, status, generated_doc, doc, schema_version, created_by) values ($1, 'approved', $2, $2, 2, $3) returning id`,
+      [caseId, JSON.stringify(doc), TEST_ACTOR_ID],
+    );
+    await pool.query("update public.case_study set approved_revision_id = $2 where id = $1", [caseId, rows[0].id]);
+    const pages = doc.formats[F]!.pages;
+    type El = { elementId: string; type: string; text?: string; binding?: unknown; bindings?: unknown; items?: El[] };
+    const all = (els: El[]): El[] => els.flatMap((el) => [el, ...all(el.items ?? [])]);
+    const page = pages.find((p) => p.blocks.some((b) => all(b.elements as El[]).some((el) => el.type === "text" && el.text !== undefined)))!;
+    const free = page.blocks.flatMap((b) => all(b.elements as El[])).find((el) => el.type === "text" && el.text !== undefined)!;
+    return { caseId, pageKeys: pages.map((p) => p.pageKey), pageKey: page.pageKey, elementId: free.elementId, original: free.text! };
+  }
+
+  /** Every row of the originals a collection must never write: the case's revisions and row, the client and its intro. */
+  async function originals(caseId: string, clientId: string) {
+    const q = async (sql: string, id: string) => (await pool.query(sql, [id])).rows;
+    return {
+      revisions: await q("select id, status, doc, updated_at from public.revision where case_id = $1 order by id", caseId),
+      caseRow: await q("select * from public.case_study where id = $1", caseId),
+      client: await q("select * from public.client where id = $1", clientId),
+      intros: await q("select * from public.client_intro where client_id = $1", clientId),
+      introRevisions: await q("select r.id, r.updated_at from public.revision r join public.client_intro i on i.id = r.client_intro_id where i.client_id = $1", clientId),
+    };
+  }
+
+  it("edits, restores, hides and reorders with compare-and-set, logging each, and never writes a revision, client or intro", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const { caseId, pageKeys, pageKey, elementId, original } = await caseWithRevision(a.id, "A1");
+    const made = await created([caseId]);
+    const id = made.collectionId;
+    const before = await originals(caseId, a.id);
+    const m = await collection();
+    const part = { kind: "case", id: caseId };
+    const ref = { collectionId: id, part, formatId: F, pageKey };
+
+    expect(await m.setCollectionText(await actor(), { ...ref, expectedVersion: 1, elementId, text: "Parole della raccolta" })).toMatchObject({ ok: true, value: { version: 2 } });
+    const stored = (await pool.query("select text, original_hash from public.collection_text_edit where collection_id = $1", [id])).rows;
+    const { createHash } = await import("node:crypto");
+    expect(stored).toEqual([{ text: "Parole della raccolta", original_hash: createHash("sha256").update(original, "utf8").digest("hex") }]);
+    // Stale.
+    expect(await m.setCollectionText(await actor(), { ...ref, expectedVersion: 1, elementId, text: "X" })).toMatchObject({ ok: false, error: { code: "STALE_COLLECTION" } });
+
+    const edits = await m.getCollectionEdits(id);
+    expect(edits).toMatchObject({ ok: true, value: { textEdits: [{ part, formatId: F, pageKey, elementId, text: "Parole della raccolta", originalChanged: false }] } });
+
+    expect(await m.restoreCollectionText(await actor(), { ...ref, expectedVersion: 2, elementId })).toMatchObject({ ok: true, value: { version: 3 } });
+    expect((await pool.query("select count(*)::int as n from public.collection_text_edit where collection_id = $1", [id])).rows[0].n).toBe(0);
+
+    expect(await m.setCollectionPageHidden(await actor(), { ...ref, expectedVersion: 3, pageKey: pageKeys[0], hidden: true })).toMatchObject({ ok: true, value: { version: 4 } });
+    // Hide every page but the last; the last is refused.
+    let version = 4;
+    for (const key of pageKeys.slice(1, -1)) {
+      expect(await m.setCollectionPageHidden(await actor(), { ...ref, expectedVersion: version, pageKey: key, hidden: true })).toMatchObject({ ok: true });
+      version += 1;
+    }
+    expect(await m.setCollectionPageHidden(await actor(), { ...ref, expectedVersion: version, pageKey: pageKeys.at(-1), hidden: true })).toMatchObject({ ok: false, error: { code: "COLLECTION_LAST_PAGE" } });
+    expect(await m.setCollectionPageHidden(await actor(), { ...ref, expectedVersion: version, pageKey: pageKeys[0], hidden: false })).toMatchObject({ ok: true, value: { version: version + 1 } });
+    version += 1;
+
+    const reversed = [...pageKeys].reverse();
+    expect(await m.setCollectionPageOrder(await actor(), { collectionId: id, expectedVersion: version, part, formatId: F, pageKeys: reversed })).toMatchObject({ ok: true, value: { version: version + 1 } });
+    version += 1;
+    expect(await m.setCollectionPageOrder(await actor(), { collectionId: id, expectedVersion: version, part, formatId: F, pageKeys: reversed.slice(1) })).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_INPUT", details: { fields: ["pageKeys"] } },
+    });
+    const read = await m.getCollectionEdits(id);
+    if (!read.ok) throw new Error(read.error.code);
+    expect(read.value.pageOrders).toEqual([{ part, formatId: F, pageKeys: reversed }]);
+    expect(read.value.hiddenPages.map((h) => h.pageKey).sort()).toEqual(pageKeys.slice(1, -1).sort());
+
+    const types = (await pool.query("select type from public.collection_event where collection_id = $1 order by version", [id])).rows.map((r) => r.type);
+    expect(types.slice(0, 4)).toEqual(["collection_created", "collection_text_edited", "collection_text_restored", "collection_page_hidden"]);
+    expect(types).toContain("collection_page_restored");
+    expect(types.at(-1)).toBe("collection_pages_moved");
+
+    // The originals are exactly as they were.
+    expect(await originals(caseId, a.id)).toEqual(before);
+  });
+
+  it("shows the original changed when the case's approved text is updated after the edit", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const { caseId, pageKey, elementId } = await caseWithRevision(a.id, "A1");
+    const made = await created([caseId]);
+    const m = await collection();
+    const part = { kind: "case", id: caseId };
+    expect(await m.setCollectionText(await actor(), { collectionId: made.collectionId, expectedVersion: 1, part, formatId: F, pageKey, elementId, text: "Mia" })).toMatchObject({ ok: true });
+    // A newer approved version with other words in that text.
+    const { rows } = await pool.query("select doc from public.revision where case_id = $1", [caseId]);
+    const doc = JSON.parse(JSON.stringify(rows[0].doc).replaceAll(`"elementId":"${elementId}"`, `"elementId":"${elementId}","__mark":1`));
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) node.forEach(walk);
+      else if (node !== null && typeof node === "object") {
+        const o = node as Record<string, unknown>;
+        if (o.__mark === 1) {
+          delete o.__mark;
+          o.text = "Nuove parole approvate";
+        }
+        Object.values(o).forEach(walk);
+      }
+    };
+    walk(doc);
+    const next = await pool.query(
+      `insert into public.revision (case_id, status, generated_doc, doc, schema_version, created_by) values ($1, 'approved', $2, $2, 2, $3) returning id`,
+      [caseId, JSON.stringify(doc), TEST_ACTOR_ID],
+    );
+    await pool.query("update public.case_study set approved_revision_id = $2 where id = $1", [caseId, next.rows[0].id]);
+    expect(await m.getCollectionEdits(made.collectionId)).toMatchObject({ ok: true, value: { textEdits: [{ elementId, text: "Mia", originalChanged: true }] } });
+  });
+
+  it("refuses a part not in the collection straight at the writers, and a bound text in the module", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const b = await createTestClient(pool, TEST_ACTOR_ID);
+    const { caseId, pageKey } = await caseWithRevision(a.id, "A1");
+    const other = await caseOf(b.id, "B1");
+    const made = await created([caseId]);
+    const m = await collection();
+    // The client's intro part is the client of a case in it.
+    expect(await m.setCollectionPageHidden(await actor(), { collectionId: made.collectionId, expectedVersion: 1, part: { kind: "client_intro", id: a.id }, formatId: F, pageKey: "x", hidden: false })).toMatchObject({
+      ok: true,
+    });
+    await expect(pool.query("select public.set_collection_page_hidden($1, 2, 'case', $2, $3, 'x', true, $4)", [made.collectionId, other, F, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    await expect(pool.query("select public.set_collection_page_hidden($1, 2, 'client_intro', $2, $3, 'x', true, $4)", [made.collectionId, b.id, F, TEST_ACTOR_ID])).rejects.toMatchObject({
+      message: "INVALID_INPUT",
+    });
+    await expect(pool.query("select public.set_collection_page_order($1, 1, 'case', $2, $3, $4, $5)", [made.collectionId, caseId, F, [pageKey], TEST_ACTOR_ID])).rejects.toMatchObject({
+      message: "STALE_COLLECTION",
+    });
+    await expect(
+      pool.query("select public.set_collection_text_edit($1, 2, 'case', $2, $3, $4, gen_random_uuid(), $5, $6, $7)", [made.collectionId, caseId, F, pageKey, "x".repeat(5001), "0".repeat(64), TEST_ACTOR_ID]),
+    ).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    expect((await pool.query("select version from public.collection where id = $1", [made.collectionId])).rows[0]).toEqual({ version: 2 });
+  });
+
+  it("denies anon and authenticated the edit tables and writers", async () => {
+    const anon = createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: false } });
+    for (const table of ["collection_text_edit", "collection_hidden_page", "collection_page_order"] as const) {
+      const { data, error } = await anon.from(table).select("*").limit(1);
+      expect(error !== null || (data ?? []).length === 0, table).toBe(true);
+    }
+    const grants = await pool.query(
+      `select has_function_privilege('authenticated', 'public.set_collection_text_edit(uuid, integer, text, uuid, text, text, uuid, text, text, uuid)', 'execute') as text_auth,
+              has_function_privilege('anon', 'public.set_collection_page_order(uuid, integer, text, uuid, text, text[], uuid)', 'execute') as order_anon,
+              has_function_privilege('service_role', 'public.set_collection_page_hidden(uuid, integer, text, uuid, text, text, boolean, uuid)', 'execute') as hidden_service,
+              has_table_privilege('service_role', 'public.collection_text_edit', 'insert') as insert`,
+    );
+    expect(grants.rows[0]).toEqual({ text_auth: false, order_anon: false, hidden_service: true, insert: false });
+  });
+
+  /** Client `clientId`'s intro, approved, its live revision the reference v2 client intro (set straight in the tables). */
+  async function approvedIntro(clientId: string) {
+    const intro = (await pool.query("select id from public.create_client_intro($1, $2)", [clientId, TEST_ACTOR_ID])).rows[0].id as string;
+    const { clientIntroV2 } = await import("@/modules/generation");
+    const { FORMAT_IDS } = await import("@/modules/rendering");
+    const doc = clientIntroV2(FORMAT_IDS);
+    const db = await pool.connect();
+    try {
+      await db.query("begin");
+      const rev = await db.query(
+        `insert into public.revision (client_intro_id, status, generated_doc, doc, schema_version, created_by) values ($1, 'approved', $2, $2, 2, $3) returning id`,
+        [intro, JSON.stringify(doc), TEST_ACTOR_ID],
+      );
+      await db.query("set local mac_recap.intro_transition = 'on'");
+      await db.query("update public.client_intro set status = 'approved', approved_revision_id = $2 where id = $1", [intro, rev.rows[0].id]);
+      await db.query("commit");
+    } catch (error) {
+      await db.query("rollback");
+      throw error;
+    } finally {
+      db.release();
+    }
+    type El = { elementId: string; type: string; text?: string; binding?: unknown; items?: El[] };
+    const all = (els: El[]): El[] => els.flatMap((el) => [el, ...all(el.items ?? [])]);
+    const pages = doc.formats[F]!.pages;
+    const introPage = pages.find((p) => p.role === "intro" && p.blocks.some((b) => all(b.elements as El[]).some((el) => el.type === "text" && el.text !== undefined)))!;
+    const free = introPage.blocks.flatMap((b) => all(b.elements as El[])).find((el) => el.type === "text" && el.text !== undefined)!;
+    return { intro, pages, pageKey: introPage.pageKey, elementId: free.elementId, introKeys: pages.filter((p) => p.role === "intro").map((p) => p.pageKey) };
+  }
+
+  it("edits a text and hides a page of a real approved client intro, writing no intro, revision or client row", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const one = await caseWithRevision(a.id, "A1");
+    const two = await caseWithRevision(a.id, "A2");
+    const intro = await approvedIntro(a.id);
+    const made = await created([one.caseId, two.caseId]);
+    const m = await collection();
+    const part = { kind: "client_intro", id: a.id };
+    const before = { one: await originals(one.caseId, a.id), two: await originals(two.caseId, a.id) };
+    expect(await m.setCollectionText(await actor(), { collectionId: made.collectionId, expectedVersion: 1, part, formatId: F, pageKey: intro.pageKey, elementId: intro.elementId, text: "Intro della raccolta" })).toMatchObject({
+      ok: true,
+      value: { version: 2 },
+    });
+    // Hide every shown intro-side page but one; the last shown is refused (the intro shows only its intro and closing pages).
+    const shown = intro.pages.filter((p) => p.role === "intro" || p.role === "outro").map((p) => p.pageKey);
+    let version = 2;
+    for (const key of shown.slice(0, -1)) {
+      expect(await m.setCollectionPageHidden(await actor(), { collectionId: made.collectionId, expectedVersion: version, part, formatId: F, pageKey: key, hidden: true })).toMatchObject({ ok: true });
+      version += 1;
+    }
+    expect(await m.setCollectionPageHidden(await actor(), { collectionId: made.collectionId, expectedVersion: version, part, formatId: F, pageKey: shown.at(-1), hidden: true })).toMatchObject({
+      ok: false,
+      error: { code: "COLLECTION_LAST_PAGE" },
+    });
+    const edits = await m.getCollectionEdits(made.collectionId);
+    expect(edits).toMatchObject({ ok: true, value: { textEdits: [{ part, elementId: intro.elementId, originalChanged: false }] } });
+    expect(edits.ok && edits.value.hiddenPages.length).toBe(shown.length - 1);
+    expect({ one: await originals(one.caseId, a.id), two: await originals(two.caseId, a.id) }).toEqual(before);
+  });
+
+  it("still loads once an edited case is deleted: its edits drop out of the read", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const one = await caseWithRevision(a.id, "A1");
+    const two = await caseWithRevision(a.id, "A2");
+    const made = await created([one.caseId, two.caseId]);
+    const m = await collection();
+    const part = { kind: "case", id: one.caseId };
+    expect(await m.setCollectionText(await actor(), { collectionId: made.collectionId, expectedVersion: 1, part, formatId: F, pageKey: one.pageKey, elementId: one.elementId, text: "Mia" })).toMatchObject({ ok: true });
+    expect(await m.setCollectionPageHidden(await actor(), { collectionId: made.collectionId, expectedVersion: 2, part, formatId: F, pageKey: one.pageKeys[0], hidden: true })).toMatchObject({ ok: true });
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [one.caseId]);
+    expect(await m.getCollection(made.collectionId)).toMatchObject({ ok: true });
+    expect(await m.getCollectionEdits(made.collectionId)).toEqual({ ok: true, value: { textEdits: [], hiddenPages: [], pageOrders: [] } });
+  });
+
+  it("removing a case drops its edits (and its client intro's with its last case): added back, nothing returns", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const b = await createTestClient(pool, TEST_ACTOR_ID);
+    const one = await caseWithRevision(a.id, "A1");
+    const two = await caseWithRevision(b.id, "B1");
+    const made = await created([one.caseId, two.caseId]);
+    const m = await collection();
+    const id = made.collectionId;
+    const part = { kind: "case", id: one.caseId };
+    const count = async () =>
+      (
+        await pool.query(
+          `select (select count(*) from public.collection_text_edit where collection_id = $1)::int as texts,
+                  (select count(*) from public.collection_hidden_page where collection_id = $1)::int as hidden,
+                  (select count(*) from public.collection_page_order where collection_id = $1)::int as orders`,
+          [id],
+        )
+      ).rows[0];
+    let v = 1;
+    const step = async (call: Promise<unknown>) => {
+      expect(await call).toMatchObject({ ok: true });
+      v += 1;
+    };
+    await step(m.setCollectionText(await actor(), { collectionId: id, expectedVersion: v, part, formatId: F, pageKey: one.pageKey, elementId: one.elementId, text: "Mia" }));
+    await step(m.setCollectionPageHidden(await actor(), { collectionId: id, expectedVersion: v, part, formatId: F, pageKey: one.pageKeys[0], hidden: true }));
+    await step(m.setCollectionPageOrder(await actor(), { collectionId: id, expectedVersion: v, part, formatId: F, pageKeys: [...one.pageKeys].reverse() }));
+    // Straight at the writer: the intro part is the client of a case in it, whatever its intro.
+    await pool.query("select public.set_collection_page_hidden($1, $2, 'client_intro', $3, $4, 'x', true, $5)", [id, v, a.id, F, TEST_ACTOR_ID]);
+    v += 1;
+    // A move rewrites every item: nothing is dropped.
+    await step(m.moveCollectionGroup(await actor(), { collectionId: id, expectedVersion: v, clientId: b.id, to: 0 }));
+    expect(await count()).toEqual({ texts: 1, hidden: 2, orders: 1 });
+
+    await step(m.removeCollectionItems(await actor(), { collectionId: id, expectedVersion: v, caseIds: [one.caseId] }));
+    expect(await count()).toEqual({ texts: 0, hidden: 0, orders: 0 });
+    await step(m.addCollectionItems(await actor(), { collectionId: id, expectedVersion: v, caseIds: [one.caseId] }));
+    expect(await count()).toEqual({ texts: 0, hidden: 0, orders: 0 });
+    expect(await m.getCollectionEdits(id)).toEqual({ ok: true, value: { textEdits: [], hiddenPages: [], pageOrders: [] } });
+  });
+
+  it("restoring a text with no edit writes nothing: no new version, no event", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const one = await caseWithRevision(a.id, "A1");
+    const made = await created([one.caseId]);
+    const m = await collection();
+    expect(
+      await m.restoreCollectionText(await actor(), { collectionId: made.collectionId, expectedVersion: 1, part: { kind: "case", id: one.caseId }, formatId: F, pageKey: one.pageKey, elementId: one.elementId }),
+    ).toEqual({ ok: true, value: { collectionId: made.collectionId, version: 1 } });
+    // Still compare-and-set.
+    await expect(
+      pool.query("select public.delete_collection_text_edit($1, 2, 'case', $2, $3, $4, $5, $6)", [made.collectionId, one.caseId, F, one.pageKey, one.elementId, TEST_ACTOR_ID]),
+    ).rejects.toMatchObject({ message: "STALE_COLLECTION" });
+    expect((await pool.query("select version from public.collection where id = $1", [made.collectionId])).rows[0]).toEqual({ version: 1 });
+    expect((await pool.query("select count(*)::int as n from public.collection_event where collection_id = $1", [made.collectionId])).rows[0].n).toBe(1);
+  });
+
+  it("counts text length in UTF-16 units, as the document does", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const one = await caseWithRevision(a.id, "A1");
+    const made = await created([one.caseId]);
+    const m = await collection();
+    const ref = { collectionId: made.collectionId, part: { kind: "case", id: one.caseId }, formatId: F, pageKey: one.pageKey, elementId: one.elementId };
+    expect(await m.setCollectionText(await actor(), { ...ref, expectedVersion: 1, text: "😀".repeat(2501) })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+    expect(await m.setCollectionText(await actor(), { ...ref, expectedVersion: 1, text: "😀".repeat(2500) })).toMatchObject({ ok: true, value: { version: 2 } });
+  });
+});
+

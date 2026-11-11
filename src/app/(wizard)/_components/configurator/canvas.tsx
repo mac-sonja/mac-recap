@@ -1,7 +1,7 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
-import { memo, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { Fragment, memo, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import type { Crop, Page } from "@/modules/generation";
 import { measureOverflow, renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
@@ -33,6 +33,10 @@ export interface CanvasGroup {
   note?: ReactNode;
   /** Shown in place of the pages when the group has none (an intro not ready yet). */
   empty?: string;
+  /** Story 5.11a: drawn before a page of the group (by its key): a collection's hidden pages, where they sat. */
+  before?: ReadonlyMap<string, ReactNode>;
+  /** Story 5.11a: drawn after the group's last page. */
+  after?: ReactNode;
 }
 
 export interface CanvasProps {
@@ -86,8 +90,13 @@ export interface CanvasProps {
   onFieldCommit?: (pageKey: string, elementId: string, text: string | null) => void;
   /** Anteprima: a click on an element (Story 4.3d: a client or case field says where to change it). */
   onPreviewPick?: (pageKey: string, elementId: string) => void;
-  /** A border dragged and released (Story 4.4b): the page's new track sizes on `axis`. */
-  onResize: (pageKey: string, axis: Axis, sizes: number[]) => void;
+  /** A border dragged and released (Story 4.4b): the page's new track sizes on `axis`. Undefined: no resize handles (Story 5.11a, a collection). */
+  onResize?: (pageKey: string, axis: Axis, sizes: number[]) => void;
+  /**
+   * Story 5.11a: drawn over each page in the editor (not in Anteprima), inside the page's box,
+   * given the page's key and its rendered host (to place marks by its elements).
+   */
+  pageExtras?: (pageKey: string, host: RefObject<HTMLElement | null>) => ReactNode;
   /** A Media tile dropped on a page (Story 4.5b): where, and its asset id. Undefined: the canvas takes no drop. */
   onPlaceMedia?: (target: MediaTarget, assetId: string) => void;
   /** Ritaglia's drag (Story 4.5b-3): the selected cropped image's or video's crop while it moves. */
@@ -148,6 +157,11 @@ function topLevelNode(block: Element, elementId: string | undefined): Element | 
   return node;
 }
 
+/** Story 5.11a: what the canvas's owner draws over a page (its `pageExtras`), given the page's rendered host. */
+function PageExtrasSlot({ render, pageKey, host }: { render: NonNullable<CanvasProps["pageExtras"]>; pageKey: string; host: RefObject<HTMLElement | null> }) {
+  return render(pageKey, host);
+}
+
 /** One page drawn by the format's renderer (Story 3.5). Memoised: a selection change never redraws it. */
 export const RenderedPage = memo(function RenderedPage({
   formatId,
@@ -197,6 +211,7 @@ function CanvasPage({
   onFieldCommit,
   onPreviewPick,
   onResize,
+  pageExtras,
   onPlaceMedia,
   onCrop,
   onCropDone,
@@ -215,6 +230,7 @@ function CanvasPage({
   | "animateTexts"
   | "onEditRequest"
   | "onResize"
+  | "pageExtras"
   | "onPlaceMedia"
   | "onCrop"
   | "onCropDone"
@@ -637,9 +653,10 @@ function CanvasPage({
             )}
           </div>
         )}
-        {!preview && editable && (
+        {!preview && editable && onResize !== undefined && (
           <ResizeHandles host={host} page={page} formatId={formatId} template={template} onResize={(axis, sizes) => onResize(page.pageKey, axis, sizes)} />
         )}
+        {!preview && pageExtras !== undefined && <PageExtrasSlot render={pageExtras} pageKey={page.pageKey} host={host} />}
         {dropFrame !== null && (
           <div
             aria-hidden="true"
@@ -732,6 +749,7 @@ export function Canvas({
   onFieldCommit,
   onPreviewPick,
   onResize,
+  pageExtras,
   onPlaceMedia,
   onCrop,
   onCropDone,
@@ -838,7 +856,9 @@ export function Canvas({
         ) : null,
         ...group.pages.map((page, j) => {
           const i = start + j;
-          return (
+          const before = group.before?.get(page.pageKey);
+          return [
+            before === undefined ? null : <Fragment key={`before-${page.pageKey}`}>{before}</Fragment>,
             <CanvasPage
               key={page.pageKey}
               formatId={formatId}
@@ -860,6 +880,7 @@ export function Canvas({
               onFieldCommit={onFieldCommit}
               onPreviewPick={onPreviewPick}
               onResize={onResize}
+              pageExtras={pageExtras}
               onPlaceMedia={onPlaceMedia}
               onCrop={onCrop}
               onCropDone={onCropDone}
@@ -882,9 +903,10 @@ export function Canvas({
                       });
                     }
               }
-            />
-          );
+            />,
+          ];
         }),
+        group.after === undefined ? null : <Fragment key={`after-${group.key}`}>{group.after}</Fragment>,
       ])}
       {!preview && onAddPage !== undefined && (
         <button

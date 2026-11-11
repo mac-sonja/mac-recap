@@ -1,12 +1,14 @@
-// Public surface of the collection module (Story 5.10a). Code outside this module imports only
+// Public surface of the collection module (Stories 5.10a, 5.11a). Code outside this module imports only
 // this file. The module owns `collection`, `collection_item`, `collection_tag` and
-// `collection_event` (AD-1): nobody else writes them. It reaches cases only through the
+// `collection_event`, and (5.11a) `collection_text_edit`, `collection_hidden_page` and
+// `collection_page_order` (AD-1): nobody else writes them. It reaches cases only through the
 // case-study module's index, and never copies a case: a collection holds case ids, resolved to
 // each case's live approved revision at every read.
 import type { Actor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import { createSupabaseCollectionRepository } from "@/modules/collection/adapters/supabase/collection-repository";
 import { makeCollectionUseCases, type CollectionDetail, type CollectionSummary } from "@/modules/collection/application/collections";
+import { makeCollectionEditUseCases, type CollectionEdits, type CollectionEditWrite } from "@/modules/collection/application/edits";
 import type { CollectionTags, CollectionWrite } from "@/modules/collection/domain/collection";
 import type { Result } from "@/shared/result";
 
@@ -18,6 +20,9 @@ export {
 } from "@/modules/collection/domain/collection";
 export type { CollectionTagKind, CollectionTags, CollectionWrite, ItemGroup } from "@/modules/collection/domain/collection";
 export type { CollectionDetail, CollectionItem, CollectionSummary } from "@/modules/collection/application/collections";
+export { COLLECTION_PART_KINDS, COLLECTION_TEXT_MAX } from "@/modules/collection/domain/edits";
+export type { CollectionPart, CollectionPartKind, StoredHiddenPage, StoredPageOrder } from "@/modules/collection/domain/edits";
+export type { CollectionEdits, CollectionEditWrite, CollectionTextEdit } from "@/modules/collection/application/edits";
 
 const collectionUseCases = () =>
   makeCollectionUseCases({
@@ -25,6 +30,22 @@ const collectionUseCases = () =>
     listCases: () => caseStudy.list({}),
     liveRevision: (caseId) => caseStudy.getLiveRevision({ kind: "case", id: caseId }),
     businessLines: caseStudy.BUSINESS_LINES,
+  });
+
+/** A client's approved intro document's live revision, or null (none, not approved, or none live). */
+async function liveIntroRevision(clientId: string): Promise<Result<caseStudy.CaseStudyRevision | null>> {
+  const intro = await caseStudy.getClientIntro(clientId);
+  if (!intro.ok) return intro;
+  if (intro.value === null || intro.value.approvedRevisionId === null) return { ok: true, value: null };
+  return caseStudy.getLiveRevision({ kind: "client_intro", id: intro.value.id });
+}
+
+const collectionEditUseCases = () =>
+  makeCollectionEditUseCases({
+    collections: createSupabaseCollectionRepository(),
+    listCases: () => caseStudy.list({}),
+    liveRevision: (caseId) => caseStudy.getLiveRevision({ kind: "case", id: caseId }),
+    liveIntroRevision,
   });
 
 /**
@@ -130,4 +151,57 @@ export function moveCollectionItem(actor: Actor, input: unknown): Promise<Result
  */
 export function recordCollectionExported(actor: Actor, input: unknown): Promise<Result<void>> {
   return collectionUseCases().recordExported(actor, input);
+}
+
+/**
+ * Story 5.11a: every edit of a live collection (its own words for free texts, hidden pages, page
+ * orders), each text edit checked now against its original's hash (`originalChanged`). Never
+ * applied to the originals: the page applies them over each part's live approved pages. Call
+ * only after `authorize(actor, 'manage collections')`. `COLLECTION_NOT_FOUND`.
+ */
+export function getCollectionEdits(collectionId: unknown): Promise<Result<CollectionEdits>> {
+  return collectionEditUseCases().edits(collectionId);
+}
+
+/**
+ * Story 5.11a, the collection's words for one free text of a part's page: input `{ collectionId,
+ * expectedVersion, part: { kind: "case" | "client_intro", id }, formatId, pageKey, elementId,
+ * text }` (at most 5,000 characters). Stored in the collection only, with the hash of the
+ * original words; no revision, client or intro is written. The original's own words remove the
+ * edit. A compare-and-set on the version. Call only after `authorize(actor, 'manage
+ * collections')`. `INVALID_INPUT`, `TEXT_NOT_EDITABLE` (a client or case field, or no text),
+ * `COLLECTION_NOT_FOUND`, `STALE_COLLECTION`.
+ */
+export function setCollectionText(actor: Actor, input: unknown): Promise<Result<CollectionEditWrite>> {
+  return collectionEditUseCases().setText(actor, input);
+}
+
+/**
+ * Story 5.11a, **Ripristina testo originale** / **Usa originale**: input `{ collectionId,
+ * expectedVersion, part, formatId, pageKey, elementId }`; the collection's words go. A
+ * compare-and-set on the version. Call only after `authorize(actor, 'manage collections')`.
+ * `INVALID_INPUT`, `COLLECTION_NOT_FOUND`, `STALE_COLLECTION`.
+ */
+export function restoreCollectionText(actor: Actor, input: unknown): Promise<Result<CollectionEditWrite>> {
+  return collectionEditUseCases().restoreText(actor, input);
+}
+
+/**
+ * Story 5.11a, **Elimina dalla raccolta** (`hidden: true`) and **Ripristina**: input
+ * `{ collectionId, expectedVersion, part, formatId, pageKey, hidden }`. A part keeps at least
+ * one page (`COLLECTION_LAST_PAGE`). A compare-and-set on the version. Call only after
+ * `authorize(actor, 'manage collections')`. `INVALID_INPUT`, `COLLECTION_NOT_FOUND`, `STALE_COLLECTION`.
+ */
+export function setCollectionPageHidden(actor: Actor, input: unknown): Promise<Result<CollectionEditWrite>> {
+  return collectionEditUseCases().setPageHidden(actor, input);
+}
+
+/**
+ * Story 5.11a, a part's pages in a new order: input `{ collectionId, expectedVersion, part,
+ * formatId, pageKeys }`, every page key of the part's document in that format. A
+ * compare-and-set on the version. Call only after `authorize(actor, 'manage collections')`.
+ * `INVALID_INPUT`, `COLLECTION_NOT_FOUND`, `STALE_COLLECTION`.
+ */
+export function setCollectionPageOrder(actor: Actor, input: unknown): Promise<Result<CollectionEditWrite>> {
+  return collectionEditUseCases().setPageOrder(actor, input);
 }

@@ -45,6 +45,11 @@ function setup(collection: StoredCollection | null = stored([A1, A2, B1]), cases
     setTags: vi.fn(async (_id: string, expected: number) => ok(expected + 1)),
     softDelete: vi.fn(async () => ok(undefined)),
     recordExported: vi.fn(async () => ok(undefined)),
+    edits: vi.fn(async () => ok({ textEdits: [], hiddenPages: [], pageOrders: [] })),
+    setTextEdit: vi.fn(async (_id: string, expected: number) => ok(expected + 1)),
+    deleteTextEdit: vi.fn(async (_id: string, expected: number) => ok(expected + 1)),
+    setPageHidden: vi.fn(async (_id: string, expected: number) => ok(expected + 1)),
+    setPageOrder: vi.fn(async (_id: string, expected: number) => ok(expected + 1)),
   } satisfies CollectionRepository;
   const liveRevision = vi.fn(async (caseId: string) => ok(caseId === A2 ? null : ({ id: `rev-${caseId}` } as unknown as CaseStudyRevision)));
   const useCases = makeCollectionUseCases({

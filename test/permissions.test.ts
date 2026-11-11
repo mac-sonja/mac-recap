@@ -132,7 +132,8 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   ...Object.fromEntries(Object.entries(exportActions).map(([name, call]) => [`export.${name}`, { call: call as Action, allowed: SHARERS }])),
   // Story 5.9a: Scarica on a client (its pack), owner/designer only until 5.9b.
   ...Object.fromEntries(Object.entries(clientExportActions).map(([name, call]) => [`client-export.${name}`, { call: call as Action, allowed: OWNERS }])),
-  // Story 5.10a: collections, for every role.
+  // Story 5.10a: collections, for every role. Story 5.11a adds the collection's own text edits,
+  // hidden pages and page orders to the page's actions: every role too, admin included.
   ...Object.fromEntries(Object.entries(collectionActions).map(([name, call]) => [`collections.${name}`, { call: call as Action, allowed: EVERYONE }])),
   ...Object.fromEntries(Object.entries(collectionPageActions).map(([name, call]) => [`collection.${name}`, { call: call as Action, allowed: EVERYONE }])),
 };
@@ -224,6 +225,11 @@ describe("no role, admin included, changes a guardrail or a permission (Story 6.
     const ownsNoContent = (name: string) => name.startsWith("export.") || name.startsWith("collections.") || name.startsWith("collection.");
     const writable = cells.filter((c) => c.role === "account_sales_social" && c.allowed && !ownsNoContent(c.name));
     expect(writable).toEqual([]);
+    // Story 5.11a: the collection's own edits are there and allowed for every role; they too
+    // write the collection only (test/db/collection.db.test.ts proves no original row changes).
+    for (const name of ["setCollectionText", "restoreCollectionText", "setCollectionPageHidden", "setCollectionPageOrder"]) {
+      expect(cells.filter((c) => c.name === `collection.${name}` && c.allowed).map((c) => c.role).sort(), name).toEqual([...EVERYONE].sort());
+    }
     expect(cells.filter((c) => c.name.startsWith("export.") && c.allowed).map((c) => c.role)).toEqual(
       expect.arrayContaining(["account_sales_social"]),
     );

@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
-// Story 5.10a: one collection in the configurator's file view, read-only, arranged from Pagine.
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+// Story 5.10a: one collection in the configurator's file view, arranged from Pagine. Story 5.11a:
+// its own text edits, hidden pages and page orders.
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Page } from "@/modules/generation";
+import type { DocumentElement, Page } from "@/modules/generation";
 import { CASE_TEMPLATE, CLIENT_TEMPLATE, FORMAT_IDS, starterPages, TEMPLATE_TEXT_KEYS, type BoundValues, type FormatId } from "@/modules/rendering";
 import { fill, it as dict } from "@/shared/i18n/it";
-import type { CollectionGroup, PartPages } from "./collection-file";
+import { collectionSegments, NO_EDITS, type CollectionGroup, type PartPages, type ViewEdits } from "./collection-file";
 import type { CollectionActions } from "./collection-view";
 
 vi.mock("next/link", () => ({
@@ -67,9 +68,13 @@ const actions = {
   addItems: vi.fn<CollectionActions["addItems"]>(),
   removeItems: vi.fn<CollectionActions["removeItems"]>(),
   retag: vi.fn<CollectionActions["retag"]>(),
+  setText: vi.fn<CollectionActions["setText"]>(),
+  restoreText: vi.fn<CollectionActions["restoreText"]>(),
+  setPageHidden: vi.fn<CollectionActions["setPageHidden"]>(),
+  setPageOrder: vi.fn<CollectionActions["setPageOrder"]>(),
 };
 
-function view(groups: CollectionGroup[] = GROUPS, version = 7, exportCounts = { available: 2, unavailable: 1 }) {
+function view(groups: CollectionGroup[] = GROUPS, version = 7, exportCounts = { available: 2, unavailable: 1 }, edits: ViewEdits = NO_EDITS) {
   return (
     <CollectionView
       key={version}
@@ -78,6 +83,7 @@ function view(groups: CollectionGroup[] = GROUPS, version = 7, exportCounts = { 
       version={version}
       tags={{ businessLines: ["branding"], industries: ["moda"] }}
       groups={groups}
+      edits={edits}
       assets={{}}
       candidates={[
         { id: "x1", name: "Caso X1", code: "XX-2026-01", clientName: "Xeno", clientCode: "XEN", businessLines: ["video"], industry: "food" },
@@ -319,6 +325,297 @@ describe("a collection's page (Story 5.10a)", () => {
     await user.click(within(dialog).getByRole("button", { name: copy.tags.save }));
     await waitFor(() => expect(actions.retag).toHaveBeenCalledWith({ collectionId: "c1", expectedVersion: 7, businessLines: ["branding", "video"], industries: ["moda"] }));
     await waitFor(() => expect(within(screen.getByRole("list", { name: copy.tags.label })).getByText("Video")).toBeTruthy());
+  });
+});
+
+describe("a collection's own edits (Story 5.11a)", () => {
+  const F = "presentazione_16_9";
+  const edited = (version = 8) => ({ ok: true as const, value: { collectionId: "c1", version } });
+  /** Case A1's first page shown (its own intro pages are left out: client A wraps it). */
+  const a1Page = () => collectionSegments(GROUPS, F).find((s) => s.key === "case:a1")!.entries[0]!;
+  const texts = (page: Page) => {
+    const out: DocumentElement[] = [];
+    const walk = (els: readonly DocumentElement[]) => {
+      for (const el of els) {
+        out.push(el);
+        if (el.type === "text_group" || el.type === "row") walk(el.items);
+      }
+    };
+    for (const b of page.blocks) walk(b.elements);
+    return out;
+  };
+  const freeText = (page: Page) => texts(page).find((el) => el.type === "text" && el.text !== undefined && el.text !== "")! as Extract<DocumentElement, { type: "text" }>;
+  const node = (shownKey: string, elementId: string) => document.querySelector<HTMLElement>(`[data-canvas-page="${shownKey}"] [data-element-id="${elementId}"]`)!;
+  const canvas = () => screen.getByRole("region", { name: dict.configurator.canvas.label });
+  const edits = dict.collection.edits;
+  const openRun = async (user: ReturnType<typeof userEvent.setup>, name: string) => user.click(within(pagine()).getByRole("button", { name: fill(edits.pagesOf, { name }) }));
+
+  it("double-click a free text, type, leave it: saved in the collection, marked, the case's pages untouched", async () => {
+    actions.setText.mockResolvedValue(edited());
+    renderView();
+    const { page, pageKey } = a1Page();
+    const el = freeText(page);
+    const original = el.text;
+    fireEvent.doubleClick(node(page.pageKey, el.elementId));
+    const typing = node(page.pageKey, el.elementId);
+    expect(typing.getAttribute("contenteditable")).toBe("plaintext-only");
+    typing.textContent = "Parole della raccolta";
+    fireEvent.input(typing);
+    fireEvent.focusOut(typing);
+    await waitFor(() =>
+      expect(actions.setText).toHaveBeenCalledWith({
+        collectionId: "c1",
+        expectedVersion: 7,
+        part: { kind: "case", id: "a1" },
+        formatId: F,
+        pageKey,
+        elementId: el.elementId,
+        text: "Parole della raccolta",
+      }),
+    );
+    expect(node(page.pageKey, el.elementId).textContent).toContain("Parole della raccolta");
+    expect(canvas().querySelector(`[data-text-mark="${el.elementId}"]`)?.textContent).toContain(edits.edited);
+    // The revision's own page is never changed.
+    expect(GROUPS[0]!.cases[0]!.part!.formats[F].find((p) => p.pageKey === pageKey)!.blocks).toEqual(page.blocks.map((b) => b));
+    expect(freeText(GROUPS[0]!.cases[0]!.part!.formats[F].find((p) => p.pageKey === pageKey)!).text).toBe(original);
+  });
+
+  it("Enter on a one-line text saves it", async () => {
+    actions.setText.mockResolvedValue(edited());
+    renderView();
+    const { page } = a1Page();
+    const el = freeText(page);
+    fireEvent.doubleClick(node(page.pageKey, el.elementId));
+    const typing = node(page.pageKey, el.elementId);
+    typing.textContent = "Una riga";
+    fireEvent.input(typing);
+    fireEvent.keyDown(typing, { key: "Enter" });
+    await waitFor(() => expect(actions.setText).toHaveBeenCalledWith(expect.objectContaining({ text: "Una riga" })));
+  });
+
+  it("opens nothing on a client or case field", async () => {
+    renderView();
+    const segments = collectionSegments(GROUPS, F);
+    const bound = segments
+      .flatMap((s) => s.pages.map((page) => ({ page, el: texts(page).find((x) => x.type === "text" && (x.binding !== undefined || x.bindings !== undefined)) })))
+      .find((x) => x.el !== undefined)!;
+    fireEvent.doubleClick(node(bound.page.pageKey, bound.el!.elementId));
+    expect(canvas().querySelector("[contenteditable]")).toBeNull();
+  });
+
+  it("refuses a text over the document's limit, saving nothing", async () => {
+    renderView();
+    const { page } = a1Page();
+    const el = freeText(page);
+    fireEvent.doubleClick(node(page.pageKey, el.elementId));
+    const typing = node(page.pageKey, el.elementId);
+    typing.textContent = "x".repeat(5001);
+    fireEvent.input(typing);
+    fireEvent.focusOut(typing);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(fill(edits.textTooLong, { max: 5000 })));
+    expect(actions.setText).not.toHaveBeenCalled();
+  });
+
+  it("puts the text back when the save fails", async () => {
+    actions.setText.mockResolvedValue({ ok: false, status: 500, error: { code: "COLLECTION_WRITE_FAILED", message: "m" } });
+    renderView();
+    const { page } = a1Page();
+    const el = freeText(page);
+    fireEvent.doubleClick(node(page.pageKey, el.elementId));
+    const typing = node(page.pageKey, el.elementId);
+    typing.textContent = "Persa";
+    fireEvent.input(typing);
+    fireEvent.focusOut(typing);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(edits.textFailed));
+    expect(node(page.pageKey, el.elementId).textContent).not.toContain("Persa");
+    expect(canvas().querySelector("[data-text-mark]")).toBeNull();
+  });
+
+  it("Ripristina testo originale removes the edit", async () => {
+    const user = userEvent.setup();
+    actions.restoreText.mockResolvedValue(edited());
+    const { page, pageKey } = a1Page();
+    const el = freeText(page);
+    const saved: ViewEdits = { ...NO_EDITS, texts: [{ partKey: "case:a1", formatId: F, pageKey, elementId: el.elementId, text: "Mia", originalChanged: false }] };
+    render(view(GROUPS, 7, undefined, saved));
+    expect(node(page.pageKey, el.elementId).textContent).toContain("Mia");
+    await user.click(within(canvas()).getByRole("button", { name: edits.restoreText }));
+    expect(actions.restoreText).toHaveBeenCalledWith({ collectionId: "c1", expectedVersion: 7, part: { kind: "case", id: "a1" }, formatId: F, pageKey, elementId: el.elementId });
+    await waitFor(() => expect(canvas().querySelector("[data-text-mark]")).toBeNull());
+    expect(node(page.pageKey, el.elementId).textContent).toContain(el.text!.slice(0, 5));
+  });
+
+  it("keeps its words when the original changed, shows the original and can use it", async () => {
+    const user = userEvent.setup();
+    actions.restoreText.mockResolvedValue(edited());
+    const { page, pageKey } = a1Page();
+    const el = freeText(page);
+    const saved: ViewEdits = { ...NO_EDITS, texts: [{ partKey: "case:a1", formatId: F, pageKey, elementId: el.elementId, text: "Mia", originalChanged: true }] };
+    render(view(GROUPS, 7, undefined, saved));
+    expect(node(page.pageKey, el.elementId).textContent).toContain("Mia");
+    const mark = canvas().querySelector<HTMLElement>(`[data-text-mark="${el.elementId}"]`)!;
+    expect(mark.textContent).toContain(edits.originalChanged);
+    await user.click(within(mark).getByRole("button", { name: edits.showOriginal }));
+    expect(within(mark).getByRole("note").textContent).toContain(el.text!);
+    await user.click(within(mark).getByRole("button", { name: edits.useOriginal }));
+    expect(actions.restoreText).toHaveBeenCalledWith(expect.objectContaining({ part: { kind: "case", id: "a1" }, pageKey, elementId: el.elementId }));
+  });
+
+  it("hides a page from Pagine (a strip with Ripristina in its place) and brings it back", async () => {
+    const user = userEvent.setup();
+    actions.setPageHidden.mockResolvedValueOnce(edited(8)).mockResolvedValueOnce(edited(9));
+    renderView();
+    const { page, pageKey } = a1Page();
+    await openRun(user, "Caso A1");
+    await user.click(within(pagine()).getByRole("button", { name: fill(edits.pageMenu, { name: page.name }) }));
+    await user.click(screen.getByRole("menuitem", { name: edits.hidePage }));
+    expect(actions.setPageHidden).toHaveBeenCalledWith({ collectionId: "c1", expectedVersion: 7, part: { kind: "case", id: "a1" }, formatId: F, pageKey, hidden: true });
+    expect(canvas().querySelector(`[data-canvas-page="${page.pageKey}"]`)).toBeNull();
+    const strip = canvas().querySelector<HTMLElement>(`[data-hidden-page="${page.pageKey}"]`)!;
+    expect(strip).toBeTruthy();
+    await user.click(within(strip).getByRole("button", { name: edits.restorePage }));
+    await waitFor(() => expect(actions.setPageHidden).toHaveBeenLastCalledWith({ collectionId: "c1", expectedVersion: 8, part: { kind: "case", id: "a1" }, formatId: F, pageKey, hidden: false }));
+    expect(canvas().querySelector(`[data-canvas-page="${page.pageKey}"]`)).toBeTruthy();
+  });
+
+  it("hides a client intro page like any other", async () => {
+    const user = userEvent.setup();
+    actions.setPageHidden.mockResolvedValue(edited());
+    renderView();
+    const intro = collectionSegments(GROUPS, F).find((s) => s.key === "client_intro:client-a")!.entries[0]!;
+    await openRun(user, copy.pages.intro);
+    await user.click(within(pagine()).getByRole("button", { name: fill(edits.pageMenu, { name: intro.page.name }) }));
+    await user.click(screen.getByRole("menuitem", { name: edits.hidePage }));
+    expect(actions.setPageHidden).toHaveBeenCalledWith(expect.objectContaining({ part: { kind: "client_intro", id: "client-a" }, pageKey: intro.pageKey, hidden: true }));
+  });
+
+  it("refuses to hide a part's last page", async () => {
+    const user = userEvent.setup();
+    const run = collectionSegments(GROUPS, F).find((s) => s.key === "case:a1")!;
+    const [last, ...others] = run.entries;
+    // A1's own intro pages aren't shown here: hide every other page of the part too.
+    const allKeys = GROUPS[0]!.cases[0]!.part!.formats[F].map((p) => p.pageKey).filter((k) => k !== last!.pageKey);
+    const saved: ViewEdits = { ...NO_EDITS, hidden: allKeys.map((pageKey) => ({ partKey: "case:a1", formatId: F, pageKey })) };
+    expect(others.length).toBeGreaterThan(0);
+    render(view(GROUPS, 7, undefined, saved));
+    await openRun(user, "Caso A1");
+    await user.click(within(pagine()).getByRole("button", { name: fill(edits.pageMenu, { name: last!.page.name }) }));
+    await user.click(screen.getByRole("menuitem", { name: edits.hidePage }));
+    expect(screen.getByRole("status").textContent).toBe(edits.lastPage);
+    expect(actions.setPageHidden).not.toHaveBeenCalled();
+  });
+
+  it("moves a page down within its part and saves the part's whole order; a failure puts it back", async () => {
+    const user = userEvent.setup();
+    actions.setPageOrder.mockResolvedValue({ ok: false, status: 500, error: { code: "COLLECTION_WRITE_FAILED", message: "m" } });
+    renderView();
+    const run = collectionSegments(GROUPS, F).find((s) => s.key === "case:a1")!;
+    const [first, second] = run.entries;
+    const all = GROUPS[0]!.cases[0]!.part!.formats[F].map((p) => p.pageKey);
+    await openRun(user, "Caso A1");
+    await user.click(within(pagine()).getByRole("button", { name: fill(edits.pageMenu, { name: first!.page.name }) }));
+    await user.click(screen.getByRole("menuitem", { name: copy.pages.moveDown }));
+    const expected = all.map((k) => (k === first!.pageKey ? second!.pageKey : k === second!.pageKey ? first!.pageKey : k));
+    expect(actions.setPageOrder).toHaveBeenCalledWith({ collectionId: "c1", expectedVersion: 7, part: { kind: "case", id: "a1" }, formatId: F, pageKeys: expected });
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(copy.orderFailed));
+    const shown = [...canvas().querySelectorAll('[data-canvas-page^="case:a1|"]')].map((el) => el.getAttribute("data-canvas-page"));
+    expect(shown.slice(0, 2)).toEqual([first!.page.pageKey, second!.page.pageKey]);
+  });
+
+  /** Opens A1's first free text, types `words`, and returns it (still open). */
+  const typeIn = (words: string) => {
+    const { page } = a1Page();
+    const el = freeText(page);
+    fireEvent.doubleClick(node(page.pageKey, el.elementId));
+    const typing = node(page.pageKey, el.elementId);
+    typing.textContent = words;
+    fireEvent.input(typing);
+    return { typing, el, page };
+  };
+
+  it("reads the pages again when an edit is refused on out-of-date pages", async () => {
+    actions.setText.mockResolvedValue({ ok: false, status: 409, error: { code: "TEXT_NOT_EDITABLE", message: "m" } });
+    renderView();
+    const { typing } = typeIn("Altro");
+    fireEvent.focusOut(typing);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(edits.notEditable));
+    expect(refresh).toHaveBeenCalled();
+    expect(canvas().querySelector("[data-text-mark]")).toBeNull();
+  });
+
+  it("saves the open text before switching format or Anteprima, in the format it was typed in", async () => {
+    const user = userEvent.setup();
+    actions.setText.mockResolvedValue(edited());
+    renderView();
+    typeIn("Prima del cambio");
+    await user.click(screen.getByRole("button", { name: /Carosello/ }));
+    await waitFor(() => expect(actions.setText).toHaveBeenCalledTimes(1));
+    expect(actions.setText).toHaveBeenCalledWith(expect.objectContaining({ formatId: F, text: "Prima del cambio" }));
+    actions.setText.mockClear();
+    await user.click(screen.getByRole("button", { name: /Presentazione/ }));
+    typeIn("Prima di Anteprima");
+    await user.click(screen.getByRole("button", { name: dict.configurator.preview.enter }));
+    await waitFor(() => expect(actions.setText).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ formatId: F, text: "Prima di Anteprima" })));
+  });
+
+  it("normalises the typed words and never saves blank ones", async () => {
+    actions.setText.mockResolvedValue(edited());
+    renderView();
+    const blank = typeIn(" \u00a0\n ");
+    fireEvent.focusOut(blank.typing);
+    await act(async () => {});
+    expect(actions.setText).not.toHaveBeenCalled();
+    expect(node(blank.page.pageKey, blank.el.elementId).textContent).toContain(blank.el.text!.slice(0, 5));
+    const words = typeIn("Due\u00a0parole \n");
+    fireEvent.focusOut(words.typing);
+    await waitFor(() => expect(actions.setText).toHaveBeenCalledWith(expect.objectContaining({ text: "Due parole" })));
+  });
+
+  it("saves an edit whose original changed again with the same words, clearing the mark", async () => {
+    actions.setText.mockResolvedValue(edited());
+    const { page, pageKey } = a1Page();
+    const el = freeText(page);
+    const saved: ViewEdits = { ...NO_EDITS, texts: [{ partKey: "case:a1", formatId: F, pageKey, elementId: el.elementId, text: "Mia", originalChanged: true }] };
+    render(view(GROUPS, 7, undefined, saved));
+    fireEvent.doubleClick(node(page.pageKey, el.elementId));
+    fireEvent.focusOut(node(page.pageKey, el.elementId));
+    await waitFor(() => expect(actions.setText).toHaveBeenCalledWith(expect.objectContaining({ elementId: el.elementId, text: "Mia" })));
+    expect(canvas().querySelector(`[data-text-mark="${el.elementId}"]`)?.textContent).toContain(edits.edited);
+  });
+
+  it("Anteprima shows no marks and no strips, and a double-click opens nothing", async () => {
+    const user = userEvent.setup();
+    const { page, pageKey } = a1Page();
+    const el = freeText(page);
+    const saved: ViewEdits = {
+      ...NO_EDITS,
+      texts: [{ partKey: "case:a1", formatId: F, pageKey, elementId: el.elementId, text: "Mia", originalChanged: false }],
+      hidden: [{ partKey: "case:a1", formatId: F, pageKey: collectionSegments(GROUPS, F).find((s) => s.key === "case:a1")!.entries[1]!.pageKey }],
+    };
+    render(view(GROUPS, 7, undefined, saved));
+    expect(canvas().querySelector("[data-text-mark]")).toBeTruthy();
+    expect(canvas().querySelector("[data-hidden-page]")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: dict.configurator.preview.enter }));
+    expect(canvas().querySelector("[data-text-mark]")).toBeNull();
+    expect(canvas().querySelector("[data-hidden-page]")).toBeNull();
+    fireEvent.doubleClick(node(page.pageKey, el.elementId));
+    expect(node(page.pageKey, el.elementId).getAttribute("contenteditable")).not.toBe("plaintext-only");
+    // Its words still show the collection's.
+    expect(node(page.pageKey, el.elementId).textContent).toContain("Mia");
+  });
+
+  it("applies saved page orders and hidden pages when it opens", () => {
+    const run = collectionSegments(GROUPS, F).find((s) => s.key === "case:a1")!;
+    const all = GROUPS[0]!.cases[0]!.part!.formats[F].map((p) => p.pageKey);
+    const saved: ViewEdits = {
+      ...NO_EDITS,
+      orders: [{ partKey: "case:a1", formatId: F, pageKeys: [...all].reverse() }],
+      hidden: [{ partKey: "case:a1", formatId: F, pageKey: run.entries[0]!.pageKey }],
+    };
+    render(view(GROUPS, 7, undefined, saved));
+    const shown = [...canvas().querySelectorAll('[data-canvas-page^="case:a1|"]')].map((el) => el.getAttribute("data-canvas-page")!.split("|")[1]);
+    const expected = [...all].reverse().filter((k) => run.entries.some((e) => e.pageKey === k) && k !== run.entries[0]!.pageKey);
+    expect(shown).toEqual(expected);
   });
 });
 
