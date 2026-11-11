@@ -29,7 +29,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | B6 | 5.10 collections | ✅ #161 (5.10a), #162 (5.10b) (migrations on the mac-recap project) | B5, **A8** (collections open the configurator) | A7, A8 | collections, configurator (collection mode) |
 | B7 | 5.11 edit texts and remove pages in a collection | ✅ #163 (5.11a, migration on the mac-recap project 2026-11-11), #164 (5.11b, no migration) | B6 | A2, A7, A8 | configurator (collection mode) |
 | B8 | 3.9 AI client intro draft | ✅ #167 (no migration; AI reads client text fields and PDFs, owner 2026-11-11) | A6 | — | generation |
-| B9 | 5.8 guardrail suite, the rest of 6.4, 6.5 permission checks | 🔄 part 1 ✅ #168 (5.8, 6.5, 6.4 checklist; no migration); part 2 (signed-in DB run) built and reviewed, PR next | every other story | — | `test/` |
+| B9 | 5.8 guardrail suite, the rest of 6.4, 6.5 permission checks | ✅ #168 (part 1), #169 (part 2: signed-in DB run) (no migrations) | every other story | — | `test/` |
 
 A and B only say where a story started in the plan. **Any session can take any story once its "Waits for" stories are merged.**
 
@@ -41,7 +41,7 @@ When a session finishes a story, or when you open a new one:
 2. Skip it if another session is working on a story it **overlaps** with, and take the next one. Two sessions on overlapping stories means merge conflicts in the same files.
 3. Mark it 🔄 in this table, in the story's first commit.
 
-**As of 2026-11-11:** A6, A7, A8, B5, B6, B7, B8 and B9 part 1 merged; every migration on the mac-recap project. Open: B9 part 2 (permission matrix against the local database with a signed-in user per role). The 3-file client limit stays for the demo (owner, 2026-11-11). CI `image` job red on main since #165: Docker build cannot resolve Ubuntu mirrors on the runners.
+**As of 2026-11-11:** every story in the table merged (A1–A9, B1–B9); every migration on the mac-recap project. Left for the demo: the CI `image` job (red on main since #165: Docker build cannot resolve Ubuntu mirrors on the runners), the owner's cover/outro design, the worker deployment, and the manual checks in `docs/guardrail-check.md`. The 3-file client limit stays for the demo (owner, 2026-11-11).
 
 To start a story in a new session, open Claude Code on `main` and say: "Start story <#> (<story>) from `_bmad-output/planning-artifacts/parallel-tracks-2026-11-03.md`; run `bmad-build`."
 
