@@ -168,5 +168,15 @@ export function createSupabaseCollectionRepository(
       const done = await write("delete", client().rpc("delete_collection", { p_collection_id: id, p_actor_id: actorId }), { collectionId: id }, () => true);
       return done.ok ? ok(undefined) : done;
     },
+
+    async recordExported(id, actorId, exportId, format) {
+      const done = await write(
+        "export event",
+        client().rpc("record_collection_exported", { p_collection_id: id, p_actor_id: actorId, p_export_id: exportId, p_format: format }),
+        { collectionId: id },
+        () => true,
+      );
+      return done.ok ? ok(undefined) : done;
+    },
   };
 }

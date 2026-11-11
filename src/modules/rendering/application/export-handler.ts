@@ -6,10 +6,12 @@ import {
   bundleHashOfDrawings,
   composePartOf,
   drawingOfCase,
+  readCollectionSources,
   readExportSources,
   readPackSources,
   sameParts,
   type DrawPart,
+  type CollectionSourceDeps,
   type ExportDrawing,
   type PackSourceDeps,
 } from "@/modules/rendering/application/export-source";
@@ -47,7 +49,7 @@ export interface MediaFile {
 type GetRendition = (assetId: string, specName: string) => Promise<Result<{ url: string; contentType: string }>>;
 
 /** What the export handler needs, injected so unit tests use a fake browser and no database (wired in `worker.ts`). */
-export interface ExportHandlerDeps extends PackSourceDeps {
+export interface ExportHandlerDeps extends PackSourceDeps, CollectionSourceDeps {
   exports: Pick<ExportRepository, "findByHash" | "insert">;
   storage: Pick<ExportStorage, "upload" | "read">;
   /** `material.listAssets`: the case's live files. */
@@ -77,7 +79,7 @@ const fail = (code: Uppercase<string>, message: string, retryable = true): Resul
 const aborted = (): Result<never, JobFailure> => err({ code: JOB_ABORTED, message: "The export was stopped." });
 
 /** Codes that asking again cannot fix: the job fails at once. */
-const PERMANENT = new Set(["NOT_APPROVED", "FORMAT_NOT_IN_REVISION", "NOT_FOUND", "CLIENT_NOT_FOUND", EXPORT_STALE, EXPORT_TOO_LARGE]);
+const PERMANENT = new Set(["NOT_APPROVED", "FORMAT_NOT_IN_REVISION", "NOT_FOUND", "CLIENT_NOT_FOUND", "COLLECTION_NOT_FOUND", EXPORT_STALE, EXPORT_TOO_LARGE]);
 
 /** A failure as the job loop takes it: retried unless it says otherwise or its code is permanent. */
 const asFailure = (error: { code: string; message: string; retryable?: boolean }): Result<never, JobFailure> =>
@@ -102,11 +104,24 @@ export function pdfPageCount(bytes: Uint8Array): number {
 
 const isBusinessLine = (line: string): line is BusinessLine => (BUSINESS_LINES as readonly string[]).includes(line);
 
+/**
+ * The clients a drawing's parts draw, each once, in order: the drawing's own client first (a
+ * case's or a pack's only one), then any other a collection's parts belong to (Story 5.10b).
+ */
+function clientsOf(drawing: ExportDrawing): { id: string; logoId: string | null }[] {
+  const clients = [drawing.client];
+  for (const part of drawing.parts) {
+    if (clients.some((c) => c.id.toLowerCase() === part.clientId.toLowerCase())) continue;
+    clients.push({ id: part.clientId, logoId: part.content.client.logoId });
+  }
+  return clients;
+}
+
 const dataUrl = (contentType: string, bytes: Uint8Array) => `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
 
 /**
  * The payload's case id, for `job_failed` (a failed export never changes the case's
- * status); null for a client pack (Story 5.9a), which is no one case's.
+ * status); null for a client pack (Story 5.9a) or a collection (5.10b), which is no one case's.
  */
 function caseIdOf(job: Job): string | null {
   const raw = job.payload as unknown;
@@ -123,7 +138,9 @@ function caseIdOf(job: Job): string | null {
  * (`bundle.zip`: a PDF at the root under its 5.3 name, a Carosello's PNGs in
  * `Carosello/`). If any format fails, no ZIP is stored; a format already made stays.
  * A client pack (Story 5.9a) is the same with all of the pack's parts, composed with the
- * pack rule (`composeParts`' `pack`) and named after the client.
+ * pack rule (`composeParts`' `pack`) and named after the client. A collection (Story 5.10b)
+ * is the same with its parts per client group, composed by default (a client's intro only with
+ * 2 or more of its cases), each part with its own client's logo and files, named after it.
  * It re-checks approval and the content hash (an edit since the request is
  * `EXPORT_STALE`: the person asks again), reuses a file already stored for the hash,
  * else draws the pages with the preview's renderer (case and client renditions and the
@@ -143,16 +160,25 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
     for (const segment of composed.segments) for (const id of referencedAssetIds({ pages: segment.pages })) wanted.add(id);
     if (wanted.size === 0) return ok({});
     const caseIds = drawing.parts.flatMap((part) => (part.caseId === null ? [] : [part.caseId]));
-    const [clientFiles, ...caseLists] = await Promise.all([deps.listClientMedia(drawing.client.id), ...caseIds.map((id) => deps.listCaseMedia(id))]);
+    // Each part's client's files: one client for a case or a pack, several for a collection (5.10b).
+    const clientIds = clientsOf(drawing).map((client) => client.id);
+    const [caseLists, clientLists] = await Promise.all([
+      Promise.all(caseIds.map((id) => deps.listCaseMedia(id))),
+      Promise.all(clientIds.map((id) => deps.listClientMedia(id))),
+    ]);
     const caseFiles: MediaFile[] = [];
     for (const listed of caseLists) {
       if (!listed.ok) return listed;
       caseFiles.push(...listed.value);
     }
-    if (!clientFiles.ok) return clientFiles;
+    const clientFiles: MediaFile[] = [];
+    for (const listed of clientLists) {
+      if (!listed.ok) return listed;
+      clientFiles.push(...listed.value);
+    }
     const sources: [MediaFile, GetRendition][] = [
       ...caseFiles.map((file): [MediaFile, GetRendition] => [file, deps.getRendition]),
-      ...clientFiles.value.map((file): [MediaFile, GetRendition] => [file, deps.getClientRendition]),
+      ...clientFiles.map((file): [MediaFile, GetRendition] => [file, deps.getClientRendition]),
     ].filter(([file]) => wanted.has(file.id.toLowerCase()) && Object.hasOwn(STILL_SPEC, file.kind));
 
     const assets: Record<string, RenderAsset> = {};
@@ -172,19 +198,32 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
     return ok(assets);
   }
 
-  async function logoUrl(drawing: ExportDrawing): Promise<Result<string | null>> {
-    if (drawing.client.logoId === null) return ok(null);
-    const logo = await deps.readClientLogo(drawing.client.id);
+  async function logoUrl(drawing: ExportDrawing, client: { id: string; logoId: string | null }): Promise<Result<string | null>> {
+    if (client.logoId === null) return ok(null);
+    const logo = await deps.readClientLogo(client.id);
     if (!logo.ok) return logo;
     if (logo.value === null || logo.value.bytes.length === 0) return ok(null);
     if (logo.value.contentType === "image/svg+xml") {
       const png = await deps.rasteriseSvg(logo.value.bytes);
       if (png.ok) return ok(dataUrl("image/png", png.value));
       if (!LOGO_SKIPPED.has(png.error.code)) return png;
-      log.warn(`export drawn without the logo: ${png.error.code}`, { caseId: drawing.parts[0].caseId ?? undefined, clientId: drawing.client.id });
+      // A case of this client: a collection's parts belong to several.
+      const caseId = drawing.parts.find((p) => p.caseId !== null && p.clientId.toLowerCase() === client.id.toLowerCase())?.caseId ?? undefined;
+      log.warn(`export drawn without the logo: ${png.error.code}`, { caseId, clientId: client.id });
       return ok(null);
     }
     return ok(dataUrl(logo.value.contentType, logo.value.bytes));
+  }
+
+  /** Each client's logo as the pages draw it, by client id (lower case). */
+  async function logoUrls(drawing: ExportDrawing): Promise<Result<Map<string, string | null>>> {
+    const logos = new Map<string, string | null>();
+    for (const client of clientsOf(drawing)) {
+      const url = await logoUrl(drawing, client);
+      if (!url.ok) return url;
+      logos.set(client.id.toLowerCase(), url.value);
+    }
+    return ok(logos);
   }
 
   function valuesOf(part: DrawPart, logo: string | null): BoundValues {
@@ -197,15 +236,15 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
 
   async function draw(drawing: ExportDrawing, signal: AbortSignal): Promise<Result<Uint8Array, Failure>> {
     const { format } = drawing;
-    const [assets, logo] = await Promise.all([mediaAssets(drawing, signal), logoUrl(drawing)]);
+    const [assets, logos] = await Promise.all([mediaAssets(drawing, signal), logoUrls(drawing)]);
     if (!assets.ok) return assets;
-    if (!logo.ok) return logo;
+    if (!logos.ok) return logos;
     const fontCss = await deps.fontCss();
     const size = getFormat(format).pixelSize;
     let html: string;
     try {
       html = exportHtml({
-        parts: drawing.parts.map((part) => composePartOf(part, valuesOf(part, logo.value), assets.value)),
+        parts: drawing.parts.map((part) => composePartOf(part, valuesOf(part, logos.value.get(part.clientId.toLowerCase()) ?? null), assets.value)),
         format,
         size,
         fontCss,
@@ -319,6 +358,15 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
   async function drawingsOf(job: Job, payload: ExportPayload, formats: ExportFormatId[], signal: AbortSignal): Promise<Result<ExportDrawing[], JobFailure>> {
     const bundled = payload.format === EXPORT_BUNDLE;
     const stale = () => fail(EXPORT_STALE, "The content changed since the export was asked for.", false);
+    if ("subject" in payload && payload.subject.kind === "collection") {
+      const read = await readCollectionSources(deps, payload.subject.id, formats);
+      if (signal.aborted) return aborted();
+      if (!read.ok) return asFailure(read.error);
+      const { drawings } = read.value;
+      const hash = bundled ? bundleHashOfDrawings(drawings) : drawings[0].contentHash;
+      if (!sameParts(read.value.parts, payload.parts) || hash !== job.inputHash) return stale();
+      return ok(drawings);
+    }
     if ("subject" in payload) {
       const read = await readPackSources(deps, payload.subject.id, formats);
       if (signal.aborted) return aborted();
@@ -344,7 +392,12 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
     const parsed = exportPayloadSchema.safeParse(job.payload);
     if (!parsed.success) return fail("INVALID_PAYLOAD", "The export job's payload is not valid.", false);
     const payload: ExportPayload = parsed.data;
-    const ids: LogContext = "subject" in payload ? { jobId: job.id, clientId: payload.subject.id } : { jobId: job.id, caseId: payload.parts[0].subject.id };
+    const ids: LogContext =
+      "subject" in payload
+        ? payload.subject.kind === "collection"
+          ? { jobId: job.id, collectionId: payload.subject.id }
+          : { jobId: job.id, clientId: payload.subject.id }
+        : { jobId: job.id, caseId: payload.parts[0].subject.id };
     // A bundle's formats in the picker's order: the order of the files in its ZIP.
     const formats: ExportFormatId[] =
       payload.format === EXPORT_BUNDLE ? EXPORT_FORMAT_IDS.filter((f) => payload.formats.includes(f)) : [payload.format];

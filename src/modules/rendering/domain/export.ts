@@ -77,6 +77,17 @@ const casePartSchema = z.object({ subject: caseSubjectSchema, revisionId: z.uuid
 export const clientSubjectSchema = z.object({ kind: z.literal("client"), id: z.uuid() }).strict();
 export type ClientSubject = z.infer<typeof clientSubjectSchema>;
 
+/**
+ * A collection's subject (Story 5.10b): the collection whose file it is. Its parts are, per
+ * client group in the collection's order, the client's approved intro (only with 2 or more of
+ * its cases available) and the group's available cases.
+ */
+export const collectionSubjectSchema = z.object({ kind: z.literal("collection"), id: z.uuid() }).strict();
+export type CollectionSubject = z.infer<typeof collectionSubjectSchema>;
+
+/** What a multi-part export is of: a client's pack (5.9a) or a collection (5.10b). */
+const packSubjectSchema = z.union([clientSubjectSchema, collectionSubjectSchema]);
+
 /** The most parts an export holds (the `export.parts` check: 1–200). */
 export const EXPORT_MAX_PARTS = 200;
 
@@ -94,17 +105,18 @@ const packPartsSchema = z.array(exportPartSchema).min(1).max(EXPORT_MAX_PARTS);
  * An `export` job's payload: the ordered parts, the format and who asked (the row's
  * `created_by`). A bundle (Story 5.4) names its formats; one job renders each that has
  * no export yet, then zips them. A client pack (Story 5.9a) names its client as
- * `subject` and holds all of the pack's parts, in order.
+ * `subject` and holds all of the pack's parts, in order; a collection (Story 5.10b) the same
+ * with its collection as `subject`.
  */
 export const exportPayloadSchema = z.union([
   z.object({ parts: z.array(casePartSchema).length(1), format: exportFormatIdSchema, requestedBy: z.uuid() }).strict(),
   z
     .object({ parts: z.array(casePartSchema).length(1), format: z.literal(EXPORT_BUNDLE), formats: bundleFormatsSchema, requestedBy: z.uuid() })
     .strict(),
-  z.object({ subject: clientSubjectSchema, parts: packPartsSchema, format: exportFormatIdSchema, requestedBy: z.uuid() }).strict(),
+  z.object({ subject: packSubjectSchema, parts: packPartsSchema, format: exportFormatIdSchema, requestedBy: z.uuid() }).strict(),
   z
     .object({
-      subject: clientSubjectSchema,
+      subject: packSubjectSchema,
       parts: packPartsSchema,
       format: z.literal(EXPORT_BUNDLE),
       formats: bundleFormatsSchema,
@@ -138,6 +150,20 @@ export const requestPackInputSchema = (input: unknown) =>
 export const packStatusInputSchema = z.union([
   z.object({ clientId: z.uuid(), jobId: z.uuid() }).strict(),
   z.object({ clientId: z.uuid(), exportId: z.uuid() }).strict(),
+]);
+
+/** What a person asks for a collection (Story 5.10b): the collection in one or more formats, as for a case. */
+export const requestOneCollectionInputSchema = z.object({ collectionId: z.uuid(), format: z.string().min(1).max(64) });
+export const requestCollectionsInputSchema = z.object({ collectionId: z.uuid(), formats: z.array(z.string().min(1).max(64)).min(1).max(8) });
+
+/** The schema a collection input is read with: `formats` when it has that key, else `format`. */
+export const requestCollectionInputSchema = (input: unknown) =>
+  typeof input === "object" && input !== null && Object.hasOwn(input, "formats") ? requestCollectionsInputSchema : requestOneCollectionInputSchema;
+
+/** The state of a collection request (Story 5.10b): by the job it enqueued, or by the export it found. */
+export const collectionStatusInputSchema = z.union([
+  z.object({ collectionId: z.uuid(), jobId: z.uuid() }).strict(),
+  z.object({ collectionId: z.uuid(), exportId: z.uuid() }).strict(),
 ]);
 
 /** The state of a request: by the job it enqueued, or by the export it found. */
@@ -246,6 +272,24 @@ export function packHashInput(client: PackClient, parts: readonly ExportPartCont
   return JSON.stringify(["export.pack.v1", EXPORT_RENDER_VERSION, format, [client.id.toLowerCase(), client.code, client.name], partRows(parts)]);
 }
 
+/** The collection a collection's file is named from (Story 5.10b). */
+export interface ExportCollection {
+  id: string;
+  name: string;
+}
+
+/**
+ * The canonical text a collection's content hash is taken of (Story 5.10b): the collection
+ * (id and name, which also names the file), then every part as `contentHashInput` takes it
+ * (subject, approved revision, template, its client's info and the bound case fields; an
+ * intro part binds no case), in the file's order, the format and `EXPORT_RENDER_VERSION`.
+ * `export.collection.v1` keeps it apart from any case's or client pack's hash, so a file of
+ * one is never handed out as another.
+ */
+export function collectionHashInput(collection: ExportCollection, parts: readonly ExportPartContent[], format: ExportFormatId): string {
+  return JSON.stringify(["export.collection.v1", EXPORT_RENDER_VERSION, format, [collection.id.toLowerCase(), collection.name], partRows(parts)]);
+}
+
 /**
  * The canonical text a bundle's content hash is taken of (Story 5.4): its formats, sorted,
  * each with its own 5.3 content hash, and the names of the files inside (they carry the
@@ -281,6 +325,18 @@ const cleanName = (text: string) => text.replace(UNSAFE_IN_FILE_NAME, " ").repla
 function fileHead(code: string, name: string): string {
   const shortName = Array.from(cleanName(name)).slice(0, 120).join("").trim();
   return [cleanName(code), shortName].filter(Boolean).join(" ");
+}
+
+/** What a collection's files are named when its name holds nothing a file name can keep (Story 5.10b). */
+export const COLLECTION_FILE_FALLBACK = "Raccolta";
+
+/**
+ * The name a collection's files are named after (Story 5.10b): its name, or
+ * `COLLECTION_FILE_FALLBACK` when cleaning leaves nothing (a name of only unsafe characters).
+ * Used with an empty code: `{name} – {Format}.{ext}`, `{name}.zip`.
+ */
+export function collectionFileName(name: string): string {
+  return fileHead("", name) === "" ? COLLECTION_FILE_FALLBACK : name;
 }
 
 /** A bundle's downloaded name (Story 5.4): `{code} {name}.zip`, cleaned as `exportFileName`. */

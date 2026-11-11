@@ -201,6 +201,17 @@ describe("DownloadButton (Story 5.3)", () => {
     expect(trigger().textContent).toContain(dict.download.working);
   });
 
+  it("shows a failed poll's own line in the toast when it gives one (Story 5.10b)", async () => {
+    setup(async () => ({ kind: "pending", ticket: "job-1" }), async () => ({ kind: "failed", message: dict.download.collectionStale }));
+    await choose();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_POLL_MS);
+    });
+    const toast = screen.getByRole("alert", { hidden: true });
+    expect(toast.textContent).toContain(dict.download.collectionStale);
+    expect(toast.textContent).not.toContain(FAILED);
+  });
+
   it("closes the toast without asking again", async () => {
     const onDownload = vi.fn(async (): Promise<DownloadStart> => ({ kind: "pending", ticket: "job-1" }));
     setup(onDownload, async () => {

@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import {
   bundleHashInput,
+  collectionHashInput,
   contentHashInput,
   packHashInput,
+  type ExportCollection,
   type ExportFormatId,
   type ExportPartContent,
   type PackClient,
@@ -35,4 +37,13 @@ export function bundleHash(formats: readonly { format: ExportFormatId; contentHa
  */
 export function packHash(client: PackClient, parts: readonly ExportPartContent[], format: ExportFormatId): string {
   return sha256(packHashInput(client, parts, format));
+}
+
+/**
+ * A collection's content hash (Story 5.10b): the sha256 of `collectionHashInput`, the
+ * collection's id and name and every part (subject, approved revision, bound values) in the
+ * file's order, and the format.
+ */
+export function collectionHash(collection: ExportCollection, parts: readonly ExportPartContent[], format: ExportFormatId): string {
+  return sha256(collectionHashInput(collection, parts, format));
 }

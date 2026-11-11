@@ -19,6 +19,9 @@ vi.mock("next/link", () => ({
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
 
+const { requestCollectionExport, getCollectionExportStatus } = vi.hoisted(() => ({ requestCollectionExport: vi.fn(), getCollectionExportStatus: vi.fn() }));
+vi.mock("@/app/(wizard)/collections/[collectionId]/actions", () => ({ requestCollectionExport, getCollectionExportStatus }));
+
 const { CollectionView } = await import("./collection-view");
 
 const VALUES: BoundValues = {
@@ -66,7 +69,7 @@ const actions = {
   retag: vi.fn<CollectionActions["retag"]>(),
 };
 
-function view(groups: CollectionGroup[] = GROUPS, version = 7) {
+function view(groups: CollectionGroup[] = GROUPS, version = 7, exportCounts = { available: 2, unavailable: 1 }) {
   return (
     <CollectionView
       key={version}
@@ -82,6 +85,7 @@ function view(groups: CollectionGroup[] = GROUPS, version = 7) {
       ]}
       tagOptions={{ businessLines: ["branding", "video"], sectors: [{ key: "moda", label: "Moda" }, { key: "food", label: "Food" }] }}
       actions={actions}
+      exportCounts={exportCounts}
     />
   );
 }
@@ -315,5 +319,41 @@ describe("a collection's page (Story 5.10a)", () => {
     await user.click(within(dialog).getByRole("button", { name: copy.tags.save }));
     await waitFor(() => expect(actions.retag).toHaveBeenCalledWith({ collectionId: "c1", expectedVersion: 7, businessLines: ["branding", "video"], industries: ["moda"] }));
     await waitFor(() => expect(within(screen.getByRole("list", { name: copy.tags.label })).getByText("Video")).toBeTruthy());
+  });
+});
+
+describe("Esporta (Story 5.10b)", () => {
+  const label = fill(dict.download.collectionLabel, { name: "Pitch moda" });
+  const dialog = () => document.querySelector("dialog")!;
+
+  it("opens the export dialog for the collection, saying how many unavailable cases are left out", async () => {
+    requestCollectionExport.mockResolvedValue({ ok: true, value: { status: "pending", jobId: "job-1" } });
+    render(view());
+    const button = screen.getByRole("button", { name: label, hidden: true });
+    expect(button.textContent).toContain(dict.download.collectionAction);
+    await userEvent.click(button);
+    expect(dialog().textContent).toContain(fill(dict.download.collectionTitle, { name: "Pitch moda" }));
+    expect(dialog().textContent).toContain(fill(dict.download.collectionDescription, { n: 2 }));
+    expect(dialog().textContent).toContain(fill(dict.download.collectionUnavailable, { n: 1 }));
+    const confirm = within(dialog()).getByRole("button", { name: dict.download.collectionAction, hidden: true });
+    await userEvent.click(confirm);
+    await waitFor(() => expect(requestCollectionExport).toHaveBeenCalledExactlyOnceWith({ collectionId: "c1", formats: ["presentazione_16_9"] }));
+  });
+
+  it("has no note when every case is available, and no Esporta when none is", () => {
+    const { unmount } = render(view(GROUPS, 7, { available: 3, unavailable: 0 }));
+    expect(screen.getByRole("button", { name: label, hidden: true })).toBeTruthy();
+    expect(document.body.textContent).not.toContain(fill(dict.download.collectionUnavailable, { n: 0 }));
+    unmount();
+    render(view(GROUPS, 7, { available: 0, unavailable: 3 }));
+    expect(screen.queryByRole("button", { name: label, hidden: true })).toBeNull();
+  });
+
+  it("shows a refusal in the dialog", async () => {
+    requestCollectionExport.mockResolvedValue({ ok: false, status: 409, error: { code: "NOT_APPROVED", message: "x" } });
+    render(view());
+    await userEvent.click(screen.getByRole("button", { name: label, hidden: true }));
+    await userEvent.click(within(dialog()).getByRole("button", { name: dict.download.collectionAction, hidden: true }));
+    await screen.findByText(dict.download.collectionNotApproved);
   });
 });

@@ -3,6 +3,8 @@
 import { failure, type ActionResult } from "@/app/_lib/action-result";
 import { authorize, getActor } from "@/modules/access";
 import * as collection from "@/modules/collection";
+import * as rendering from "@/modules/rendering/server";
+import type { ExportTicket } from "@/modules/rendering/server";
 
 // Story 5.10a: one collection's Pagine panel and top bar. Every change is a compare-and-set on
 // the collection's `version` (`expectedVersion`); a stale one is 409 `STALE_COLLECTION` and
@@ -74,4 +76,44 @@ export async function retagCollection(input: unknown): Promise<ActionResult<{ co
   if (!decision.ok) return failure(decision.error);
   const done = await collection.retagCollection(actor.value, input);
   return done.ok ? { ok: true, value: done.value } : failure(done.error);
+}
+
+/**
+ * **Esporta** on a collection (Story 5.10b): input `{ collectionId, formats }`. Builds the
+ * collection's file from live approved revisions, per client group in its order (a client's
+ * approved intro and closing wrap its cases only with 2 or more of them; a "Non disponibile" case
+ * is left out); when the same file was exported before, returns `{ status: "ready", url,
+ * fileName }` at once (with a `collection_exported` event), otherwise enqueues an `export` job and
+ * returns `{ status: "pending", jobId }`. Web requests never render. Every role (`manage
+ * collections`, owner 2026-11-10: admin included). 403 `FORBIDDEN`; 400 `INVALID_INPUT`,
+ * `FORMAT_NOT_EXPORTABLE`, `FORMAT_NOT_IN_REVISION`; 404 `COLLECTION_NOT_FOUND`; 409
+ * `NOT_APPROVED` (no available case). Nothing is enqueued on any error.
+ */
+export async function requestCollectionExport(input: unknown): Promise<ActionResult<ExportTicket>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage collections");
+  if (!decision.ok) return failure(decision.error);
+  // What is exported is always approved: the module checks every part has an approved revision.
+  const approved = authorize(actor.value, "export", { status: "approved" });
+  if (!approved.ok) return failure(approved.error);
+  const requested = await rendering.requestCollection(actor.value, input);
+  return requested.ok ? requested : failure(requested.error);
+}
+
+/**
+ * Where a collection's **Esporta** stands (Story 5.10b), polled every 2 s: input
+ * `{ collectionId, jobId }`. `pending`, `failed`, or `ready` with the signed link (and a
+ * `collection_exported` event). 403 `FORBIDDEN`; 400 `INVALID_INPUT`; 404 `NOT_FOUND`,
+ * `COLLECTION_NOT_FOUND`; 409 `NOT_APPROVED`, `EXPORT_STALE` (the collection changed since).
+ */
+export async function getCollectionExportStatus(input: unknown): Promise<ActionResult<ExportTicket>> {
+  const actor = await getActor();
+  if (!actor.ok) return failure(actor.error);
+  const decision = authorize(actor.value, "manage collections");
+  if (!decision.ok) return failure(decision.error);
+  const approved = authorize(actor.value, "export", { status: "approved" });
+  if (!approved.ok) return failure(approved.error);
+  const status = await rendering.collectionStatus(actor.value, input);
+  return status.ok ? status : failure(status.error);
 }

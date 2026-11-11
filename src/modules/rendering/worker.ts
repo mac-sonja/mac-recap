@@ -4,6 +4,7 @@
 import * as caseStudy from "@/modules/case-study";
 import type { JobHandler } from "@/modules/jobs";
 import * as material from "@/modules/material";
+import { readCollection } from "@/modules/rendering/adapters/collection/read-collection";
 import { interFontCss } from "@/modules/rendering/adapters/fonts/inter";
 import { fetchBytes } from "@/modules/rendering/adapters/http/fetch-bytes";
 import { createPlaywrightExportBrowser } from "@/modules/rendering/adapters/playwright/export-browser";
@@ -27,6 +28,7 @@ export function exportHandler(overrides: Partial<ExportHandlerDeps> = {}): JobHa
     getClient: caseStudy.getClient,
     getClientIntro: caseStudy.getClientIntro,
     listClientCasesInOrder: caseStudy.listClientCasesInOrder,
+    getCollection: readCollection,
     exports: createSupabaseExportRepository(),
     storage: createSupabaseExportStorage(),
     listCaseMedia: (caseId) => material.listAssets({ caseId }),

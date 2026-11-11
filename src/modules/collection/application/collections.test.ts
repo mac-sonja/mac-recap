@@ -44,6 +44,7 @@ function setup(collection: StoredCollection | null = stored([A1, A2, B1]), cases
     rename: vi.fn(async (_id: string, expected: number) => ok(expected + 1)),
     setTags: vi.fn(async (_id: string, expected: number) => ok(expected + 1)),
     softDelete: vi.fn(async () => ok(undefined)),
+    recordExported: vi.fn(async () => ok(undefined)),
   } satisfies CollectionRepository;
   const liveRevision = vi.fn(async (caseId: string) => ok(caseId === A2 ? null : ({ id: `rev-${caseId}` } as unknown as CaseStudyRevision)));
   const useCases = makeCollectionUseCases({
@@ -196,5 +197,24 @@ describe("name and tags", () => {
     const { repo, useCases } = setup();
     expect(await useCases.remove(actor, { collectionId: COLLECTION })).toEqual({ ok: true, value: undefined });
     expect(repo.softDelete).toHaveBeenCalledWith(COLLECTION, actor.id);
+  });
+});
+
+describe("recordExported (Story 5.10b)", () => {
+  it("logs one collection_exported event with the export and its format, bumping nothing", async () => {
+    const { repo, useCases } = setup();
+    const exportId = uuid(9);
+    expect(await useCases.recordExported(actor, { collectionId: COLLECTION, exportId, format: "bundle" })).toEqual(ok(undefined));
+    expect(repo.recordExported).toHaveBeenCalledExactlyOnceWith(COLLECTION, actor.id, exportId, "bundle");
+    expect(repo.setItems).not.toHaveBeenCalled();
+  });
+
+  it("refuses a malformed input, writing nothing", async () => {
+    const { repo, useCases } = setup();
+    expect(await useCases.recordExported(actor, { collectionId: "x", exportId: uuid(9), format: "Bundle!" })).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_INPUT", details: { fields: ["collectionId", "format"] } },
+    });
+    expect(repo.recordExported).not.toHaveBeenCalled();
   });
 });
