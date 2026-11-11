@@ -246,7 +246,7 @@ describe("export handler (Story 5.3)", () => {
     expect(all.exports.insert).not.toHaveBeenCalled();
   });
 
-  it("re-checks approval: no approved revision any more fails at once, draws and stores nothing", async () => {
+  it("NFR7 guardrail: re-checks approval: no approved revision any more fails at once, draws and stores nothing", async () => {
     const { all } = deps();
     const job = await jobFor(all, "presentazione_16_9");
     vi.mocked(all.getLiveRevision).mockResolvedValue(ok<CaseStudyRevision | null>(null));
@@ -503,7 +503,7 @@ describe("export handler, bundles (Story 5.4)", () => {
     expect(big.all.storage.upload).not.toHaveBeenCalledWith(expect.objectContaining({ format: "bundle" }), expect.anything());
   });
 
-  it("re-checks approval and the bundle's hash before drawing anything", async () => {
+  it("NFR7 guardrail: re-checks approval and the bundle's hash before drawing anything", async () => {
     const { all } = deps({ exports: memoryExports() });
     const job = await bundleJobFor(all);
     vi.mocked(all.getClientInfoForCase).mockResolvedValue(ok(clientInfo({ name: "Lumen Spa" })));
@@ -706,7 +706,7 @@ describe("export handler, client packs (Story 5.9a)", () => {
     expect(rig.exports.rows).toEqual([]);
   });
 
-  it("draws an intro that isn't approved as no intro: each case whole", async () => {
+  it("NFR7 guardrail: draws an intro that isn't approved as no intro: each case whole", async () => {
     const rig = await packRig({ order: ["A", "B"], intro: "unapproved" });
     await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["presentazione_16_9"] });
     expect(await rig.handler.run(rig.jobs[0], signal())).toEqual(ok(undefined));

@@ -204,7 +204,7 @@ export function makeExportStatus(deps: RequestExportDeps) {
     const found = await deps.getCase(caseId);
     if (!found.ok) return found;
     const caseStudy = found.value;
-    // Approved only (NFR1): nothing is looked up, let alone handed out, without a live revision.
+    // Approved only (NFR7): nothing is looked up, let alone handed out, without a live revision.
     const live = await deps.getLiveRevision({ kind: "case", id: caseStudy.id });
     if (!live.ok) return live;
     if (live.value === null) return notApproved(caseStudy.id);
@@ -354,7 +354,7 @@ export function makePackStatus(deps: RequestPackDeps) {
     const { clientId } = parsed.data;
     const notFound = () => err({ code: "NOT_FOUND", message: "No such export.", details: { clientId } });
 
-    // Approved only (NFR1): nothing is looked up, let alone handed out, without an approved case.
+    // Approved only (NFR7): nothing is looked up, let alone handed out, without an approved case.
     const read = await readPackParts(deps, clientId);
     if (!read.ok) return read;
     const { client, parts } = read.value;
@@ -514,7 +514,7 @@ export function makeCollectionStatus(deps: RequestCollectionDeps) {
       hash = job.inputHash;
     }
 
-    // Approved only (NFR1): nothing is handed out without an available case, read once now.
+    // Approved only (NFR7): nothing is handed out without an available case, read once now.
     const read = await readCollectionSources(deps, collectionId, EXPORT_FORMAT_IDS, { skipMissingFormats: true });
     if (!read.ok) return read;
     const { collection, parts, drawings } = read.value;

@@ -1006,7 +1006,7 @@ describe("details form (context_form)", () => {
     });
   });
 
-  it("the form is not material: a filled form with no assets → has_material false", async () => {
+  it("NFR6 guardrail: the form is not material: a filled form with no assets → has_material false", async () => {
     const created = await createCase();
     for (const field of ["context", "solution"]) {
       expect(codeOf(await saveField({ caseId: created.id, field, text: "Compilato" }))).toBe("OK");

@@ -162,13 +162,15 @@ describe("generate handler: success", () => {
 });
 
 describe("generate handler: gate and discarded results", () => {
-  it("no material: NO_MATERIAL, not retryable, nothing written", async () => {
+  it("NFR6 guardrail: no material, the details form filled in: NO_MATERIAL, not retryable, nothing written", async () => {
     const { deps, handler } = make({ hasMaterial: vi.fn(async () => ok(false)) });
+    // The default form here is filled in (context, results): it is not material.
+    expect(await deps.getDetailsForm()).toMatchObject({ ok: true, value: { context: SECRET } });
     expect(await handler.run(job, live)).toMatchObject({ ok: false, error: { code: "NO_MATERIAL", retryable: false } });
     expect(deps.createWorkingRevision).not.toHaveBeenCalled();
   });
 
-  it("all of the manifest's assets removed since: NO_MATERIAL even though newer files exist", async () => {
+  it("NFR6 guardrail: all of the manifest's assets removed since: NO_MATERIAL even though newer files exist", async () => {
     const { deps, handler } = make({ listGenerationAssets: vi.fn(async () => ok([asSource(LATE, "image/png", "image")])) });
     expect(await handler.run(job, live)).toMatchObject({ ok: false, error: { code: "NO_MATERIAL" } });
     expect(deps.createWorkingRevision).not.toHaveBeenCalled();
@@ -415,7 +417,7 @@ describe("generate handler: a client intro (Story 3.11)", () => {
     });
   });
 
-  it("re-checks the gate: fewer than 2 client images is NO_CLIENT_IMAGES, final, nothing written", async () => {
+  it("NFR6 guardrail: the worker re-checks the gate: fewer than 2 client images is NO_CLIENT_IMAGES, final, nothing written", async () => {
     const { handler, intro } = makeIntro({
       listClientAssets: vi.fn(async () =>
         ok([

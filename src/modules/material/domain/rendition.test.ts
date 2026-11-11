@@ -34,13 +34,13 @@ describe("rendition specs", () => {
     });
   });
 
-  it("every spec fits inside and never enlarges", () => {
+  it("NFR1 guardrail: every spec fits inside and never enlarges", () => {
     for (const name of RENDITION_SPEC_NAMES) {
       expect(RENDITION_SPECS[name]).toMatchObject({ fit: "inside", withoutEnlargement: true });
     }
   });
 
-  it("no spec carries a crop, focal point, filter or watermark field", () => {
+  it("NFR1 guardrail: no spec carries a crop, focal point, filter or watermark field", () => {
     const allowed = new Set([
       "name", "version", "source", "output", "contentType", "ext", "maxLongSide", "fit", "withoutEnlargement", "quality",
       "atSeconds", "videoCodec", "crf", "preset", "pixelFormat", "maxrateKbps", "bufsizeKbps", "audioCodec", "audioBitrateKbps", "faststart",

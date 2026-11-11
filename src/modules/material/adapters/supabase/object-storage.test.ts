@@ -246,7 +246,7 @@ describe("createSupabaseObjectStorage", () => {
       `clients/${CASE_ID}/material/${ASSET_ID}.jpg`,
       `clients/${CASE_ID}/logos/${ASSET_ID}/renditions/0123456789abcdef.webp`,
     ])(
-      "upload refuses anything but a rendition key: %s",
+      "NFR1 guardrail: upload refuses anything but a rendition key: %s",
       async (key) => {
         const stub = stubClient();
         expect(await createSupabaseObjectStorage(stub.factory).upload(key, new Uint8Array([1]), "image/webp")).toMatchObject({

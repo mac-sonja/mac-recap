@@ -3,14 +3,17 @@ import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// Story 4.8 (AR5, C39): a case becomes `approved` only through a person's call to
+// NFR2 as built for the demo (the per-block check was removed, SCP 2026-10-28): a person
+// approves one case or intro at a time, through one caller each, after the overflow and
+// missing-material checks and before any write; nothing leaves Approvato except through its
+// own use cases. Story 4.8 (AR5, C39): a case becomes `approved` only through a person's call to
 // `case-study.approve`, with an overflow-free result for every format and no missing
 // material. This scans src/ for any other way in: no bulk or automatic approve in the
 // module's API, no `transition(…, "approve")` (the generic transition would skip the
 // checks), and `approve` called only by the configurator's server action, which takes
 // the actor from the session.
 
-const root = fileURLToPath(new URL("..", import.meta.url));
+const root = fileURLToPath(new URL("../..", import.meta.url));
 
 function files(dir: string, ext: RegExp): string[] {
   return readdirSync(join(root, dir), { recursive: true, withFileTypes: true })
@@ -26,7 +29,7 @@ const APPROVE_CALLER = "src/app/(wizard)/case-studies/[caseId]/configurator/acti
 /** Story 4.11a: the only caller of `caseStudy.approveIntro`, the client-mode configurator's action. */
 const APPROVE_INTRO_CALLER = "src/app/(wizard)/clients/[clientId]/configurator/actions.ts";
 
-describe("approval happens only through a person's call to approve (Story 4.8)", () => {
+describe("NFR2 guardrail: approval happens only through a person's call to approve (Story 4.8)", () => {
   it("the case-study module exports one approve per subject (Story 4.11a: the intro's) and no bulk or automatic variant", async () => {
     // Functions only: event-name constants (`APPROVED_VERSION_UPDATED`) approve nothing.
     const api = Object.entries(await import("@/modules/case-study")).filter(([, value]) => typeof value === "function");
@@ -83,7 +86,7 @@ describe("approval happens only through a person's call to approve (Story 4.8)",
 
 // Story 4.9: Approvato is terminal. Editing an approved case forks, updates or discards a
 // copy; none of it, nor anything else, moves the case back to Da approvare or Bozza.
-describe("no path from Approvato back to Da approvare or Bozza (Story 4.9)", () => {
+describe("NFR2 guardrail: no path from Approvato back to Da approvare or Bozza (Story 4.9)", () => {
   const migrations = () => files("supabase/migrations", /\.sql$/);
 
   it("the transition table has no edge out of approved", async () => {
@@ -117,7 +120,7 @@ describe("no path from Approvato back to Da approvare or Bozza (Story 4.9)", () 
 
 // Story 4.11b: an approved intro is edited the same way. Its fork, update and discard never
 // move it out of Approvato.
-describe("no path from an approved intro back to Da approvare (Story 4.11b)", () => {
+describe("NFR2 guardrail: no path from an approved intro back to Da approvare (Story 4.11b)", () => {
   const migrations = () => files("supabase/migrations", /\.sql$/);
 
   it("the intro edit-approved migration never changes an intro's status", () => {

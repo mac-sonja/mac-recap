@@ -117,7 +117,7 @@ describe("startClientIntro (Story 3.11)", () => {
     expect(deps.current()?.status).toBe("generating");
   });
 
-  it("fewer than 2 images: NO_CLIENT_IMAGES, no intro row, no job", async () => {
+  it("NFR6 guardrail: fewer than 2 images: NO_CLIENT_IMAGES, no intro row, no job", async () => {
     const deps = fakes(null, [asset(1), asset(2, "document")]);
     expect(await makeStartClientIntro(deps)(actor, { clientId: CLIENT_ID })).toMatchObject({ ok: false, error: { code: "NO_CLIENT_IMAGES" } });
     expect(deps.intros.getOrCreate).not.toHaveBeenCalled();

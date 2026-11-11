@@ -26,7 +26,7 @@ async function rendered(input: Uint8Array, spec: typeof thumb | typeof display) 
 }
 
 describe("sharp image renditions (real sharp)", () => {
-  it("downscales a 6000×4000 JPEG to a 480×320 thumb and a 2048×1365 display, both WebP", async () => {
+  it("NFR1 guardrail: downscales a 6000×4000 JPEG to a 480×320 thumb and a 2048×1365 display, both WebP", async () => {
     const input = await fixture(6000, 4000, "jpeg");
     const t = await rendered(input, thumb);
     expect(t).toMatchObject({ width: 480, height: 320, format: "webp", metaWidth: 480, metaHeight: 320 });
@@ -34,7 +34,7 @@ describe("sharp image renditions (real sharp)", () => {
     expect(d).toMatchObject({ width: 2048, height: 1365, format: "webp", metaWidth: 2048, metaHeight: 1365 });
   });
 
-  it("never enlarges: a 300×200 PNG stays 300×200 for thumb and display", async () => {
+  it("NFR1 guardrail: never enlarges: a 300×200 PNG stays 300×200 for thumb and display", async () => {
     const input = await fixture(300, 200, "png");
     expect(await rendered(input, thumb)).toMatchObject({ width: 300, height: 200, format: "webp" });
     expect(await rendered(input, display)).toMatchObject({ width: 300, height: 200, format: "webp" });
