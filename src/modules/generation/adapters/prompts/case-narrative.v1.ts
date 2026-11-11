@@ -48,7 +48,8 @@ const KEY_ROLES: Readonly<Record<TemplateTextKey, string>> = {
   outputBody: "testo dell'Output: cosa è stato realizzato, in concreto, e a cosa serve",
 };
 
-const GUIDE = `## 1. Nome
+/** The copywriting guide (copywriting-case-mac.md, bozza 2): shared with `client-intro@1` (Story 3.9). */
+export const GUIDE = `## 1. Nome
 
 - L'agenzia si chiama **MAC**. Sempre maiuscolo, senza punti.
 - Mai "Men At Code", "Men at Code", "Mac" o "M.A.C.", anche se compare nel materiale caricato.

@@ -1,9 +1,17 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Actor } from "@/modules/access";
-import { buildClientIntroTestDraft } from "@/modules/generation/application/client-intro-draft";
+import { buildClientIntroDocument } from "@/modules/generation/application/client-intro-draft";
 import { buildCaseDocument, type FormatDraftTexts, type TestDraftForm } from "@/modules/generation/application/test-draft";
-import { testDraftTextSource, type SourceAsset, type TextSource, type TextSourceMeta } from "@/modules/generation/application/text-source";
+import {
+  clientTestTextSource,
+  testDraftTextSource,
+  type ClientTextSource,
+  type ClientTextSourceInput,
+  type SourceAsset,
+  type TextSource,
+  type TextSourceMeta,
+} from "@/modules/generation/application/text-source";
 import { CLAIM_ASPECTS, type CaseStudyDocument, type ClaimAspect } from "@/modules/generation/domain/document";
 import type { CaseStatus } from "@/shared/case-status";
 import { log } from "@/shared/log";
@@ -112,23 +120,30 @@ export interface GenerateDeps {
 /** What the generate handler needs for a client intro (Story 3.11), wired in `worker.ts`. */
 export interface ClientIntroGenerateDeps {
   getIntro(introId: string): Promise<Result<{ clientId: string; status: CaseStatus; headVersion: number }>>;
-  getClient(clientId: string): Promise<
-    Result<{ description: string | null; brief: { context: string; results: readonly unknown[]; testimonialQuote: string } }>
-  >;
+  /** The client's current record and brief (Story 3.9: what the AI reads). */
+  getClient(clientId: string): Promise<Result<ClientTextSourceInput["client"]>>;
   /** The client's live files in `position` order. */
-  listClientAssets(clientId: string): Promise<Result<readonly { id: string; kind: string }[]>>;
+  listClientAssets(clientId: string): Promise<Result<ClientTextSourceInput["assets"]>>;
   transitionIntro(introId: string, event: "generation_succeeded" | "generation_failed", actor: Actor): Promise<Result<unknown>>;
   createIntroWorkingRevision(
     actor: Actor,
     input: {
       clientIntroId: string;
       doc: CaseStudyDocument;
-      manifest: { testDraft: true; assetIds: string[] };
+      manifest: ClientIntroManifest;
       meta: TextSourceMeta;
       expectedHeadVersion: number;
     },
   ): Promise<Result<{ id: string }>>;
+  /**
+   * Writes the four texts (Story 3.9): the AI when `ANTHROPIC_API_KEY` is set, else the
+   * marked test text (the default).
+   */
+  textSource?: ClientTextSource;
 }
+
+/** What an intro revision records of its input: the images it shows; the test text is flagged. */
+export type ClientIntroManifest = { assetIds: string[]; testDraft?: true };
 
 /** The intro needs this many client images: case-study's `CLIENT_MATERIAL_MIN_IMAGES` (kept equal by `generation/index.test.ts`). */
 export const MIN_CLIENT_IMAGES = 2;
@@ -305,11 +320,12 @@ export function makeGenerateHandler(deps: GenerateDeps) {
   }
 
   /**
-   * A client intro's draft (Story 3.11): always the marked test text, whatever the text
-   * source (no LLM, even with `ANTHROPIC_API_KEY` set). Re-checks the gate (2 client
-   * images), builds the document from the client template with the client's first three
-   * images in `position` order, writes a working revision (head compare-and-set on
-   * `baseHeadVersion`) and moves the intro to `in_review`. A moved head returns it to
+   * A client intro's draft (Story 3.11, 3.9). Re-checks the gate (2 client images), asks the
+   * intro's text source for the four texts (the AI's from the client's current data and PDFs
+   * when `ANTHROPIC_API_KEY` is set, else the marked test text; never the case text source),
+   * builds the document from the client template with the client's first three images in
+   * `position` order, writes a working revision with the source's meta (head compare-and-set
+   * on `baseHeadVersion`) and moves the intro to `in_review`. A moved head returns it to
    * `draft`; `onPermanentFailure` does the same after a failure for good.
    */
   async function runIntro(job: JobLike, payload: ClientIntroPayload, signal: AbortSignal): Promise<Outcome> {
@@ -336,9 +352,20 @@ export function makeGenerateHandler(deps: GenerateDeps) {
     // Gate, again: the server checked it at the save; a file may have gone since.
     if (images.length < MIN_CLIENT_IMAGES) return fail("NO_CLIENT_IMAGES", `The client has fewer than ${MIN_CLIENT_IMAGES} images.`);
 
+    const source = intro.textSource ?? clientTestTextSource;
+    let written;
+    try {
+      written = await source.texts({ clientId, client: client.value, assets: assets.value });
+    } catch (error) {
+      log.error(`generate client text source threw: ${error instanceof Error ? error.name : typeof error}`, { clientIntroId: introId });
+      return fail("TEXT_SOURCE_FAILED", "The text source threw.", true);
+    }
+    if (!written.ok) return fail(written.error.code, written.error.message, written.error.retryable);
+    const { texts, meta } = written.value;
+
     const { brief } = client.value;
-    const doc = buildClientIntroTestDraft({
-      client: { description: client.value.description, context: brief.context },
+    const doc = buildClientIntroDocument({
+      texts,
       images,
       resultRows: brief.results.length,
       hasTestimonial: brief.testimonialQuote.trim() !== "",
@@ -351,8 +378,8 @@ export function makeGenerateHandler(deps: GenerateDeps) {
       intro.createIntroWorkingRevision(actor.value, {
         clientIntroId: introId,
         doc,
-        manifest: { testDraft: true, assetIds: images.slice(0, CLIENT_INTRO_IMAGES) },
-        meta: { model: null, fellBack: false, promptVersion: null },
+        manifest: { assetIds: images.slice(0, CLIENT_INTRO_IMAGES), ...(meta.promptVersion === null ? { testDraft: true as const } : {}) },
+        meta,
         expectedHeadVersion: baseHeadVersion,
       }),
     );

@@ -2,7 +2,7 @@
 title: 'Story 3.9: the AI writes the client intro and closing'
 type: 'feature'
 created: '2026-11-11'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '7f4e3d2e34750a4e431e7fb48a832b9866a8376c'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -76,16 +76,23 @@ All under `src/modules/generation/` unless noted.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `ports/` + `adapters/prompts/client-intro.v1.ts` + `adapters/anthropic/` client writer (+ tests with a fake client) -- the AI call.
-- [ ] `application/` client text source and `runIntro` (+ tests) -- AI texts or test text, refs checked, real meta.
-- [ ] `worker.ts` (+ `text-source.test.ts`) -- lazy choice by key.
-- [ ] `sprint-status.yaml` -- 3.9 to `review`.
+- [x] `ports/` + `adapters/prompts/client-intro.v1.ts` + `adapters/anthropic/` client writer (+ tests with a fake client) -- the AI call.
+- [x] `application/` client text source and `runIntro` (+ tests) -- AI texts or test text, refs checked, real meta.
+- [x] `worker.ts` (+ `text-source.test.ts`) -- lazy choice by key.
+- [x] `sprint-status.yaml` -- 3.9 to `review`.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:db` and `build`, when they run, then they pass.
 - Given the case AI (3.6) and the 3.11 intro tests, when they run, then they pass, apart from the flipped "always test text" test.
 
 ## Implementation Notes
+
+- **Seam.** `ClientTextSource` (`application/text-source.ts`) next to the case one; `clientTestTextSource` (3.11's texts, null meta) is the default, `makeClientIntroTextSource` (`application/client-intro-text-source.ts`) the AI's. `runIntro` takes it as `intro.textSource`; the case `textSource` never writes an intro.
+- **Limits.** `CLIENT_INTRO_TEXT_LIMITS` in `ports/client-intro-writer.ts` (heads 45, bodies 260 characters), one set for every format; the prompt states them and the text source refuses a longer text (`LLM_OUTPUT_INVALID`).
+- **What counts as sent.** A client field left empty is not sent, so citing it is `INVALID_SOURCE_REF`; `asset` refs are valid only for PDFs actually sent (images are never sent). Field ids: `name`, `industry`, `description`, `context`, `solution`, `results`, `testimonial`.
+- **Reuse.** `GUIDE` of `case-narrative.v1.ts` is now exported (text unchanged); the adapter's error mapping and fallback check became exported helpers (`callFailure`, `servedByFallback`) shared by both writers, behaviour unchanged.
+- **Client PDFs.** `material.readClientFileBytes({ clientId, assetId })` reads a live client file's original (`clients/{clientId}/material/{assetId}.{ext}`), checked against its client.
+- **Manifest.** An AI intro revision records `{ assetIds }`; the test text keeps `{ testDraft: true, assetIds }`.
 
 ## Spec Change Log
 

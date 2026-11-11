@@ -5,7 +5,7 @@ import { FORMAT_TEXT_BUDGETS, PROMPT_VERSION, systemPrompt } from "@/modules/gen
 import type { NarrativeGenerator, NarrativeRequest, NarrativeResult, NarrativeText } from "@/modules/generation/ports/narrative-generator";
 import { FORMAT_IDS, type FormatId, type TemplateTextKey } from "@/modules/rendering";
 import { log } from "@/shared/log";
-import { err, ok } from "@/shared/result";
+import { err, ok, type Result } from "@/shared/result";
 
 /** The one model constant (AR7). */
 export const NARRATIVE_MODEL = "claude-opus-5-5";
@@ -97,10 +97,27 @@ function toTexts(output: NarrativeOutput): NarrativeResult["texts"] {
   ) as NarrativeResult["texts"];
 }
 
-/** Whether a fallback model served the answer: a `fallback_message` entry in `usage.iterations`. */
-function servedByFallback(usage: Anthropic.Beta.BetaUsage): boolean {
+/** Whether a fallback model served the answer: a `fallback_message` entry in `usage.iterations`. Shared with the client writer. */
+export function servedByFallback(usage: Anthropic.Beta.BetaUsage): boolean {
   const iterations = (usage as { iterations?: readonly { type: string }[] | null }).iterations ?? [];
   return iterations.some((entry) => entry.type === "fallback_message");
+}
+
+/**
+ * A thrown `parse` call as the port's error (shared with the client writer): an API error by
+ * HTTP status (`LLM_UNAVAILABLE` when transient, else `LLM_REQUEST_REJECTED`), anything else
+ * (a parse failure of the answer, an unclassed network error) `LLM_OUTPUT_INVALID`. Logs the
+ * status or the error's name only.
+ */
+export function callFailure(error: unknown, call: string): Result<never> {
+  if (error instanceof Anthropic.APIError) {
+    const status = error.status ?? 0;
+    log.error(`${call} call failed: HTTP ${status}`);
+    const transient = status === 0 || status === 408 || status === 409 || status === 429 || status >= 500;
+    return err({ code: transient ? "LLM_UNAVAILABLE" : "LLM_REQUEST_REJECTED", message: `The AI call failed (HTTP ${status}).` });
+  }
+  log.error(`${call} call threw: ${error instanceof Error ? error.name : typeof error}`);
+  return err({ code: "LLM_OUTPUT_INVALID", message: "The AI answer could not be read." });
 }
 
 /**
@@ -125,15 +142,7 @@ export function createAnthropicNarrativeGenerator({ apiKey, client }: { apiKey?:
           messages: [{ role: "user", content: buildContent(request) }],
         });
       } catch (error) {
-        if (error instanceof Anthropic.APIError) {
-          const status = error.status ?? 0;
-          log.error(`narrative call failed: HTTP ${status}`);
-          const transient = status === 0 || status === 408 || status === 409 || status === 429 || status >= 500;
-          return err({ code: transient ? "LLM_UNAVAILABLE" : "LLM_REQUEST_REJECTED", message: `The AI call failed (HTTP ${status}).` });
-        }
-        // A parse failure of the answer, or a network error the SDK did not class.
-        log.error(`narrative call threw: ${error instanceof Error ? error.name : typeof error}`);
-        return err({ code: "LLM_OUTPUT_INVALID", message: "The AI answer could not be read." });
+        return callFailure(error, "narrative");
       }
       const fellBack = servedByFallback(response.usage);
       log.info(`narrative call done: ${response.model}, fell back ${fellBack}, stop ${response.stop_reason}, ${response.usage.output_tokens} output tokens`);
