@@ -41,7 +41,7 @@ When a session finishes a story, or when you open a new one:
 2. Skip it if another session is working on a story it **overlaps** with, and take the next one. Two sessions on overlapping stories means merge conflicts in the same files.
 3. Mark it 🔄 in this table, in the story's first commit.
 
-**As of 2026-11-11:** every story in the table merged (A1–A9, B1–B9); every migration on the mac-recap project. Left for the demo: the CI `image` job (red on main since #165: Docker build cannot resolve Ubuntu mirrors on the runners), the owner's cover/outro design, the worker deployment, and the manual checks in `docs/guardrail-check.md`. The 3-file client limit stays for the demo (owner, 2026-11-11).
+**As of 2026-11-11:** every story in the table merged (A1–A9, B1–B9); every migration on the mac-recap project; CI green again (#170: the image installs apt packages from archive.ubuntu.com and builds on the runner's network). Left for the demo: the owner's cover/outro design, the worker deployment, and the manual checks in `docs/guardrail-check.md`. The 3-file client limit stays for the demo (owner, 2026-11-11).
 
 To start a story in a new session, open Claude Code on `main` and say: "Start story <#> (<story>) from `_bmad-output/planning-artifacts/parallel-tracks-2026-11-03.md`; run `bmad-build`."
 
