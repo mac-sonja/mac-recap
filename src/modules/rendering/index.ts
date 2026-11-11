@@ -35,6 +35,28 @@ export { EXPORT_FORMAT_IDS, isExportFormatId } from "@/modules/rendering/domain/
 export type { ExportFormatId } from "@/modules/rendering/domain/export";
 export { composeParts, renderComposed } from "@/modules/rendering/compose";
 export type { CasePart, ClientIntroPart, ComposedFile, ComposedSegment, ComposeOptions, ComposePart } from "@/modules/rendering/compose";
+// Story 5.11b: a collection's edits laid over its parts, one rule set for its page and its export.
+export {
+  applyCollectionEdits,
+  collectionPartKey,
+  freeTextIn,
+  isFreeText,
+  NO_COLLECTION_EDITS,
+  normalisePartKey,
+  orderedPages,
+  pageTextEdits,
+  wordedPage,
+} from "@/modules/rendering/collection-edits";
+export type {
+  AppliedCollectionEdits,
+  ApplyCollectionEditsOptions,
+  CollectionEditSet,
+  CollectionHiddenPageRef,
+  CollectionPageOrderRef,
+  CollectionPartKey,
+  CollectionTextOverride,
+  EffectivePartEdits,
+} from "@/modules/rendering/collection-edits";
 export { measureOverflow } from "@/modules/rendering/overflow";
 export type { BlockOverflow, OverflowReport, PageOverflow } from "@/modules/rendering/overflow";
 export type {
