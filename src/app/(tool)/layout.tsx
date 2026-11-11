@@ -9,6 +9,7 @@ import { authorize, can, type Actor } from "@/modules/access";
 import * as caseStudy from "@/modules/case-study";
 import { it } from "@/shared/i18n/it";
 import { Sidebar } from "./_components/sidebar";
+import { clientsAccess } from "./clients/_lib/clients-surface";
 
 /** Label for a role from the dictionary; roles without a label (system) show none. */
 function roleLabel(role: string): string {
@@ -44,7 +45,8 @@ export default async function ToolLayout({ children }: Readonly<{ children: Reac
       <Sidebar
         showNewCaseStudy={can(actor, "create case")}
         showCaseStudies={can(actor, "list cases")}
-        showClients={can(actor, "list clients")}
+        // Story 5.9b: Clienti also for a role that may only download a client's pack (read-only).
+        showClients={clientsAccess(actor) !== null}
         showLibrary={!can(actor, "list cases") && can(actor, "list cases", { status: "approved" })}
         showCollections={can(actor, "manage collections")}
         showOrganization={can(actor, "manage users")}

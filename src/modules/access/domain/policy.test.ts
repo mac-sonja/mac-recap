@@ -22,6 +22,7 @@ const EXPECTED: Record<Action, Partial<Record<Role, Cell>>> = {
   discard: { owner_designer: "all", admin: "all" },
   view: { owner_designer: "approved", admin: "approved", account_sales_social: "approved" },
   export: { owner_designer: "approved", admin: "approved", account_sales_social: "approved" },
+  "download client pack": { owner_designer: "approved", admin: "approved", account_sales_social: "approved" },
   "job work": { system: "all" },
   "create link": { owner_designer: "approved", admin: "approved", account_sales_social: "approved" },
   "turn off link": { owner_designer: "all", admin: "all", account_sales_social: "all" },
@@ -68,7 +69,7 @@ describe("AD-11 permission matrix", () => {
 
   it("does not let account/sales/social act on unapproved cases", () => {
     for (const status of CASE_STATUSES.filter((s) => s !== "approved")) {
-      for (const action of ["view", "export", "create link", "list cases"] as const) {
+      for (const action of ["view", "export", "download client pack", "create link", "list cases"] as const) {
         expect(can("account_sales_social", action, { status })).toBe(false);
       }
     }
@@ -78,6 +79,14 @@ describe("AD-11 permission matrix", () => {
     for (const action of ["list clients", "manage clients"] as const) {
       expect(ROLES.filter((role) => can(role, action))).toEqual(["owner_designer", "admin"]);
     }
+  });
+
+  it("lets every person's role download an approved client pack (Story 5.9b)", () => {
+    expect(ROLES.filter((role) => can(role, "download client pack", { status: "approved" }))).toEqual([
+      "owner_designer",
+      "account_sales_social",
+      "admin",
+    ]);
   });
 
   it("lets every person's role manage collections, admin included (Story 5.10a)", () => {

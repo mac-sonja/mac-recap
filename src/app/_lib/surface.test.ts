@@ -70,6 +70,15 @@ describe("requireSurface", () => {
     await expect(requireSurface("list cases", { status: "draft" })).rejects.toThrow("REDIRECT /library");
   });
 
+  it("lets the actor in when the policy allows any one of a list of uses (Story 5.9b)", async () => {
+    const uses = [{ action: "list clients" }, { action: "download client pack", resource: { status: "approved" } }] as const;
+    getActor.mockResolvedValue(ok(actor("account_sales_social")));
+    expect(await requireSurface(uses)).toMatchObject({ landing: "/library" });
+    await expect(requireSurface([{ action: "list clients" }])).rejects.toThrow("REDIRECT /library");
+    await expect(requireSurface([{ action: "download client pack", resource: { status: "draft" } }])).rejects.toThrow("REDIRECT /library");
+    await expect(requireSurface([])).rejects.toThrow("REDIRECT /library");
+  });
+
   it("returns null when the profile can't be read, without redirecting", async () => {
     getActor.mockResolvedValue(err({ code: "PROFILE_LOOKUP_FAILED", message: "m" }));
     expect(await requireSurface("list cases")).toBeNull();
