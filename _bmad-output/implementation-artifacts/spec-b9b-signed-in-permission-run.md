@@ -2,7 +2,7 @@
 title: 'B9 part 2: permission matrix against the database with a signed-in user per role (rest of Story 6.4)'
 type: 'chore'
 created: '2026-11-11'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'd6bcd125611b6cafa6aa23939c9108449e20f0e5'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -66,17 +66,23 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `test/helpers/db-actor.ts`, `test/db/global-setup.ts`, `test/db/setup.ts` -- one signed-in user per role, switchable cookie store.
-- [ ] Shared EXPECTED (`test/helpers/permission-matrix.ts` or export) -- one source for both suites.
-- [ ] `test/db/permissions.db.test.ts` -- the end-to-end matrix with seeded data and before/after snapshots.
-- [ ] `docs/guardrail-check.md` -- name the signed-in run; remove it from "not built".
-- [ ] `sprint-status.yaml` -- 6.4 to `done`.
+- [x] `test/helpers/db-actor.ts`, `test/db/global-setup.ts`, `test/db/setup.ts` -- one signed-in user per role, switchable cookie store.
+- [x] Shared EXPECTED (`test/helpers/permission-matrix.ts` or export) -- one source for both suites.
+- [x] `test/db/permissions.db.test.ts` -- the end-to-end matrix with seeded data and before/after snapshots.
+- [x] `docs/guardrail-check.md` -- name the signed-in run; remove it from "not built".
+- [x] `sprint-status.yaml` -- 6.4 to `done`.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:guardrails`, `test:db` and `build`, when they run, then they pass.
 - Given the existing DB tests, when they run, then they pass unchanged.
 
 ## Implementation Notes
+
+- **Users and sessions.** `test/helpers/db-actor.ts` has `TEST_USERS` (owner/designer unchanged: same id, email, password; plus `db-test-admin@…` `…d2` and `db-test-account@…` `…d3`), `ensureTestUsers()` (idempotent, also resets role, disable and designer request) and `signInTestUser(role)`. `global-setup.ts` signs each in once and provides `dbActorCookies` (owner, unchanged) and `dbRoleCookies`. `setup.ts` mocks `cookies()` with a switchable store (`currentCookieStore` / `switchSession`), the owner's by default, so existing DB tests are untouched.
+- **Shared EXPECTED.** Moved verbatim to `test/helpers/permission-matrix.ts` (with the role lists and `SIGN_IN_ACTIONS`); `test/permissions.test.ts` imports it.
+- **The run** (`test/db/permissions.db.test.ts`, describe tagged `NFR3 guardrail`): per role, every denied action with real ids → 403 `FORBIDDEN`, then a snapshot (row count + md5 of every `public` table and `storage.objects`) equal to the one taken before that role's denied batch (one snapshot pair per role, not per action: a full snapshot costs ~250 ms); every allowed action called with `{}` gets past the policy; `change permissions or guardrails` denied to each signed-in actor. Real allowed runs on seeded data (client with an approved case and a draft, a draft-only client, a collection; the reference v2 document with its files made live client files so Approva finds them): owners create/edit a client, create a case, save a case in review and approve it (event actor checked); admin renders Organizzazione and changes a job title, others are redirected; account/sales/social exports the approved case and the client pack (export jobs enqueued, deleted in `afterAll`), is refused the draft (FORBIDDEN reads, `NOT_APPROVED` export, case page redirects, approved-only list scope, no row changed), sees only the client with an approved case on Clienti, edits a collection text with originals unchanged. No session and a disabled profile → 401 for every action.
+- **Disabled profile:** the account/sales/social user, not the admin: the test admin is the stack's only enabled admin and `LAST_ADMIN` refuses disabling it.
+- **Checked once (not committed):** allowing `delete case` to account/sales/social in the policy fails the denied cell, the snapshot (case_study, case_event changed) and the draft check.
 
 ## Spec Change Log
 
