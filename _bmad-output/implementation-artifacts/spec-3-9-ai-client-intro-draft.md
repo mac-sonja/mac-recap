@@ -98,6 +98,25 @@ All under `src/modules/generation/` unless noted.
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Nothing checks the worker's `generateHandler` wires the AI client source when the key is set (verification-gap) | medium | Removing `textSource: lazyWorkerClientTextSource()` passes every test; intros would silently stay test text | patch |
+| 2 | `collectPdfs` copies the case PDF budget logic, and its budget, text-cut, unreadable-PDF and unknown-sector branches are untested (blind, verification-gap) | medium | Two copies will drift; a corrupt PDF or a too-large one ships untested | patch |
+| 3 | Two identical AI texts get each other's refs (edge) | low | `buildClientIntroDocument` matches by text; one-line guard | patch |
+| 4 | An aborted job still makes the paid AI call (edge) | low | No `signal.aborted` check before `texts()`; one-line guard | patch |
+| 5 | Unknown sector key silently drops the sector (blind) | low | `?.label ?? null` without a log | patch |
+| 6 | Handler tests don't check that client text and errors stay out of logs (blind) | low | Writer and source tests do; the handler's don't | patch |
+| 7 | `readClientFileBytes` docs disagree; `clientAssetKey` doc stale (blind, verification-gap) | low | Direct doc corrections | patch |
+| 8 | Test-text flag inferred from `promptVersion` (blind) | low | Correct today; only a future source could break it | reject |
+| 9 | A text with no citations is accepted (blind) | low | The spec requires refs to be among what was sent, not non-empty | reject |
+| 10 | Locale hard-wired to Italian (blind) | low | Italian only by spec | reject |
+| 11 | `readClientFileBytes` has no authorization of its own (blind) | low | Same worker-only pattern as the case `readAssetBytes`; no web caller | reject |
+| 12 | Shared Anthropic helpers live in the case adapter; second client/reader built (blind) | low | Works; refactor only | reject |
+| 13 | Results/testimonial "filled" checks inconsistent (blind) | low | Edge data; a stray ref fails safely | reject |
+| 14 | `LLM_TRUNCATED` retried with the same input (blind) | low | Same as the case path; bounded by 3 attempts | reject |
+| 15 | DOCX/text files not sent and `docxText` unused (blind) | false | Owner decision: PDFs only | reject |
+| 16 | Permanent read errors retried (blind) | low | Bounded by the queue's 3 attempts | reject |
+
 ## Verification
 
 **Commands:**
