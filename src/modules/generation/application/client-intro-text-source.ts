@@ -1,5 +1,5 @@
 import type { ClientDraftTexts } from "@/modules/generation/application/client-intro-draft";
-import { MAX_EXTRACTED_CHARS, MAX_PDF_PAGES, REQUEST_BUDGET_BYTES } from "@/modules/generation/application/narrative-text-source";
+import { requestDocuments } from "@/modules/generation/application/request-documents";
 import type { DraftText } from "@/modules/generation/application/test-draft";
 import type { ClientTextSource, ClientTextSourceInput, TextSourceError } from "@/modules/generation/application/text-source";
 import { MAX_SOURCE_REFS, MAX_TEXT_CHARS, type DocumentMaterialRef } from "@/modules/generation/domain/document";
@@ -26,9 +26,6 @@ export interface ClientIntroSourceDeps {
   listClientSectors(): Promise<Result<readonly { key: string; label: string }[]>>;
 }
 
-const base64Size = (n: number) => Math.ceil(n / 3) * 4;
-const utf8Size = (text: string) => Buffer.byteLength(text, "utf8");
-
 const fail = (code: Uppercase<string>, message: string, retryable: boolean): Result<never, TextSourceError> => err({ code, message, retryable });
 
 /** Errors the job must not retry: the same request would fail the same way. */
@@ -37,31 +34,13 @@ const FINAL_CODES = new Set(["LLM_REFUSAL", "LLM_REQUEST_REJECTED"]);
 const filled = (value: string | null) => value !== null && value.trim() !== "";
 
 /**
- * The client's PDFs (OP 2 for clients: no images, videos or other files), by 3.6's case rules:
- * oldest first (the files come in `position` order), whole while they fit the request budget
- * and the 200-page limit, otherwise as their extracted text, cut at the extracted-text limit.
- * A file removed since is skipped and logged by id; an unreadable PDF too. Another read error
- * fails the attempt (retryable).
+ * The client's PDFs (OP 2 for clients: no images, videos or other files), by 3.6's case rules
+ * (`requestDocuments`), oldest first (the files come in `position` order). A file removed
+ * since is skipped and logged by id. Another read error fails the attempt (retryable).
  */
 async function collectPdfs(deps: ClientIntroSourceDeps, input: ClientTextSourceInput): Promise<Result<ClientIntroRequest["documents"], TextSourceError>> {
   const { clientId } = input;
-  const documents: ClientIntroRequest["documents"][number][] = [];
-  let budget = REQUEST_BUDGET_BYTES;
-  let pdfPages = 0;
-  let extractedChars = 0;
-  const addText = (assetId: string, raw: string) => {
-    const room = MAX_EXTRACTED_CHARS - extractedChars;
-    if (room <= 0) {
-      log.warn(`generate leaves out the text of ${assetId}: the extracted-text limit is reached`, { clientId });
-      return;
-    }
-    const text = raw.length > room ? raw.slice(0, room) : raw;
-    if (text.length < raw.length) log.warn(`generate cuts the text of ${assetId} to the extracted-text limit`, { clientId });
-    extractedChars += text.length;
-    budget -= utf8Size(text);
-    documents.push({ assetId, kind: "text", text });
-  };
-
+  const docs = requestDocuments(deps.documents, { clientId });
   for (const asset of input.assets) {
     if (asset.contentType !== "application/pdf") continue;
     const got = await deps.readClientFileBytes({ clientId, assetId: asset.id });
@@ -72,23 +51,9 @@ async function collectPdfs(deps: ClientIntroSourceDeps, input: ClientTextSourceI
       }
       return fail("MATERIAL_READ_FAILED", "A client file could not be read.", true);
     }
-    const bytes = got.value.bytes;
-    try {
-      const pages = await deps.documents.pdfPageCount(bytes);
-      const size = base64Size(bytes.byteLength);
-      if (pdfPages + pages <= MAX_PDF_PAGES && size <= budget) {
-        pdfPages += pages;
-        budget -= size;
-        documents.push({ assetId: asset.id, kind: "pdf", bytes });
-      } else {
-        log.info(`generate sends the client PDF ${asset.id} as text (${pages} pages, ${bytes.byteLength} bytes)`, { clientId });
-        addText(asset.id, await deps.documents.pdfText(bytes));
-      }
-    } catch (error) {
-      log.warn(`generate skips an unreadable client PDF ${asset.id} (${error instanceof Error ? error.name : typeof error})`, { clientId });
-    }
+    await docs.addPdf(asset.id, got.value.bytes);
   }
-  return ok(documents);
+  return ok(docs.documents);
 }
 
 /** The client fields the request carries: a field left empty is not sent, so it cannot be cited. */
@@ -146,6 +111,9 @@ function toDraftTexts(
     if (text === "" || Array.from(text).length > max) return fail("LLM_OUTPUT_INVALID", "The AI wrote an empty or too long text.", true);
     out[key] = { text, sourceRefs: documentRefs(t.sourceRefs), ...(t.aspect === undefined ? {} : { aspect: t.aspect }) };
   }
+  // Texts are matched to their refs by value on the pages: two equal texts would swap refs.
+  const values = CLIENT_TEMPLATE_TEXT_KEYS.map((key) => out[key]?.text);
+  if (new Set(values).size !== values.length) return fail("LLM_OUTPUT_INVALID", "The AI wrote two equal texts.", true);
   return ok(out as ClientDraftTexts);
 }
 
@@ -164,6 +132,7 @@ export function makeClientIntroTextSource(deps: ClientIntroSourceDeps): ClientTe
         const sectors = await deps.listClientSectors();
         if (!sectors.ok) return fail("CLIENT_LOOKUP_FAILED", sectors.error.message, true);
         industry = sectors.value.find((s) => s.key === client.industry)?.label ?? null;
+        if (industry === null) log.warn("generate sends no sector: the client's sector key is not in the list", { clientId });
       }
       const documents = await collectPdfs(deps, input);
       if (!documents.ok) return documents;

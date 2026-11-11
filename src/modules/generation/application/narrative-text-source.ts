@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { DraftText, DraftTexts, FormatDraftTexts } from "@/modules/generation/application/test-draft";
+import { base64Size, requestDocuments } from "@/modules/generation/application/request-documents";
 import type { SourceAsset, TextSource, TextSourceError } from "@/modules/generation/application/text-source";
 import { MAX_SOURCE_REFS, MAX_TEXT_CHARS, type DocumentMaterialRef } from "@/modules/generation/domain/document";
 import type {
@@ -13,20 +14,11 @@ import { FORMAT_IDS, TEMPLATE_TEXT_KEYS, type FormatId, type TemplateTextKey } f
 import { log } from "@/shared/log";
 import { err, ok, type AppError, type Result } from "@/shared/result";
 
-/** The request's material budget: base64 bytes of files plus UTF-8 bytes of text, under the API's 32 MB request limit. */
-export const REQUEST_BUDGET_BYTES = 30 * 1024 * 1024;
-/**
- * PDF pages sent whole, all PDFs together. The API reads up to 600 per request, but each page
- * costs its text plus a page image (about 1,500–3,000 tokens), so 200 keeps the request well
- * inside the 1M-token context; further PDFs go as their text.
- */
-export const MAX_PDF_PAGES = 200;
+export { MAX_EXTRACTED_CHARS, MAX_PDF_PAGES, REQUEST_BUDGET_BYTES } from "@/modules/generation/application/request-documents";
 /** The API's limit for one image (raw bytes before base64); a display copy over it is left out. */
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 /** Images sent at most (owner, 2026-10-29). */
 export const MAX_IMAGES = 20;
-/** Characters of extracted text sent at most, all documents together; the rest is cut and logged. */
-export const MAX_EXTRACTED_CHARS = 600_000;
 
 const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const PLAIN_TEXT = new Set(["text/plain", "text/markdown"]);
@@ -47,9 +39,6 @@ export interface NarrativeSourceDeps {
   }>>;
 }
 
-/** The base64 size of `n` bytes. */
-const base64Size = (n: number) => Math.ceil(n / 3) * 4;
-const utf8Size = (text: string) => Buffer.byteLength(text, "utf8");
 
 const fail = (code: Uppercase<string>, message: string, retryable: boolean): Result<never, TextSourceError> => err({ code, message, retryable });
 
@@ -73,11 +62,8 @@ async function collectMaterial(
   caseId: string,
   assets: readonly SourceAsset[],
 ): Promise<Result<Pick<NarrativeRequest, "documents" | "images">, TextSourceError>> {
-  const documents: NarrativeRequest["documents"][number][] = [];
+  const docs = requestDocuments(deps.documents, { caseId });
   const images: NarrativeRequest["images"][number][] = [];
-  let budget = REQUEST_BUDGET_BYTES;
-  let pdfPages = 0;
-  let extractedChars = 0;
 
   const read = async (assetId: string, variant: "original" | "image.display") => {
     const got = await deps.readAssetBytes({ caseId, assetId, variant });
@@ -88,18 +74,6 @@ async function collectMaterial(
     }
     return { error: got.error, skip: false as const };
   };
-  const addText = (assetId: string, raw: string) => {
-    const room = MAX_EXTRACTED_CHARS - extractedChars;
-    if (room <= 0) {
-      log.warn(`generate leaves out the text of ${assetId}: the extracted-text limit is reached`, { caseId });
-      return;
-    }
-    const text = raw.length > room ? raw.slice(0, room) : raw;
-    if (text.length < raw.length) log.warn(`generate cuts the text of ${assetId} to the extracted-text limit`, { caseId });
-    extractedChars += text.length;
-    budget -= utf8Size(text);
-    documents.push({ assetId, kind: "text", text });
-  };
 
   // 1. Text documents always go.
   for (const asset of assets) {
@@ -108,7 +82,7 @@ async function collectMaterial(
     if (got.skip) continue;
     if ("error" in got) return fail("MATERIAL_READ_FAILED", "A file could not be read.", true);
     try {
-      addText(asset.id, asset.contentType === DOCX ? await deps.documents.docxText(got.bytes) : new TextDecoder().decode(got.bytes));
+      docs.addText(asset.id, asset.contentType === DOCX ? await deps.documents.docxText(got.bytes) : new TextDecoder().decode(got.bytes));
     } catch (error) {
       log.warn(`generate skips an unreadable document ${asset.id} (${error instanceof Error ? error.name : typeof error})`, { caseId });
     }
@@ -120,20 +94,7 @@ async function collectMaterial(
     const got = await read(asset.id, "original");
     if (got.skip) continue;
     if ("error" in got) return fail("MATERIAL_READ_FAILED", "A file could not be read.", true);
-    try {
-      const pages = await deps.documents.pdfPageCount(got.bytes);
-      const size = base64Size(got.bytes.byteLength);
-      if (pdfPages + pages <= MAX_PDF_PAGES && size <= budget) {
-        pdfPages += pages;
-        budget -= size;
-        documents.push({ assetId: asset.id, kind: "pdf", bytes: got.bytes });
-      } else {
-        log.info(`generate sends the PDF ${asset.id} as text (${pages} pages, ${got.bytes.byteLength} bytes)`, { caseId });
-        addText(asset.id, await deps.documents.pdfText(got.bytes));
-      }
-    } catch (error) {
-      log.warn(`generate skips an unreadable PDF ${asset.id} (${error instanceof Error ? error.name : typeof error})`, { caseId });
-    }
+    await docs.addPdf(asset.id, got.bytes);
   }
 
   // 3. Images: favourites first, at most 20, while they fit.
@@ -143,14 +104,14 @@ async function collectMaterial(
     if (got.skip) continue;
     if ("error" in got) return fail("MATERIAL_READ_FAILED", "A file could not be read.", true);
     const size = base64Size(got.bytes.byteLength);
-    if (!IMAGE_TYPES.has(got.contentType) || got.bytes.byteLength > MAX_IMAGE_BYTES || size > budget) {
+    if (!IMAGE_TYPES.has(got.contentType) || got.bytes.byteLength > MAX_IMAGE_BYTES || size > docs.remaining()) {
       log.warn(`generate leaves out the image ${asset.id}: over the request budget or not a sendable type`, { caseId });
       continue;
     }
-    budget -= size;
+    docs.spend(size);
     images.push({ assetId: asset.id, mediaType: got.contentType as "image/webp" | "image/png" | "image/jpeg", bytes: got.bytes });
   }
-  return ok({ documents, images });
+  return ok({ documents: docs.documents, images });
 }
 
 /** Whether a ref names something the AI received (the manifest, the form, the client). */
