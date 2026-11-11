@@ -97,6 +97,25 @@ context:
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | `CLIENTS_SURFACE` / `clientsAccess` never run against the real policy; no-access redirect tests removed (verification-gap, blind) | medium | Page tests mock `requireSurface` and compare the constant to itself; dropping the read-only entry would ship unnoticed | patch |
+| 2 | No happy-path pack export for account/sales/social (blind) | medium | Only a `NOT_APPROVED` case is tested for the role | patch |
+| 3 | Client page reads the intro and sectors before redirecting a read-only user away (edge, blind) | low | The approved-case check runs after `getClientIntro` / `listClientSectors`; a direct reorder | patch |
+| 4 | Read-only empty state says "Ancora nessun cliente." when clients exist without approved cases (blind) | low | Copy written for another case; users would see it | patch |
+| 5 | "Every role" in comments, though `system` lacks the action (blind) | low | Policy test lists three roles; direct wording fix | patch |
+| 6 | Page test mocks widened to `unknown`, losing type checks (blind) | low | `vi.fn<(action: unknown) => …>`; direct fix | patch |
+| 7 | 5.9b permissions test asserts less than its title (blind) | low | Only `updateClient` is checked untouched | patch |
+| 8 | `ClientsTable` / `ClientRow` docs stale for read-only mode (blind) | low | JSDoc still describes owner-only fields | patch |
+| 9 | `requireSurface` ignores `resource` when given a list (edge, blind) | low | No caller passes both; overloads add surface | reject |
+| 10 | Intro read for approved-case clients missing from summaries (edge) | low | Only extra reads; rare | reject |
+| 11 | Owner tests edited, so "unchanged" is not shown (edge) | false | Only the guard argument's expectation changed; every owner assertion passes as before | reject |
+| 12 | `download client pack` duplicates `export`; both checked (blind) | low | Separate action by spec, for a future per-client rule | reject |
+| 13 | Access checks repeated (blind) | low | Harmless duplication | reject |
+| 14 | Read-only case table receives authoring props (blind) | low | Redirect means no empty state; `canCreate` false hides the button | reject |
+| 15 | List may show working-copy names of approved cases (blind) | low | Pre-existing: Libreria shows the same `list({status:"approved"})` rows to these roles | reject |
+| 16 | `getClientExportStatus` may hand out another client's job (blind) | false | `makePackStatus` looks the job up only among `getJobsFor(client.id)` and requires kind `export` | reject |
+
 ## Verification
 
 **Commands:**
