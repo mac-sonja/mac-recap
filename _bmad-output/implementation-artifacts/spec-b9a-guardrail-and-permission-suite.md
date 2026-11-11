@@ -87,6 +87,22 @@ context:
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | `test:guardrails` never runs in CI, so its fail-closed reporter never fires there (verification-gap, blind) | medium | `.github/workflows/ci.yml` runs `npm test` and `test:db` only | patch |
+| 2 | `suite.test.ts` counts tags found in comments; config filter and reporter regex differ; suite check itself skipped by the guardrail run (verification-gap, edge, blind) | medium | Comments in nfr1/nfr3 files satisfy it; `/NFR\d+ guardrail/` vs `GUARDRAIL_TAG` | patch |
+| 3 | Doc and 6.5 test claim collection edits write no revision/client row, but the collection use case is stubbed there (edge, blind) | medium | The real proof is `test/db/collection.db.test.ts` (untagged) | patch |
+| 4 | 6.5 coverage test hard-codes a count (edge, blind) | low | `toBe(1 + 9 + 2 + 3 + 11)` against the spec's "no hard-coded counts" | patch |
+| 5 | Clienti test leaks a persistent `getClientIntro` mock (edge, blind) | low | `mockResolvedValue` with no reset | patch |
+| 6 | NFR1 schema check is a blocklist on names (blind) | low | Exact allowed-key set is a direct, stronger assertion | patch |
+| 7 | NFR1 test says "four" writes, lists five; doc says "no other write" (blind) | low | Wording | patch |
+| 8 | Doc: dates read as contradictory; NFR4/NFR5 not explained; NFR3 cites tests the guardrail run skips; DB guardrail rows not in the table (blind, edge) | low | Doc wording | patch |
+| 9 | Inline `"use server"` functions are not discovered by the permission suite (edge) | low | A one-line assertion that none exist outside discovered files closes it | patch |
+| 10 | Guardrail config imports `./vitest.config.mjs` (file is `.mts`) (blind, verification-gap) | low | Works via the bundler; one-word fix | patch |
+| 11 | Static NFR1/NFR3 scans can be bypassed (aliasing, scripts/, `remove`, multi-key ENV/ARG, renamed columns, method-body bounds) (edge, blind) | low | Heuristic source scans by design; listed as a risk in the checklist | reject |
+| 12 | Sign-in check imports one `(auth)` file only (blind) | low | One file today; the NFR3 name scan covers the rest | reject |
+| 13 | Old specs still name `test/approval-guardrail.test.ts` (verification-gap) | low | Historical specs, no code reference | reject |
+
 ## Verification
 
 **Commands:**
