@@ -89,7 +89,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - run: docker build --tag mac-recap:ci .
+      # --network=host: since 2026-11-11 the build's own containers can't resolve the Ubuntu
+      # mirrors on GitHub's runners (apt-get fails at Dockerfile:17) while the runner itself can.
+      # Building on the runner's network sidesteps it; the image itself is unchanged.
+      - run: docker build --network=host --tag mac-recap:ci .
       - run: scripts/smoke-image.sh mac-recap:ci
 
   db:
