@@ -73,11 +73,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/rendering/collection-edits.ts` + `index.ts` -- the shared pure apply function (+ unit tests for every matrix rule) -- one rule set for page and export.
-- [ ] `collection-file.ts` (+ existing tests) -- use the shared function; page behaviour unchanged.
-- [ ] `rendering` adapter, `export-source.ts`, `domain/export.ts`, `server.ts`, `worker.ts` (+ unit tests) -- read, apply, hash.
-- [ ] `test/` -- a handler/source test proving edited text, hidden page, order and intro hide reach the composed pages, and stale on edit change.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 5.11 to `review` (5.11a and 5.11b built).
+- [x] `src/modules/rendering/collection-edits.ts` + `index.ts` -- the shared pure apply function (+ unit tests for every matrix rule) -- one rule set for page and export.
+- [x] `collection-file.ts` (+ existing tests) -- use the shared function; page behaviour unchanged.
+- [x] `rendering` adapter, `export-source.ts`, `domain/export.ts`, `server.ts`, `worker.ts` (+ unit tests) -- read, apply, hash.
+- [x] `test/` -- a handler/source test proving edited text, hidden page, order and intro hide reach the composed pages, and stale on edit change.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- 5.11 to `review` (5.11a and 5.11b built).
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:db` and `build`, when they run, then they pass.
@@ -85,6 +85,11 @@ context:
 - Given the 5.11a collection page tests, when they run, then they pass unchanged.
 
 ## Implementation Notes
+
+- **Shared rules.** `rendering/collection-edits.ts` (exported from `index.ts`): `applyCollectionEdits(parts, formatId, edits, { wordPage?, compose? })` returns the parts ordered and worded (hidden pages in) and composed (the page's layout, with strips), the effective hidden keys per part (only pages the file would show; none when that would be all of them), the parts without hidden pages and their composed file (the export), and `effective`: per part, the words on shown pages that differ from the page's, the hidden pages that take effect, and the shown order when it differs from the document's. Part keys compare with the id lower-cased; a client intro is `client_intro:{clientId}`. `freeTextIn`, `orderedPages`, `pageTextEdits`, `wordedPage` moved here too; `collection-file.ts` re-exports them, keeps its `WeakMap` caches (passed as `wordPage`) and strips, and its zero-pages fallback now comes from the shared function.
+- **Export.** `readCollectionEdits` (adapter, `collection.getCollectionEdits` → `CollectionEditSet`), wired in `server.ts` and `worker.ts` as `getCollectionEdits`; read with the collection in `readCollectionParts`. `readCollectionSources` applies them per format; each `DrawPart` carries the edited copy as `doc`, which `composePartOf` prefers, so `pageCount`, media and the handler's `exportHtml` all draw it. Case and pack parts have no `doc`: unchanged.
+- **Hash.** `collectionHashInput` is `export.collection.v2` with a trailing list of the effective edits (sorted by part key; words sorted by page and element; hidden sorted; order or null). Case, bundle and pack inputs unchanged. Stale follows the hash in the handler and the status check.
+- **Tests.** `collection-edits.test.ts` (every matrix rule), `export.test.ts` (v2 and edit hashing), `test/collection-export-edits.test.ts` (text, hide, order, intro hide reach the drawn pages; Carosello untouched; all-hidden; stored again; stale on edit; running job refused). `test/permissions.test.ts` stubs `getCollectionEdits` for the 5.10b guardrail.
 
 ## Spec Change Log
 

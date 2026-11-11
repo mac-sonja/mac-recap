@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { EffectivePartEdits } from "@/modules/rendering/collection-edits";
 import {
   bundleHashInput,
   collectionHashInput,
@@ -42,8 +43,13 @@ export function packHash(client: PackClient, parts: readonly ExportPartContent[]
 /**
  * A collection's content hash (Story 5.10b): the sha256 of `collectionHashInput`, the
  * collection's id and name and every part (subject, approved revision, bound values) in the
- * file's order, and the format.
+ * file's order, the format, and (Story 5.11b) the collection's edits that take effect in it.
  */
-export function collectionHash(collection: ExportCollection, parts: readonly ExportPartContent[], format: ExportFormatId): string {
-  return sha256(collectionHashInput(collection, parts, format));
+export function collectionHash(
+  collection: ExportCollection,
+  parts: readonly ExportPartContent[],
+  format: ExportFormatId,
+  edits: readonly EffectivePartEdits[] = [],
+): string {
+  return sha256(collectionHashInput(collection, parts, format, edits));
 }

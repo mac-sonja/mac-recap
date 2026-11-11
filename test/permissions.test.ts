@@ -378,6 +378,8 @@ describe("no role exports a collection with a revision that isn't approved (Stor
     );
     vi.mocked(caseStudyModule.get).mockImplementation(async (id) => ok(caseOf(id as string)) as never);
     vi.mocked(caseStudyModule.getClientIntro).mockResolvedValue(ok({ id: "dddddddd-0000-4000-8000-000000000001" }) as never);
+    // Story 5.11b: the export reads the collection's edits too; none here.
+    vi.mocked(collectionModule.getCollectionEdits).mockResolvedValue(ok({ textEdits: [], hiddenPages: [], pageOrders: [] }));
     const getLiveRevision = vi.mocked(caseStudyModule.getLiveRevision);
     getLiveRevision.mockReset();
     getLiveRevision.mockImplementation(async (subject) => ok(live(subject as { kind: string; id: string })) as never);
@@ -390,6 +392,8 @@ describe("no role exports a collection with a revision that isn't approved (Stor
   afterEach(() => {
     vi.mocked(collectionModule.getCollection).mockReset();
     vi.mocked(collectionModule.getCollection).mockResolvedValue(ok(null) as never);
+    vi.mocked(collectionModule.getCollectionEdits).mockReset();
+    vi.mocked(collectionModule.getCollectionEdits).mockResolvedValue(ok(null) as never);
     vi.mocked(caseStudyModule.get).mockReset();
     vi.mocked(caseStudyModule.get).mockResolvedValue(ok(null) as never);
   });
