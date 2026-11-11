@@ -307,6 +307,25 @@ SIGTERM and SIGKILL) to **at least 15 s** for the worker; Docker's default is 10
 so use `docker stop --time 15` (or `stop_grace_period: 15s` in Compose). With less,
 SIGKILL can land before the release and the job waits for its 10-minute lease to expire.
 
+### Railway
+
+Two Railway services build the same repo and `Dockerfile`, each pointed at its own
+config-as-code file (service **Settings → Config-as-code → Railway config file**).
+The files stay out of the image (`.dockerignore`).
+
+| Service | Config file | What it sets |
+| --- | --- | --- |
+| Web | `/railway.web.json` | Image's default `CMD`; health check on `/sign-in`. Generate a public domain. |
+| Worker | `/railway.worker.json` | Start command `/usr/bin/tini -- node dist/worker.js`; 15 s draining (SIGTERM → SIGKILL), see Stop timeout. No domain, no health check. |
+
+- Give both services the same variables (see Environment variables); the web
+  service exits 1 at start without them.
+- Railway sets `PORT`; the web process listens on it.
+- Put both services in an EU region, next to the Supabase project.
+- **Staging:** with the basic-auth gate on, `/sign-in` answers 401 and the health
+  check never passes. Clear the health check path for that environment in the
+  dashboard.
+
 ### Caching
 
 No shared cache or CDN may sit in front of the web process. Next serves
