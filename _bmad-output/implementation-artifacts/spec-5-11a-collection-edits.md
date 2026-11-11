@@ -116,6 +116,25 @@ The original case histories, client intros and client records are never written.
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Page crashes when a stored edit's case or client was deleted / removed (edge) | high | `edits()` passes `NOT_FOUND` from `getLiveRevision` up; `page.tsx` throws | patch |
+| 2 | Edits of a removed case stay and come back when it is re-added (blind, edge) | medium | No cleanup on `collection_item` delete | patch |
+| 3 | Revision changed under an open page: order/text writes fail with no refresh (blind, edge) | medium | Only `STALE_COLLECTION` refreshes; `INVALID_INPUT` / `TEXT_NOT_EDITABLE` show "orderFailed" forever | patch |
+| 4 | Format switch or Anteprima drops typed text (blind) | medium | `setEditing(null)` without `finishEdit` | patch |
+| 5 | A part can end up with no pages shown (wrapping drops pages, new revision removes the one left) (blind, edge) | medium | Server `canHide` and client guard count differently; no re-check at read | patch |
+| 6 | "Original changed" can't be cleared while keeping the words (edge) | medium | Early return when text equals shown | patch |
+| 7 | Character count by code point vs schema's UTF-16 (audit, edge) | low | `[...text].length` vs zod `.max` | patch |
+| 8 | Empty / whitespace text saved; NBSP and trailing whitespace make spurious edits (edge) | low | No trim or normalisation | patch |
+| 9 | `restoreText` logs and bumps with nothing to restore (blind) | low | `delete_collection_text_edit` always bumps | patch |
+| 10 | Enter listener read from `canvasRef` once at mount (blind) | low | `useEffect([])` | patch |
+| 11 | Intro half of "no originals written" is vacuous; no real-DB intro edit; no Anteprima read-only test (audit, blind) | low | Test creates no client intro | patch |
+| 12 | Exports ignore the edits (blind, edge) | false | 5.11b by owner decision | reject |
+| 13 | New page after a saved order goes at the end of the part (edge) | low | Order of the rest kept; demo scale | defer |
+| 14 | Intro-part hides unused once a client drops to one case (edge) | low | Follows the 2+ rule; rows kept for when it wraps again | reject |
+| 15 | Version and edits read in separate SELECTs (edge) | low | CAS turns it into a refresh | reject |
+| 16 | Last-page rule only in the module, not SQL (audit) | low | Writers service-role only; CAS covers races | reject |
+
 ## Verification
 
 **Commands:**
