@@ -29,7 +29,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | B6 | 5.10 collections | ✅ #161 (5.10a), #162 (5.10b) (migrations on the mac-recap project) | B5, **A8** (collections open the configurator) | A7, A8 | collections, configurator (collection mode) |
 | B7 | 5.11 edit texts and remove pages in a collection | ✅ #163 (5.11a, migration on the mac-recap project 2026-11-11), #164 (5.11b, no migration) | B6 | A2, A7, A8 | configurator (collection mode) |
 | B8 | 3.9 AI client intro draft | ✅ #167 (no migration; AI reads client text fields and PDFs, owner 2026-11-11) | A6 | — | generation |
-| B9 | 5.8 guardrail suite, the rest of 6.4, 6.5 permission checks | 🔄 part 1 started 2026-11-11; part 2 (signed-in DB run) to do | every other story | — | `test/` |
+| B9 | 5.8 guardrail suite, the rest of 6.4, 6.5 permission checks | 🔄 part 1 built and reviewed, PR next; part 2 (signed-in DB run) to do | every other story | — | `test/` |
 
 A and B only say where a story started in the plan. **Any session can take any story once its "Waits for" stories are merged.**
 

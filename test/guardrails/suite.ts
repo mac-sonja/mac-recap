@@ -11,6 +11,12 @@ export type Guardrail = (typeof GUARDRAILS)[number];
 /** The tag in a test's or a describe's name that puts it in the suite. */
 export const GUARDRAIL_TAG = /\b(NFR\d+) guardrail\b/;
 
+/** The suite's own checks (test/guardrails/suite.test.ts): run by `test:guardrails` too, counted under no guardrail. */
+export const SUITE_TAG = /\bguardrail suite\b/;
+
+/** What `test:guardrails` runs: a guardrail's tests and the suite's own checks. */
+export const GUARDRAIL_TEST_NAMES = new RegExp(`${GUARDRAIL_TAG.source}|${SUITE_TAG.source}`);
+
 /** Every file outside test/guardrails with a tagged test (test/db/** runs with `npm run test:db` instead). */
 export const TAGGED_FILES = [
   // NFR1: renditions only downscale; nothing but the upload flow writes an original.

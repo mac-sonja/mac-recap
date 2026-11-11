@@ -11,10 +11,19 @@ npm test                  # the same tests, with everything else (CI runs this)
 npm run test:db           # the database tests named below (local Supabase stack)
 ```
 
-`npm run test:guardrails` runs only the tests whose name holds `NFRn guardrail` and ends
-with a table of guardrails, each `passed`, `FAILED` or `NO TEST RAN`; any guardrail that
-isn't `passed` fails the run. The files it reads are listed in `test/guardrails/suite.ts`;
-`test/guardrails/suite.test.ts` fails when a tagged test sits in a file that isn't listed.
+`npm run test:guardrails` (also a CI step) runs only the tests whose `it`/`describe` title
+holds `NFRn guardrail`, plus the suite's own checks, and ends with a table of guardrails,
+each `passed`, `FAILED` or `NO TEST RAN`; any line that isn't `passed` fails the run. The
+files it reads are listed in `test/guardrails/suite.ts`; `test/guardrails/suite.test.ts`
+fails when a tagged title sits in a file that isn't listed.
+
+The rows below marked `npm run test:db` are tagged too but run only against the local
+database, with `npm run test:db`: they are not counted in the `test:guardrails` table.
+Rows marked `npm test` are untagged tests that run with everything else.
+
+NFR4 (hands-on time) and NFR5 (narrative quality) are not guardrails (they aren't marked
+"guardrail" in the PRD) and aren't in this suite: NFR4 is measured by hand on real cases,
+NFR5 against the Sprint 2 quality checklist when a real draft is read.
 
 ## Each guardrail and its tests
 
@@ -22,15 +31,15 @@ isn't `passed` fails the run. The files it reads are listed in `test/guardrails/
 
 | What is proved | Test |
 |---|---|
-| The case narrative and the client intro output schemas have no asset, layout, template, slot or image field: the AI returns text only | `test/guardrails/nfr1-ai-boundary.test.ts` |
-| Only the upload flow writes an original: the browser's PUT to a signed upload URL (case files, client files, client logo), then the confirm action. No other Storage write exists; the server's one material upload refuses every key but a rendition's | `test/guardrails/nfr1-ai-boundary.test.ts`, `src/modules/material/adapters/supabase/object-storage.test.ts` |
+| The case narrative and the client intro output schemas have exactly the allowed fields (per format its texts; each text, its aspect and its cited sources), so no asset, layout, template, slot or image field: the AI returns text only | `test/guardrails/nfr1-ai-boundary.test.ts` |
+| Only the upload flow writes an original: the browser's PUT to a signed upload URL (case files, client files, client logo), then the confirm action. A source scan finds exactly five Storage writes in `src`: those three signed upload URLs, the material upload (which refuses every key but a rendition's) and the export upload | `test/guardrails/nfr1-ai-boundary.test.ts`, `src/modules/material/adapters/supabase/object-storage.test.ts` |
 | The rendition job never writes the original's key | `src/modules/material/application/make-renditions.test.ts` |
 | Renditions only downscale: every spec fits inside without enlarging and has no crop, focal point, filter or watermark; real sharp downscales and never enlarges | `src/modules/material/domain/rendition.test.ts`, `src/modules/material/adapters/sharp/image-processor.test.ts` |
 
 ### NFR2: a person checks every claim before approval
 
-The per-block check was removed for the demo (SCP 2026-10-28), so NFR2 is tested as the
-approval rules built today.
+The per-block check was removed for the demo by the sprint change proposal of 2026-10-28,
+so NFR2 is tested as the approval rules built today.
 
 | What is proved | Test |
 |---|---|
@@ -46,16 +55,21 @@ approval rules built today.
 | The matrix denies `change permissions or guardrails` to every role and to system, on any resource | `test/guardrails/nfr3-no-guardrail-setting.test.ts`, `test/permissions.test.ts` |
 | No server action (sign-in included), page or route, environment variable, table, column or database function names a guardrail or permission setting | `test/guardrails/nfr3-no-guardrail-setting.test.ts`, `test/permissions.test.ts` |
 | Account/sales/social has no write action outside exports and collections | `test/permissions.test.ts` |
+| Every server action, for every role, through the real actor resolver and policy (the role matrix below) | `test/permissions.test.ts` (`npm test`, untagged) |
 
-The permission suite itself (`test/permissions.test.ts`, Stories 6.4 and 6.5) runs every
+The role-matrix tests of the permission suite are not tagged: they run in `npm test` (and
+CI), not in the `test:guardrails` table. The permission suite (`test/permissions.test.ts`,
+Stories 6.4 and 6.5) runs every
 server action for every role through the real `getActor` and `authorize`: allowed past the
 policy, denied 403; no session, no profile, a disabled profile or the system profile 401. It
 finds every `"use server"` file under `src/app` on disk (except the sign-in actions in
-`(auth)`) and fails, naming it, on any file or export missing from its list. For intros,
-client packs and collections it also proves that account/sales/social edits a collection's
-text, pages and order through the collection only (no revision, intro, case or client
-write), can't edit a client or an intro, and sees on Clienti only the clients with an
-approved case.
+`(auth)`) and fails, naming it, on any file or export missing from its list, and on any
+inline `"use server"` function under `src/app`. For intros, client packs and collections it
+also proves that account/sales/social's collection edits reach the collection's use cases
+and call no case-study or material function, that the role can't edit a client or an intro,
+and that it sees on Clienti only the clients with an approved case. That the collection's
+use cases write no revision, intro, case or client row is proved against the database by
+`test/db/collection.db.test.ts` (`npm run test:db`, as an owner/designer; per role is B9 part 2).
 
 ### NFR6: no material, nothing generated
 
@@ -72,7 +86,7 @@ approved case.
 |---|---|
 | Single-case export, client pack and collection export fail `NOT_APPROVED` without an approved revision, for every role, read live revisions only (never a working one) and enqueue nothing | `test/permissions.test.ts` |
 | The export worker re-checks approval before it draws; an intro that isn't approved is left out of a pack | `src/modules/rendering/application/export-handler.test.ts` |
-| A collection's own text edits never write the original case, revision, client or intro | `test/db/collection.db.test.ts` (`npm run test:db`) |
+| A collection's own text edits, restores, hidden pages and page orders never write the original case's revision, client or intro (the database rows) | `test/db/collection.db.test.ts` (`npm run test:db`) |
 
 ## Manual checks before the demo
 
@@ -88,10 +102,12 @@ approved case.
 
 ## Not built for the demo
 
-- **Share links and `/s/{token}`** (Stories 5.5 to 5.7): after the demo (2026-11-03). Their
+- **Share links and `/s/{token}`** (Stories 5.5 to 5.7): moved to after the demo by owner
+  decision of 2026-11-03. Their
   NFR7 checks (no link without an approved revision; never a working or superseded revision
   served) are not tested because nothing exists to test.
-- **The per-block check** (Story 4.7): removed for the demo (SCP 2026-10-28). NFR2 is
+- **The per-block check** (Story 4.7): removed for the demo by the sprint change proposal
+  of 2026-10-28. NFR2 is
   tested as the approval rules above.
 - **The signed-in database run** (B9 part 2): the permission matrix against the local
   database, with a signed-in test user per role. Today the suite runs the real actor
@@ -99,6 +115,6 @@ approved case.
 
 ## Record
 
-NFR3 re-checked after Epic 6 (login, users and roles): `npm run test:guardrails` and the
-permission suite pass on the post-login build, 2026-11-11. The manual checks above are still
+NFR3 re-checked after Epic 6 (login, users and roles) on 2026-11-11: `npm run
+test:guardrails` and the permission suite pass on the post-login build. The manual checks above are still
 to run before the demo.

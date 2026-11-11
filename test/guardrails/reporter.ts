@@ -1,5 +1,5 @@
 import type { Reporter, TestModule } from "vitest/node";
-import { GUARDRAIL_TAG, GUARDRAILS } from "./suite";
+import { GUARDRAIL_TAG, GUARDRAILS, SUITE_TAG } from "./suite";
 
 /**
  * Prints one result per guardrail after `npm run test:guardrails`: passed or failed, with its
@@ -8,13 +8,17 @@ import { GUARDRAIL_TAG, GUARDRAILS } from "./suite";
  */
 export default class GuardrailReporter implements Reporter {
   onTestRunEnd(testModules: ReadonlyArray<TestModule>) {
+    const suite = { passed: 0, failed: 0 };
     const tally = new Map<string, { passed: number; failed: number }>(GUARDRAILS.map((g) => [g, { passed: 0, failed: 0 }]));
     for (const testModule of testModules) {
       for (const test of testModule.children.allTests()) {
         const state = test.result().state;
         if (state !== "passed" && state !== "failed") continue;
         const guardrail = GUARDRAIL_TAG.exec(test.fullName)?.[1];
-        if (guardrail === undefined) continue;
+        if (guardrail === undefined) {
+          if (SUITE_TAG.test(test.fullName)) suite[state] += 1;
+          continue;
+        }
         const counts = tally.get(guardrail) ?? { passed: 0, failed: 0 };
         counts[state] += 1;
         tally.set(guardrail, counts);
@@ -27,6 +31,9 @@ export default class GuardrailReporter implements Reporter {
       if (verdict !== "passed") ok = false;
       lines.push(`   ${guardrail.padEnd(5)} ${verdict.padEnd(12)} ${passed} passed, ${failed} failed`);
     }
+    const suiteVerdict = suite.failed > 0 ? "FAILED" : suite.passed === 0 ? "NO TEST RAN" : "passed";
+    if (suiteVerdict !== "passed") ok = false;
+    lines.push(`   ${"suite".padEnd(5)} ${suiteVerdict.padEnd(12)} ${suite.passed} passed, ${suite.failed} failed (the suite's own checks)`);
     lines.push("");
     process.stdout.write(`${lines.join("\n")}\n`);
     if (!ok) process.exitCode = 1;

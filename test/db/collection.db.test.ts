@@ -278,7 +278,7 @@ describe("collection edits (Story 5.11a)", () => {
     };
   }
 
-  it("edits, restores, hides and reorders with compare-and-set, logging each, and never writes a revision, client or intro", async () => {
+  it("NFR7 guardrail: edits, restores, hides and reorders with compare-and-set, logging each, and never writes a revision, client or intro", async () => {
     const a = await createTestClient(pool, TEST_ACTOR_ID);
     const { caseId, pageKeys, pageKey, elementId, original } = await caseWithRevision(a.id, "A1");
     const made = await created([caseId]);

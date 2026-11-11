@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { z } from "zod";
 import { clientIntroOutputSchema } from "@/modules/generation/adapters/anthropic/client-intro-writer";
 import { narrativeOutputSchema } from "@/modules/generation/adapters/anthropic/narrative-generator";
 
@@ -28,19 +27,37 @@ function propertyNames(schema: unknown): string[] {
   return [...own, ...Object.values(record).flatMap(propertyNames)];
 }
 
-/** No field the AI fills may place, pick or shape a file or a page. */
-const FORBIDDEN_FIELD = /asset|layout|template|slot|image/i;
+/** The keys of the object schema at `schema.properties[key]`. */
+const keysOf = (schema: { properties?: Record<string, { properties?: Record<string, unknown> }> }, key: string) =>
+  Object.keys(schema.properties?.[key]?.properties ?? {}).sort();
+
+/** Each text the AI fills: the words, which side they cover, and what they cite (a source's kind and id). */
+const TEXT_FIELDS = ["aspect", "sourceRefs", "text"];
+const REF_FIELDS = ["id", "kind"];
+
+/** The case narrative's texts per format: exactly what the default pages show. A new field must be added here on purpose. */
+const NARRATIVE_TEXTS: Record<string, string[]> = {
+  presentazione_16_9: ["title", "subtitle", "challengeHead", "challengeBody", "ideaHead", "ideaBody", "outputHead", "outputBody"],
+  carosello_1_1: ["title", "subtitle", "challengeHead", "challengeBody", "ideaHead", "ideaBody"],
+  video_9_16: ["title", "subtitle"],
+};
+/** The client intro's four texts, the same in every format. */
+const CLIENT_TEXTS = ["introHead", "introBody", "outroHead", "outroBody"];
 
 describe("NFR1 guardrail: the AI's output is text only, never an asset, layout, template, slot or image", () => {
-  it.each([
-    ["case narrative", narrativeOutputSchema],
-    ["client intro", clientIntroOutputSchema],
-  ] as const)("the %s output schema has no asset, layout, template, slot or image field", (_, schema: z.ZodType) => {
-    const names = propertyNames(schema.toJSONSchema());
-    expect(names.length).toBeGreaterThan(0);
-    expect(names.filter((name) => FORBIDDEN_FIELD.test(name))).toEqual([]);
-    // Each text's own fields: the words, which side they cover, and what they cite.
-    for (const leaf of ["text", "aspect", "sourceRefs", "kind", "id"]) expect(names).toContain(leaf);
+  it("the case narrative output schema has exactly the allowed fields: per format its texts, each text, aspect and cited sources", () => {
+    const json = narrativeOutputSchema.toJSONSchema() as Parameters<typeof keysOf>[0];
+    expect(Object.keys(json.properties ?? {}).sort()).toEqual(Object.keys(NARRATIVE_TEXTS).sort());
+    for (const [format, texts] of Object.entries(NARRATIVE_TEXTS)) expect(keysOf(json, format), format).toEqual([...texts].sort());
+    const allowed = new Set([...Object.keys(NARRATIVE_TEXTS), ...Object.values(NARRATIVE_TEXTS).flat(), ...TEXT_FIELDS, ...REF_FIELDS]);
+    expect(new Set(propertyNames(json))).toEqual(allowed);
+  });
+
+  it("the client intro output schema has exactly the allowed fields: its four texts, each text, aspect and cited sources", () => {
+    const json = clientIntroOutputSchema.toJSONSchema() as Parameters<typeof keysOf>[0];
+    expect(Object.keys(json.properties ?? {}).sort()).toEqual([...CLIENT_TEXTS].sort());
+    for (const key of CLIENT_TEXTS) expect(keysOf(json, key), key).toEqual(TEXT_FIELDS);
+    expect(new Set(propertyNames(json))).toEqual(new Set([...CLIENT_TEXTS, ...TEXT_FIELDS, ...REF_FIELDS]));
   });
 });
 
@@ -48,7 +65,7 @@ describe("NFR1 guardrail: only the upload flow writes an original", () => {
   /** Supabase Storage calls that put bytes into a bucket, or let a browser do it. */
   const WRITES = new Set(["upload", "update", "move", "copy", "createSignedUploadUrl", "uploadToSignedUrl"]);
 
-  it("every Storage write is one of these four, in the storage adapters", () => {
+  it("every Storage write in src is one of these five, in the storage adapters", () => {
     const found = sources().flatMap((rel) =>
       [...read(rel).matchAll(/bucket\(\)\s*\.\s*(\w+)\s*\(|storage\s*\.\s*from\([^)]*\)\s*\.\s*(\w+)\s*\(/g)]
         .map((m) => m[1] ?? m[2])

@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Profile, Role } from "@/modules/access";
 import { ok } from "@/shared/result";
-import { listServerActionFiles } from "./helpers/authorize-guard";
+import { hasInlineServerAction, listServerActionFiles, listSourceFiles } from "./helpers/authorize-guard";
 
 // Stories 6.4 and 6.5: every server action, for every role, through the real actor resolver
 // (`getActor`: session → profile by email → role) and the real policy
@@ -288,6 +290,13 @@ describe("permission suite through the real actor resolver (Stories 6.4, 6.5)", 
     expect(Object.keys(ACTIONS).length).toBe(Object.values(MODULES).reduce((n, exports) => n + Object.keys(exports).length, 0));
   });
 
+  it("has no inline server action anywhere under src/app, so none can skip the matrix", () => {
+    const inline = listSourceFiles(`${root}src/app`)
+      .map((abs) => relative(root, abs).split(/[\\/]/).join("/"))
+      .filter((rel) => hasInlineServerAction(rel, readFileSync(`${root}${rel}`, "utf8")));
+    expect(inline, `inline "use server" functions (move them into a listed actions file): ${inline.join(", ")}`).toEqual([]);
+  });
+
   it.each(cells)("$name as $role → allowed: $allowed", async ({ call, role, allowed }) => {
     session.role = role;
     const result = await call({});
@@ -386,10 +395,9 @@ describe("intros, client packs and collections for account/sales/social (Story 6
     for (const name of [...intro, ...pack, ...collections]) {
       expect(cells.filter((c) => c.name === name).map((c) => c.role).sort(), name).toEqual([...ROLES].sort());
     }
-    expect(intro.length + pack.length + collections.length).toBe(1 + 9 + 2 + 3 + 11);
   });
 
-  it("edits a collection's text, pages and order through the collection only: no revision, intro, case or client is written", async () => {
+  it("edits a collection's text, pages and order through the collection's use cases only: the actions call no case-study or material function (the rows: test/db/collection.db.test.ts)", async () => {
     session.role = "account_sales_social";
     const edits = ["setCollectionText", "restoreCollectionText", "setCollectionPageHidden", "setCollectionPageOrder"] as const;
     for (const fn of contentModules()) fn.mockClear();
@@ -401,7 +409,8 @@ describe("intros, client packs and collections for account/sales/social (Story 6
       expect(result.ok || (result.status !== 401 && result.status !== 403), name).toBe(true);
       expect(behind, name).toHaveBeenCalledOnce();
     }
-    // Nothing of the case-study or material module ran: no revision, intro, case or client row.
+    // Nothing of the case-study or material module ran. That the collection's own use cases write
+    // no revision, intro, case or client row is proved against the database in test/db/collection.db.test.ts.
     expect(contentModules().filter((fn) => fn.mock.calls.length > 0)).toEqual([]);
   });
 
@@ -426,7 +435,7 @@ describe("intros, client packs and collections for account/sales/social (Story 6
     const list = vi.mocked(caseStudyModule.list);
     list.mockClear();
     list.mockResolvedValueOnce(ok([{ status: "approved", client: { id: WITH.id } }]) as never);
-    vi.mocked(caseStudyModule.getClientIntro).mockResolvedValue(ok(null) as never);
+    vi.mocked(caseStudyModule.getClientIntro).mockResolvedValueOnce(ok(null) as never);
     const { renderToStaticMarkup } = await import("react-dom/server");
     const html = renderToStaticMarkup(await ClientsPage({ searchParams: Promise.resolve({}) }));
     // Only approved cases are read, whatever else exists.

@@ -2,7 +2,7 @@
 title: 'B9 part 1: guardrail suite and complete permission check (Stories 5.8, 6.5, 6.4 checklist)'
 type: 'chore'
 created: '2026-11-11'
-status: 'in-review'
+status: 'done'
 baseline_commit: '02a05a08c73e1f5d2122fa7b6b22cf8395eb7f18'
 route: 'dispatch'
 review_loop_iteration: 0

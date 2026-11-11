@@ -190,6 +190,15 @@ export function isServerActionModule(file: string, code: string): boolean {
   return hasUseServerDirective(ts.createSourceFile(file, code, ts.ScriptTarget.Latest, false, ts.ScriptKind.TSX).statements);
 }
 
+/** Whether `code` holds an inline server action: a function whose body starts with "use server". */
+export function hasInlineServerAction(file: string, code: string): boolean {
+  const sf = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const visit = (node: ts.Node): boolean =>
+    (isFunctionLike(node) && node.body !== undefined && ts.isBlock(node.body) && hasUseServerDirective(node.body.statements)) ||
+    (ts.forEachChild(node, visit) ?? false);
+  return visit(sf);
+}
+
 /** Every `"use server"` module under `dir`, as paths relative to `root` with `/` separators, sorted. */
 export function listServerActionFiles(root: string, dir: string): string[] {
   return listSourceFiles(dir)
