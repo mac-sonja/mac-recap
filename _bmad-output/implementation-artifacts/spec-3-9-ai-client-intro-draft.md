@@ -2,7 +2,7 @@
 title: 'Story 3.9: the AI writes the client intro and closing'
 type: 'feature'
 created: '2026-11-11'
-status: 'in-review'
+status: 'done'
 baseline_commit: '7f4e3d2e34750a4e431e7fb48a832b9866a8376c'
 route: 'dispatch'
 review_loop_iteration: 0

@@ -296,9 +296,10 @@ export function enqueueClientRenditions(file: { id: string; clientId: string; ki
 /**
  * The original bytes of one live client file (`{ clientId, assetId }`), for the generate job
  * (Story 3.9) to send a client's PDFs to the AI. Module-only: no server action, no signed
- * link; no authorization of its own. Errors: `INVALID_INPUT`, `NOT_FOUND` (unknown, removed,
- * another client's or a deleted client's file, or a missing object), `STORAGE_NOT_CONFIGURED`,
- * `CLIENT_LOOKUP_FAILED`, `CLIENT_INVALID`, the download errors.
+ * link; no authorization of its own. Errors: `INVALID_INPUT`, `NOT_FOUND` (an unknown or
+ * removed file, another client's or a deleted client's file, or a missing object),
+ * `STORAGE_NOT_CONFIGURED`, `CLIENT_LOOKUP_FAILED` and `CLIENT_INVALID` (the file lookup),
+ * `STORAGE_FAILED` (the download).
  */
 export function readClientFileBytes(input: { clientId: string; assetId: string }): Promise<Result<{ bytes: Uint8Array; contentType: string }>> {
   return makeReadClientFileBytes({ files: clientFiles(), storage: configuredStorage() }, (file) => clientAssetKey(file.clientId, file.id, file.contentType))(input);

@@ -352,6 +352,8 @@ export function makeGenerateHandler(deps: GenerateDeps) {
     // Gate, again: the server checked it at the save; a file may have gone since.
     if (images.length < MIN_CLIENT_IMAGES) return fail("NO_CLIENT_IMAGES", `The client has fewer than ${MIN_CLIENT_IMAGES} images.`);
 
+    // No AI call for an aborted job.
+    if (signal.aborted) return fail("ABORTED", "The job was aborted.");
     const source = intro.textSource ?? clientTestTextSource;
     let written;
     try {

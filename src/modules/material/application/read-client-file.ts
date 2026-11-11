@@ -10,9 +10,10 @@ const readInputSchema = z.object({ clientId: z.uuid(), assetId: z.uuid() });
 
 /**
  * The original bytes of one live client file (Story 3.9, worker only: the generate job sends a
- * client's PDFs to the AI). Errors: `INVALID_INPUT`, `NOT_FOUND` (no such file, a removed one,
- * one of another or a deleted client, or a missing object), `STORAGE_NOT_CONFIGURED`, the
- * lookup and download errors. Reads only.
+ * client's PDFs to the AI). Reads only. Errors: `INVALID_INPUT`, `NOT_FOUND` (an unknown or
+ * removed file, another client's or a deleted client's file, or a missing object),
+ * `STORAGE_NOT_CONFIGURED`, `CLIENT_LOOKUP_FAILED` and `CLIENT_INVALID` (the file lookup),
+ * `STORAGE_FAILED` (the download).
  */
 export function makeReadClientFileBytes(
   { files, storage }: { files: ClientFiles; storage: Pick<ObjectStorage, "download"> | null },

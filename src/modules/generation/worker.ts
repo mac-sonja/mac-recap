@@ -10,7 +10,7 @@ import { createAnthropicClientIntroWriter } from "@/modules/generation/adapters/
 import { createAnthropicNarrativeGenerator } from "@/modules/generation/adapters/anthropic/narrative-generator";
 import { createDocumentReader } from "@/modules/generation/adapters/documents/document-reader";
 import { makeClientIntroTextSource } from "@/modules/generation/application/client-intro-text-source";
-import { makeGenerateHandler, type GenerateDeps } from "@/modules/generation/application/generate-case";
+import { makeGenerateHandler, type ClientIntroGenerateDeps, type GenerateDeps } from "@/modules/generation/application/generate-case";
 import { makeNarrativeTextSource } from "@/modules/generation/application/narrative-text-source";
 import {
   clientTestTextSource,
@@ -72,9 +72,13 @@ function lazyWorkerClientTextSource(): ClientTextSource {
 /**
  * The `generate` job handler, wired to the real use cases. Register it in the
  * worker as `{ generate: generateHandler() }`. `overrides` replaces single
- * dependencies (tests).
+ * dependencies (tests); `overrides.intro` replaces single intro dependencies, so the
+ * intro keeps the worker's client text source unless it names its own.
  */
-export function generateHandler(overrides: Partial<GenerateDeps> = {}): JobHandler {
+export function generateHandler(
+  overrides: Partial<Omit<GenerateDeps, "intro">> & { intro?: Partial<ClientIntroGenerateDeps> } = {},
+): JobHandler {
+  const { intro, ...rest } = overrides;
   return makeGenerateHandler({
     getSystemActor,
     getCase: caseStudy.get,
@@ -94,7 +98,8 @@ export function generateHandler(overrides: Partial<GenerateDeps> = {}): JobHandl
       transitionIntro: caseStudy.transitionIntro,
       createIntroWorkingRevision: caseStudy.createIntroWorkingRevision,
       textSource: lazyWorkerClientTextSource(),
+      ...intro,
     },
-    ...overrides,
+    ...rest,
   });
 }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeClientIntroTextSource, type ClientIntroSourceDeps } from "@/modules/generation/application/client-intro-text-source";
-import { MAX_PDF_PAGES } from "@/modules/generation/application/narrative-text-source";
+import { MAX_EXTRACTED_CHARS, MAX_PDF_PAGES, REQUEST_BUDGET_BYTES } from "@/modules/generation/application/request-documents";
 import { clientTestTextSource, type ClientTextSourceInput } from "@/modules/generation/application/text-source";
 import { CLIENT_INTRO_TEXT_LIMITS, type ClientIntroRequest, type ClientIntroResult, type ClientIntroText } from "@/modules/generation/ports/client-intro-writer";
 import { CLIENT_TEMPLATE_TEXT_KEYS } from "@/modules/rendering";
@@ -88,6 +88,36 @@ describe("client intro text source: what the AI gets (Story 3.9)", () => {
     expect(sent().documents).toEqual([{ assetId: id(2), kind: "text", text: "Testo del PDF" }]);
   });
 
+  it("a PDF over the byte budget goes as its extracted text", async () => {
+    vi.mocked(deps.readClientFileBytes).mockResolvedValueOnce(ok({ bytes: new Uint8Array(REQUEST_BUDGET_BYTES), contentType: "application/pdf" }));
+    await run();
+    expect(sent().documents).toEqual([{ assetId: id(2), kind: "text", text: "Testo del PDF" }]);
+  });
+
+  it("extracted text is cut at the limit, and the text of a later PDF is left out", async () => {
+    const pdfs = [6, 7].map((n) => ({ id: id(n), kind: "document", contentType: "application/pdf" }));
+    vi.mocked(deps.documents.pdfPageCount).mockResolvedValue(MAX_PDF_PAGES + 1);
+    vi.mocked(deps.documents.pdfText).mockResolvedValue("y".repeat(MAX_EXTRACTED_CHARS + 10));
+    expect((await run(fullClient, pdfs)).ok).toBe(true);
+    expect(sent().documents).toEqual([{ assetId: id(6), kind: "text", text: "y".repeat(MAX_EXTRACTED_CHARS) }]);
+  });
+
+  it("a PDF whose page count or text cannot be read is skipped, and the attempt goes on", async () => {
+    const pdfs = [6, 7].map((n) => ({ id: id(n), kind: "document", contentType: "application/pdf" }));
+    vi.mocked(deps.documents.pdfPageCount).mockRejectedValueOnce(new Error(SECRET)).mockResolvedValueOnce(MAX_PDF_PAGES + 1);
+    vi.mocked(deps.documents.pdfText).mockRejectedValueOnce(new Error(SECRET));
+    expect((await run(fullClient, pdfs)).ok).toBe(true);
+    expect(sent().documents).toEqual([]);
+    expect(logged).not.toContain(SECRET);
+  });
+
+  it("an unknown sector key sends no sector and logs a warning", async () => {
+    vi.mocked(deps.listClientSectors).mockResolvedValueOnce(ok([{ key: "energia", label: "Energia" }]));
+    expect((await run()).ok).toBe(true);
+    expect(sent().client.industry).toBeNull();
+    expect(logged).toContain("generate sends no sector");
+  });
+
   it("a removed PDF is skipped; another read error fails the attempt, retryable; a sector lookup error too", async () => {
     vi.mocked(deps.readClientFileBytes).mockResolvedValueOnce(err({ code: "NOT_FOUND", message: "m" }));
     expect((await run()).ok).toBe(true);
@@ -111,15 +141,13 @@ describe("client intro text source: what the AI gets (Story 3.9)", () => {
 
 describe("client intro text source: the AI's answer", () => {
   it("the four texts, trimmed, with client_field and PDF refs kept (deduplicated) and the aspect", async () => {
-    write.mockResolvedValueOnce(
-      ok(
-        answer({
-          text: "  Una luce per l'ospitalità  ",
-          aspect: "graphic",
-          sourceRefs: [{ kind: "client_field", id: "name" }, { kind: "asset", id: id(2) }, { kind: "asset", id: id(2) }],
-        }),
-      ),
-    );
+    const withBody = answer();
+    withBody.texts.outroBody = {
+      text: "  Una luce per l'ospitalità  ",
+      aspect: "graphic",
+      sourceRefs: [{ kind: "client_field", id: "name" }, { kind: "asset", id: id(2) }, { kind: "asset", id: id(2) }],
+    };
+    write.mockResolvedValueOnce(ok(withBody));
     const out = await run();
     expect(out.ok && out.value.texts.outroBody).toEqual({
       text: "Una luce per l'ospitalità",
@@ -143,6 +171,13 @@ describe("client intro text source: the AI's answer", () => {
     const missing = answer();
     delete (missing.texts as Partial<ClientIntroResult["texts"]>).outroHead;
     write.mockResolvedValueOnce(ok(missing));
+    expect(await run()).toMatchObject({ ok: false, error: { code: "LLM_OUTPUT_INVALID", retryable: true } });
+  });
+
+  it("two equal texts (after trimming) are LLM_OUTPUT_INVALID, retryable: on the pages they would take each other's refs", async () => {
+    const twins = answer();
+    twins.texts.outroHead = { ...twins.texts.outroHead, text: ` ${twins.texts.introHead.text} ` };
+    write.mockResolvedValueOnce(ok(twins));
     expect(await run()).toMatchObject({ ok: false, error: { code: "LLM_OUTPUT_INVALID", retryable: true } });
   });
 

@@ -331,7 +331,26 @@ describe("generate handler: a client intro (Story 3.11)", () => {
     };
     const aiSource = (result: Awaited<ReturnType<ClientTextSource["texts"]>>) => ({ texts: vi.fn<ClientTextSource["texts"]>(async () => result) });
 
+    /** Everything logged during `run`. */
+    const capture = () => {
+      const lines: string[] = [];
+      vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+        lines.push(String(chunk));
+        return true;
+      });
+      vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+        lines.push(String(chunk));
+        return true;
+      });
+      return () => lines.join("");
+    };
+    const expectNoClientText = (logged: string) => {
+      expect(logged).not.toContain(DESCRIPTION);
+      for (const t of Object.values(aiTexts)) expect(logged).not.toContain(t.text);
+    };
+
     it("asks the client source with the client's current data and files, and lays the four texts into every format with real meta", async () => {
+      const logged = capture();
       const source = aiSource(ok({ texts: aiTexts, meta }));
       const { handler, intro } = makeIntro({ textSource: source });
       expect(await handler.run(introJob, live)).toEqual(ok(undefined));
@@ -355,6 +374,18 @@ describe("generate handler: a client intro (Story 3.11)", () => {
         expect(json).toContain(JSON.stringify({ kind: "asset", id: PDF_ID }));
       }
       expect(intro.transitionIntro).toHaveBeenCalledExactlyOnceWith(INTRO_ID, "generation_succeeded", SYSTEM);
+      expect(logged()).toContain(INTRO_ID);
+      expectNoClientText(logged());
+    });
+
+    it("an aborted job makes no AI call and writes nothing", async () => {
+      const source = aiSource(ok({ texts: aiTexts, meta }));
+      const { handler, intro } = makeIntro({ textSource: source });
+      const stopped = new AbortController();
+      stopped.abort();
+      expect(await handler.run(introJob, stopped.signal)).toMatchObject({ ok: false, error: { code: "ABORTED" } });
+      expect(source.texts).not.toHaveBeenCalled();
+      expect(intro.createIntroWorkingRevision).not.toHaveBeenCalled();
     });
 
     it("a source failure keeps its code and retry flag: INVALID_SOURCE_REF is final and the intro goes back to Bozza", async () => {
@@ -368,7 +399,8 @@ describe("generate handler: a client intro (Story 3.11)", () => {
       expect(down.intro.transitionIntro).not.toHaveBeenCalled();
     });
 
-    it("a throwing source is TEXT_SOURCE_FAILED, retryable", async () => {
+    it("a throwing source is TEXT_SOURCE_FAILED, retryable; the error's message is not logged", async () => {
+      const logged = capture();
       const { handler } = makeIntro({
         textSource: {
           texts: async () => {
@@ -377,6 +409,9 @@ describe("generate handler: a client intro (Story 3.11)", () => {
         },
       });
       expect(await handler.run(introJob, live)).toMatchObject({ ok: false, error: { code: "TEXT_SOURCE_FAILED", retryable: true } });
+      expect(logged()).toContain("text source threw");
+      expect(logged()).not.toContain(SECRET);
+      expectNoClientText(logged());
     });
   });
 
