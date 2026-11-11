@@ -356,3 +356,7 @@
 - source_spec: none
   summary: Drop the 3-file client material limit (SCP 2026-10-28): client material follows the case upload rules, and the intro uses the first 3 images, favourites first.
   evidence: Code still refuses a 4th file with CLIENT_MATERIAL_LIMIT; the owner chose on 2026-11-11 to keep the limit for the demo and revisit after it.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-b9a-guardrail-and-permission-suite.md`
+  summary: B9 part 2 (rest of Story 6.4): run the permission matrix against the local database with a signed-in test user per role (owner, admin, account/sales/social), through the real getActor and authorize.
+  evidence: Owner chose on 2026-11-11 to build B9 in two parts; part 1 builds the guardrail suite, the complete permission list and the checklist.
