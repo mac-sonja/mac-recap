@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "test:guardrails": "vitest run --config vitest.guardrails.config.mts",
     "test:db": "scripts/test-db.sh",
     "db:start": "supabase start",
     "db:types": "supabase gen types --lang=typescript --local > src/shared/db.types.ts.tmp && mv src/shared/db.types.ts.tmp src/shared/db.types.ts"

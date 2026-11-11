@@ -7,7 +7,7 @@ import { getFormat, isFormatId, type FormatId } from "@/modules/rendering/domain
  * key is built only in its storage adapter.
  */
 
-/** The case has no approved revision: nothing is exported (the guardrail, NFR1). */
+/** The case has no approved revision: nothing is exported (the guardrail, NFR7). */
 export const NOT_APPROVED = "NOT_APPROVED" as const;
 /** A format that does not export yet: Video stays *In arrivo* (Story 5.3). */
 export const FORMAT_NOT_EXPORTABLE = "FORMAT_NOT_EXPORTABLE" as const;

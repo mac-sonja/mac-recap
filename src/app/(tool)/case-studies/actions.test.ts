@@ -614,9 +614,12 @@ describe("generateCaseStudy action (Story 3.7a)", () => {
     expect(await generateCaseStudy({ caseId: CASE_ID })).toEqual({ ok: false, status: 500, error: { code: "CASE_STUDY_WRITE_FAILED", message: "m" } });
   });
 
-  it("without material: NO_MATERIAL (409), no job, no transition", async () => {
+  it("NFR6 guardrail: without material: NO_MATERIAL (409), no job, no transition, whatever the details form holds", async () => {
     hasMaterialUseCase.mockResolvedValue(ok(false));
+    // A filled form changes nothing: the gate never asks for it (test/db/material.db.test.ts: the form is not material).
+    getDetailsUseCase.mockResolvedValue(ok({ context: "Bando PNRR", solution: "Portale", results: [{ label: "Iscritti", value: "+30%" }], testimonialQuote: "Sì.", testimonialAuthor: "Anna" }));
     expect(await generateCaseStudy({ caseId: CASE_ID })).toMatchObject({ ok: false, status: 409, error: { code: "NO_MATERIAL" } });
+    expect(getDetailsUseCase).not.toHaveBeenCalled();
     expect(enqueueUseCase).not.toHaveBeenCalled();
     expect(transitionUseCase).not.toHaveBeenCalled();
   });

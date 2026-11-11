@@ -185,6 +185,28 @@ export function listSourceFiles(dir: string): string[] {
     .map((e) => join(e.parentPath, e.name));
 }
 
+/** Whether `code` is a `"use server"` module (its directive prologue holds "use server"). */
+export function isServerActionModule(file: string, code: string): boolean {
+  return hasUseServerDirective(ts.createSourceFile(file, code, ts.ScriptTarget.Latest, false, ts.ScriptKind.TSX).statements);
+}
+
+/** Whether `code` holds an inline server action: a function whose body starts with "use server". */
+export function hasInlineServerAction(file: string, code: string): boolean {
+  const sf = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const visit = (node: ts.Node): boolean =>
+    (isFunctionLike(node) && node.body !== undefined && ts.isBlock(node.body) && hasUseServerDirective(node.body.statements)) ||
+    (ts.forEachChild(node, visit) ?? false);
+  return visit(sf);
+}
+
+/** Every `"use server"` module under `dir`, as paths relative to `root` with `/` separators, sorted. */
+export function listServerActionFiles(root: string, dir: string): string[] {
+  return listSourceFiles(dir)
+    .filter((abs) => isServerActionModule(abs, readFileSync(abs, "utf8")))
+    .map((abs) => relative(root, abs).split(/[\\/]/).join("/"))
+    .sort();
+}
+
 /** Checks every file under `dir`; violation paths are relative to `root`. */
 export function checkTree(root: string, dir: string): Violation[] {
   return listSourceFiles(dir).flatMap((abs) => checkSource(relative(root, abs), readFileSync(abs, "utf8")));

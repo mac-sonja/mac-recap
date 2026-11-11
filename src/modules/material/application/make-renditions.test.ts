@@ -119,7 +119,7 @@ describe("rendition handler", () => {
     expect(w.deps.video.open).not.toHaveBeenCalled();
   });
 
-  it("never writes the original's key", async () => {
+  it("NFR1 guardrail: never writes the original's key", async () => {
     const w = world();
     await makeRenditionHandler(w.deps).run(job(), live());
     expect(w.deps.storage.upload.mock.calls.map(([key]) => key)).not.toContain(ORIGINAL_KEY);

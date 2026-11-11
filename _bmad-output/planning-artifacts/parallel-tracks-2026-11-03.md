@@ -28,8 +28,8 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | B5 | 5.9 combined export and client pack | ✅ #160 (5.9a), #165 (5.9b) (no migrations) | B4, **A6, A8** (pack follows 4.12's case order) | — | export, client page |
 | B6 | 5.10 collections | ✅ #161 (5.10a), #162 (5.10b) (migrations on the mac-recap project) | B5, **A8** (collections open the configurator) | A7, A8 | collections, configurator (collection mode) |
 | B7 | 5.11 edit texts and remove pages in a collection | ✅ #163 (5.11a, migration on the mac-recap project 2026-11-11), #164 (5.11b, no migration) | B6 | A2, A7, A8 | configurator (collection mode) |
-| B8 | 3.9 AI client intro draft | 🔄 built and reviewed 2026-11-11, PR next | A6 | — | generation |
-| B9 | 5.8 guardrail suite, the rest of 6.4, 6.5 permission checks | ⬜ | every other story | — | `test/` |
+| B8 | 3.9 AI client intro draft | ✅ #167 (no migration; AI reads client text fields and PDFs, owner 2026-11-11) | A6 | — | generation |
+| B9 | 5.8 guardrail suite, the rest of 6.4, 6.5 permission checks | 🔄 part 1 built and reviewed, PR next; part 2 (signed-in DB run) to do | every other story | — | `test/` |
 
 A and B only say where a story started in the plan. **Any session can take any story once its "Waits for" stories are merged.**
 
@@ -41,7 +41,7 @@ When a session finishes a story, or when you open a new one:
 2. Skip it if another session is working on a story it **overlaps** with, and take the next one. Two sessions on overlapping stories means merge conflicts in the same files.
 3. Mark it 🔄 in this table, in the story's first commit.
 
-**As of 2026-11-11:** A6, A7, A8, B5, B6 and B7 merged; every migration on the mac-recap project. Open: B8 (3.9 AI client intro); B9 last. The 3-file client limit stays for the demo (owner, 2026-11-11).
+**As of 2026-11-11:** A6, A7, A8, B5, B6, B7 and B8 merged; every migration on the mac-recap project. Open: B9 (guardrail and permission suite). The 3-file client limit stays for the demo (owner, 2026-11-11). CI `image` job red on main since #165: Docker build cannot resolve Ubuntu mirrors on the runners.
 
 To start a story in a new session, open Claude Code on `main` and say: "Start story <#> (<story>) from `_bmad-output/planning-artifacts/parallel-tracks-2026-11-03.md`; run `bmad-build`."
 

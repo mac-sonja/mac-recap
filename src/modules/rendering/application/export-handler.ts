@@ -351,7 +351,7 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
   }
 
   /**
-   * What the job draws, read again now (approved only, NFR1), or `EXPORT_STALE` when it
+   * What the job draws, read again now (approved only, NFR7), or `EXPORT_STALE` when it
    * changed since the request: another approved revision, another pack (order, intro,
    * cases), or another content hash (a client or case field edit).
    */
@@ -402,7 +402,7 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
     const formats: ExportFormatId[] =
       payload.format === EXPORT_BUNDLE ? EXPORT_FORMAT_IDS.filter((f) => payload.formats.includes(f)) : [payload.format];
 
-    // Approved only, checked again before anything is drawn (NFR1).
+    // Approved only, checked again before anything is drawn (NFR7).
     const read = await drawingsOf(job, payload, formats, signal);
     if (!read.ok) return read;
     const drawings = read.value;
