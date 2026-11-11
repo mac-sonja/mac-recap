@@ -10,3 +10,4 @@ docs
 coverage
 **/.DS_Store
 supabase/.temp
+railway.*.json
