@@ -2,7 +2,7 @@
 title: 'Story 5.11b: collection exports apply the collection edits'
 type: 'feature'
 created: '2026-11-11'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '0e14400e2b730d95a129ab6f55c045caaaebe278'
 route: 'dispatch'
 review_loop_iteration: 0
