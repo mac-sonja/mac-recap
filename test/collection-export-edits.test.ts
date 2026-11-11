@@ -6,8 +6,23 @@ import { describe, expect, it, vi } from "vitest";
 import type { Job } from "@/modules/jobs";
 import { storeZip, readStoredZip } from "@/modules/rendering/adapters/zip/store-zip";
 import { makeExportHandler, type ExportHandlerDeps } from "@/modules/rendering/application/export-handler";
-import { readCollectionSources } from "@/modules/rendering/application/export-source";
-import { ACTOR, CLIENT_ID, COLLECTION_ID, collectionDeps, OTHER_CASE_ID, PACK_CASES } from "@/modules/rendering/application/export.fixtures";
+import { collectionSegments, EMPTY_VALUES, type CollectionGroup, type PartPages, type ViewEdits } from "@/app/(wizard)/collections/[collectionId]/_components/collection-file";
+import type { CaseStudyDocument, DocumentElement, Page } from "@/modules/generation";
+import { composeParts } from "@/modules/rendering";
+import { composePartOf, readCollectionSources } from "@/modules/rendering/application/export-source";
+import {
+  ACTOR,
+  CLIENT_ID,
+  COLLECTION_ID,
+  collectionDeps,
+  introDoc,
+  OTHER_CASE_ID,
+  OTHER_CLIENT_ID,
+  OTHER_REVISION_ID,
+  PACK_CASES,
+  packCaseRevision,
+  revision,
+} from "@/modules/rendering/application/export.fixtures";
 import { makeCollectionStatus, makeRequestCollection } from "@/modules/rendering/application/request-export";
 import { NO_COLLECTION_EDITS, type CollectionEditSet } from "@/modules/rendering/collection-edits";
 import type { ExportRecord, NewExport } from "@/modules/rendering/domain/export";
@@ -201,5 +216,66 @@ describe("collection export with the collection's edits (Story 5.11b)", () => {
     r.getCollectionEdits.mockResolvedValue(err({ code: "COLLECTION_NOT_FOUND", message: "gone" }) as never);
     expect(await r.request(ACTOR, { collectionId: COLLECTION_ID, formats: [P] })).toMatchObject({ ok: false, error: { code: "COLLECTION_NOT_FOUND" } });
     expect(r.jobs).toEqual([]);
+  });
+});
+
+describe("the collection page and its export show the same pages (Story 5.11b)", () => {
+  /** EDITED in both formats. */
+  const BOTH: CollectionEditSet = {
+    texts: [P, C].flatMap((formatId) => EDITED.texts.map((t) => ({ ...t, formatId }))),
+    hidden: [P, C].flatMap((formatId) => EDITED.hidden.map((h) => ({ ...h, formatId }))),
+    orders: [P, C].flatMap((formatId) => EDITED.orders.map((o) => ({ ...o, formatId }))),
+  };
+  const view: ViewEdits = { ...BOTH, texts: BOTH.texts.map((t) => ({ ...t, originalChanged: false })) };
+
+  const partPages = (doc: CaseStudyDocument): PartPages => ({
+    template: doc.template,
+    formats: Object.fromEntries(Object.entries(doc.formats).map(([id, entry]) => [id, (entry as { pages: Page[] }).pages])) as unknown as PartPages["formats"],
+    values: EMPTY_VALUES,
+  });
+  /** The same collection as `collectionDeps()`: A, B of CLIENT_ID wrapped by its approved intro, then X of another client. */
+  const groups: CollectionGroup[] = [
+    {
+      clientId: CLIENT_ID,
+      clientName: "Lumen Srl",
+      intro: partPages(introDoc()),
+      cases: (["A", "B"] as const).map((key) => ({ caseId: PACK_CASES[key], name: `Caso ${key}`, code: key, part: partPages(packCaseRevision(key).doc) })),
+    },
+    {
+      clientId: OTHER_CLIENT_ID,
+      clientName: "Oro Spa",
+      intro: null,
+      cases: [{ caseId: OTHER_CASE_ID, name: "Caso X", code: "X", part: partPages(revision({ id: OTHER_REVISION_ID, caseId: OTHER_CASE_ID }).doc) }],
+    },
+  ];
+
+  /** A page as compared: its key and every free text's words. */
+  const shape = (page: Page) => {
+    const words: string[] = [];
+    const walk = (elements: readonly DocumentElement[]) => {
+      for (const el of elements) {
+        if (el.type === "text" && el.text !== undefined && el.binding === undefined && el.bindings === undefined) words.push(`${el.elementId}=${el.text}`);
+        if (el.type === "text_group" || el.type === "row") walk(el.items);
+      }
+    };
+    for (const block of page.blocks) walk(block.elements);
+    return [page.pageKey.slice(page.pageKey.indexOf("|") + 1), words];
+  };
+
+  it.each([P, C])("in %s: the same pages, in the same order, with the same words", async (format) => {
+    const onPage = collectionSegments(groups, format, view).flatMap((s) => s.pages.map(shape));
+
+    const read = await readCollectionSources(rig(BOTH).all, COLLECTION_ID, [format]);
+    if (!read.ok) throw new Error(read.error.code);
+    const [drawing] = read.value.drawings;
+    const file = composeParts(drawing!.parts.map((part) => composePartOf(part)), format);
+    const inFile = file.segments.flatMap((s) => s.pages.map(shape));
+
+    expect(inFile).toEqual(onPage);
+    expect(drawing!.pageCount).toBe(onPage.length);
+    // The edits took effect: the text, the order, the hidden pages (the client intro's too).
+    expect(JSON.stringify(inFile)).toContain("Titolo della raccolta");
+    expect(inFile.at(-1)![0]).toBe("intro");
+    expect(inFile[0]![0]).not.toBe("intro");
   });
 });

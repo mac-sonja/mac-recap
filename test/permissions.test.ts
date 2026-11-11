@@ -393,7 +393,7 @@ describe("no role exports a collection with a revision that isn't approved (Stor
     vi.mocked(collectionModule.getCollection).mockReset();
     vi.mocked(collectionModule.getCollection).mockResolvedValue(ok(null) as never);
     vi.mocked(collectionModule.getCollectionEdits).mockReset();
-    vi.mocked(collectionModule.getCollectionEdits).mockResolvedValue(ok(null) as never);
+    vi.mocked(collectionModule.getCollectionEdits).mockResolvedValue(ok({ textEdits: [], hiddenPages: [], pageOrders: [] }));
     vi.mocked(caseStudyModule.get).mockReset();
     vi.mocked(caseStudyModule.get).mockResolvedValue(ok(null) as never);
   });

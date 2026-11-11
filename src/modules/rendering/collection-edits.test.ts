@@ -6,6 +6,7 @@ import {
   freeTextIn,
   NO_COLLECTION_EDITS,
   orderedPages,
+  wordedPage,
   type CollectionEditSet,
   type ComposePart,
   type FormatId,
@@ -107,10 +108,14 @@ describe("applyCollectionEdits (Story 5.11b)", () => {
   });
 
   it("keeps the collection's words when the original changed since", () => {
-    const parts = [casePart("a")];
-    // The page's text now reads "Titolo a-1" whatever the edit was saved against.
-    const applied = applyCollectionEdits(parts, P, edits({ texts: [{ partKey: "case:a", formatId: P, pageKey: "a-1", elementId: "title", text: "Mio" }] }));
-    expect(freeTextIn(applied.file.segments[0]!.pages[1]!, "title")).toBe("Mio");
+    // The edit was saved against "Titolo a-1"; the case was updated since and its page now says otherwise.
+    const part = casePart("a");
+    const updated = pagesOf(part, P).map((p) => (p.pageKey === "a-1" ? wordedPage(p, [{ elementId: "title", text: "Titolo aggiornato" }]) : p));
+    const changed: ComposePart = { ...part, doc: { ...part.doc, formats: { ...part.doc.formats, [P]: { pages: updated } } } as CaseStudyDocument };
+    expect(freeTextIn(pagesOf(changed, P)[1]!, "title")).toBe("Titolo aggiornato");
+    const applied = applyCollectionEdits([changed], P, edits({ texts: [{ partKey: "case:a", formatId: P, pageKey: "a-1", elementId: "title", text: "Titolo a-1" }] }));
+    expect(freeTextIn(applied.file.segments[0]!.pages[1]!, "title")).toBe("Titolo a-1");
+    expect(applied.effective).toEqual([{ partKey: "case:a", texts: [["a-1", "title", "Titolo a-1"]], hidden: [], order: null }]);
   });
 
   it("follows the saved order first, then any page it doesn't name in the document's order", () => {
