@@ -6,7 +6,9 @@ import { COLLECTION_PAGES_MAX, COLLECTION_TEXT_MAX } from "@/modules/collection/
 import type { StoredCollection } from "@/modules/collection/domain/collection";
 import type { StoredCollectionEdits } from "@/modules/collection/domain/edits";
 import type { CollectionRepository } from "@/modules/collection/ports/collection-repository";
+import { composeParts, FORMAT_IDS, type ComposePart } from "@/modules/rendering";
 import { err, ok, type Result } from "@/shared/result";
+import { shownPageKeys } from "@/modules/collection/domain/edits";
 import { freeTextOf, makeCollectionEditUseCases, textHash } from "./edits";
 
 const actor: Actor = { id: "00000000-0000-4000-8000-0000000000a1", email: "a@menatcode.it", displayName: "A", role: "account_sales_social" };
@@ -24,11 +26,11 @@ const F = "presentazione_16_9";
 
 const text = (elementId: string, words: string) => ({ elementId, type: "text", style: "title", text: words, provenance: "generated" });
 /** A page with a free text, a free text inside a Testi group, a client field and an image (ids repeat across pages: never read together). */
-const page = (pageKey: string): Page =>
+const page = (pageKey: string, role = "body"): Page =>
   ({
     pageKey,
     name: pageKey,
-    role: "body",
+    role,
     section: "output",
     background: { kind: "transparent" },
     grid: { layoutId: "one", rows: [1], cols: [1] },
@@ -242,5 +244,70 @@ describe("getCollectionEdits (Story 5.11a)", () => {
     expect(await useCases.edits(COLLECTION)).toMatchObject({ ok: false, error: { code: "COLLECTION_NOT_FOUND" } });
     repo.find.mockResolvedValueOnce(err({ code: "COLLECTION_LOOKUP_FAILED", message: "x" }) as never);
     expect(await useCases.edits(COLLECTION)).toMatchObject({ ok: false, error: { code: "COLLECTION_LOOKUP_FAILED" } });
+  });
+});
+
+describe("Story 5.11a review fixes", () => {
+  it("counts the text limit in UTF-16 units, as the document does", async () => {
+    const { useCases } = setup();
+    expect(await useCases.setText(actor, { ...base, elementId: FREE, text: "😀".repeat(2500) })).toMatchObject({ ok: true });
+    expect(await useCases.setText(actor, { ...base, elementId: FREE, text: "😀".repeat(2501) })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", details: { fields: ["text"] } } });
+  });
+
+  it("normalises typed words and refuses blank ones", async () => {
+    const { repo, useCases } = setup();
+    expect(await useCases.setText(actor, { ...base, elementId: FREE, text: "Due\u00a0parole \n\n" })).toMatchObject({ ok: true });
+    expect((repo.setTextEdit.mock.calls[0] as unknown[])[2]).toMatchObject({ text: "Due parole" });
+    expect(await useCases.setText(actor, { ...base, elementId: FREE, text: " \u00a0\n" })).toMatchObject({ ok: false, error: { details: { fields: ["text"] } } });
+    // Trailing spaces on the original's words remove the edit as the words alone do.
+    expect(await useCases.setText(actor, { ...base, elementId: FREE, text: "Titolo  " })).toEqual({ ok: true, value: { collectionId: COLLECTION, version: 3 } });
+  });
+
+  it("leaves out the edits of parts no longer in the collection, and reads a gone case as unavailable", async () => {
+    const part = { kind: "case" as const, id: A1 };
+    const gone = { kind: "case" as const, id: B1 };
+    const edit = (p: { kind: "case" | "client_intro"; id: string }) => ({ part: p, formatId: F, pageKey: "cover", elementId: FREE, text: "Mio", originalHash: textHash("Titolo") });
+    const edits: StoredCollectionEdits = {
+      textEdits: [edit(part), edit(gone), edit({ kind: "client_intro", id: CLIENT_B })],
+      hiddenPages: [{ part: gone, formatId: F, pageKey: "cover" }, { part: { kind: "client_intro", id: CLIENT_A }, formatId: F, pageKey: "cover" }],
+      pageOrders: [{ part: gone, formatId: F, pageKeys: ["cover"] }],
+    };
+    const { useCases, liveRevision } = setup({ edits });
+    liveRevision.mockResolvedValue(err({ code: "NOT_FOUND", message: "gone" }) as never);
+    const read = await useCases.edits(COLLECTION);
+    expect(read).toEqual({ ok: true, value: { textEdits: [], hiddenPages: [edits.hiddenPages[1]], pageOrders: [] } });
+    // Any other read failure still fails.
+    liveRevision.mockResolvedValue(err({ code: "REVISION_LOOKUP_FAILED", message: "x" }) as never);
+    expect(await useCases.edits(COLLECTION)).toMatchObject({ ok: false, error: { code: "REVISION_LOOKUP_FAILED" } });
+  });
+
+  it("counts a wrapped case's last page as the file shows it (its own intro pages left out)", async () => {
+    const pages = [page("cover", "intro"), page("body")];
+    const wrapped = setup({ pages });
+    expect(await wrapped.useCases.setPageHidden(actor, { ...base, pageKey: "body", hidden: true })).toMatchObject({ ok: false, error: { code: "COLLECTION_LAST_PAGE" } });
+    // No approved intro: the case shows whole, so its body page can go.
+    const whole = setup({ pages });
+    whole.liveIntroRevision.mockResolvedValue(ok(null as never));
+    expect(await whole.useCases.setPageHidden(actor, { ...base, pageKey: "body", hidden: true })).toMatchObject({ ok: true });
+  });
+
+  it("shownPageKeys follows composeParts's default layout", () => {
+    const doc = (kind: "case_history" | "client_intro", pages: Page[]) =>
+      ({ schemaVersion: 2, kind, template: "mac-case@1", formats: Object.fromEntries(FORMAT_IDS.map((id) => [id, { pages }])) }) as never;
+    const casePages = [page("cover", "intro"), page("body"), page("closing", "outro")];
+    const introPages = [page("hello", "intro"), page("middle"), page("bye", "outro")];
+    for (const formatId of FORMAT_IDS) {
+      for (const n of [1, 2]) {
+        const parts: ComposePart[] = [
+          { kind: "client_intro", clientId: "c", doc: doc("client_intro", introPages), assets: {}, values: {} as never },
+          ...Array.from({ length: n }, (_, i): ComposePart => ({ kind: "case_history", caseId: `k${i}`, clientId: "c", doc: doc("case_history", casePages), assets: {}, values: {} as never })),
+        ];
+        const segments = composeParts(parts, formatId).segments;
+        const keysOf = (slots: string[]) => segments.filter((s) => slots.includes(s.slot) && (s.slot !== "case" || s.key === "case:k0")).flatMap((s) => s.pages.map((p) => p.pageKey));
+        const wrapped = n >= 2;
+        expect(shownPageKeys(casePages, "case", formatId, wrapped), `${formatId} ${n}`).toEqual(keysOf(["case"]));
+        expect(shownPageKeys(introPages, "client_intro", formatId, wrapped), `${formatId} ${n}`).toEqual(keysOf(["client_intro", "client_closing"]));
+      }
+    }
   });
 });

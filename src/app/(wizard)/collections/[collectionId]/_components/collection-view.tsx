@@ -3,7 +3,7 @@
 import { ArrowLeft, Eye, Pencil, Tag } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { DANGER_ACTION, PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { Dialog } from "@/app/_components/dialog";
 import type { ActionResult } from "@/app/_lib/action-result";
@@ -27,6 +27,7 @@ import {
   freeTextIn,
   groupOfCase,
   movedPageOrder,
+  normaliseTyped,
   orderedPages,
   originalText,
   pageTextEdits,
@@ -142,6 +143,9 @@ function blockOf(page: Page, elementId: string): string | undefined {
   return page.blocks.find((b) => findElement(b.elements, elementId) !== undefined)?.blockId;
 }
 
+/** Story 5.11a: an edit's refusals that mean the page's copy of the pages is out of date. */
+const PAGE_DATA_REFUSALS = new Set(["INVALID_INPUT", "TEXT_NOT_EDITABLE", "COLLECTION_LAST_PAGE"]);
+
 /** Whether a write was refused because the collection changed elsewhere (or went). */
 const isStale = (code: string | null) => code === "STALE_COLLECTION" || code === "COLLECTION_NOT_FOUND";
 
@@ -185,8 +189,8 @@ export function CollectionView({
   const [edits, setEdits] = useState(initialEdits);
   /** The free text open for typing, by its shown page's key. */
   const [editing, setEditing] = useState<{ pageKey: string; elementId: string } | null>(null);
-  /** The words typed in the open text so far. */
-  const typed = useRef<string | null>(null);
+  /** The open text's session (with the format it was opened in) and the words typed so far; null when none is open. */
+  const session = useRef<{ pageKey: string; elementId: string; formatId: FormatId; typed: string | null } | null>(null);
   const [tags, setTags] = useState(initialTags);
   const [formatId, setFormatId] = useState<FormatId>("presentazione_16_9");
   const [preview, setPreview] = useState(false);
@@ -249,7 +253,11 @@ export function CollectionView({
           // Changed elsewhere: retrying with this version can't work, so the page is read again.
           say(it.collections.stale);
           router.refresh();
-        } else say(failed(code));
+        } else {
+          say(failed(code));
+          // Refused on the pages the page holds (a page, a text or the part changed since): read them again.
+          if (next.edits !== undefined && code !== null && PAGE_DATA_REFUSALS.has(code)) router.refresh();
+        }
       });
     },
     [router, say],
@@ -287,26 +295,37 @@ export function CollectionView({
   const requestEdit = (pageKey: string, elementId: string) => {
     const info = pageInfo.get(pageKey);
     if (info === undefined || freeTextIn(info.entry.page, elementId) === null) return;
-    typed.current = null;
+    session.current = { pageKey, elementId, formatId, typed: null };
     setEditing({ pageKey, elementId });
   };
 
-  /** The open text left (blur, Enter on one line, Esc): its words are saved in the collection when they changed. */
+  /**
+   * The open text left (blur, Enter on one line, Esc, or the format or Anteprima switched): its
+   * words, normalised, are saved in the collection when they changed. Blank words are not saved
+   * (the shown words come back). An edit whose original changed is saved again even with the same
+   * words: its original is taken as read now. Only the session's own end counts: a second end of
+   * the same session (focus leaving after a switch already saved it) does nothing.
+   */
   const finishEdit = (pageKey: string, elementId: string) => {
+    const open = session.current;
+    if (open === null || open.pageKey !== pageKey || open.elementId !== elementId) return;
+    session.current = null;
     setEditing(null);
-    const text = typed.current;
-    typed.current = null;
-    const info = pageInfo.get(pageKey);
-    if (text === null || info === undefined) return;
+    const info = open.formatId === formatId ? pageInfo.get(pageKey) : undefined;
+    if (info === undefined) return;
     const { segment, entry } = info;
     const shown = freeTextIn(entry.page, elementId);
-    if (shown === null || text === shown) return;
-    if ([...text].length > MAX_TEXT_CHARS) {
+    if (shown === null) return;
+    const text = open.typed === null ? shown : normaliseTyped(open.typed);
+    const ref = { partKey: segment.partKey, formatId, pageKey: entry.pageKey, elementId };
+    const changedOriginal = pageTextEdits(edits, segment.partKey, formatId, entry.pageKey).some((t) => t.elementId === elementId && t.originalChanged);
+    if (text.trim() === "") return;
+    if (text === shown && !changedOriginal) return;
+    if (text.length > MAX_TEXT_CHARS) {
       // The page is drawn again from the saved words.
       say(fill(it.collection.edits.textTooLong, { max: MAX_TEXT_CHARS }));
       return;
     }
-    const ref = { partKey: segment.partKey, formatId, pageKey: entry.pageKey, elementId };
     if (text === originalText(groups, segment.partKey, formatId, entry.pageKey, elementId)) {
       enqueue(
         { edits: withTextEdit(edits, ref, null) },
@@ -320,6 +339,12 @@ export function CollectionView({
       (v) => actions.setText({ ...pageInput(segment, entry.pageKey, v), elementId, text }),
       (code) => (code === "TEXT_NOT_EDITABLE" ? it.collection.edits.notEditable : it.collection.edits.textFailed),
     );
+  };
+
+  /** Saves the open text, if any, before the canvas changes under it (a format or Anteprima switch). */
+  const finishOpenEdit = () => {
+    const open = session.current;
+    if (open !== null) finishEdit(open.pageKey, open.elementId);
   };
 
   /** **Ripristina testo originale** / **Usa originale**: the collection's words go. */
@@ -395,22 +420,16 @@ export function CollectionView({
     return marks.length === 0 ? null : <TextMarks host={host} marks={marks} />;
   };
 
-  // Enter on a one-line text saves it (it leaves the text); on a text of several lines it adds a line.
-  useEffect(() => {
-    const el = canvasRef.current;
-    if (el === null) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
-      const target = event.target;
-      if (!(target instanceof HTMLElement) || !target.hasAttribute("contenteditable")) return;
-      if (typedText(target).includes("\n")) return;
-      event.preventDefault();
-      event.stopPropagation();
-      target.blur();
-    };
-    el.addEventListener("keydown", onKey, true);
-    return () => el.removeEventListener("keydown", onKey, true);
-  }, []);
+  /** Enter on a one-line text saves it (it leaves the text); on a text of several lines it adds a line. */
+  const onCanvasKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.hasAttribute("contenteditable")) return;
+    if (typedText(target).includes("\n")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    target.blur();
+  };
 
   const editingPage = editing === null ? undefined : pageInfo.get(editing.pageKey)?.entry.page;
   const editingBlock = editing === null || editingPage === undefined ? undefined : blockOf(editingPage, editing.elementId);
@@ -468,7 +487,7 @@ export function CollectionView({
   const selectSegment = (key: string) =>
     canvasRef.current?.querySelector(`[data-canvas-group="${key}"]`)?.scrollIntoView?.({ block: "start", behavior: reducedMotion() ? "auto" : "smooth" });
   const pickFormat = (next: FormatId) => {
-    setEditing(null);
+    finishOpenEdit();
     setFormatId(next);
     setSlide(0);
   };
@@ -498,7 +517,7 @@ export function CollectionView({
               aria-label={previewLabel}
               title={previewLabel}
               onClick={() => {
-                setEditing(null);
+                finishOpenEdit();
                 setPreview(!preview);
                 setSlide(0);
               }}
@@ -535,7 +554,7 @@ export function CollectionView({
         </header>
 
         <main className="grid min-h-0 flex-1" style={{ gridTemplateColumns: `minmax(0,1fr) ${preview ? "0px" : "280px"}`, gridTemplateRows: "minmax(0,1fr)" }}>
-          <div className="relative min-h-0">
+          <div className="relative min-h-0" onKeyDownCapture={onCanvasKeyDown}>
             <StatusMessage message={message} />
             <Canvas
               formatId={formatId}
@@ -561,8 +580,9 @@ export function CollectionView({
               editable={!preview}
               editing={preview ? null : editing}
               onEditRequest={requestEdit}
-              onTextInput={(_pageKey, _elementId, text) => {
-                typed.current = text;
+              onTextInput={(pageKey, elementId, text) => {
+                const open = session.current;
+                if (open !== null && open.pageKey === pageKey && open.elementId === elementId) open.typed = text;
               }}
               onTextDone={finishEdit}
               pageExtras={pageExtras}

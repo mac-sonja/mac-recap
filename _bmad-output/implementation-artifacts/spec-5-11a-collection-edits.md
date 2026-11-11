@@ -2,7 +2,7 @@
 title: 'Story 5.11a: edit texts, hide and reorder pages in a collection'
 type: 'feature'
 created: '2026-11-11'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '57bb89202140971a40243ab958df76c45d65481e'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -110,7 +110,13 @@ The original case histories, client intros and client records are never written.
 - **Data.** `20261111120000_collection_edits.sql`: `collection_text_edit`, `collection_hidden_page`, `collection_page_order`, keyed by collection, `part_kind` (`case` | `client_intro`), `part_id` (the case, or the client for its intro document), format and page key. Writers (service role only, CAS on `collection.version`, one event each): `set_collection_text_edit`, `delete_collection_text_edit`, `set_collection_page_hidden`, `set_collection_page_order`; the part must be a case of the collection or the client of one (`INVALID_INPUT` detail `part`).
 - **Module.** `application/edits.ts`: the original's sha256 is worked out from the part's live approved revision on save and on every read (`textHash`); typing the original's words removes the edit. `COLLECTION_LAST_PAGE` (a part keeps one page of its document in the format) and `TEXT_NOT_EDITABLE` (409). `getCollectionEdits` drops edits whose text is no longer a free text and flags `originalChanged`.
 - **UI.** Overrides are laid over each part's pages before `composeParts` (hidden pages composed in, then shown as strips). Canvas gained optional `onResize` (no handles without it), `pageExtras` and `CanvasGroup.before/after`. Pagine: a "Pagine di {name}" toggle under each case, intro and closing row lists its pages (move by drag, Alt+↑/↓ or menu; **Elimina dalla raccolta** / **Ripristina**). Edits share the moves' write queue; a failure restores both order and edits. Anteprima stays read-only.
-- **Not done here:** stale edit rows of a case removed from the collection are left in place (they apply again if the case is re-added).
+- **Review fixes (2026-11-11).**
+  - Reads never fail for a part that is gone: `getCollectionEdits` skips rows of parts not in the collection, and a case or client that is gone (`NOT_FOUND`, `CLIENT_NOT_FOUND`) counts as unavailable.
+  - A deferred constraint trigger on `collection_item` (`collection_item_drop_edits`) drops a removed case's edits, plus its client intro's once no case of that client is left. Moves that rewrite the items keep them.
+  - `delete_collection_text_edit` with no row writes nothing (no version bump, no event).
+  - Text is normalised (NBSP becomes a space, trailing whitespace is trimmed), blank text is refused, and length is counted in UTF-16 units. Saving an edit whose original changed refreshes its hash, even with the same words.
+  - `COLLECTION_LAST_PAGE` counts only the pages the file shows (a wrapped case leaves out its own intro pages; an intro shows only its intro and closing pages). `shownPageKeys` mirrors `composeParts` and is tested against it. The page also never draws a part with zero pages.
+  - The page saves an open text before a format or Anteprima switch, and re-reads after `INVALID_INPUT` / `TEXT_NOT_EDITABLE` / `COLLECTION_LAST_PAGE` on an edit. The Enter key is handled on the canvas wrapper.
 
 ## Spec Change Log
 

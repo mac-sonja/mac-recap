@@ -166,7 +166,8 @@ $$;
 
 -- Removes the collection's words for a free text (**Ripristina testo originale**, **Usa
 -- originale**), if the version is still `p_expected_version`: the original shows again. Logs
--- `collection_text_restored` (also when there was no edit). Returns the new version. Raises P0001
+-- `collection_text_restored`. Returns the new version; with no edit there, the version as it is
+-- (still compare-and-set, nothing written). Raises P0001
 -- `INVALID_INPUT`, `COLLECTION_NOT_FOUND` or `STALE_COLLECTION`; nothing is written then.
 create function public.delete_collection_text_edit(
   p_collection_id uuid,
@@ -192,6 +193,10 @@ begin
   delete from public.collection_text_edit
    where collection_id = p_collection_id and part_kind = p_part_kind and part_id = p_part_id
      and format = p_format and page_key = p_page_key and element_id = p_element_id;
+  -- No edit there: nothing changes, so neither the version nor the log does.
+  if not found then
+    return p_expected_version;
+  end if;
   return public.collection_bump(p_collection_id, p_actor_id, 'collection_text_restored', jsonb_build_object(
     'part', jsonb_build_object('kind', p_part_kind, 'id', p_part_id),
     'format', p_format, 'pageKey', p_page_key, 'elementId', p_element_id
@@ -283,3 +288,46 @@ grant execute on function public.set_collection_text_edit(uuid, integer, text, u
 grant execute on function public.delete_collection_text_edit(uuid, integer, text, uuid, text, text, uuid, uuid) to service_role;
 grant execute on function public.set_collection_page_hidden(uuid, integer, text, uuid, text, text, boolean, uuid) to service_role;
 grant execute on function public.set_collection_page_order(uuid, integer, text, uuid, text, text[], uuid) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- A case leaving a collection takes its edits with it
+-- ---------------------------------------------------------------------------
+
+-- After a `collection_item` row goes, at the end of the transaction (the 5.10a writers delete
+-- and insert every item to reorder them): if the case is no longer in the collection, its text
+-- edits, hidden pages and page orders go; if no case of its client is left either, so do the
+-- client intro's. Added back later, it starts with none. Not executable by anyone: a trigger.
+create function public.collection_item_drop_edits()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  client uuid;
+begin
+  if exists (select 1 from public.collection_item where collection_id = old.collection_id and case_id = old.case_id) then
+    return null;
+  end if;
+  delete from public.collection_text_edit where collection_id = old.collection_id and part_kind = 'case' and part_id = old.case_id;
+  delete from public.collection_hidden_page where collection_id = old.collection_id and part_kind = 'case' and part_id = old.case_id;
+  delete from public.collection_page_order where collection_id = old.collection_id and part_kind = 'case' and part_id = old.case_id;
+  select c.client_id into client from public.case_study c where c.id = old.case_id;
+  if client is not null and not exists (
+    select 1 from public.collection_item item join public.case_study c on c.id = item.case_id
+     where item.collection_id = old.collection_id and c.client_id = client
+  ) then
+    delete from public.collection_text_edit where collection_id = old.collection_id and part_kind = 'client_intro' and part_id = client;
+    delete from public.collection_hidden_page where collection_id = old.collection_id and part_kind = 'client_intro' and part_id = client;
+    delete from public.collection_page_order where collection_id = old.collection_id and part_kind = 'client_intro' and part_id = client;
+  end if;
+  return null;
+end;
+$$;
+
+revoke all on function public.collection_item_drop_edits() from public, anon, authenticated, service_role;
+
+create constraint trigger collection_item_drop_edits
+  after delete on public.collection_item
+  deferrable initially deferred
+  for each row execute function public.collection_item_drop_edits();

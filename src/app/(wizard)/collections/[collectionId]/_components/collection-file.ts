@@ -283,8 +283,24 @@ export function collectionSegments(groups: readonly CollectionGroup[], formatId:
     const closingKey = `client_closing:${group.clientId}`;
     if (wraps && composed.has(closingKey)) add(closingKey, "closing", group.clientId, group.intro!, introKey);
   }
-  return out;
+  // A part never shows no page: when every page of it the file would show is hidden (the case
+  // got wrapped by its client's intro since, say), its hides are ignored for the drawing.
+  const emptied = new Set<PartKey>();
+  for (const segment of out) {
+    if (segment.entries.length === 0) continue;
+    const runs = out.filter((s) => s.partKey === segment.partKey);
+    if (runs.every((s) => s.pages.length === 0)) emptied.add(segment.partKey);
+  }
+  return emptied.size === 0
+    ? out
+    : out.map((s) => (emptied.has(s.partKey) ? { ...s, entries: s.entries.map((e) => ({ ...e, hidden: false })), pages: s.entries.map((e) => e.page) } : s));
 }
+
+/**
+ * Typed words as the collection keeps them (the module normalises the same way): no-break spaces
+ * as plain spaces, no trailing spaces or line breaks.
+ */
+export const normaliseTyped = (text: string) => text.replaceAll("\u00a0", " ").trimEnd();
 
 /** `list` with the entry at `from` moved to `to` (clamped). */
 function moved<T>(list: readonly T[], from: number, to: number): T[] {

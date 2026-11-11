@@ -146,6 +146,19 @@ describe("a collection's own edits over its pages (Story 5.11a)", () => {
     expect(shownPagesOfPart(segments, "client_intro:a")).toBe(1);
   });
 
+  it("never shows a part with no page: when every page it would show is hidden, it shows them", () => {
+    // A1's body and closing hidden: shown whole it keeps its intro; wrapped, it would show none.
+    const edits: ViewEdits = {
+      ...NO_EDITS,
+      hidden: ["a1-body", "closing"].map((pageKey) => ({ partKey: "case:a1", formatId: F, pageKey })),
+    };
+    const whole = collectionSegments([group("a", ["a1"], null)], F, edits).find((s) => s.key === "case:a1")!;
+    expect(whole.pages.map((p) => p.pageKey)).toEqual(["case:a1|a1-intro"]);
+    const wrapped = collectionSegments([group("a", ["a1", "a2"], introPart())], F, edits).find((s) => s.key === "case:a1")!;
+    expect(wrapped.pages.map((p) => p.pageKey)).toEqual(["case:a1|a1-body", "case:a1|closing"]);
+    expect(wrapped.entries.every((e) => !e.hidden)).toBe(true);
+  });
+
   it("moves a page within its run, keeping the part's other pages in place", () => {
     expect(movedPageOrder(["i", "b1", "b2", "c"], ["b1", "b2", "c"], 0, 1)).toEqual(["i", "b2", "b1", "c"]);
     expect(movedPageOrder(["i", "b1", "b2", "c"], ["b1", "b2", "c"], 2, 0)).toEqual(["i", "c", "b1", "b2"]);

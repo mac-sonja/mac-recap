@@ -522,6 +522,88 @@ describe("a collection's own edits (Story 5.11a)", () => {
     expect(shown.slice(0, 2)).toEqual([first!.page.pageKey, second!.page.pageKey]);
   });
 
+  /** Opens A1's first free text, types `words`, and returns it (still open). */
+  const typeIn = (words: string) => {
+    const { page } = a1Page();
+    const el = freeText(page);
+    fireEvent.doubleClick(node(page.pageKey, el.elementId));
+    const typing = node(page.pageKey, el.elementId);
+    typing.textContent = words;
+    fireEvent.input(typing);
+    return { typing, el, page };
+  };
+
+  it("reads the pages again when an edit is refused on out-of-date pages", async () => {
+    actions.setText.mockResolvedValue({ ok: false, status: 409, error: { code: "TEXT_NOT_EDITABLE", message: "m" } });
+    renderView();
+    const { typing } = typeIn("Altro");
+    fireEvent.focusOut(typing);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(edits.notEditable));
+    expect(refresh).toHaveBeenCalled();
+    expect(canvas().querySelector("[data-text-mark]")).toBeNull();
+  });
+
+  it("saves the open text before switching format or Anteprima, in the format it was typed in", async () => {
+    const user = userEvent.setup();
+    actions.setText.mockResolvedValue(edited());
+    renderView();
+    typeIn("Prima del cambio");
+    await user.click(screen.getByRole("button", { name: /Carosello/ }));
+    await waitFor(() => expect(actions.setText).toHaveBeenCalledTimes(1));
+    expect(actions.setText).toHaveBeenCalledWith(expect.objectContaining({ formatId: F, text: "Prima del cambio" }));
+    actions.setText.mockClear();
+    await user.click(screen.getByRole("button", { name: /Presentazione/ }));
+    typeIn("Prima di Anteprima");
+    await user.click(screen.getByRole("button", { name: dict.configurator.preview.enter }));
+    await waitFor(() => expect(actions.setText).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ formatId: F, text: "Prima di Anteprima" })));
+  });
+
+  it("normalises the typed words and never saves blank ones", async () => {
+    actions.setText.mockResolvedValue(edited());
+    renderView();
+    const blank = typeIn(" \u00a0\n ");
+    fireEvent.focusOut(blank.typing);
+    await act(async () => {});
+    expect(actions.setText).not.toHaveBeenCalled();
+    expect(node(blank.page.pageKey, blank.el.elementId).textContent).toContain(blank.el.text!.slice(0, 5));
+    const words = typeIn("Due\u00a0parole \n");
+    fireEvent.focusOut(words.typing);
+    await waitFor(() => expect(actions.setText).toHaveBeenCalledWith(expect.objectContaining({ text: "Due parole" })));
+  });
+
+  it("saves an edit whose original changed again with the same words, clearing the mark", async () => {
+    actions.setText.mockResolvedValue(edited());
+    const { page, pageKey } = a1Page();
+    const el = freeText(page);
+    const saved: ViewEdits = { ...NO_EDITS, texts: [{ partKey: "case:a1", formatId: F, pageKey, elementId: el.elementId, text: "Mia", originalChanged: true }] };
+    render(view(GROUPS, 7, undefined, saved));
+    fireEvent.doubleClick(node(page.pageKey, el.elementId));
+    fireEvent.focusOut(node(page.pageKey, el.elementId));
+    await waitFor(() => expect(actions.setText).toHaveBeenCalledWith(expect.objectContaining({ elementId: el.elementId, text: "Mia" })));
+    expect(canvas().querySelector(`[data-text-mark="${el.elementId}"]`)?.textContent).toContain(edits.edited);
+  });
+
+  it("Anteprima shows no marks and no strips, and a double-click opens nothing", async () => {
+    const user = userEvent.setup();
+    const { page, pageKey } = a1Page();
+    const el = freeText(page);
+    const saved: ViewEdits = {
+      ...NO_EDITS,
+      texts: [{ partKey: "case:a1", formatId: F, pageKey, elementId: el.elementId, text: "Mia", originalChanged: false }],
+      hidden: [{ partKey: "case:a1", formatId: F, pageKey: collectionSegments(GROUPS, F).find((s) => s.key === "case:a1")!.entries[1]!.pageKey }],
+    };
+    render(view(GROUPS, 7, undefined, saved));
+    expect(canvas().querySelector("[data-text-mark]")).toBeTruthy();
+    expect(canvas().querySelector("[data-hidden-page]")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: dict.configurator.preview.enter }));
+    expect(canvas().querySelector("[data-text-mark]")).toBeNull();
+    expect(canvas().querySelector("[data-hidden-page]")).toBeNull();
+    fireEvent.doubleClick(node(page.pageKey, el.elementId));
+    expect(node(page.pageKey, el.elementId).getAttribute("contenteditable")).not.toBe("plaintext-only");
+    // Its words still show the collection's.
+    expect(node(page.pageKey, el.elementId).textContent).toContain("Mia");
+  });
+
   it("applies saved page orders and hidden pages when it opens", () => {
     const run = collectionSegments(GROUPS, F).find((s) => s.key === "case:a1")!;
     const all = GROUPS[0]!.cases[0]!.part!.formats[F].map((p) => p.pageKey);

@@ -401,4 +401,145 @@ describe("collection edits (Story 5.11a)", () => {
     );
     expect(grants.rows[0]).toEqual({ text_auth: false, order_anon: false, hidden_service: true, insert: false });
   });
+
+  /** Client `clientId`'s intro, approved, its live revision the reference v2 client intro (set straight in the tables). */
+  async function approvedIntro(clientId: string) {
+    const intro = (await pool.query("select id from public.create_client_intro($1, $2)", [clientId, TEST_ACTOR_ID])).rows[0].id as string;
+    const { clientIntroV2 } = await import("@/modules/generation");
+    const { FORMAT_IDS } = await import("@/modules/rendering");
+    const doc = clientIntroV2(FORMAT_IDS);
+    const db = await pool.connect();
+    try {
+      await db.query("begin");
+      const rev = await db.query(
+        `insert into public.revision (client_intro_id, status, generated_doc, doc, schema_version, created_by) values ($1, 'approved', $2, $2, 2, $3) returning id`,
+        [intro, JSON.stringify(doc), TEST_ACTOR_ID],
+      );
+      await db.query("set local mac_recap.intro_transition = 'on'");
+      await db.query("update public.client_intro set status = 'approved', approved_revision_id = $2 where id = $1", [intro, rev.rows[0].id]);
+      await db.query("commit");
+    } catch (error) {
+      await db.query("rollback");
+      throw error;
+    } finally {
+      db.release();
+    }
+    type El = { elementId: string; type: string; text?: string; binding?: unknown; items?: El[] };
+    const all = (els: El[]): El[] => els.flatMap((el) => [el, ...all(el.items ?? [])]);
+    const pages = doc.formats[F]!.pages;
+    const introPage = pages.find((p) => p.role === "intro" && p.blocks.some((b) => all(b.elements as El[]).some((el) => el.type === "text" && el.text !== undefined)))!;
+    const free = introPage.blocks.flatMap((b) => all(b.elements as El[])).find((el) => el.type === "text" && el.text !== undefined)!;
+    return { intro, pages, pageKey: introPage.pageKey, elementId: free.elementId, introKeys: pages.filter((p) => p.role === "intro").map((p) => p.pageKey) };
+  }
+
+  it("edits a text and hides a page of a real approved client intro, writing no intro, revision or client row", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const one = await caseWithRevision(a.id, "A1");
+    const two = await caseWithRevision(a.id, "A2");
+    const intro = await approvedIntro(a.id);
+    const made = await created([one.caseId, two.caseId]);
+    const m = await collection();
+    const part = { kind: "client_intro", id: a.id };
+    const before = { one: await originals(one.caseId, a.id), two: await originals(two.caseId, a.id) };
+    expect(await m.setCollectionText(await actor(), { collectionId: made.collectionId, expectedVersion: 1, part, formatId: F, pageKey: intro.pageKey, elementId: intro.elementId, text: "Intro della raccolta" })).toMatchObject({
+      ok: true,
+      value: { version: 2 },
+    });
+    // Hide every shown intro-side page but one; the last shown is refused (the intro shows only its intro and closing pages).
+    const shown = intro.pages.filter((p) => p.role === "intro" || p.role === "outro").map((p) => p.pageKey);
+    let version = 2;
+    for (const key of shown.slice(0, -1)) {
+      expect(await m.setCollectionPageHidden(await actor(), { collectionId: made.collectionId, expectedVersion: version, part, formatId: F, pageKey: key, hidden: true })).toMatchObject({ ok: true });
+      version += 1;
+    }
+    expect(await m.setCollectionPageHidden(await actor(), { collectionId: made.collectionId, expectedVersion: version, part, formatId: F, pageKey: shown.at(-1), hidden: true })).toMatchObject({
+      ok: false,
+      error: { code: "COLLECTION_LAST_PAGE" },
+    });
+    const edits = await m.getCollectionEdits(made.collectionId);
+    expect(edits).toMatchObject({ ok: true, value: { textEdits: [{ part, elementId: intro.elementId, originalChanged: false }] } });
+    expect(edits.ok && edits.value.hiddenPages.length).toBe(shown.length - 1);
+    expect({ one: await originals(one.caseId, a.id), two: await originals(two.caseId, a.id) }).toEqual(before);
+  });
+
+  it("still loads once an edited case is deleted: its edits drop out of the read", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const one = await caseWithRevision(a.id, "A1");
+    const two = await caseWithRevision(a.id, "A2");
+    const made = await created([one.caseId, two.caseId]);
+    const m = await collection();
+    const part = { kind: "case", id: one.caseId };
+    expect(await m.setCollectionText(await actor(), { collectionId: made.collectionId, expectedVersion: 1, part, formatId: F, pageKey: one.pageKey, elementId: one.elementId, text: "Mia" })).toMatchObject({ ok: true });
+    expect(await m.setCollectionPageHidden(await actor(), { collectionId: made.collectionId, expectedVersion: 2, part, formatId: F, pageKey: one.pageKeys[0], hidden: true })).toMatchObject({ ok: true });
+    await pool.query("update public.case_study set deleted_at = now() where id = $1", [one.caseId]);
+    expect(await m.getCollection(made.collectionId)).toMatchObject({ ok: true });
+    expect(await m.getCollectionEdits(made.collectionId)).toEqual({ ok: true, value: { textEdits: [], hiddenPages: [], pageOrders: [] } });
+  });
+
+  it("removing a case drops its edits (and its client intro's with its last case): added back, nothing returns", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const b = await createTestClient(pool, TEST_ACTOR_ID);
+    const one = await caseWithRevision(a.id, "A1");
+    const two = await caseWithRevision(b.id, "B1");
+    const made = await created([one.caseId, two.caseId]);
+    const m = await collection();
+    const id = made.collectionId;
+    const part = { kind: "case", id: one.caseId };
+    const count = async () =>
+      (
+        await pool.query(
+          `select (select count(*) from public.collection_text_edit where collection_id = $1)::int as texts,
+                  (select count(*) from public.collection_hidden_page where collection_id = $1)::int as hidden,
+                  (select count(*) from public.collection_page_order where collection_id = $1)::int as orders`,
+          [id],
+        )
+      ).rows[0];
+    let v = 1;
+    const step = async (call: Promise<unknown>) => {
+      expect(await call).toMatchObject({ ok: true });
+      v += 1;
+    };
+    await step(m.setCollectionText(await actor(), { collectionId: id, expectedVersion: v, part, formatId: F, pageKey: one.pageKey, elementId: one.elementId, text: "Mia" }));
+    await step(m.setCollectionPageHidden(await actor(), { collectionId: id, expectedVersion: v, part, formatId: F, pageKey: one.pageKeys[0], hidden: true }));
+    await step(m.setCollectionPageOrder(await actor(), { collectionId: id, expectedVersion: v, part, formatId: F, pageKeys: [...one.pageKeys].reverse() }));
+    // Straight at the writer: the intro part is the client of a case in it, whatever its intro.
+    await pool.query("select public.set_collection_page_hidden($1, $2, 'client_intro', $3, $4, 'x', true, $5)", [id, v, a.id, F, TEST_ACTOR_ID]);
+    v += 1;
+    // A move rewrites every item: nothing is dropped.
+    await step(m.moveCollectionGroup(await actor(), { collectionId: id, expectedVersion: v, clientId: b.id, to: 0 }));
+    expect(await count()).toEqual({ texts: 1, hidden: 2, orders: 1 });
+
+    await step(m.removeCollectionItems(await actor(), { collectionId: id, expectedVersion: v, caseIds: [one.caseId] }));
+    expect(await count()).toEqual({ texts: 0, hidden: 0, orders: 0 });
+    await step(m.addCollectionItems(await actor(), { collectionId: id, expectedVersion: v, caseIds: [one.caseId] }));
+    expect(await count()).toEqual({ texts: 0, hidden: 0, orders: 0 });
+    expect(await m.getCollectionEdits(id)).toEqual({ ok: true, value: { textEdits: [], hiddenPages: [], pageOrders: [] } });
+  });
+
+  it("restoring a text with no edit writes nothing: no new version, no event", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const one = await caseWithRevision(a.id, "A1");
+    const made = await created([one.caseId]);
+    const m = await collection();
+    expect(
+      await m.restoreCollectionText(await actor(), { collectionId: made.collectionId, expectedVersion: 1, part: { kind: "case", id: one.caseId }, formatId: F, pageKey: one.pageKey, elementId: one.elementId }),
+    ).toEqual({ ok: true, value: { collectionId: made.collectionId, version: 1 } });
+    // Still compare-and-set.
+    await expect(
+      pool.query("select public.delete_collection_text_edit($1, 2, 'case', $2, $3, $4, $5, $6)", [made.collectionId, one.caseId, F, one.pageKey, one.elementId, TEST_ACTOR_ID]),
+    ).rejects.toMatchObject({ message: "STALE_COLLECTION" });
+    expect((await pool.query("select version from public.collection where id = $1", [made.collectionId])).rows[0]).toEqual({ version: 1 });
+    expect((await pool.query("select count(*)::int as n from public.collection_event where collection_id = $1", [made.collectionId])).rows[0].n).toBe(1);
+  });
+
+  it("counts text length in UTF-16 units, as the document does", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const one = await caseWithRevision(a.id, "A1");
+    const made = await created([one.caseId]);
+    const m = await collection();
+    const ref = { collectionId: made.collectionId, part: { kind: "case", id: one.caseId }, formatId: F, pageKey: one.pageKey, elementId: one.elementId };
+    expect(await m.setCollectionText(await actor(), { ...ref, expectedVersion: 1, text: "😀".repeat(2501) })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT" } });
+    expect(await m.setCollectionText(await actor(), { ...ref, expectedVersion: 1, text: "😀".repeat(2500) })).toMatchObject({ ok: true, value: { version: 2 } });
+  });
 });
+
