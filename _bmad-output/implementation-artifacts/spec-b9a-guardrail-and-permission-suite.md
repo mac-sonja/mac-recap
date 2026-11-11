@@ -2,7 +2,7 @@
 title: 'B9 part 1: guardrail suite and complete permission check (Stories 5.8, 6.5, 6.4 checklist)'
 type: 'chore'
 created: '2026-11-11'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '02a05a08c73e1f5d2122fa7b6b22cf8395eb7f18'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -67,16 +67,21 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `test/guardrails/` (or tagged describes) + `package.json` -- `test:guardrails` with one named block per NFR.
-- [ ] `test/permissions.test.ts` -- discovery, no hard-coded count, the 3 missing actions, 6.5 coverage.
-- [ ] `docs/guardrail-check.md` -- the checklist.
-- [ ] `sprint-status.yaml` -- 5.8 and 6.5 to `review`; 6.4 note: checklist done, signed-in DB run is B9 part 2.
+- [x] `test/guardrails/` (or tagged describes) + `package.json` -- `test:guardrails` with one named block per NFR.
+- [x] `test/permissions.test.ts` -- discovery, no hard-coded count, the 3 missing actions, 6.5 coverage.
+- [x] `docs/guardrail-check.md` -- the checklist.
+- [x] `sprint-status.yaml` -- 5.8 and 6.5 to `review`; 6.4 note: checklist done, signed-in DB run is B9 part 2.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:guardrails`, `test:db` and `build`, when they run, then they pass.
 - Given a temporary new export in a `"use server"` file, when the permission suite runs, then it fails naming it (checked once, not committed).
 
 ## Implementation Notes
+
+- **Tag, not move.** A guardrail test is any test or describe whose name holds `NFRn guardrail`. `npm run test:guardrails` (`vitest.guardrails.config.mts`) runs only those, from the files in `test/guardrails/suite.ts` (`TAGGED_FILES` + `test/guardrails/**`), with `test/guardrails/reporter.ts` printing one line per guardrail and failing the run when a guardrail has a failed test or none ran. `test/guardrails/suite.test.ts` (in `npm test`) fails when a tagged test sits in a file the config doesn't include. `test/db/**` tags (NFR6 form-is-not-material) run with `test:db` only.
+- **Moved:** `test/approval-guardrail.test.ts` → `test/guardrails/nfr2-approval.test.ts` (describes prefixed `NFR2 guardrail:`). **New:** `nfr1-ai-boundary.test.ts` (output-schema property names; static scan: the only Storage writes are the three signed upload URLs, the rendition-only material upload and the export upload; only the three upload requests sign an upload URL), `nfr3-no-guardrail-setting.test.ts` (matrix denial per role and status; no server action, page/route path, env var, table, column or DB function named after a permission/guardrail/policy/matrix).
+- **Tagged in place:** NFR6 in `case-studies/actions.test.ts` (now also asserts the form is never read), `generate-case.test.ts` (×3), `client-intro.test.ts`; NFR1 in `rendition.test.ts` (×2), `image-processor.test.ts` (×2), `make-renditions.test.ts`, `object-storage.test.ts`; NFR7 in `export-handler.test.ts` (×3); the three `permissions.test.ts` export blocks relabelled NFR1 → NFR7 (and the matching source comments in `rendering`, comment-only).
+- **Permission suite:** `EXPECTED` is now file → `{ label, actions: name → roles }`, written out by hand; files are discovered with `listServerActionFiles` (new in `test/helpers/authorize-guard.ts`) and imported dynamically. Checked once with a temporary export and a temporary `"use server"` file: both failures name the file and export (not committed).
 
 ## Spec Change Log
 
