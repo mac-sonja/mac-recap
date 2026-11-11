@@ -25,6 +25,12 @@ export interface ClientsTableProps {
   rows: ClientRow[];
   /** Policy decision (`manage clients`): whether **Aggiungi cliente** exists. */
   canManage: boolean;
+  /**
+   * The read-only list (Story 5.9b; the page decides it from the policy): the rows are the
+   * clients with an approved case, each counted by its approved cases; no profile status
+   * ("Profilo completo / da completare") and its own empty line. Default off.
+   */
+  readOnly?: boolean;
 }
 
 /** The sort menu's options: a sort key and direction each. */
@@ -102,8 +108,11 @@ export const rowHref = (row: Pick<ClientRow, "id">) => clientHref(row.id);
  * field. Every card opens the client's page (`rowHref`; owner, 2026-10-19), where
  * **Modifica** reopens the wizard. **Aggiungi cliente** (only with `manage clients`)
  * opens the client wizard; it is hidden below 1024 px, where the page is read-only.
+ * `readOnly` (Story 5.9b, account/sales/social): the rows are only the clients with an
+ * approved case, counted by approved cases; no profile status, no add, and the empty line
+ * says no client has an approved case. Search, sort and **Scarica** work as above.
  */
-export function ClientsTable({ rows, canManage }: ClientsTableProps) {
+export function ClientsTable({ rows, canManage, readOnly = false }: ClientsTableProps) {
   const searchId = useId();
   const sortId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -153,6 +162,8 @@ export function ClientsTable({ rows, canManage }: ClientsTableProps) {
               <span className="lg:hidden">{it.clients.emptyReadOnly}</span>
               <span className="hidden lg:inline">{it.clients.empty}</span>
             </>
+          ) : readOnly ? (
+            it.clients.emptyNoApproved
           ) : (
             it.clients.emptyReadOnly
           )}
@@ -248,16 +259,18 @@ export function ClientsTable({ rows, canManage }: ClientsTableProps) {
                     <span className="inline-flex items-center rounded-full bg-surface-control px-2 py-0.5 font-label text-badge font-medium text-foreground-muted tabular-nums">
                       {row.caseCount === 1 ? it.clients.caseCountOne : fill(it.clients.caseCount, { n: row.caseCount })}
                     </span>
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2 pl-1.5 font-label text-badge font-medium before:size-1.5 before:rounded-full before:content-['']",
-                        row.complete
-                          ? "bg-status-approved-tint text-status-approved-foreground before:bg-status-approved"
-                          : "bg-status-review-tint text-status-review-foreground before:bg-status-review",
-                      )}
-                    >
-                      {row.complete ? it.clients.complete : it.clients.incomplete}
-                    </span>
+                    {!readOnly && (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2 pl-1.5 font-label text-badge font-medium before:size-1.5 before:rounded-full before:content-['']",
+                          row.complete
+                            ? "bg-status-approved-tint text-status-approved-foreground before:bg-status-approved"
+                            : "bg-status-review-tint text-status-review-foreground before:bg-status-review",
+                        )}
+                      >
+                        {row.complete ? it.clients.complete : it.clients.incomplete}
+                      </span>
+                    )}
                     {/* Room for Scarica, which sits over the card: a button can't live inside its link. */}
                     {row.approvedCount > 0 && <span aria-hidden="true" className="ml-auto h-7 w-24" />}
                   </span>

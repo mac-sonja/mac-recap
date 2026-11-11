@@ -353,3 +353,6 @@
 - source_spec: none
   summary: Story 5.11 part 2 (5.11b): collection exports apply the collection's text edits, hidden pages and page order to a copy of the documents, and the collection content hash includes them.
   evidence: Owner chose on 2026-11-11 to build B7 in two parts; part 1 (5.11a) stores and shows the edits on the collection page.
+- source_spec: none
+  summary: Drop the 3-file client material limit (SCP 2026-10-28): client material follows the case upload rules, and the intro uses the first 3 images, favourites first.
+  evidence: Code still refuses a 4th file with CLIENT_MATERIAL_LIMIT; the owner chose on 2026-11-11 to keep the limit for the demo and revisit after it.

@@ -25,9 +25,9 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | B2 | 5.1 library of approved case studies | ✅ #149 | A4 ✅ | — | `(tool)/library` |
 | B3 | 5.3 export a format as a file (Presentazione PDF, Carosello PNGs) | ✅ #151 (migration on dev) | — | A6 (job kind) | worker, rendering (read only), export dialog |
 | B4 | 5.4 several formats as one ZIP | ✅ #153 (migration on dev) | B3 | — | export dialog, worker |
-| B5 | 5.9 combined export and client pack | 🔄 5.9a ✅ #160 (no migration); 5.9b (read-only Clienti for account/sales/social) to do | B4, **A6, A8** (pack follows 4.12's case order) | — | export, client page |
+| B5 | 5.9 combined export and client pack | 🔄 5.9a ✅ #160 (no migration); 5.9b (read-only Clienti for account/sales/social) built and reviewed, PR next | B4, **A6, A8** (pack follows 4.12's case order) | — | export, client page |
 | B6 | 5.10 collections | ✅ #161 (5.10a), #162 (5.10b) (migrations on the mac-recap project) | B5, **A8** (collections open the configurator) | A7, A8 | collections, configurator (collection mode) |
-| B7 | 5.11 edit texts and remove pages in a collection | 🔄 5.11a ✅ #163 (migration on the mac-recap project 2026-11-11); 5.11b (exports apply the edits) built and reviewed, PR next | B6 | A2, A7, A8 | configurator (collection mode) |
+| B7 | 5.11 edit texts and remove pages in a collection | ✅ #163 (5.11a, migration on the mac-recap project 2026-11-11), #164 (5.11b, no migration) | B6 | A2, A7, A8 | configurator (collection mode) |
 | B8 | 3.9 AI client intro draft | ⬜ | A6 | — | generation |
 | B9 | 5.8 guardrail suite, the rest of 6.4, 6.5 permission checks | ⬜ | every other story | — | `test/` |
 
@@ -41,7 +41,7 @@ When a session finishes a story, or when you open a new one:
 2. Skip it if another session is working on a story it **overlaps** with, and take the next one. Two sessions on overlapping stories means merge conflicts in the same files.
 3. Mark it 🔄 in this table, in the story's first commit.
 
-**As of 2026-11-11:** A6, A7, A8 and B6 merged; B5 part 1 and B7 part 1 merged; every migration on the mac-recap project. Open: 5.11b (collection exports apply the edits), 5.9b (read-only Clienti for account/sales/social), B8 (3.9 AI client intro); B9 last.
+**As of 2026-11-11:** A6, A7, A8, B6 and B7 merged; B5 part 1 merged; every migration on the mac-recap project. Open: 5.9b (read-only Clienti for account/sales/social), B8 (3.9 AI client intro); B9 last.
 
 To start a story in a new session, open Claude Code on `main` and say: "Start story <#> (<story>) from `_bmad-output/planning-artifacts/parallel-tracks-2026-11-03.md`; run `bmad-build`."
 

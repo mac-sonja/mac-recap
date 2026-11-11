@@ -60,12 +60,13 @@ describe("ToolLayout", () => {
     expect(html).toContain("content");
   });
 
-  it("shows neither nav item to account/sales/social (Editor)", async () => {
+  it("shows account/sales/social (Editor) Libreria and Clienti, but not Nuova case or Case (Story 5.9b)", async () => {
     getActor.mockResolvedValue(ok(actor("account_sales_social")));
     const html = await renderLayout();
     expect(html).not.toContain("Nuova case");
     expect(html).not.toContain('href="/case-studies"');
-    expect(html).not.toContain('href="/clients"');
+    expect(html).toContain('href="/library"');
+    expect(html).toContain('href="/clients"');
     expect(html).toContain("Editor");
   });
 

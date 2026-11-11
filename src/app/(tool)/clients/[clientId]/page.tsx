@@ -19,6 +19,7 @@ import { IntroStatus } from "../_components/intro-status";
 import { EditClientButton } from "../_components/edit-client-button";
 import { LogoTile } from "../_components/logo-tile";
 import { clientLimits, clientMaterialLimits } from "../_lib/client-limits";
+import { CLIENTS_SURFACE, clientsAccess } from "../_lib/clients-surface";
 
 export interface ClientPageProps {
   params: Promise<{ clientId: string }>;
@@ -43,12 +44,17 @@ export interface ClientPageProps {
  * In elaborazione). Story 4.11a: **Apri** beside it, for a role that may `edit`, once the intro
  * is Da approvare or Approvato: the intro and outro in the configurator. Story 5.9a: **Scarica**
  * (the client's pack) once the client has an approved case.
+ * Story 5.9b: a role that may only `download client pack` (account/sales/social) gets it
+ * read-only: the profile, the approved cases (each opens its approved case page) and
+ * **Scarica**; no intro status, no edit, layout or new-case controls. A client with no
+ * approved case goes back to `/clients`.
  */
 export default async function ClientPage({ params, searchParams }: ClientPageProps) {
-  const shell = await requireSurface("list clients");
+  const shell = await requireSurface(CLIENTS_SURFACE);
   if (shell === null) return null;
   const { actor, landing } = shell;
-  if (!authorize(actor, "list clients").ok) redirect(landing);
+  const readOnly = clientsAccess(actor) === "read-only";
+  if (!(readOnly ? authorize(actor, "download client pack", { status: "approved" }) : authorize(actor, "list clients")).ok) redirect(landing);
 
   const { clientId } = await params;
   const found = await caseStudy.getClient(clientId);
@@ -58,7 +64,15 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
   }
   const client = found.value;
 
-  // Story 3.11: the intro-and-outro draft's status, once the client has one.
+  // Story 5.9b: a read-only actor sees approved cases only, whatever its own list scope.
+  const scope = readOnly ? ({ status: "approved" } as const) : listScopeFor(actor);
+  if (scope === null || !authorize(actor, "list cases", scope).ok) redirect(landing);
+  const listed = await caseStudy.list({ ...scope, clientId: client.id });
+  if (!listed.ok) throw new Error(`Case studies could not be listed: ${listed.error.code}`);
+  if (readOnly && !listed.value.some((c) => c.status === "approved")) redirect("/clients");
+
+  // Story 3.11: the intro-and-outro draft's status, once the client has one. Read-only (5.9b), the
+  // status isn't shown, but the pack dialog's note still needs whether the intro is approved.
   const intro = await caseStudy.getClientIntro(client.id);
   if (!intro.ok) throw new Error(`Client intro could not be loaded: ${intro.error.code}`);
 
@@ -66,12 +80,9 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
   const sectors = await caseStudy.listClientSectors();
   if (!sectors.ok) throw new Error(`Client sectors could not be listed: ${sectors.error.code}`);
 
-  const scope = listScopeFor(actor);
-  if (scope === null || !authorize(actor, "list cases", scope).ok) redirect(landing);
-  const listed = await caseStudy.list({ ...scope, clientId: client.id });
-  if (!listed.ok) throw new Error(`Case studies could not be listed: ${listed.error.code}`);
-
-  const rows: CaseStudyRow[] = listed.value.map((c) => ({
+  // Read-only, approved cases only (the list is already scoped; this keeps it so).
+  const cases = readOnly ? listed.value.filter((c) => c.status === "approved") : listed.value;
+  const rows: CaseStudyRow[] = cases.map((c) => ({
     id: c.id,
     code: c.code,
     name: c.name,
@@ -130,7 +141,8 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
               <span className="sr-only">{it.clients.detail.code} </span>
               {client.code}
             </p>
-            {intro.value === null ? null : (
+            {/* Story 5.9b: the intro's status is for the roles that work on clients, not read-only ones. */}
+            {readOnly || intro.value === null ? null : (
               <IntroStatus status={intro.value.status} href={can(actor, "edit") ? clientConfiguratorHref(client.id) : undefined} />
             )}
             {client.industry === null ? null : (
@@ -142,8 +154,8 @@ export default async function ClientPage({ params, searchParams }: ClientPagePro
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Story 5.9a: the client's pack, with at least one approved case (owner/designer: this page is theirs). */}
-          {can(actor, "export", { status: "approved" }) && (
+          {/* Story 5.9a/5.9b: the client's pack, with at least one approved case, for every role that may download it. */}
+          {can(actor, "download client pack", { status: "approved" }) && (
             <ClientPackButton clientId={client.id} name={client.name} approvedCount={approvedCount} introApproved={introApproved} />
           )}
           {can(actor, "edit") &&

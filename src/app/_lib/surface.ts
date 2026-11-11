@@ -32,16 +32,25 @@ export const resolveShellActor = cache(async (): Promise<ShellActor | null> => {
   return { actor: result.value, landing };
 });
 
+/** One way into a surface: an action, narrowed by a resource when given. */
+export interface SurfaceUse {
+  action: Action;
+  resource?: Resource;
+}
+
 /**
  * Guard for a surface whose use is `action`: redirects to the actor's landing when
  * the policy denies it. Returns `null` when there is no usable actor; the `(tool)`
  * layout then shows the no-actor page instead of the shell and the page.
  * `resource` narrows the check, e.g. `{ status: "approved" }` for a surface that a role
  * which may list approved cases only can still use (an approved case's detail page).
+ * A list of uses lets the actor in when the policy allows any one of them (Story 5.9b:
+ * Clienti for `list clients`, or read-only for `download client pack`).
  */
-export async function requireSurface(action: Action, resource: Resource = {}): Promise<ShellActor | null> {
+export async function requireSurface(action: Action | readonly SurfaceUse[], resource: Resource = {}): Promise<ShellActor | null> {
   const shell = await resolveShellActor();
   if (shell === null) return null;
-  if (!can(shell.actor, action, resource)) redirect(shell.landing);
+  const uses: readonly SurfaceUse[] = typeof action === "string" ? [{ action, resource }] : action;
+  if (!uses.some((use) => can(shell.actor, use.action, use.resource ?? {}))) redirect(shell.landing);
   return shell;
 }

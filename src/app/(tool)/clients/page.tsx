@@ -10,34 +10,42 @@ import { ClientPanel } from "./_components/client-panel";
 import { ClientsTable } from "./_components/clients-table";
 import type { ClientRow } from "./_components/filter-sort";
 import { clientLimits, clientMaterialLimits } from "./_lib/client-limits";
+import { CLIENTS_SURFACE, clientsAccess } from "./_lib/clients-surface";
 
 export interface ClientsPageProps {
   searchParams?: Promise<{ nuovo?: string | string[] }>;
 }
 
 /**
- * The Clients page (Story 2.13), owner/designer only (`list clients`; any other
- * role goes to its landing). Every client with its non-deleted case count loads
- * once; search and sort run in the browser. **Aggiungi cliente** exists only with
- * `manage clients`. A card with approved cases offers **Scarica** (the client pack, Story
- * 5.9a; its dialog notes when the client's intro isn't approved).
+ * The Clients page (Story 2.13), for `list clients` (owner/designer, admin); any other
+ * role goes to its landing, except one that may `download client pack` (Story 5.9b,
+ * account/sales/social), which gets a read-only list: only the clients with an approved
+ * case, counted by approved cases, without the profile's status. Every client with its
+ * non-deleted case count loads once; search and sort run in the browser. **Aggiungi
+ * cliente** exists only with `manage clients`. A card with approved cases offers
+ * **Scarica** (the client pack, Story 5.9a; its dialog notes when the client's intro isn't
+ * approved).
  * A failed load throws into Next's error boundary: no partial table. With
  * `?nuovo=1` and `manage clients`, the add panel (**Nuovo cliente**) opens over the list.
  */
 export default async function ClientsPage({ searchParams }: ClientsPageProps = {}) {
-  const shell = await requireSurface("list clients");
+  const shell = await requireSurface(CLIENTS_SURFACE);
   if (shell === null) return null;
   const { actor, landing } = shell;
-  if (!authorize(actor, "list clients").ok) redirect(landing);
+  const readOnly = clientsAccess(actor) === "read-only";
+  // Story 5.9b: a read-only actor lists approved cases only, whatever its own list scope.
+  if (!(readOnly ? authorize(actor, "download client pack", { status: "approved" }) : authorize(actor, "list clients")).ok) redirect(landing);
+  if (readOnly && !authorize(actor, "list cases", { status: "approved" }).ok) redirect(landing);
+  const scope = listScopeFor(actor);
+  const caseScope = readOnly ? ({ status: "approved" } as const) : scope !== null && can(actor, "list cases") ? scope : null;
 
   const listed = await caseStudy.listClientSummaries();
   if (!listed.ok) throw new Error(`Clients could not be listed: ${listed.error.code}`);
 
-  // Approved cases per client, for the card's Scarica (the client pack).
+  // Approved cases per client: the card's Scarica (the client pack) and, read-only, which clients show.
   const approved = new Map<string, number>();
-  const scope = listScopeFor(actor);
-  if (scope !== null && can(actor, "list cases")) {
-    const cases = await caseStudy.list(scope);
+  if (caseScope !== null) {
+    const cases = await caseStudy.list(caseScope);
     if (!cases.ok) throw new Error(`Case studies could not be listed: ${cases.error.code}`);
     for (const c of cases.value) {
       if (c.status === "approved") approved.set(c.client.id, (approved.get(c.client.id) ?? 0) + 1);
@@ -59,11 +67,13 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps = {
     }),
   );
 
-  const rows: ClientRow[] = listed.value.map(({ id, code, name, caseCount, complete, logoUrl }) => ({
+  // Read-only: only clients with an approved case, counted by approved cases (no draft counts).
+  const summaries = readOnly ? listed.value.filter(({ id }) => approved.has(id)) : listed.value;
+  const rows: ClientRow[] = summaries.map(({ id, code, name, caseCount, complete, logoUrl }) => ({
     id,
     code,
     name,
-    caseCount,
+    caseCount: readOnly ? (approved.get(id) ?? 0) : caseCount,
     approvedCount: approved.get(id) ?? 0,
     introApproved: introApproved.get(id) ?? null,
     complete,
@@ -84,7 +94,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps = {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={it.clients.heading} lead={it.clients.lead} />
-      <ClientsTable rows={rows} canManage={canManage} />
+      <ClientsTable rows={rows} canManage={canManage} readOnly={readOnly} />
       {adding && (
         <ClientPanel
           client={null}
