@@ -95,6 +95,21 @@ context:
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Two edits of one element, last equal to original, put a no-op edit in the hash (blind, edge) | false | `collection_text_edit` primary key is (collection, part, format, page, element): one stored edit per element, so duplicates never reach the function | reject |
+| 2 | Every stored collection export goes stale on deploy (blind) | false | Intended by the frozen matrix ("No edits … hash version changes") | reject |
+| 3 | Page composes three times per render, two unused (blind) | low | In-memory compose on demo-scale collections; making it lazy adds an option | reject |
+| 4 | `CollectionPartEdits` duplicates `EffectivePartEdits` (blind) | low | Both shapes are fed from `effective` only; no caller diverges today | reject |
+| 5 | Part keys lower-cased two ways (blind) | low | Kinds are lower-case constants; same result | reject |
+| 6 | `canHide` and the display fallback use different rules (blind) | low | Pre-existing from 5.11a; the fallback keeps page and export consistent whatever the server accepted | reject |
+| 7 | No test that the page and the export show the same pages and texts (blind) | medium | The story's main promise is untested end to end | patch |
+| 8 | `readCollectionEdits` adapter mapping untested (verification-gap, blind) | medium | Only reached with empty arrays; a wrong key silently drops every edit | patch |
+| 9 | "Original changed" test never changes the original (blind) | low | Same input as the plain edit case | patch |
+| 10 | `permissions.test.ts` resets `getCollectionEdits` to `ok(null)` (verification-gap, blind) | low | A later test would throw a TypeError; one-line correction | patch |
+| 11 | Collection and edits read separately; edits read even when the collection read fails (blind) | low | Edits of gone parts are skipped; a race only gives a new hash and a re-render | reject |
+| 12 | Rendering index exports internal helpers (blind) | low | Used by the page; no outside caller | reject |
+
 ## Verification
 
 **Commands:**
