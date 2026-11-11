@@ -2,7 +2,8 @@
 title: 'Story 5.11a: edit texts, hide and reorder pages in a collection'
 type: 'feature'
 created: '2026-11-11'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: '57bb89202140971a40243ab958df76c45d65481e'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -28,6 +29,7 @@ The original case histories, client intros and client records are never written.
 **Owner decisions (2026-11-11):**
 - **Base:** the existing collection page (5.10a), not the editing Configurator. There are no layout, media, typography or section tools, for anyone.
 - **Split:** this is part 1. Part 2 (5.11b, deferred) makes exports apply the edits.
+- **Free text only:** approved with the spec: only free text elements are editable; bound client/case field texts stay as they are.
 
 **Always:**
 - **Storage:**
