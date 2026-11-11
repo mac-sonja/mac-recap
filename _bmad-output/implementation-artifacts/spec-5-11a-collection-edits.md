@@ -95,17 +95,22 @@ The original case histories, client intros and client records are never written.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Migration, then `npm run db:types`.
-- [ ] `src/modules/collection/**` (+ unit and db tests, including "no revision / client / intro row written").
-- [ ] Collection page: text editing and markers, hide and restore, page reorder (+ tests).
-- [ ] `src/shared/i18n/it.ts`, `test/permissions.test.ts`.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml`: 5.11 stays `in-progress` with a note that 5.11a is in review.
+- [x] Migration, then `npm run db:types`.
+- [x] `src/modules/collection/**` (+ unit and db tests, including "no revision / client / intro row written").
+- [x] Collection page: text editing and markers, hide and restore, page reorder (+ tests).
+- [x] `src/shared/i18n/it.ts`, `test/permissions.test.ts`.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml`: 5.11 stays `in-progress` with a note that 5.11a is in review.
 
 **Acceptance Criteria:**
 - Given `npm run typecheck`, `lint`, `test`, `test:db` and `build`, when they run, then they pass.
 - Given the 5.10a/b collection tests and the configurator tests, when they run, then they pass unchanged, apart from the new edit layer.
 
 ## Implementation Notes
+
+- **Data.** `20261111120000_collection_edits.sql`: `collection_text_edit`, `collection_hidden_page`, `collection_page_order`, keyed by collection, `part_kind` (`case` | `client_intro`), `part_id` (the case, or the client for its intro document), format and page key. Writers (service role only, CAS on `collection.version`, one event each): `set_collection_text_edit`, `delete_collection_text_edit`, `set_collection_page_hidden`, `set_collection_page_order`; the part must be a case of the collection or the client of one (`INVALID_INPUT` detail `part`).
+- **Module.** `application/edits.ts`: the original's sha256 is worked out from the part's live approved revision on save and on every read (`textHash`); typing the original's words removes the edit. `COLLECTION_LAST_PAGE` (a part keeps one page of its document in the format) and `TEXT_NOT_EDITABLE` (409). `getCollectionEdits` drops edits whose text is no longer a free text and flags `originalChanged`.
+- **UI.** Overrides are laid over each part's pages before `composeParts` (hidden pages composed in, then shown as strips). Canvas gained optional `onResize` (no handles without it), `pageExtras` and `CanvasGroup.before/after`. Pagine: a "Pagine di {name}" toggle under each case, intro and closing row lists its pages (move by drag, Alt+↑/↓ or menu; **Elimina dalla raccolta** / **Ripristina**). Edits share the moves' write queue; a failure restores both order and edits. Anteprima stays read-only.
+- **Not done here:** stale edit rows of a case removed from the collection are left in place (they apply again if the case is re-added).
 
 ## Spec Change Log
 
