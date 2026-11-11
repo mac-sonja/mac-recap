@@ -14,7 +14,12 @@ RUN npm run build
 FROM mcr.microsoft.com/playwright:v1.63.0-noble AS runtime
 # The base image ships no system ffmpeg; pin Ubuntu noble's build (ffmpeg and ffprobe, for video renditions).
 # tini is PID 1 for both processes: it forwards SIGTERM/SIGINT and reaps the ffmpeg children.
-RUN apt-get update \
+# The base image's apt sources point at azure.archive.ubuntu.com, which only answers from inside
+# Azure (and stopped answering GitHub's runners on 2026-11-11): use Ubuntu's main archive instead,
+# so the image builds on any host (CI, Render, a laptop). Same packages, same pinned versions.
+RUN sed -i 's#http://azure.archive.ubuntu.com#http://archive.ubuntu.com#g' \
+    /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true; \
+  apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg=7:6.1.1-3ubuntu5 tini=0.19.0-1 \
   && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production \
