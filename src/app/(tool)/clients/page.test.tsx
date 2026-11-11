@@ -6,9 +6,9 @@ import type { ClientSector, ClientSummary } from "@/modules/case-study";
 import { fill, it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
-const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
+const requireSurface = vi.fn<(action: unknown) => Promise<ShellActor | null>>();
 const listClientSummaries = vi.fn<() => Promise<Result<ClientSummary[]>>>();
-const list = vi.fn<() => Promise<Result<{ status: string; client: { id: string } }[]>>>();
+const list = vi.fn<(scope?: unknown) => Promise<Result<{ status: string; client: { id: string } }[]>>>();
 const listClientSectors = vi.fn<() => Promise<Result<ClientSector[]>>>();
 const getClientIntro = vi.fn<(clientId: string) => Promise<Result<{ approvedRevisionId: string | null } | null>>>();
 const SECTORS: ClientSector[] = [
@@ -22,10 +22,10 @@ vi.mock("next/navigation", () => ({
     throw new Error(`REDIRECT ${path}`);
   }),
 }));
-vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
+vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: unknown) => requireSurface(action) }));
 vi.mock("@/modules/case-study", () => ({
   listClientSummaries: () => listClientSummaries(),
-  list: () => list(),
+  list: (scope: unknown) => list(scope),
   listClientSectors: () => listClientSectors(),
   getClientIntro: (clientId: string) => getClientIntro(clientId),
 }));
@@ -41,6 +41,7 @@ vi.mock("./_components/client-panel", () => ({
 }));
 
 const { default: ClientsPage } = await import("./page");
+const { CLIENTS_SURFACE } = await import("./_lib/clients-surface");
 const { default: Loading } = await import("./loading");
 
 const shell = (role: Role, landing = "/case-studies"): ShellActor => ({
@@ -69,7 +70,7 @@ describe("ClientsPage", () => {
     requireSurface.mockResolvedValue(shell("owner_designer"));
     listClientSummaries.mockResolvedValue(ok([ACME, LUMEN]));
     const html = await renderPage();
-    expect(requireSurface).toHaveBeenCalledWith("list clients");
+    expect(requireSurface).toHaveBeenCalledWith(CLIENTS_SURFACE);
     expect(html).toMatch(new RegExp(`<h1[^>]*>${dict.clients.heading}</h1>`));
     expect(html).toContain(dict.clients.lead);
     expect(html).toContain(`<ul aria-label="${dict.clients.table.caption}"`);
@@ -190,12 +191,50 @@ describe("ClientsPage", () => {
     expect(html).not.toContain(`aria-label="${dict.clients.table.caption}"`);
   });
 
-  it.each([
-    ["account_sales_social", "/library"],
-  ] as const)("redirects %s to its landing and lists nothing", async (role, landing) => {
-    requireSurface.mockResolvedValue(shell(role, landing));
-    await expect(ClientsPage()).rejects.toThrow(`REDIRECT ${landing}`);
-    expect(listClientSummaries).not.toHaveBeenCalled();
+  describe("read-only, for a role that may only download a client's pack (Story 5.9b)", () => {
+    const account = () => {
+      requireSurface.mockResolvedValue(shell("account_sales_social", "/library"));
+      listClientSummaries.mockResolvedValue(ok([ACME, { ...LUMEN, caseCount: 5, complete: false }]));
+      // The approved cases only: Lumen has two, Acme none (its drafts are never listed).
+      list.mockResolvedValue(
+        ok([
+          { status: "approved", client: { id: LUMEN.id } },
+          { status: "approved", client: { id: LUMEN.id } },
+        ]),
+      );
+    };
+
+    it("lists only the clients with an approved case, counted by approved cases, each with Scarica", async () => {
+      account();
+      const html = await renderPage();
+      expect(list).toHaveBeenCalledExactlyOnceWith({ status: "approved" });
+      expect(html.match(/<li data-client-id=/g)).toHaveLength(1);
+      expect(html).toContain(`href="/clients/${LUMEN.id}"`);
+      expect(html).not.toContain(ACME.id);
+      expect(html).toMatch(new RegExp(`<span class="[^"]*tabular-nums[^"]*">${fill(dict.clients.caseCount, { n: 2 })}</span>`));
+      expect(html).not.toContain(fill(dict.clients.caseCount, { n: 5 }));
+      expect(html).toContain(`aria-label="${fill(dict.download.packLabel, { name: LUMEN.name })}"`);
+      expect(html).not.toContain(dict.clients.incomplete);
+      expect(html).not.toContain(dict.clients.complete);
+      expect(html).not.toContain(dict.clients.add);
+    });
+
+    it("opens no add panel with ?nuovo=1", async () => {
+      account();
+      const html = renderToStaticMarkup(await ClientsPage({ searchParams: Promise.resolve({ nuovo: "1" }) }));
+      expect(html).not.toContain("data-panel");
+      expect(html).not.toContain(dict.clients.add);
+      expect(listClientSectors).not.toHaveBeenCalled();
+    });
+
+    it("shows the read-only empty line when no client has an approved case", async () => {
+      account();
+      list.mockResolvedValue(ok([]));
+      const html = await renderPage();
+      expect(html).toContain(dict.clients.emptyReadOnly);
+      expect(html).not.toContain(dict.clients.add);
+      expect(html).not.toContain("<li data-client-id=");
+    });
   });
 
   it("renders nothing and lists nothing without a usable actor", async () => {

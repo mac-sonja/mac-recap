@@ -6,7 +6,7 @@ import type { CaseStudy, ClientDetail, ClientIntro, ClientSector, ListedClientAs
 import { fill, it as dict } from "@/shared/i18n/it";
 import { err, ok, type Result } from "@/shared/result";
 
-const requireSurface = vi.fn<(action: string) => Promise<ShellActor | null>>();
+const requireSurface = vi.fn<(action: unknown) => Promise<ShellActor | null>>();
 const getClient = vi.fn<(id: unknown) => Promise<Result<ClientDetail>>>();
 const list = vi.fn<(scope: ListScope) => Promise<Result<CaseStudy[]>>>();
 const listClientMaterial = vi.fn<(input: unknown) => Promise<Result<ListedClientAsset[]>>>();
@@ -26,7 +26,7 @@ vi.mock("next/navigation", () => ({
     throw new Error(`REDIRECT ${path}`);
   }),
 }));
-vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: string) => requireSurface(action) }));
+vi.mock("@/app/_lib/surface", () => ({ requireSurface: (action: unknown) => requireSurface(action) }));
 vi.mock("@/modules/case-study", () => ({
   getClient: (id: unknown) => getClient(id),
   list: (scope: ListScope) => list(scope),
@@ -62,6 +62,7 @@ vi.mock("../_components/client-panel", () => ({
 }));
 
 const { default: ClientPage } = await import("./page");
+const { CLIENTS_SURFACE } = await import("../_lib/clients-surface");
 const { default: Loading } = await import("./loading");
 
 const shell = (role: Role, landing = "/case-studies"): ShellActor => ({
@@ -174,7 +175,7 @@ describe("ClientPage", () => {
 
   it("shows the name, the code, Modifica, the new-case call to action and the client's cases only", async () => {
     const html = await renderPage();
-    expect(requireSurface).toHaveBeenCalledWith("list clients");
+    expect(requireSurface).toHaveBeenCalledWith(CLIENTS_SURFACE);
     expect(getClient).toHaveBeenCalledWith(LUMEN.id);
     expect(list).toHaveBeenCalledExactlyOnceWith({ clientId: LUMEN.id });
     expect(html).toMatch(/<h1[^>]*>Lumen Srl<\/h1>/);
@@ -335,13 +336,56 @@ describe("ClientPage", () => {
     expect(list).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["account_sales_social", "/library"],
-  ] as const)("redirects %s to its landing without reading the client", async (role, landing) => {
-    requireSurface.mockResolvedValue(shell(role, landing));
-    await expect(renderPage()).rejects.toThrow(`REDIRECT ${landing}`);
-    expect(getClient).not.toHaveBeenCalled();
-    expect(list).not.toHaveBeenCalled();
+  describe("read-only, for a role that may only download a client's pack (Story 5.9b)", () => {
+    const APPROVED_ID = "aaaaaaaa-0000-4000-8000-000000000002";
+    const account = () => {
+      requireSurface.mockResolvedValue(shell("account_sales_social", "/library"));
+      getClient.mockResolvedValue(ok({ ...LUMEN, industry: "energia", description: "Brand di moda." }));
+      getClientIntro.mockResolvedValue(ok({ ...intro("approved"), approvedRevisionId: "eeeeeeee-0000-4000-8000-000000000001" }));
+      list.mockResolvedValue(ok([caseStudy({ id: APPROVED_ID, code: "LUM-2026-02", name: "Campagna", status: "approved" })]));
+    };
+
+    it("shows the profile, the approved cases (each to its case page) and Scarica; no edit, layout, intro or new-case controls", async () => {
+      account();
+      const html = await renderPage();
+      expect(list).toHaveBeenCalledExactlyOnceWith({ status: "approved", clientId: LUMEN.id });
+      expect(html).toMatch(/<h1[^>]*>Lumen Srl<\/h1>/);
+      expect(html).toMatch(/font-mono[^>]*>.*LUM<\/p>/);
+      expect(html).toContain("Energia");
+      expect(html).toContain("Brand di moda.");
+      expect(html).toContain("Campagna");
+      expect(html).toContain(`href="/case-studies/${APPROVED_ID}"`);
+      expect(html).toContain(`aria-label="${fill(dict.download.packLabel, { name: LUMEN.name })}"`);
+      expect(html).toContain(dict.download.packDescriptionOne);
+      expect(html).not.toContain("data-intro-status");
+      expect(html).not.toContain(dict.clients.detail.intro);
+      expect(html).not.toContain("/configurator");
+      expect(html).not.toContain(dict.clientPanel.layout);
+      expect(html).not.toContain("?modifica=1");
+      expect(html).not.toContain(dict.clients.detail.newCase);
+      expect(html).not.toContain("/case-studies/new");
+    });
+
+    it("leaves out any case that isn't approved, even if one slipped into the list", async () => {
+      account();
+      list.mockResolvedValue(ok([caseStudy({ id: APPROVED_ID, name: "Campagna", status: "approved" }), caseStudy({ name: "Bozza segreta", status: "draft" })]));
+      const html = await renderPage();
+      expect(html).toContain("Campagna");
+      expect(html).not.toContain("Bozza segreta");
+    });
+
+    it("opens no edit panel with ?modifica=1", async () => {
+      account();
+      const html = await renderPage(LUMEN.id, { modifica: "1" });
+      expect(html).not.toContain("data-panel");
+      expect(listClientMaterial).not.toHaveBeenCalled();
+    });
+
+    it("goes back to /clients for a client with no approved case", async () => {
+      account();
+      list.mockResolvedValue(ok([]));
+      await expect(renderPage()).rejects.toThrow("REDIRECT /clients");
+    });
   });
 
   it("throws into the error boundary when the client lookup fails", async () => {

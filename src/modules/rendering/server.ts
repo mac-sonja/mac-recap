@@ -88,8 +88,8 @@ export function exportStatus(actor: Actor, input: unknown): Promise<Result<Expor
  * order and the intro's closing once (without an approved intro, each case whole), from
  * live revisions only. `ready` when the same pack was exported before (with an `export`
  * case event per case), else an `export` job and `pending`. Nothing is enqueued on any
- * error. Call only after authorizing the actor (owner/designer for now: `list clients` and
- * `export`). Errors: `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE`, `FORMAT_NOT_IN_REVISION`,
+ * error. Call only after authorizing the actor (every role: `download client pack` and
+ * `export`, approved; Story 5.9b). Errors: `INVALID_INPUT`, `FORMAT_NOT_EXPORTABLE`, `FORMAT_NOT_IN_REVISION`,
  * `CLIENT_NOT_FOUND`, `NOT_APPROVED` (no approved case), `EXPORT_TOO_LARGE`, the reads'.
  */
 export function requestPack(actor: Actor, input: unknown): Promise<Result<ExportTicket>> {

@@ -130,8 +130,8 @@ const EXPECTED: Record<string, { call: Action; allowed: readonly Role[] }> = {
   "draft-ready.listReadyDrafts": { call: draftReady.listReadyDrafts as Action, allowed: OWNERS },
   // Story 5.3: Scarica on an approved case.
   ...Object.fromEntries(Object.entries(exportActions).map(([name, call]) => [`export.${name}`, { call: call as Action, allowed: SHARERS }])),
-  // Story 5.9a: Scarica on a client (its pack), owner/designer only until 5.9b.
-  ...Object.fromEntries(Object.entries(clientExportActions).map(([name, call]) => [`client-export.${name}`, { call: call as Action, allowed: OWNERS }])),
+  // Story 5.9a: Scarica on a client (its pack); Story 5.9b: every role (`download client pack`).
+  ...Object.fromEntries(Object.entries(clientExportActions).map(([name, call]) => [`client-export.${name}`, { call: call as Action, allowed: SHARERS }])),
   // Story 5.10a: collections, for every role. Story 5.11a adds the collection's own text edits,
   // hidden pages and page orders to the page's actions: every role too, admin included.
   ...Object.fromEntries(Object.entries(collectionActions).map(([name, call]) => [`collections.${name}`, { call: call as Action, allowed: EVERYONE }])),
@@ -222,7 +222,9 @@ describe("no role, admin included, changes a guardrail or a permission (Story 6.
   it("gives account/sales/social no write action: no create, edit, approve, delete or client change", () => {
     // Exporting an approved case writes no content (only its file and an `export` event). A
     // collection (Story 5.10a, every role) holds case ids only: it never writes a case, a revision or a client.
-    const ownsNoContent = (name: string) => name.startsWith("export.") || name.startsWith("collections.") || name.startsWith("collection.");
+    // A client's pack (Story 5.9b) is an export too: its file and an `export` event per case, no content.
+    const ownsNoContent = (name: string) =>
+      name.startsWith("export.") || name.startsWith("client-export.") || name.startsWith("collections.") || name.startsWith("collection.");
     const writable = cells.filter((c) => c.role === "account_sales_social" && c.allowed && !ownsNoContent(c.name));
     expect(writable).toEqual([]);
     // Story 5.11a: the collection's own edits are there and allowed for every role; they too
@@ -231,6 +233,9 @@ describe("no role, admin included, changes a guardrail or a permission (Story 6.
       expect(cells.filter((c) => c.name === `collection.${name}` && c.allowed).map((c) => c.role).sort(), name).toEqual([...EVERYONE].sort());
     }
     expect(cells.filter((c) => c.name.startsWith("export.") && c.allowed).map((c) => c.role)).toEqual(
+      expect.arrayContaining(["account_sales_social"]),
+    );
+    expect(cells.filter((c) => c.name.startsWith("client-export.") && c.allowed).map((c) => c.role)).toEqual(
       expect.arrayContaining(["account_sales_social"]),
     );
   });
@@ -324,7 +329,7 @@ describe("no role exports a client pack with a revision that isn't approved (Sto
     vi.mocked(caseStudyModule.listClientCasesInOrder).mockResolvedValue(ok([]) as never);
   });
 
-  it.each(["owner_designer", "admin"] as const)("as %s: a client with only cases not approved is NOT_APPROVED, nothing enqueued", async (role) => {
+  it.each(["owner_designer", "admin", "account_sales_social"] as const)("as %s: a client with only cases not approved is NOT_APPROVED, nothing enqueued", async (role) => {
     session.role = role;
     // Bozza or Da approvare cases only: the client has no approved case to list.
     vi.mocked(caseStudyModule.listClientCasesInOrder).mockResolvedValue(ok([]) as never);
@@ -341,7 +346,7 @@ describe("no role exports a client pack with a revision that isn't approved (Sto
     expect(jobsModule.enqueue).not.toHaveBeenCalled();
   });
 
-  it.each(["owner_designer", "admin"] as const)("as %s: a listed case whose approved revision is gone is left out, never its working copy", async (role) => {
+  it.each(["owner_designer", "admin", "account_sales_social"] as const)("as %s: a listed case whose approved revision is gone is left out, never its working copy", async (role) => {
     session.role = role;
     vi.mocked(caseStudyModule.listClientCasesInOrder).mockResolvedValue(ok([approvedCase]) as never);
     // The case has a working head but no live revision any more; the intro isn't approved either.
@@ -353,15 +358,23 @@ describe("no role exports a client pack with a revision that isn't approved (Sto
     expect(jobsModule.enqueue).not.toHaveBeenCalled();
   });
 
-  it("as account/sales/social: FORBIDDEN before anything is read (5.9b)", async () => {
+  it("as account/sales/social: the pack is theirs, yet every client write is FORBIDDEN before anything is read (5.9b)", async () => {
     session.role = "account_sales_social";
-    const list = vi.mocked(caseStudyModule.listClientCasesInOrder);
-    list.mockClear();
+    vi.mocked(caseStudyModule.listClientCasesInOrder).mockResolvedValue(ok([approvedCase]) as never);
+    arrange(() => null);
+    // Past the policy: the pack is read (its approved revisions only), as for an owner.
     expect(await clientExportActions.requestClientExport({ clientId: CLIENT_ID, formats: ["presentazione_16_9"] })).toMatchObject({
       ok: false,
-      status: 403,
+      status: 409,
+      error: { code: "NOT_APPROVED" },
     });
-    expect(list).not.toHaveBeenCalled();
+    expect(caseStudyModule.listClientCasesInOrder).toHaveBeenCalledWith(CLIENT_ID);
+    const updateClient = vi.mocked(caseStudyModule.updateClient);
+    updateClient.mockClear();
+    for (const write of [clients.createClient, clients.updateClient, clients.deleteClient, clients.saveClientBriefField, clients.startClientIntro]) {
+      expect(await write({ id: CLIENT_ID })).toMatchObject({ ok: false, status: 403, error: { code: "FORBIDDEN" } });
+    }
+    expect(updateClient).not.toHaveBeenCalled();
   });
 });
 
