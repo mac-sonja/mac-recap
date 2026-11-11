@@ -1,4 +1,5 @@
 import type { CollectionTags, StoredCollection } from "@/modules/collection/domain/collection";
+import type { StoredCollectionEdits, StoredHiddenPage, StoredPageOrder, StoredTextEdit } from "@/modules/collection/domain/edits";
 import type { Result } from "@/shared/result";
 
 /**
@@ -39,4 +40,20 @@ export interface CollectionRepository {
    * bump. `err COLLECTION_NOT_FOUND` when unknown or deleted, `INVALID_INPUT`.
    */
   recordExported(id: string, actorId: string, exportId: string, format: string): Promise<Result<void>>;
+  /**
+   * Story 5.11a: every edit of a collection (text edits, hidden pages, page orders), whatever
+   * its parts. `err` only when the read fails.
+   */
+  edits(id: string): Promise<Result<StoredCollectionEdits>>;
+  /**
+   * Sets the collection's words for one free text if the version is still `expectedVersion`;
+   * returns the new version. `err COLLECTION_NOT_FOUND` / `STALE_COLLECTION` / `INVALID_INPUT`.
+   */
+  setTextEdit(id: string, expectedVersion: number, edit: StoredTextEdit, actorId: string): Promise<Result<number>>;
+  /** Removes the collection's words for one free text (the original shows) if the version is still `expectedVersion`; returns the new version. */
+  deleteTextEdit(id: string, expectedVersion: number, text: Omit<StoredTextEdit, "text" | "originalHash">, actorId: string): Promise<Result<number>>;
+  /** Hides a page (`hidden`) or shows it again if the version is still `expectedVersion`; returns the new version. */
+  setPageHidden(id: string, expectedVersion: number, page: StoredHiddenPage, hidden: boolean, actorId: string): Promise<Result<number>>;
+  /** Sets a part's page order in a format if the version is still `expectedVersion`; returns the new version. */
+  setPageOrder(id: string, expectedVersion: number, order: StoredPageOrder, actorId: string): Promise<Result<number>>;
 }

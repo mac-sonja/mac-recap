@@ -1010,6 +1010,42 @@ export const it = {
       failed: "Non siamo riusciti a rimuoverla. Riprova.",
     },
     orderFailed: "Ordine non salvato. Riprova.",
+    /** Story 5.11a: the collection's own edits, stored in it only. */
+    edits: {
+      /** Under a free text with the collection's words. */
+      edited: "Modificato in questa raccolta",
+      restoreText: "Ripristina testo originale",
+      /** The original's words changed since the edit: the collection keeps its own. */
+      originalChanged: "Il testo originale è cambiato",
+      showOriginal: "Vedi originale",
+      hideOriginal: "Nascondi originale",
+      useOriginal: "Usa originale",
+      originalLabel: "Testo originale",
+      /** A text left empty in the original. */
+      originalEmpty: "(vuoto)",
+      textFailed: "Testo non salvato. Riprova.",
+      restoreFailed: "Non siamo riusciti a ripristinare il testo. Riprova.",
+      /** `{max}` characters, the document's text limit. */
+      textTooLong: "Al massimo {max} caratteri. Il testo non è stato salvato.",
+      notEditable: "Questo testo arriva dalla scheda del cliente o della case: qui non si modifica.",
+      /** A page's menu in Pagine. */
+      hidePage: "Elimina dalla raccolta",
+      restorePage: "Ripristina",
+      /** The strip in a hidden page's place; `{n}` and `{name}` the page. */
+      hiddenStrip: "{name} non è in questa raccolta",
+      hiddenRow: "Eliminata dalla raccolta",
+      lastPage: "Una parte tiene almeno una pagina.",
+      hideFailed: "Pagina non eliminata. Riprova.",
+      showFailed: "Pagina non ripristinata. Riprova.",
+      /** The toggle that shows a part's pages in Pagine; `{name}` the case, the intro or the closing. */
+      pagesOf: "Pagine di {name}",
+      /** A page row: its place `{n}` and its `{name}`. */
+      pageRow: "{n} · {name}",
+      /** A page row's menu; `{name}` the page. */
+      pageMenu: "Azioni per la pagina {name}",
+      pageDragHint: "Trascina per spostare la pagina nella sua parte, oppure usa il menu.",
+      otherPart: "Una pagina resta nella sua parte.",
+    },
     add: {
       button: "Aggiungi casi",
       title: "Aggiungi casi",

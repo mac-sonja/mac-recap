@@ -437,6 +437,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"collection_hidden_page": {
+                  Row: {
+                    "collection_id": string,"format": string,"page_key": string,"part_id": string,"part_kind": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "collection_id": string,"format": string,"page_key": string,"part_id": string,"part_kind": string
+                  }
+                  Update: {
+                    "collection_id"?: string,"format"?: string,"page_key"?: string,"part_id"?: string,"part_kind"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "collection_hidden_page_collection_id_fkey"
+      columns: ["collection_id"]
+isOneToOne: false
+      referencedRelation: "collection"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"collection_item": {
                   Row: {
                     "case_id": string,"collection_id": string,"position": number
@@ -463,6 +483,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"collection_page_order": {
+                  Row: {
+                    "collection_id": string,"format": string,"page_keys": (string)[],"part_id": string,"part_kind": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "collection_id": string,"format": string,"page_keys": (string)[],"part_id": string,"part_kind": string
+                  }
+                  Update: {
+                    "collection_id"?: string,"format"?: string,"page_keys"?: (string)[],"part_id"?: string,"part_kind"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "collection_page_order_collection_id_fkey"
+      columns: ["collection_id"]
+isOneToOne: false
+      referencedRelation: "collection"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"collection_tag": {
                   Row: {
                     "collection_id": string,"key": string,"kind": string
@@ -480,6 +520,32 @@ isOneToOne: false
       columns: ["collection_id"]
 isOneToOne: false
       referencedRelation: "collection"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"collection_text_edit": {
+                  Row: {
+                    "collection_id": string,"element_id": string,"format": string,"original_hash": string,"page_key": string,"part_id": string,"part_kind": string,"text": string,"updated_at": string,"updated_by": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "collection_id": string,"element_id": string,"format": string,"original_hash": string,"page_key": string,"part_id": string,"part_kind": string,"text": string,"updated_at"?: string,"updated_by": string
+                  }
+                  Update: {
+                    "collection_id"?: string,"element_id"?: string,"format"?: string,"original_hash"?: string,"page_key"?: string,"part_id"?: string,"part_kind"?: string,"text"?: string,"updated_at"?: string,"updated_by"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "collection_text_edit_collection_id_fkey"
+      columns: ["collection_id"]
+isOneToOne: false
+      referencedRelation: "collection"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "collection_text_edit_updated_by_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "profile"
       referencedColumns: ["id"]
     }
                   ]
@@ -693,8 +759,14 @@ isOneToOne: false
 "client_name_key":
 { Args: { "p_name": string }; Returns: string
                            },
+"collection_bump":
+{ Args: { "p_actor_id": string,"p_collection_id": string,"p_data": Json,"p_type": string }; Returns: number
+                           },
 "collection_check_items":
 { Args: { "p_case_ids": (string)[],"p_kept": (string)[] }; Returns: undefined
+                           },
+"collection_check_part":
+{ Args: { "p_collection_id": string,"p_format": string,"p_part_id": string,"p_part_kind": string }; Returns: undefined
                            },
 "collection_check_tags":
 { Args: { "p_business_lines": (string)[],"p_industries": (string)[] }; Returns: undefined
@@ -875,6 +947,9 @@ isOneToOne: false
                            },
 "delete_collection":
 { Args: { "p_actor_id": string,"p_collection_id": string }; Returns: undefined
+                           },
+"delete_collection_text_edit":
+{ Args: { "p_actor_id": string,"p_collection_id": string,"p_element_id": string,"p_expected_version": number,"p_format": string,"p_page_key": string,"p_part_id": string,"p_part_kind": string }; Returns: number
                            },
 "discard_head":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_expected_head_version": number,"p_revision_id": string }; Returns: {
@@ -1110,8 +1185,17 @@ isOneToOne: false
 "set_collection_items":
 { Args: { "p_actor_id": string,"p_case_ids": (string)[],"p_collection_id": string,"p_event_data": Json,"p_event_type": string,"p_expected_version": number }; Returns: number
                            },
+"set_collection_page_hidden":
+{ Args: { "p_actor_id": string,"p_collection_id": string,"p_expected_version": number,"p_format": string,"p_hidden": boolean,"p_page_key": string,"p_part_id": string,"p_part_kind": string }; Returns: number
+                           },
+"set_collection_page_order":
+{ Args: { "p_actor_id": string,"p_collection_id": string,"p_expected_version": number,"p_format": string,"p_page_keys": (string)[],"p_part_id": string,"p_part_kind": string }; Returns: number
+                           },
 "set_collection_tags":
 { Args: { "p_actor_id": string,"p_business_lines": (string)[],"p_collection_id": string,"p_expected_version": number,"p_industries": (string)[] }; Returns: number
+                           },
+"set_collection_text_edit":
+{ Args: { "p_actor_id": string,"p_collection_id": string,"p_element_id": string,"p_expected_version": number,"p_format": string,"p_original_hash": string,"p_page_key": string,"p_part_id": string,"p_part_kind": string,"p_text": string }; Returns: number
                            },
 "transition_case_study":
 { Args: { "p_actor_id": string,"p_case_id": string,"p_event": string,"p_from": string,"p_to": string }; Returns: {

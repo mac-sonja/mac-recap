@@ -1,12 +1,12 @@
 import * as caseStudy from "@/modules/case-study";
 import type { ClientDetail, ClientSector } from "@/modules/case-study";
-import { groupsOf, type CollectionDetail, type CollectionItem } from "@/modules/collection";
+import { groupsOf, type CollectionDetail, type CollectionEdits, type CollectionItem } from "@/modules/collection";
 import * as material from "@/modules/material";
 import type { RenderAsset } from "@/modules/rendering";
 import { log } from "@/shared/log";
 import { ok, type Result } from "@/shared/result";
 import { boundValuesOf, clientBoundValuesOf, clientRenderAssetsOf, pagesOfDocument, renderAssetsOf } from "@/app/(wizard)/_lib/configurator-data";
-import type { CollectionCandidate, CollectionCase, CollectionGroup, PartPages } from "./_components/collection-file";
+import type { CollectionCandidate, CollectionCase, CollectionGroup, PartPages, ViewEdits } from "./_components/collection-file";
 
 // Story 5.10a, server only: a collection's groups and pages for its page. Each case is read from
 // its live approved revision (`getLiveRevision`, never a working or superseded one) and each
@@ -137,4 +137,17 @@ export async function candidatesOf(detail: CollectionDetail): Promise<Result<Col
 export function exportCountsOf(detail: CollectionDetail): { available: number; unavailable: number } {
   const available = detail.items.filter((item) => item.revision !== null).length;
   return { available, unavailable: detail.items.length - available };
+}
+
+/**
+ * Story 5.11a, the collection's own edits as its page applies them: each keyed by its part
+ * (`case:{caseId}`, `client_intro:{clientId}`).
+ */
+export function viewEditsOf(edits: CollectionEdits): ViewEdits {
+  const keyOf = (part: { kind: string; id: string }) => `${part.kind}:${part.id}`;
+  return {
+    texts: edits.textEdits.map(({ part, ...rest }) => ({ partKey: keyOf(part), ...rest })),
+    hidden: edits.hiddenPages.map(({ part, ...rest }) => ({ partKey: keyOf(part), ...rest })),
+    orders: edits.pageOrders.map(({ part, ...rest }) => ({ partKey: keyOf(part), ...rest })),
+  };
 }

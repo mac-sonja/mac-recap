@@ -3,8 +3,18 @@ import { collectionsHref } from "@/app/_lib/routes";
 import { requireSurface } from "@/app/_lib/surface";
 import * as caseStudy from "@/modules/case-study";
 import * as collection from "@/modules/collection";
-import { addCollectionItems, moveCollectionGroup, moveCollectionItem, removeCollectionItems, retagCollection } from "./actions";
-import { candidatesOf, collectionGroupsOf, exportCountsOf } from "./collection-data";
+import {
+  addCollectionItems,
+  moveCollectionGroup,
+  moveCollectionItem,
+  removeCollectionItems,
+  restoreCollectionText,
+  retagCollection,
+  setCollectionPageHidden,
+  setCollectionPageOrder,
+  setCollectionText,
+} from "./actions";
+import { candidatesOf, collectionGroupsOf, exportCountsOf, viewEditsOf } from "./collection-data";
 import { CollectionView, type CollectionActions } from "./_components/collection-view";
 
 export interface CollectionPageProps {
@@ -18,16 +28,20 @@ const ACTIONS: CollectionActions = {
   addItems: addCollectionItems,
   removeItems: removeCollectionItems,
   retag: retagCollection,
+  setText: setCollectionText,
+  restoreText: restoreCollectionText,
+  setPageHidden: setCollectionPageHidden,
+  setPageOrder: setCollectionPageOrder,
 };
 
 /**
- * One collection (Story 5.10a), full screen in the configurator's file view, every page
- * read-only for now: for every role (`manage collections`; owner 2026-11-10: admin included).
+ * One collection (Story 5.10a), full screen in the configurator's file view: for every role (`manage collections`; owner 2026-11-10: admin included).
  * Each case shows its live approved revision and its client's current info, never a copy; a case
  * with no approved revision any more is "Non disponibile". An unknown, malformed or deleted
  * collection goes back to Raccolte; any other load failure throws into the wizard group's error
  * boundary. Remounted on every new version, so a change read again (an added or removed case)
- * starts the view afresh. **Esporta** (Story 5.10b) shows only while one of its cases has an
+ * starts the view afresh. Its own edits (Story 5.11a: free texts' words, hidden pages, page
+ * orders) are read with it and laid over the live pages; the originals are never written. **Esporta** (Story 5.10b) shows only while one of its cases has an
  * approved revision; its dialog counts the "Non disponibile" ones it leaves out.
  */
 export default async function CollectionPage({ params }: CollectionPageProps) {
@@ -43,9 +57,10 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
   const detail = found.value;
   const sectors = await caseStudy.listClientSectors();
   const sectorList = sectors.ok ? sectors.value : [];
-  const [drawn, candidates] = await Promise.all([collectionGroupsOf(detail, sectorList), candidatesOf(detail)]);
+  const [drawn, candidates, edits] = await Promise.all([collectionGroupsOf(detail, sectorList), candidatesOf(detail), collection.getCollectionEdits(detail.id)]);
   if (!drawn.ok) throw new Error(`Collection cases could not be loaded: ${drawn.error.code}`);
   if (!candidates.ok) throw new Error(`Approved cases could not be listed: ${candidates.error.code}`);
+  if (!edits.ok) throw new Error(`Collection edits could not be loaded: ${edits.error.code}`);
 
   return (
     <CollectionView
@@ -55,6 +70,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
       version={detail.version}
       tags={{ businessLines: caseStudy.BUSINESS_LINES.filter((line) => detail.tags.businessLines.includes(line)), industries: detail.tags.industries }}
       groups={drawn.value.groups}
+      edits={viewEditsOf(edits.value)}
       assets={drawn.value.assets}
       candidates={candidates.value}
       tagOptions={{ businessLines: caseStudy.BUSINESS_LINES, sectors: sectorList, sectorsFailed: !sectors.ok }}

@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
 import type { Page } from "@/modules/generation";
 import { FORMAT_IDS, type FormatId } from "@/modules/rendering";
-import { collectionSegments, EMPTY_VALUES, matchesTags, withCaseMoved, withGroupMoved, type CollectionGroup, type PartPages } from "./collection-file";
+import {
+  collectionSegments,
+  EMPTY_VALUES,
+  freeTextIn,
+  matchesTags,
+  movedPageOrder,
+  NO_EDITS,
+  partOfKey,
+  shownPagesOfPart,
+  withCaseMoved,
+  withGroupMoved,
+  type CollectionGroup,
+  type PartPages,
+  type ViewEdits,
+} from "./collection-file";
 
 const page = (pageKey: string, role: string): Page => ({ pageKey, name: pageKey, role, section: "output", blocks: [] }) as unknown as Page;
 
@@ -72,5 +86,75 @@ describe("a collection's pages (Story 5.10a)", () => {
     expect(matchesTags(candidate, { businessLines: ["video"], industries: [] })).toBe(true);
     expect(matchesTags(candidate, { businessLines: [], industries: ["moda"] })).toBe(true);
     expect(matchesTags(candidate, { businessLines: ["branding"], industries: ["food"] })).toBe(false);
+  });
+});
+
+describe("a collection's own edits over its pages (Story 5.11a)", () => {
+  const F: FormatId = "presentazione_16_9";
+  const textPage = (pageKey: string): Page =>
+    ({
+      pageKey,
+      name: pageKey,
+      role: "body",
+      section: "output",
+      blocks: [
+        {
+          blockId: "b1",
+          elements: [
+            { elementId: "free", type: "text", text: "Originale" },
+            { elementId: "bound", type: "text", binding: { record: "client", field: "name" } },
+          ],
+        },
+      ],
+    }) as unknown as Page;
+  const words = (p: Page, id: string) => freeTextIn(p, id);
+
+  it("lays the collection's words over free texts only, never touching the revision's page", () => {
+    const original = textPage("x");
+    const groups = [{ clientId: "a", clientName: "A", intro: null, cases: [{ caseId: "a1", name: "a1", code: "A1", part: part([original]) }] }];
+    const edits: ViewEdits = {
+      ...NO_EDITS,
+      texts: [
+        { partKey: "case:a1", formatId: F, pageKey: "x", elementId: "free", text: "Mia", originalChanged: false },
+        { partKey: "case:a1", formatId: F, pageKey: "x", elementId: "bound", text: "Mai", originalChanged: false },
+      ],
+    };
+    const [segment] = collectionSegments(groups, F, edits);
+    expect(words(segment!.pages[0]!, "free")).toBe("Mia");
+    expect(freeTextIn(segment!.pages[0]!, "bound")).toBeNull();
+    expect(words(original, "free")).toBe("Originale");
+    // Another format keeps the original words.
+    expect(words(collectionSegments(groups, "carosello_1_1", edits)[0]!.pages[0]!, "free")).toBe("Originale");
+    // The same edits give the same page object (an untouched page keeps its drawing).
+    expect(collectionSegments(groups, F, edits)[0]!.pages[0]).toBe(segment!.pages[0]);
+  });
+
+  it("orders a part's pages as saved and keeps hidden pages as entries, out of the pages shown", () => {
+    const groups = [group("a", ["a1", "a2"], introPart())];
+    const edits: ViewEdits = {
+      ...NO_EDITS,
+      orders: [{ partKey: "case:a1", formatId: F, pageKeys: ["closing", "a1-body", "a1-intro"] }],
+      hidden: [{ partKey: "client_intro:a", formatId: F, pageKey: "bye" }],
+    };
+    const segments = collectionSegments(groups, F, edits);
+    const a1 = segments.find((s) => s.key === "case:a1")!;
+    expect(a1.pages.map((p) => p.pageKey)).toEqual(["case:a1|closing", "case:a1|a1-body"]);
+    const closing = segments.find((s) => s.key === "client_closing:a")!;
+    expect(closing.partKey).toBe("client_intro:a");
+    expect(closing.pages).toEqual([]);
+    expect(closing.entries.map((e) => [e.pageKey, e.hidden])).toEqual([["bye", true]]);
+    expect(shownPagesOfPart(segments, "client_intro:a")).toBe(1);
+  });
+
+  it("moves a page within its run, keeping the part's other pages in place", () => {
+    expect(movedPageOrder(["i", "b1", "b2", "c"], ["b1", "b2", "c"], 0, 1)).toEqual(["i", "b2", "b1", "c"]);
+    expect(movedPageOrder(["i", "b1", "b2", "c"], ["b1", "b2", "c"], 2, 0)).toEqual(["i", "c", "b1", "b2"]);
+    expect(movedPageOrder(["a", "b"], ["a", "b"], 1, 5)).toBeNull();
+    expect(movedPageOrder(["a", "b"], ["a", "b"], 0, 0)).toBeNull();
+  });
+
+  it("names a part from its key", () => {
+    expect(partOfKey("case:a1")).toEqual({ kind: "case", id: "a1" });
+    expect(partOfKey("client_intro:c-1")).toEqual({ kind: "client_intro", id: "c-1" });
   });
 });
