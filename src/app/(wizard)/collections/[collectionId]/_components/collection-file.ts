@@ -1,5 +1,15 @@
-import { CURRENT_SCHEMA_VERSION, type CaseStudyDocument, type DocumentElement, type Page } from "@/modules/generation";
-import { composeParts, type BoundValues, type ComposePart, type FormatId } from "@/modules/rendering";
+import { CURRENT_SCHEMA_VERSION, type CaseStudyDocument, type Page } from "@/modules/generation";
+import {
+  applyCollectionEdits,
+  freeTextIn,
+  normalisePartKey,
+  orderedPages,
+  pageTextEdits,
+  wordedPage,
+  type BoundValues,
+  type ComposePart,
+  type FormatId,
+} from "@/modules/rendering";
 import type { BusinessLine } from "@/modules/case-study";
 
 /**
@@ -138,36 +148,13 @@ function prefixed(page: Page, segment: string): Page {
   return out;
 }
 
-/** Whether `el` is a free text: its own words, not a client or case field. */
-const isFreeText = (el: DocumentElement): el is Extract<DocumentElement, { type: "text" }> & { text: string } =>
-  el.type === "text" && el.text !== undefined && el.binding === undefined && el.bindings === undefined;
-
-/** Free text `elementId` of `page` (inside Testi groups and rows too), or null: a field, an image, or not there. */
-export function freeTextIn(page: Page, elementId: string): string | null {
-  const walk = (elements: readonly DocumentElement[]): string | null | undefined => {
-    for (const el of elements) {
-      if (el.elementId === elementId) return isFreeText(el) ? el.text : null;
-      if (el.type === "text_group" || el.type === "row") {
-        const found = walk(el.items);
-        if (found !== undefined) return found;
-      }
-    }
-    return undefined;
-  };
-  for (const block of page.blocks) {
-    const found = walk(block.elements);
-    if (found !== undefined) return found;
-  }
-  return null;
-}
-
-/** The text edits of one page of a part in a format. */
-export const pageTextEdits = (edits: ViewEdits, partKey: PartKey, formatId: string, pageKey: string) =>
-  edits.texts.filter((t) => t.partKey === partKey && t.formatId === formatId && t.pageKey === pageKey);
+// Story 5.11b: the rules that lay the edits over a part's pages live in the rendering module, so
+// the page and the export apply them the same way; the page keeps its drawing caches and strips.
+export { freeTextIn, orderedPages, pageTextEdits };
 
 /** A page with the collection's words, by its original page object and the words: the same object every time, so an untouched page keeps its drawing. */
 const worded = new WeakMap<Page, Map<string, Page>>();
-function withWords(page: Page, texts: readonly ViewTextEdit[]): Page {
+function withWords(page: Page, texts: readonly { elementId: string; text: string }[]): Page {
   if (texts.length === 0) return page;
   const signature = JSON.stringify(texts.map((t) => [t.elementId, t.text]));
   let bySignature = worded.get(page);
@@ -177,50 +164,18 @@ function withWords(page: Page, texts: readonly ViewTextEdit[]): Page {
   }
   const cached = bySignature.get(signature);
   if (cached !== undefined) return cached;
-  const words = new Map(texts.map((t) => [t.elementId, t.text]));
-  const copy = structuredClone(page);
-  const walk = (elements: DocumentElement[]) => {
-    for (const el of elements) {
-      // Only a free text takes the collection's words: a field stays the record's.
-      if (isFreeText(el) && words.has(el.elementId)) el.text = words.get(el.elementId)!;
-      if (el.type === "text_group" || el.type === "row") walk(el.items as DocumentElement[]);
-    }
-  };
-  for (const block of copy.blocks) walk(block.elements);
+  const copy = wordedPage(page, texts);
   bySignature.set(signature, copy);
   return copy;
 }
 
-/**
- * A part's pages in a format in the collection's order, the hidden ones included: the saved
- * order first (keys no longer in the document skipped), then any page it doesn't name, in the
- * document's order.
- */
-export function orderedPages(pages: readonly Page[], partKey: PartKey, formatId: string, edits: ViewEdits): readonly Page[] {
-  const order = edits.orders.find((o) => o.partKey === partKey && o.formatId === formatId);
-  if (order === undefined) return pages;
-  const byKey = new Map(pages.map((p) => [p.pageKey, p]));
-  const named = order.pageKeys.flatMap((key) => byKey.get(key) ?? []);
-  const seen = new Set(named.map((p) => p.pageKey));
-  return [...named, ...pages.filter((p) => !seen.has(p.pageKey))];
-}
-
-/** The hidden page keys of a part in a format. */
-const hiddenOf = (edits: ViewEdits, partKey: PartKey, formatId: string) =>
-  new Set(edits.hidden.filter((h) => h.partKey === partKey && h.formatId === formatId).map((h) => h.pageKey));
-
-/** A part's pages as a document `composeParts` reads: in `formatId`, in the collection's order with its words (hidden pages included). */
-const docOf = (part: PartPages, kind: "case_history" | "client_intro", partKey: PartKey, formatId: FormatId, edits: ViewEdits): CaseStudyDocument =>
+/** A part's pages as a document `composeParts` reads (the edits are laid over by `applyCollectionEdits`). */
+const docOf = (part: PartPages, kind: "case_history" | "client_intro"): CaseStudyDocument =>
   ({
     schemaVersion: CURRENT_SCHEMA_VERSION,
     kind,
     template: part.template,
-    formats: Object.fromEntries(
-      Object.entries(part.formats).map(([id, pages]) => [
-        id,
-        { pages: id === formatId ? orderedPages(pages, partKey, formatId, edits).map((p) => withWords(p, pageTextEdits(edits, partKey, formatId, p.pageKey))) : pages },
-      ]),
-    ),
+    formats: Object.fromEntries(Object.entries(part.formats).map(([id, pages]) => [id, { pages }])),
   }) as CaseStudyDocument;
 
 /**
@@ -233,19 +188,21 @@ const docOf = (part: PartPages, kind: "case_history" | "client_intro", partKey: 
 export function collectionSegments(groups: readonly CollectionGroup[], formatId: FormatId, edits: ViewEdits = NO_EDITS): ViewSegment[] {
   const parts: ComposePart[] = [];
   for (const group of groups) {
-    const introKey = `client_intro:${group.clientId}`;
-    if (group.intro !== null) parts.push({ kind: "client_intro", clientId: group.clientId, doc: docOf(group.intro, "client_intro", introKey, formatId, edits), assets: {}, values: group.intro.values });
+    if (group.intro !== null) parts.push({ kind: "client_intro", clientId: group.clientId, doc: docOf(group.intro, "client_intro"), assets: {}, values: group.intro.values });
     for (const c of group.cases) {
       if (c.part !== null) {
-        parts.push({ kind: "case_history", caseId: c.caseId, clientId: group.clientId, doc: docOf(c.part, "case_history", `case:${c.caseId}`, formatId, edits), assets: {}, values: c.part.values });
+        parts.push({ kind: "case_history", caseId: c.caseId, clientId: group.clientId, doc: docOf(c.part, "case_history"), assets: {}, values: c.part.values });
       }
     }
   }
-  // Composed with the hidden pages in: each stays in its run, where it sat, as a strip.
-  const composed = new Map(composeParts(parts, formatId).segments.map((s) => [s.key, s]));
+  // The export's rules (Story 5.11b): order and words laid over, and which pages are hidden, a
+  // part never showing no page. Composed with the hidden pages in: each stays in its run, where
+  // it sat, as a strip.
+  const applied = applyCollectionEdits(parts, formatId, edits, { wordPage: withWords });
+  const composed = new Map(applied.composed.segments.map((s) => [s.key, s]));
   const out: ViewSegment[] = [];
   const add = (key: string, kind: ViewSegment["kind"], clientId: string, part: PartPages, partKey: PartKey, caseId?: string) => {
-    const hidden = hiddenOf(edits, partKey, formatId);
+    const hidden = applied.hidden.get(normalisePartKey(partKey)) ?? new Set<string>();
     const entries = (composed.get(key)?.pages ?? []).map((p) => ({ page: prefixed(p, key), pageKey: p.pageKey, hidden: hidden.has(p.pageKey) }));
     out.push({
       key,
@@ -283,17 +240,7 @@ export function collectionSegments(groups: readonly CollectionGroup[], formatId:
     const closingKey = `client_closing:${group.clientId}`;
     if (wraps && composed.has(closingKey)) add(closingKey, "closing", group.clientId, group.intro!, introKey);
   }
-  // A part never shows no page: when every page of it the file would show is hidden (the case
-  // got wrapped by its client's intro since, say), its hides are ignored for the drawing.
-  const emptied = new Set<PartKey>();
-  for (const segment of out) {
-    if (segment.entries.length === 0) continue;
-    const runs = out.filter((s) => s.partKey === segment.partKey);
-    if (runs.every((s) => s.pages.length === 0)) emptied.add(segment.partKey);
-  }
-  return emptied.size === 0
-    ? out
-    : out.map((s) => (emptied.has(s.partKey) ? { ...s, entries: s.entries.map((e) => ({ ...e, hidden: false })), pages: s.entries.map((e) => e.page) } : s));
+  return out;
 }
 
 /**

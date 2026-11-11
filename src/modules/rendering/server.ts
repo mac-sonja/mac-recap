@@ -7,7 +7,7 @@ import * as caseStudy from "@/modules/case-study";
 import * as collection from "@/modules/collection";
 import * as jobs from "@/modules/jobs";
 import * as material from "@/modules/material";
-import { readCollection } from "@/modules/rendering/adapters/collection/read-collection";
+import { readCollection, readCollectionEdits } from "@/modules/rendering/adapters/collection/read-collection";
 import { createSupabaseExportRepository } from "@/modules/rendering/adapters/supabase/export-repository";
 import { createSupabaseExportStorage } from "@/modules/rendering/adapters/supabase/export-storage";
 import type { ExportSourceDeps, PackSourceDeps } from "@/modules/rendering/application/export-source";
@@ -48,6 +48,7 @@ function deps(): RequestPackDeps & RequestCollectionDeps {
   return {
     ...packSourceDeps(),
     getCollection: readCollection,
+    getCollectionEdits: readCollectionEdits,
     recordCollectionEvent: (actor, input) => collection.recordCollectionExported(actor, input),
     exports: createSupabaseExportRepository(),
     storage: createSupabaseExportStorage(),

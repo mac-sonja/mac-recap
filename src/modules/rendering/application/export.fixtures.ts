@@ -7,6 +7,7 @@ import type { CaseClientInfo, CaseStudy, CaseStudyRevision } from "@/modules/cas
 import { caseHistoryV2, clientIntroV2, type CaseStudyDocument } from "@/modules/generation";
 import type { DetailsForm } from "@/modules/material";
 import type { CollectionEntry, CollectionSourceDeps, PackSourceDeps } from "@/modules/rendering/application/export-source";
+import { NO_COLLECTION_EDITS, type CollectionEditSet } from "@/modules/rendering/collection-edits";
 import { FORMAT_IDS } from "@/modules/rendering/domain/formats";
 import { CLIENT_TEMPLATE } from "@/modules/rendering/templates";
 import { ok } from "@/shared/result";
@@ -104,6 +105,8 @@ export function sourceDeps(over: Partial<PackSourceDeps & CollectionSourceDeps> 
     getClientIntro: vi.fn(async () => ok<{ id: string } | null>(null)),
     listClientCasesInOrder: vi.fn(async () => ok<CaseStudy[]>([caseStudy()])),
     getCollection: vi.fn(async () => ok({ id: COLLECTION_ID, name: "Pitch moda", items: [{ caseId: CASE_ID, clientId: CLIENT_ID }] as readonly CollectionEntry[] })),
+    /** Story 5.11b: no collection edits. */
+    getCollectionEdits: vi.fn(async () => ok<CollectionEditSet>(NO_COLLECTION_EDITS)),
     ...over,
   } satisfies PackSourceDeps & CollectionSourceDeps;
 }

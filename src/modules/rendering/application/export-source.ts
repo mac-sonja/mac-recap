@@ -1,6 +1,7 @@
 import type { CaseClientInfo, CaseStudy, CaseStudyRevision } from "@/modules/case-study";
-import type { Page } from "@/modules/generation";
+import type { CaseStudyDocument, Page } from "@/modules/generation";
 import type { DetailsForm } from "@/modules/material";
+import { applyCollectionEdits, type CollectionEditSet } from "@/modules/rendering/collection-edits";
 import { composeParts, type ComposePart } from "@/modules/rendering/compose";
 import { bundleHash, collectionHash, contentHash, packHash } from "@/modules/rendering/application/content-hash";
 import {
@@ -148,6 +149,12 @@ export interface DrawPart {
   clientId: string;
   revision: CaseStudyRevision;
   content: ExportPartContent;
+  /**
+   * Story 5.11b, a collection's part: the revision's document with the collection's edits laid
+   * over in the drawing's format (its words, its page order, its hidden pages left out). A copy:
+   * the revision is never changed. Absent: the revision's document as it is.
+   */
+  doc?: CaseStudyDocument;
 }
 
 /** One file to draw: one format of a case (Story 5.3), a client's pack (Story 5.9a) or a collection (Story 5.10b). */
@@ -352,7 +359,7 @@ export async function readPackSources(deps: PackSourceDeps, clientId: string, fo
 
 /** A drawn part as `composeParts` takes it (`assets` and `values` filled in by the caller that renders). */
 export function composePartOf(part: DrawPart, values: BoundValues = NO_VALUES, assets: ComposePart["assets"] = {}): ComposePart {
-  const base = { clientId: part.clientId.toLowerCase(), doc: part.revision.doc, assets, values };
+  const base = { clientId: part.clientId.toLowerCase(), doc: part.doc ?? part.revision.doc, assets, values };
   return part.kind === "case_history" ? { ...base, kind: "case_history", caseId: part.caseId ?? "" } : { ...base, kind: "client_intro" };
 }
 
@@ -372,6 +379,11 @@ export interface CollectionSourceDeps extends ExportSourceDeps {
   getCollection(collectionId: string): Promise<Result<{ id: string; name: string; items: readonly CollectionEntry[] }>>;
   /** The client's intro document (`case-study.getClientIntro`), or null when it has none. */
   getClientIntro(clientId: string): Promise<Result<{ id: string } | null>>;
+  /**
+   * Story 5.11b, the collection's own edits (`collection.getCollectionEdits`): its words for free
+   * texts, hidden pages and page orders, keyed `case:{caseId}` / `client_intro:{clientId}`.
+   */
+  getCollectionEdits(collectionId: string): Promise<Result<CollectionEditSet>>;
 }
 
 export const collectionNotApproved = (collectionId: string) =>
@@ -394,6 +406,8 @@ export interface CollectionParts {
   parts: readonly ExportPart[];
   /** The collection's cases left out: no approved revision any more, or deleted ("Non disponibile"). */
   unavailable: number;
+  /** Story 5.11b: the collection's own edits, read with it (laid over per format by `readCollectionSources`). */
+  edits: CollectionEditSet;
 }
 
 /**
@@ -405,8 +419,9 @@ export interface CollectionParts {
  * `NOT_APPROVED` (no available case), the other reads'.
  */
 export async function readCollectionParts(deps: CollectionSourceDeps, collectionId: string): Promise<Result<CollectionParts>> {
-  const found = await deps.getCollection(collectionId);
+  const [found, edits] = await Promise.all([deps.getCollection(collectionId), deps.getCollectionEdits(collectionId)]);
   if (!found.ok) return found;
+  if (!edits.ok) return edits;
   const collection: ExportCollection = { id: found.value.id, name: found.value.name };
   const { items } = found.value;
 
@@ -452,7 +467,7 @@ export async function readCollectionParts(deps: CollectionSourceDeps, collection
     ...(group.intro === null ? [] : [{ subject: { kind: "client_intro" as const, id: group.intro.id }, revisionId: group.intro.revision.id }]),
     ...group.cases.map(({ caseStudy, revision }) => ({ subject: { kind: "case" as const, id: caseStudy.id }, revisionId: revision.id })),
   ]);
-  return ok({ collection, groups: withIntros, parts, unavailable: items.length - available });
+  return ok({ collection, groups: withIntros, parts, unavailable: items.length - available, edits: edits.value });
 }
 
 /** What a collection draws in each format asked for (Story 5.10b). */
@@ -529,20 +544,25 @@ export async function readCollectionSources(
       };
       return [intro, ...cases];
     });
-    const composed = composeParts(
+    // Story 5.11b: the collection's edits laid over each part, by the rules its page uses; each
+    // part then draws its edited copy (`doc`), and the hash covers the edits that take effect.
+    const applied = applyCollectionEdits(
       drawParts.map((p) => composePartOf(p)),
       format,
+      parts.edits,
     );
-    const first = drawParts.find((p) => p.kind === "case_history") ?? drawParts[0];
+    const edited = drawParts.map((p, i): DrawPart => ({ ...p, doc: applied.shownParts[i].doc }));
+    const first = edited.find((p) => p.kind === "case_history") ?? edited[0];
     return {
       format,
-      parts: drawParts,
+      parts: edited,
       pack: false,
-      pageCount: composed.segments.reduce((sum, segment) => sum + segment.pages.length, 0),
+      pageCount: applied.file.segments.reduce((sum, segment) => sum + segment.pages.length, 0),
       contentHash: collectionHash(
         parts.collection,
         drawParts.map((p) => p.content),
         format,
+        applied.effective,
       ),
       code: "",
       name: collectionFileName(parts.collection.name),

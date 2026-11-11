@@ -220,7 +220,7 @@ describe("collections (Story 5.10b)", () => {
   it("hash apart from a case's export and a pack, and change with the name, the order, a revision and a client's fields", () => {
     const parts = [content(casePart), content(otherPart, "Oro")];
     const base = collectionHashInput(collection, parts, "presentazione_16_9");
-    expect(JSON.parse(base)[0]).toBe("export.collection.v1");
+    expect(JSON.parse(base)[0]).toBe("export.collection.v2");
     expect(base).not.toBe(contentHashInput(parts, "presentazione_16_9"));
     expect(base).not.toBe(packHashInput({ id: CLIENT, code: "", name: "Pitch moda" }, parts, "presentazione_16_9"));
     expect(collectionHashInput({ ...collection, name: "Pitch lusso" }, parts, "presentazione_16_9")).not.toBe(base);
@@ -229,6 +229,23 @@ describe("collections (Story 5.10b)", () => {
     expect(collectionHashInput(collection, [parts[0], content(otherPart, "Oro Srl")], "presentazione_16_9")).not.toBe(base);
     expect(collectionHashInput(collection, parts, "carosello_1_1")).not.toBe(base);
     expect(collectionHashInput(collection, parts, "presentazione_16_9")).toBe(base);
+  });
+
+  it("hash the edits that take effect (Story 5.11b): canonical, and any change gives another", () => {
+    const parts = [content(casePart), content(otherPart, "Oro")];
+    const base = collectionHashInput(collection, parts, "presentazione_16_9");
+    expect(collectionHashInput(collection, parts, "presentazione_16_9", [])).toBe(base);
+    const a = { partKey: `case:${CASE}`, texts: [["p1", "e2", "Due"], ["p1", "e1", "Uno"]] as const, hidden: ["p3", "p2"], order: null };
+    const b = { partKey: `client_intro:${CLIENT}`, texts: [], hidden: [], order: ["b", "a"] };
+    const edited = collectionHashInput(collection, parts, "presentazione_16_9", [a, b]);
+    expect(edited).not.toBe(base);
+    // The same edits in any order: the same hash.
+    const shuffled = { ...a, texts: [a.texts[1], a.texts[0]], hidden: ["p2", "p3"] };
+    expect(collectionHashInput(collection, parts, "presentazione_16_9", [b, shuffled])).toBe(edited);
+    expect(collectionHashInput(collection, parts, "presentazione_16_9", [{ ...a, texts: [["p1", "e1", "Uno!"]] }, b])).not.toBe(edited);
+    expect(collectionHashInput(collection, parts, "presentazione_16_9", [{ ...a, hidden: ["p2"] }, b])).not.toBe(edited);
+    expect(collectionHashInput(collection, parts, "presentazione_16_9", [a, { ...b, order: ["a", "b"] }])).not.toBe(edited);
+    expect(collectionHashInput(collection, parts, "presentazione_16_9", [a])).not.toBe(edited);
   });
 
   it("name the file after the collection, without a code", () => {

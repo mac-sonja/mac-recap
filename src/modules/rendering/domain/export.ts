@@ -278,16 +278,42 @@ export interface ExportCollection {
   name: string;
 }
 
+/** A collection's edits of one part that take effect in a format (Story 5.11b; `EffectivePartEdits` of `collection-edits.ts`). */
+export interface CollectionPartEdits {
+  partKey: string;
+  texts: readonly (readonly [string, string, string])[];
+  hidden: readonly string[];
+  order: readonly string[] | null;
+}
+
 /**
  * The canonical text a collection's content hash is taken of (Story 5.10b): the collection
  * (id and name, which also names the file), then every part as `contentHashInput` takes it
  * (subject, approved revision, template, its client's info and the bound case fields; an
  * intro part binds no case), in the file's order, the format and `EXPORT_RENDER_VERSION`.
- * `export.collection.v1` keeps it apart from any case's or client pack's hash, so a file of
- * one is never handed out as another.
+ * Story 5.11b, `export.collection.v2`: then, per part with an edit that takes effect in the
+ * format (sorted by part key), its words (`[pageKey, elementId, text]`, sorted), its hidden pages
+ * (sorted) and its shown pages' order (null when it is the document's). The same edits give the
+ * same hash; any change gives another. Kept apart from any case's or client pack's hash, so a
+ * file of one is never handed out as another.
  */
-export function collectionHashInput(collection: ExportCollection, parts: readonly ExportPartContent[], format: ExportFormatId): string {
-  return JSON.stringify(["export.collection.v1", EXPORT_RENDER_VERSION, format, [collection.id.toLowerCase(), collection.name], partRows(parts)]);
+export function collectionHashInput(
+  collection: ExportCollection,
+  parts: readonly ExportPartContent[],
+  format: ExportFormatId,
+  edits: readonly CollectionPartEdits[] = [],
+): string {
+  const order = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const editRows = [...edits]
+    .map((e) => ({ ...e, partKey: e.partKey.toLowerCase() }))
+    .sort((a, b) => order(a.partKey, b.partKey))
+    .map((e) => [
+      e.partKey,
+      [...e.texts].map((t) => [...t]).sort((a, b) => order(a[0], b[0]) || order(a[1], b[1]) || order(a[2], b[2])),
+      [...e.hidden].sort(order),
+      e.order === null ? null : [...e.order],
+    ]);
+  return JSON.stringify(["export.collection.v2", EXPORT_RENDER_VERSION, format, [collection.id.toLowerCase(), collection.name], partRows(parts), editRows]);
 }
 
 /**
