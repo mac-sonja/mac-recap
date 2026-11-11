@@ -27,7 +27,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | B4 | 5.4 several formats as one ZIP | ✅ #153 (migration on dev) | B3 | — | export dialog, worker |
 | B5 | 5.9 combined export and client pack | 🔄 5.9a ✅ #160 (no migration); 5.9b (read-only Clienti for account/sales/social) to do | B4, **A6, A8** (pack follows 4.12's case order) | — | export, client page |
 | B6 | 5.10 collections | ✅ #161 (5.10a), #162 (5.10b) (migrations on the mac-recap project) | B5, **A8** (collections open the configurator) | A7, A8 | collections, configurator (collection mode) |
-| B7 | 5.11 edit texts and remove pages in a collection | 🔄 5.11a ✅ #163 (migration on the mac-recap project 2026-11-11); 5.11b (exports apply the edits) to do | B6 | A2, A7, A8 | configurator (collection mode) |
+| B7 | 5.11 edit texts and remove pages in a collection | 🔄 5.11a ✅ #163 (migration on the mac-recap project 2026-11-11); 5.11b (exports apply the edits) in progress | B6 | A2, A7, A8 | configurator (collection mode) |
 | B8 | 3.9 AI client intro draft | ⬜ | A6 | — | generation |
 | B9 | 5.8 guardrail suite, the rest of 6.4, 6.5 permission checks | ⬜ | every other story | — | `test/` |
 
