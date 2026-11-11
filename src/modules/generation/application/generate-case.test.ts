@@ -165,7 +165,7 @@ describe("generate handler: gate and discarded results", () => {
   it("NFR6 guardrail: no material, the details form filled in: NO_MATERIAL, not retryable, nothing written", async () => {
     const { deps, handler } = make({ hasMaterial: vi.fn(async () => ok(false)) });
     // The default form here is filled in (context, results): it is not material.
-    expect(await deps.getDetailsForm()).toMatchObject({ ok: true, value: { context: SECRET } });
+    expect(await deps.getDetailsForm({ caseId: CASE_ID })).toMatchObject({ ok: true, value: { context: SECRET } });
     expect(await handler.run(job, live)).toMatchObject({ ok: false, error: { code: "NO_MATERIAL", retryable: false } });
     expect(deps.createWorkingRevision).not.toHaveBeenCalled();
   });

@@ -9,8 +9,8 @@ import { GUARDRAIL_TAG, GUARDRAILS } from "./suite";
 export default class GuardrailReporter implements Reporter {
   onTestRunEnd(testModules: ReadonlyArray<TestModule>) {
     const tally = new Map<string, { passed: number; failed: number }>(GUARDRAILS.map((g) => [g, { passed: 0, failed: 0 }]));
-    for (const module of testModules) {
-      for (const test of module.children.allTests()) {
+    for (const testModule of testModules) {
+      for (const test of testModule.children.allTests()) {
         const state = test.result().state;
         if (state !== "passed" && state !== "failed") continue;
         const guardrail = GUARDRAIL_TAG.exec(test.fullName)?.[1];

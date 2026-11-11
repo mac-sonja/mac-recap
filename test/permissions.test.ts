@@ -78,15 +78,11 @@ vi.mock("@/modules/rendering/adapters/supabase/export-repository", () => ({
 // Collections (Story 5.10a): what runs after `authorize` doesn't matter here.
 vi.mock("@/modules/collection", () => stubbedUseCases(() => vi.importActual("@/modules/collection")));
 
-const caseStudies = await import("@/app/(tool)/case-studies/actions");
 const clients = await import("@/app/(tool)/clients/actions");
 const organization = await import("@/app/(tool)/organization/actions");
-const configurator = await import("@/app/(wizard)/case-studies/[caseId]/configurator/actions");
-const clientConfigurator = await import("@/app/(wizard)/clients/[clientId]/configurator/actions");
 const exportActions = await import("@/app/(tool)/case-studies/export-actions");
 const clientExportActions = await import("@/app/(tool)/clients/export-actions");
 const jobsModule = await import("@/modules/jobs");
-const collectionActions = await import("@/app/(tool)/collections/actions");
 const collectionPageActions = await import("@/app/(wizard)/collections/[collectionId]/actions");
 const { default: LibraryPage } = await import("@/app/(tool)/library/page");
 const { default: ClientsPage } = await import("@/app/(tool)/clients/page");
@@ -340,8 +336,8 @@ describe("NFR3 guardrail: no role, admin included, changes a guardrail or a perm
   });
 
   it("denies 'change permissions or guardrails' to every role and to system, on any resource", async () => {
-    const { authorize, can } = await vi.importActual<typeof import("@/modules/access")>("@/modules/access");
-    const { CASE_STATUSES } = await vi.importActual<typeof import("@/modules/access/domain/policy")>("@/modules/access/domain/policy");
+    const { authorize } = await vi.importActual<typeof import("@/modules/access")>("@/modules/access");
+    const { can, CASE_STATUSES } = await vi.importActual<typeof import("@/modules/access/domain/policy")>("@/modules/access/domain/policy");
     for (const role of [...ROLES, "system"] as const) {
       const decision = authorize({ ...profileFor("x@menatcode.it", role) }, "change permissions or guardrails");
       expect(decision).toMatchObject({ ok: false, error: { code: "FORBIDDEN" } });
