@@ -88,6 +88,21 @@ context:
 
 ## Review Triage Log
 
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | "No row changed" snapshot leaves out `auth.users`/`auth.identities`, where Organizzazione actions write (blind) | medium | `snapshot()` reads `public.*` and `storage.objects` only | patch |
+| 2 | Matrix coverage only one way: stale EXPECTED files or renamed actions pass silently (blind) | medium | `ACTIONS` drops names that don't resolve | patch |
+| 3 | Draft refusal is proved only through owner-only actions, not through actions account users are allowed (blind) | medium | `listAssets`/`getDetailsForm`/`getRenderAssets` are 403 by role | patch |
+| 4 | Profile upsert doesn't reset `job_title` despite its comment (blind, edge, verification-gap) | low | Direct correction | patch |
+| 5 | Redirect assertions accept any path (blind) | low | `/^REDIRECT \//` | patch |
+| 6 | "Gets past the policy" accepts 404/500 (blind) | low | Only 401/403 excluded | patch |
+| 7 | `TEST_ROLES` not checked against `ROLES` (blind) | low | A new role would be skipped silently | patch |
+| 8 | `requestOrigin` mock comment wrong (blind) | low | Direct correction | patch |
+| 9 | Seeded data left on the local stack (blind) | low | Same convention as the other DB tests; local only | reject |
+| 10 | Refresh tokens may rotate across files after an hour (blind) | low | The DB run takes about a minute | reject |
+| 11 | User management and a disabled owner not run signed in (blind) | low | Covered by the stubbed suite; spec asks for representative allowed actions | reject |
+| 12 | A profile already holding a test email under another id aborts the run (edge) | low | Only on a hand-edited local stack | reject |
+
 ## Verification
 
 **Commands:**
