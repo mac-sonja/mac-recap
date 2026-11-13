@@ -364,6 +364,15 @@ describe("MAC's pages as a collection part", () => {
     expect(after.repo.setPageHidden).not.toHaveBeenCalled();
   });
 
+  it("refuses an order for MAC's pages: they sit by role, so it would change nothing", async () => {
+    const { repo, useCases } = setup();
+    expect(await useCases.setPageOrder(actor, { collectionId: COLLECTION, expectedVersion: 3, part: brand, formatId: F, pageKeys: [BRAND_OUTRO_KEY, BRAND_INTRO_KEY] })).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_INPUT", details: { fields: ["part"] } },
+    });
+    expect(repo.setPageOrder).not.toHaveBeenCalled();
+  });
+
   it("reads its edits back, checked against MAC's own words", async () => {
     const edit = (text: string, originalHash: string) => ({ part: brand, formatId: F, pageKey: BRAND_INTRO_KEY, elementId: BRAND_TITLE_ELEMENT_ID, text, originalHash });
     const { useCases } = setup({ edits: { textEdits: [edit("Mia", textHash("Our projects"))], hiddenPages: [{ part: brand, formatId: F, pageKey: BRAND_OUTRO_KEY }], pageOrders: [] } });

@@ -9,6 +9,7 @@ import {
   BRAND_TEMPLATE,
   hasBrandPages,
   measureOverflow,
+  NO_BOUND_VALUES,
   renderFormat,
   type BoundValues,
   type FormatId,
@@ -850,7 +851,7 @@ export function Canvas({
           onPreviewPick={onPreviewPick}
         />
       )}
-      {branded && <BrandCanvasPage page={BRAND_INTRO} label={it.configurator.canvas.brandIntro} number={1} formatId={formatId} width={width} />}
+      {branded && <BrandCanvasPage page={BRAND_INTRO} label={it.configurator.canvas.brandIntro} note={it.configurator.canvas.brandNote} number={1} formatId={formatId} width={width} />}
       {/* The editor, and Anteprima of Presentazione: the pages stacked, under their groups' labels. */}
       {(slideshow ? [] : numberedGroups(groups)).map(({ group, start }) => [
         // A label before the first page of each group (a run of one section, or a part of the client's file).
@@ -933,6 +934,7 @@ export function Canvas({
         <BrandCanvasPage
           page={BRAND_OUTRO}
           label={it.configurator.canvas.brandOutro}
+          note={it.configurator.canvas.brandOutroNote}
           number={groups.reduce((sum, g) => sum + g.pages.length, 0) + 2}
           formatId={formatId}
           width={width}
@@ -960,7 +962,7 @@ export function Canvas({
  * brand renderer. Read-only: no selection, no typing (it has no `data-canvas-page`, so neither a
  * click, a double-click nor a drop reaches the editor), no bin.
  */
-function BrandCanvasPage({ page, label, number, formatId, width }: { page: Page; label: string; number: number; formatId: FormatId; width: string }) {
+function BrandCanvasPage({ page, label, note, number, formatId, width }: { page: Page; label: string; note: string; number: number; formatId: FormatId; width: string }) {
   return (
     <>
       <div
@@ -974,7 +976,7 @@ function BrandCanvasPage({ page, label, number, formatId, width }: { page: Page;
       </div>
       <div className={cn("mt-3.5 flex w-full items-center justify-between gap-2 font-label text-[12.5px] text-foreground-muted", width)}>
         <span className="truncate">{fill(it.configurator.canvas.pageLabel, { n: number, name: page.name })}</span>
-        <span className="shrink-0">{it.configurator.canvas.brandNote}</span>
+        <span className="shrink-0">{note}</span>
       </div>
       <div
         data-brand-page={page.pageKey}
@@ -982,17 +984,13 @@ function BrandCanvasPage({ page, label, number, formatId, width }: { page: Page;
         aria-label={fill(it.configurator.canvas.brandPage, { name: page.name })}
         className={cn("pointer-events-none relative w-full shrink-0 shadow-page select-none", width)}
       >
-        <RenderedPage formatId={formatId} template={BRAND_TEMPLATE} page={page} number={number} assets={NO_ASSETS} values={NO_VALUES} animateTexts={false} />
+        <RenderedPage formatId={formatId} template={BRAND_TEMPLATE} page={page} number={number} assets={NO_ASSETS} values={NO_BOUND_VALUES} animateTexts={false} />
       </div>
     </>
   );
 }
 
 const NO_ASSETS: Readonly<Record<string, RenderAsset>> = Object.freeze({});
-const NO_VALUES: BoundValues = {
-  client: { name: "", sector: "", description: "", logoUrl: null, results: [], testimonial: null },
-  case: { year: null, services: [], results: [], testimonial: null },
-};
 
 /** The slideshow of Carosello and Video in Anteprima, with Instagram's interface over a Video page. */
 function SlideshowOf({

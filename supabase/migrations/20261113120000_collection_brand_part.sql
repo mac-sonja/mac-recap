@@ -4,8 +4,8 @@
 --
 -- The renderer adds two fixed brand pages around every Presentazione file ("Our projects" and
 -- the company details). They are code constants, never stored in a document or a revision. A
--- collection may change the "Our projects" title's words, hide either page and order them, like
--- any part: `part_kind` 'brand' with the fixed sentinel `part_id`
+-- collection may change the "Our projects" title's words and hide either page, like any part:
+-- `part_kind` 'brand' with the fixed sentinel `part_id`
 -- '4d414300-0000-4000-8000-000000000000' ("MAC" in hex; `BRAND_PART_ID` in
 -- src/modules/rendering/brand/pages.ts). Every collection has it; the module checks the pages and
 -- the format (Presentazione only) before calling a writer.

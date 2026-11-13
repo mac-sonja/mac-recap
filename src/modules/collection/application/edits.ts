@@ -246,13 +246,16 @@ export function makeCollectionEditUseCases({ collections, listCases, liveRevisio
 
     /**
      * A part's pages in a new order: input `{ collectionId, expectedVersion, part, formatId,
-     * pageKeys }`, every page key of the part's document in that format, each once.
+     * pageKeys }`, every page key of the part's document in that format, each once. MAC's pages
+     * are never reordered (`INVALID_INPUT`, `part`).
      * `INVALID_INPUT`, `COLLECTION_NOT_FOUND`, `STALE_COLLECTION`.
      */
     async setPageOrder(actor: Actor, input: unknown): Promise<Result<CollectionEditWrite>> {
       const parsed = parseInput(setPageOrderInputSchema, input);
       if (!parsed.ok) return parsed;
       const { collectionId, expectedVersion, part, formatId, pageKeys } = parsed.value;
+      // MAC's pages sit by their role (intro first, outro last): an order for them would change nothing.
+      if (part.kind === "brand") return err(invalid("part"));
       const read = await partPages(collectionId, expectedVersion, part, formatId);
       if (!read.ok) return read;
       if (!isPermutation(read.value.pages.map((p) => p.pageKey), pageKeys)) return err(invalid("pageKeys"));

@@ -1235,6 +1235,7 @@ export const it = {
       brandIntro: "Apertura MAC",
       brandOutro: "Chiusura MAC",
       brandNote: "Pagina fissa di MAC: il titolo si cambia solo in una raccolta.",
+      brandOutroNote: "Pagina fissa di MAC.",
       /** Read on a MAC page: `{name}` the page. */
       brandPage: "{name}, pagina fissa di MAC",
       /** On the selected block. */

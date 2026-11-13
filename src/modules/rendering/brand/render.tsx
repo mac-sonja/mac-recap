@@ -12,6 +12,9 @@ import type { RenderInput } from "@/modules/rendering/templates/types";
  * mac-case v1's (`section.mr-page`, `BASE_CSS`: one size container, `1u = 100cqw / 1920`), so
  * exports count and print them like any page. Pure: the only words read from the page are the
  * "Our projects" title's (a collection may change them); every other text is fixed here.
+ *
+ * Any change here (markup, texts, CSS) changes every Presentazione export, but no content hash
+ * covers it: bump `EXPORT_RENDER_VERSION` (`domain/export.ts`) with it.
  */
 
 /** MAC's details, as the Figma outro shows them. Fixed: never a document element, never edited. */

@@ -48,6 +48,7 @@ export {
   BRAND_TITLE,
   BRAND_TITLE_ELEMENT_ID,
   brandPageCount,
+  NO_BOUND_VALUES,
   hasBrandPages,
   isBrandPage,
   isBrandPageKey,

@@ -7,6 +7,7 @@ import {
   FORMAT_IDS,
   freeTextIn,
   hasBrandPages,
+  NO_BOUND_VALUES,
   normalisePartKey,
   orderedPages,
   pageTextEdits,
@@ -136,11 +137,8 @@ export interface ViewSegment {
   entries: readonly SegmentEntry[];
 }
 
-/** No bound values: a case with no pages draws nothing. */
-export const EMPTY_VALUES: BoundValues = {
-  client: { name: "", sector: "", description: "", logoUrl: null, results: [], testimonial: null },
-  case: { year: null, services: [], results: [], testimonial: null },
-};
+/** No bound values: a case with no pages draws nothing (the rendering module's one constant). */
+export const EMPTY_VALUES: BoundValues = NO_BOUND_VALUES;
 
 /** MAC's pages as a part: the rendering module's constants, in Presentazione only. */
 export const BRAND_PART: PartPages = {

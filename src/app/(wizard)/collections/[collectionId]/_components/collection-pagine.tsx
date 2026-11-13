@@ -16,7 +16,7 @@ const CASE_DRAG_TYPE = "application/x-mac-collection-case";
 /** Story 5.11a: a page's drag data type (its run and place). It never mixes with the other two. */
 const PAGE_DRAG_TYPE = "application/x-mac-collection-page";
 
-/** A page's still thumbnail, drawn by the format's renderer (as the configurator's Pagine). */
+/** A page's still thumbnail, drawn by the format's renderer (as the configurator's Pagine); `number` undefined: a hidden page, which has none in the file. */
 const Thumbnail = memo(function Thumbnail({
   formatId,
   template,
@@ -28,13 +28,13 @@ const Thumbnail = memo(function Thumbnail({
   formatId: FormatId;
   template: string;
   page: Page;
-  number: number;
+  number: number | undefined;
   assets: Readonly<Record<string, RenderAsset>>;
   values: BoundValues;
 }) {
   return (
     <span aria-hidden="true" className={cn("pointer-events-none block w-full overflow-hidden rounded-md bg-surface-raised shadow-card", ASPECT[formatId])}>
-      {renderFormat(template, formatId, { pages: [page], assets, values, options: { still: true, startPage: number } })}
+      {renderFormat(template, formatId, { pages: [page], assets, values, options: number === undefined ? { still: true } : { still: true, startPage: number } })}
     </span>
   );
 });
@@ -299,7 +299,14 @@ function RunPages({
                   )}
                 >
                   <span className="relative block w-[40px] shrink-0">
-                    <Thumbnail formatId={formatId} template={segment.template} page={entry.page} number={numberOf.get(entry.page.pageKey) ?? i + 1} assets={assets} values={segment.values} />
+                    <Thumbnail
+                      formatId={formatId}
+                      template={segment.template}
+                      page={entry.page}
+                      number={entry.hidden ? undefined : numberOf.get(entry.page.pageKey)}
+                      assets={assets}
+                      values={segment.values}
+                    />
                     {entry.hidden && (
                       <span aria-hidden="true" className="absolute inset-0 grid place-items-center rounded-md bg-surface-control/60 text-foreground">
                         <EyeOff className="size-3" />

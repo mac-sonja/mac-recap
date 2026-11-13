@@ -1,6 +1,6 @@
 import { Fragment, type ReactElement } from "react";
 import type { CaseStudyDocument, Page } from "@/modules/generation";
-import { BRAND_PAGES, BRAND_TEMPLATE, hasBrandPages } from "@/modules/rendering/brand/pages";
+import { BRAND_PAGES, BRAND_TEMPLATE, hasBrandPages, NO_BOUND_VALUES } from "@/modules/rendering/brand/pages";
 import { FORMAT_NOT_IN_REVISION, type FormatId } from "@/modules/rendering/domain/formats";
 import { renderFormat } from "@/modules/rendering/templates";
 import type { BoundValues, RenderAsset, RenderOptions } from "@/modules/rendering/templates/types";
@@ -177,12 +177,6 @@ function withBrand(segments: ComposedSegment[], formatId: FormatId, brand: reado
   return out;
 }
 
-/** MAC's pages bind nothing. */
-const NO_VALUES: BoundValues = {
-  client: { name: "", sector: "", description: "", logoUrl: null, results: [], testimonial: null },
-  case: { year: null, services: [], results: [], testimonial: null },
-};
-
 /**
  * A combined file drawn with each part's own renderer, numbered continuously. The same
  * element serves the client configurator and exports (`renderToStaticMarkup`).
@@ -193,7 +187,7 @@ export function renderComposed(file: ComposedFile, options: Omit<RenderOptions, 
       {file.segments.map((segment) => (
         <Fragment key={segment.key}>
           {segment.part.kind === "brand"
-            ? renderFormat(BRAND_TEMPLATE, file.formatId, { pages: segment.pages, assets: {}, values: NO_VALUES, options: { ...options, startPage: segment.startPage } })
+            ? renderFormat(BRAND_TEMPLATE, file.formatId, { pages: segment.pages, assets: {}, values: NO_BOUND_VALUES, options: { ...options, startPage: segment.startPage } })
             : renderFormat(segment.part.doc.template, file.formatId, {
                 pages: segment.pages,
                 assets: segment.part.assets,

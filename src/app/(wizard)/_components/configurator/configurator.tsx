@@ -19,7 +19,7 @@ import {
   type TextGroupAlign,
 } from "@/modules/generation";
 import type { ListedAsset } from "@/modules/material";
-import { FORMAT_IDS, isBrandPageKey, type BoundValues, type DefaultPage, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
+import { FORMAT_IDS, hasBrandPages, isBrandPageKey, type BoundValues, type DefaultPage, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { Dialog } from "@/app/_components/dialog";
@@ -1498,7 +1498,8 @@ export function Configurator({
   /** Pagine of the client's file: Introduzione and Chiusura thumbnails, a row per case between them. */
   const filePagine: FilePagine | undefined = (() => {
     if (fileGroups === undefined) return undefined;
-    let start = 1;
+    // As the canvas numbers them: in Presentazione MAC's intro is page 1.
+    let start = hasBrandPages(formatId) && fileGroups.some((g) => g.pages.length > 0) ? 2 : 1;
     const numbered = fileGroups.map((group) => {
       const at = start;
       start += group.pages.length;

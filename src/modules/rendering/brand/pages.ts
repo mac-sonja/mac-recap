@@ -1,5 +1,6 @@
 import type { Page } from "@/modules/generation";
 import type { FormatId } from "@/modules/rendering/domain/formats";
+import type { BoundValues } from "@/modules/rendering/templates/types";
 
 /**
  * MAC's own opening and closing pages of a Presentazione file (Figma `lUcMm0xOxW7Y50M93buTDb`:
@@ -9,6 +10,11 @@ import type { FormatId } from "@/modules/rendering/domain/formats";
  * Their element ids never change, so a collection's text edits can name them: only the "Our
  * projects" title is a free text (editable in a collection only); every other MAC text is fixed
  * markup of the renderer (`brand/render.tsx`), not a document element.
+ *
+ * Changing anything MAC's pages draw (these pages, their texts, `brand/render.tsx`'s markup or
+ * CSS, `brand/art.tsx`) changes every Presentazione export, but no content hash covers it (a
+ * single case's hash names only the case): bump `EXPORT_RENDER_VERSION` (`domain/export.ts`) with
+ * it, or stored files keep the old pages.
  */
 
 /** The ref the brand pages are drawn with (`renderFormat`): not a template of the registry, no document holds it. */
@@ -30,6 +36,12 @@ export const BRAND_PART_ID = "4d414300-0000-4000-8000-000000000000";
 export const BRAND_TITLE_ELEMENT_ID = "4d414300-0000-4000-8000-000000000001";
 const BRAND_TITLE_BLOCK_ID = "4d414300-0000-4000-8000-000000000002";
 export const BRAND_TITLE = "Our projects";
+
+/** No bound values: what MAC's pages (and an empty part) draw with. */
+export const NO_BOUND_VALUES: BoundValues = Object.freeze({
+  client: Object.freeze({ name: "", sector: "", description: "", logoUrl: null, results: Object.freeze([]), testimonial: null }),
+  case: Object.freeze({ year: null, services: Object.freeze([]), results: Object.freeze([]), testimonial: null }),
+});
 
 /** The gradient's middle stop: what a page's background stands for where the gradient isn't drawn. */
 const BRAND_BLUE = "#1455C7";
