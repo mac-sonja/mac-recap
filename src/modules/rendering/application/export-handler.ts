@@ -1,6 +1,6 @@
 import { referencedAssetIds } from "@/modules/case-study";
 import { JOB_ABORTED, type Job, type JobFailure, type JobHandler, type JobOutcome } from "@/modules/jobs";
-import { composeParts } from "@/modules/rendering/compose";
+import { composeParts, type ComposeOptions } from "@/modules/rendering/compose";
 import { exportHtml } from "@/modules/rendering/application/export-html";
 import {
   bundleHashOfDrawings,
@@ -148,13 +148,18 @@ function caseIdOf(job: Job): string | null {
  * 1920×1080 pages, or one 1080×1080 PNG per slide in a ZIP), stores the file and writes
  * the immutable `export` row. It never touches the case's status.
  */
+/** How a drawing's parts are composed: a pack's rule, and a collection's own copies of MAC's pages. */
+function composeOptionsOf(drawing: ExportDrawing): ComposeOptions {
+  return { ...(drawing.pack ? { pack: true } : {}), ...(drawing.brand === undefined ? {} : { brand: drawing.brand }) };
+}
+
 export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
   async function mediaAssets(drawing: ExportDrawing, signal: AbortSignal): Promise<Result<Record<string, RenderAsset>, Failure>> {
     // Only the pages the file draws: a pack drops each case's own intro and Carosello Chiusura.
     const composed = composeParts(
       drawing.parts.map((part) => composePartOf(part)),
       drawing.format,
-      drawing.pack ? { pack: true } : undefined,
+      composeOptionsOf(drawing),
     );
     const wanted = new Set<string>();
     for (const segment of composed.segments) for (const id of referencedAssetIds({ pages: segment.pages })) wanted.add(id);
@@ -248,7 +253,7 @@ export function makeExportHandler(deps: ExportHandlerDeps): JobHandler {
         format,
         size,
         fontCss,
-        ...(drawing.pack ? { compose: { pack: true } } : {}),
+        compose: composeOptionsOf(drawing),
       });
     } catch {
       return err({ code: "EXPORT_RENDER_FAILED", message: "The pages could not be drawn.", retryable: false });

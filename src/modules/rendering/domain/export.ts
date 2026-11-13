@@ -25,7 +25,7 @@ export const EXPORT_MAX_BYTES = 50 * 1024 * 1024;
  * export rendering changes** (anything that would make the same content give another
  * file): stored exports are then drawn again instead of being reused.
  */
-export const EXPORT_RENDER_VERSION = 1;
+export const EXPORT_RENDER_VERSION = 2;
 
 /** The formats that export today, in the picker's order. */
 export const EXPORT_FORMAT_IDS = ["presentazione_16_9", "carosello_1_1"] as const satisfies readonly FormatId[];

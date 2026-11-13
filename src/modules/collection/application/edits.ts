@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Actor } from "@/modules/access";
 import type { CaseStudyRevision, ListedCaseStudy } from "@/modules/case-study";
 import type { DocumentElement, Page, TextElement } from "@/modules/generation";
+import { BRAND_PAGES, BRAND_PART_ID, hasBrandPages } from "@/modules/rendering";
 import {
   canHide,
   isPermutation,
@@ -91,6 +92,7 @@ const GONE = new Set(["NOT_FOUND", "CLIENT_NOT_FOUND", "CASE_NOT_FOUND"]);
 export function makeCollectionEditUseCases({ collections, listCases, liveRevision, liveIntroRevision }: CollectionEditDeps) {
   /** The live revision a part draws from, or null when it has none any more (none approved, or the case or client is gone). */
   const revisionOf = async (part: CollectionPart): Promise<Result<CaseStudyRevision | null>> => {
+    if (part.kind === "brand") return ok(null);
     const read = await (part.kind === "case" ? liveRevision(part.id) : liveIntroRevision(part.id));
     return !read.ok && GONE.has(read.error.code) ? ok(null) : read;
   };
@@ -103,9 +105,16 @@ export function makeCollectionEditUseCases({ collections, listCases, liveRevisio
     return ok(listed.value.filter((c) => inside.has(c.id.toLowerCase())));
   }
 
-  /** Whether `part` is one of `cases`, or the client of one of them. */
+  /** Whether `part` is one of `cases`, the client of one of them, or MAC's pages (by their sentinel id: every collection has them). */
   const partIn = (part: CollectionPart, cases: readonly ListedCaseStudy[]) =>
-    part.kind === "case" ? cases.some((c) => c.id.toLowerCase() === part.id) : cases.some((c) => c.client.id.toLowerCase() === part.id);
+    part.kind === "brand"
+      ? part.id === BRAND_PART_ID
+      : part.kind === "case"
+        ? cases.some((c) => c.id.toLowerCase() === part.id)
+        : cases.some((c) => c.client.id.toLowerCase() === part.id);
+
+  /** MAC's pages in `formatId`: the rendering module's constants, Presentazione only. */
+  const brandPagesIn = (formatId: string): readonly Page[] | null => (hasBrandPages(formatId) ? BRAND_PAGES : null);
 
   /**
    * Whether the file wraps client `clientId`'s cases in its intro: its intro is approved and 2 or
@@ -126,7 +135,8 @@ export function makeCollectionEditUseCases({ collections, listCases, liveRevisio
 
   /**
    * The collection at `expectedVersion`, and the pages of `part` in `formatId` from its live
-   * approved revision. The part must be one of its cases, or a client one of its cases belongs to.
+   * approved revision (MAC's pages: the rendering module's, in Presentazione only). The part must
+   * be one of its cases, a client one of its cases belongs to, or MAC's pages.
    */
   async function partPages(
     collectionId: string,
@@ -141,6 +151,10 @@ export function makeCollectionEditUseCases({ collections, listCases, liveRevisio
     const cases = await casesOf(found.value);
     if (!cases.ok) return cases;
     if (!partIn(part, cases.value)) return err(invalid("part"));
+    if (part.kind === "brand") {
+      const pages = brandPagesIn(formatId);
+      return pages === null ? err(invalid("formatId")) : ok({ stored: found.value, cases: cases.value, pages });
+    }
     const revision = await revisionOf(part);
     if (!revision.ok) return revision;
     // No approved revision any more ("Non disponibile"): nothing of it shows, so nothing is edited.
@@ -211,10 +225,14 @@ export function makeCollectionEditUseCases({ collections, listCases, liveRevisio
         const { pages, cases } = read.value;
         if (!pages.some((p) => p.pageKey === pageKey)) return err(invalid("pageKey"));
         // The pages the file shows of the part: a case wrapped by its client's intro shows fewer.
-        const clientId = part.kind === "client_intro" ? part.id : cases.find((c) => c.id.toLowerCase() === part.id)!.client.id.toLowerCase();
-        const wrapped = await wraps(clientId, cases);
-        if (!wrapped.ok) return wrapped;
-        const shown = shownPageKeys(pages, part.kind, formatId, wrapped.value);
+        let wrapped = false;
+        if (part.kind !== "brand") {
+          const clientId = part.kind === "client_intro" ? part.id : cases.find((c) => c.id.toLowerCase() === part.id)!.client.id.toLowerCase();
+          const wrapping = await wraps(clientId, cases);
+          if (!wrapping.ok) return wrapping;
+          wrapped = wrapping.value;
+        }
+        const shown = shownPageKeys(pages, part.kind, formatId, wrapped);
         const edits = await collections.edits(collectionId);
         if (!edits.ok) return edits;
         const already = new Set(edits.value.hiddenPages.filter((h) => samePart(h.part, part) && h.formatId === formatId).map((h) => h.pageKey));
@@ -274,12 +292,17 @@ export function makeCollectionEditUseCases({ collections, listCases, liveRevisio
       const textEdits: CollectionTextEdit[] = [];
       for (const edit of stored.value.textEdits) {
         if (!inside(edit.part)) continue;
-        const revision = await revisionFor(edit.part);
-        if (!revision.ok) return revision;
         const { originalHash, ...rest } = edit;
-        if (revision.value === null) continue;
-        const formats = revision.value.doc.formats;
-        const page = Object.hasOwn(formats, edit.formatId) ? formats[edit.formatId]!.pages.find((p) => p.pageKey === edit.pageKey) : undefined;
+        let pages: readonly Page[] | null;
+        if (edit.part.kind === "brand") pages = brandPagesIn(edit.formatId);
+        else {
+          const revision = await revisionFor(edit.part);
+          if (!revision.ok) return revision;
+          if (revision.value === null) continue;
+          const formats = revision.value.doc.formats;
+          pages = Object.hasOwn(formats, edit.formatId) ? formats[edit.formatId]!.pages : null;
+        }
+        const page = pages?.find((p) => p.pageKey === edit.pageKey);
         const original = page === undefined ? null : freeTextOf(page, edit.elementId);
         if (original === null) continue;
         textEdits.push({ ...rest, originalChanged: textHash(original.text) !== originalHash });

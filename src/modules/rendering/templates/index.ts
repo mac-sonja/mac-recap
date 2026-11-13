@@ -1,5 +1,7 @@
 import type { ReactElement } from "react";
 import type { DocumentKind, Page } from "@/modules/generation";
+import { renderBrand } from "@/modules/rendering/brand/render";
+import { BRAND_TEMPLATE } from "@/modules/rendering/brand/pages";
 import { isFormatId, type FormatId } from "@/modules/rendering/domain/formats";
 import { macCaseV1 } from "@/modules/rendering/templates/mac-case/v1";
 import { macClientV1 } from "@/modules/rendering/templates/mac-client/v1";
@@ -55,9 +57,12 @@ export function starterPages(template: string, kind: DocumentKind, formatId: str
  * One format's pages drawn by the template's renderer (Story 3.5): a pure function of
  * the pages, asset URLs and current bound values. The same element serves the
  * configurator, the case study view, shared links and exports (`renderToStaticMarkup`).
- * Throws for a template that isn't registered or has no renderer (a bug).
+ * `BRAND_TEMPLATE` draws MAC's own pages (Presentazione only): not a template of the
+ * registry, so no document can name it. Throws for a template that isn't registered or has
+ * no renderer (a bug).
  */
 export function renderFormat(template: string, formatId: FormatId, input: RenderInput): ReactElement {
+  if (template === BRAND_TEMPLATE) return renderBrand(formatId, input);
   const found = required(template);
   if (found.render === undefined) throw new Error(`template ${template} has no renderer`);
   return found.render(formatId, input);

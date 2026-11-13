@@ -51,9 +51,9 @@ describe("Chromium is available in CI", () => {
 });
 
 describe("the inline Inter font", () => {
-  it("embeds the Latin and Latin Extended woff2 files as `Inter`", async () => {
+  it("embeds the Latin and Latin Extended woff2 files, and Latin italic, as `Inter`", async () => {
     const css = await interFontCss();
-    expect(css.match(/@font-face\{font-family:Inter;/g)).toHaveLength(2);
+    expect(css.match(/@font-face\{font-family:Inter;/g)).toHaveLength(3);
     expect(css).toContain("src:url(data:font/woff2;base64,d09GMg"); // "wOF2"
     expect(css).not.toMatch(/url\((?!data:)/);
   });

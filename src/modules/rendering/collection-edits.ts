@@ -1,5 +1,6 @@
 import type { CaseStudyDocument, DocumentElement, Page, TextElement } from "@/modules/generation";
-import { composeParts, type ComposedFile, type ComposeOptions, type ComposePart } from "@/modules/rendering/compose";
+import { BRAND_PAGES, BRAND_PART_ID } from "@/modules/rendering/brand/pages";
+import { composeParts, type BrandPart, type ComposedFile, type ComposeOptions, type ComposePart } from "@/modules/rendering/compose";
 import type { FormatId } from "@/modules/rendering/domain/formats";
 
 /**
@@ -11,8 +12,15 @@ import type { FormatId } from "@/modules/rendering/domain/formats";
  * Generation is imported for its types only: its index imports this module at runtime.
  */
 
-/** A part of a collection: `case:{caseId}`, or `client_intro:{clientId}` (a client's intro document: its intro and its closing). */
+/**
+ * A part of a collection: `case:{caseId}`, `client_intro:{clientId}` (a client's intro document:
+ * its intro and its closing), or `brand:{BRAND_PART_ID}` (MAC's own intro and outro of a
+ * Presentazione file: only its title is a free text).
+ */
 export type CollectionPartKey = string;
+
+/** MAC's pages as a collection part. */
+export const BRAND_PART_KEY: CollectionPartKey = `brand:${BRAND_PART_ID}`;
 
 /** The collection's words for one free text of a part's page in a format. */
 export interface CollectionTextOverride {
@@ -52,9 +60,9 @@ export function normalisePartKey(partKey: CollectionPartKey): CollectionPartKey 
   return at < 0 ? partKey : `${partKey.slice(0, at)}:${partKey.slice(at + 1).toLowerCase()}`;
 }
 
-/** The part key of a composed part: a case by its id, a client's intro document by its client's id. */
-export const collectionPartKey = (part: ComposePart): CollectionPartKey =>
-  part.kind === "case_history" ? `case:${part.caseId.toLowerCase()}` : `client_intro:${part.clientId.toLowerCase()}`;
+/** The part key of a composed part: a case by its id, a client's intro document by its client's id, MAC's pages by the sentinel. */
+export const collectionPartKey = (part: ComposePart | BrandPart): CollectionPartKey =>
+  part.kind === "case_history" ? `case:${part.caseId.toLowerCase()}` : part.kind === "brand" ? BRAND_PART_KEY : `client_intro:${part.clientId.toLowerCase()}`;
 
 const samePart = (a: CollectionPartKey, b: CollectionPartKey) => normalisePartKey(a) === normalisePartKey(b);
 
@@ -148,6 +156,8 @@ export interface AppliedCollectionEdits {
   shownParts: ComposePart[];
   /** `shownParts` composed: the file's pages (page numbers run on over the shown pages only). */
   file: ComposedFile;
+  /** MAC's pages the file draws (Presentazione): with the collection's words, its hidden ones left out (`ComposeOptions.brand`). */
+  brand: readonly Page[];
   /** Per part with an edit that takes effect, sorted by part key. */
   effective: EffectivePartEdits[];
 }
@@ -188,8 +198,9 @@ const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
  *   is no longer a free text is ignored, and an edit whose original changed keeps its words;
  * - hidden pages left out, except that a part whose every page the file would show is hidden
  *   keeps them all (a part never shows no page).
- * A client's intro edits are keyed by its client's id (`client_intro:{clientId}`). Pure: the
- * given documents are not changed, and an untouched page is the given object.
+ * A client's intro edits are keyed by its client's id (`client_intro:{clientId}`), MAC's pages'
+ * by `BRAND_PART_KEY`: they take words, a hide and an order like any part. Pure: the given
+ * documents are not changed, and an untouched page is the given object.
  */
 export function applyCollectionEdits(
   parts: readonly ComposePart[],
@@ -212,7 +223,13 @@ export function applyCollectionEdits(
     return withPages(part, formatId, pages);
   });
 
-  const composed = composeParts(edited, formatId, options.compose);
+  // MAC's pages (Presentazione only: elsewhere `composeParts` leaves them out) as a part of their own.
+  const brandPages = orderedPages(BRAND_PAGES, BRAND_PART_KEY, formatId, edits).map((page) => {
+    const own = pageTextEdits({ texts }, BRAND_PART_KEY, formatId, page.pageKey);
+    return own.length === 0 ? page : wordPage(page, own);
+  });
+
+  const composed = composeParts(edited, formatId, { ...options.compose, brand: brandPages });
   const composedKeys = keysByPart(composed);
   const hidden = new Map<CollectionPartKey, ReadonlySet<string>>();
   for (const [key, shown] of composedKeys) {
@@ -228,18 +245,21 @@ export function applyCollectionEdits(
     const formats = part.doc.formats as Record<string, { pages: readonly Page[] }>;
     return withPages(part, formatId, formats[formatId]!.pages.filter((p) => !out.has(p.pageKey)));
   });
-  const file = composeParts(shownParts, formatId, options.compose);
+  const brandHidden = hidden.get(BRAND_PART_KEY) ?? new Set<string>();
+  const brand = brandPages.filter((p) => !brandHidden.has(p.pageKey));
+  const file = composeParts(shownParts, formatId, { ...options.compose, brand });
 
   // What takes effect: compared with the parts as they are.
   const before = keysByPart(composeParts(parts, formatId, options.compose));
   const after = keysByPart(file);
-  const originals = new Map(
-    parts.map((part) => {
+  const originals = new Map([
+    ...parts.map((part) => {
       const formats = part.doc.formats as Record<string, { pages: readonly Page[] } | undefined>;
       const pages = Object.hasOwn(formats, formatId) ? (formats[formatId]?.pages ?? []) : [];
       return [collectionPartKey(part), new Map(pages.map((p) => [p.pageKey, p]))] as const;
     }),
-  );
+    [BRAND_PART_KEY, new Map(BRAND_PAGES.map((p) => [p.pageKey, p]))] as const,
+  ]);
   const effective: EffectivePartEdits[] = [];
   for (const [key, shown] of after) {
     const onShown = new Set(shown);
@@ -261,5 +281,5 @@ export function applyCollectionEdits(
   }
   effective.sort((a, b) => compare(a.partKey, b.partKey));
 
-  return { parts: edited, composed, hidden, shownParts, file, effective };
+  return { parts: edited, composed, hidden, shownParts, file, brand, effective };
 }
