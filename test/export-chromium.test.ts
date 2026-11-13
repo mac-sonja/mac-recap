@@ -3,6 +3,9 @@
 // is not installed locally; CI installs it (and fails here if it is missing), and the
 // runtime image is Playwright's own (v1.63.0-noble).
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { join } from "node:path";
 import { chromium } from "playwright";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
@@ -54,6 +57,12 @@ describe("the inline Inter font", () => {
   it("embeds the Latin and Latin Extended woff2 files, and Latin italic, as `Inter`", async () => {
     const css = await interFontCss();
     expect(css.match(/@font-face\{font-family:Inter;/g)).toHaveLength(3);
+    // Only the third face is italic: a wrong style would print every export in italic.
+    const rules = css.split("\n");
+    expect(rules.map((rule) => /font-style:([a-z]+);/.exec(rule)?.[1])).toEqual(["normal", "normal", "italic"]);
+    const italic = (await readFile(createRequire(join(process.cwd(), "package.json")).resolve("@fontsource-variable/inter/files/inter-latin-wght-italic.woff2"))).toString("base64");
+    expect(rules[2]).toContain(`base64,${italic})`);
+    expect(rules[0]).not.toContain(italic);
     expect(css).toContain("src:url(data:font/woff2;base64,d09GMg"); // "wOF2"
     expect(css).not.toMatch(/url\((?!data:)/);
   });

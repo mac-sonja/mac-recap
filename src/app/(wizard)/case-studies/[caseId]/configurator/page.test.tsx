@@ -431,10 +431,10 @@ describe("ConfiguratorPage", () => {
     getEditableRevision.mockResolvedValue(ok(null));
     const html = await render();
     expect(html).toContain("Bozza di prova");
-    // Presentazione's starter pages, grouped Intro, Output, Risultati.
-    expect(html).toContain("1 · Intro");
-    expect(html).toContain("2 · Contenuti");
-    expect(html).toContain("3 · Risultati e testimonial");
+    // Presentazione's starter pages, grouped Intro, Output, Risultati, after MAC's intro (page 1).
+    expect(html).toContain("2 · Intro");
+    expect(html).toContain("3 · Contenuti");
+    expect(html).toContain("4 · Risultati e testimonial");
     // The bound values: the client's sector, the case's year and services.
     expect(html).toContain("Illuminazione");
     expect(html).toContain("Web design");
@@ -466,7 +466,7 @@ describe("ConfiguratorPage", () => {
     getEditableRevision.mockResolvedValue(ok({ ...revision, id: COPY, status: "working", doc }));
     const html = await render();
     expect(html).toContain('data-editable="true"');
-    expect(html).toContain("1 · Copertina corretta");
+    expect(html).toContain("2 · Copertina corretta");
     expect(html).toContain(dict.configurator.approvedEdit.banner);
     expect(html).toContain(dict.configurator.approvedEdit.update);
     expect(html).toContain(dict.configurator.approvedEdit.discard);

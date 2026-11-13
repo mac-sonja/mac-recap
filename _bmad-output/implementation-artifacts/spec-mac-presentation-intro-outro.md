@@ -2,7 +2,7 @@
 title: 'MAC intro and outro pages in Presentazione'
 type: 'feature'
 created: '2026-11-13'
-status: 'in-review'
+status: 'done'
 baseline_commit: '8d79d3e5e854d87d95c64613781c5081bd9ae02e'
 route: 'dispatch'
 review_loop_iteration: 0

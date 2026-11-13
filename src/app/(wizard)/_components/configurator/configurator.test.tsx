@@ -206,6 +206,12 @@ describe("Configurator", () => {
     expect(canvas().querySelectorAll(".mr-page")).toHaveLength(5);
   });
 
+  it("draws no MAC page around a Presentazione with no page", () => {
+    setup(false, { ...formats, presentazione_16_9: [] });
+    expect(canvas().querySelector("[data-brand-page]")).toBeNull();
+    expect(canvas().querySelector("[data-canvas-page]")).toBeNull();
+  });
+
   it("shows MAC's pages read-only: no selection, no typing, no bin; none in Carosello", () => {
     setup();
     const brand = [...canvas().querySelectorAll<HTMLElement>("[data-brand-page]")];
@@ -271,7 +277,8 @@ describe("Configurator", () => {
     setup();
     const page = formats.presentazione_16_9[2];
     const thumb = rightPanel().querySelector<HTMLElement>(`[data-thumb="${page.pageKey}"]`)!;
-    expect(thumb.querySelector("small")?.textContent).toBe(`3 · ${page.name}`);
+    // Numbered as on the canvas: MAC's intro is page 1.
+    expect(thumb.querySelector("small")?.textContent).toBe(`4 · ${page.name}`);
     fireEvent.click(thumb);
     expect(thumb.getAttribute("aria-current")).toBe("true");
     expect(pageNode(page.pageKey).hasAttribute("data-selected")).toBe(true);

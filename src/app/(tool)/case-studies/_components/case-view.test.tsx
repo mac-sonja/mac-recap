@@ -68,6 +68,7 @@ const LINES: ActivityCardLine[] = [
 ];
 
 function setup({
+  pages = formats,
   trial = false,
   editHref = EDIT_HREF as string | null,
   deleteCaseId = CASE_ID as string | null,
@@ -79,7 +80,7 @@ function setup({
       header={{ name: "Rebrand Lumen", code: "LUM-2026-01", status: "approved" }}
       back={{ href: "/case-studies", label: dict.caseView.back }}
       template="mac-case@1"
-      formats={formats}
+      formats={pages}
       assets={{ [IMAGE]: { url: "https://cdn.test/a.webp", kind: "image" } }}
       values={VALUES}
       trial={trial}
@@ -294,6 +295,12 @@ describe("CaseView", () => {
     // Nothing on the slide is selectable.
     fireEvent.click(canvas().querySelector("[data-slide] [data-canvas-page]")!);
     expect(canvas().querySelector("[data-selected], [data-frame]")).toBeNull();
+  });
+
+  it("draws no MAC page around an empty Presentazione", () => {
+    setup({ pages: { ...formats, presentazione_16_9: [] } });
+    expect(canvas().querySelector('[data-template="mac-brand@1"]')).toBeNull();
+    expect(canvas().querySelector("[data-canvas-page]")).toBeNull();
   });
 
   it("restarts on the first slide when the format changes", () => {
