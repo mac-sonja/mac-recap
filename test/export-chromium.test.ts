@@ -3,6 +3,9 @@
 // is not installed locally; CI installs it (and fails here if it is missing), and the
 // runtime image is Playwright's own (v1.63.0-noble).
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { join } from "node:path";
 import { chromium } from "playwright";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
@@ -51,9 +54,15 @@ describe("Chromium is available in CI", () => {
 });
 
 describe("the inline Inter font", () => {
-  it("embeds the Latin and Latin Extended woff2 files as `Inter`", async () => {
+  it("embeds the Latin and Latin Extended woff2 files, and Latin italic, as `Inter`", async () => {
     const css = await interFontCss();
-    expect(css.match(/@font-face\{font-family:Inter;/g)).toHaveLength(2);
+    expect(css.match(/@font-face\{font-family:Inter;/g)).toHaveLength(3);
+    // Only the third face is italic: a wrong style would print every export in italic.
+    const rules = css.split("\n");
+    expect(rules.map((rule) => /font-style:([a-z]+);/.exec(rule)?.[1])).toEqual(["normal", "normal", "italic"]);
+    const italic = (await readFile(createRequire(join(process.cwd(), "package.json")).resolve("@fontsource-variable/inter/files/inter-latin-wght-italic.woff2"))).toString("base64");
+    expect(rules[2]).toContain(`base64,${italic})`);
+    expect(rules[0]).not.toContain(italic);
     expect(css).toContain("src:url(data:font/woff2;base64,d09GMg"); // "wOF2"
     expect(css).not.toMatch(/url\((?!data:)/);
   });
@@ -62,19 +71,18 @@ describe("the inline Inter font", () => {
 describe.skipIf(!hasChromium)("export with real Chromium (Story 5.3)", () => {
   const browser = createPlaywrightExportBrowser();
 
-  it("prints a two-page Presentazione as a PDF of two 1920×1080 pages, in Inter", async () => {
+  it("prints a two-page Presentazione between MAC's intro and outro as a PDF of four 1920×1080 pages, in Inter, W-Group linked", async () => {
     const size = { width: 1920, height: 1080 };
     const pdf = Buffer.from(await browser.pdf(await html("presentazione_16_9", size), size, new AbortController().signal));
     const text = pdf.toString("latin1");
     expect(text.startsWith("%PDF-")).toBe(true);
-    expect(text.match(/\/Type\s*\/Page(?!s)/g)).toHaveLength(2);
+    expect(text.match(/\/Type\s*\/Page(?!s)/g)).toHaveLength(4);
     // 1920×1080 CSS px = 1440×810 pt.
     const boxes = [...text.matchAll(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/g)].map((m) => [Math.round(Number(m[1])), Math.round(Number(m[2]))]);
-    expect(boxes).toEqual([
-      [1440, 810],
-      [1440, 810],
-    ]);
+    expect(boxes).toEqual(Array.from({ length: 4 }, () => [1440, 810]));
     expect(text).toMatch(/\/FontName\s*\/[A-Z]{6}\+Inter/);
+    // MAC's outro: "W-Group" is a link in the PDF.
+    expect(text).toMatch(/\/URI\s*\(https:\/\/w-group\.it\/\)/);
   }, 60_000);
 
   it("shoots a two-slide Carosello as two 1080×1080 PNGs", async () => {
@@ -160,7 +168,8 @@ describe.skipIf(!hasChromium)("export with real Chromium (Story 5.3)", () => {
       ...Array.from({ length: slides }, (_, i) => `Carosello/${String(i + 1).padStart(width, "0")}.png`),
     ]);
     expect(Buffer.from(entries[0].bytes).toString("latin1").startsWith("%PDF-")).toBe(true);
-    expect(pdfPageCount(entries[0].bytes)).toBe(pdfPages);
+    // The case's pages between MAC's intro and outro.
+    expect(pdfPageCount(entries[0].bytes)).toBe(pdfPages + 2);
     for (const entry of entries.slice(1)) {
       const meta = await sharp(entry.bytes).metadata();
       expect([meta.format, meta.width, meta.height]).toEqual(["png", 1080, 1080]);

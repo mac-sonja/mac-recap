@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { Page } from "@/modules/generation";
-import { FORMAT_IDS, type FormatId } from "@/modules/rendering";
+import {
+  BRAND_INTRO_KEY,
+  BRAND_OUTRO_KEY,
+  BRAND_PAGES,
+  BRAND_PART_ID,
+  BRAND_PART_KEY,
+  BRAND_TEMPLATE,
+  BRAND_TITLE_ELEMENT_ID,
+  FORMAT_IDS,
+  type FormatId,
+} from "@/modules/rendering";
 import {
   collectionSegments,
   EMPTY_VALUES,
@@ -8,7 +18,9 @@ import {
   matchesTags,
   movedPageOrder,
   NO_EDITS,
+  originalText,
   partOfKey,
+  partPagesOf,
   shownPagesOfPart,
   withCaseMoved,
   withGroupMoved,
@@ -37,8 +49,10 @@ const group = (clientId: string, cases: string[], intro: PartPages | null, unava
   cases: cases.map((caseId) => ({ caseId, name: caseId, code: caseId.toUpperCase(), part: unavailable.includes(caseId) ? null : casePart(caseId) })),
 });
 
+/** The clients' runs, without MAC's pages around Presentazione (they have their own tests below). */
+const own = <T extends { kind: string }>(segments: readonly T[]) => segments.filter((s) => s.kind !== "brand_intro" && s.kind !== "brand_outro");
 const shape = (groups: CollectionGroup[], formatId: FormatId = "presentazione_16_9") =>
-  collectionSegments(groups, formatId).map((s) => `${s.key}:${s.pages.map((p) => p.pageKey.split("|")[1]).join(",")}`);
+  own(collectionSegments(groups, formatId)).map((s) => `${s.key}:${s.pages.map((p) => p.pageKey.split("|")[1]).join(",")}`);
 
 describe("a collection's pages (Story 5.10a)", () => {
   it("wraps a client with 2+ cases and an approved intro in its intro and closing, dropping the cases' own intros", () => {
@@ -61,7 +75,7 @@ describe("a collection's pages (Story 5.10a)", () => {
   });
 
   it("lists a case with no approved revision where it sits, with no pages, and counts it out of the intro rule", () => {
-    const segments = collectionSegments([group("a", ["a1", "a2"], introPart(), ["a2"])], "presentazione_16_9");
+    const segments = own(collectionSegments([group("a", ["a1", "a2"], introPart(), ["a2"])], "presentazione_16_9"));
     expect(segments.map((s) => `${s.key}:${s.kind}:${s.pages.length}`)).toEqual(["case:a1:case:3", "case:a2:unavailable:0"]);
   });
 
@@ -119,14 +133,14 @@ describe("a collection's own edits over its pages (Story 5.11a)", () => {
         { partKey: "case:a1", formatId: F, pageKey: "x", elementId: "bound", text: "Mai", originalChanged: false },
       ],
     };
-    const [segment] = collectionSegments(groups, F, edits);
+    const [segment] = own(collectionSegments(groups, F, edits));
     expect(words(segment!.pages[0]!, "free")).toBe("Mia");
     expect(freeTextIn(segment!.pages[0]!, "bound")).toBeNull();
     expect(words(original, "free")).toBe("Originale");
     // Another format keeps the original words.
     expect(words(collectionSegments(groups, "carosello_1_1", edits)[0]!.pages[0]!, "free")).toBe("Originale");
     // The same edits give the same page object (an untouched page keeps its drawing).
-    expect(collectionSegments(groups, F, edits)[0]!.pages[0]).toBe(segment!.pages[0]);
+    expect(own(collectionSegments(groups, F, edits))[0]!.pages[0]).toBe(segment!.pages[0]);
   });
 
   it("orders a part's pages as saved and keeps hidden pages as entries, out of the pages shown", () => {
@@ -169,5 +183,45 @@ describe("a collection's own edits over its pages (Story 5.11a)", () => {
   it("names a part from its key", () => {
     expect(partOfKey("case:a1")).toEqual({ kind: "case", id: "a1" });
     expect(partOfKey("client_intro:c-1")).toEqual({ kind: "client_intro", id: "c-1" });
+    expect(partOfKey(BRAND_PART_KEY)).toEqual({ kind: "brand", id: BRAND_PART_ID });
+  });
+});
+
+describe("MAC's pages in a collection", () => {
+  const F: FormatId = "presentazione_16_9";
+  const groups = () => [group("a", ["a1", "a2"], introPart()), group("b", ["b1"], null)];
+  const title = (text: string) => ({ partKey: BRAND_PART_KEY, formatId: F, pageKey: BRAND_INTRO_KEY, elementId: BRAND_TITLE_ELEMENT_ID, text, originalChanged: false });
+
+  it("open the file once and close it once, in Presentazione only", () => {
+    const segments = collectionSegments(groups(), F);
+    expect(segments.map((s) => s.kind)).toEqual(["brand_intro", "intro", "case", "case", "closing", "case", "brand_outro"]);
+    const [intro, outro] = [segments[0]!, segments.at(-1)!];
+    expect([intro.partKey, intro.template, intro.clientId]).toEqual([BRAND_PART_KEY, BRAND_TEMPLATE, ""]);
+    expect(intro.pages.map((p) => p.pageKey)).toEqual([`brand_intro|${BRAND_INTRO_KEY}`]);
+    expect(outro.pages.map((p) => p.pageKey)).toEqual([`brand_outro|${BRAND_OUTRO_KEY}`]);
+    for (const formatId of ["carosello_1_1", "video_9_16"] as const) {
+      expect(collectionSegments(groups(), formatId).some((s) => s.partKey === BRAND_PART_KEY)).toBe(false);
+    }
+    // No case with pages: nothing around nothing.
+    expect(collectionSegments([group("a", ["a1"], null, ["a1"])], F).map((s) => s.kind)).toEqual(["unavailable"]);
+  });
+
+  it("take the collection's words for the title only; the original stays MAC's", () => {
+    const segments = collectionSegments(groups(), F, { ...NO_EDITS, texts: [title("I nostri progetti")] });
+    expect(freeTextIn(segments[0]!.pages[0]!, BRAND_TITLE_ELEMENT_ID)).toBe("I nostri progetti");
+    expect(originalText(groups(), BRAND_PART_KEY, F, BRAND_INTRO_KEY, BRAND_TITLE_ELEMENT_ID)).toBe("Our projects");
+    // The company's name is fixed markup, not a text of the page.
+    expect(originalText(groups(), BRAND_PART_KEY, F, BRAND_OUTRO_KEY, BRAND_TITLE_ELEMENT_ID)).toBeNull();
+    expect(partPagesOf(groups(), BRAND_PART_KEY)?.formats.presentazione_16_9).toEqual(BRAND_PAGES);
+  });
+
+  it("hide like any page: out of the shown pages, still an entry; never both", () => {
+    const hidden = (keys: string[]): ViewEdits => ({ ...NO_EDITS, hidden: keys.map((pageKey) => ({ partKey: BRAND_PART_KEY, formatId: F, pageKey })) });
+    const segments = collectionSegments(groups(), F, hidden([BRAND_INTRO_KEY]));
+    expect(segments[0]!.pages).toEqual([]);
+    expect(segments[0]!.entries.map((e) => [e.pageKey, e.hidden])).toEqual([[BRAND_INTRO_KEY, true]]);
+    expect(shownPagesOfPart(segments, BRAND_PART_KEY)).toBe(1);
+    const both = collectionSegments(groups(), F, hidden([BRAND_INTRO_KEY, BRAND_OUTRO_KEY]));
+    expect(shownPagesOfPart(both, BRAND_PART_KEY)).toBe(2);
   });
 });

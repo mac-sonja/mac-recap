@@ -324,6 +324,13 @@ describe("Configurator on a client's whole file (Story 4.12a)", () => {
     const labels = [...canvas().querySelectorAll("span.truncate")].map((s) => s.textContent);
     expect(labels[0]).toMatch(/^1 · /);
     expect(labels.at(-1)).toMatch(new RegExp(`^${labels.length} · `));
+    // MAC's intro opens the file once and MAC's outro closes it once, read-only.
+    const brand = [...canvas().querySelectorAll<HTMLElement>("[data-brand-page]")];
+    expect(brand.map((b) => b.dataset.brandPage)).toEqual(["mac-brand-intro", "mac-brand-outro"]);
+    const order = [...canvas().querySelectorAll<HTMLElement>("[data-brand-page], [data-canvas-page]")].map((n) => n.dataset.brandPage ?? n.dataset.canvasPage);
+    expect([order[0], order.at(-1)]).toEqual(["mac-brand-intro", "mac-brand-outro"]);
+    expect(labels[0]).toBe("1 · MAC · Our projects");
+    expect(brand[0]!.querySelector("[contenteditable]")).toBeNull();
   });
 
   it("leaves out a case's Carosello Chiusura (the file ends with the client's)", async () => {

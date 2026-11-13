@@ -3,12 +3,16 @@ import { z } from "zod";
 /**
  * Story 5.11a: a collection's own edits, stored in the collection only. A collection can change
  * the words of a page's free texts, hide pages and put a part's pages in another order, per
- * format. A part is one of its cases or a client's intro document (its intro and closing pages).
- * The originals (revisions, clients, client intros) are never written.
+ * format. A part is one of its cases, a client's intro document (its intro and closing pages), or
+ * MAC's own intro and outro of a Presentazione file (code constants of the rendering module).
+ * The originals (revisions, clients, client intros, MAC's pages) are never written.
  */
 
-/** A part of a collection: one of its cases (`id` the case), or a client's intro document (`id` the client). */
-export const COLLECTION_PART_KINDS = ["case", "client_intro"] as const;
+/**
+ * A part of a collection: one of its cases (`id` the case), a client's intro document (`id` the
+ * client), or MAC's pages (`brand`, `id` the fixed sentinel `BRAND_PART_ID` of the rendering module).
+ */
+export const COLLECTION_PART_KINDS = ["case", "client_intro", "brand"] as const;
 export type CollectionPartKind = (typeof COLLECTION_PART_KINDS)[number];
 
 export interface CollectionPart {
@@ -145,8 +149,10 @@ const CASE_CLOSING_KEY = "closing";
  * than importing it. `wrapped`: the part's client has an approved intro and 2 or more cases with
  * pages in the collection. A wrapped case leaves out its own intro pages (and, in Carosello, its
  * Chiusura); a client intro shows only its intro and closing pages, and only when wrapping.
+ * MAC's pages always all show (Presentazione is the only format that has them).
  */
 export function shownPageKeys(pages: readonly PageShape[], kind: CollectionPartKind, formatId: string, wrapped: boolean): string[] {
+  if (kind === "brand") return pages.map((p) => p.pageKey);
   if (kind === "client_intro") return wrapped ? pages.filter((p) => p.role === "intro" || p.role === "outro").map((p) => p.pageKey) : [];
   if (!wrapped) return pages.map((p) => p.pageKey);
   return pages.filter((p) => p.role !== "intro" && !(formatId === CAROSELLO && p.pageKey === CASE_CLOSING_KEY)).map((p) => p.pageKey);

@@ -63,6 +63,11 @@ describe("contentHash (Story 5.3)", () => {
     expect(contentHash([change(part())], "presentazione_16_9")).not.toBe(base);
   });
 
+  it("pins EXPORT_RENDER_VERSION: bump it (and this) with any change to how exports are drawn, MAC's pages included", () => {
+    // MAC's intro and outro (rendering/brand) are in no content hash: a change to them needs this bump.
+    expect(EXPORT_RENDER_VERSION).toBe(2);
+  });
+
   it("covers EXPORT_RENDER_VERSION, so a bump draws every export again", () => {
     expect(JSON.parse(contentHashInput([part()], "presentazione_16_9"))[1]).toBe(EXPORT_RENDER_VERSION);
     expect(contentHashInput([part()], "presentazione_16_9")).toContain('"mac-case@1"');

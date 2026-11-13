@@ -3,7 +3,7 @@
 import { ArrowLeft, Eye, Pencil, Tag } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { DANGER_ACTION, PRIMARY_ACTION, SECONDARY_ACTION } from "@/app/_components/button-styles";
 import { Dialog } from "@/app/_components/dialog";
 import type { ActionResult } from "@/app/_lib/action-result";
@@ -41,11 +41,10 @@ import {
   withTextEdit,
   type CollectionCandidate,
   type CollectionGroup,
-  type SegmentEntry,
   type ViewEdits,
   type ViewSegment,
 } from "./collection-file";
-import { HiddenPageStrip, TextMarks } from "./collection-marks";
+import { TextMarks } from "./collection-marks";
 import { CollectionExportButton } from "./collection-export-button";
 import { CollectionPagine } from "./collection-pagine";
 
@@ -58,7 +57,7 @@ type EditWrite = ActionResult<{ collectionId: string; version: number }>;
 interface PageInput {
   collectionId: string;
   expectedVersion: number;
-  part: { kind: "case" | "client_intro"; id: string };
+  part: { kind: "case" | "client_intro" | "brand"; id: string };
   formatId: string;
   pageKey: string;
 }
@@ -98,44 +97,37 @@ export interface CollectionViewProps {
 const noop = () => {};
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
-/** The canvas groups of a format's segments: each with its heading, an unavailable case with its note; `strip` draws a hidden page where it sat (none in Anteprima). */
-function canvasGroupsOf(
-  segments: readonly ViewSegment[],
-  groups: readonly CollectionGroup[],
-  strip: ((segment: ViewSegment, entry: SegmentEntry) => ReactNode) | null,
-): CanvasGroup[] {
+/**
+ * The canvas groups of a format's segments: each with its heading, an unavailable case with its
+ * note. A hidden page leaves the canvas (no strip in its place): Pagine keeps it, faded, with
+ * **Mostra**. A run whose every page is hidden (MAC's intro or outro) leaves it too.
+ */
+function canvasGroupsOf(segments: readonly ViewSegment[], groups: readonly CollectionGroup[]): CanvasGroup[] {
   const copy = it.collection;
-  return segments.map((s) => {
-    const group = groups.find((g) => g.clientId === s.clientId);
-    const c = s.caseId === undefined ? undefined : group?.cases.find((x) => x.caseId === s.caseId);
-    const label =
-      s.kind === "intro"
-        ? fill(copy.canvas.intro, { client: group?.clientName ?? "" })
-        : s.kind === "closing"
-          ? fill(copy.canvas.closing, { client: group?.clientName ?? "" })
-          : fill(copy.canvas.case, { code: c?.code ?? "", name: c?.name ?? "" });
-    const before = new Map<string, ReactNode>();
-    let pending: ReactNode[] = [];
-    if (strip !== null) {
-      for (const entry of s.entries) {
-        if (entry.hidden) pending.push(strip(s, entry));
-        else if (pending.length > 0) {
-          before.set(entry.page.pageKey, pending);
-          pending = [];
-        }
-      }
-    }
-    return {
-      key: s.key,
-      label,
-      template: s.template,
-      values: s.values,
-      pages: s.pages,
-      ...(s.kind === "unavailable" ? { empty: `${copy.pages.unavailable}. ${copy.pages.unavailableNote}` } : {}),
-      ...(before.size > 0 ? { before } : {}),
-      ...(pending.length > 0 ? { after: pending } : {}),
-    };
-  });
+  return segments
+    .filter((s) => s.kind === "unavailable" || s.pages.length > 0)
+    .map((s) => {
+      const group = groups.find((g) => g.clientId === s.clientId);
+      const c = s.caseId === undefined ? undefined : group?.cases.find((x) => x.caseId === s.caseId);
+      const label =
+        s.kind === "brand_intro"
+          ? copy.canvas.brandIntro
+          : s.kind === "brand_outro"
+            ? copy.canvas.brandOutro
+            : s.kind === "intro"
+              ? fill(copy.canvas.intro, { client: group?.clientName ?? "" })
+              : s.kind === "closing"
+                ? fill(copy.canvas.closing, { client: group?.clientName ?? "" })
+                : fill(copy.canvas.case, { code: c?.code ?? "", name: c?.name ?? "" });
+      return {
+        key: s.key,
+        label,
+        template: s.template,
+        values: s.values,
+        pages: s.pages,
+        ...(s.kind === "unavailable" ? { empty: `${copy.pages.unavailable}. ${copy.pages.unavailableNote}` } : {}),
+      };
+    });
 }
 
 /** The block of `page` holding element `elementId`, for the selection frame around a text being typed in. */
@@ -165,10 +157,12 @@ const isStale = (code: string | null) => code === "STALE_COLLECTION" || code ===
  * a double-click on a free text opens it in place, and leaving it (or Enter on a one-line text)
  * saves the collection's words, marked "Modificato in questa raccolta" with **Ripristina testo
  * originale** ("Il testo originale è cambiato" with **Vedi originale** and **Usa originale** when
- * the original changed since). A client or case field, an image or a logo opens nothing. In
- * **Pagine** each part's pages can be moved within it and hidden (**Elimina dalla raccolta**); a
- * hidden page leaves the canvas for a strip with **Ripristina**, and a part keeps at least one
- * page. Edits are saved in the same queue as moves, shown at once and undone on failure.
+ * the original changed since). A client or case field, an image or a logo opens nothing. MAC's
+ * intro and outro (Presentazione) are a part too: only their "Our projects" title takes words.
+ * In **Pagine** each part's pages can be moved within it and hidden (**Nascondi**): a hidden
+ * page leaves the canvas and the file, and stays in Pagine, faded, with **Mostra**; a part keeps
+ * at least one page. Edits are saved in the same queue as moves, shown at once and undone on
+ * failure.
  */
 export function CollectionView({
   id,
@@ -355,7 +349,7 @@ export function CollectionView({
       () => it.collection.edits.restoreFailed,
     );
 
-  /** **Elimina dalla raccolta** (`hidden`) or **Ripristina** on a page of a run; a part keeps at least one page. */
+  /** **Nascondi** (`hidden`) or **Mostra** on a page of a run (MAC's pages too); a part keeps at least one page. */
   const setPageHidden = (segmentKey: string, pageKey: string, hidden: boolean) => {
     const segment = segments.find((s) => s.key === segmentKey);
     if (segment === undefined) return;
@@ -388,21 +382,7 @@ export function CollectionView({
     );
   };
 
-  const canvasGroups = canvasGroupsOf(
-    segments,
-    groups,
-    preview
-      ? null
-      : (segment, entry) => (
-          <HiddenPageStrip
-            key={`hidden-${entry.page.pageKey}`}
-            formatId={formatId}
-            pageKey={entry.page.pageKey}
-            name={entry.page.name}
-            onRestore={() => setPageHidden(segment.key, entry.pageKey, false)}
-          />
-        ),
-  );
+  const canvasGroups = canvasGroupsOf(segments, groups);
 
   /** The marks under a page's texts with the collection's words. */
   const pageExtras = (pageKey: string, host: RefObject<HTMLElement | null>) => {

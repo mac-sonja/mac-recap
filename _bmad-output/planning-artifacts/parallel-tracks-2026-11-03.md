@@ -1,6 +1,6 @@
 # Parallel tracks to the demo
 
-Started 2026-11-03, last updated 2026-11-11.
+Started 2026-11-03, last updated 2026-11-13.
 
 The remaining demo stories, run as two Claude Code sessions at the same time. The owner reviews and merges for both. **Keep the Status column current**: update it in the same pull request that changes a story's status, so any session can use the table to pick its next story.
 
@@ -30,6 +30,7 @@ Status: ✅ merged · 🔄 in progress or in review · ⏸ blocked · ⬜ to do.
 | B7 | 5.11 edit texts and remove pages in a collection | ✅ #163 (5.11a, migration on the mac-recap project 2026-11-11), #164 (5.11b, no migration) | B6 | A2, A7, A8 | configurator (collection mode) |
 | B8 | 3.9 AI client intro draft | ✅ #167 (no migration; AI reads client text fields and PDFs, owner 2026-11-11) | A6 | — | generation |
 | B9 | 5.8 guardrail suite, the rest of 6.4, 6.5 permission checks | ✅ #168 (part 1), #169 (part 2: signed-in DB run) (no migrations) | every other story | — | `test/` |
+| C1 | MAC intro and outro around every Presentazione file (Figma 1047:291 and 1031:218); collections hide pages (Nascondi / Mostra) instead of deleting them | ✅ #171 (migration 20261113120000 not yet on the mac-recap project; owner 2026-11-13: merge without it) | — | — | rendering, configurator, collections, export |
 
 A and B only say where a story started in the plan. **Any session can take any story once its "Waits for" stories are merged.**
 
@@ -41,7 +42,7 @@ When a session finishes a story, or when you open a new one:
 2. Skip it if another session is working on a story it **overlaps** with, and take the next one. Two sessions on overlapping stories means merge conflicts in the same files.
 3. Mark it 🔄 in this table, in the story's first commit.
 
-**As of 2026-11-11:** every story in the table merged (A1–A9, B1–B9); every migration on the mac-recap project. Left for the demo: the CI `image` job (red on main since #165: Docker build cannot resolve Ubuntu mirrors on the runners), the owner's cover/outro design, the worker deployment, and the manual checks in `docs/guardrail-check.md`. The 3-file client limit stays for the demo (owner, 2026-11-11).
+**As of 2026-11-13:** every story in the table merged (A1–A9, B1–B9, C1); stories merged to main are done in `sprint-status.yaml` (owner 2026-11-13). The CI `image` job is green again since #170. The client cover and outro are final (owner 2026-11-13). Left for the demo: apply migration 20261113120000 (#171) to the mac-recap project, the worker deployment, and the manual checks in `docs/guardrail-check.md`. The 3-file client limit stays for the demo (owner, 2026-11-11).
 
 To start a story in a new session, open Claude Code on `main` and say: "Start story <#> (<story>) from `_bmad-output/planning-artifacts/parallel-tracks-2026-11-03.md`; run `bmad-build`."
 

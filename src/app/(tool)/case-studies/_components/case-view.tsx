@@ -2,13 +2,13 @@
 
 import { ChevronLeft, Pencil } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { PRIMARY_ACTION } from "@/app/_components/button-styles";
 import { DownloadButton } from "@/app/_components/download-button";
 import { StatusBadge } from "@/app/_components/status-badge";
 import type { ConfiguratorHeader } from "@/app/(wizard)/_components/configurator/top-bar";
 import type { Page } from "@/modules/generation";
-import { FORMAT_IDS, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
+import { FORMAT_IDS, withBrandPages, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { ActivityCard, type ActivityCardLine } from "../../_components/activity-card";
 import { caseDownload } from "./case-download";
@@ -94,7 +94,8 @@ export function CaseView({
   const [slide, setSlide] = useState(0);
   const still = useReducedMotion();
 
-  const pages = formats[formatId];
+  // In Presentazione, MAC's intro and outro around the case's pages, as every file has them.
+  const pages = useMemo(() => withBrandPages(formatId, formats[formatId]), [formatId, formats]);
 
   function pickFormat(next: FormatId) {
     if (next === formatId) return;

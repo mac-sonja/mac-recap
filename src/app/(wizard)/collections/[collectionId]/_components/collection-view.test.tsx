@@ -5,7 +5,20 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DocumentElement, Page } from "@/modules/generation";
-import { CASE_TEMPLATE, CLIENT_TEMPLATE, FORMAT_IDS, starterPages, TEMPLATE_TEXT_KEYS, type BoundValues, type FormatId } from "@/modules/rendering";
+import {
+  BRAND_INTRO,
+  BRAND_INTRO_KEY,
+  BRAND_OUTRO,
+  BRAND_PART_ID,
+  BRAND_TITLE_ELEMENT_ID,
+  CASE_TEMPLATE,
+  CLIENT_TEMPLATE,
+  FORMAT_IDS,
+  starterPages,
+  TEMPLATE_TEXT_KEYS,
+  type BoundValues,
+  type FormatId,
+} from "@/modules/rendering";
 import { fill, it as dict } from "@/shared/i18n/it";
 import { collectionSegments, NO_EDITS, type CollectionGroup, type PartPages, type ViewEdits } from "./collection-file";
 import type { CollectionActions } from "./collection-view";
@@ -116,7 +129,9 @@ describe("a collection's page (Story 5.10a)", () => {
     expect(within(tags).getByText("Moda")).toBeTruthy();
     const canvas = screen.getByRole("region", { name: dict.configurator.canvas.label });
     const headings = [...canvas.querySelectorAll("[data-canvas-group]")].map((el) => el.getAttribute("data-canvas-group"));
-    expect(headings).toEqual(["client_intro:client-a", "case:a1", "case:a2", "client_closing:client-a", "case:b1"]);
+    // MAC's intro opens the file and its outro closes it, once.
+    expect(headings).toEqual(["brand_intro", "client_intro:client-a", "case:a1", "case:a2", "client_closing:client-a", "case:b1", "brand_outro"]);
+    expect(within(canvas).getByText(copy.canvas.brandIntro)).toBeTruthy();
     expect(within(canvas).getByText(fill(copy.canvas.intro, { client: "Alfa" }))).toBeTruthy();
     // Read-only: no bin, no Aggiungi pagina, nothing typed in.
     expect(canvas.querySelector("[data-delete-page]")).toBeNull();
@@ -125,8 +140,13 @@ describe("a collection's page (Story 5.10a)", () => {
     // Pagine: locked intro and closing rows, and the unavailable case greyed.
     const panel = pagine();
     const locked = [...panel.querySelectorAll("[data-locked]")];
-    expect(locked.map((el) => el.getAttribute("data-locked"))).toEqual(["client_intro:client-a", "client_closing:client-a"]);
-    expect(locked.map((el) => el.querySelector(".lucide-lock")?.parentElement?.textContent)).toEqual([copy.pages.intro, copy.pages.closing]);
+    expect(locked.map((el) => el.getAttribute("data-locked"))).toEqual(["brand_intro", "client_intro:client-a", "client_closing:client-a", "brand_outro"]);
+    expect(locked.map((el) => el.querySelector(".lucide-lock")?.parentElement?.textContent)).toEqual([
+      copy.pages.brandIntro,
+      copy.pages.intro,
+      copy.pages.closing,
+      copy.pages.brandOutro,
+    ]);
     const unavailable = panel.querySelector('[data-row="case:b1"]')!;
     expect(unavailable.hasAttribute("data-unavailable")).toBe(true);
     expect(within(unavailable as HTMLElement).getByText(copy.pages.unavailable)).toBeTruthy();
@@ -461,21 +481,45 @@ describe("a collection's own edits (Story 5.11a)", () => {
     expect(actions.restoreText).toHaveBeenCalledWith(expect.objectContaining({ part: { kind: "case", id: "a1" }, pageKey, elementId: el.elementId }));
   });
 
-  it("hides a page from Pagine (a strip with Ripristina in its place) and brings it back", async () => {
+  it("hides a page from Pagine with Nascondi: gone from the canvas (no strip), faded in Pagine with Mostra", async () => {
     const user = userEvent.setup();
     actions.setPageHidden.mockResolvedValueOnce(edited(8)).mockResolvedValueOnce(edited(9));
     renderView();
     const { page, pageKey } = a1Page();
+    const canvasText = canvas().textContent;
     await openRun(user, "Caso A1");
     await user.click(within(pagine()).getByRole("button", { name: fill(edits.pageMenu, { name: page.name }) }));
+    expect(screen.queryByRole("menuitem", { name: "Elimina dalla raccolta" })).toBeNull();
     await user.click(screen.getByRole("menuitem", { name: edits.hidePage }));
+    expect(edits.hidePage).toBe("Nascondi");
     expect(actions.setPageHidden).toHaveBeenCalledWith({ collectionId: "c1", expectedVersion: 7, part: { kind: "case", id: "a1" }, formatId: F, pageKey, hidden: true });
     expect(canvas().querySelector(`[data-canvas-page="${page.pageKey}"]`)).toBeNull();
-    const strip = canvas().querySelector<HTMLElement>(`[data-hidden-page="${page.pageKey}"]`)!;
-    expect(strip).toBeTruthy();
-    await user.click(within(strip).getByRole("button", { name: edits.restorePage }));
+    // Nothing in its place on the canvas.
+    expect(canvas().querySelector("[data-hidden-page]")).toBeNull();
+    expect(canvasText).not.toContain(edits.restorePage);
+    expect(within(canvas()).queryByRole("button", { name: edits.restorePage })).toBeNull();
+    // Still in Pagine, faded, with Mostra.
+    const row = pagine().querySelector<HTMLElement>(`[data-page-row="${pageKey}"]`)!;
+    expect(row.hasAttribute("data-hidden")).toBe(true);
+    expect(row.className).toContain("opacity-50");
+    expect(row.textContent).toContain(edits.hiddenRow);
+    await user.click(within(pagine()).getByRole("button", { name: fill(edits.pageMenu, { name: page.name }) }));
+    await user.click(screen.getByRole("menuitem", { name: edits.restorePage }));
+    expect(edits.restorePage).toBe("Mostra");
     await waitFor(() => expect(actions.setPageHidden).toHaveBeenLastCalledWith({ collectionId: "c1", expectedVersion: 8, part: { kind: "case", id: "a1" }, formatId: F, pageKey, hidden: false }));
     expect(canvas().querySelector(`[data-canvas-page="${page.pageKey}"]`)).toBeTruthy();
+    expect(pagine().querySelector(`[data-page-row="${pageKey}"]`)!.hasAttribute("data-hidden")).toBe(false);
+  });
+
+  it("keeps a run whose pages are all hidden in Pagine, so Mostra can bring them back", async () => {
+    const user = userEvent.setup();
+    const intro = collectionSegments(GROUPS, F).find((s) => s.key === "client_intro:client-a")!;
+    const saved: ViewEdits = { ...NO_EDITS, hidden: intro.entries.map((e) => ({ partKey: "client_intro:client-a", formatId: F, pageKey: e.pageKey })) };
+    render(view(GROUPS, 7, undefined, saved));
+    expect(canvas().querySelector('[data-canvas-group="client_intro:client-a"]')).toBeNull();
+    expect(pagine().querySelector('[data-locked="client_intro:client-a"]')).toBeTruthy();
+    await openRun(user, copy.pages.intro);
+    expect(pagine().querySelector(`[data-page-row="${intro.entries[0]!.pageKey}"]`)!.hasAttribute("data-hidden")).toBe(true);
   });
 
   it("hides a client intro page like any other", async () => {
@@ -583,7 +627,54 @@ describe("a collection's own edits (Story 5.11a)", () => {
     expect(canvas().querySelector(`[data-text-mark="${el.elementId}"]`)?.textContent).toContain(edits.edited);
   });
 
-  it("Anteprima shows no marks and no strips, and a double-click opens nothing", async () => {
+  it("opens MAC's \"Our projects\" title for typing and saves it in the collection as MAC's part; MAC's other texts open nothing", async () => {
+    actions.setText.mockResolvedValue(edited());
+    renderView();
+    const intro = `brand_intro|${BRAND_INTRO_KEY}`;
+    const title = node(intro, BRAND_TITLE_ELEMENT_ID);
+    expect(title.textContent).toBe("Our projects");
+    // A fixed MAC text (the company's name) is not an element: nothing opens.
+    fireEvent.doubleClick(canvas().querySelector<HTMLElement>(`[data-canvas-page="${intro}"] .mr-brand-name`)!);
+    expect(canvas().querySelector("[contenteditable]")).toBeNull();
+    fireEvent.doubleClick(title);
+    const typing = node(intro, BRAND_TITLE_ELEMENT_ID);
+    expect(typing.getAttribute("contenteditable")).toBe("plaintext-only");
+    typing.textContent = "I nostri progetti";
+    fireEvent.input(typing);
+    fireEvent.focusOut(typing);
+    await waitFor(() =>
+      expect(actions.setText).toHaveBeenCalledWith({
+        collectionId: "c1",
+        expectedVersion: 7,
+        part: { kind: "brand", id: BRAND_PART_ID },
+        formatId: F,
+        pageKey: BRAND_INTRO_KEY,
+        elementId: BRAND_TITLE_ELEMENT_ID,
+        text: "I nostri progetti",
+      }),
+    );
+    expect(node(intro, BRAND_TITLE_ELEMENT_ID).textContent).toBe("I nostri progetti");
+    expect(canvas().querySelector(`[data-text-mark="${BRAND_TITLE_ELEMENT_ID}"]`)?.textContent).toContain(edits.edited);
+  });
+
+  it("hides MAC's intro like any page, and refuses to hide MAC's last page shown", async () => {
+    const user = userEvent.setup();
+    actions.setPageHidden.mockResolvedValue(edited());
+    renderView();
+    await openRun(user, copy.pages.brandIntro);
+    await user.click(within(pagine()).getByRole("button", { name: fill(edits.pageMenu, { name: BRAND_INTRO.name }) }));
+    await user.click(screen.getByRole("menuitem", { name: edits.hidePage }));
+    expect(actions.setPageHidden).toHaveBeenCalledWith({ collectionId: "c1", expectedVersion: 7, part: { kind: "brand", id: BRAND_PART_ID }, formatId: F, pageKey: BRAND_INTRO_KEY, hidden: true });
+    expect(canvas().querySelector('[data-canvas-group="brand_intro"]')).toBeNull();
+    expect(canvas().querySelector('[data-canvas-group="brand_outro"]')).toBeTruthy();
+    await openRun(user, copy.pages.brandOutro);
+    await user.click(within(pagine()).getByRole("button", { name: fill(edits.pageMenu, { name: BRAND_OUTRO.name }) }));
+    await user.click(screen.getByRole("menuitem", { name: edits.hidePage }));
+    expect(screen.getByRole("status").textContent).toBe(edits.lastPage);
+    expect(actions.setPageHidden).toHaveBeenCalledTimes(1);
+  });
+
+  it("Anteprima shows no marks and no hidden page, and a double-click opens nothing", async () => {
     const user = userEvent.setup();
     const { page, pageKey } = a1Page();
     const el = freeText(page);
@@ -593,11 +684,12 @@ describe("a collection's own edits (Story 5.11a)", () => {
       hidden: [{ partKey: "case:a1", formatId: F, pageKey: collectionSegments(GROUPS, F).find((s) => s.key === "case:a1")!.entries[1]!.pageKey }],
     };
     render(view(GROUPS, 7, undefined, saved));
+    const hiddenKey = collectionSegments(GROUPS, F, saved).find((s) => s.key === "case:a1")!.entries.find((e) => e.hidden)!.page.pageKey;
     expect(canvas().querySelector("[data-text-mark]")).toBeTruthy();
-    expect(canvas().querySelector("[data-hidden-page]")).toBeTruthy();
+    expect(canvas().querySelector(`[data-canvas-page="${hiddenKey}"]`)).toBeNull();
     await user.click(screen.getByRole("button", { name: dict.configurator.preview.enter }));
     expect(canvas().querySelector("[data-text-mark]")).toBeNull();
-    expect(canvas().querySelector("[data-hidden-page]")).toBeNull();
+    expect(canvas().querySelector(`[data-canvas-page="${hiddenKey}"]`)).toBeNull();
     fireEvent.doubleClick(node(page.pageKey, el.elementId));
     expect(node(page.pageKey, el.elementId).getAttribute("contenteditable")).not.toBe("plaintext-only");
     // Its words still show the collection's.

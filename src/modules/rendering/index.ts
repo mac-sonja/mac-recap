@@ -34,10 +34,31 @@ export {
 export { EXPORT_FORMAT_IDS, isExportFormatId } from "@/modules/rendering/domain/export";
 export type { ExportFormatId } from "@/modules/rendering/domain/export";
 export { composeParts, renderComposed } from "@/modules/rendering/compose";
-export type { CasePart, ClientIntroPart, ComposedFile, ComposedSegment, ComposeOptions, ComposePart } from "@/modules/rendering/compose";
+export type { BrandPart, CasePart, ClientIntroPart, ComposedFile, ComposedSegment, ComposeOptions, ComposePart } from "@/modules/rendering/compose";
+// MAC's own intro and outro of every Presentazione file: code constants, drawn by `renderFormat(BRAND_TEMPLATE, …)`.
+export {
+  BRAND_FORMAT,
+  BRAND_INTRO,
+  BRAND_INTRO_KEY,
+  BRAND_OUTRO,
+  BRAND_OUTRO_KEY,
+  BRAND_PAGES,
+  BRAND_PART_ID,
+  BRAND_TEMPLATE,
+  BRAND_TITLE,
+  BRAND_TITLE_ELEMENT_ID,
+  brandPageCount,
+  NO_BOUND_VALUES,
+  hasBrandPages,
+  isBrandPage,
+  isBrandPageKey,
+  templateOfPage,
+  withBrandPages,
+} from "@/modules/rendering/brand/pages";
 // Story 5.11b: a collection's edits laid over its parts, one rule set for its page and its export.
 export {
   applyCollectionEdits,
+  BRAND_PART_KEY,
   collectionPartKey,
   freeTextIn,
   isFreeText,

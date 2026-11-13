@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FORMAT_IDS, layouts, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
+import { BRAND_INTRO_KEY, BRAND_OUTRO_KEY, BRAND_TITLE_ELEMENT_ID, FORMAT_IDS, layouts, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
 import {
   buildTestDraft,
   caseHistoryV2,
@@ -199,11 +199,37 @@ describe("Configurator", () => {
     expect(screen.getByText(dict.configurator.narrowScreen)).toBeTruthy();
   });
 
-  it("draws Presentazione's pages grouped Intro, Output, Risultati and labelled {n} · {name}", () => {
+  it("draws Presentazione's pages grouped Intro, Output, Risultati and labelled {n} · {name}, between MAC's intro and outro", () => {
     setup();
     const text = canvas().textContent ?? "";
-    expect(text).toMatch(/Intro.*1 · Intro.*Output.*2 · Contenuti.*Risultati.*3 · Risultati e testimonial/s);
-    expect(canvas().querySelectorAll(".mr-page")).toHaveLength(3);
+    expect(text).toMatch(/Apertura MAC.*1 · MAC · Our projects.*Intro.*2 · Intro.*Output.*3 · Contenuti.*Risultati.*4 · Risultati e testimonial.*Chiusura MAC.*5 · MAC · Contatti/s);
+    expect(canvas().querySelectorAll(".mr-page")).toHaveLength(5);
+  });
+
+  it("draws no MAC page around a Presentazione with no page", () => {
+    setup(false, { ...formats, presentazione_16_9: [] });
+    expect(canvas().querySelector("[data-brand-page]")).toBeNull();
+    expect(canvas().querySelector("[data-canvas-page]")).toBeNull();
+  });
+
+  it("shows MAC's pages read-only: no selection, no typing, no bin; none in Carosello", () => {
+    setup();
+    const brand = [...canvas().querySelectorAll<HTMLElement>("[data-brand-page]")];
+    expect(brand.map((b) => b.dataset.brandPage)).toEqual([BRAND_INTRO_KEY, BRAND_OUTRO_KEY]);
+    // The document's pages are the case's only.
+    expect([...canvas().querySelectorAll<HTMLElement>("[data-canvas-page]")].map((n) => n.dataset.canvasPage)).toEqual(formats.presentazione_16_9.map((pg) => pg.pageKey));
+    const title = brand[0]!.querySelector<HTMLElement>(`[data-element-id="${BRAND_TITLE_ELEMENT_ID}"]`)!;
+    expect(title.textContent).toBe("Our projects");
+    fireEvent.click(title);
+    fireEvent.doubleClick(title);
+    fireEvent.keyDown(title, { key: "Enter" });
+    expect(title.hasAttribute("contenteditable")).toBe(false);
+    expect(canvas().querySelector("[contenteditable]")).toBeNull();
+    expect(canvas().querySelector("[data-selected], [data-frame]")).toBeNull();
+    expect(brand[0]!.querySelector("[data-delete-page]")).toBeNull();
+    expect(canvas().querySelectorAll("[data-delete-page]")).toHaveLength(formats.presentazione_16_9.length);
+    fireEvent.click(button(/Carosello/));
+    expect(canvas().querySelector("[data-brand-page]")).toBeNull();
   });
 
   it("switches format: that format's own pages and thumbnails", () => {
@@ -251,7 +277,8 @@ describe("Configurator", () => {
     setup();
     const page = formats.presentazione_16_9[2];
     const thumb = rightPanel().querySelector<HTMLElement>(`[data-thumb="${page.pageKey}"]`)!;
-    expect(thumb.querySelector("small")?.textContent).toBe(`3 · ${page.name}`);
+    // Numbered as on the canvas: MAC's intro is page 1.
+    expect(thumb.querySelector("small")?.textContent).toBe(`4 · ${page.name}`);
     fireEvent.click(thumb);
     expect(thumb.getAttribute("aria-current")).toBe("true");
     expect(pageNode(page.pageKey).hasAttribute("data-selected")).toBe(true);
@@ -420,7 +447,7 @@ describe("Configurator · Anteprima (Story 4.2b)", () => {
     const pages = [...canvas().querySelectorAll<HTMLElement>("[data-canvas-page]")];
     expect(pages.map((p) => p.dataset.canvasPage)).toEqual(formats.presentazione_16_9.map((p) => p.pageKey));
     for (const page of pages) expect(page.className).toContain("max-w-[1600px]");
-    expect(canvas().textContent).toMatch(/Intro.*1 · Intro.*Output.*2 · Contenuti.*Risultati.*3 · Risultati e testimonial/s);
+    expect(canvas().textContent).toMatch(/Apertura MAC.*1 · MAC · Our projects.*Intro.*2 · Intro.*Output.*3 · Contenuti.*Risultati.*4 · Risultati e testimonial.*Chiusura MAC/s);
     expect(canvas().querySelector("[data-slideshow]")).toBeNull();
   });
 
@@ -2845,7 +2872,8 @@ describe("Configurator pages (Story 4.13)", () => {
     expect(now).toHaveLength(keys.length + 1);
     expect(now[0]).toBe(keys[0]);
     expect(pageNode(now[1]!).hasAttribute("data-selected")).toBe(true);
-    expect(canvas().textContent).toContain(fill(dict.configurator.canvas.pageLabel, { n: 2, name: p.newPage }));
+    // Numbered after MAC's intro.
+    expect(canvas().textContent).toContain(fill(dict.configurator.canvas.pageLabel, { n: 3, name: p.newPage }));
     await settle();
     expect(savedKeys(onSave)).toHaveLength(keys.length + 1);
     expect(validateNewDocument(lastDoc(onSave))).toMatchObject({ ok: true });
@@ -2877,7 +2905,8 @@ describe("Configurator pages (Story 4.13)", () => {
     const onSave = vi.fn(savedOk);
     setup(false, formats, { onSave });
     const keys = formats.presentazione_16_9.map((pg) => pg.pageKey);
-    fireEvent.click(button(fill(p.deleteLabel, { n: 2 }), canvas()));
+    // The case's second page is page 3: MAC's intro is page 1.
+    fireEvent.click(button(fill(p.deleteLabel, { n: 3 }), canvas()));
     expect(status().textContent).toBe(p.deleted);
     expect(pagesNow()).toEqual(keys.filter((_, i) => i !== 1));
     await settle();
@@ -3507,7 +3536,7 @@ describe("Configurator client and case fields", () => {
     el.type === "text" && el.binding?.record === record && el.binding.field === field && (index === undefined || el.binding.index === index);
   const node = (at: { pageKey: string; id: string }) => pageNode(at.pageKey).querySelector<HTMLElement>(`[data-element-id="${at.id}"]`)!;
   const nameNodes = () =>
-    [...canvas().querySelectorAll<HTMLElement>(".mr-txt[data-element-id]")].filter((n) => {
+    [...canvas().querySelectorAll<HTMLElement>("[data-canvas-page] .mr-txt[data-element-id]")].filter((n) => {
       const at = { pageKey: n.closest<HTMLElement>("[data-canvas-page]")!.dataset.canvasPage!, id: n.dataset.elementId! };
       const page = formats.presentazione_16_9.find((p) => p.pageKey === at.pageKey);
       return page !== undefined && textElementAt([page], at.pageKey, at.id)?.binding?.field === "name";

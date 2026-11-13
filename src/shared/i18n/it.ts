@@ -976,6 +976,10 @@ export const it = {
       intro: "Introduzione",
       closing: "Chiusura",
       locked: "Bloccata: segue le case del cliente",
+      /** MAC's own pages around a Presentazione file: they open and close it and don't move. */
+      brandIntro: "Apertura MAC",
+      brandOutro: "Chiusura MAC",
+      brandLocked: "Bloccata: apre e chiude ogni presentazione",
       /** `{code}` and `{n}` pages of a case. */
       casePages: "{code} · {n} pagine",
       casePagesOne: "{code} · 1 pagina",
@@ -1000,6 +1004,9 @@ export const it = {
     canvas: {
       intro: "Introduzione · {client}",
       closing: "Chiusura · {client}",
+      /** MAC's own pages: in a collection only their title "Our projects" can be changed. */
+      brandIntro: "Apertura MAC",
+      brandOutro: "Chiusura MAC",
       /** `{code}` · `{name}` of a case. */
       case: "{code} · {name}",
     },
@@ -1030,15 +1037,13 @@ export const it = {
       /** `{max}` characters, the document's text limit. */
       textTooLong: "Al massimo {max} caratteri. Il testo non è stato salvato.",
       notEditable: "Questo testo arriva dalla scheda del cliente o della case: qui non si modifica.",
-      /** A page's menu in Pagine. */
-      hidePage: "Elimina dalla raccolta",
-      restorePage: "Ripristina",
-      /** The strip in a hidden page's place; `{n}` and `{name}` the page. */
-      hiddenStrip: "{name} non è in questa raccolta",
-      hiddenRow: "Eliminata dalla raccolta",
+      /** A page's menu in Pagine: a hidden page leaves the canvas and the file, and stays here, faded. */
+      hidePage: "Nascondi",
+      restorePage: "Mostra",
+      hiddenRow: "Nascosta in questa raccolta",
       lastPage: "Una parte tiene almeno una pagina.",
-      hideFailed: "Pagina non eliminata. Riprova.",
-      showFailed: "Pagina non ripristinata. Riprova.",
+      hideFailed: "Pagina non nascosta. Riprova.",
+      showFailed: "Pagina non mostrata. Riprova.",
       /** The toggle that shows a part's pages in Pagine; `{name}` the case, the intro or the closing. */
       pagesOf: "Pagine di {name}",
       /** A page row: its place `{n}` and its `{name}`. */
@@ -1226,6 +1231,13 @@ export const it = {
       /** Above each page: its number and name. */
       pageLabel: "{n} · {name}",
       empty: "Nessuna pagina in questo formato.",
+      /** MAC's own pages around every Presentazione: shown here, never edited (a collection may change their title). */
+      brandIntro: "Apertura MAC",
+      brandOutro: "Chiusura MAC",
+      brandNote: "Pagina fissa di MAC: il titolo si cambia solo in una raccolta.",
+      brandOutroNote: "Pagina fissa di MAC.",
+      /** Read on a MAC page: `{name}` the page. */
+      brandPage: "{name}, pagina fissa di MAC",
       /** On the selected block. */
       move: "⠿ Sposta",
       /** The grip's hint (Story 4.3e). */

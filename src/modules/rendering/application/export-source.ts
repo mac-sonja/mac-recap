@@ -1,6 +1,7 @@
 import type { CaseClientInfo, CaseStudy, CaseStudyRevision } from "@/modules/case-study";
 import type { CaseStudyDocument, Page } from "@/modules/generation";
 import type { DetailsForm } from "@/modules/material";
+import { brandPageCount } from "@/modules/rendering/brand/pages";
 import { applyCollectionEdits, type CollectionEditSet } from "@/modules/rendering/collection-edits";
 import { composeParts, type ComposePart } from "@/modules/rendering/compose";
 import { bundleHash, collectionHash, contentHash, packHash } from "@/modules/rendering/application/content-hash";
@@ -164,7 +165,12 @@ export interface ExportDrawing {
   parts: readonly DrawPart[];
   /** Composed with the pack rule (`composeParts`' `pack` option). */
   pack: boolean;
-  /** How many pages the file has (`composeParts`): what a printed file is checked against. */
+  /**
+   * A collection's copies of MAC's pages (its words, its hidden ones left out), drawn instead of
+   * the constants (`composeParts`' `brand` option). Absent: MAC's own pages.
+   */
+  brand?: readonly Page[];
+  /** How many pages the file has (`composeParts`, MAC's pages in Presentazione included): what a printed file is checked against. */
   pageCount: number;
   contentHash: string;
   /** The code and name its files are named after: the case's, the client's, or (no code) the collection's. */
@@ -182,7 +188,8 @@ export function drawingOfCase(source: ExportSource): ExportDrawing {
       { kind: "case_history", caseId: source.caseStudy.id, clientId: source.info.clientId, revision: source.revision, content: source.content },
     ],
     pack: false,
-    pageCount: source.pages.length,
+    // The case's pages, with MAC's intro and outro around them in Presentazione (`composeParts`).
+    pageCount: source.pages.length + brandPageCount(source.format),
     contentHash: source.contentHash,
     code: source.caseStudy.code,
     name: source.caseStudy.name,
@@ -557,6 +564,7 @@ export async function readCollectionSources(
       format,
       parts: edited,
       pack: false,
+      brand: applied.brand,
       pageCount: applied.file.segments.reduce((sum, segment) => sum + segment.pages.length, 0),
       contentHash: collectionHash(
         parts.collection,

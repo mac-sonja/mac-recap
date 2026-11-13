@@ -360,3 +360,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-b9a-guardrail-and-permission-suite.md`
   summary: B9 part 2 (rest of Story 6.4): run the permission matrix against the local database with a signed-in test user per role (owner, admin, account/sales/social), through the real getActor and authorize.
   evidence: Owner chose on 2026-11-11 to build B9 in two parts; part 1 builds the guardrail suite, the complete permission list and the checklist.
+- source_spec: `_bmad-output/implementation-artifacts/spec-mac-presentation-intro-outro.md`
+  summary: A collection's own words for a text (a case text or MAC's "Our projects" title) are never measured for overflow, so a long one is clipped in the page and the PDF.
+  evidence: COLLECTION_TEXT_MAX is 5000 and the collection page calls no measureOverflow; the case configurator's overflow marker has no collection counterpart.

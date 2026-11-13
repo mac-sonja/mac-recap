@@ -1,7 +1,13 @@
 import { CURRENT_SCHEMA_VERSION, type CaseStudyDocument, type Page } from "@/modules/generation";
 import {
   applyCollectionEdits,
+  BRAND_PAGES,
+  BRAND_PART_KEY,
+  BRAND_TEMPLATE,
+  FORMAT_IDS,
   freeTextIn,
+  hasBrandPages,
+  NO_BOUND_VALUES,
   normalisePartKey,
   orderedPages,
   pageTextEdits,
@@ -19,7 +25,10 @@ import type { BusinessLine } from "@/modules/case-study";
  * laid over each part's pages before they are composed; the originals stay as they are.
  */
 
-/** A part of the collection: `case:{caseId}`, or `client_intro:{clientId}` (a client's intro document: its intro and its closing). */
+/**
+ * A part of the collection: `case:{caseId}`, `client_intro:{clientId}` (a client's intro document:
+ * its intro and its closing), or `BRAND_PART_KEY` (MAC's intro and outro of Presentazione).
+ */
 export type PartKey = string;
 
 /** The collection's words for one free text of a part's page in a format. */
@@ -57,9 +66,10 @@ export interface ViewEdits {
 export const NO_EDITS: ViewEdits = { texts: [], hidden: [], orders: [] };
 
 /** The part a part key names, as the actions take it. */
-export function partOfKey(partKey: PartKey): { kind: "case" | "client_intro"; id: string } {
+export function partOfKey(partKey: PartKey): { kind: "case" | "client_intro" | "brand"; id: string } {
   const at = partKey.indexOf(":");
-  return { kind: partKey.slice(0, at) === "client_intro" ? "client_intro" : "case", id: partKey.slice(at + 1) };
+  const kind = partKey.slice(0, at);
+  return { kind: kind === "client_intro" || kind === "brand" ? kind : "case", id: partKey.slice(at + 1) };
 }
 
 /** A document's pages as the canvas draws them: its template, every format's pages, its bound values. */
@@ -100,7 +110,7 @@ export interface CollectionCandidate {
   industry: string | null;
 }
 
-/** A page of a segment: shown, or hidden by the collection (it then shows as a strip with **Ripristina**). */
+/** A page of a segment: shown, or hidden by the collection (it then leaves the canvas, and shows faded in Pagine with **Mostra**). */
 export interface SegmentEntry {
   /** The page as drawn (its key prefixed with the segment's, its free texts with the collection's words). */
   page: Page;
@@ -109,11 +119,12 @@ export interface SegmentEntry {
   hidden: boolean;
 }
 
-/** One run of the collection's pages in a format: a client's intro or closing, a case, or a case with no pages any more. */
+/** One run of the collection's pages in a format: MAC's intro or outro, a client's intro or closing, a case, or a case with no pages any more. */
 export interface ViewSegment {
-  /** Unique in the collection: `client_intro:{clientId}`, `case:{caseId}`, `client_closing:{clientId}`. */
+  /** Unique in the collection: `brand_intro`, `client_intro:{clientId}`, `case:{caseId}`, `client_closing:{clientId}`, `brand_outro`. */
   key: string;
-  kind: "intro" | "case" | "closing" | "unavailable";
+  kind: "brand_intro" | "intro" | "case" | "closing" | "unavailable" | "brand_outro";
+  /** The client's id; `""` for MAC's pages. */
   clientId: string;
   caseId?: string;
   template: string;
@@ -126,10 +137,14 @@ export interface ViewSegment {
   entries: readonly SegmentEntry[];
 }
 
-/** No bound values: a case with no pages draws nothing. */
-export const EMPTY_VALUES: BoundValues = {
-  client: { name: "", sector: "", description: "", logoUrl: null, results: [], testimonial: null },
-  case: { year: null, services: [], results: [], testimonial: null },
+/** No bound values: a case with no pages draws nothing (the rendering module's one constant). */
+export const EMPTY_VALUES: BoundValues = NO_BOUND_VALUES;
+
+/** MAC's pages as a part: the rendering module's constants, in Presentazione only. */
+export const BRAND_PART: PartPages = {
+  template: BRAND_TEMPLATE,
+  formats: Object.fromEntries(FORMAT_IDS.map((id) => [id, hasBrandPages(id) ? BRAND_PAGES : []])) as Record<FormatId, readonly Page[]>,
+  values: EMPTY_VALUES,
 };
 
 /** A page shown, by its revision's own page object and segment: the same object every time, so an untouched page keeps its drawing. */
@@ -183,7 +198,8 @@ const docOf = (part: PartPages, kind: "case_history" | "client_intro"): CaseStud
  * each client with an approved intro and 2 or more cases with pages, its intro, its cases without
  * their own intro pages (and Carosello Chiusura), then its closing once; otherwise each case
  * whole. Groups are given already grouped by client, so the order stays the collection's. A case
- * with no approved revision gets an empty `unavailable` segment where it sits.
+ * with no approved revision gets an empty `unavailable` segment where it sits. In Presentazione
+ * MAC's intro opens the file and its outro closes it (part `BRAND_PART_KEY`).
  */
 export function collectionSegments(groups: readonly CollectionGroup[], formatId: FormatId, edits: ViewEdits = NO_EDITS): ViewSegment[] {
   const parts: ComposePart[] = [];
@@ -196,8 +212,8 @@ export function collectionSegments(groups: readonly CollectionGroup[], formatId:
     }
   }
   // The export's rules (Story 5.11b): order and words laid over, and which pages are hidden, a
-  // part never showing no page. Composed with the hidden pages in: each stays in its run, where
-  // it sat, as a strip.
+  // part never showing no page. Composed with the hidden pages in: each stays in its run's
+  // entries (Pagine shows it faded), out of its shown pages.
   const applied = applyCollectionEdits(parts, formatId, edits, { wordPage: withWords });
   const composed = new Map(applied.composed.segments.map((s) => [s.key, s]));
   const out: ViewSegment[] = [];
@@ -216,6 +232,7 @@ export function collectionSegments(groups: readonly CollectionGroup[], formatId:
       entries,
     });
   };
+  if (composed.has("brand_intro")) add("brand_intro", "brand_intro", "", BRAND_PART, BRAND_PART_KEY);
   for (const group of groups) {
     const introKey = `client_intro:${group.clientId}`;
     const wraps = group.intro !== null && composed.has(introKey);
@@ -240,6 +257,7 @@ export function collectionSegments(groups: readonly CollectionGroup[], formatId:
     const closingKey = `client_closing:${group.clientId}`;
     if (wraps && composed.has(closingKey)) add(closingKey, "closing", group.clientId, group.intro!, introKey);
   }
+  if (composed.has("brand_outro")) add("brand_outro", "brand_outro", "", BRAND_PART, BRAND_PART_KEY);
   return out;
 }
 
@@ -281,9 +299,10 @@ export const groupOfCase = (groups: readonly CollectionGroup[], caseId: string) 
 export const matchesTags = (candidate: CollectionCandidate, tags: { businessLines: readonly string[]; industries: readonly string[] }) =>
   candidate.businessLines.some((line) => tags.businessLines.includes(line)) || (candidate.industry !== null && tags.industries.includes(candidate.industry));
 
-/** The original pages of a part, by its key (a case's live revision, or its client's intro document); undefined when it has none. */
+/** The original pages of a part, by its key (a case's live revision, its client's intro document, or MAC's pages); undefined when it has none. */
 export function partPagesOf(groups: readonly CollectionGroup[], partKey: PartKey): PartPages | undefined {
   const { kind, id } = partOfKey(partKey);
+  if (kind === "brand") return partKey === BRAND_PART_KEY ? BRAND_PART : undefined;
   for (const group of groups) {
     if (kind === "client_intro" && group.clientId === id) return group.intro ?? undefined;
     const found = kind === "case" ? group.cases.find((c) => c.caseId === id) : undefined;

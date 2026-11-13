@@ -8,7 +8,7 @@ import { storeZip, readStoredZip } from "@/modules/rendering/adapters/zip/store-
 import { makeExportHandler, type ExportHandlerDeps } from "@/modules/rendering/application/export-handler";
 import { collectionSegments, EMPTY_VALUES, type CollectionGroup, type PartPages, type ViewEdits } from "@/app/(wizard)/collections/[collectionId]/_components/collection-file";
 import type { CaseStudyDocument, DocumentElement, Page } from "@/modules/generation";
-import { composeParts } from "@/modules/rendering";
+import { BRAND_INTRO_KEY, BRAND_OUTRO_KEY, BRAND_PART_KEY, BRAND_TITLE_ELEMENT_ID, composeParts } from "@/modules/rendering";
 import { composePartOf, readCollectionSources } from "@/modules/rendering/application/export-source";
 import {
   ACTOR,
@@ -34,11 +34,15 @@ const C = "carosello_1_1" as const;
 /** X's intro page's free title in the fixture document ("Il titolo del progetto…"). */
 const TITLE = "eeeeeeee-0000-4000-8000-000000000003";
 
-const sections = (html: string) => html.match(/<section class="mr-page"/g)?.length ?? 0;
+const sections = (html: string) => html.match(/<section class="mr-page[" ]/g)?.length ?? 0;
 /** Each page's key, in the file's order. */
-const pageKeys = (html: string) => [...html.matchAll(/<section class="mr-page"[^>]*?data-page-key="([^"]+)"/g)].map((m) => m[1]);
+const pageKeys = (html: string) => [...html.matchAll(/<section class="mr-page[^"]*"[^>]*?data-page-key="([^"]+)"/g)].map((m) => m[1]);
 const pageNumbers = (html: string) => [...html.matchAll(/data-page-number="(\d+)"/g)].map((m) => Number(m[1]));
 const signal = () => new AbortController().signal;
+
+/** MAC's title in this collection's words, and MAC's outro hidden. */
+const BRAND_WORDS = { partKey: BRAND_PART_KEY, formatId: P, pageKey: BRAND_INTRO_KEY, elementId: BRAND_TITLE_ELEMENT_ID, text: "I nostri progetti" };
+const BRAND_OUTRO_HIDDEN = { partKey: BRAND_PART_KEY, formatId: P, pageKey: BRAND_OUTRO_KEY };
 
 /** The edits the matrix names, all at once. */
 const EDITED: CollectionEditSet = {
@@ -145,14 +149,29 @@ describe("collection export with the collection's edits (Story 5.11b)", () => {
     expect(await r.request(ACTOR, { collectionId: COLLECTION_ID, formats: [P] })).toMatchObject({ ok: true, value: { status: "pending" } });
     expect(await r.handler.run(r.jobs[0]!, signal())).toEqual(ok(undefined));
     const html = r.seen[0]!;
-    // Unedited: intro (client), A contenuti-4, A risultati, B contenuti-4, B risultati, closing, X intro, X contenuti-4, X risultati.
-    expect(pageKeys(html)).toEqual(["risultati", "contenuti-4", "risultati", "closing", "risultati", "contenuti-4", "intro"]);
-    expect(pageNumbers(html)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    // Unedited: MAC's intro, intro (client), A contenuti-4, A risultati, B contenuti-4, B risultati, closing, X intro, X contenuti-4, X risultati, MAC's outro.
+    expect(pageKeys(html)).toEqual([BRAND_INTRO_KEY, "risultati", "contenuti-4", "risultati", "closing", "risultati", "contenuti-4", "intro", BRAND_OUTRO_KEY]);
+    expect(pageNumbers(html)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(html).toContain("Titolo della raccolta");
     // Only X's title changed: A's and B's own intro pages aren't drawn (wrapped), so the original shows nowhere.
     expect(html).not.toContain("Il titolo del progetto");
     // The edits read the collection only (the originals are never written: the export has no writer for them).
     expect(r.getCollectionEdits).toHaveBeenCalledWith(COLLECTION_ID);
+  });
+
+  it("draws MAC's title in the collection's words and leaves its hidden outro out, in this collection's file only", async () => {
+    const r = rig({ ...EDITED, texts: [...EDITED.texts, BRAND_WORDS], hidden: [...EDITED.hidden, BRAND_OUTRO_HIDDEN] });
+    await r.request(ACTOR, { collectionId: COLLECTION_ID, formats: [P] });
+    expect(await r.handler.run(r.jobs[0]!, signal())).toEqual(ok(undefined));
+    const html = r.seen[0]!;
+    expect(pageKeys(html)).toEqual([BRAND_INTRO_KEY, "risultati", "contenuti-4", "risultati", "closing", "risultati", "contenuti-4", "intro"]);
+    expect(html).toContain("I nostri progetti");
+    expect(html).not.toContain(">Our projects<");
+    // Another hash than the same collection without MAC's edits: a new file.
+    const plain = await readCollectionSources(rig().all, COLLECTION_ID, [P]);
+    if (!plain.ok) throw new Error(plain.error.code);
+    expect(r.jobs[0]!.inputHash).not.toBe(plain.value.drawings[0]!.contentHash);
+    expect(plain.value.drawings[0]!.pageCount).toBe(9);
   });
 
   it("applies the edits in their own format only: Carosello unchanged", async () => {
@@ -220,10 +239,10 @@ describe("collection export with the collection's edits (Story 5.11b)", () => {
 });
 
 describe("the collection page and its export show the same pages (Story 5.11b)", () => {
-  /** EDITED in both formats. */
+  /** EDITED in both formats, and MAC's title changed and its outro hidden. */
   const BOTH: CollectionEditSet = {
-    texts: [P, C].flatMap((formatId) => EDITED.texts.map((t) => ({ ...t, formatId }))),
-    hidden: [P, C].flatMap((formatId) => EDITED.hidden.map((h) => ({ ...h, formatId }))),
+    texts: [P, C].flatMap((formatId) => [...EDITED.texts, BRAND_WORDS].map((t) => ({ ...t, formatId }))),
+    hidden: [P, C].flatMap((formatId) => [...EDITED.hidden, BRAND_OUTRO_HIDDEN].map((h) => ({ ...h, formatId }))),
     orders: [P, C].flatMap((formatId) => EDITED.orders.map((o) => ({ ...o, formatId }))),
   };
   const view: ViewEdits = { ...BOTH, texts: BOTH.texts.map((t) => ({ ...t, originalChanged: false })) };
@@ -268,14 +287,22 @@ describe("the collection page and its export show the same pages (Story 5.11b)",
     const read = await readCollectionSources(rig(BOTH).all, COLLECTION_ID, [format]);
     if (!read.ok) throw new Error(read.error.code);
     const [drawing] = read.value.drawings;
-    const file = composeParts(drawing!.parts.map((part) => composePartOf(part)), format);
+    const file = composeParts(
+      drawing!.parts.map((part) => composePartOf(part)),
+      format,
+      drawing!.brand === undefined ? {} : { brand: drawing!.brand },
+    );
     const inFile = file.segments.flatMap((s) => s.pages.map(shape));
 
     expect(inFile).toEqual(onPage);
     expect(drawing!.pageCount).toBe(onPage.length);
     // The edits took effect: the text, the order, the hidden pages (the client intro's too).
     expect(JSON.stringify(inFile)).toContain("Titolo della raccolta");
-    expect(inFile.at(-1)![0]).toBe("intro");
-    expect(inFile[0]![0]).not.toBe("intro");
+    // MAC's pages open and close Presentazione (and only it); MAC's outro hidden, only its intro.
+    const own = inFile.filter(([key]) => !String(key).startsWith("mac-brand-"));
+    expect(own.at(-1)![0]).toBe("intro");
+    expect(own[0]![0]).not.toBe("intro");
+    expect(inFile.length - own.length).toBe(format === P ? 1 : 0);
+    if (format === P) expect(inFile[0]).toEqual([BRAND_INTRO_KEY, [`${BRAND_TITLE_ELEMENT_ID}=I nostri progetti`]]);
   });
 });

@@ -8,7 +8,7 @@ import { NAV } from "@/app/(wizard)/_components/configurator/slideshow";
 import { ICON_BUTTON, SEG, SEG_BUTTON } from "@/app/(wizard)/_components/configurator/styles";
 import { FormatSwitch } from "@/app/(wizard)/_components/configurator/top-bar";
 import type { Page } from "@/modules/generation";
-import { FORMATS, getFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
+import { FORMATS, getFormat, templateOfPage, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 
@@ -17,7 +17,7 @@ export interface CaseViewerProps {
   /** A different format was picked: the page goes back to slide 1 (the viewer returns to Adatta itself). */
   onFormat: (formatId: FormatId) => void;
   template: string;
-  /** The format's pages, in order. */
+  /** The format's pages, in order (MAC's own pages among them, drawn with their own renderer). */
   pages: readonly Page[];
   assets: Readonly<Record<string, RenderAsset>>;
   values: BoundValues;
@@ -406,7 +406,7 @@ export function CaseViewer({
             style={{ ...(full ? {} : { "--slide-ratio": w / h }), ...(slideWidth === undefined ? {} : { width: slideWidth }) } as CSSProperties}
           >
             <div data-canvas-page={page.pageKey}>
-              <RenderedPage formatId={formatId} template={template} page={page} number={index + 1} assets={assets} values={values} animateTexts />
+              <RenderedPage formatId={formatId} template={templateOfPage(page, template)} page={page} number={index + 1} assets={assets} values={values} animateTexts />
             </div>
             {video && instagram !== "off" && <InstagramOverlay view={instagram} caption={caption} />}
           </div>

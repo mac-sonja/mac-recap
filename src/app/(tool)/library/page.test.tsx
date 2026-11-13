@@ -255,6 +255,12 @@ describe("LibraryPage", () => {
     expect(html).not.toContain(EDITED_IMAGE);
   });
 
+  it("keeps the case's own first page as the cover, never MAC's intro", async () => {
+    const html = await render();
+    expect(html).not.toContain("mac-brand-intro");
+    expect(html).not.toContain("Our projects");
+  });
+
   it("shows the approved page, not a later edit on the head", async () => {
     // The head is a working revision with another image; the library reads the live one only.
     const html = await render();

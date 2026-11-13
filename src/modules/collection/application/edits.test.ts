@@ -6,7 +6,16 @@ import { COLLECTION_PAGES_MAX, COLLECTION_TEXT_MAX } from "@/modules/collection/
 import type { StoredCollection } from "@/modules/collection/domain/collection";
 import type { StoredCollectionEdits } from "@/modules/collection/domain/edits";
 import type { CollectionRepository } from "@/modules/collection/ports/collection-repository";
-import { composeParts, FORMAT_IDS, type ComposePart } from "@/modules/rendering";
+import {
+  BRAND_INTRO_KEY,
+  BRAND_OUTRO_KEY,
+  BRAND_PAGES,
+  BRAND_PART_ID,
+  BRAND_TITLE_ELEMENT_ID,
+  composeParts,
+  FORMAT_IDS,
+  type ComposePart,
+} from "@/modules/rendering";
 import { err, ok, type Result } from "@/shared/result";
 import { shownPageKeys } from "@/modules/collection/domain/edits";
 import { freeTextOf, makeCollectionEditUseCases, textHash } from "./edits";
@@ -307,7 +316,75 @@ describe("Story 5.11a review fixes", () => {
         const wrapped = n >= 2;
         expect(shownPageKeys(casePages, "case", formatId, wrapped), `${formatId} ${n}`).toEqual(keysOf(["case"]));
         expect(shownPageKeys(introPages, "client_intro", formatId, wrapped), `${formatId} ${n}`).toEqual(keysOf(["client_intro", "client_closing"]));
+        expect(shownPageKeys(BRAND_PAGES, "brand", formatId, wrapped), `${formatId} ${n}`).toEqual(
+          formatId === F ? keysOf(["brand_intro", "brand_outro"]) : BRAND_PAGES.map((p) => p.pageKey),
+        );
       }
     }
+  });
+});
+
+describe("MAC's pages as a collection part", () => {
+  const brand = { kind: "brand" as const, id: BRAND_PART_ID };
+  const title = { ...base, part: brand, pageKey: BRAND_INTRO_KEY, elementId: BRAND_TITLE_ELEMENT_ID };
+
+  it("takes the collection's words for the \"Our projects\" title, hashed against MAC's own words; no revision is read", async () => {
+    const { repo, useCases, liveRevision, liveIntroRevision } = setup();
+    expect(await useCases.setText(actor, { ...title, text: "I nostri progetti" })).toEqual({ ok: true, value: { collectionId: COLLECTION, version: 4 } });
+    expect(repo.setTextEdit).toHaveBeenCalledWith(
+      COLLECTION,
+      3,
+      { part: brand, formatId: F, pageKey: BRAND_INTRO_KEY, elementId: BRAND_TITLE_ELEMENT_ID, text: "I nostri progetti", originalHash: textHash("Our projects") },
+      actor.id,
+    );
+    expect(liveRevision).not.toHaveBeenCalled();
+    expect(liveIntroRevision).not.toHaveBeenCalled();
+  });
+
+  it("refuses every other MAC text (TEXT_NOT_EDITABLE), another format, another id", async () => {
+    const { repo, useCases } = setup();
+    for (const at of [
+      { ...title, elementId: FREE },
+      { ...title, pageKey: BRAND_OUTRO_KEY },
+    ]) {
+      expect(await useCases.setText(actor, { ...at, text: "Men At Work" })).toMatchObject({ ok: false, error: { code: "TEXT_NOT_EDITABLE" } });
+    }
+    expect(await useCases.setText(actor, { ...title, formatId: "carosello_1_1", text: "X" })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", details: { fields: ["formatId"] } } });
+    expect(await useCases.setText(actor, { ...title, part: { kind: "brand", id: A1 }, text: "X" })).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", details: { fields: ["part"] } } });
+    expect(repo.setTextEdit).not.toHaveBeenCalled();
+  });
+
+  it("hides one of MAC's pages, never both (COLLECTION_LAST_PAGE)", async () => {
+    const { repo, useCases } = setup();
+    const hide = { ...base, part: brand, pageKey: BRAND_INTRO_KEY, hidden: true };
+    expect(await useCases.setPageHidden(actor, hide)).toMatchObject({ ok: true });
+    expect(repo.setPageHidden).toHaveBeenCalledWith(COLLECTION, 3, { part: brand, formatId: F, pageKey: BRAND_INTRO_KEY }, true, actor.id);
+    const after = setup({ edits: { textEdits: [], hiddenPages: [{ part: brand, formatId: F, pageKey: BRAND_INTRO_KEY }], pageOrders: [] } });
+    expect(await after.useCases.setPageHidden(actor, { ...hide, pageKey: BRAND_OUTRO_KEY })).toMatchObject({ ok: false, error: { code: "COLLECTION_LAST_PAGE" } });
+    expect(after.repo.setPageHidden).not.toHaveBeenCalled();
+  });
+
+  it("refuses an order for MAC's pages: they sit by role, so it would change nothing", async () => {
+    const { repo, useCases } = setup();
+    expect(await useCases.setPageOrder(actor, { collectionId: COLLECTION, expectedVersion: 3, part: brand, formatId: F, pageKeys: [BRAND_OUTRO_KEY, BRAND_INTRO_KEY] })).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_INPUT", details: { fields: ["part"] } },
+    });
+    expect(repo.setPageOrder).not.toHaveBeenCalled();
+  });
+
+  it("reads its edits back, checked against MAC's own words", async () => {
+    const edit = (text: string, originalHash: string) => ({ part: brand, formatId: F, pageKey: BRAND_INTRO_KEY, elementId: BRAND_TITLE_ELEMENT_ID, text, originalHash });
+    const { useCases } = setup({ edits: { textEdits: [edit("Mia", textHash("Our projects"))], hiddenPages: [{ part: brand, formatId: F, pageKey: BRAND_OUTRO_KEY }], pageOrders: [] } });
+    expect(await useCases.edits(COLLECTION)).toEqual({
+      ok: true,
+      value: {
+        textEdits: [{ part: brand, formatId: F, pageKey: BRAND_INTRO_KEY, elementId: BRAND_TITLE_ELEMENT_ID, text: "Mia", originalChanged: false }],
+        hiddenPages: [{ part: brand, formatId: F, pageKey: BRAND_OUTRO_KEY }],
+        pageOrders: [],
+      },
+    });
+    const changed = setup({ edits: { textEdits: [edit("Mia", textHash("Older words"))], hiddenPages: [], pageOrders: [] } });
+    expect((await changed.useCases.edits(COLLECTION)).ok && (await changed.useCases.edits(COLLECTION))).toMatchObject({ value: { textEdits: [{ originalChanged: true }] } });
   });
 });

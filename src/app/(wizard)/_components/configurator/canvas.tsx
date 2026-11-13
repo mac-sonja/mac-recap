@@ -3,7 +3,18 @@
 import { Trash2 } from "lucide-react";
 import { Fragment, memo, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import type { Crop, Page } from "@/modules/generation";
-import { measureOverflow, renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
+import {
+  BRAND_INTRO,
+  BRAND_OUTRO,
+  BRAND_TEMPLATE,
+  hasBrandPages,
+  measureOverflow,
+  NO_BOUND_VALUES,
+  renderFormat,
+  type BoundValues,
+  type FormatId,
+  type RenderAsset,
+} from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { useInPlaceText } from "./in-place-text";
@@ -107,6 +118,12 @@ export interface CanvasProps {
   onDeletePage?: (pageKey: string) => void;
   /** **+ Aggiungi pagina** after the last page (Story 4.13); undefined: no button. */
   onAddPage?: () => void;
+  /**
+   * MAC's own intro and outro around the pages (Presentazione only, and only around a page), drawn
+   * read-only: nothing on them can be selected, typed in or dropped on (the case and client
+   * configurators). A collection draws them as groups of its own instead (their title takes its words).
+   */
+  brand?: boolean;
   /** The canvas drag in progress (Story 4.3e), started here or from Elementi; null: none. */
   dragging?: CanvasDrag | null;
   /** A drag on the canvas starts (its source) or ends (null). Undefined: nothing on the canvas drags. */
@@ -755,6 +772,7 @@ export function Canvas({
   onCropDone,
   onDeletePage,
   onAddPage,
+  brand = false,
   dragging = null,
   onDragSource,
   onCanvasDrop,
@@ -769,6 +787,9 @@ export function Canvas({
   const groups = given ?? runsOfPages(pages, pageGroups, template, values);
   /** Each page's template and values, by page key (the slideshow's pages cross groups). */
   const partOf = new Map(groups.flatMap((g) => g.pages.map((p) => [p.pageKey, g] as const)));
+  // MAC's pages open and close a Presentazione with any page; the others are numbered on after MAC's intro.
+  const branded = brand && !slideshow && hasBrandPages(formatId) && groups.some((g) => g.pages.length > 0);
+  const offset = branded ? 1 : 0;
 
   function onScroll() {
     if (frame.current !== null) return;
@@ -830,6 +851,7 @@ export function Canvas({
           onPreviewPick={onPreviewPick}
         />
       )}
+      {branded && <BrandCanvasPage page={BRAND_INTRO} label={it.configurator.canvas.brandIntro} note={it.configurator.canvas.brandNote} number={1} formatId={formatId} width={width} />}
       {/* The editor, and Anteprima of Presentazione: the pages stacked, under their groups' labels. */}
       {(slideshow ? [] : numberedGroups(groups)).map(({ group, start }) => [
         // A label before the first page of each group (a run of one section, or a part of the client's file).
@@ -864,7 +886,7 @@ export function Canvas({
               formatId={formatId}
               template={group.template}
               page={page}
-              number={i + 1}
+              number={i + 1 + offset}
               assets={assets}
               values={group.values}
               selection={selection}
@@ -908,6 +930,16 @@ export function Canvas({
         }),
         group.after === undefined ? null : <Fragment key={`after-${group.key}`}>{group.after}</Fragment>,
       ])}
+      {branded && (
+        <BrandCanvasPage
+          page={BRAND_OUTRO}
+          label={it.configurator.canvas.brandOutro}
+          note={it.configurator.canvas.brandOutroNote}
+          number={groups.reduce((sum, g) => sum + g.pages.length, 0) + 2}
+          formatId={formatId}
+          width={width}
+        />
+      )}
       {!preview && onAddPage !== undefined && (
         <button
           type="button"
@@ -924,6 +956,41 @@ export function Canvas({
     </section>
   );
 }
+
+/**
+ * One of MAC's pages on the configurator's canvas: its label, a note, and the page drawn by the
+ * brand renderer. Read-only: no selection, no typing (it has no `data-canvas-page`, so neither a
+ * click, a double-click nor a drop reaches the editor), no bin.
+ */
+function BrandCanvasPage({ page, label, note, number, formatId, width }: { page: Page; label: string; note: string; number: number; formatId: FormatId; width: string }) {
+  return (
+    <>
+      <div
+        className={cn(
+          "mt-7 flex w-full items-center gap-2.5 font-label text-[11.5px] font-semibold tracking-[0.06em] text-foreground-muted uppercase first:mt-2",
+          width,
+        )}
+      >
+        {label}
+        <span aria-hidden="true" className="h-px flex-1 bg-border-strong" />
+      </div>
+      <div className={cn("mt-3.5 flex w-full items-center justify-between gap-2 font-label text-[12.5px] text-foreground-muted", width)}>
+        <span className="truncate">{fill(it.configurator.canvas.pageLabel, { n: number, name: page.name })}</span>
+        <span className="shrink-0">{note}</span>
+      </div>
+      <div
+        data-brand-page={page.pageKey}
+        role="img"
+        aria-label={fill(it.configurator.canvas.brandPage, { name: page.name })}
+        className={cn("pointer-events-none relative w-full shrink-0 shadow-page select-none", width)}
+      >
+        <RenderedPage formatId={formatId} template={BRAND_TEMPLATE} page={page} number={number} assets={NO_ASSETS} values={NO_BOUND_VALUES} animateTexts={false} />
+      </div>
+    </>
+  );
+}
+
+const NO_ASSETS: Readonly<Record<string, RenderAsset>> = Object.freeze({});
 
 /** The slideshow of Carosello and Video in Anteprima, with Instagram's interface over a Video page. */
 function SlideshowOf({

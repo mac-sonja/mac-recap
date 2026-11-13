@@ -8,7 +8,11 @@ import { renderFormat, type BoundValues, type RenderAsset } from "@/modules/rend
 import { cn } from "@/shared/utils";
 import { CardCheckbox } from "./library-selection";
 
-/** What a card's cover draws: page 1 of the live revision's Presentazione 16:9. */
+/**
+ * What a card's cover draws: page 1 of the live revision's Presentazione 16:9, the case's own
+ * first page. Never MAC's intro, which opens every Presentazione file (`withBrandPages`): every
+ * card would look the same.
+ */
 export interface LibraryCover {
   template: string;
   page: Page;

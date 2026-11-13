@@ -5,7 +5,7 @@ import { memo, useId, useLayoutEffect, useMemo, useRef, useState, type Ref } fro
 import { SEARCH_FIELD, SEARCH_ICON } from "@/app/_components/field-styles";
 import type { Page } from "@/modules/generation";
 import type { ListedAsset } from "@/modules/material";
-import { renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
+import { hasBrandPages, renderFormat, type BoundValues, type FormatId, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { pageAssetIds, type MediaUploadRules } from "./media-files";
@@ -182,7 +182,9 @@ export function RightPanel({
   const [view, setView] = useState<"grid" | "list">("grid");
   const searchId = useId();
   const q = query.trim().toLocaleLowerCase("it");
-  const numbered = pages.map((page, i) => ({ page, number: i + 1 }));
+  // As the canvas numbers them: in Presentazione MAC's intro is page 1, so the pages run on from 2.
+  const offset = hasBrandPages(formatId) && pages.length > 0 ? 1 : 0;
+  const numbered = pages.map((page, i) => ({ page, number: i + 1 + offset }));
   const shown = q === "" ? numbered : numbered.filter(({ page }) => page.name.toLocaleLowerCase("it").includes(q));
   const onPage = useMemo(() => pageAssetIds(pages), [pages]);
   /** The thumbnail a dragged page would land on (marked with an accent line). */
