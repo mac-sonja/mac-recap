@@ -2,7 +2,8 @@
 title: 'MAC intro and outro pages in Presentazione'
 type: 'feature'
 created: '2026-11-13'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: '8d79d3e5e854d87d95c64613781c5081bd9ae02e'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -93,6 +94,8 @@ context:
 ## Design Notes
 
 The SVG paths are exported in frame coordinates: draw them in one `viewBox="0 0 1920 1080"` SVG, translating the star paths by their node x (1160, 1080, 1000) and the wordmark by y 478, with `overflow:hidden` on the page.
+
+Figma is not reachable from this environment (figma.com is blocked). The exported paths, gradients, every text position and style, and the target screenshots are in `/tmp/claude-0/-home-user-mac-recap/2ea7a183-b0c9-5a9e-a1ea-eeaf84fe061c/scratchpad/figma-assets/brand-paths.md`: build the pages from that file only. Keep the art in TypeScript (no `public/` assets). The "Our projects" title is the one free text (constant UUID element id); every other MAC text is fixed markup, not a document element. The W-Group text is a link in the PDF.
 
 ## Verification
 
