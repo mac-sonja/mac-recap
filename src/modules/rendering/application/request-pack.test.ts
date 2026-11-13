@@ -61,6 +61,9 @@ const record = (hash: string, parts: ExportPart[], over: Partial<ExportRecord> =
   ...over,
 });
 
+/** MAC's intro and outro, around every Presentazione file. */
+const MAC = 2;
+
 describe("a client's pack (Story 5.9a)", () => {
   it("is the approved intro, then the approved cases in the client's order, read from live revisions only", async () => {
     const d = deps({ order: ["C", "A", "B"] });
@@ -71,7 +74,8 @@ describe("a client's pack (Story 5.9a)", () => {
     // Intro pages, each case without its own intro page, the client's closing once; numbered on.
     const [drawing] = pack.drawings;
     const caseKeep = revision().doc.formats.presentazione_16_9.pages.filter((p) => p.role !== "intro").length;
-    expect(drawing.pageCount).toBe(1 + 3 * caseKeep + 1);
+    // MAC's intro and outro around the pack.
+    expect(drawing.pageCount).toBe(MAC + 1 + 3 * caseKeep + 1);
     expect(drawing.code).toBe("LUM");
     expect(drawing.name).toBe("Lumen Srl");
   });
@@ -80,14 +84,14 @@ describe("a client's pack (Story 5.9a)", () => {
     const pack = await packNow(deps({ order: ["A"] }));
     expect(pack.parts).toEqual([introPart, casePart("A")]);
     const all = revision().doc.formats.presentazione_16_9.pages;
-    expect(pack.drawings[0].pageCount).toBe(1 + all.filter((p) => p.role !== "intro").length + 1);
+    expect(pack.drawings[0].pageCount).toBe(MAC + 1 + all.filter((p) => p.role !== "intro").length + 1);
   });
 
   it.each(["unapproved", "none"] as const)("without an approved intro (%s): each case whole", async (intro) => {
     const pack = await packNow(deps({ order: ["A", "B"], intro }));
     expect(pack.intro).toBeNull();
     expect(pack.parts).toEqual([casePart("A"), casePart("B")]);
-    expect(pack.drawings[0].pageCount).toBe(2 * revision().doc.formats.presentazione_16_9.pages.length);
+    expect(pack.drawings[0].pageCount).toBe(MAC + 2 * revision().doc.formats.presentazione_16_9.pages.length);
   });
 
   it("drops each case's own Carosello Chiusura and keeps the client's closing once", async () => {

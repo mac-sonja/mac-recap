@@ -62,6 +62,8 @@ const record = (hash: string, parts: ExportPart[], over: Partial<ExportRecord> =
 });
 
 const presentazione = () => revision().doc.formats.presentazione_16_9.pages;
+/** MAC's intro and outro, around every Presentazione file. */
+const MAC = 2;
 
 describe("a collection's file (Story 5.10b)", () => {
   it("mixed: the intro of A and B's client, A and B without their own intros, its closing, then X whole; live revisions only", async () => {
@@ -74,7 +76,8 @@ describe("a collection's file (Story 5.10b)", () => {
     expect(d.getClientIntro).toHaveBeenCalledExactlyOnceWith(CLIENT_ID);
     const keep = presentazione().filter((p) => p.role !== "intro").length;
     const [drawing] = file.drawings;
-    expect(drawing.pageCount).toBe(1 + 2 * keep + 1 + presentazione().length);
+    // MAC's intro and outro around it all.
+    expect(drawing.pageCount).toBe(MAC + 1 + 2 * keep + 1 + presentazione().length);
     expect(drawing.code).toBe("");
     expect(drawing.name).toBe("Pitch moda");
     expect(drawing.pack).toBe(false);
@@ -85,7 +88,7 @@ describe("a collection's file (Story 5.10b)", () => {
   it.each(["unapproved", "none"] as const)("intro not approved (%s): A, B and X whole", async (intro) => {
     const file = await collectionNow(deps({ intro }));
     expect(file.parts).toEqual([casePart("A"), casePart("B"), casePart("X")]);
-    expect(file.drawings[0].pageCount).toBe(3 * presentazione().length);
+    expect(file.drawings[0].pageCount).toBe(MAC + 3 * presentazione().length);
   });
 
   it("a client with one case (A alone) keeps its own intro and closing, even with an approved intro", async () => {

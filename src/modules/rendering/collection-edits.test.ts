@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { CaseStudyDocument, Page } from "@/modules/generation";
 import {
   applyCollectionEdits,
+  BRAND_INTRO,
+  BRAND_INTRO_KEY,
+  BRAND_OUTRO,
+  BRAND_OUTRO_KEY,
+  BRAND_PART_ID,
+  BRAND_PART_KEY,
+  BRAND_TITLE_ELEMENT_ID,
   collectionPartKey,
   freeTextIn,
   NO_COLLECTION_EDITS,
@@ -65,14 +72,18 @@ const introPart = (client = "k1"): ComposePart => ({
 
 const edits = (over: Partial<CollectionEditSet>): CollectionEditSet => ({ ...NO_COLLECTION_EDITS, ...over });
 const keys = (file: { segments: readonly { pages: readonly Page[] }[] }) => file.segments.flatMap((s) => s.pages.map((p) => p.pageKey));
+/** The parts' own page keys: without MAC's pages around a Presentazione file (they have their own tests below). */
+const own = (file: { segments: readonly { pages: readonly Page[] }[] }) => keys(file).filter((key) => !key.startsWith("mac-brand-"));
+/** A run of the file by its key. */
+const run = (file: { segments: readonly { key: string; pages: readonly Page[] }[] }, key: string) => file.segments.find((s) => s.key === key)!;
 const pagesOf = (part: ComposePart, formatId: FormatId) => (part.doc.formats as Record<string, { pages: Page[] }>)[formatId]!.pages;
 
 describe("applyCollectionEdits (Story 5.11b)", () => {
   it("leaves everything as it is with no edits: same pages, same objects, nothing effective", () => {
     const parts = [casePart("a")];
     const applied = applyCollectionEdits(parts, P, NO_COLLECTION_EDITS);
-    expect(keys(applied.file)).toEqual(["a-intro", "a-1", "a-2", "a-end"]);
-    expect(applied.file.segments[0]!.pages[1]).toBe(pagesOf(parts[0]!, P)[1]);
+    expect(own(applied.file)).toEqual(["a-intro", "a-1", "a-2", "a-end"]);
+    expect(run(applied.file, "case:a").pages[1]).toBe(pagesOf(parts[0]!, P)[1]);
     expect(applied.effective).toEqual([]);
   });
 
@@ -91,12 +102,12 @@ describe("applyCollectionEdits (Story 5.11b)", () => {
         ],
       }),
     );
-    const edited = applied.file.segments[0]!.pages[1]!;
+    const edited = run(applied.file, "case:a").pages[1]!;
     expect(freeTextIn(edited, "title")).toBe("Nuovo titolo");
     expect(freeTextIn(edited, "deep")).toBe("Nuovo profondo");
     expect(JSON.stringify(edited)).toContain('"binding":"client.name"');
     expect(JSON.stringify(edited)).not.toContain("Non un campo");
-    expect(freeTextIn(applied.file.segments[0]!.pages[2]!, "title")).toBe("Titolo a-2");
+    expect(freeTextIn(run(applied.file, "case:a").pages[2]!, "title")).toBe("Titolo a-2");
     // The originals are never changed.
     expect(parts[0]!.doc).toEqual(original);
     // Carosello: the Carosello edit only.
@@ -114,14 +125,14 @@ describe("applyCollectionEdits (Story 5.11b)", () => {
     const changed: ComposePart = { ...part, doc: { ...part.doc, formats: { ...part.doc.formats, [P]: { pages: updated } } } as CaseStudyDocument };
     expect(freeTextIn(pagesOf(changed, P)[1]!, "title")).toBe("Titolo aggiornato");
     const applied = applyCollectionEdits([changed], P, edits({ texts: [{ partKey: "case:a", formatId: P, pageKey: "a-1", elementId: "title", text: "Titolo a-1" }] }));
-    expect(freeTextIn(applied.file.segments[0]!.pages[1]!, "title")).toBe("Titolo a-1");
+    expect(freeTextIn(run(applied.file, "case:a").pages[1]!, "title")).toBe("Titolo a-1");
     expect(applied.effective).toEqual([{ partKey: "case:a", texts: [["a-1", "title", "Titolo a-1"]], hidden: [], order: null }]);
   });
 
   it("follows the saved order first, then any page it doesn't name in the document's order", () => {
     const parts = [casePart("a")];
     const applied = applyCollectionEdits(parts, P, edits({ orders: [{ partKey: "case:a", formatId: P, pageKeys: ["a-2", "gone", "a-1"] }] }));
-    expect(keys(applied.file)).toEqual(["a-2", "a-1", "a-intro", "a-end"]);
+    expect(own(applied.file)).toEqual(["a-2", "a-1", "a-intro", "a-end"]);
     expect(applied.effective).toEqual([{ partKey: "case:a", texts: [], hidden: [], order: ["a-2", "a-1", "a-intro", "a-end"] }]);
     expect(orderedPages(pagesOf(parts[0]!, P), "case:A", P, { orders: [{ partKey: "case:a", formatId: P, pageKeys: ["a-end"] }] }).map((p) => p.pageKey)).toEqual([
       "a-end",
@@ -154,8 +165,8 @@ describe("applyCollectionEdits (Story 5.11b)", () => {
         texts: [{ partKey: "client_intro:k1", formatId: P, pageKey: "bye", elementId: "title", text: "Arrivederci" }],
       }),
     );
-    expect(keys(applied.file)).toEqual(["a-1", "a-2", "a-end", "b-1", "b-2", "b-end", "bye"]);
-    expect(freeTextIn(applied.file.segments.at(-1)!.pages[0]!, "title")).toBe("Arrivederci");
+    expect(own(applied.file)).toEqual(["a-1", "a-2", "a-end", "b-1", "b-2", "b-end", "bye"]);
+    expect(freeTextIn(run(applied.file, "client_closing:k1").pages[0]!, "title")).toBe("Arrivederci");
     expect(collectionPartKey(parts[0]!)).toBe("client_intro:k1");
     expect(applied.effective.map((e) => e.partKey)).toEqual(["client_intro:k1"]);
   });
@@ -165,7 +176,7 @@ describe("applyCollectionEdits (Story 5.11b)", () => {
     const parts = [introPart(), casePart("a"), casePart("b")];
     const hideAll = edits({ hidden: ["a-1", "a-2", "a-end"].map((pageKey) => ({ partKey: "case:a", formatId: P, pageKey })) });
     const applied = applyCollectionEdits(parts, P, hideAll);
-    expect(keys(applied.file)).toEqual(["hello", "a-1", "a-2", "a-end", "b-1", "b-2", "b-end", "bye"]);
+    expect(own(applied.file)).toEqual(["hello", "a-1", "a-2", "a-end", "b-1", "b-2", "b-end", "bye"]);
     expect(applied.hidden.get("case:a")!.size).toBe(0);
     expect(applied.effective).toEqual([]);
     // Hiding its own intro page (not shown when wrapped) as well counts the same.
@@ -173,7 +184,7 @@ describe("applyCollectionEdits (Story 5.11b)", () => {
     expect(keys(applyCollectionEdits(parts, P, withIntro).file)).toContain("a-1");
     // An intro with both its pages hidden keeps them.
     const intro = edits({ hidden: ["hello", "bye"].map((pageKey) => ({ partKey: "client_intro:k1", formatId: P, pageKey })) });
-    expect(keys(applyCollectionEdits(parts, P, intro).file)).toEqual(["hello", "a-1", "a-2", "a-end", "b-1", "b-2", "b-end", "bye"]);
+    expect(own(applyCollectionEdits(parts, P, intro).file)).toEqual(["hello", "a-1", "a-2", "a-end", "b-1", "b-2", "b-end", "bye"]);
   });
 
   it("counts as effective only what changes the file", () => {
@@ -193,6 +204,53 @@ describe("applyCollectionEdits (Story 5.11b)", () => {
         orders: [{ partKey: "case:b", formatId: P, pageKeys: ["b-1", "b-intro", "b-2", "b-end"] }],
       }),
     );
+    expect(applied.effective).toEqual([]);
+  });
+});
+
+describe("applyCollectionEdits, MAC's pages (Presentazione)", () => {
+  const title = (text: string, formatId: FormatId = P) => ({ partKey: BRAND_PART_KEY, formatId, pageKey: BRAND_INTRO_KEY, elementId: BRAND_TITLE_ELEMENT_ID, text });
+
+  it("opens and closes the file with them, as they are with no edit", () => {
+    const applied = applyCollectionEdits([casePart("a")], P, NO_COLLECTION_EDITS);
+    expect(keys(applied.file)).toEqual([BRAND_INTRO_KEY, "a-intro", "a-1", "a-2", "a-end", BRAND_OUTRO_KEY]);
+    expect(run(applied.file, "brand_intro").pages[0]).toBe(BRAND_INTRO);
+    expect(applied.brand).toEqual([BRAND_INTRO, BRAND_OUTRO]);
+    expect(BRAND_PART_KEY).toBe(`brand:${BRAND_PART_ID}`);
+    expect(collectionPartKey({ kind: "brand" })).toBe(BRAND_PART_KEY);
+  });
+
+  it("takes the collection's words for the title only, in this collection's file only", () => {
+    const applied = applyCollectionEdits(
+      [casePart("a")],
+      P,
+      edits({ texts: [title("I nostri progetti"), { ...title("Men"), elementId: "4d414300-0000-4000-8000-0000000000ff" }, { ...title("Altro"), pageKey: BRAND_OUTRO_KEY }] }),
+    );
+    expect(freeTextIn(run(applied.file, "brand_intro").pages[0]!, BRAND_TITLE_ELEMENT_ID)).toBe("I nostri progetti");
+    expect(freeTextIn(applied.brand[0]!, BRAND_TITLE_ELEMENT_ID)).toBe("I nostri progetti");
+    expect(applied.brand[1]).toEqual(BRAND_OUTRO);
+    // The constants never change.
+    expect(freeTextIn(BRAND_INTRO, BRAND_TITLE_ELEMENT_ID)).toBe("Our projects");
+    expect(applied.effective).toEqual([{ partKey: BRAND_PART_KEY, texts: [[BRAND_INTRO_KEY, BRAND_TITLE_ELEMENT_ID, "I nostri progetti"]], hidden: [], order: null }]);
+    // The original words are no edit.
+    expect(applyCollectionEdits([casePart("a")], P, edits({ texts: [title("Our projects")] })).effective).toEqual([]);
+  });
+
+  it("leaves a hidden one out of the file, kept where it was for the page; never both", () => {
+    const hideIntro = edits({ hidden: [{ partKey: BRAND_PART_KEY, formatId: P, pageKey: BRAND_INTRO_KEY }] });
+    const applied = applyCollectionEdits([casePart("a")], P, hideIntro);
+    expect(keys(applied.file)).toEqual(["a-intro", "a-1", "a-2", "a-end", BRAND_OUTRO_KEY]);
+    expect(applied.file.segments[0]!.startPage).toBe(1);
+    expect(keys(applied.composed)[0]).toBe(BRAND_INTRO_KEY);
+    expect(applied.brand).toEqual([BRAND_OUTRO]);
+    expect(applied.effective).toEqual([{ partKey: BRAND_PART_KEY, texts: [], hidden: [BRAND_INTRO_KEY], order: null }]);
+    const both = edits({ hidden: [BRAND_INTRO_KEY, BRAND_OUTRO_KEY].map((pageKey) => ({ partKey: BRAND_PART_KEY, formatId: P, pageKey })) });
+    expect(applyCollectionEdits([casePart("a")], P, both).brand).toEqual([BRAND_INTRO, BRAND_OUTRO]);
+  });
+
+  it("has none in the other formats: their edits there change nothing", () => {
+    const applied = applyCollectionEdits([casePart("a")], C, edits({ texts: [title("X", C)], hidden: [{ partKey: BRAND_PART_KEY, formatId: C, pageKey: BRAND_INTRO_KEY }] }));
+    expect(keys(applied.file)).toEqual(["a-intro", "a-1", "a-2", "a-end"]);
     expect(applied.effective).toEqual([]);
   });
 });

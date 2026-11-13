@@ -4,7 +4,7 @@ import type { ShellActor } from "@/app/_lib/surface";
 import type { CaseActivity, CaseClientInfo, CaseStudy, CaseStudyRevision, ClientDetail } from "@/modules/case-study";
 import { caseHistoryV2 } from "@/modules/generation";
 import type { DetailsForm, ListedAsset, RenditionLink } from "@/modules/material";
-import { FORMAT_IDS } from "@/modules/rendering";
+import { BRAND_INTRO, FORMAT_IDS } from "@/modules/rendering";
 import { err, ok, type Result } from "@/shared/result";
 
 const requireSurface = vi.fn<(action: string, resource?: unknown) => Promise<ShellActor | null>>();
@@ -20,6 +20,8 @@ const getClientRendition = vi.fn<(assetId: unknown, spec: unknown) => Promise<Re
 const listClientMaterial = vi.fn<(input: unknown) => Promise<Result<unknown[]>>>();
 /** The props the page gives `CaseView` (Story 4.5c-2: the client's render assets). */
 const caseViewProps = vi.fn<(props: Record<string, unknown>) => void>();
+/** What the case view was last given. */
+const lastProps = () => caseViewProps.mock.calls.at(-1)![0] as { formats: Record<string, { name: string }[] | undefined>; values: unknown };
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -280,28 +282,31 @@ describe("CaseViewPage", () => {
     expect(html).toContain("Non è in nessuna raccolta.");
   });
 
-  it("draws the live revision's pages with the renderer", async () => {
+  it("draws the live revision's pages with the renderer, between MAC's intro and outro", async () => {
     const html = await render();
-    expect(html).toContain('data-template="mac-case@1"');
+    // One slide at a time, under the viewer's counter: Presentazione opens with MAC's intro.
     expect(html).toMatch(/data-canvas-page="[^"]+"/);
-    // One slide at a time, under the viewer's counter.
     expect(html.match(/data-canvas-page="/g)).toHaveLength(1);
+    expect(html).toContain('data-template="mac-brand@1"');
     const pages = revision.doc.formats.presentazione_16_9!.pages;
-    expect(html).toContain(`1 di ${pages.length} · ${pages[0]!.name}`);
+    expect(html).toContain(`1 di ${pages.length + 2} · ${BRAND_INTRO.name}`);
+    // The case's own pages, as the renderer draws them.
+    expect(lastProps().formats.presentazione_16_9).toEqual(pages);
   });
 
   it("gives the renderer only ready renditions and a video its ready poster", async () => {
     getLiveRevision.mockResolvedValue(ok(null));
-    let html = await render();
-    expect(html).toContain(`https://cdn.test/${IMAGE}/image.display`);
-    expect(html).not.toContain(`${PENDING}/`);
+    // The first slide is MAC's intro: the assets are read from what the viewer is given.
+    const assetsGiven = () => caseViewProps.mock.calls.at(-1)![0].assets as Record<string, { url: string; posterUrl?: string }>;
+    await render();
+    expect(assetsGiven()[IMAGE]?.url).toBe(`https://cdn.test/${IMAGE}/image.display`);
+    expect(JSON.stringify(assetsGiven())).not.toContain(`${PENDING}/`);
 
     listAssets.mockResolvedValue(ok([listed(VIDEO, "video")]));
     getRendition.mockImplementation(async (assetId, spec) => link(`https://cdn.test/${String(assetId)}/${String(spec)}`));
     getLiveRevision.mockResolvedValue(ok({ ...revision, doc: withVideo(revision.doc, VIDEO) }));
-    html = await render();
-    expect(html).toContain(`src="https://cdn.test/${VIDEO}/video.display"`);
-    expect(html).toContain(`poster="https://cdn.test/${VIDEO}/video.poster"`);
+    await render();
+    expect(assetsGiven()[VIDEO]).toMatchObject({ url: `https://cdn.test/${VIDEO}/video.display`, posterUrl: `https://cdn.test/${VIDEO}/video.poster` });
   });
 
   it("draws the client's images and videos a page shows from the client renditions (Story 4.5c-2)", async () => {
@@ -330,9 +335,11 @@ describe("CaseViewPage", () => {
     getLiveRevision.mockResolvedValue(ok(null));
     const html = await render();
     expect(html).toContain("Bozza di prova");
-    expect(html).toContain("1 di 3 · Intro");
-    expect(html).toContain("Illuminazione");
-    expect(html).toContain("Web design");
+    // The starter's three pages between MAC's intro and outro.
+    expect(html).toContain(`1 di 5 · ${BRAND_INTRO.name}`);
+    expect(lastProps().formats.presentazione_16_9!.map((p) => p.name)[0]).toBe("Intro");
+    expect(JSON.stringify(lastProps().values)).toContain("Illuminazione");
+    expect(JSON.stringify(lastProps().values)).toContain("Web design");
   });
 
   it("shows no Modifica to a role without `edit`", async () => {

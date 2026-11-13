@@ -19,7 +19,7 @@ import {
   type TextGroupAlign,
 } from "@/modules/generation";
 import type { ListedAsset } from "@/modules/material";
-import { FORMAT_IDS, type BoundValues, type DefaultPage, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
+import { FORMAT_IDS, isBrandPageKey, type BoundValues, type DefaultPage, type FormatId, type Layout, type RenderAsset } from "@/modules/rendering";
 import { fill, it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
 import { Dialog } from "@/app/_components/dialog";
@@ -538,6 +538,8 @@ export function Configurator({
   /** A double-click (or Enter) on an element: a text with its own words opens for typing; any other text says it can't yet; an animation opens its dialog. */
   const requestEdit = useCallback(
     (pageKey: string, elementId: string) => {
+      // MAC's own pages are never edited here: a collection is the only place their title changes.
+      if (isBrandPageKey(pageKey)) return;
       const at = selectionOf(formats[formatId], pageKey, elementId);
       const { element: target } = resolveSelection(formats[formatId], at);
       if (target?.type === "animation" && at?.blockId !== undefined) {
@@ -1723,6 +1725,7 @@ export function Configurator({
 
           <div className="relative col-start-2 row-start-1 min-h-0">
             <Canvas
+              brand
               formatId={formatId}
               template={template}
               pages={pages}

@@ -62,19 +62,18 @@ describe("the inline Inter font", () => {
 describe.skipIf(!hasChromium)("export with real Chromium (Story 5.3)", () => {
   const browser = createPlaywrightExportBrowser();
 
-  it("prints a two-page Presentazione as a PDF of two 1920×1080 pages, in Inter", async () => {
+  it("prints a two-page Presentazione between MAC's intro and outro as a PDF of four 1920×1080 pages, in Inter, W-Group linked", async () => {
     const size = { width: 1920, height: 1080 };
     const pdf = Buffer.from(await browser.pdf(await html("presentazione_16_9", size), size, new AbortController().signal));
     const text = pdf.toString("latin1");
     expect(text.startsWith("%PDF-")).toBe(true);
-    expect(text.match(/\/Type\s*\/Page(?!s)/g)).toHaveLength(2);
+    expect(text.match(/\/Type\s*\/Page(?!s)/g)).toHaveLength(4);
     // 1920×1080 CSS px = 1440×810 pt.
     const boxes = [...text.matchAll(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/g)].map((m) => [Math.round(Number(m[1])), Math.round(Number(m[2]))]);
-    expect(boxes).toEqual([
-      [1440, 810],
-      [1440, 810],
-    ]);
+    expect(boxes).toEqual(Array.from({ length: 4 }, () => [1440, 810]));
     expect(text).toMatch(/\/FontName\s*\/[A-Z]{6}\+Inter/);
+    // MAC's outro: "W-Group" is a link in the PDF.
+    expect(text).toMatch(/\/URI\s*\(https:\/\/w-group\.it\/\)/);
   }, 60_000);
 
   it("shoots a two-slide Carosello as two 1080×1080 PNGs", async () => {
@@ -160,7 +159,8 @@ describe.skipIf(!hasChromium)("export with real Chromium (Story 5.3)", () => {
       ...Array.from({ length: slides }, (_, i) => `Carosello/${String(i + 1).padStart(width, "0")}.png`),
     ]);
     expect(Buffer.from(entries[0].bytes).toString("latin1").startsWith("%PDF-")).toBe(true);
-    expect(pdfPageCount(entries[0].bytes)).toBe(pdfPages);
+    // The case's pages between MAC's intro and outro.
+    expect(pdfPageCount(entries[0].bytes)).toBe(pdfPages + 2);
     for (const entry of entries.slice(1)) {
       const meta = await sharp(entry.bytes).metadata();
       expect([meta.format, meta.width, meta.height]).toEqual(["png", 1080, 1080]);

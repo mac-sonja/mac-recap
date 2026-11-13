@@ -1,11 +1,8 @@
 "use client";
 
-import { EyeOff } from "lucide-react";
 import { useLayoutEffect, useState, type RefObject, type SyntheticEvent } from "react";
-import type { FormatId } from "@/modules/rendering";
-import { fill, it } from "@/shared/i18n/it";
+import { it } from "@/shared/i18n/it";
 import { cn } from "@/shared/utils";
-import { PAGE_WIDTH } from "@/app/(wizard)/_components/configurator/styles";
 
 /** A free text with the collection's words, as its mark shows it. */
 export interface TextMark {
@@ -100,28 +97,5 @@ export function TextMarks({ host, marks }: { host: RefObject<HTMLElement | null>
         );
       })}
     </>
-  );
-}
-
-/** Story 5.11a: a hidden page's collapsed strip, where the page sat, with **Ripristina**. */
-export function HiddenPageStrip({ formatId, pageKey, name, onRestore }: { formatId: FormatId; pageKey: string; name: string; onRestore: () => void }) {
-  return (
-    <div
-      data-hidden-page={pageKey}
-      className={cn(
-        "mt-3.5 flex w-full items-center gap-2.5 rounded-lg border border-dashed border-border-strong bg-surface-raised/60 px-3 py-2 font-label text-[12.5px] text-foreground-muted",
-        PAGE_WIDTH[formatId],
-      )}
-    >
-      <EyeOff aria-hidden="true" className="size-3.5 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{fill(it.collection.edits.hiddenStrip, { name })}</span>
-      <button
-        type="button"
-        onClick={onRestore}
-        className="shrink-0 rounded-md px-2 py-1 font-semibold text-foreground transition-colors duration-150 hover:bg-surface-hover"
-      >
-        {it.collection.edits.restorePage}
-      </button>
-    </div>
   );
 }

@@ -1,8 +1,16 @@
 // @vitest-environment happy-dom
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { CaseStudyDocument, Page } from "@/modules/generation";
+import { pageSchema, type CaseStudyDocument, type Page } from "@/modules/generation";
 import {
+  BRAND_INTRO,
+  BRAND_INTRO_KEY,
+  BRAND_OUTRO,
+  BRAND_OUTRO_KEY,
+  BRAND_PAGES,
+  BRAND_TEMPLATE,
+  BRAND_TITLE_ELEMENT_ID,
+  renderFormat,
   CASE_TEMPLATE,
   composeParts,
   FORMAT_IDS,
@@ -13,6 +21,7 @@ import {
   type CasePart,
   type ClientIntroPart,
   type ComposedFile,
+  type ComposeOptions,
   type FormatId,
 } from "@/modules/rendering";
 
@@ -79,17 +88,21 @@ const introPart = (clientId: string): ClientIntroPart => ({
   values: VALUES,
 });
 
+/** A segment's part as the expectations name it: a case by its id, a client's intro as `intro-{client}`, MAC's pages as `mac`. */
+const nameOf = (part: ComposedFile["segments"][number]["part"]) =>
+  part.kind === "case_history" ? part.caseId : part.kind === "brand" ? "mac" : `intro-${part.clientId}`;
+
 /** Each page as `{part}:{pageKey}#{number}`. */
-const flat = (file: ComposedFile) =>
-  file.segments.flatMap((s) =>
-    s.pages.map((p, i) => `${s.part.kind === "case_history" ? s.part.caseId : `intro-${s.part.clientId}`}:${p.pageKey}#${s.startPage + i}`),
-  );
+const flat = (file: ComposedFile) => file.segments.flatMap((s) => s.pages.map((p, i) => `${nameOf(s.part)}:${p.pageKey}#${s.startPage + i}`));
 const keysOf = (part: CasePart | ClientIntroPart, formatId: FormatId) => part.doc.formats[formatId].pages.map((p) => p.pageKey);
+
+/** The C38 rules alone: no MAC pages around a Presentazione file (they have their own tests below). */
+const RULES: ComposeOptions = { brand: [] };
 
 describe("composeParts", () => {
   it.each(FORMAT_IDS)("one case keeps all its pages, numbered from 1 (%s)", (formatId) => {
     const a = casePart("aaaa", "lumen");
-    const file = composeParts([introPart("lumen"), a], formatId);
+    const file = composeParts([introPart("lumen"), a], formatId, RULES);
     expect(flat(file)).toEqual(keysOf(a, formatId).map((k, i) => `aaaa:${k}#${i + 1}`));
   });
 
@@ -115,7 +128,7 @@ describe("composeParts", () => {
   it("keeps a Presentazione or Video case's outro pages (only Carosello drops its Chiusura)", () => {
     for (const formatId of ["presentazione_16_9", "video_9_16"] as const) {
       const [a, b] = [casePart("aaaa", "lumen"), casePart("bbbb", "lumen")];
-      const file = composeParts([introPart("lumen"), a, b], formatId);
+      const file = composeParts([introPart("lumen"), a, b], formatId, RULES);
       for (const [i, part] of [a, b].entries()) {
         const kept = part.doc.formats[formatId].pages.filter((p) => p.role !== "intro");
         expect(kept.some((p) => p.role === "outro")).toBe(true);
@@ -134,8 +147,8 @@ describe("composeParts", () => {
       casePart("cccc", "orto"),
       casePart("bbbb", "lumen"),
     ];
-    const file = composeParts(parts, "presentazione_16_9");
-    expect(file.segments.map((s) => (s.part.kind === "case_history" ? s.part.caseId : `intro-${s.part.clientId}`))).toEqual([
+    const file = composeParts(parts, "presentazione_16_9", RULES);
+    expect(file.segments.map((s) => nameOf(s.part))).toEqual([
       "intro-lumen",
       "aaaa",
       "cccc", // Orto has one case here: it keeps its own pages and its intro document is left out.
@@ -149,7 +162,7 @@ describe("composeParts", () => {
 
   it("wraps three cases of one client once: the middle case gets neither the client intro nor the closing", () => {
     const parts = [introPart("lumen"), casePart("aaaa", "lumen"), casePart("bbbb", "lumen"), casePart("cccc", "lumen")];
-    const file = composeParts(parts, "presentazione_16_9");
+    const file = composeParts(parts, "presentazione_16_9", RULES);
     expect(file.segments.map((s) => s.key)).toEqual([
       "client_intro:lumen",
       "case:aaaa",
@@ -199,7 +212,7 @@ describe("composeParts", () => {
   describe("the client file (Story 4.12a, clientFile)", () => {
     it.each(FORMAT_IDS)("includes the intro with one case, the case trimmed as in a file (%s)", (formatId) => {
       const [intro, a] = [introPart("lumen"), casePart("aaaa", "lumen")];
-      const file = composeParts([intro, a], formatId, { clientFile: true });
+      const file = composeParts([intro, a], formatId, { ...RULES, clientFile: true });
       expect(file.segments.map((s) => s.key)).toEqual(["client_intro:lumen", "case:aaaa", "client_closing:lumen"]);
       const casePages = file.segments[1].pages;
       expect(casePages.some((p) => p.role === "intro")).toBe(false);
@@ -218,7 +231,7 @@ describe("composeParts", () => {
     });
 
     it("shows a client's intro and closing alone when it has no case", () => {
-      const file = composeParts([introPart("lumen")], "presentazione_16_9", { clientFile: true });
+      const file = composeParts([introPart("lumen")], "presentazione_16_9", { ...RULES, clientFile: true });
       expect(file.segments.map((s) => s.key)).toEqual(["client_intro:lumen", "client_closing:lumen"]);
     });
 
@@ -232,7 +245,7 @@ describe("composeParts", () => {
   describe("the client pack (Story 5.9a, pack)", () => {
     it.each(FORMAT_IDS)("wraps one case in the client's intro and closing, the case trimmed (%s)", (formatId) => {
       const [intro, a] = [introPart("lumen"), casePart("aaaa", "lumen")];
-      const file = composeParts([intro, a], formatId, { pack: true });
+      const file = composeParts([intro, a], formatId, { ...RULES, pack: true });
       expect(file.segments.map((s) => s.key)).toEqual(["client_intro:lumen", "case:aaaa", "client_closing:lumen"]);
       const expected = a.doc.formats[formatId].pages.filter((p) => p.role !== "intro" && !(formatId === "carosello_1_1" && p.pageKey === "closing"));
       expect(file.segments[1].pages).toEqual(expected);
@@ -242,7 +255,7 @@ describe("composeParts", () => {
 
     it("puts the intro first, the cases in the parts' order, and the closing once", () => {
       const parts = [introPart("lumen"), casePart("cccc", "lumen"), casePart("aaaa", "lumen"), casePart("bbbb", "lumen")];
-      const file = composeParts(parts, "presentazione_16_9", { pack: true });
+      const file = composeParts(parts, "presentazione_16_9", { ...RULES, pack: true });
       expect(file.segments.map((s) => s.key)).toEqual(["client_intro:lumen", "case:cccc", "case:aaaa", "case:bbbb", "client_closing:lumen"]);
     });
 
@@ -269,6 +282,100 @@ describe("composeParts", () => {
 
   it("returns no segments for no parts", () => {
     expect(composeParts([], "carosello_1_1").segments).toEqual([]);
+  });
+});
+
+describe("MAC's pages around a Presentazione file", () => {
+  const P = "presentazione_16_9";
+  const macKeys = (file: ComposedFile) => [file.segments[0]!.key, file.segments.at(-1)!.key];
+
+  it.each([
+    ["a single case", [casePart("aaaa", "lumen")], {}],
+    ["a client's pack", [introPart("lumen"), casePart("aaaa", "lumen")], { pack: true }],
+    ["a client's file", [introPart("lumen"), casePart("aaaa", "lumen"), casePart("bbbb", "lumen")], { clientFile: true }],
+    ["a collection of several clients", [introPart("lumen"), casePart("aaaa", "lumen"), casePart("bbbb", "lumen"), casePart("cccc", "orto")], {}],
+  ] as const)("opens %s with MAC's intro and closes it with MAC's outro, once, numbered on", (_, parts, options) => {
+    const file = composeParts(parts, P, options);
+    const without = composeParts(parts, P, { ...options, brand: [] });
+    expect(macKeys(file)).toEqual(["brand_intro", "brand_outro"]);
+    expect(file.segments.filter((s) => s.part.kind === "brand").map((s) => s.slot)).toEqual(["brand_intro", "brand_outro"]);
+    expect(file.segments[0]!.pages).toEqual([BRAND_INTRO]);
+    expect(file.segments[0]!.pages[0]).toBe(BRAND_INTRO);
+    expect(file.segments.at(-1)!.pages[0]).toBe(BRAND_OUTRO);
+    // The parts' own pages are the same runs, one page later.
+    expect(file.segments.slice(1, -1).map((s) => [s.key, s.pages, s.startPage - 1])).toEqual(without.segments.map((s) => [s.key, s.pages, s.startPage]));
+    const numbers = flat(file).map((k) => Number(k.split("#")[1]));
+    expect(numbers).toEqual(numbers.map((_, i) => i + 1));
+    expect(flat(file).at(-1)).toBe(`mac:${BRAND_OUTRO.pageKey}#${numbers.length}`);
+  });
+
+  it.each(["carosello_1_1", "video_9_16"] as const)("leaves %s as it was: no MAC page", (formatId) => {
+    const file = composeParts([introPart("lumen"), casePart("aaaa", "lumen"), casePart("bbbb", "lumen")], formatId);
+    expect(file.segments.some((s) => s.part.kind === "brand")).toBe(false);
+    expect(file).toEqual(composeParts([introPart("lumen"), casePart("aaaa", "lumen"), casePart("bbbb", "lumen")], formatId, { brand: [] }));
+  });
+
+  it("adds nothing around a file with no page", () => {
+    expect(composeParts([], P).segments).toEqual([]);
+    expect(composeParts([introPart("lumen")], P, { pack: true }).segments).toEqual([]);
+  });
+
+  it("draws the MAC pages it is given: a collection's copy, or only the outro when the intro is hidden", () => {
+    const worded = { ...BRAND_INTRO, blocks: [] };
+    expect(composeParts([casePart("aaaa", "lumen")], P, { brand: [worded, BRAND_OUTRO] }).segments[0]!.pages[0]).toBe(worded);
+    const file = composeParts([casePart("aaaa", "lumen")], P, { brand: [BRAND_OUTRO] });
+    expect(file.segments.map((s) => s.key)).toEqual(["case:aaaa", "brand_outro"]);
+    expect(file.segments[0]!.startPage).toBe(1);
+  });
+
+  it("are valid pages with constant ids, the title the one free text", () => {
+    for (const page of BRAND_PAGES) expect(pageSchema.safeParse(page).success).toBe(true);
+    expect(BRAND_PAGES.map((p) => [p.pageKey, p.role])).toEqual([
+      [BRAND_INTRO_KEY, "intro"],
+      [BRAND_OUTRO_KEY, "outro"],
+    ]);
+    expect(BRAND_INTRO.blocks.flatMap((b) => b.elements)).toEqual([expect.objectContaining({ elementId: BRAND_TITLE_ELEMENT_ID, type: "text", text: "Our projects" })]);
+    expect(BRAND_OUTRO.blocks).toEqual([]);
+    expect(Object.isFrozen(BRAND_INTRO.blocks[0]!.elements[0])).toBe(true);
+  });
+
+  it("are drawn by their own renderer: the title, MAC's details, the W-Group link, numbered with the file", () => {
+    const file = composeParts([casePart("aaaa", "lumen")], P);
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(renderComposed(file, { still: true }));
+    const pages = [...host.querySelectorAll<HTMLElement>("section.mr-page")];
+    expect(pages.map((p) => Number(p.dataset.pageNumber))).toEqual(pages.map((_, i) => i + 1));
+    const [intro, outro] = [pages[0]!, pages.at(-1)!];
+    expect(intro.matches("[data-brand]") && outro.matches("[data-brand]")).toBe(true);
+    expect(pages.slice(1, -1).some((p) => p.matches("[data-brand]"))).toBe(false);
+    expect(intro.dataset.pageKey).toBe(BRAND_INTRO_KEY);
+    expect(intro.querySelector(`[data-element-id="${BRAND_TITLE_ELEMENT_ID}"]`)?.textContent).toBe("Our projects");
+    expect(intro.textContent).toContain("Men At Code S.r.l.");
+    expect(intro.textContent).toContain("www.menatcode.it");
+    // Only the title is a document element: nothing else on MAC's pages can be addressed.
+    expect([...host.querySelectorAll("[data-brand] [data-element-id]")]).toHaveLength(1);
+    for (const text of ["Sede operativa", "Via Lomazzo, 27 — 20154 Milano", "Sede legale", "Via Pietro Nenni, 18 — 25124 Brescia", "04216420986", "03795980980"]) {
+      expect(outro.textContent).toContain(text);
+    }
+    const link = outro.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("https://w-group.it/");
+    expect(link?.textContent).toBe("W-Group");
+    // The art is inline SVG (no file to load), its gradient ids unique in the document.
+    expect(host.querySelectorAll("img")).toHaveLength(0);
+    const ids = [...host.querySelectorAll("[data-brand] [id]")].map((el) => el.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(intro.querySelectorAll("svg path")).toHaveLength(3);
+  });
+
+  it("draws a collection's words for the title", () => {
+    const worded = { ...BRAND_INTRO, blocks: [{ ...BRAND_INTRO.blocks[0]!, elements: [{ ...BRAND_INTRO.blocks[0]!.elements[0]!, text: "I nostri progetti" }] }] } as typeof BRAND_INTRO;
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(renderFormat(BRAND_TEMPLATE, P, { pages: [worded], assets: {}, values: VALUES }));
+    expect(host.querySelector(`[data-element-id="${BRAND_TITLE_ELEMENT_ID}"]`)?.textContent).toBe("I nostri progetti");
+  });
+
+  it("refuses another format (a bug)", () => {
+    expect(() => renderFormat(BRAND_TEMPLATE, "carosello_1_1", { pages: [BRAND_INTRO], assets: {}, values: VALUES })).toThrow(/presentazione_16_9 only/);
   });
 });
 

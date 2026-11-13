@@ -7,6 +7,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TEST_ACTOR_ID } from "../helpers/db-actor";
 import { createTestClient, TEST_INDUSTRY } from "../helpers/db-clients";
+import { BRAND_INTRO_KEY, BRAND_OUTRO_KEY, BRAND_PART_ID, BRAND_TITLE_ELEMENT_ID } from "@/modules/rendering";
 
 const REQUIRED = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "SUPABASE_DB_URL"] as const;
 const missing = REQUIRED.filter((name) => !process.env[name]);
@@ -385,6 +386,39 @@ describe("collection edits (Story 5.11a)", () => {
       pool.query("select public.set_collection_text_edit($1, 2, 'case', $2, $3, $4, gen_random_uuid(), $5, $6, $7)", [made.collectionId, caseId, F, pageKey, "x".repeat(5001), "0".repeat(64), TEST_ACTOR_ID]),
     ).rejects.toMatchObject({ message: "INVALID_INPUT" });
     expect((await pool.query("select version from public.collection where id = $1", [made.collectionId])).rows[0]).toEqual({ version: 2 });
+  });
+
+  it("takes MAC's pages as a part: the title's words and a hidden page, by the sentinel id only", async () => {
+    const a = await createTestClient(pool, TEST_ACTOR_ID);
+    const { caseId } = await caseWithRevision(a.id, "A1");
+    const made = await created([caseId]);
+    const m = await collection();
+    const part = { kind: "brand", id: BRAND_PART_ID };
+    const ref = { collectionId: made.collectionId, part, formatId: F, pageKey: BRAND_INTRO_KEY };
+    expect(await m.setCollectionText(await actor(), { ...ref, expectedVersion: 1, elementId: BRAND_TITLE_ELEMENT_ID, text: "I nostri progetti" })).toMatchObject({ ok: true, value: { version: 2 } });
+    expect(await m.setCollectionPageHidden(await actor(), { ...ref, expectedVersion: 2, pageKey: BRAND_OUTRO_KEY, hidden: true })).toMatchObject({ ok: true, value: { version: 3 } });
+    // Never both of MAC's pages; any other MAC text is fixed.
+    expect(await m.setCollectionPageHidden(await actor(), { ...ref, expectedVersion: 3, hidden: true })).toMatchObject({ ok: false, error: { code: "COLLECTION_LAST_PAGE" } });
+    expect(await m.setCollectionText(await actor(), { ...ref, expectedVersion: 3, pageKey: BRAND_OUTRO_KEY, elementId: BRAND_TITLE_ELEMENT_ID, text: "x" })).toMatchObject({
+      ok: false,
+      error: { code: "TEXT_NOT_EDITABLE" },
+    });
+    expect(await m.getCollectionEdits(made.collectionId)).toMatchObject({
+      ok: true,
+      value: {
+        textEdits: [{ part, formatId: F, pageKey: BRAND_INTRO_KEY, elementId: BRAND_TITLE_ELEMENT_ID, text: "I nostri progetti", originalChanged: false }],
+        hiddenPages: [{ part, formatId: F, pageKey: BRAND_OUTRO_KEY }],
+      },
+    });
+    // The writers take MAC's part by its sentinel only, and the tables hold no other id for it.
+    await expect(pool.query("select public.set_collection_page_hidden($1, 3, 'brand', $2, $3, 'x', true, $4)", [made.collectionId, caseId, F, TEST_ACTOR_ID])).rejects.toMatchObject({ message: "INVALID_INPUT" });
+    await expect(
+      pool.query("insert into public.collection_hidden_page (collection_id, part_kind, part_id, format, page_key) values ($1, 'brand', $2, $3, 'x')", [made.collectionId, caseId, F]),
+    ).rejects.toMatchObject({ code: "23514" });
+    await expect(
+      pool.query("insert into public.collection_hidden_page (collection_id, part_kind, part_id, format, page_key) values ($1, 'other', $2, $3, 'x')", [made.collectionId, BRAND_PART_ID, F]),
+    ).rejects.toMatchObject({ code: "23514" });
+    expect((await pool.query("select version from public.collection where id = $1", [made.collectionId])).rows[0]).toEqual({ version: 3 });
   });
 
   it("denies anon and authenticated the edit tables and writers", async () => {

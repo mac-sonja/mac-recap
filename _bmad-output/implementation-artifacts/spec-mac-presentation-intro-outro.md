@@ -2,7 +2,7 @@
 title: 'MAC intro and outro pages in Presentazione'
 type: 'feature'
 created: '2026-11-13'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '8d79d3e5e854d87d95c64613781c5081bd9ae02e'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -69,15 +69,15 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/modules/rendering/brand/{pages.ts,render.tsx,art.tsx}` -- the two fixed pages (constant ids, texts) and their renderer from the Figma context -- one source for every surface.
-- [ ] `src/modules/rendering/compose.tsx` (+ test) -- brand segments first and last in Presentazione; `renderComposed` draws them.
-- [ ] Case configurator, approved-case view -- show the brand pages read-only around the case's pages.
-- [ ] `supabase/migrations/<ts>_collection_brand_part.sql`, `modules/collection` domain, repo and `edits.ts` (+ tests) -- `brand` part kind for text edits (and hidden pages per Q2).
-- [ ] `collection-edits.ts`, `collection-file.ts`, `collection-view.tsx` (+ tests) -- the brand title editable in a collection only.
-- [ ] `collection-view.tsx`, `collection-marks.tsx` (`HiddenPageStrip`), the Pagine sidebar component, `src/shared/i18n/it.ts` (+ tests) -- Nascondi / Mostra; no strip in the canvas; hidden pages faded in the sidebar.
-- [ ] `library-card.tsx` -- keep the case's own first page as the cover.
-- [ ] `export-source.ts`, `export-handler.ts`, `domain/export.ts` (+ tests) -- page counts, hash, render version.
-- [ ] `test/permissions.test.ts` -- rows for any new action.
+- [x] `src/modules/rendering/brand/{pages.ts,render.tsx,art.tsx}` -- the two fixed pages (constant ids, texts) and their renderer from the Figma context -- one source for every surface.
+- [x] `src/modules/rendering/compose.tsx` (+ test) -- brand segments first and last in Presentazione; `renderComposed` draws them.
+- [x] Case configurator, approved-case view -- show the brand pages read-only around the case's pages.
+- [x] `supabase/migrations/<ts>_collection_brand_part.sql`, `modules/collection` domain, repo and `edits.ts` (+ tests) -- `brand` part kind for text edits (and hidden pages per Q2).
+- [x] `collection-edits.ts`, `collection-file.ts`, `collection-view.tsx` (+ tests) -- the brand title editable in a collection only.
+- [x] `collection-view.tsx`, `collection-marks.tsx` (`HiddenPageStrip`), the Pagine sidebar component, `src/shared/i18n/it.ts` (+ tests) -- Nascondi / Mostra; no strip in the canvas; hidden pages faded in the sidebar.
+- [x] `library-card.tsx` -- keep the case's own first page as the cover.
+- [x] `export-source.ts`, `export-handler.ts`, `domain/export.ts` (+ tests) -- page counts, hash, render version.
+- [x] `test/permissions.test.ts` -- rows for any new action.
 
 **Acceptance Criteria:**
 - Given any Presentazione export, when the PDF is drawn, then page 1 is the MAC intro, the last page is the MAC outro, and the page count check passes.

@@ -168,15 +168,15 @@ export interface CollectionPagineProps {
   onRefused: (text: string) => void;
   /** Story 5.11a: a run's page at `from` to place `to` (both within the run, hidden pages counted). */
   onMovePage: (segmentKey: string, from: number, to: number) => void;
-  /** Story 5.11a: **Elimina dalla raccolta** (`hidden`) or **Ripristina** on a page of a run. */
+  /** Story 5.11a: **Nascondi** (`hidden`) or **Mostra** on a page of a run. */
   onPageHidden: (segmentKey: string, pageKey: string, hidden: boolean) => void;
 }
 
 /**
  * Story 5.11a: a run's pages under its row, behind a toggle ("Pagine di {name}"). Each page shows
- * its thumbnail, number and name, or "Eliminata dalla raccolta" when hidden. Pages move within
- * the run (so within their part) by drag, Alt+↑/↓ or the menu (**Sposta su**, **Sposta giù**);
- * the menu also has **Elimina dalla raccolta**, or **Ripristina** for a hidden page.
+ * its thumbnail, number and name; a hidden one stays, faded, with "Nascosta in questa raccolta"
+ * and no number. Pages move within the run (so within their part) by drag, Alt+↑/↓ or the menu
+ * (**Sposta su**, **Sposta giù**); the menu also has **Nascondi**, or **Mostra** for a hidden page.
  */
 function RunPages({
   formatId,
@@ -295,16 +295,15 @@ function RunPages({
                   }}
                   className={cn(
                     "flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-md p-1 text-left transition-colors duration-150 hover:bg-surface-hover active:cursor-grabbing",
-                    entry.hidden && "opacity-60",
+                    entry.hidden && "opacity-50",
                   )}
                 >
-                  <span className="block w-[40px] shrink-0">
-                    {entry.hidden ? (
-                      <span aria-hidden="true" className={cn("grid w-full place-items-center rounded-md bg-surface-control text-foreground-muted", ASPECT[formatId])}>
+                  <span className="relative block w-[40px] shrink-0">
+                    <Thumbnail formatId={formatId} template={segment.template} page={entry.page} number={numberOf.get(entry.page.pageKey) ?? i + 1} assets={assets} values={segment.values} />
+                    {entry.hidden && (
+                      <span aria-hidden="true" className="absolute inset-0 grid place-items-center rounded-md bg-surface-control/60 text-foreground">
                         <EyeOff className="size-3" />
                       </span>
-                    ) : (
-                      <Thumbnail formatId={formatId} template={segment.template} page={entry.page} number={numberOf.get(entry.page.pageKey) ?? 1} assets={assets} values={segment.values} />
                     )}
                   </span>
                   <span className="flex min-w-0 flex-col">
@@ -382,9 +381,10 @@ export function CollectionPagine({
   const pageNumbers = new Map<string, number>();
   let counted = 1;
   for (const s of segments) for (const p of s.pages) pageNumbers.set(p.pageKey, counted++);
-  /** A page row clicked: the canvas scrolls to the page, or to the strip of a hidden one. */
+  /** A page row clicked: the canvas scrolls to the page; a hidden one isn't on the canvas. */
   const selectPage = (shownKey: string, hidden: boolean) => {
-    const canvasPage = document.querySelector(hidden ? `[data-hidden-page="${shownKey}"]` : `[data-canvas-page="${shownKey}"]`);
+    if (hidden) return;
+    const canvasPage = document.querySelector(`[data-canvas-page="${shownKey}"]`);
     canvasPage?.scrollIntoView?.({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true ? "auto" : "smooth" });
   };
   const runPages = (key: string, name: string) => {
@@ -426,13 +426,20 @@ export function CollectionPagine({
     onMoveCase(caseId, to);
   };
 
-  /** A locked row: the client's intro or closing, which follow its cases and never move. */
-  const locked = (key: string, label: string) => {
+  /** A locked row: the client's intro or closing, which follow its cases and never move; or MAC's intro or outro, which open and close the file. */
+  const locked = (key: string, label: string, title: string = copy.locked) => {
     const s = segment(key);
     const first = s?.pages[0];
     return (
       <li key={key} data-locked={key} className="flex flex-col gap-1 rounded-lg p-1.5 text-foreground-muted">
-        <button type="button" onClick={() => onSelect(key)} className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-left" title={copy.locked}>
+        <button
+          type="button"
+          onClick={() => {
+            if (first !== undefined) onSelect(key);
+          }}
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-left"
+          title={title}
+        >
           <span className="block w-[52px] shrink-0">
             {first !== undefined && s !== undefined ? (
               <Thumbnail formatId={formatId} template={s.template} page={first} number={numberOf.get(key) ?? 1} assets={assets} values={s.values} />
@@ -448,21 +455,31 @@ export function CollectionPagine({
             <small className="truncate font-label text-[12px]">{pageCountLabel(s?.pages.length ?? 0)}</small>
           </span>
         </button>
-        <span className="sr-only">{copy.locked}</span>
+        <span className="sr-only">{title}</span>
         {runPages(key, label)}
       </li>
     );
   };
+  /** MAC's intro or outro (Presentazione only): a locked row of its own, outside the clients' groups. */
+  const brandRow = (key: "brand_intro" | "brand_outro", label: string) =>
+    segment(key) === undefined ? null : (
+      <ul data-brand-row={key} className="flex flex-col gap-1 rounded-xl bg-surface-raised/60 p-1.5 shadow-card">
+        {locked(key, label, copy.brandLocked)}
+      </ul>
+    );
 
   return (
     <div ref={root} className="flex flex-col gap-4">
       <span id={hintId} hidden>
         {copy.dragHint}
       </span>
+      {brandRow("brand_intro", copy.brandIntro)}
       <ol className="flex flex-col gap-3">
         {groups.map((group, gi) => {
-          const introShown = (segment(`client_intro:${group.clientId}`)?.pages.length ?? 0) > 0;
-          const closingShown = (segment(`client_closing:${group.clientId}`)?.pages.length ?? 0) > 0;
+          // A run stays listed while its pages are all hidden: Pagine is where **Mostra** brings them back.
+          const introShown = (segment(`client_intro:${group.clientId}`)?.entries.length ?? 0) > 0;
+          const closingShown = (segment(`client_closing:${group.clientId}`)?.entries.length ?? 0) > 0;
+          const introOnCanvas = (segment(`client_intro:${group.clientId}`)?.pages.length ?? 0) > 0;
           const groupDrop =
             dropOn === `group:${group.clientId}` && dragging?.kind === "group" && dragging.clientId !== group.clientId
               ? groups.findIndex((g) => g.clientId === dragging.clientId) > gi
@@ -497,7 +514,7 @@ export function CollectionPagine({
                   aria-describedby={hintId}
                   aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
                   title={copy.dragHint}
-                  onClick={() => onSelect(introShown ? `client_intro:${group.clientId}` : `case:${group.cases[0]?.caseId ?? ""}`)}
+                  onClick={() => onSelect(introOnCanvas ? `client_intro:${group.clientId}` : `case:${group.cases[0]?.caseId ?? ""}`)}
                   onKeyDown={(event) => groupKeys(event, group.clientId, gi)}
                   onDragStart={(event) => {
                     setDragging({ kind: "group", clientId: group.clientId });
@@ -619,6 +636,7 @@ export function CollectionPagine({
           );
         })}
       </ol>
+      {brandRow("brand_outro", copy.brandOutro)}
       <button type="button" onClick={onAdd} className={cn(SECONDARY_ACTION, "w-full")}>
         <Plus aria-hidden="true" className="size-4" />
         {it.collection.add.button}

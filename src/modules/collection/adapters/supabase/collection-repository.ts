@@ -71,7 +71,7 @@ const writeFailed = (what: string, details: { collectionId?: string; actorId?: s
   details,
 });
 
-const partKindOf = (kind: string): CollectionPartKind => (kind === "client_intro" ? "client_intro" : "case");
+const partKindOf = (kind: string): CollectionPartKind => (kind === "client_intro" ? "client_intro" : kind === "brand" ? "brand" : "case");
 
 export function createSupabaseCollectionRepository(
   client: () => ReturnType<typeof createSupabaseAdminClient> = createSupabaseAdminClient,

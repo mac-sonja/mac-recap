@@ -149,8 +149,10 @@ const CASE_CLOSING_KEY = "closing";
  * than importing it. `wrapped`: the part's client has an approved intro and 2 or more cases with
  * pages in the collection. A wrapped case leaves out its own intro pages (and, in Carosello, its
  * Chiusura); a client intro shows only its intro and closing pages, and only when wrapping.
+ * MAC's pages always all show (Presentazione is the only format that has them).
  */
 export function shownPageKeys(pages: readonly PageShape[], kind: CollectionPartKind, formatId: string, wrapped: boolean): string[] {
+  if (kind === "brand") return pages.map((p) => p.pageKey);
   if (kind === "client_intro") return wrapped ? pages.filter((p) => p.role === "intro" || p.role === "outro").map((p) => p.pageKey) : [];
   if (!wrapped) return pages.map((p) => p.pageKey);
   return pages.filter((p) => p.role !== "intro" && !(formatId === CAROSELLO && p.pageKey === CASE_CLOSING_KEY)).map((p) => p.pageKey);

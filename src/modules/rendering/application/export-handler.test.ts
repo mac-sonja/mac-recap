@@ -36,7 +36,7 @@ const FONT_CSS = "@font-face{font-family:Inter;src:url(data:font/woff2;base64,SU
 const fakePdf = (pages: number) =>
   new TextEncoder().encode(`%PDF-fake << /Type /Pages >> ${"<< /Type /Page >> ".repeat(pages)}`);
 
-const sections = (html: string) => html.match(/<section class="mr-page"/g)?.length ?? 0;
+const sections = (html: string) => html.match(/<section class="mr-page[" ]/g)?.length ?? 0;
 
 /** A browser that never starts Chromium: it keeps the HTML and answers one PNG per slide. */
 function fakeBrowser() {
@@ -144,10 +144,13 @@ describe("export handler (Story 5.3)", () => {
     expect(all.browser.pdf).toHaveBeenCalledOnce();
     expect(all.browser.pngs).not.toHaveBeenCalled();
     expect(seen[0].size).toEqual({ width: 1920, height: 1080 });
-    expect(sections(seen[0].html)).toBe(3);
+    // The case's three pages, between MAC's intro and outro.
+    expect(sections(seen[0].html)).toBe(5);
+    expect(seen[0].html.indexOf('data-page-key="mac-brand-intro"')).toBeLessThan(seen[0].html.indexOf('data-template="mac-case@1"'));
+    expect(seen[0].html.lastIndexOf('data-page-key="mac-brand-outro"')).toBeGreaterThan(seen[0].html.lastIndexOf('data-template="mac-case@1"'));
     const [[target, bytes]] = vi.mocked(all.storage.upload).mock.calls as unknown as [[{ contentHash: string; format: string }, Uint8Array]];
     expect(target).toEqual({ contentHash: job.inputHash, format: "presentazione_16_9" });
-    expect(bytes).toEqual(fakePdf(3));
+    expect(bytes).toEqual(fakePdf(5));
     expect(inserted).toEqual([
       {
         contentHash: job.inputHash,
@@ -179,7 +182,9 @@ describe("export handler (Story 5.3)", () => {
     expect(html).toContain(`data:image/png;base64,${Buffer.from(PNG_LOGO).toString("base64")}`);
     // The client's current name, the case's bound fields.
     expect(html).toContain("Lumen Srl");
-    expect(html).not.toMatch(/https?:\/\/(?!www\.w3\.org)/);
+    // Nothing to fetch: MAC's outro links W-Group's site (a link in the PDF, never loaded).
+    expect(html).not.toMatch(/https?:\/\/(?!www\.w3\.org|w-group\.it\/")/);
+    expect(html).toContain('<a href="https://w-group.it/"');
     expect(html).not.toContain("<script");
     expect(html).not.toContain("<video");
   });
@@ -711,7 +716,8 @@ describe("export handler, client packs (Story 5.9a)", () => {
     await rig.request(ACTOR, { clientId: CLIENT_ID, formats: ["presentazione_16_9"] });
     expect(await rig.handler.run(rig.jobs[0], signal())).toEqual(ok(undefined));
     expect(rig.exports.rows[0].parts.map((p) => p.subject.kind)).toEqual(["case", "case"]);
-    expect(sections(rig.seen[0].html)).toBe(6);
+    // Both cases whole, between MAC's intro and outro.
+    expect(sections(rig.seen[0].html)).toBe(2 + 6);
   });
 });
 
@@ -895,13 +901,14 @@ describe("export handler, collections with cases left out (Story 5.10b)", () => 
   it("leaves out an unavailable case: X gone, A and B still wrapped by their client's intro", async () => {
     const { html, row } = await runFor({ unavailable: ["X"] });
     expect(row.parts.map((p) => p.subject.id)).toEqual([INTRO_ID, PACK_CASES.A, PACK_CASES.B]);
-    expect(sections(html)).toBe(1 + 2 * own().filter((p) => p.role !== "intro").length + 1);
+    // MAC's intro, the client's intro, A and B, the client's closing, MAC's outro.
+    expect(sections(html)).toBe(1 + 1 + 2 * own().filter((p) => p.role !== "intro").length + 1 + 1);
     expect(html).not.toContain("Caso X");
   });
 
   it("draws every case whole when the intro isn't approved", async () => {
     const { html, row } = await runFor({ intro: "unapproved" });
     expect(row.parts.map((p) => p.subject.kind)).toEqual(["case", "case", "case"]);
-    expect(sections(html)).toBe(3 * own().length);
+    expect(sections(html)).toBe(1 + 3 * own().length + 1);
   });
 });

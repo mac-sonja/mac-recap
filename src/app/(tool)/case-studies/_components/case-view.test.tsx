@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Page } from "@/modules/generation";
-import { FORMAT_IDS, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
+import { BRAND_INTRO, BRAND_OUTRO, FORMAT_IDS, starterPages, type BoundValues, type FormatId } from "@/modules/rendering";
 import { fill, it as dict } from "@/shared/i18n/it";
 import type { ActivityCardLine } from "../../_components/activity-card";
 import { CaseView } from "./case-view";
@@ -260,15 +260,21 @@ describe("CaseView", () => {
     expect(pages[0]!.className).not.toContain("cursor-pointer");
   });
 
-  it("pages Presentazione with → too: twice shows the third slide", () => {
+  it("pages Presentazione with → too, MAC's intro first: twice shows the case's second page", () => {
     setup();
-    const n = formats.presentazione_16_9.length;
+    // The case's pages between MAC's intro and outro.
+    const n = formats.presentazione_16_9.length + 2;
+    expect(slideCaption()).toBe(fill(preview.slide, { i: 1, n, name: BRAND_INTRO.name }));
+    expect(canvas().querySelector('[data-slide] [data-template="mac-brand@1"]')).toBeTruthy();
     expect(fireEvent.keyDown(document, { key: "ArrowRight" })).toBe(false);
     fireEvent.keyDown(document, { key: "ArrowRight" });
-    expect(slideCaption()).toBe(fill(preview.slide, { i: 3, n, name: formats.presentazione_16_9[2]!.name }));
-    expect(canvas().querySelector("[data-slide]")?.getAttribute("data-slide")).toBe(formats.presentazione_16_9[2]!.pageKey);
+    expect(slideCaption()).toBe(fill(preview.slide, { i: 3, n, name: formats.presentazione_16_9[1]!.name }));
+    expect(canvas().querySelector("[data-slide]")?.getAttribute("data-slide")).toBe(formats.presentazione_16_9[1]!.pageKey);
+    expect(canvas().querySelector('[data-slide] [data-template="mac-case@1"]')).toBeTruthy();
     fireEvent.keyDown(document, { key: "ArrowLeft" });
     expect(slideCaption()).toContain(`2 di ${n}`);
+    for (let i = 0; i < n + 2; i++) fireEvent.keyDown(document, { key: "ArrowRight" });
+    expect(slideCaption()).toBe(fill(preview.slide, { i: n, n, name: BRAND_OUTRO.name }));
   });
 
   it("shows Carosello as a slideshow that ← → step through, leaving modified arrows to the browser", () => {
@@ -298,7 +304,7 @@ describe("CaseView", () => {
     expect(slideCaption()).toContain(`1 di ${formats.video_9_16.length}`);
     fireEvent.keyDown(document, { key: "ArrowRight" });
     fireEvent.click(format("Presentazione"));
-    expect(slideCaption()).toContain(`1 di ${formats.presentazione_16_9.length}`);
+    expect(slideCaption()).toContain(`1 di ${formats.presentazione_16_9.length + 2}`);
   });
 
   it("keeps ← → inside the open Scarica dialog: the slide stays", () => {
