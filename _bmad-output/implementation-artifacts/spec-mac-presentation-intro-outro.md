@@ -87,9 +87,34 @@ context:
 
 ## Implementation Notes
 
+- No new server action: `test/permissions.test.ts` needed no rows.
+- Collections can hide one MAC page; hiding the second returns `COLLECTION_LAST_PAGE` (a part keeps one page).
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Right panel Pagine numbers case pages from 1 while the canvas starts them at 2 (edge) | medium | `right-panel.tsx:185` `number: i + 1`; canvas adds `offset` | patch |
+| 2 | A brand page order is stored but has no effect (edge, blind) | low | `withBrand` places by role; `setPageOrder` accepts `brand` | patch (refuse it in the use case) |
+| 3 | A hidden page's thumbnail in Pagine shows a run-local number (edge, blind) | low | `collection-pagine.tsx:302` falls back to `i + 1`; the doc says no number | patch |
+| 4 | The "only in a collection" note also shows under the outro, which has no title (blind) | low | `BrandCanvasPage` takes one note for both | patch |
+| 5 | Nothing warns that a brand change needs an `EXPORT_RENDER_VERSION` bump, and nothing pins it (blind, gap) | medium | `content-hash.test.ts` compares the constant to itself; single-case hashes don't cover the brand | patch (comment + pin test) |
+| 6 | The italic face's `font-style` is untested (gap) | medium | `export-chromium.test.ts:53-59` counts rules only; a wrong style would print every export in italic | patch |
+| 7 | No MAC pages around an empty Presentazione: untested in `CaseView` and the configurator (gap) | low | Only `composeParts` tests it | patch |
+| 8 | Empty `BoundValues` copied three times (blind) | low | `canvas.tsx`, `compose.tsx`, `collection-file.ts` | patch |
+| 9 | Long collection title not measured for overflow (blind) | medium | `COLLECTION_TEXT_MAX` 5000; no collection text (case or MAC) is measured on the collection page | defer (pre-existing for every collection text) |
+| 10 | `drawingOfCase` page count wrong for an empty case (blind) | false | Case sources are never empty (`export-source.ts:89`); `export-handler.test.ts` checks the printed count | reject |
+| 11 | Spec points at a scratchpad file (blind) | low | The fix edits this spec; `art.tsx` names the Figma nodes | reject |
+| 12 | Permissions task ticked with no diff (blind) | low | No new server action; fix edits the spec (noted in Implementation Notes) | reject |
+| 13 | DB doesn't pin format / page key / element for `brand` (blind) | low | The module checks them before any write; more CHECKs add surface | reject |
+| 14 | `mac-brand` layout id or key suffix could match a document page (blind, edge) | low | No template layout uses that id; needs a hand-made document | reject |
+| 15 | `withBrand` drops a brand page with another role (edge) | false | Brand pages are constants with roles intro/outro; copies keep the role | reject |
+| 16 | Brand pages carry `section: "risultati"` / `human_added` (blind) | low | Brand pages never enter section grouping or provenance logic | reject |
+| 17 | Case page test lost a server-HTML template assertion (blind) | low | `case-viewer.test.tsx` still covers drawing with the case template | reject |
+| 18 | `#C8D4EA` on blue is ~4.4:1 (blind) | low | The owner's final Figma colours | reject |
+| 19 | A case run with no shown page loses its canvas group (edge) | false | A part keeps at least one shown page; an intro run with all pages hidden falls back to the first case in `onSelect` | reject |
 
 ## Design Notes
 
